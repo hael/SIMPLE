@@ -1653,18 +1653,13 @@ contains
         dist = myacos(dot_product(normal1, normal2))
     end function euldist
 
-    !>  \brief  calculates the distance (in radians) btw the in-plane rotations
+    !>  \brief  calculates the distance (in radians) btw the in-plane rotations (euler_inplrotdist: the whole in-plane
+    !!          angles when both sit at the same pole)
     !! \param self1,self2 ori class type rotaional matrices
     pure function inplrotdist( self1, self2 ) result( dist )
         class(ori), intent(in) :: self1, self2
-        real :: dist, mat(2,2), u(2), x1(2), x2(2)
-        u(1) = 0.
-        u(2) = 1.
-        call rotmat2d(self1%e3get(), mat)
-        x1   = matmul(u,mat)
-        call rotmat2d(self2%e3get(), mat)
-        x2   = matmul(u,mat)
-        dist = myacos(dot_product(x1,x2))
+        real :: dist
+        dist = euler_inplrotdist(self1%get_euler(), self2%get_euler())
     end function inplrotdist
 
     ! DESTRUCTORS

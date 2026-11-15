@@ -33,6 +33,7 @@ contains
         call test_build_refspiral()
         call test_neighbour_searches()
         call test_sym_dist_table()
+        call test_sym_dists_pole()
         ! call report_summary()
     end subroutine run_all_sym_tests
 
@@ -691,5 +692,27 @@ contains
         call oasym%kill
         call osym%kill
     end subroutine test_sym_dist_table
+
+    !> sym_dists on the c4 axis: two orientations at the north pole view along it, and their in-plane distance is the
+    !! difference of their whole in-plane angles modulo the 90-degree symmetry (set_euler leaves e3 at 0 there)
+    subroutine test_sym_dists_pole()
+        type(sym) :: se
+        type(ori) :: oref, oasym, osym
+        real      :: euldist, inpldist
+        write(*,'(A)') 'test_sym_dists_pole'
+        call se%new('c4')
+        call oref%new_ori(.true.)
+        call oasym%new_ori(.true.)
+        call oref%set_euler([0., 0., 30.])
+        call oasym%set_euler([0., 0., 160.])
+        call se%sym_dists(oref, oasym, osym, euldist, inpldist)
+        call assert_real(0., euldist, DEG_TOL, 'sym_dists: two orientations on the c4 axis view along it')
+        call assert_real(40., inpldist, DEG_TOL, &
+            &'sym_dists: on the c4 axis the in-plane distance is the whole-angle difference modulo 90 degrees')
+        call oref%kill
+        call oasym%kill
+        call osym%kill
+        call se%kill
+    end subroutine test_sym_dists_pole
 
 end module simple_sym_tester

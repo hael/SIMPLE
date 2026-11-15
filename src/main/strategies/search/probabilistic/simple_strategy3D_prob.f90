@@ -55,7 +55,7 @@ contains
         class(oris),            intent(inout) :: os
         integer,                intent(in)    :: ithr
         integer :: iproj, iptcl_map, irot, istate, iref
-        real    :: corr, frac, sh(2), inpl_coord
+        real    :: corr, frac, sh(2), inpl_coord, euler(3)
         logical :: inpl_valid, l_inpl
         self%assignment_valid = .false.
         ! the in-plane posterior insertion: one particle of the table, its committed view weight 1 unless reweighted
@@ -95,11 +95,11 @@ contains
             if( self%s%uses_continuous_refinement() )then
                 call self%s%refine_assignment_continuously(iref, irot, corr, sh, &
                     &inpl_coord, inpl_valid)
-                call assign_ori(self%s, iref, irot, corr, sh, inpl_coord, inpl_valid)
+                call assign_ori(self%s, iref, irot, corr, sh, inpl_coord, inpl_valid, euler_out=euler)
             else
-                call assign_ori(self%s, iref, irot, corr, sh)
+                call assign_ori(self%s, iref, irot, corr, sh, euler_out=euler)
             endif
-            if( l_inpl ) call self%insert_inpl_posterior(iptcl_map, iref, irot, sh)
+            if( l_inpl ) call self%insert_inpl_posterior(iptcl_map, iref, irot, sh, euler)
             ! the dynamic centring's state (shift_sigma > 0): this iteration's move and the particle's prior width for
             ! its next search
             if( self%s%p_ptr%l_centring ) call record_shift_state(self%s%b_ptr%spproj_field, self%s%iptcl, norm2(sh),&
@@ -197,17 +197,18 @@ contains
     end subroutine inpl_pose_row
 
     !> The committed pose's row after its solve, then the view weights of all the particle's poses (inpl_view_weights) into
-    !! the slots the insertion reads; a pose without a valid row leaves the whole particle to the insertion without
-    !! the key (its blocks emptied, the table's weights kept)
-    subroutine insert_inpl_posterior( self, iptcl_map, iref, bin, sh )
+    !! the slots the insertion reads; euler is the committed pose about its direction (assign_ori). A pose without a
+    !! valid row leaves the whole particle to the insertion without the key (its blocks emptied, the table's weights kept)
+    subroutine insert_inpl_posterior( self, iptcl_map, iref, bin, sh, euler )
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: iptcl_map, iref, bin
-        real,                   intent(in)    :: sh(2)
+        real,                   intent(in)    :: sh(2), euler(3)
         integer :: iloc, npose, k, ithr
         real    :: temp
         iloc  = self%spec%extra_poses%loc(self%s%iptcl)
         npose = 1 + self%spec%extra_poses%nextra(iloc)
         ithr  = self%s%ithr
+        self%spec%extra_poses%committed_euler(:,iloc) = euler
         call self%inpl_pose_row(iref, bin, sh, self%spec%eulprob_obj_part%get_prior_centre(iptcl_map), iloc, 0)
         if( any(s3D%inpl_nent(1:npose,ithr) < 1) )then
             do k = 0,npose - 1

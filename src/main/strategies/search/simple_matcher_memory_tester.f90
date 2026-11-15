@@ -52,8 +52,8 @@ contains
         call matcher_memory_terms(params,50,1000,4,0,larger_fixed,larger_slot)
         call assert_true(larger_fixed - fixed == inpl_reserved_bytes(1000, 3, INPL_POSTERIOR_BUDGET), &
             &'the key adds the reservation of max(1,topk) blocks of K entries per particle to the fixed storage')
-        call assert_true(inpl_reserved_bytes(1000, 3, INPL_POSTERIOR_BUDGET) == 792000_int64, &
-            &'792 bytes per particle at topk 3 and K 64')
+        call assert_true(inpl_reserved_bytes(1000, 3, INPL_POSTERIOR_BUDGET) == 804000_int64, &
+            &'804 bytes per particle at topk 3 and K 64: three blocks of 8 + 4 K bytes and a 12-byte committed triplet')
         call assert_true(larger_slot == slot_bytes, 'the reservation adds nothing per batch slot')
         deallocate(params)
     end subroutine run_all_matcher_memory_tests

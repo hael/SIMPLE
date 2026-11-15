@@ -222,15 +222,18 @@ contains
     end subroutine prep_fplane_grid
 
     !>  Calculates and updates sigma2 within search resolution range
-    !> The sigma2 contribution of particle iptcl at its assigned polar orientation o.
-    subroutine calc_sigma2_pftc( self, pftc, iptcl, o, refkind )
-        class(euclid_sigma2), intent(inout) :: self
-        class(polarft_calc),  intent(inout) :: pftc
-        integer,              intent(in)    :: iptcl
-        class(ori),           intent(in)    :: o
-        character(len=*),     intent(in)    :: refkind ! 'proj' or 'class'
+    !> The sigma2 contribution of particle iptcl at its assigned polar orientation o; with eulspace (refkind 'proj', the
+    !! directions o's proj indexes) o's in-plane angle is read about its direction, since at a pole e3 sits in e1
+    subroutine calc_sigma2_pftc( self, pftc, iptcl, o, refkind, eulspace )
+        use simple_ori_utils, only: euler_about_ref
+        class(euclid_sigma2),  intent(inout) :: self
+        class(polarft_calc),   intent(inout) :: pftc
+        integer,               intent(in)    :: iptcl
+        class(ori),            intent(in)    :: o
+        character(len=*),      intent(in)    :: refkind ! 'proj' or 'class'
+        class(oris), optional, intent(in)    :: eulspace
         integer :: iref, irot, kfromto(2)
-        real    :: shvec(2)
+        real    :: shvec(2), euls(3)
         if( .not.associated(self%p_ptr) )then
             THROW_HARD('euclid_sigma2: params pointer is not set')
         endif
@@ -239,10 +242,12 @@ contains
         kfromto = self%p_ptr%kfromto
         shvec = o%get_2Dshift()
         iref  = nint(o%get(trim(refkind)))
+        euls  = o%get_euler()
+        if( present(eulspace) ) euls = euler_about_ref(euls, eulspace%get_euler(iref))
         if( trim(refkind) == 'proj' .and. self%p_ptr%nstates > 1 )then
             iref = (o%get_state() - 1) * self%p_ptr%nspace + iref
         endif
-        irot  = pftc%get_roind(360. - o%e3get())
+        irot  = pftc%get_roind(360. - euls(3))
         ! the residual goes straight into the particle's record over the pass's band
         call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, self%sigma2_part(kfromto(1):kfromto(2),iptcl))
     end subroutine calc_sigma2_pftc

@@ -721,6 +721,9 @@ contains
         endif
         iloc     = extra%loc(pinds(i))
         l_blocks = extra%has_blocks(iloc)
+        ! the committed pose's entries take their angles about its direction (committed_euler): the selection's copy is
+        ! normalised, which at e2 = 0 or 180 folds e3 into e1
+        if( l_blocks ) euler = extra%committed_euler(:,iloc)
         do k = 0, extra%nextra(iloc)
             if( k == 0 )then
                 wpose = extra%wc(iloc)

@@ -135,6 +135,8 @@ contains
         call simple_rmdir(dname, status=istat)
         call assert_int(0, istat, 'rmdir: status')
         call assert_true(.not. dir_exists(dname), 'rmdir: directory removed')
+        call simple_rmdir(dname, status=istat)
+        call assert_int(0, istat, 'rmdir: missing directory is a successful no-op')
     end subroutine test_simple_mkdir_dir_exists_rmdir
 
     subroutine test_simple_rmdir_symlinks()
@@ -167,6 +169,20 @@ contains
             call assert_true(.not. dir_exists('tmp_syslib_link'), 'rmdir: root symlink is removed')
             call assert_true(file_exists('tmp_syslib_target/keep.txt'), 'rmdir: root symlink target is preserved')
             call simple_rmfile('tmp_syslib_link')
+        enddo
+        do i = 1, 2
+            call syslib_symlink('tmp_syslib_missing', 'tmp_syslib_dangling')
+            if( i == 1 )then
+                call simple_rmdir('tmp_syslib_dangling', status=istat)
+            else
+                call simple_rmdir(string('tmp_syslib_dangling///'), status=istat)
+            endif
+            call assert_int(0, istat, 'rmdir: dangling root link removal succeeds')
+            ! Making the target exist exposes a root link that was incorrectly left behind.
+            call simple_mkdir('tmp_syslib_missing', verbose=.false.)
+            call assert_true(.not. file_exists('tmp_syslib_dangling'), 'rmdir: dangling root link itself was removed')
+            call simple_rmfile('tmp_syslib_dangling')
+            call simple_rmdir('tmp_syslib_missing')
         enddo
         call simple_rmdir('tmp_syslib_target')
 #endif

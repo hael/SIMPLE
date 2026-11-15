@@ -6,13 +6,14 @@ use simple_math,   only: rotmat2d, cross
 use simple_rnd,    only: ran3
 implicit none
 
-public :: euler2m, m2euler, dm2euler, euler_dist, euler_inplrotdist, euler_compose, euler_mirror
+public :: euler2m, m2euler, dm2euler, euler_dist, euler_inplrotdist, euler_compose, euler_mirror, euler_about_ref
 public :: make_transfmat, rnd_romat, geodesic_frobdev, rotmat2d
 public :: genfire2euler, euler2genfire
 public :: canonical_mirror_frame_angle
 private
 
 real, parameter :: zvec(3) = [0.,0.,1.]
+real, parameter :: POLE_COS = 0.9999999 !< |cos e2| from which m2euler holds the whole in-plane angle in e1
 
 contains
 
@@ -50,8 +51,8 @@ contains
         real :: c, e(3)
         ! clamp to protect acos from tiny numerical drift
         c = max(-1.0, min(1.0, R(3,3)))
-        if( c < 0.9999999 )then
-            if( c > -0.9999999 )then
+        if( c < POLE_COS )then
+            if( c > -POLE_COS )then
                 e = rad2deg([atan2(R(3,2),R(3,1)), acos(c), atan2(R(2,3),-R(1,3))])
             else
                 e = [rad2deg(-atan2(R(1,2),R(2,2))), 180., 0.]
@@ -250,17 +251,57 @@ contains
         normal = matmul(zvec, rmat)
     end function euler_normal
 
-    !>  \brief  calculates the in-plane distance of a euler triplet (so just psi) in radians
+    !> The in-plane distance (radians) of two Euler triplets: the angle between their psi (e3), or, both at the same
+    !! pole, between their whole in-plane angles e1 + e3 (e2 = 0) or e1 - e3 (e2 = 180), since there a normalised
+    !! triplet holds that angle in e1 (m2euler)
     pure real function euler_inplrotdist( euls1, euls2 )
         real, intent(in) :: euls1(3), euls2(3)
         real, parameter  :: u(2) = [0.0, 1.0]
-        real             :: mat(2,2), x1(2), x2(2)
-        call rotmat2d(euls1(3), mat)
+        real             :: mat(2,2), x1(2), x2(2), psi1, psi2
+        integer          :: pole1, pole2
+        psi1  = euls1(3)
+        psi2  = euls2(3)
+        pole1 = euler_pole(euls1)
+        pole2 = euler_pole(euls2)
+        if( pole1 /= 0 .and. pole1 == pole2 )then
+            psi1 = euls1(1) + real(pole1) * euls1(3)
+            psi2 = euls2(1) + real(pole2) * euls2(3)
+        endif
+        call rotmat2d(psi1, mat)
         x1   = matmul(u,mat)
-        call rotmat2d(euls2(3), mat)
+        call rotmat2d(psi2, mat)
         x2   = matmul(u,mat)
         euler_inplrotdist = myacos(dot_product(x1,x2))
     end function euler_inplrotdist
+
+    !> 1 at the north pole (e2 = 0), -1 at the south pole (e2 = 180), 0 elsewhere: m2euler's test on the matrix
+    !! element cos e2
+    pure integer function euler_pole( euls ) result( pole )
+        real, intent(in) :: euls(3)
+        real :: c
+        c    = cos(deg2rad(euls(2)))
+        pole = 0
+        if( c >= POLE_COS )then
+            pole = 1
+        else if( c <= -POLE_COS )then
+            pole = -1
+        endif
+    end function euler_pole
+
+    !> The triplet euls with its in-plane angle about the reference direction euls_ref (a stored pose read about a grid
+    !! direction): euls off the poles; when either sits at a pole, where e1 and e3 turn about one axis and a normalised
+    !! triplet holds the whole angle in e1, e1 becomes the reference's and e3 gains e1 - e1_ref (e2 = 0) or loses it (180)
+    pure function euler_about_ref( euls, euls_ref ) result( e )
+        real, intent(in) :: euls(3), euls_ref(3)
+        real    :: e(3)
+        integer :: pole
+        e    = euls
+        pole = euler_pole(euls)
+        if( pole == 0 ) pole = euler_pole(euls_ref)
+        if( pole == 0 ) return
+        e(1) = euls_ref(1)
+        e(3) = modulo(euls(3) + real(pole) * (euls(1) - euls_ref(1)), 360.)
+    end function euler_about_ref
 
     !>  \brief  is for composing Euler triplets
     pure subroutine euler_compose( euls1, euls2, euls_out )

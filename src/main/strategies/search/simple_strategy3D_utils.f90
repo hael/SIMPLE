@@ -50,17 +50,21 @@ contains
     end subroutine candidate_pose
 
 
-    subroutine assign_ori( s, ref, inpl, corr, sh, continuous_coord, continuous_valid )
+    !> euler_out: the stored triplet about its direction (euler_about_ref): set_euler normalises the project's copy,
+    !! which at e2 = 0 or 180 folds e3 into e1; elsewhere it is the stored triplet itself
+    subroutine assign_ori( s, ref, inpl, corr, sh, continuous_coord, continuous_valid, euler_out )
+        use simple_ori_utils, only: euler_about_ref
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: ref, inpl  ! ref here is multi-state ref index
         real,                   intent(in)    :: corr
         real,                   intent(in)    :: sh(2)
         real,          optional, intent(in)    :: continuous_coord
         logical,       optional, intent(in)    :: continuous_valid
+        real,          optional, intent(out)   :: euler_out(3)
         type(ori) :: osym, o_prev, o_new
         integer   :: state, proj, neff_states, nrefs_eval, nrefs_tot
         real      :: euler(3), shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac
-        real      :: inpl_coord
+        real      :: inpl_coord, euls_prev(3), euls_new(3)
         logical   :: l_multistates, inpl_valid
         ! stash previous ori
         call s%b_ptr%spproj_field%get_ori(s%iptcl, o_prev)
@@ -81,6 +85,7 @@ contains
                 &s%continuous_active, s%b_ptr%pftc%get_dang())
         endif
         call s%b_ptr%spproj_field%set_euler(s%iptcl, euler)
+        if( present(euler_out) ) euler_out = euler_about_ref(s%b_ptr%spproj_field%get_euler(s%iptcl), euler)
         ! shift
         shvec_incr = 0.
         if( s%doshift ) shvec_incr = sh
@@ -109,9 +114,14 @@ contains
         ! fractional poses, so convergence thresholds keep their legacy
         ! calibration
         call s%b_ptr%spproj_field%get_ori(s%iptcl, o_new)
+        ! the new discrete cell about its direction: the stored triplet is normalised, with e3 in e1 at a pole
+        euls_new = euler_about_ref(o_new%get_euler(), euler)
+        call o_new%e1set(euls_new(1))
         call o_new%e3set(360. - s%b_ptr%pftc%get_rot(inpl))
-        call o_prev%e3set(360. - s%b_ptr%pftc%get_rot( &
-            &s%b_ptr%pftc%get_roind(360. - o_prev%e3get())))
+        ! the previous discrete cell about the previous direction (prep4prob, prep4srch), for the same reason
+        euls_prev = euler_about_ref(o_prev%get_euler(), s%b_ptr%eulspace%get_euler(s%prev_proj))
+        call o_prev%e1set(euls_prev(1))
+        call o_prev%e3set(360. - s%b_ptr%pftc%get_rot(s%b_ptr%pftc%get_roind(360. - euls_prev(3))))
         call s%b_ptr%pgrpsyms%sym_dists(o_prev, o_new, osym, euldist, dist_inpl)
         if( s%b_ptr%spproj_field%isthere(s%iptcl,'dist') )then
             call s%b_ptr%spproj_field%set(s%iptcl, 'dist', 0.5*euldist + 0.5*s%b_ptr%spproj_field%get(s%iptcl,'dist'))

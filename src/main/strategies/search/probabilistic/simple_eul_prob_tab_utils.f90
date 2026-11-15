@@ -217,6 +217,9 @@ type :: prob_insert_poses
     integer, allocatable :: blk_nent(:)  !< (nblk*nptcls) the block's entries
     integer, allocatable :: blk_bin(:)   !< (nblk*nptcls) the solved bin of the block's pose
     integer, allocatable :: blk_ent(:,:) !< (kq,nblk*nptcls) the rotation index in the low 16 bits, the point count above
+    ! (3,nptcls) the committed pose's triplet about its direction, the frame of its entries' angles: the project's
+    ! copy is normalised, which at e2 = 0 or 180 folds e3 into e1
+    real,    allocatable :: committed_euler(:,:)
 contains
     procedure :: setup_range  => insert_poses_setup_range
     procedure :: reserve_inpl => insert_poses_reserve_inpl
@@ -1230,7 +1233,7 @@ contains
         integer(int64) :: nelig
         real(dp)       :: wc_sum
         call self%counts(nptcls, npose, wc_sum, nelig, ncapped, kmax)
-        call insert_report_counts(nptcls, npose, wc_sum, ncapped, kmax)
+        call insert_report_counts(nptcls, npose, wc_sum, ncapped, kmax, .false.)
     end subroutine insert_table_report
 
     !> the counts the report is made of (a part publishes them, the master sums them in part order); the committed
@@ -1342,18 +1345,27 @@ contains
 
     end subroutine write_fill_profile_bench
 
-    !> the insertion report from counts
-    subroutine insert_report_counts( nptcls, npose, wc_sum, ncapped, kmax )
+    !> Table counts are selection statistics when the in-plane posterior subsequently reweights the poses.
+    subroutine insert_report_counts( nptcls, npose, wc_sum, ncapped, kmax, l_inpl )
         integer,  intent(in) :: nptcls, npose, ncapped, kmax
         real(dp), intent(in) :: wc_sum
+        logical,  intent(in) :: l_inpl
         character(len=32) :: ninsert, wcommit, pct_capped
+        character(len=:), allocatable :: label, weight_kind
         if( nptcls < 1 ) return
         write(ninsert,'(F32.2)') 1. + real(npose) / real(nptcls)
         write(wcommit,'(F32.0)') 100. * real(wc_sum) / real(nptcls)
         write(pct_capped,'(F32.0)') 100. * real(ncapped) / real(nptcls)
+        label       = 'POSES INSERTED'
+        weight_kind = 'weight'
+        if( l_inpl )then
+            label       = 'POSES SELECTED'
+            weight_kind = 'table weight'
+            wcommit     = fmt_dec(100. * real(wc_sum) / real(nptcls), 0)
+        endif
         ! the capped share says whether topk limits the insertion
-        write(logfhandle,'(A)') log_item('POSES INSERTED', trim(adjustl(ninsert))//' per particle, '//&
-            &trim(adjustl(wcommit))//'% of the weight on the assigned pose; '//trim(adjustl(pct_capped))//&
+        write(logfhandle,'(A)') log_item(label, trim(adjustl(ninsert))//' per particle, '//&
+            &trim(adjustl(wcommit))//'% of the '//weight_kind//' on the assigned pose; '//trim(adjustl(pct_capped))//&
             &'% of particles had more poses in the cone than topk '//int2str(kmax)//' allows')
         call flush(logfhandle)
     end subroutine insert_report_counts
@@ -1587,10 +1599,16 @@ contains
                 write(logfhandle,'(A)') log_item('POSE ASSIGNMENT', trim(adjustl(mode_pct))//&
                     &'% of particles at their best pose'//neff_clause(rec%neff_nrows, rec%neff_sum_draw, 'poses')//note)
                 if( rec%l_extras )then
-                    call insert_report_counts(rec%ins_nptcls, rec%ins_npose, rec%ins_wc_sum, rec%ins_ncapped, rec%kmax)
+                    call insert_report_counts(rec%ins_nptcls, rec%ins_npose, rec%ins_wc_sum, rec%ins_ncapped, &
+                        &rec%kmax, rec%inpl_kmax > 1)
                 else if( rec%kmax > 1 )then
-                    write(logfhandle,'(A)') log_item('POSES INSERTED', '1 per particle, the assigned pose only '//&
-                        &'(no FSC yet for the insertion cone)')
+                    if( rec%inpl_kmax > 1 )then
+                        write(logfhandle,'(A)') log_item('POSES SELECTED', '1 per particle, the assigned view only '//&
+                            &'(no FSC yet for the insertion cone)')
+                    else
+                        write(logfhandle,'(A)') log_item('POSES INSERTED', '1 per particle, the assigned pose only '//&
+                            &'(no FSC yet for the insertion cone)')
+                    endif
                 endif
                 if( rec%inpl_kmax > 1 ) call inpl3D_report_counts(rec)
                 call rec%states%report(prob_beta)
@@ -1697,8 +1715,8 @@ contains
     end subroutine insert_poses_setup_range
 
     !> the in-plane posterior insertion's blocks for the part the first setup_range laid out: max(1,kmax) blocks per
-    !! particle of kq packed entries, the worst case (a quadrature gives at most kq), never exceeded, grown or copied;
-    !! the rotation grid must fit an entry's 16-bit index
+    !! particle of kq packed entries, the worst case (a quadrature gives at most kq), never exceeded, grown or copied,
+    !! and each particle's committed triplet; the rotation grid must fit an entry's 16-bit index
     subroutine insert_poses_reserve_inpl( self, kq, kmax, rots )
         class(prob_insert_poses), intent(inout) :: self
         integer,                  intent(in)    :: kq, kmax
@@ -1714,6 +1732,7 @@ contains
         nblocks   = max(1, self%nblk * self%nptcls)
         allocate(self%blk_nent(nblocks), self%blk_bin(nblocks), source=0)
         allocate(self%blk_ent(kq,nblocks), source=0)
+        allocate(self%committed_euler(3,max(1, self%nptcls)), source=0.)
         allocate(self%e3_grid(nrots))
         self%e3_grid = 360. - rots
     end subroutine insert_poses_reserve_inpl
@@ -1771,10 +1790,11 @@ contains
     end function prior_window_centre
 
     !> the bytes the in-plane posterior insertion reserves for nptcls particles at topk poses and kq entries per pose
-    !! (insert_poses_reserve_inpl, the memory estimate's term): per block its count, its bin and kq entries of 4 bytes
+    !! (insert_poses_reserve_inpl, the memory estimate's term): per block its count, its bin and kq entries of 4 bytes,
+    !! per particle its committed triplet
     pure integer(int64) function inpl_reserved_bytes( nptcls, topk, kq ) result( nbytes )
         integer, intent(in) :: nptcls, topk, kq
-        nbytes = int(nptcls,int64) * int(max(1,topk),int64) * (8_int64 + 4_int64 * int(kq,int64))
+        nbytes = int(nptcls,int64) * (int(max(1,topk),int64) * (8_int64 + 4_int64 * int(kq,int64)) + 12_int64)
     end function inpl_reserved_bytes
 
     !> one packed entry of a block: the rotation index (below 2^16) in the low 16 bits, the point count above
@@ -1853,6 +1873,7 @@ contains
         if( allocated(self%blk_nent) ) deallocate(self%blk_nent)
         if( allocated(self%blk_bin)  ) deallocate(self%blk_bin)
         if( allocated(self%blk_ent)  ) deallocate(self%blk_ent)
+        if( allocated(self%committed_euler) ) deallocate(self%committed_euler)
         if( allocated(self%e3_grid)  ) deallocate(self%e3_grid)
         self%nptcls = 0
         self%npose  = 0
@@ -2167,13 +2188,17 @@ contains
         call flush(logfhandle)
     end subroutine inpl_report_counts
 
-    !> the 3D line of the in-plane posterior insertion from a record (the owner's or the parts' sum): angles per
-    !! particle, the share of rows with one angle and the budget against the band
+    !> In-plane entries and the assigned view's inserted weight, including particles on fallback poses.
     subroutine inpl3D_report_counts( rec )
         type(prob_readout), intent(in) :: rec
-        if( rec%inpl_nptcls < 1_int64 .or. rec%inpl_nrows < 1_int64 .or. rec%nptcls < 1 ) return
-        write(logfhandle,'(A)') log_item('IN-PLANE ANGLES', inpl_text(real(rec%inpl_npose) / real(rec%inpl_nptcls), &
-            &100. * real(rec%inpl_nsingle) / real(rec%inpl_nrows), 'poses', rec%inpl_kmax, rec%inpl_mmax))
+        if( rec%nptcls < 1 ) return
+        if( rec%inpl_nptcls > 0_int64 .and. rec%inpl_nrows > 0_int64 )then
+            write(logfhandle,'(A)') log_item('IN-PLANE ANGLES', inpl_text(real(rec%inpl_npose) / real(rec%inpl_nptcls), &
+                &100. * real(rec%inpl_nsingle) / real(rec%inpl_nrows), 'poses', rec%inpl_kmax, rec%inpl_mmax))
+        endif
+        write(logfhandle,'(A)') log_item('INSERTED VIEW WEIGHT', &
+            &fmt_dec(real(100.d0 * rec%inpl_committed_view_weight_sum / real(rec%nptcls,dp)), 0)//&
+            &'% on the assigned view after in-plane reweighting (all its angles)')
         call flush(logfhandle)
     end subroutine inpl3D_report_counts
 

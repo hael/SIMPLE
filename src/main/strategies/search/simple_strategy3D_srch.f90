@@ -10,6 +10,7 @@ use simple_eul_prob_tab_utils, only: posterior_temperature, prob_insert_poses, r
 use simple_parameters,       only: parameters
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_shiftmap_srch,    only: shiftmap_srch
+use simple_ori_utils,        only: euler_about_ref
 implicit none
 
 integer, parameter :: CONT_ROUTE_NOT_ATTEMPTED = 0
@@ -174,11 +175,14 @@ contains
 
     subroutine prep4prob( self )
         class(strategy3D_srch), intent(inout) :: self
+        real :: euls_prev(3)
         call self%b_ptr%spproj_field%get_ori(self%iptcl, self%o_prev)         ! previous ori
         self%prev_state = self%o_prev%get_state()                             ! state index
-        self%prev_roind = self%b_ptr%pftc%get_roind(360.-self%o_prev%e3get()) ! in-plane angle index
         self%prev_shvec = self%o_prev%get_2Dshift()                           ! shift vector
         self%prev_proj  = self%b_ptr%eulspace%find_closest_proj(self%o_prev)  ! previous projection direction
+        ! the in-plane angle index about that direction: at a pole the stored triplet holds the angle in e1
+        euls_prev       = euler_about_ref(self%o_prev%get_euler(), self%b_ptr%eulspace%get_euler(self%prev_proj))
+        self%prev_roind = self%b_ptr%pftc%get_roind(360. - euls_prev(3))
         self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj
         call self%b_ptr%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
         call prep_strategy3D_thread(self%ithr)
@@ -198,14 +202,16 @@ contains
 
     subroutine prep4srch( self )
         class(strategy3D_srch), intent(inout) :: self
-        real      :: corrs(self%nrots), corr
+        real      :: corrs(self%nrots), corr, euls_prev(3)
         integer   :: ipeak, iref_sub, iref_sub_rand, prev_proj_sub
         ! previous parameters
         call self%b_ptr%spproj_field%get_ori(self%iptcl, self%o_prev)         ! previous ori
         self%prev_state = self%o_prev%get_state()                             ! state index
-        self%prev_roind = self%b_ptr%pftc%get_roind(360.-self%o_prev%e3get()) ! in-plane angle index
         self%prev_shvec = self%o_prev%get_2Dshift()                           ! shift vector
         self%prev_proj  = self%b_ptr%eulspace%find_closest_proj(self%o_prev)  ! previous projection direction
+        ! the in-plane angle index about that direction: at a pole the stored triplet holds the angle in e1
+        euls_prev       = euler_about_ref(self%o_prev%get_euler(), self%b_ptr%eulspace%get_euler(self%prev_proj))
+        self%prev_roind = self%b_ptr%pftc%get_roind(360. - euls_prev(3))
         ! map previous projection direction (always use full-space ref index)
         self%prev_ref = (self%prev_state-1)*self%nprojs + self%prev_proj
         call self%b_ptr%spproj_field%set(self%iptcl, 'proj', self%prev_proj)

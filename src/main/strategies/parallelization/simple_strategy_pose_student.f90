@@ -748,6 +748,7 @@ contains
     !! directions) and the confidence, with the error against the particle's stored direction, written to the text
     !! table <fname>_pred.txt. Project: reads the particle field and the stacks; writes nothing
     subroutine predict_poses_exec( params, build, cline )
+        use simple_ori_utils, only: euler_about_ref
         type(parameters), target, intent(inout) :: params
         type(builder),    target, intent(inout) :: build
         class(cmdline),           intent(inout) :: cline
@@ -776,6 +777,7 @@ contains
         integer  :: n_in_cone, n_within_two, n_capped, n_seeded, n_in_cone_seeded, route, n_wide, nchk, nfeat, chk_unit
         real(dp) :: ncone_sum, conf_sum, radius_sum
         real     :: conf_threshold, conf_fraction, heldout_seeded, heldout_recovered, spacing, cone, euls(3), cone_bound
+        real     :: euls_stored(3)
         real,    allocatable :: chk_tv(:,:), chk_jacc(:,:), chk_fchg(:,:,:), chk_sorted(:)
         integer, allocatable :: chk_mode(:,:), chk_cone(:,:)
         type(string)         :: fname_chk
@@ -932,8 +934,11 @@ contains
             if( preds(i)%k99 <= KMAX_STUDENT .and. preds(i)%radius <= cone_bound .and. preds(i)%conf >= conf_threshold ) route = 1
             cone = 0.
             if( route == 1 )then
+                ! the search's in-plane angle about its own direction (iproj_ref; at a pole the stored triplet holds it
+                ! in e1), carried to the mode's direction
+                euls_stored = euler_about_ref(build%spproj_field%get_euler(iptcl), student%grid_euler(iproj_ref(i)))
                 euls = student%grid_euler(preds(i)%mode)
-                euls(3) = build%spproj_field%e3get(iptcl)
+                euls(3) = euls_stored(3)
                 call build%spproj_field%set_euler(iptcl, euls)
                 cone = max(preds(i)%radius, spacing)
                 n_seeded = n_seeded + 1

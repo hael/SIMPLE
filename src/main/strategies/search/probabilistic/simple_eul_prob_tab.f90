@@ -19,6 +19,7 @@ use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_defs,               only: PROB_INSERT_WMIN
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: polarft_calc, SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
+use simple_ori_utils,          only: euler_about_ref
 implicit none
 
 public :: eul_prob_tab, seeded_window_refine
@@ -626,7 +627,7 @@ contains
             type(ori) :: o_prev_loc
             logical   :: l_refined
             real     :: temp, pmax, neff, euls_min(3), euls_d(3), euls_h(3), euls_x(3), euls_sym(3), euldist, inpldist
-            real     :: sh_mode(2), sh_kernel(2), dist_loc, dist_at, dist_own, dist_other
+            real     :: sh_mode(2), sh_kernel(2), dist_loc, dist_at, dist_own, dist_other, euls_prev(3)
             integer  :: imin, k99, nvalid, ri_loc, istate_min, iproj_min, irot_loc, irot_min, j_loc
             integer  :: imin_d, k99_d, nvalid_d, imin_h, k99_h, nvalid_h, imin_x, k99_x, nvalid_x
             integer  :: prev_state, prev_proj, irot_prev, irot_ctrl, iref_prev, nrots_loc
@@ -755,7 +756,9 @@ contains
                 if( self%state_exists(prev_state) )then
                     nrots_loc = self%b_ptr%pftc%get_nrots()
                     iref_prev = (prev_state-1)*self%p_ptr%nspace + prev_proj + self%post_ref_offset
-                    irot_prev = self%b_ptr%pftc%get_roind(360.-o_prev_loc%e3get())
+                    ! the previous in-plane rotation about the previous direction (the angle sits in e1 at a pole)
+                    euls_prev = euler_about_ref(o_prev_loc%get_euler(), self%b_ptr%eulspace%get_euler(prev_proj))
+                    irot_prev = self%b_ptr%pftc%get_roind(360. - euls_prev(3))
                     if( irot_prev >= 1 .and. irot_prev <= nrots_loc )then
                         irot_ctrl = irot_prev + nrots_loc/2
                         if( irot_ctrl > nrots_loc ) irot_ctrl = irot_ctrl - nrots_loc
@@ -840,6 +843,7 @@ contains
             real,      intent(out)   :: shift_seed(3)
             integer,   intent(out)   :: irot_seed !< in-plane rotation the estimate ends at (0: zero shift)
             integer :: irot, iref
+            real    :: euls_prev(3)
             shift_seed = 0.
             irot_seed  = 0
             if( .not. l_sh_first ) return
@@ -847,7 +851,9 @@ contains
             if( prev_proj  < 1 .or. prev_proj  > self%p_ptr%nspace  ) return
             if( .not. self%state_exists(prev_state) ) return
             iref = (prev_state-1)*self%p_ptr%nspace + prev_proj
-            irot = self%b_ptr%pftc%get_roind(360.-o_prev_loc%e3get())
+            ! the previous in-plane rotation about the previous direction (the angle sits in e1 at a pole)
+            euls_prev = euler_about_ref(o_prev_loc%get_euler(), self%b_ptr%eulspace%get_euler(prev_proj))
+            irot      = self%b_ptr%pftc%get_roind(360. - euls_prev(3))
             call grad_shsrch_obj(ithr_loc)%set_indices(iref, iptcl_loc)
             shift_seed = grad_shsrch_obj(ithr_loc)%minimize(irot=irot, sh_rot=.false.)
             if( irot == 0 ) shift_seed(2:3) = 0.

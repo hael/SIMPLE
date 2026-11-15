@@ -37,8 +37,14 @@ Silent ones first: nothing reports these.
   by adding angles. `set_euler` goes through the matrix: e1, e3 in [0,360), e2 in [0,180], and within
   0.026 degrees of a pole e3 is folded into e1 and set to 0. A 2D record's in-plane angle is `e3` with
   e1 = e2 = 0: set it with `e3set`, never `set_euler`.
+- **A stored 3D pose's in-plane angle is not its `e3` at a pole.** The reference spiral keeps the north pole
+  (all but D, O and I) and, under C, the south pole, so poses land there. Read the angle about a grid direction with `euler_about_ref`
+  (the search's previous index, the tables' shift seeds, the sigma2 residual), and never pair a stored
+  pose's e1, e2 with a new e3: re-express it about its direction first (`assign_ori`'s `euler_out`).
 - **Distance units differ.** `.euldist.`, `.inplrotdist.`, `geodesic_dist_trace`, `oris%euldist`:
-  radians. `min_euldist`, the angle of `nearest_proj_neighbors`: degrees.
+  radians. `min_euldist`, the angle of `nearest_proj_neighbors`: degrees. `.inplrotdist.` and
+  `euler_inplrotdist` compare e3, or the whole angles (e1 + e3 at e2 = 0, e1 - e3 at 180) when both
+  triplets sit at the same pole.
 - **Shifts** `x, y` are pixels of the particle's stack in the particle frame; an image is centred by
   shifting it by minus `[x, y]`. Cropping and resampling: `references/conventions.md`.
 - **Labels.** `state` 0 excludes a row (`ptcl2D`'s selects, `ptcl3D`'s is the 3D label); `class` and

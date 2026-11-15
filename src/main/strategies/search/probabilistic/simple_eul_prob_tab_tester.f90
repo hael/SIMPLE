@@ -17,7 +17,7 @@ use simple_eul_prob_tab_utils, only: record_seed_shift, cone_view_dist, cone_cel
     &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss, update_screen_best, start_shift_state, &
     &prob_readout, write_prob_readout, read_prob_readout, add_prob_readout, inpl_quadrature, inpl_view_weights, &
     &inpl_prior_penalty, inpl_entry_pack, inpl_entry_rot, inpl_entry_count, inpl_reserved_bytes, inpl_particle_counts, &
-    &prob_inpl_counts, PROB_READOUT_3D_DENSE
+    &prob_inpl_counts, PROB_READOUT_3D_DENSE, report_prob_readout
 use simple_rnd,                only: seed_rnd_fixed, ran3, rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_sym,                only: sym
@@ -88,6 +88,7 @@ contains
         call test_inpl_collapsed_peak()
         write(*,'(A)') 'test_inpl_readout_round_trip'
         call test_inpl_readout_round_trip()
+        call test_inpl_weight_report()
         write(*,'(A)') 'test_neff_readout'
         call test_neff_readout()
         call test_neff_report()
@@ -1894,14 +1895,16 @@ contains
         call plain%setup_range(tab, pinds, 1, NP)
         call poses%setup_range(tab, pinds, 1, NP)
         call poses%reserve_inpl(KQ, TOPK, rots)
-        call assert_true(.not. allocated(plain%blk_nent) .and. .not. allocated(plain%e3_grid), &
-            &'without the reservation no block is allocated')
+        call assert_true(.not. allocated(plain%blk_nent) .and. .not. allocated(plain%e3_grid) .and. &
+            &.not. allocated(plain%committed_euler), 'without the reservation no block is allocated')
         call assert_true(all(poses%nextra(1:NP) == plain%nextra(1:NP)) .and. all(poses%first(1:NP) == plain%first(1:NP)) &
             &.and. all(poses%wc(1:NP) == plain%wc(1:NP)) .and. poses%npose == plain%npose, &
             &'the reservation keeps the table''s layout: counts, first slots and weights')
         call assert_int(NP * TOPK, size(poses%blk_nent), 'max(1,topk) blocks per particle')
+        call assert_int(3 * NP, size(poses%committed_euler), 'one committed triplet per particle')
         nbytes = int(storage_size(poses%blk_nent) / 8, int64) * int(size(poses%blk_nent) + size(poses%blk_bin) + &
-            &size(poses%blk_ent), int64)
+            &size(poses%blk_ent), int64) + int(storage_size(poses%committed_euler) / 8, int64) * &
+            &int(size(poses%committed_euler), int64)
         call assert_true(nbytes == inpl_reserved_bytes(NP, TOPK, KQ), 'the reserved bytes are the memory estimate''s term')
         if( size(poses%blk_nent) /= NP * TOPK )then
             ! a reservation of other size would be filled out of its bounds below
@@ -2063,5 +2066,64 @@ contains
             &acc%inpl_mmax == 23, 'the master sums the parts'' in-plane fields')
         call fname%kill
     end subroutine test_inpl_readout_round_trip
+
+    !> The log distinguishes table selection from inserted view mass, including particles using fallback poses.
+    subroutine test_inpl_weight_report()
+        type(prob_readout) :: rec
+        character(len=512) :: line
+        integer :: saved_log, u, ios, icase
+        logical :: selected, inserted, actual
+        write(*,'(A)') 'test_inpl_weight_report'
+        rec%route       = PROB_READOUT_3D_DENSE
+        rec%nptcls      = 4
+        rec%kmax        = 3
+        rec%l_extras    = .true.
+        rec%ins_nptcls  = 4
+        rec%ins_npose   = 8
+        rec%ins_wc_sum  = 3.d0
+        rec%inpl_kmax   = INPL_POSTERIOR_BUDGET
+        rec%inpl_nptcls = 3_int64
+        rec%inpl_nrows  = 6_int64
+        rec%inpl_npose  = 12_int64
+        rec%inpl_committed_view_weight_sum = 2.d0
+        do icase = 1, 3
+            if( icase == 2 ) rec%inpl_kmax = 1
+            if( icase == 3 )then
+                rec%inpl_kmax = INPL_POSTERIOR_BUDGET
+                rec%l_extras = .false.
+                rec%inpl_committed_view_weight_sum = 4.d0
+            endif
+            saved_log = logfhandle
+            open(newunit=u, status='scratch', action='readwrite')
+            logfhandle = u
+            call report_prob_readout(rec, 1.)
+            logfhandle = saved_log
+            rewind(u)
+            selected = .false.
+            inserted = .false.
+            actual   = .false.
+            do
+                read(u,'(A)',iostat=ios) line
+                if( ios /= 0 ) exit
+                if( index(line, 'POSES SELECTED') > 0 ) selected = index(line, '75% of the table weight') > 0
+                if( index(line, 'POSES INSERTED') > 0 ) inserted = .true.
+                if( index(line, 'INSERTED VIEW WEIGHT') > 0 )then
+                    actual = .true.
+                    if( icase == 1 ) actual = index(line, '50% on the assigned view') > 0
+                    if( icase == 3 ) actual = index(line, '100% on the assigned view') > 0
+                endif
+            enddo
+            close(u)
+            select case(icase)
+                case(1)
+                    call assert_true(selected .and. .not. inserted, 'table weights are labelled as selected before in-plane reweighting')
+                    call assert_true(actual, 'inserted view weight uses all four particles, including the fallback, not three valid quadratures')
+                case(2)
+                    call assert_true(inserted .and. .not. selected .and. .not. actual, 'without in-plane reweighting the insertion report is retained')
+                case(3)
+                    call assert_true(actual .and. .not. inserted, 'without extras the inserted view weight is 100 percent without claiming one inserted angle')
+            end select
+        enddo
+    end subroutine test_inpl_weight_report
 
 end module simple_eul_prob_tab_tester

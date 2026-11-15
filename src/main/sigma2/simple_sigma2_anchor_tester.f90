@@ -26,6 +26,7 @@ contains
         call test_band_readout()
         call test_log_blend()
         call test_matching_separation()
+        call test_pole_residuals()
         call leave_fixture(saved, root, nfail0)
     end subroutine run_all_sigma2_anchor_tests
 
@@ -286,5 +287,89 @@ contains
         enddo
         call pose%kill()
     end subroutine test_matching_separation
+
+    !> A quarter-turn maps 1 + A cos(2 theta) to 1 - A cos(2 theta): zero residual at either pole.
+    !! Reading the normalized e3 alone instead gives mean squared residual / 2 = A**2.
+    subroutine test_pole_residuals()
+        use simple_defs, only: PI
+        use simple_type_defs, only: OBJFUN_EUCLID
+        use simple_parameters, only: parameters
+        use simple_polarft_calc, only: polarft_calc
+        use simple_euclid_sigma2, only: euclid_sigma2
+        use simple_ori, only: ori
+        use simple_oris, only: oris
+        integer, parameter :: NPFT = 12
+        real, parameter :: RESID_TOL = 1.e-6 ! single-precision angular fields and shell sums
+        class(parameters), allocatable, target :: params
+        class(polarft_calc), allocatable :: calc
+        class(euclid_sigma2), allocatable, target :: esig
+        type(ori) :: pose
+        type(oris) :: directions
+        complex :: particle(NPFT,2:NSH), reference(NPFT,2:NSH)
+        real :: spectra(NSH,2), amplitude, euls(3), theta
+        real, allocatable :: residual(:)
+        integer :: half, r, iproj
+        write(*,'(A)') 'test_pole_residuals'
+        allocate(params, calc, esig)
+        params%box = 2*NSH
+        params%box_crop = 2*NSH
+        params%pftsz = NPFT
+        params%ctf = 'no'
+        params%oritype = 'ptcl3D'
+        params%cc_objfun = OBJFUN_EUCLID
+        params%fromp = 1
+        params%top = 2
+        params%nspace = 2
+        params%nstates = 2
+        params%kfromto = [2,NSH]
+        spectra = 1.
+        call write_store(spectra, 1_int64, SIGMA2_PROV_PSPEC)
+        call calc%new(params, 4, [1,2], params%kfromto)
+        call esig%new(params, calc, string(STORE), 2*NSH)
+        call esig%read_global()
+        call esig%read_part()
+        do half = 1, 2
+            amplitude = 0.2 + 0.2 * real(half)
+            do r = 1, NPFT
+                theta = real(r-1) * PI / real(NPFT)
+                reference(r,:) = cmplx(1. + amplitude * cos(2.*theta), 0.)
+                particle(r,:)  = cmplx(1. - amplitude * cos(2.*theta), 0.)
+            enddo
+            call calc%set_eo(half, half == 1)
+            call calc%set_ptcl_pft(half, particle)
+            call calc%set_ref_pft(3, reference, half == 1)
+            call calc%set_ref_pft(4, reference, half == 1)
+            reference = (3.,0.)
+            call calc%set_ref_pft(1, reference, half == 1)
+            call calc%set_ref_pft(2, reference, half == 1)
+        enddo
+        call calc%memoize_refs()
+        call calc%memoize_ptcls()
+        call directions%new(2, .false.)
+        call directions%set_euler(1, [37., 0., 0.])
+        call directions%set_euler(2, [53., 180., 0.])
+        call pose%new(is_ptcl=.true.)
+        call pose%set('state', 2)
+        do iproj = 1, 2
+            euls = directions%get_euler(iproj)
+            call pose%set_euler([euls(1), euls(2), 90.])
+            call pose%set('proj', iproj)
+            do half = 1, 2
+                amplitude = 0.2 + 0.2 * real(half)
+                call esig%calc_sigma2(calc, half, pose, 'proj', eulspace=directions)
+                residual = esig%get_sigma2_part(half)
+                call assert_true(maxval(abs(residual)) < RESID_TOL, &
+                    &'pole residual uses the assigned angle and state-local direction in each half')
+                call esig%calc_sigma2(calc, half, pose, 'proj')
+                residual = esig%get_sigma2_part(half)
+                call assert_true(maxval(abs(residual - amplitude**2)) < RESID_TOL, &
+                    &'the normalized-angle control has the independent A-squared residual')
+            enddo
+        enddo
+        call pose%kill()
+        call directions%kill()
+        call calc%kill()
+        call esig%kill()
+    end subroutine test_pole_residuals
 
 end module simple_sigma2_anchor_tester

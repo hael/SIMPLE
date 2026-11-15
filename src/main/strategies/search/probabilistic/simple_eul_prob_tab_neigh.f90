@@ -20,7 +20,7 @@ use simple_eul_prob_tab_utils, only: shift_needs_disk, disk_radius_px, screen_po
 use simple_defs,               only: PROB_INSERT_WMIN
 use simple_polarft_calc, only: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW
 use simple_ori,                only: ori
-use simple_ori_utils,          only: euler_mirror
+use simple_ori_utils,          only: euler_mirror, euler_about_ref
 implicit none
 
 public :: eul_prob_tab_neigh
@@ -1318,12 +1318,15 @@ contains
         logical,                   intent(in)    :: l_with_shift
         real,                      intent(inout) :: shift_seed(3)
         integer :: irot, iref
+        real    :: euls_prev(3)
         shift_seed = 0.
         if( .not. l_with_shift ) return
         if( prev_state >= 1 .and. prev_state <= self%p_ptr%nstates .and.&
             &prev_proj >= 1 .and. prev_proj <= self%p_ptr%nspace )then
             if( self%state_exists(prev_state) )then
-                irot = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())
+                ! the previous in-plane rotation about the previous direction (the angle sits in e1 at a pole)
+                euls_prev = euler_about_ref(o_prev%get_euler(), self%b_ptr%eulspace%get_euler(prev_proj))
+                irot = self%b_ptr%pftc%get_roind(360. - euls_prev(3))
                 iref = (prev_state-1)*self%p_ptr%nspace + prev_proj
                 call grad_obj(ithr)%set_indices(iref, iptcl)
                 shift_seed = grad_obj(ithr)%minimize(irot=irot, sh_rot=.false.)

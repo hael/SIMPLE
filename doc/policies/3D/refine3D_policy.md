@@ -868,7 +868,8 @@ convergence statistics unchanged; `topk=1` is bit for bit the single-draw
 run. The part keeps the extras in its insertion table (`prob_insert_table`:
 per particle the committed weight and the extras as reference, in-plane
 index, refined shift and weight), publishes their counts in its readout
-record, and the master logs `POSES INSERTED` from the merged counts with the
+record, and the master logs `POSES INSERTED` from the merged counts (`POSES SELECTED`
+when the in-plane posterior subsequently reweights them) with the
 insertions per particle, the mean committed weight and the fraction of
 particles with more eligible entries than `topk - 1`: near zero the insertion is
 the full average within the cone, above it `topk` is binding (the record also
@@ -954,7 +955,11 @@ the committed one and its extras, enters at a quadrature of its in-plane posteri
   the particle and the reference (`RND_FAM_INPLQ`), so it depends on no thread, batch or part; the points
   in the solved bin are inserted at the pose's continuous angle, every other entry at its grid angle.
   This also holds for a row collapsed to one entry: its selected bin can differ from the solved bin,
-  because the tempered draw and local solve need not select the physical posterior's dominant peak;
+  because the tempered draw and local solve need not select the physical posterior's dominant peak.
+  The angles replace e3 of the pose's triplet about its direction: an extra's own, and for the
+  committed pose its triplet from `assign_ori` (`committed_euler`), not the project's copy, which
+  `set_euler` normalises and which at e2 = 0 or 180 holds e3 in e1 (the reference spiral's north pole
+  except under D, O and I, and under C its south pole);
 - the poses reweighted by their in-plane marginals (`inpl_view_weights`):
   `log m_k = ln Z_k - T L_min,k - P_k`, normalised over the particle's poses, an extra under
   `PROB_INSERT_WMIN` dropped and the rest renormalised, the committed pose always kept. `P_k` is the
@@ -968,17 +973,20 @@ the committed one and its extras, enters at a quadrature of its in-plane posteri
 Each entry carries its pose's weight times its point count over `K`, so a particle's weights sum to 1
 and the trailing reconstruction's population accounting is unchanged. A particle with a pose without a
 valid row enters at the table's weights, one angle per pose. The entries live in a worst-case reservation laid out at the first
-batch for the part (`prob_insert_poses%reserve_inpl`: `max(1,topk)` blocks of `K` packed entries per
-particle, `max(1,topk)(8 + 4K)` bytes, the memory estimate's term). Gridding inserts each entry from the
+batch for the part (`prob_insert_poses%reserve_inpl`: `max(1,topk)` blocks of `K` packed entries and the
+committed triplet per particle, `max(1,topk)(8 + 4K) + 12` bytes, the memory estimate's term). Gridding inserts each entry from the
 committed plane, re-shifted once per extra pose (`insert_inpl_entries`). PCG expands the entries per
 observation batch in chunks of at most `MAXIMGBATCHSZ`, each chunk with its own records and
 `prep_particles` (`accumulate_pcg_inpl_entries`), so the per-entry metadata is bounded by one chunk, and
 the accumulators equal one flat accumulation of the same entries. The committed pose, the search, the
 table, its draws and everything the search commits are unchanged. The resolution exits take the weighted
-insertion's margin in these passes (`l_margin`). The readout is `IN-PLANE ANGLES` after `POSES INSERTED`: angles per particle, the share of rows
-collapsed to one angle, and whether the budget K exceeds m_max, the highest angular harmonic the band
-resolves at the rim. The readout record also holds the rows per particle, the rows' mean n_eff and the
-committed view weight, which the log does not print; the REC3D bench gives the poses inserted.
+insertion's margin in these passes (`l_margin`). `POSES SELECTED` reports the table's pose count and weights
+before in-plane reweighting; passes without that reweighting retain `POSES INSERTED`. `IN-PLANE ANGLES`
+reports angles per particle, the share of rows collapsed to one angle, and whether the budget K exceeds
+m_max, the highest angular harmonic the band resolves at the rim. `INSERTED VIEW WEIGHT` reports the
+assigned view's actual weight after reweighting, summed over all table particles including fallbacks.
+This is the view's total weight across its angles, not the assigned angle's weight. The readout record also
+holds the rows per particle and their mean n_eff; the REC3D bench gives the poses inserted.
 Whether the maps gain is the maintainer's test on PorF, PfCRT, streptavidin and a small membrane protein.
 
 ### Neighbourhood-table assignment (`assign_rows_neigh`)

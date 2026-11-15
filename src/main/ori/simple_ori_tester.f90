@@ -3,7 +3,8 @@ module simple_ori_tester
 use simple_test_utils ! assertions etc.
 use simple_defs       ! dp, STDLEN, etc.
 use simple_ori,       only: ori
-use simple_ori_utils, only: euler2m, m2euler, euler_compose, geodesic_frobdev, genfire2euler, euler2genfire
+use simple_ori_utils, only: euler2m, m2euler, euler_compose, geodesic_frobdev, genfire2euler, euler2genfire, &
+    &euler_inplrotdist, euler_about_ref
 use simple_linalg,    only: rad2deg
 use simple_string,    only: string
 use simple_type_defs, only: ctfparams, CTFFLAG_YES, CTFFLAG_FLIP
@@ -44,6 +45,8 @@ contains
         call test_mirror_frame_angles()
         call test_transp_involution()
         call test_geodesic_metrics()
+        call test_inplrotdist_poles()
+        call test_euler_about_ref()
         call test_euler_compose_vs_compeuler()
         call test_ori2str_and_str2ori_roundtrip()
         call test_ori_from_rotmat()
@@ -591,6 +594,67 @@ contains
         enddo
         call assert_true(dmax < 1.e-2, 'geodesic_dist_trace of a rotation with itself is ~0 (clamped cosine)')
     end subroutine test_geodesic_trace_self_distance
+
+    !> The in-plane distance: the angle between the e3, or, both at the same pole, between the whole in-plane angles
+    !! (e1 + e3 at e2 = 0, e1 - e3 at e2 = 180), where set_euler leaves e3 at 0
+    subroutine test_inplrotdist_poles()
+        type(ori) :: a, b
+        real      :: e(3)
+        write(*,'(A)') 'test_inplrotdist_poles'
+        call a%new_ori(.false.)
+        call b%new_ori(.false.)
+        ! 30 and 75 degrees about the axis at the north pole, stored with e3 = 0
+        call a%set_euler([0., 0., 30.])
+        call b%set_euler([0., 0., 75.])
+        e = b%get_euler()
+        call assert_real(0., e(3), EPS, 'at the north pole set_euler leaves e3 at 0 (the premise)')
+        call assert_real(45., rad2deg(a .inplrotdist. b), DEG_TOL, &
+            &'two orientations at the north pole are their whole in-plane angles apart')
+        ! a stored rotation against an unfolded triplet 10 degrees on, at either pole
+        call a%set_euler([37., 0., 112.5])
+        call assert_real(10., rad2deg(euler_inplrotdist([37., 0., 122.5], a%get_euler())), DEG_TOL, &
+            &'at the north pole a formed and a stored triplet are their whole in-plane angles apart')
+        call a%set_euler([37., 180., 112.5])
+        call assert_real(10., rad2deg(euler_inplrotdist([37., 180., 122.5], a%get_euler())), DEG_TOL, &
+            &'at the south pole a formed and a stored triplet are their whole in-plane angles apart')
+        call assert_real(40., rad2deg(euler_inplrotdist([10., 180., 0.], [50., 180., 0.])), DEG_TOL, &
+            &'two orientations at the south pole are their whole in-plane angles apart')
+        ! elsewhere, and a pole against a triplet off it, the angle between the e3
+        call assert_real(30., rad2deg(euler_inplrotdist([10., 60., 20.], [80., 60., 50.])), DEG_TOL, &
+            &'off the poles the in-plane distance is the angle between the e3')
+        call assert_real(75., rad2deg(euler_inplrotdist([30., 0., 0.], [0., 60., 75.])), DEG_TOL, &
+            &'a pole against an off-pole triplet keeps the angle between the e3')
+        call a%kill
+        call b%kill
+    end subroutine test_inplrotdist_poles
+
+    !> A stored triplet read about a reference direction (euler_about_ref): itself off the poles; at either pole, where
+    !! set_euler leaves e3 at 0 with the angle in e1, the reference's e1, the in-plane angle about it and the same
+    !! rotation; a triplet beside a pole read about the pole takes e1 + e3, the angle about the axis
+    subroutine test_euler_about_ref()
+        type(ori) :: a
+        real      :: e(3), e_off(3)
+        write(*,'(A)') 'test_euler_about_ref'
+        call a%new_ori(.false.)
+        e_off = [10., 60., 20.]
+        e     = euler_about_ref(e_off, [12., 61., 0.])
+        call assert_true(all(e == e_off), 'off the poles a triplet is read about a reference direction unchanged')
+        ! 112.5 degrees about the north pole reference [37, 0, 0], stored as [149.5, 0, 0]
+        call a%set_euler([37., 0., 112.5])
+        e = euler_about_ref(a%get_euler(), [37., 0., 0.])
+        call assert_real(37.,   e(1), DEG_TOL, 'at the north pole the triplet takes the reference''s e1')
+        call assert_real(112.5, e(3), DEG_TOL, 'at the north pole the in-plane angle about the reference comes back')
+        call assert_true(maxval(abs(euler2m(e) - euler2m(a%get_euler()))) < EPS, 'at the north pole it is the same rotation')
+        ! and about the south pole reference [37, 180, 0]
+        call a%set_euler([37., 180., 112.5])
+        e = euler_about_ref(a%get_euler(), [37., 180., 0.])
+        call assert_real(112.5, e(3), DEG_TOL, 'at the south pole the in-plane angle about the reference comes back')
+        call assert_true(maxval(abs(euler2m(e) - euler2m(a%get_euler()))) < EPS, 'at the south pole it is the same rotation')
+        ! beside the north pole (not folded) and read about the pole
+        e = euler_about_ref([100., 1., 30.], [0., 0., 0.])
+        call assert_real(130., e(3), DEG_TOL, 'a triplet beside the pole read about the pole takes e1 + e3')
+        call a%kill
+    end subroutine test_euler_about_ref
 
     !---------------- euler_compose vs compeuler ----------------
 

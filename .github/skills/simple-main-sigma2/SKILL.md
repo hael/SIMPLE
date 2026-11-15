@@ -29,10 +29,11 @@ Silent ones first.
   which drops the pointer. `fromp`/`top` are copied from `params` at `new`.
 - One maker per generation, verifying consumers. Workers never write the store: a matcher reads its rows
   (`read_part`, `fromp:top`) and the spectra (`read_global`), overwrites the rows of the particles it aligned
-  over its band (`calc_sigma2`) and writes its whole range for the next generation (`write_sigma2`). The master
-  opens the transaction before the workers (`prepare_canonical_sigma_update`) and commits after them: the
-  ranges must belong to that generation and layout, not overlap and cover every row, or the commit stops. So an
-  empty partition writes its unchanged range too.
+  over its band (`calc_sigma2`; the 3D matcher passes `eulspace` so the residual is taken at the pose's in-plane
+  angle about its direction, which a normalised triplet holds in e1 at a pole) and writes its whole range for the
+  next generation (`write_sigma2`). The master opens the transaction before the workers
+  (`prepare_canonical_sigma_update`) and commits after them: the ranges must belong to that generation and layout,
+  not overlap and cover every row, or the commit stops. So an empty partition writes its unchanged range too.
 - The store spans shells `1..fdim(box)-1` of the native box and the project's particle layout (box, smpd,
   particle count, layout digest); a pass updates only its band. Its path is relative to the project's
   directory (`update_projinfo`).

@@ -45,6 +45,11 @@ Silent ones first.
   thread. Every `prob*` draw (sample, in-plane, candidate order, assignment, 2D start class) is keyed on
   (seed, pass, iteration, particle, draw) (`rnd_draw_key`, `prob_rnd_scope`) and depends on no thread, batch or
   part; the project owner fixes the seed first (`adopt_run_seed`). A new `prob*` draw takes a key, not `ran3`.
+- A stored 3D pose's in-plane angle is read about a grid direction, never from `e3` alone: `prep4prob` and
+  `prep4srch` take `prev_roind` about `prev_proj` (`euler_about_ref`), as do the tables' shift seeds, and the 3D
+  sigma2 residual takes `calc_sigma2(..., eulspace=)`; at a pole the stored triplet's e3 is 0, the angle in e1.
+  Nothing pairs a stored pose's e1, e2 with a new e3: `assign_ori` returns the committed pose about its direction (`euler_out`),
+  which the in-plane posterior insertion keeps (`prob_insert_poses%committed_euler`).
 - A worker reproduces the sample (`sample4update_reprod`) whenever the master drew it (probabilistic
   modes, `master_draws_sample*`, the `pose_cont` follow-up) and draws only otherwise.
 - Preparation records each particle's mask (`note_obs_mask`); class sums and 3D reconstruction normalise

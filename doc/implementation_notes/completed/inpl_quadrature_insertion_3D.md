@@ -9,10 +9,15 @@ The final bootstrap postprocess low-pass limits are 4.14–4.25 A in the older r
 newer completed runs (5.65 A is restart 2). These logs do not contain maps or per-particle quadratures, so
 they cannot establish the frequency or map-level effect of an individual defect. The current stage-3 first
 iteration of restart 1 inserts 10.60 angles per particle.
-The printed `POSES INSERTED` assigned weight is `ins_wc_sum`, the table's weight before marginal reweighting;
-`inpl_committed_view_weight_sum` is carried in the part records but is not printed. That line cannot establish
+The supplied logs' `POSES INSERTED` assigned weight is `ins_wc_sum`, the table's weight before marginal reweighting;
+`inpl_committed_view_weight_sum` is carried in their part records but is not printed. That line cannot establish
 that the actual view weights stayed close to the old ones. The logs also count one-entry rows without counting
 how many selected a bin different from the solved bin.
+
+The follow-up logging correction labels those table values `POSES SELECTED` and prints
+`INSERTED VIEW WEIGHT` from the actual marginally reweighted sum divided by all table particles, including
+fallbacks. The assigned view's weight sums its angular entries; it is not the assigned angle's individual weight.
+Without in-plane reweighting, the existing `POSES INSERTED` report is retained.
 
 Code review found that `prob_insert_poses%entry_e3` sends **every collapsed row** to its solved angle, even if
 the quadrature selected a different bin. A hot draw and the subsequent local continuous solve need not select

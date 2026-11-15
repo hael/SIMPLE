@@ -1656,7 +1656,10 @@ int remove_directory_recursive(char *path, int *len, int*count)
     int r = -1;
     if(dfd < 0) {
         struct stat root_stat;
-        if((errno == ENOTDIR || errno == ELOOP) && !lstat(cpath, &root_stat) && S_ISLNK(root_stat.st_mode)) {
+        if(errno == ENOENT) {
+            /* A missing root is a successful no-op, also without a Fortran existence precheck. */
+            r = 0;
+        } else if((errno == ENOTDIR || errno == ELOOP) && !lstat(cpath, &root_stat) && S_ISLNK(root_stat.st_mode)) {
             r = unlink(cpath);
             if(!r) *count = *count + 1;
         }

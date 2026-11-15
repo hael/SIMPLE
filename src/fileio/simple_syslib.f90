@@ -942,41 +942,26 @@ contains
         end if
     end subroutine simple_mkdir
 
-    !> \brief  Remove directory
-    !! return status 0=success for directory exists or directory created
-    !! return error status for other removedir results
+    !> Remove a directory tree or root symlink without following links; a missing root is a successful no-op.
     subroutine simple_rmdir( d, status )
         class(*),          intent(in)  :: d
         integer, optional, intent(out) :: status
         character(kind=c_char,len=:), allocatable :: path
-        integer :: io_status, err, length, count
-        logical :: dir_e
-        dir_e = .false.
+        integer :: io_status, length, count
         select type(d)
             type is(string)
-                inquire(file=d%to_char(), exist=dir_e)
-                if(dir_e) then
-                    allocate(path, source=d%to_char()//c_null_char)
-                endif
+                allocate(path, source=d%to_char()//c_null_char)
             type is(character(*))
-                inquire(file=trim(adjustl(d)), exist=dir_e)
-                if(dir_e) then
-                    allocate(path, source=trim(adjustl(d))//c_null_char)
-                endif
+                allocate(path, source=trim(adjustl(d))//c_null_char)
             class default
                 call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
         end select
-        io_status=0
-        count=0
-        if(dir_e)then
-            length = len_trim(adjustl(path))
-            io_status = removedir(trim(adjustl(path)), length, count)
-            if(io_status /= 0)then
-                err = int(IERRNO(), kind=4 )
-                call simple_error_check(io_status, "syslib:: simple_rmdir failed to remove "//trim(adjustl(path)))
-            endif
-            deallocate(path)
-        end if
+        ! INQUIRE follows links and misses a dangling root; the C routine checks the directory entry itself.
+        count = 0
+        length = len_trim(adjustl(path))
+        io_status = removedir(trim(adjustl(path)), length, count)
+        call simple_error_check(io_status, "syslib:: simple_rmdir failed to remove "//trim(adjustl(path)))
+        deallocate(path)
         if(present(status)) status = io_status
     end subroutine simple_rmdir
 

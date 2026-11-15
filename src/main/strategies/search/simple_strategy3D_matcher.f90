@@ -283,7 +283,7 @@ contains
                 if( ctrl%do_emit_sigma .and. .not. p_ptr%l_cart_refine )then
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
-                    call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj')
+                    call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj', eulspace=b_ptr%eulspace)
                 endif
                 ts_thr(ithr) = ts_thr(ithr) + (omp_get_wtime() - t_ptcl)
             enddo

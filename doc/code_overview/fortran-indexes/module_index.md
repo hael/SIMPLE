@@ -2310,6 +2310,47 @@ Private symbols:
 - `write_all_element_fixture` — subroutine
 
 ---
+## Module: simple_class_candidates
+
+Files:
+- `main/project/simple_class_candidates.f90`
+- `main/project/simple_class_candidates_tester.f90`
+
+Uses:
+- `iso_fortran_env`
+- `simple_error`
+- `simple_fileio`
+- `simple_oris`
+- `simple_ptcl_layout`
+- `simple_sp_project`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+
+Public symbols:
+- `class_candidates` — type
+- `run_all_class_candidates_tests` — subroutine
+- `run_all_class_candidates_tests` — subroutine
+
+Private symbols:
+- `fill_rows` — subroutine
+- `get_cands` — subroutine
+- `get_nseeded` — function
+- `is_seeded` — function
+- `kill` — subroutine
+- `make_project` — subroutine
+- `new` — subroutine
+- `prediction_table` — subroutine
+- `publish` — subroutine
+- `publish_parts` — subroutine
+- `test_parts` — subroutine
+- `test_refusals` — subroutine
+- `test_round_trip` — subroutine
+- `write_and_register` — subroutine
+- `write_part` — subroutine
+
+---
 ## Module: simple_class_compatibility
 
 Files:
@@ -2449,6 +2490,63 @@ Private symbols:
 - `test_read_replaces_previous_array` — subroutine
 
 ---
+## Module: simple_class_student
+
+Files:
+- `main/learn/simple_class_student.f90`
+- `main/learn/simple_class_student_tester.f90`
+
+Uses:
+- `iso_fortran_env`
+- `simple_defs`
+- `simple_defs_hhcnn`
+- `simple_error`
+- `simple_math`
+- `simple_polar_feats`
+- `simple_polar_student`
+- `simple_rnd`
+- `simple_string`
+- `simple_test_utils`
+
+Public symbols:
+- `class_pred` — type
+- `class_student` — type
+- `run_all_class_student_tests` — subroutine
+- `run_all_class_student_tests` — subroutine
+
+Private symbols:
+- `cands_of` — subroutine
+- `get_box` — function
+- `get_box_crop` — function
+- `get_kfromto` — function
+- `get_lp` — function
+- `get_mskdiam` — function
+- `get_ncls` — function
+- `get_pftsz` — function
+- `get_record` — subroutine
+- `get_smpd` — function
+- `get_state` — function
+- `get_threshold` — subroutine
+- `get_train_profile` — function
+- `get_weights` — subroutine
+- `get_with_ctf` — function
+- `init_readout` — subroutine
+- `kill` — subroutine
+- `make_student` — subroutine
+- `new` — subroutine
+- `predict_feat` — subroutine
+- `predict_tensor` — subroutine
+- `prepare_predict` — subroutine
+- `read` — subroutine
+- `rotation_of` — function
+- `set_provenance` — subroutine
+- `set_threshold` — subroutine
+- `test_cands` — subroutine
+- `test_file_roundtrip` — subroutine
+- `train` — subroutine
+- `write` — subroutine
+
+---
 ## Module: simple_classaverager
 
 Files:
@@ -2476,6 +2574,7 @@ Uses:
 - `simple_oris`
 - `simple_parameters`
 - `simple_sp_project`
+- `simple_string_utils`
 - `simple_test_utils`
 
 Public symbols:
@@ -2965,6 +3064,39 @@ Local symbols (enclosing procedure scope):
 - `exec_shape_rank_cavgs::p1_lt_p2` — function
 
 ---
+## Module: simple_commanders_center_ptcls
+
+Files:
+- `main/commanders/simple/simple_commanders_center_ptcls.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commander_base`
+- `simple_commanders_refine2d`
+- `simple_defs`
+- `simple_defs_center`
+- `simple_error`
+- `simple_estimate_ssnr`
+- `simple_jiffys`
+- `simple_parameters`
+- `simple_ran_tabu`
+- `simple_refine2d_fnames`
+- `simple_sp_project`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_type_defs`
+
+Public symbols:
+- `commander_center_ptcls` — type
+
+Private symbols:
+- `exec_center_ptcls` — subroutine
+
+Local symbols (enclosing procedure scope):
+- `exec_center_ptcls::set_child` — subroutine
+
+---
 ## Module: simple_commanders_checks
 
 Files:
@@ -2990,6 +3122,56 @@ Public symbols:
 - `exec_check_update_frac` — subroutine
 - `exec_info_image` — subroutine
 - `exec_info_stktab` — subroutine
+
+---
+## Module: simple_commanders_class_student
+
+Files:
+- `main/commanders/simple/simple_commanders_class_student.f90`
+
+Uses:
+- `simple_class_student`
+- `simple_cmdline`
+- `simple_commander_base`
+- `simple_commanders_center_ptcls`
+- `simple_commanders_mkcavgs`
+- `simple_commanders_refine2d`
+- `simple_commanders_solve2d`
+- `simple_core_module_api`
+- `simple_defs_hhcnn`
+- `simple_error`
+- `simple_image`
+- `simple_imghead`
+- `simple_parameters`
+- `simple_refine2d_fnames`
+- `simple_sp_project`
+- `simple_strategy_class_student`
+- `simple_string`
+
+Public symbols:
+- `commander_learn_class_student` — type
+- `commander_predict_classes` — type
+- `commander_validate_class_student` — type
+
+Private symbols:
+- `exec_learn_class_student` — subroutine
+- `exec_predict_classes` — subroutine
+- `exec_validate_class_student` — subroutine
+- `set_ncls_from_refs` — subroutine
+
+Local symbols (enclosing procedure scope):
+- `exec_validate_class_student::arm_stats` — function
+- `exec_validate_class_student::cavgs_frc` — subroutine
+- `exec_validate_class_student::enter_subdir` — subroutine
+- `exec_validate_class_student::lj` — function
+- `exec_validate_class_student::met` — function
+- `exec_validate_class_student::r2s` — function
+- `exec_validate_class_student::read_pred_table` — subroutine
+- `exec_validate_class_student::report_statistics` — subroutine
+- `exec_validate_class_student::select_rows` — subroutine
+- `exec_validate_class_student::set_parts` — subroutine
+- `exec_validate_class_student::write_copy` — subroutine
+- `exec_validate_class_student::write_timings` — subroutine
 
 ---
 ## Module: simple_commanders_denoise
@@ -3063,6 +3245,7 @@ Files:
 
 Uses:
 - `simple_commanders_api`
+- `simple_defs_flex`
 - `simple_flex_pca_strategy`
 - `simple_magic_boxes`
 
@@ -3415,6 +3598,7 @@ Uses:
 - `simple_commanders_solve3d`
 - `simple_core_module_api`
 - `simple_defs`
+- `simple_defs_hhcnn`
 - `simple_error`
 - `simple_estimate_ssnr`
 - `simple_fileio`
@@ -3445,6 +3629,7 @@ Private symbols:
 Local symbols (enclosing procedure scope):
 - `exec_validate_pose_student::enter_subdir` — subroutine
 - `exec_validate_pose_student::rec_from_poses` — subroutine
+- `exec_validate_pose_student::set_parts` — subroutine
 - `exec_validate_pose_student::write_recs` — subroutine
 - `exec_validate_pose_student::write_timings` — subroutine
 - `report_statistics::dist_stats` — subroutine
@@ -3463,6 +3648,7 @@ Files:
 Uses:
 - `simple_commanders_api`
 - `simple_nu_filter`
+- `simple_string_utils`
 
 Public symbols:
 - `commander_postprocess_nu` — type
@@ -3732,7 +3918,7 @@ Uses:
 - `simple_procimgstk`
 - `simple_progress`
 - `simple_refine2d_strategy`
-- `simple_solve2d_controller`
+- `simple_sigma2_anchor`
 - `simple_strategy2d_matcher`
 
 Public symbols:
@@ -3892,6 +4078,7 @@ Uses:
 - `simple_dose_series`
 - `simple_dose_series_manifest`
 - `simple_estimate_ssnr`
+- `simple_fileio`
 - `simple_fsc`
 - `simple_nu_filter`
 - `simple_opt_filter`
@@ -3927,7 +4114,6 @@ Local symbols (enclosing procedure scope):
 - `exec_dose_filter3D::plot_decay` — subroutine
 - `exec_dose_filter3D::prepare_half` — subroutine
 - `exec_dose_filter3D::scatter_half` — subroutine
-- `exec_dose_filter3D::strip_extension` — function
 - `exec_dose_filter3D::write_coefficients` — subroutine
 - `exec_dose_filter3D::write_fsc_table` — subroutine
 - `exec_estimate_lpstages::calc_lplim_final_stage` — function
@@ -4019,6 +4205,7 @@ Uses:
 - `simple_sigma2_bootstrap`
 - `simple_solve2d_chunk`
 - `simple_solve2d_controller`
+- `simple_string_utils`
 - `simple_timer`
 
 Public symbols:
@@ -4076,6 +4263,7 @@ Uses:
 - `simple_commanders_rec`
 - `simple_commanders_refine3d`
 - `simple_commanders_reproject`
+- `simple_defs_solve3d`
 - `simple_eo_partition`
 - `simple_estimate_ssnr`
 - `simple_external_reference_pose_initialization`
@@ -4159,6 +4347,7 @@ Files:
 Uses:
 - `simple_commanders_api`
 - `simple_commanders_solve3d`
+- `simple_defs_solve3d`
 - `simple_refine3d_fnames`
 - `simple_solve3d_addon_report`
 - `simple_solve3d_chunks_plan`
@@ -4179,51 +4368,6 @@ Private symbols:
 
 Local symbols (enclosing procedure scope):
 - `exec_solve3D_chunks::forward_keys` — subroutine
-
----
-## Module: simple_commanders_solve3D_pyramid
-
-Files:
-- `main/commanders/simple/simple_commanders_solve3D_pyramid.f90`
-
-Uses:
-- `simple_cavg_quality_model`
-- `simple_chash`
-- `simple_cmdline`
-- `simple_commander_base`
-- `simple_commanders_cavgs`
-- `simple_commanders_denoise`
-- `simple_commanders_refine3d`
-- `simple_commanders_solve2d`
-- `simple_commanders_solve3d`
-- `simple_defs`
-- `simple_defs_fname`
-- `simple_error`
-- `simple_estimate_ssnr`
-- `simple_fileio`
-- `simple_jiffys`
-- `simple_math_ft`
-- `simple_parameters`
-- `simple_sp_project`
-- `simple_state_assignment`
-- `simple_string`
-- `simple_string_utils`
-- `simple_syslib`
-
-Public symbols:
-- `commander_solve3D_pyramid` — type
-
-Private symbols:
-- `command_text` — function
-- `exec_solve3D_pyramid` — subroutine
-- `pyramid_report` — type
-- `write_report` — subroutine
-
-Local symbols (enclosing procedure scope):
-- `exec_solve3D_pyramid::fail` — subroutine
-- `exec_solve3D_pyramid::run_job` — subroutine
-- `exec_solve3D_pyramid::state_resolutions` — subroutine
-- `exec_solve3D_pyramid::take_2D` — subroutine
 
 ---
 ## Module: simple_commanders_starproject
@@ -4295,6 +4439,7 @@ Uses:
 - `simple_defs`
 - `simple_defs_fname`
 - `simple_defs_stream`
+- `simple_defs_stream_commanders`
 - `simple_error`
 - `simple_fileio`
 - `simple_gui_assembler`
@@ -4392,6 +4537,7 @@ Uses:
 - `simple_cmdline`
 - `simple_commander_base`
 - `simple_defs`
+- `simple_defs_stream_commanders`
 - `simple_error`
 - `simple_jiffys`
 - `simple_stream_sigterm`
@@ -4485,6 +4631,7 @@ Uses:
 - `simple_commander_base`
 - `simple_defs`
 - `simple_defs_fname`
+- `simple_defs_stream_commanders`
 - `simple_error`
 - `simple_gui_metadata_stream_solve3d_multistate`
 - `simple_jiffys`
@@ -4524,8 +4671,10 @@ Uses:
 - `simple_cavgs_work_project_tester`
 - `simple_chash_tester`
 - `simple_cif2mrc_tester`
+- `simple_class_candidates`
 - `simple_class_compatibility`
 - `simple_class_sample_io_tester`
+- `simple_class_student`
 - `simple_classaverager`
 - `simple_cmdline_tester`
 - `simple_commanders_api`
@@ -4606,6 +4755,7 @@ Uses:
 - `simple_pftc_inplane_tester`
 - `simple_polar_feats_tester`
 - `simple_polar_shiftmap`
+- `simple_polar_student`
 - `simple_polarft_calc`
 - `simple_polarft_corr_tester`
 - `simple_pose_student`
@@ -4628,8 +4778,8 @@ Uses:
 - `simple_refine_motion_model_strategy`
 - `simple_rnd`
 - `simple_segmentation_tester`
+- `simple_sigma2_anchor_tester`
 - `simple_sigma2_bootstrap_tester`
-- `simple_sigma2_frozen_tester`
 - `simple_sigma2_state`
 - `simple_simulator_tester`
 - `simple_solve2d_controller`
@@ -4651,7 +4801,7 @@ Uses:
 - `simple_strategy3d_cont_1jyx_tester`
 - `simple_strategy3d_cont_tester`
 - `simple_strategy3d_inplane_tester`
-- `simple_strategy_pose_student`
+- `simple_strategy_student_common`
 - `simple_stream_chain_tester`
 - `simple_stream_job_sets_tester`
 - `simple_stream_master_tester`
@@ -4774,6 +4924,8 @@ Files:
 - `main/commanders/test/simple_commanders_test_highlevel.f90`
 - `main/commanders/test/simple_commanders_test_highlevel_addon.f90`
 - `main/commanders/test/simple_commanders_test_highlevel_backends.f90`
+- `main/commanders/test/simple_commanders_test_highlevel_center.f90`
+- `main/commanders/test/simple_commanders_test_highlevel_class_student.f90`
 - `main/commanders/test/simple_commanders_test_highlevel_cont.f90`
 - `main/commanders/test/simple_commanders_test_highlevel_fixture.f90`
 - `main/commanders/test/simple_commanders_test_highlevel_flex.f90`
@@ -4796,8 +4948,11 @@ Uses:
 - `simple_cartesian_fourier`
 - `simple_cartft_pose_opt`
 - `simple_class_frcs`
+- `simple_class_student`
 - `simple_cluster_seed`
 - `simple_commanders_api`
+- `simple_commanders_center_ptcls`
+- `simple_commanders_class_student`
 - `simple_commanders_denoise`
 - `simple_commanders_flex_pca`
 - `simple_commanders_pick`
@@ -4815,6 +4970,7 @@ Uses:
 - `simple_commanders_solve3d`
 - `simple_commanders_validate`
 - `simple_defs_fname`
+- `simple_defs_hhcnn`
 - `simple_eo_partition`
 - `simple_estimate_ssnr`
 - `simple_euclid_sigma2`
@@ -4827,6 +4983,7 @@ Uses:
 - `simple_image`
 - `simple_imghead`
 - `simple_matcher_ptcl_io`
+- `simple_math`
 - `simple_molecule_data`
 - `simple_ori_utils`
 - `simple_oris`
@@ -4845,6 +5002,7 @@ Uses:
 - `simple_solve3d_manifest`
 - `simple_sp_project`
 - `simple_state_weight_set`
+- `simple_strategy_student_common`
 - `simple_string_utils`
 - `simple_sym`
 - `simple_syslib`
@@ -4869,6 +5027,8 @@ Uses:
 
 Public symbols:
 - `commander_generate_solve3D_addon_snapshots` — type
+- `commander_test_center_ptcls` — type
+- `commander_test_class_student` — type
 - `commander_test_cont_refine3D_1jxy` — type
 - `commander_test_cont_refine3D_bench` — type
 - `commander_test_flex_pca_blobs` — type
@@ -4891,6 +5051,10 @@ Public symbols:
 - `commander_test_write_state_weights_mixed` — type
 - `exec_generate_solve3D_addon_snapshots` — subroutine
 - `exec_generate_solve3D_addon_snapshots` — subroutine
+- `exec_test_center_ptcls` — subroutine
+- `exec_test_center_ptcls` — subroutine
+- `exec_test_class_student` — subroutine
+- `exec_test_class_student` — subroutine
 - `exec_test_cont_refine3D_1jxy` — subroutine
 - `exec_test_cont_refine3D_1jxy` — subroutine
 - `exec_test_cont_refine3D_bench` — subroutine
@@ -4999,6 +5163,9 @@ Private symbols:
 Local symbols (enclosing procedure scope):
 - `check_case::check_run` — subroutine
 - `evaluate::docked_fname` — function
+- `exec_test_center_ptcls::median_of` — function
+- `exec_test_class_student::master_as_shared_memory` — subroutine
+- `exec_test_class_student::read_reads` — subroutine
 - `exec_test_mini_stream_quantitative::find_simulation` — function
 - `exec_test_mini_stream_quantitative::nrecords` — function
 - `exec_test_mini_stream_quantitative::require` — subroutine
@@ -5038,6 +5205,7 @@ Local symbols (enclosing procedure scope):
 - `run_cont_refine3D_gate::sym_err` — function
 - `run_flex_mode::job_exited_cleanly` — function
 - `run_pose_student_gate::enter_stage` — subroutine
+- `run_pose_student_gate::master_as_shared_memory` — subroutine
 - `run_pose_student_gate::read_model_record` — subroutine
 - `run_pose_student_gate::read_pred_table` — subroutine
 - `run_pose_student_gate::read_table_rows` — subroutine
@@ -5218,21 +5386,19 @@ Files:
 
 Uses:
 - `simple_atoms`
-- `simple_butterworth`
 - `simple_clustering_utils`
 - `simple_commanders_api`
 - `simple_commanders_reproject`
 - `simple_dock_vols`
-- `simple_halfmap_diagnostics`
 - `simple_image_msk`
 - `simple_imghead`
+- `simple_postprocess_strategy`
 - `simple_procimgstk`
 - `simple_projector`
 - `simple_segmentation`
 - `simple_simple_volinterp`
 - `simple_strategy2d_utils`
 - `simple_symanalyzer`
-- `simple_vol_pproc_policy`
 - `simple_volanalyzer`
 - `simple_volcluster`
 - `simple_volpft_symsrch`
@@ -5260,7 +5426,6 @@ Public symbols:
 - `exec_volanalyze` — subroutine
 - `exec_volcluster` — subroutine
 - `exec_volops` — subroutine
-- `postprocess_volume_from_files` — subroutine
 
 ---
 ## Module: simple_commanders_volops_tester
@@ -5361,6 +5526,7 @@ Private symbols:
 - `test_posterior_anneal_tail` — subroutine
 - `test_posterior_anneal_tail2D` — subroutine
 - `test_posterior_anneal_tail_states` — subroutine
+- `test_posterior_exits_inpl_posterior` — subroutine
 - `test_posterior_exits_weighted_insertion` — subroutine
 - `test_posterior_minimum_iterations` — subroutine
 - `test_posterior_multistate_overlap` — subroutine
@@ -5372,6 +5538,7 @@ Private symbols:
 
 Local symbols (enclosing procedure scope):
 - `test_posterior_anneal_tail2D::converged_field` — subroutine
+- `test_posterior_exits_inpl_posterior::run_stage` — subroutine
 - `test_posterior_exits_weighted_insertion::run_stage` — subroutine
 - `test_stage_exit_progress::run_stage` — subroutine
 - `test_stage_plateau_exit::run_stage` — subroutine
@@ -5742,6 +5909,12 @@ Public symbols:
 - `get_lattice_params` — subroutine
 
 ---
+## Module: simple_defs_center
+
+Files:
+- `defs/simple_defs_center.f90`
+
+---
 ## Module: simple_defs_conv
 
 Files:
@@ -5775,6 +5948,12 @@ Uses:
 - `iso_c_binding`
 
 ---
+## Module: simple_defs_hhcnn
+
+Files:
+- `defs/simple_defs_hhcnn.f90`
+
+---
 ## Module: simple_defs_ori
 
 Files:
@@ -5787,6 +5966,12 @@ Public symbols:
 - `oriparam_isthere` — function
 
 ---
+## Module: simple_defs_solve3D
+
+Files:
+- `defs/simple_defs_solve3D.f90`
+
+---
 ## Module: simple_defs_stream
 
 Files:
@@ -5794,6 +5979,12 @@ Files:
 
 Public symbols:
 - `scaled_dims` — type
+
+---
+## Module: simple_defs_stream_commanders
+
+Files:
+- `defs/simple_defs_stream_commanders.f90`
 
 ---
 ## Module: simple_defs_string
@@ -6335,13 +6526,16 @@ Public symbols:
 - `ssnr2fsc` — function
 - `ssnr2optlp` — function
 
+Private symbols:
+- `stage_autoscale` — subroutine
+- `stage_box` — subroutine
+- `stage_trslim` — function
+
 Local symbols (enclosing procedure scope):
 - `lpstages::apply_trslim_override` — subroutine
 - `lpstages::calc_lpinfo` — subroutine
-- `lpstages::calc_scaleinfo` — subroutine
 - `lpstages::print_lpinfo` — subroutine
 - `lpstages::print_scaleinfo` — subroutine
-- `lpstages_fast::calc_scaleinfo` — subroutine
 
 ---
 ## Module: simple_euclid_sigma2
@@ -6355,9 +6549,10 @@ Uses:
 - `simple_cartft_calc`
 - `simple_core_module_api`
 - `simple_fplane_grid`
+- `simple_ori_utils`
 - `simple_parameters`
 - `simple_polarft_calc`
-- `simple_sigma2_frozen`
+- `simple_sigma2_anchor`
 - `simple_sigma2_state`
 - `simple_sigma2_state_file`
 - `simple_syslib`
@@ -6398,6 +6593,7 @@ Uses:
 - `simple_builder`
 - `simple_defs`
 - `simple_eul_prob_tab_utils`
+- `simple_ori_utils`
 - `simple_pftc_shsrch_grad`
 - `simple_pftc_srch_api`
 - `simple_polarft_calc`
@@ -6407,19 +6603,23 @@ Uses:
 
 Public symbols:
 - `eul_prob_tab` — type
+- `seeded_window_refine` — function
 
 Private symbols:
 - `assign_batch` — subroutine
 - `assign_candidate` — subroutine
 - `assign_rows` — subroutine
 - `close_assignment` — subroutine
+- `copy_inpl_counts` — subroutine
 - `entry_candidate` — function
 - `fill_tab_range` — subroutine
 - `full_to_compact_ref` — function
 - `get_fill_profile` — function
 - `get_posterior_row` — subroutine
+- `get_prior_centre` — function
 - `get_readout` — function
 - `get_row` — subroutine
+- `get_shift_prior_sigma2` — function
 - `initialize_storage` — subroutine
 - `keep_batch_rows` — subroutine
 - `kill` — subroutine
@@ -6427,9 +6627,11 @@ Private symbols:
 - `new_common` — subroutine
 - `new_pipeline` — subroutine
 - `open_assignment` — subroutine
+- `open_inpl_assignment` — subroutine
 - `ref_full` — function
 - `ref_proj` — function
 - `ref_state` — function
+- `set_inpl_counts` — subroutine
 - `set_insert_cone` — subroutine
 - `set_iteration_model` — subroutine
 - `set_model_from_field` — subroutine
@@ -6464,6 +6666,7 @@ Uses:
 - `ieee_arithmetic`
 - `iso_fortran_env`
 - `simple_builder`
+- `simple_class_candidates`
 - `simple_decay_funs`
 - `simple_eul_prob_tab_utils`
 - `simple_pftc_shsrch_grad`
@@ -6490,8 +6693,10 @@ Private symbols:
 - `fill_tab_range` — subroutine
 - `finalize_candidate_assignment` — subroutine
 - `get_fill_profile` — function
+- `get_posterior_row` — subroutine
 - `init_eval2D_sparse_ws` — subroutine
 - `initialize_storage` — subroutine
+- `keep_batch_rows` — subroutine
 - `kill` — subroutine
 - `memoize_seed_bank2D` — subroutine
 - `new_common` — subroutine
@@ -6515,6 +6720,7 @@ Local symbols (enclosing procedure scope):
 - `fill_tab_prob_neigh_range::process_particle` — subroutine
 - `fill_tab_prob_neigh_range::refine_best_classes` — subroutine
 - `fill_tab_prob_neigh_range::score_class` — subroutine
+- `new_common::open_class_candidates` — subroutine
 - `record_fill_profile2D::add_counters` — subroutine
 
 ---
@@ -6547,6 +6753,7 @@ Private symbols:
 - `set_candidate` — subroutine
 - `test_dense_batch` — subroutine
 - `test_dense_posterior_assignment` — subroutine
+- `test_dense_posterior_rows` — subroutine
 - `test_inpl_insert_channel` — subroutine
 - `test_inpl_phase` — subroutine
 - `test_inpl_quadrature` — subroutine
@@ -6672,6 +6879,13 @@ Private symbols:
 - `test_bounded_and_power_samplers` — subroutine
 - `test_draw_posterior_row` — subroutine
 - `test_geom_cone_prefilter` — subroutine
+- `test_inpl_collapsed_peak` — subroutine
+- `test_inpl_prior_weights` — subroutine
+- `test_inpl_readout_round_trip` — subroutine
+- `test_inpl_reservation_layout` — subroutine
+- `test_inpl_view_against_angle_weight` — subroutine
+- `test_inpl_view_weights` — subroutine
+- `test_inpl_weight_report` — subroutine
 - `test_insert_cone` — subroutine
 - `test_insert_extras_multistate` — subroutine
 - `test_insert_pose_loss` — subroutine
@@ -6747,7 +6961,14 @@ Public symbols:
 - `draw_posterior_row` — subroutine
 - `eulprob_corr_switch` — function
 - `eulprob_dist_switch` — function
+- `inpl_entry_count` — function
+- `inpl_entry_pack` — function
+- `inpl_entry_rot` — function
+- `inpl_particle_counts` — function
+- `inpl_prior_penalty` — function
 - `inpl_quadrature` — subroutine
+- `inpl_reserved_bytes` — function
+- `inpl_view_weights` — subroutine
 - `insert_cone_from_fsc` — function
 - `insert_pose_loss` — function
 - `keyed_candidate_order` — subroutine
@@ -6757,12 +6978,14 @@ Public symbols:
 - `posterior_row_stats` — subroutine
 - `posterior_temperature` — function
 - `print_disk_set` — subroutine
+- `prior_window_centre` — function
 - `prob_beta_at` — function
 - `prob_candidate` — type
 - `prob_candidate_buffer` — type
 - `prob_candidate_store` — type
 - `prob_dense_entry` — type
 - `prob_fill_profile` — type
+- `prob_inpl_counts` — type
 - `prob_insert_cone` — type
 - `prob_insert_inpl` — type
 - `prob_insert_pose` — type
@@ -6800,6 +7023,8 @@ Private symbols:
 - `append_candidate` — subroutine
 - `append_or_replace_candidate` — subroutine
 - `get_buffer_candidate_inpl` — function
+- `inpl3D_report_counts` — subroutine
+- `inpl_counts_add` — subroutine
 - `inpl_insert_begin_batch` — subroutine
 - `inpl_insert_end_batch` — subroutine
 - `inpl_insert_get_counts` — subroutine
@@ -6809,6 +7034,7 @@ Private symbols:
 - `inpl_insert_set_single` — subroutine
 - `inpl_insert_set_spread` — subroutine
 - `inpl_report_counts` — subroutine
+- `inpl_text` — function
 - `insert_cone_get_angle` — function
 - `insert_cone_has_space` — function
 - `insert_cone_is_open` — function
@@ -6816,8 +7042,13 @@ Private symbols:
 - `insert_cone_new` — subroutine
 - `insert_cone_set_space` — subroutine
 - `insert_cone_within` — function
+- `insert_poses_block` — function
+- `insert_poses_entry_e3` — function
+- `insert_poses_entry_weight` — function
 - `insert_poses_has` — function
+- `insert_poses_has_blocks` — function
 - `insert_poses_kill` — subroutine
+- `insert_poses_reserve_inpl` — subroutine
 - `insert_poses_setup_range` — subroutine
 - `insert_report_counts` — subroutine
 - `insert_table_add` — subroutine
@@ -6831,14 +7062,14 @@ Private symbols:
 - `kill_candidate_buffer` — subroutine
 - `kill_candidate_store` — subroutine
 - `maxheap_sift_down` — subroutine
+- `neff_clause` — function
+- `neff_readout_clause` — function
 - `neff_readout_kill` — subroutine
 - `neff_readout_new` — subroutine
 - `neff_readout_nkept` — function
 - `neff_readout_offer` — subroutine
-- `neff_readout_report` — subroutine
 - `neff_readout_sum_neff` — function
 - `neff_readout_wanted` — function
-- `neff_report_sums` — subroutine
 - `new_fixed_candidate_store` — subroutine
 - `new_ragged_candidate_store` — subroutine
 - `quad_add_point` — subroutine
@@ -7107,6 +7338,8 @@ Files:
 Uses:
 - `simple_cmdline`
 - `simple_commanders_cavgs`
+- `simple_commanders_center_ptcls`
+- `simple_commanders_class_student`
 - `simple_commanders_mkcavgs`
 - `simple_commanders_project_cls`
 - `simple_commanders_refine2d`
@@ -7187,7 +7420,6 @@ Uses:
 - `simple_commanders_resolest`
 - `simple_commanders_solve3d`
 - `simple_commanders_solve3d_chunks`
-- `simple_commanders_solve3d_pyramid`
 - `simple_commanders_volops`
 - `simple_exec_helpers`
 - `simple_string`
@@ -7266,6 +7498,8 @@ Uses:
 - `simple_cmdline`
 - `simple_commanders_api`
 - `simple_ctf_estimate_fit`
+- `simple_image`
+- `simple_imgarr_utils`
 - `simple_parameters`
 - `simple_particle_extractor`
 - `simple_qsys_env`
@@ -7300,8 +7534,6 @@ Private symbols:
 - `set_extract_defaults` — subroutine
 
 Local symbols (enclosing procedure scope):
-- `inmem_execute::box_inside` — function
-- `inmem_execute::killimgbatch` — subroutine
 - `inmem_execute::prepimgbatch` — subroutine
 
 ---
@@ -7501,13 +7733,15 @@ Public symbols:
 - `fname2iter` — function
 - `fname_new_ext_char` — function
 - `fname_new_ext_str` — function
+- `fname_size` — function
 - `fopen` — subroutine
 - `funit_size` — function
 - `get_fbody_char` — function
 - `get_fbody_str` — function
 - `get_fpath` — function
 - `get_open_funits` — subroutine
-- `get_relative_path` — function
+- `get_relative_path_char` — function
+- `get_relative_path_str` — function
 - `imat2file` — subroutine
 - `is_funit_open` — function
 - `lmat2file` — subroutine
@@ -7522,6 +7756,7 @@ Public symbols:
 - `rmat2file` — subroutine
 - `simple_copy_file` — subroutine
 - `stemname` — function
+- `strip_fext` — function
 - `swap_suffix_char` — function
 - `swap_suffix_str` — function
 - `wait_for_closure` — subroutine
@@ -7565,6 +7800,7 @@ Private symbols:
 - `test_simple_list_files_and_regexp` — subroutine
 - `test_simple_mkdir_dir_exists_chdir_getcwd_rmdir` — subroutine
 - `test_simple_touch_rename_abspath` — subroutine
+- `test_strip_fext` — subroutine
 - `test_write_singlelineoftext_and_read_exit_code` — subroutine
 
 Local symbols (enclosing procedure scope):
@@ -8670,6 +8906,8 @@ Public symbols:
 - `orth_block` — subroutine
 - `path_latent_targets` — subroutine
 - `reliability_path_targets` — subroutine
+
+Private symbols:
 - `sort_block_desc` — subroutine
 
 ---
@@ -9226,6 +9464,7 @@ Files:
 Uses:
 - `simple_cmdline`
 - `simple_core_module_api`
+- `simple_fileio`
 - `simple_forked_process`
 - `simple_fplane_grid`
 - `simple_image`
@@ -9252,7 +9491,6 @@ Private symbols:
 - `bundle_store` — function
 - `component` — function
 - `delete_gridding_set` — subroutine
-- `file_size` — function
 - `get_density` — subroutine
 - `get_nfrozen_state` — function
 - `gridding_set_status` — subroutine
@@ -10506,6 +10744,7 @@ Uses:
 - `simple_image`
 - `simple_image_msk`
 - `simple_parameters`
+- `simple_string_utils`
 
 Public symbols:
 - `copy_support_provenance` — subroutine
@@ -10766,6 +11005,7 @@ Private symbols:
 - `test_gradient_check` — subroutine
 - `test_hermitian_contract` — subroutine
 - `test_mirror_invariance` — subroutine
+- `test_no_reflection` — subroutine
 - `test_thread_identity` — subroutine
 - `test_tiled_blocks` — subroutine
 - `test_toy_problem` — subroutine
@@ -10939,6 +11179,7 @@ Public symbols:
 - `image_stack` — type
 - `unmemoize_mask_coords` — subroutine
 - `unmemoize_powspec_coords` — subroutine
+- `window_inside` — function
 
 Private symbols:
 - `acf` — subroutine
@@ -11679,7 +11920,6 @@ Private symbols:
 
 Local symbols (enclosing procedure scope):
 - `distance_transform::dt_1d` — subroutine
-- `frame_ref_phase_correlation::interp_peak` — function
 - `NLmean2D::reflect_ind` — function
 - `nu_objective::squared_loss_scaled` — function
 - `warp_frames_and_sum::interp_bilin` — function
@@ -11922,6 +12162,7 @@ Private symbols:
 - `test_corr` — subroutine
 - `test_ctf_maps_box_check` — subroutine
 - `test_dose_weighing_modes` — subroutine
+- `test_fcorr_shift_cutoff` — subroutine
 - `test_fft_roundtrip_and_nyquist` — subroutine
 - `test_file_roundtrip` — subroutine
 - `test_file_roundtrip_sizes` — subroutine
@@ -12037,6 +12278,7 @@ Uses:
 - `simple_tifflib`
 
 Public symbols:
+- `check_stack_dims` — subroutine
 - `find_img_smpd` — function
 - `find_ldim_nptcls` — subroutine
 - `get_mrc_minmax` — subroutine
@@ -12340,6 +12582,7 @@ Uses:
 
 Public symbols:
 - `jpg_img` — type
+- `jpg_rgb_code` — function
 - `write_rgb_jpeg` — subroutine
 
 Private symbols:
@@ -12992,8 +13235,10 @@ Uses:
 Public symbols:
 - `calc_3Drec` — subroutine
 - `cleanup_rec_buffers` — subroutine
+- `count_inserted_poses` — function
 - `gen_rec_plane` — subroutine
 - `init_rec` — subroutine
+- `insert_inpl_entries` — subroutine
 - `prep_imgs4rec` — subroutine
 - `write_rec3D_bench` — subroutine
 - `write_state_half_partial` — subroutine
@@ -13019,6 +13264,8 @@ Files:
 
 Uses:
 - `iso_fortran_env`
+- `simple_defs`
+- `simple_eul_prob_tab_utils`
 - `simple_parameters`
 - `simple_type_defs`
 
@@ -13034,6 +13281,8 @@ Files:
 
 Uses:
 - `iso_fortran_env`
+- `simple_defs`
+- `simple_eul_prob_tab_utils`
 - `simple_matcher_memory`
 - `simple_parameters`
 - `simple_test_utils`
@@ -13254,7 +13503,8 @@ Public symbols:
 - `calc_score_thres` — function
 - `ceil_div` — function
 - `create_hist_vector` — subroutine
-- `cross` — function
+- `cross_dp` — function
+- `cross_sp` — function
 - `elim_dup` — subroutine
 - `equispaced_vals` — function
 - `floor_div` — function
@@ -13274,6 +13524,7 @@ Public symbols:
 - `otsu_binarize` — subroutine
 - `otsu_mask` — subroutine
 - `otsu_thresh` — subroutine
+- `parabolic_peak_offset` — function
 - `pixels_dist_int` — function
 - `pixels_dist_real` — function
 - `put_last` — subroutine
@@ -13627,6 +13878,8 @@ Uses:
 - `simple_ft_expanded`
 - `simple_ftexp_shsrch`
 - `simple_image`
+- `simple_math`
+- `simple_motion_correct_utils`
 - `simple_parameters`
 
 Public symbols:
@@ -13637,12 +13890,10 @@ Private symbols:
 - `align_corr` — subroutine
 - `align_dcorr` — subroutine
 - `align_discrete` — subroutine
-- `calc_rmsd` — function
 - `calc_shifts` — subroutine
 - `dealloc_ftexps` — subroutine
 - `dealloc_images` — subroutine
 - `fit_polynomial` — subroutine
-- `gen_weights` — subroutine
 - `get_coords` — subroutine
 - `get_corr` — function
 - `get_corrs` — subroutine
@@ -13669,7 +13920,6 @@ Private symbols:
 - `set_weights` — subroutine
 
 Local symbols (enclosing procedure scope):
-- `calc_shifts::interp_peak` — function
 - `polynomial2shift::poly2val` — function
 
 ---
@@ -13681,6 +13931,8 @@ Files:
 Uses:
 - `simple_core_module_api`
 - `simple_image`
+- `simple_math`
+- `simple_motion_correct_utils`
 - `simple_parameters`
 
 Public symbols:
@@ -13689,10 +13941,8 @@ Public symbols:
 Private symbols:
 - `align` — subroutine
 - `align_dcorr` — subroutine
-- `calc_rmsd` — function
 - `calc_shifts` — subroutine
 - `dealloc_images` — subroutine
-- `gen_weights` — subroutine
 - `get_opt_shifts` — subroutine
 - `get_reference` — subroutine
 - `init_images` — subroutine
@@ -13702,9 +13952,6 @@ Private symbols:
 - `set_reslims` — subroutine
 - `set_trs` — subroutine
 - `shift_frames_gen_ref` — subroutine
-
-Local symbols (enclosing procedure scope):
-- `calc_shifts::interp_peak` — function
 
 ---
 ## Module: simple_motion_correct
@@ -13821,8 +14068,10 @@ Public symbols:
 - `correct_gain` — subroutine
 - `eer_scale_movie_convention` — subroutine
 - `flip_gain` — subroutine
+- `motion_align_weights` — subroutine
 - `patch_poly` — function
 - `pix2polycoords` — function
+- `shifts_rmsd` — function
 
 ---
 ## Module: simple_motion_gain_analysis
@@ -14166,6 +14415,7 @@ Uses:
 - `simple_error`
 - `simple_rnd`
 - `simple_srch_sort_loc`
+- `simple_stat`
 - `simple_test_utils`
 - `simple_xd_gmm`
 
@@ -14188,8 +14438,6 @@ Private symbols:
 - `fit_k_cov` — subroutine
 - `gauss_samples` — subroutine
 - `is_admissible` — function
-- `median_dp` — function
-- `sort_desc` — function
 - `test_calibration` — subroutine
 - `test_coordination_term` — subroutine
 - `test_enclosed_fraction` — subroutine
@@ -14515,6 +14763,7 @@ Uses:
 - `simple_neighs`
 - `simple_nu_filter_vars`
 - `simple_rnd`
+- `simple_string_utils`
 - `simple_tent_smooth`
 - `simple_test_utils`
 
@@ -14748,6 +14997,7 @@ Uses:
 - `simple_image_msk`
 - `simple_nu_filter`
 - `simple_parameters`
+- `simple_string_utils`
 
 Public symbols:
 - `nonuniform_filter_state` — subroutine
@@ -15468,6 +15718,7 @@ Private symbols:
 - `test_delete_2Dclustering` — subroutine
 - `test_delete_3Dalignment` — subroutine
 - `test_delete_entry` — subroutine
+- `test_euler_about_ref` — subroutine
 - `test_euler_basic_set_get` — subroutine
 - `test_euler_compose_vs_compeuler` — subroutine
 - `test_euler_matrix_roundtrip` — subroutine
@@ -15476,6 +15727,7 @@ Private symbols:
 - `test_geodesic_trace_self_distance` — subroutine
 - `test_get_dfx_dfy_and_setters` — subroutine
 - `test_get_keys` — subroutine
+- `test_inplrotdist_poles` — subroutine
 - `test_isthere_and_ischar` — subroutine
 - `test_mirror2d_involution` — subroutine
 - `test_mirror3d_involution` — subroutine
@@ -15509,6 +15761,7 @@ Public symbols:
 - `dm2euler` — function
 - `euler2genfire` — function
 - `euler2m` — function
+- `euler_about_ref` — function
 - `euler_compose` — subroutine
 - `euler_dist` — function
 - `euler_inplrotdist` — function
@@ -15520,8 +15773,8 @@ Public symbols:
 - `rnd_romat` — subroutine
 
 Private symbols:
-- `cross3` — function
 - `euler_normal` — function
+- `euler_pole` — function
 - `genfire_rotmat` — function
 - `rotmat` — function
 
@@ -15587,6 +15840,8 @@ Private symbols:
 - `copy_same_kind` — subroutine
 - `count_state_gt_zero` — function
 - `count_state_gt_zero` — function
+- `count_state_updated` — function
+- `count_state_updated` — function
 - `counts2fracs` — subroutine
 - `delete` — subroutine
 - `delete` — subroutine
@@ -16047,7 +16302,6 @@ Local symbols (enclosing procedure scope):
 - `write_projdir_heatmap::greek_token_glyph` — function
 - `write_projdir_heatmap::greek_token_length` — function
 - `write_projdir_heatmap::heat_color` — subroutine
-- `write_projdir_heatmap::rgb_code` — function
 - `write_projdir_heatmap::segment_distance_sq` — function
 - `write_projdir_heatmap::smooth_tick_text_width` — function
 - `write_projdir_heatmap::text_width` — function
@@ -16623,6 +16877,7 @@ Files:
 Uses:
 - `ieee_arithmetic`
 - `simple_core_module_api`
+- `simple_timer`
 
 Public symbols:
 - `pcg_operator` — type
@@ -16636,8 +16891,6 @@ Private symbols:
 - `pcg_precond_i` — subroutine
 - `pcg_size_i` — function
 - `pcg_solver_outcome_kill` — subroutine
-- `pcg_tic` — function
-- `pcg_toc` — function
 
 ---
 ## Module: simple_pcg_sparse_tester
@@ -17492,6 +17745,85 @@ Private symbols:
 - `test_peak_recovery` — subroutine
 
 ---
+## Module: simple_polar_student
+
+Files:
+- `main/learn/simple_polar_student.f90`
+- `main/learn/simple_polar_student_tester.f90`
+
+Uses:
+- `ieee_arithmetic`
+- `iso_fortran_env`
+- `simple_defs`
+- `simple_error`
+- `simple_fileio`
+- `simple_hhcnn`
+- `simple_polar_feats`
+- `simple_rnd`
+- `simple_string`
+- `simple_syslib`
+- `simple_test_utils`
+- `simple_timer`
+
+Public symbols:
+- `polar_student` — type
+- `polar_student_header` — type
+- `polar_student_targets` — subroutine
+- `run_all_polar_student_tests` — subroutine
+- `run_all_polar_student_tests` — subroutine
+- `student_train_profile` — type
+
+Private symbols:
+- `class_rotation` — subroutine
+- `disk_shift` — subroutine
+- `get_box` — function
+- `get_box_crop` — function
+- `get_features` — subroutine
+- `get_kfromto` — function
+- `get_lp` — function
+- `get_mskdiam` — function
+- `get_nclass` — function
+- `get_nfeat` — function
+- `get_nk` — function
+- `get_pftsz` — function
+- `get_pftsz_net` — function
+- `get_record` — subroutine
+- `get_seed` — function
+- `get_smpd` — function
+- `get_threshold` — subroutine
+- `get_train_profile` — function
+- `get_weights` — subroutine
+- `get_with_ctf` — function
+- `header_kill` — subroutine
+- `header_read` — subroutine
+- `header_weights_path` — subroutine
+- `init_templates` — subroutine
+- `keyed_permutation` — subroutine
+- `keyed_uniforms` — subroutine
+- `kill` — subroutine
+- `load` — subroutine
+- `make_core` — subroutine
+- `new` — subroutine
+- `predict_tensor` — subroutine
+- `prepare_predict` — subroutine
+- `random_tensor` — subroutine
+- `read_record` — subroutine
+- `set_provenance` — subroutine
+- `set_threshold` — subroutine
+- `shift_feat` — subroutine
+- `test_header_roundtrip` — subroutine
+- `test_targets` — subroutine
+- `test_weights_helpers` — subroutine
+- `train` — subroutine
+- `weights_fname` — function
+- `weights_header_mismatch` — function
+- `write` — subroutine
+
+Local symbols (enclosing procedure scope):
+- `train::assemble_batch` — subroutine
+- `train::evaluate_held` — subroutine
+
+---
 ## Module: simple_polarft_calc
 
 Files:
@@ -17896,36 +18228,31 @@ Files:
 - `main/learn/simple_pose_student_tester.f90`
 
 Uses:
-- `ieee_arithmetic`
 - `iso_fortran_env`
 - `simple_defs`
+- `simple_defs_hhcnn`
 - `simple_error`
 - `simple_fileio`
-- `simple_hhcnn`
 - `simple_math`
 - `simple_ori`
 - `simple_oris`
 - `simple_polar_feats`
+- `simple_polar_student`
 - `simple_rnd`
 - `simple_string`
-- `simple_string_utils`
 - `simple_sym`
 - `simple_syslib`
 - `simple_test_utils`
-- `simple_timer`
 
 Public symbols:
 - `pose_student` — type
-- `pose_student_targets` — subroutine
 - `run_all_pose_student_tests` — subroutine
 - `run_all_pose_student_tests` — subroutine
 - `student_pred` — type
-- `student_train_profile` — type
 
 Private symbols:
 - `angle_between` — function
 - `cone_of` — subroutine
-- `disk_shift` — subroutine
 - `fold_index` — function
 - `get_box` — function
 - `get_box_crop` — function
@@ -17948,11 +18275,8 @@ Private symbols:
 - `grid_closest` — function
 - `grid_euler` — function
 - `grid_spacing` — function
-- `header_weights_path` — subroutine
 - `heavier` — function
 - `init_readout` — subroutine
-- `keyed_permutation` — subroutine
-- `keyed_uniforms` — subroutine
 - `kill` — subroutine
 - `make_student` — subroutine
 - `mirror_of` — function
@@ -17965,26 +18289,42 @@ Private symbols:
 - `random_readout` — subroutine
 - `random_tensor` — subroutine
 - `read` — subroutine
-- `read_record` — subroutine
 - `set_cone_bound` — subroutine
 - `set_provenance` — subroutine
 - `set_threshold` — subroutine
 - `test_cone` — subroutine
 - `test_file_roundtrip` — subroutine
 - `test_pairs` — subroutine
-- `test_targets` — subroutine
 - `test_threshold_roundtrip` — subroutine
 - `test_weights_contract` — subroutine
 - `test_wide_band` — subroutine
 - `train` — subroutine
-- `weights_fname` — function
-- `weights_header_mismatch` — function
 - `write` — subroutine
 
 Local symbols (enclosing procedure scope):
 - `cone_of::sort_pairs` — subroutine
-- `train::assemble_batch` — subroutine
-- `train::evaluate_held` — subroutine
+
+---
+## Module: simple_postprocess_strategy
+
+Files:
+- `main/strategies/parallelization/simple_postprocess_strategy.f90`
+
+Uses:
+- `simple_butterworth`
+- `simple_cmdline`
+- `simple_core_module_api`
+- `simple_halfmap_diagnostics`
+- `simple_image`
+- `simple_image_msk`
+- `simple_parameters`
+- `simple_sp_project`
+- `simple_string_utils`
+- `simple_vol_pproc_policy`
+
+Public symbols:
+- `postprocess_volume_from_files` — subroutine
+- `run_postprocess` — subroutine
 
 ---
 ## Module: simple_preprocess_strategy
@@ -18040,6 +18380,7 @@ Uses:
 - `simple_cmdline`
 - `simple_commanders_cavgs`
 - `simple_commanders_checks`
+- `simple_commanders_class_student`
 - `simple_commanders_denoise`
 - `simple_commanders_distr`
 - `simple_commanders_euclid`
@@ -18107,6 +18448,7 @@ Uses:
 - `simple_core_module_api`
 - `simple_ctf`
 - `simple_image`
+- `simple_imghead`
 - `simple_memoize_ft_maps`
 - `simple_sp_project`
 - `simple_stack_io`
@@ -18130,7 +18472,6 @@ Public symbols:
 - `pad_imgfile` — subroutine
 - `phase_rand_imgfile` — subroutine
 - `quantize_imgfile` — subroutine
-- `raise_exception_imgfile` — subroutine
 - `random_cls_from_imgfile` — subroutine
 - `random_selection_from_imgfile` — subroutine
 - `real_filter_imgfile` — subroutine
@@ -18451,6 +18792,7 @@ Uses:
 - `simple_image_bin`
 - `simple_imgarr_utils`
 - `simple_imghead`
+- `simple_jpg`
 - `simple_optics_maps`
 - `simple_parameters`
 - `simple_projfile_utils`
@@ -18580,7 +18922,6 @@ Local symbols (enclosing procedure scope):
 - `write_rejection_reason_overlay_jpg::paint_reason_border` — subroutine
 - `write_rejection_reason_overlay_jpg::reason_code_from_text` — function
 - `write_rejection_reason_overlay_jpg::reason_color` — function
-- `write_rejection_reason_overlay_jpg::rgb_code` — function
 
 ---
 ## Module: simple_ptcl_sieve_utils
@@ -18743,6 +19084,7 @@ Uses:
 - `simple_qsys_persistent_worker`
 - `simple_qsys_slurm`
 - `simple_rnd`
+- `simple_string_utils`
 - `simple_syslib`
 - `unix`
 
@@ -18787,7 +19129,6 @@ Private symbols:
 - `schedule_streaming` — subroutine
 - `service_persistent_worker_warmup` — subroutine
 - `set_jobs_status` — subroutine
-- `shell_quote` — function
 - `stage_coarray_jobs` — subroutine
 - `stop_on_failed_parts` — subroutine
 - `submit_coarray_jobs` — subroutine
@@ -19203,18 +19544,22 @@ Uses:
 
 Public symbols:
 - `accumulate_pcg_extras` — subroutine
+- `accumulate_pcg_inpl_batch` — subroutine
 - `accumulate_pcg_state_half` — subroutine
 - `calculate_pcg_state_diagnostics` — subroutine
 - `execute_rec3D_pcg_distributed_master` — subroutine
 - `execute_rec3D_pcg_worker` — subroutine
 - `pcg_assemble_bench` — type
 - `pcg_extra_entries` — subroutine
+- `pcg_inpl_particle_entries` — subroutine
 - `rec3D_master_nthr` — function
+- `remove_pcg_raw_files` — subroutine
 - `set_pcg_solve_support` — subroutine
 - `validate_pcg_common` — subroutine
 - `write_pcg_assemble_bench` — subroutine
 
 Private symbols:
+- `accumulate_pcg_inpl_entries` — subroutine
 - `build_pcg_density_support` — subroutine
 - `build_pcg_state_support` — subroutine
 - `matched_band_kstop` — function
@@ -19228,6 +19573,7 @@ Private symbols:
 - `write_output_diagnostics` — subroutine
 
 Local symbols (enclosing procedure scope):
+- `accumulate_pcg_inpl_batch::flush_chunk` — subroutine
 - `build_pcg_state_support::handle_missing_reference` — subroutine
 - `execute_rec3D_pcg_distributed_master::add_raw_read_size` — subroutine
 - `execute_rec3D_pcg_distributed_master::atomic_prior_provenance` — function
@@ -19258,6 +19604,7 @@ Local symbols (enclosing procedure scope):
 - `execute_rec3D_pcg_distributed_master::write_distributed_diagnostics` — subroutine
 - `execute_rec3D_pcg_worker::accumulate_worker_state_half` — subroutine
 - `execute_rec3D_pcg_worker::collect_weighted_state_half` — subroutine
+- `pcg_inpl_particle_entries::add_entry` — subroutine
 
 ---
 ## Module: simple_rec3D_service
@@ -19268,10 +19615,10 @@ Files:
 Uses:
 - `simple_builder`
 - `simple_cmdline`
-- `simple_commanders_volops`
 - `simple_core_module_api`
 - `simple_matcher_3drec`
 - `simple_parameters`
+- `simple_postprocess_strategy`
 - `simple_qsys_env`
 - `simple_rec3d_pcg_strategy`
 - `simple_refine3d_fnames`
@@ -19297,7 +19644,6 @@ Private symbols:
 - `postprocess_states` — subroutine
 - `rec3D_saved_params` — type
 - `register_outputs` — subroutine
-- `remove_pcg_raw_files` — subroutine
 - `rename_outputs` — subroutine
 - `report_weight_set` — subroutine
 - `restore_params` — subroutine
@@ -19365,13 +19711,20 @@ Uses:
 - `simple_eo_partition`
 - `simple_eul_prob_tab_utils`
 - `simple_exec_helpers`
+- `simple_fplane_grid`
+- `simple_image`
+- `simple_matcher_3drec`
+- `simple_math_ft`
+- `simple_memoize_ft_maps`
 - `simple_parameters`
 - `simple_qsys_funs`
 - `simple_rec3d_pcg_strategy`
 - `simple_rec3d_service`
+- `simple_reconstructor`
 - `simple_reconstructor_pcg`
 - `simple_rnd`
 - `simple_sigma2_bootstrap`
+- `simple_sp_project`
 - `simple_test_utils`
 - `simple_type_defs`
 
@@ -19403,11 +19756,15 @@ Private symbols:
 - `test_backend_resolution` — subroutine
 - `test_defaults` — subroutine
 - `test_factory_branches` — subroutine
+- `test_inpl_gridding_entries` — subroutine
 - `test_pcg_extra_entries` — subroutine
+- `test_pcg_inpl_chunks` — subroutine
 
 Local symbols (enclosing procedure scope):
+- `test_inpl_gridding_entries::set_block` — subroutine
 - `test_pcg_extra_entries::accumulate_entries` — subroutine
 - `test_pcg_extra_entries::accumulate_plain` — subroutine
+- `test_pcg_inpl_chunks::set_block` — subroutine
 
 ---
 ## Module: simple_rec3D_wave_strategy
@@ -19716,6 +20073,7 @@ Uses:
 - `simple_pcg_lattice`
 - `simple_pcg_solver`
 - `simple_rnd`
+- `simple_timer`
 
 Public symbols:
 - `handle_cold_restart_outcome` — subroutine
@@ -19778,8 +20136,6 @@ Private symbols:
 - `ml_shrink_factor` — function
 - `new` — subroutine
 - `pack_half_slice` — subroutine
-- `pcg_tic` — function
-- `pcg_toc` — function
 - `prep_particles` — subroutine
 - `prepare_fused_planes` — subroutine
 - `reconstruction_vector_apply` — subroutine
@@ -19825,6 +20181,7 @@ Uses:
 - `simple_cmdline`
 - `simple_commanders_api`
 - `simple_dose_curve`
+- `simple_image`
 - `simple_parameters`
 - `simple_particle_extractor`
 - `simple_qsys_env`
@@ -19837,7 +20194,6 @@ Public symbols:
 - `reextract_strategy` — type
 
 Private symbols:
-- `box_inside` — function
 - `cleanup_interface` — subroutine
 - `distr_cleanup` — subroutine
 - `distr_end_message` — function
@@ -19910,12 +20266,13 @@ Uses:
 - `simple_qsys_funs`
 - `simple_refine2d_fnames`
 - `simple_rnd`
+- `simple_sigma2_anchor`
 - `simple_sigma2_bootstrap`
-- `simple_sigma2_frozen`
 - `simple_starproject`
 - `simple_strategy2d_matcher`
 - `simple_strategy_sigma2`
 - `simple_stream_utils`
+- `simple_string_utils`
 
 Public symbols:
 - `create_refine2D_strategy` — function
@@ -19951,7 +20308,7 @@ Private symbols:
 - `inmem_finalize_run` — subroutine
 - `inmem_initialize` — subroutine
 - `refine2D_bench_state` — type
-- `report_frozen_sigma2` — subroutine
+- `report_sigma2_anchor` — subroutine
 - `restore_cavgs_inmem` — subroutine
 - `run_distributed_cavg_assembly` — subroutine
 - `tail_start_interface` — function
@@ -20227,7 +20584,6 @@ Uses:
 - `simple_cluster_seed`
 - `simple_cmdline`
 - `simple_commanders_rec`
-- `simple_commanders_volops`
 - `simple_convergence`
 - `simple_core_module_api`
 - `simple_decay_funs`
@@ -20246,6 +20602,7 @@ Uses:
 - `simple_matcher_smpl_and_lplims`
 - `simple_oris`
 - `simple_parameters`
+- `simple_postprocess_strategy`
 - `simple_qsys_env`
 - `simple_qsys_funs`
 - `simple_rec3d_pcg_strategy`
@@ -20262,6 +20619,7 @@ Uses:
 - `simple_strategy3d_matcher`
 - `simple_strategy_sigma2`
 - `simple_string`
+- `simple_string_utils`
 - `simple_syslib`
 - `simple_test_utils`
 - `simple_trail_chain_manifest`
@@ -20320,7 +20678,6 @@ Private symbols:
 - `refresh_matching_lp_from_project` — subroutine
 - `refresh_resolution_fields_from_fsc` — subroutine
 - `remove_partial_rec_files` — subroutine
-- `remove_pcg_raw_files` — subroutine
 - `report_rec_master_phase` — subroutine
 - `reset_refine3D_bench` — subroutine
 - `seed_multistate_startup_labels` — subroutine
@@ -20409,6 +20766,7 @@ Uses:
 - `simple_refine3d_fnames`
 - `simple_sp_project`
 - `simple_stack_io`
+- `simple_string_utils`
 - `simple_syslib`
 - `simple_test_flex_phantom_fixture`
 - `simple_test_fraction_dose_fixture`
@@ -20453,7 +20811,6 @@ Private symbols:
 - `number` — function
 - `plot_fraction_fsc` — subroutine
 - `remove_fraction_partials` — subroutine
-- `shell_quote` — function
 - `validate_fraction_range` — subroutine
 - `write_fraction_fsc_matrix` — subroutine
 
@@ -20741,6 +21098,61 @@ Local symbols (enclosing procedure scope):
 - `srch::alloc_results` — subroutine
 
 ---
+## Module: simple_sigma2_anchor
+
+Files:
+- `main/sigma2/simple_sigma2_anchor.f90`
+
+Uses:
+- `ieee_arithmetic`
+- `iso_fortran_env`
+- `simple_sigma2_state_file`
+- `simple_syslib`
+
+Public symbols:
+- `blend_sigma2` — subroutine
+- `prepare_sigma2_anchor` — subroutine
+- `read_sigma2_anchor` — subroutine
+- `sigma2_anchor_band_stats` — subroutine
+- `sigma2_stage_weight` — function
+
+Private symbols:
+- `smooth_log_spectrum` — subroutine
+
+---
+## Module: simple_sigma2_anchor_tester
+
+Files:
+- `main/sigma2/simple_sigma2_anchor_tester.f90`
+
+Uses:
+- `ieee_arithmetic`
+- `iso_fortran_env`
+- `simple_defs`
+- `simple_euclid_sigma2`
+- `simple_ori`
+- `simple_oris`
+- `simple_parameters`
+- `simple_polarft_calc`
+- `simple_sigma2_anchor`
+- `simple_sigma2_state_file`
+- `simple_string`
+- `simple_test_utils`
+- `simple_type_defs`
+
+Public symbols:
+- `run_all_sigma2_anchor_tests` — subroutine
+
+Private symbols:
+- `test_band_readout` — subroutine
+- `test_invalid_companions` — subroutine
+- `test_log_blend` — subroutine
+- `test_matching_separation` — subroutine
+- `test_pole_residuals` — subroutine
+- `test_smoothing_and_persistence` — subroutine
+- `write_store` — subroutine
+
+---
 ## Module: simple_sigma2_bootstrap
 
 Files:
@@ -20812,58 +21224,6 @@ Uses:
 Public symbols:
 - `canonical_sigma2_consumable` — function
 - `load_sigma2` — subroutine
-
----
-## Module: simple_sigma2_frozen
-
-Files:
-- `main/sigma2/simple_sigma2_frozen.f90`
-
-Uses:
-- `ieee_arithmetic`
-- `iso_fortran_env`
-- `simple_sigma2_state_file`
-- `simple_syslib`
-
-Public symbols:
-- `blend_sigma2` — subroutine
-- `frozen_sigma2_band_stats` — subroutine
-- `prepare_frozen_sigma2` — subroutine
-- `read_frozen_sigma2` — subroutine
-
-Private symbols:
-- `smooth_log_spectrum` — subroutine
-
----
-## Module: simple_sigma2_frozen_tester
-
-Files:
-- `main/sigma2/simple_sigma2_frozen_tester.f90`
-
-Uses:
-- `ieee_arithmetic`
-- `iso_fortran_env`
-- `simple_defs`
-- `simple_euclid_sigma2`
-- `simple_ori`
-- `simple_parameters`
-- `simple_polarft_calc`
-- `simple_sigma2_frozen`
-- `simple_sigma2_state_file`
-- `simple_string`
-- `simple_test_utils`
-- `simple_type_defs`
-
-Public symbols:
-- `run_all_sigma2_frozen_tests` — subroutine
-
-Private symbols:
-- `test_band_readout` — subroutine
-- `test_invalid_companions` — subroutine
-- `test_log_blend` — subroutine
-- `test_matching_separation` — subroutine
-- `test_smoothing_and_persistence` — subroutine
-- `write_store` — subroutine
 
 ---
 ## Module: simple_sigma2_pspec_sums
@@ -21124,6 +21484,7 @@ Uses:
 - `simple_image_msk`
 - `simple_parameters`
 - `simple_refine2d_fnames`
+- `simple_sigma2_anchor`
 - `simple_sp_project`
 - `simple_test_utils`
 
@@ -21136,7 +21497,6 @@ Public symbols:
 - `set_cline_refine2D_seed_pass` — subroutine
 - `set_cline_refine2D_stage` — subroutine
 - `set_solve2D_sampling_policy` — subroutine
-- `sigma2_stage_weight` — function
 - `solve2D_class_frc05_quantile` — subroutine
 - `solve2D_first_shift_stage` — function
 - `solve2D_mskdiam_estimate` — subroutine
@@ -21977,6 +22337,7 @@ Public symbols:
 - `reverse_iarr` — subroutine
 - `reverse_rarr` — subroutine
 - `scores2order` — function
+- `scores2order_stable` — function
 - `selec_dp` — function
 - `selec_sp` — function
 - `unique` — subroutine
@@ -22210,6 +22571,7 @@ Files:
 Uses:
 - `simple_core_module_api`
 - `simple_image`
+- `simple_imghead`
 
 Public symbols:
 - `acf_stack` — subroutine
@@ -22219,9 +22581,6 @@ Public symbols:
 - `prep_imgfile4movie` — subroutine
 - `stats_imgfile` — subroutine
 
-Private symbols:
-- `raise_exception` — subroutine
-
 ---
 ## Module: simple_starfile
 
@@ -22230,6 +22589,7 @@ Files:
 
 Uses:
 - `simple_core_module_api`
+- `simple_fileio`
 - `simple_starfile_wrappers`
 
 Public symbols:
@@ -22245,11 +22605,6 @@ Private symbols:
 - `write_optics_table` — subroutine
 - `write_ptcl2D_table` — subroutine
 - `write_ptcl2D_table_parallel` — subroutine
-
-Local symbols (enclosing procedure scope):
-- `write_mics_table::get_relative_path_here` — function
-- `write_ptcl2D_table::get_relative_path_here` — function
-- `write_ptcl2D_table_parallel::get_relative_path_here` — function
 
 ---
 ## Module: simple_starfile_tester
@@ -22441,6 +22796,7 @@ Uses:
 - `cplot2d_wrapper_module`
 - `simple_cmdline`
 - `simple_core_module_api`
+- `simple_fileio`
 - `simple_parameters`
 - `simple_sp_project`
 - `simple_starfile_wrappers`
@@ -22461,10 +22817,6 @@ Private symbols:
 - `stream_export_micrographs` — subroutine
 - `stream_export_particles_2D` — subroutine
 - `stream_write_optics` — subroutine
-
-Local symbols (enclosing procedure scope):
-- `starfile_set_micrographs_table::get_relative_path_here` — function
-- `starfile_set_particles2D_table::get_relative_path_here` — function
 
 ---
 ## Module: simple_starproject_stream_tester
@@ -22749,8 +23101,6 @@ Public symbols:
 - `check_state_refs` — subroutine
 - `compact_states` — subroutine
 - `count_active_classes` — function
-- `cut_whole_stacks` — function
-- `docked_cc_common_grid` — function
 - `docked_pair_cc` — function
 - `expansion_budget` — function
 - `fit_mskdiam` — function
@@ -22758,8 +23108,6 @@ Public symbols:
 - `log_jpeg` — subroutine
 - `map_assignment` — function
 - `map_refine_result` — function
-- `map_state_poses` — function
-- `median_of` — function
 - `model_rejected_rows` — function
 - `read_refs_record` — function
 - `refs_check` — type
@@ -22769,30 +23117,26 @@ Public symbols:
 - `run_all_state_assignment_tests` — subroutine
 - `score_cavgs_with_model` — function
 - `select_route_classes` — subroutine
-- `select_state_classes` — function
 - `set_assign_cline` — subroutine
 - `set_cavgs3D_cline` — subroutine
 - `set_clsexp_cline` — subroutine
 - `set_refine_cont_cline` — subroutine
 - `set_refine_seeds` — subroutine
 - `set_solve2D_route_cline` — subroutine
-- `set_state_cavgs3D_cline` — subroutine
 - `usable_job_2D` — function
 - `write_matched_cavgs` — subroutine
 - `write_refine_project` — subroutine
 - `write_state_cavgs` — subroutine
 
 Private symbols:
+- `median_of` — function
 - `test_check_rules` — subroutine
-- `test_cut_whole_stacks` — subroutine
 - `test_fit_rules` — subroutine
 - `test_job_clines` — subroutine
 - `test_state_cavgs` — subroutine
-- `test_state_runs` — subroutine
 
 Local symbols (enclosing procedure scope):
 - `check_state_refs::write_check_cavgs` — subroutine
-- `docked_cc_common_grid::fourier_crop` — subroutine
 - `map_assignment::log_fit` — subroutine
 - `write_state_cavgs::write_cavgs_jpeg` — subroutine
 
@@ -23338,6 +23682,7 @@ Uses:
 Public symbols:
 - `clean_strategy3D` — subroutine
 - `prep_strategy3D` — subroutine
+- `prep_strategy3D_inpl_bank` — subroutine
 - `prep_strategy3D_thread` — subroutine
 - `ref_proj_from_index` — function
 - `ref_state_from_index` — function
@@ -23622,6 +23967,7 @@ Uses:
 - `simple_cmdline`
 - `simple_core_module_api`
 - `simple_defs`
+- `simple_eul_prob_tab`
 - `simple_forked_process`
 - `simple_image`
 - `simple_linked_list`
@@ -23630,6 +23976,7 @@ Uses:
 - `simple_matcher_ptcl_io`
 - `simple_matcher_smpl_and_lplims`
 - `simple_memoize_ft_maps`
+- `simple_ori_utils`
 - `simple_parameters`
 - `simple_pftc_shsrch_grad`
 - `simple_polarft_calc`
@@ -23668,16 +24015,20 @@ Private symbols:
 - `test_map_initialised_refinement` — subroutine
 - `test_pass_state_team_sized` — subroutine
 - `test_pass_team_check` — subroutine
+- `test_previous_inplane_at_poles` — subroutine
 - `test_previous_shift_is_stored_shift` — subroutine
 - `test_rec_observation_mask` — subroutine
 - `test_rec_state_half_stops_on_eo` — subroutine
 - `test_resolve_inplane_e3` — subroutine
+- `test_seeded_window_centre` — subroutine
+- `test_solved_row_frame` — subroutine
 - `test_storage_with_continuous_arrays` — subroutine
 - `test_storage_without_continuous_arrays` — subroutine
 - `test_table_increment_axes` — subroutine
 
 Local symbols (enclosing procedure scope):
 - `test_rec_observation_mask::record_and_reread` — subroutine
+- `test_seeded_window_centre::closed_form_centre` — function
 
 ---
 ## Module: simple_strategy3D_matcher
@@ -23739,7 +24090,9 @@ Local symbols (enclosing procedure scope):
 - `refine3D_exec::pipeline_batch` — subroutine
 - `refine3D_exec::prepare_particles_batches` — subroutine
 - `refine3D_exec::prepare_refs_sigmas_and_pftc` — subroutine
+- `refine3D_exec::report_inpl_counts` — subroutine
 - `refine3D_exec::sample_particles_for_update` — subroutine
+- `refine3D_exec::setup_inpl_posterior` — subroutine
 - `refine3D_exec::strategy3D_per_ptcl` — type
 - `refine3D_exec::write_bench_file` — subroutine
 - `refine3D_exec::write_empty_readout` — subroutine
@@ -23769,6 +24122,9 @@ Uses:
 - `simple_eul_prob_tab_utils`
 - `simple_oris`
 - `simple_parameters`
+- `simple_polarft_calc`
+- `simple_rnd`
+- `simple_strategy3d_alloc`
 - `simple_strategy3d_pftc`
 - `simple_strategy3d_srch`
 - `simple_strategy3d_utils`
@@ -23777,7 +24133,11 @@ Public symbols:
 - `strategy3D_prob` — type
 
 Private symbols:
+- `add_inpl_counts` — subroutine
 - `has_valid_assignment` — function
+- `inpl_active` — function
+- `inpl_pose_row` — subroutine
+- `insert_inpl_posterior` — subroutine
 - `kill_prob` — subroutine
 - `new_prob` — subroutine
 - `oris_assign_prob` — subroutine
@@ -23821,6 +24181,7 @@ Uses:
 - `simple_core_module_api`
 - `simple_eul_prob_tab`
 - `simple_eul_prob_tab_utils`
+- `simple_ori_utils`
 - `simple_parameters`
 - `simple_pftc_shsrch_grad`
 - `simple_shiftmap_srch`
@@ -23861,6 +24222,7 @@ Files:
 
 Uses:
 - `simple_core_module_api`
+- `simple_ori_utils`
 - `simple_pftc_shsrch_grad`
 - `simple_strategy3d_alloc`
 - `simple_strategy3d_srch`
@@ -23873,11 +24235,64 @@ Public symbols:
 - `resolve_inplane_e3` — function
 
 ---
+## Module: simple_strategy_class_student
+
+Files:
+- `main/strategies/parallelization/simple_strategy_class_student.f90`
+
+Uses:
+- `iso_fortran_env`
+- `simple_binoris_io`
+- `simple_builder`
+- `simple_class_candidates`
+- `simple_class_student`
+- `simple_classaverager`
+- `simple_cmdline`
+- `simple_core_module_api`
+- `simple_defs_hhcnn`
+- `simple_eo_partition`
+- `simple_eul_prob_tab2d`
+- `simple_eul_prob_tab_utils`
+- `simple_image`
+- `simple_matcher_pftc_prep`
+- `simple_matcher_ptcl_batch`
+- `simple_matcher_ptcl_io`
+- `simple_matcher_smpl_and_lplims`
+- `simple_parameters`
+- `simple_pftc_shsrch_grad`
+- `simple_polar_feats`
+- `simple_qsys_funs`
+- `simple_rnd`
+- `simple_sigma2_bootstrap`
+- `simple_strategy_student_common`
+- `simple_type_defs`
+
+Public symbols:
+- `learn_class_student_exec` — subroutine
+- `predict_classes_exec` — subroutine
+- `run_learn_class_student` — subroutine
+- `run_predict_classes` — subroutine
+
+Private symbols:
+- `predict_classes_master` — subroutine
+
+Local symbols (enclosing procedure scope):
+- `learn_class_student_exec::check_reread_population` — subroutine
+- `learn_class_student_exec::keep_design` — subroutine
+- `learn_class_student_exec::log_inpl_error` — subroutine
+- `learn_class_student_exec::predict_held` — subroutine
+- `learn_class_student_exec::set_conf_threshold` — subroutine
+- `learn_class_student_exec::try_design` — subroutine
+- `learn_class_student_exec::write_header` — subroutine
+- `learn_class_student_exec::write_heldout_table` — subroutine
+- `predict_classes_exec::predict_one` — subroutine
+- `predict_classes_exec::write_empty_part` — subroutine
+
+---
 ## Module: simple_strategy_pose_student
 
 Files:
 - `main/strategies/parallelization/simple_strategy_pose_student.f90`
-- `main/strategies/parallelization/simple_strategy_pose_student_tester.f90`
 
 Uses:
 - `ieee_arithmetic`
@@ -23887,6 +24302,7 @@ Uses:
 - `simple_builder`
 - `simple_cmdline`
 - `simple_core_module_api`
+- `simple_defs_hhcnn`
 - `simple_eo_partition`
 - `simple_eul_prob_tab`
 - `simple_eul_prob_tab_utils`
@@ -23897,43 +24313,34 @@ Uses:
 - `simple_matcher_smpl_and_lplims`
 - `simple_math`
 - `simple_ori`
+- `simple_ori_utils`
 - `simple_parameters`
 - `simple_pftc_shsrch_grad`
 - `simple_polar_feats`
+- `simple_polar_student`
 - `simple_pose_student`
+- `simple_qsys_funs`
 - `simple_rnd`
 - `simple_sigma2_bootstrap`
-- `simple_test_utils`
+- `simple_strategy_student_common`
 - `simple_type_defs`
 
 Public symbols:
 - `learn_pose_student_exec` — subroutine
 - `predict_poses_exec` — subroutine
-- `run_all_strategy_pose_student_tests` — subroutine
-- `run_all_strategy_pose_student_tests` — subroutine
 - `run_learn_pose_student` — subroutine
 - `run_predict_poses` — subroutine
-- `student_boot_quantile` — function
-- `student_conf_threshold` — subroutine
-- `student_geometry_mismatch` — function
-- `student_holdout_split` — subroutine
-- `student_part_pinds` — subroutine
 
 Private symbols:
-- `file_hash` — function
-- `fname_base` — function
-- `test_boot_quantile` — subroutine
-- `test_conf_threshold` — subroutine
-- `test_geometry` — subroutine
-- `test_holdout_split` — subroutine
-- `test_part_range` — subroutine
+- `predict_poses_master` — subroutine
 
 Local symbols (enclosing procedure scope):
 - `learn_pose_student_exec::check_reread_population` — subroutine
 - `learn_pose_student_exec::eligible_held` — subroutine
+- `learn_pose_student_exec::keep_design` — subroutine
 - `learn_pose_student_exec::l_recovered` — function
-- `learn_pose_student_exec::resampled_gain` — subroutine
 - `learn_pose_student_exec::set_conf_threshold` — subroutine
+- `learn_pose_student_exec::try_design` — subroutine
 - `learn_pose_student_exec::valid_dist` — function
 - `learn_pose_student_exec::write_grid` — subroutine
 - `learn_pose_student_exec::write_header` — subroutine
@@ -23976,6 +24383,60 @@ Public symbols:
 Local symbols (enclosing procedure scope):
 - `commit_sigma2_exec::consolidate_canonical` — subroutine
 - `commit_sigma2_exec::write_commit_bench` — subroutine
+
+---
+## Module: simple_strategy_student_common
+
+Files:
+- `main/strategies/parallelization/simple_strategy_student_common.f90`
+- `main/strategies/parallelization/simple_strategy_student_common_tester.f90`
+
+Uses:
+- `iso_fortran_env`
+- `simple_builder`
+- `simple_chash`
+- `simple_cmdline`
+- `simple_defs`
+- `simple_defs_fname`
+- `simple_defs_hhcnn`
+- `simple_error`
+- `simple_fileio`
+- `simple_math`
+- `simple_parameters`
+- `simple_polar_feats`
+- `simple_qsys_env`
+- `simple_qsys_funs`
+- `simple_sigma2_bootstrap`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+- `simple_timer`
+
+Public symbols:
+- `choose_student_design` — subroutine
+- `concat_part_tables` — subroutine
+- `file_hash` — function
+- `fname_base` — function
+- `run_all_student_strategy_tests` — subroutine
+- `run_all_student_strategy_tests` — subroutine
+- `student_boot_quantile` — function
+- `student_conf_threshold` — subroutine
+- `student_design_keep` — subroutine
+- `student_design_trial` — subroutine
+- `student_geometry_mismatch` — function
+- `student_holdout_split` — subroutine
+- `student_part_pinds` — subroutine
+- `student_predict_parts` — subroutine
+- `student_resampled_gain` — function
+- `student_sigma2_for_pass` — subroutine
+
+Private symbols:
+- `test_boot_quantile` — subroutine
+- `test_conf_threshold` — subroutine
+- `test_geometry` — subroutine
+- `test_holdout_split` — subroutine
+- `test_part_range` — subroutine
 
 ---
 ## Module: simple_stream_api
@@ -25668,6 +26129,7 @@ Private symbols:
 - `test_has_substr` — subroutine
 - `test_is_blank_and_is_allocated` — subroutine
 - `test_list_of_ints2arr` — subroutine
+- `test_log_format` — subroutine
 - `test_numeric_conversion` — subroutine
 - `test_readline_empty_line` — subroutine
 - `test_readline_eof_behavior` — subroutine
@@ -25707,6 +26169,7 @@ Public symbols:
 - `findloc_str_str` — function
 - `first_blank` — function
 - `first_non_blank` — function
+- `fmt_dec` — function
 - `fortran_logical` — function
 - `fortran_quote` — function
 - `fortran_symbol_from_string` — function
@@ -25718,6 +26181,7 @@ Public symbols:
 - `lex_sort_str` — subroutine
 - `list_of_ints2arr` — function
 - `list_of_strs2arr` — function
+- `log_item` — function
 - `lowercase` — function
 - `map_str_nrs` — function
 - `parsestr` — subroutine
@@ -25860,6 +26324,7 @@ Private symbols:
 - `test_rot_to_asym` — subroutine
 - `test_subgroups` — subroutine
 - `test_sym_dist_table` — subroutine
+- `test_sym_dists_pole` — subroutine
 - `test_symops_form_a_group` — subroutine
 - `test_symrandomize` — subroutine
 - `within_lims` — function
@@ -26043,6 +26508,7 @@ Private symbols:
 - `test_simple_list_files_regexp` — subroutine
 - `test_simple_mkdir_dir_exists_rmdir` — subroutine
 - `test_simple_rename_and_del_file` — subroutine
+- `test_simple_rmdir_symlinks` — subroutine
 - `test_simple_rmfile` — subroutine
 - `test_simple_touch_and_file_exists` — subroutine
 - `test_syslib_c2fortran_string` — subroutine
@@ -26733,6 +27199,8 @@ Uses:
 
 Public symbols:
 - `construct_test_highlevel_programs` — subroutine
+- `new_center_ptcls` — subroutine
+- `new_class_student` — subroutine
 - `new_cont_refine3D_1jxy` — subroutine
 - `new_cont_refine3D_bench` — subroutine
 - `new_flex_pca_blobs` — subroutine
@@ -26908,6 +27376,8 @@ Uses:
 
 Public symbols:
 - `cast_time_char` — function
+- `clock_count` — function
+- `clock_seconds_since` — function
 - `in_timer_loop` — function
 - `now` — subroutine
 - `reset_timer` — subroutine
@@ -27027,6 +27497,7 @@ Files:
 
 Uses:
 - `simple_atoms`
+- `simple_math`
 - `simple_pftc_srch_api`
 
 Public symbols:
@@ -27280,6 +27751,7 @@ Files:
 - `main/ui/simple/simple_ui_heterogeneity.f90`
 
 Uses:
+- `simple_defs_flex`
 - `simple_ui_modules`
 
 Public symbols:
@@ -27604,6 +28076,7 @@ Public symbols:
 - `add_annealed_sigma_input` — subroutine
 - `construct_refine2D_programs` — subroutine
 - `new_bootstrap_cavgs` — subroutine
+- `new_center_ptcls` — subroutine
 - `new_cls_expansion` — subroutine
 - `new_make_cavgs` — subroutine
 - `new_map_cavgs_selection` — subroutine
@@ -27613,6 +28086,7 @@ Public symbols:
 - `new_solve2D_chunks` — subroutine
 - `new_solve2D_descriptor` — subroutine
 - `new_unbootstrap_cavgs` — subroutine
+- `new_validate_class_student` — subroutine
 - `new_write_classes` — subroutine
 
 ---
@@ -27733,7 +28207,6 @@ Public symbols:
 - `new_solve3D_addon` — subroutine
 - `new_solve3D_cavgs` — subroutine
 - `new_solve3D_chunks` — subroutine
-- `new_solve3D_pyramid` — subroutine
 - `new_validate_pose_student` — subroutine
 
 ---
@@ -27992,6 +28465,7 @@ Uses:
 - `simple_builder`
 - `simple_cmdline`
 - `simple_core_module_api`
+- `simple_fileio`
 - `simple_frozen_accum`
 - `simple_halfmap_diagnostics`
 - `simple_image`
@@ -28037,7 +28511,6 @@ Local symbols (enclosing procedure scope):
 - `restore_state_from_parts::sum_eos_before_density_correction_if_needed` — subroutine
 - `restore_state_from_parts::sum_pair_into_sum_rec` — subroutine
 - `restore_state_from_parts::trail_chain_component` — function
-- `restore_state_from_parts::trail_chain_file_size` — function
 - `restore_state_from_parts::use_static_nu_aux_replacement` — function
 - `restore_state_from_parts::validate_trail_chain` — function
 - `restore_state_from_parts::write_gridding_pair_accumulators` — subroutine
@@ -28808,9 +29281,7 @@ Local symbols (enclosing procedure scope):
 - `exec_trajectory_solve3D::record_gate1` — subroutine
 - `exec_trajectory_solve3D::record_shifts` — subroutine
 - `exec_trajectory_solve3D::require_file` — subroutine
-- `exec_trajectory_solve3D::simple_rmdir_checked` — subroutine
 - `exec_trajectory_solve3D::simulate_startvol` — subroutine
-- `exec_trajectory_solve3D::sort_order` — function
 - `exec_trajectory_solve3D::write_gate_pairs` — subroutine
 - `exec_trajectory_solve3D::write_pair` — subroutine
 

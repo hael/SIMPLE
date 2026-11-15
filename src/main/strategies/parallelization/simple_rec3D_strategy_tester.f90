@@ -154,10 +154,11 @@ contains
 
     !> The key-on gridding loop (insert_inpl_entries) on a committed pose and two extras equals every entry inserted on
     !! its own from the committed plane re-shifted for it, bit for bit; entries at one pose whose weights sum to 1
-    !! equal one insertion at weight 1
+    !! equal one insertion at weight 1; a committed pose at a pole takes its entries about its direction
     subroutine test_inpl_gridding_entries()
         integer, parameter :: BOXG = 16, KQ = 4, NR = 16
         real,    parameter :: SMPDG = 2.0, SH_C(2) = [0.7, -1.3], WBASE = 0.7
+        real,    parameter :: EUL_C(3) = [37., 64., 112.5], EUL_POLE(3) = [37., 0., 112.5]
         type(parameters), target :: params
         type(sp_project)         :: project
         type(reconstructor)      :: ra, rb
@@ -203,7 +204,7 @@ contains
         call obs_pad%fft()
         call obs_pad%gen_fplane4rec(SMPDG, ctfparms, SH_C, fpl, grid)
         call o%new(.false.)
-        call o%set_euler([37., 64., 112.5])
+        call o%set_euler(EUL_C)
         call o%set_shift(SH_C)
         ! one particle (index 7): the committed pose and two extras at other directions and shifts
         extra%nptcls = 1
@@ -220,6 +221,7 @@ contains
         extra%shift(:,1) = [1.6, 0.4]
         extra%shift(:,2) = [-0.9, -2.2]
         call extra%reserve_inpl(KQ, 3, rots)
+        extra%committed_euler(:,1) = EUL_C
         call set_block(0, 3, [3, 9, 0], [3, 1, 0])
         call set_block(1, 5, [5, 12, 0], [2, 2, 0])
         call set_block(2, 7, [13, 0, 0], [4, 0, 0])
@@ -233,7 +235,7 @@ contains
         do k = 0, 2
             if( k == 0 )then
                 wpose = extra%wc(1)
-                euler = o%get_euler()
+                euler = EUL_C
             else
                 wpose = extra%w(k)
                 euler = extra%euler(:,k)
@@ -282,6 +284,30 @@ contains
         call assert_true(cerr < 1.e-6 .and. derr < 1.e-6, 'entries at one pose whose weights sum to 1 equal one insertion at weight 1')
         call ra%kill
         call rb%kill
+        ! the committed pose at a pole: its normalised triplet holds e3 in e1, so an entry off the solved bin must take
+        ! its grid angle about the reference's e1 (committed_euler), not about the orientation's folded e1
+        call o%set_euler(EUL_POLE)
+        call assert_true(abs(o%e2get()) < 1.e-6 .and. abs(o%e3get()) < 1.e-6, &
+            &'at e2 = 0 the orientation''s normalised triplet folds e3 into e1')
+        extra%committed_euler(:,1) = EUL_POLE
+        extra%wc(1) = 1.
+        extra%w     = 0.
+        call set_block(0, 3, [3, 9, 0], [3, 1, 0])
+        call ra%new_accumulator(params, project, expand=.true., wthreads=.false.)
+        call insert_inpl_entries(c1sym, o, fpl, ra, extra, 1, 1., 1., fpl_scratch)
+        call rb%new_accumulator(params, project, expand=.true., wthreads=.false.)
+        call oe%set_euler(EUL_POLE)
+        call rb%insert_plane_oversamp(c1sym, oe, fpl, w=0.75)
+        call oe%set_euler([EUL_POLE(1), EUL_POLE(2), 360. - rots(9)])
+        call rb%insert_plane_oversamp(c1sym, oe, fpl, w=0.25)
+        ca = ra%cmat_exp
+        cb = rb%cmat_exp
+        da = ra%rho_exp
+        db = rb%rho_exp
+        call assert_true(all(ca == cb) .and. all(da == db), &
+            &'a committed pose at a pole inserts its entries about the reference''s e1, not the orientation''s folded e1')
+        call ra%kill
+        call rb%kill
         call extra%kill
         call forget_ft_maps()
         call c1sym%kill()
@@ -308,10 +334,11 @@ contains
 
     !> The key-on PCG chunks (accumulate_pcg_inpl_batch, chunks of 3 entries, one and two observation batches) give the
     !! raw B and D of one flat accumulation of the same entries byte for byte, at one thread and at four; the flat list
-    !! holds every inserted entry once
+    !! holds every inserted entry once; a committed pose at a pole takes its entries about its direction
     subroutine test_pcg_inpl_chunks()
         integer, parameter :: NP = 4, BOX = 32, KQ = 4, NR = 16, CAP = 3
         real,    parameter :: SMPD = 2.
+        real,    parameter :: ROT_TOL = 1.e-5 ! single-precision rotation matrices of one rotation from two triplets
         type(reconstructor_pcg) :: op
         type(oris)              :: sel, flat
         type(ori)               :: o
@@ -320,7 +347,8 @@ contains
         complex, allocatable    :: planes(:,:,:), yflat(:,:,:), bf(:,:,:), bc(:,:,:)
         real,    allocatable    :: df(:,:,:), dc(:,:,:), inv_sig2(:)
         real    :: rots(NR), eul(3,3*KQ), sh(2,3*KQ), wt(3*KQ), wbase(NP), wflat(64), eflat(3,64), sflat(2,64)
-        integer :: pinds(NP), lims2(2,2), i, h, k, np_i, nflat, pflat(64), nthr_saved, iteam
+        real    :: eul_c(3,NP), e3_pole(3), rot_err
+        integer :: pinds(NP), lims2(2,2), i, h, k, j, np_i, nflat, pflat(64), nthr_saved, iteam
         logical :: l_begun
         write(*,'(A)') 'test_pcg_inpl_chunks'
         call seed_rnd_fixed(20261117)
@@ -331,10 +359,15 @@ contains
         do i = 1, NR
             rots(i) = real(i - 1) * 360. / real(NR)
         enddo
+        ! the committed triplets as the search forms them, particle 11's at the pole e2 = 0
+        do i = 1, NP
+            eul_c(:,i) = [30.*real(i), 40. + 10.*real(i), 15.*real(i)]
+        enddo
+        eul_c(2,1) = 0.
         call sel%new(NP, .true.)
         call o%new(.true.)
         do i = 1, NP
-            call o%set_euler([30.*real(i), 40. + 10.*real(i), 15.*real(i)])
+            call o%set_euler(eul_c(:,i))
             call o%set_ctfvars(ctfp)
             call o%set_shift([0.5*real(i), -0.3*real(i)])
             call sel%set_ori(i, o)
@@ -368,16 +401,28 @@ contains
         extra%shift(:,2) = [-0.6, 0.9]
         extra%shift(:,3) = [0.3, 1.7]
         call extra%reserve_inpl(KQ, 3, rots)
+        extra%committed_euler = eul_c
         call set_block(1, 0, 3, [3, 9, 14, 0], [2, 1, 1, 0])
         call set_block(2, 0, 2, [2, 7, 0, 0], [3, 1, 0, 0])
         call set_block(2, 1, 5, [13, 0, 0, 0], [4, 0, 0, 0])
         call set_block(4, 0, 1, [1, 4, 8, 12], [1, 1, 1, 1])
         call set_block(4, 1, 6, [6, 10, 0, 0], [2, 2, 0, 0])
         call set_block(4, 2, 2, [2, 3, 11, 0], [1, 2, 1, 0])
+        ! particle 11's entries: bin 3 is the solved bin (the committed e3), bins 9 and 14 at their grid angles
+        e3_pole = [eul_c(3,1), 360. - rots(9), 360. - rots(14)]
         ! the flat list
         nflat = 0
         do i = 1, NP
             call pcg_inpl_particle_entries(sel, pinds, wbase, extra, 1., i, eul, sh, wt, np_i)
+            if( i == 1 )then
+                call assert_int(3, np_i, 'the pole particle enters at its three entries')
+                rot_err = 0.
+                do j = 1, min(3, np_i)
+                    rot_err = max(rot_err, maxval(abs(euler2m(eul(:,j)) - euler2m([eul_c(1,1), eul_c(2,1), e3_pole(j)]))))
+                enddo
+                call assert_real(0., rot_err, ROT_TOL, &
+                    &'PCG turns a pole''s entries about the reference''s e1, not the selection''s folded e1')
+            endif
             if( i == 2 ) call assert_real(90., eul(3,np_i), 0., &
                 &'PCG keeps a collapsed extra at bin 13, away from its solved bin 5')
             eflat(:,nflat+1:nflat+np_i) = eul(:,1:np_i)

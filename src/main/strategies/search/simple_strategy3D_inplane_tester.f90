@@ -21,7 +21,7 @@ use simple_builder,           only: builder
 use simple_image,             only: image
 use simple_syslib,            only: del_file
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-use simple_strategy3D_utils,  only: resolve_inplane_e3, candidate_pose
+use simple_strategy3D_utils,  only: resolve_inplane_e3, candidate_pose, assign_ori
 use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad, shift_ref2ptcl, shift_ptcl2ref
 use simple_eul_prob_tab,      only: seeded_window_refine
 use simple_matcher_2Dprep,    only: prepimg4align
@@ -64,6 +64,7 @@ contains
         call test_inpl_cont_derivation()
         call test_key_derivation()
         call test_previous_shift_is_stored_shift()
+        call test_previous_inplane_at_poles()
         call test_table_increment_axes()
         call test_map_initialised_refinement()
         call test_continuous_seed_beyond_window()
@@ -465,6 +466,59 @@ contains
         call cline%kill
         call del_file(PHANTOM)
     end subroutine test_previous_shift_is_stored_shift
+
+    !> A previous pose at a pole, where set_euler leaves e3 at 0 with the in-plane angle in e1: prep4prob reads its
+    !! in-plane index about the previous direction, at both poles of the two-direction grid, and assign_ori measures
+    !! the in-plane distance between the discrete cells, the previous angle off the grid by 0.3 steps
+    subroutine test_previous_inplane_at_poles()
+        use simple_ori_utils, only: euler2m
+        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        class(builder),    allocatable, target :: b
+        class(parameters), allocatable, target :: p
+        class(cmdline), allocatable :: cline
+        type(strategy3D_srch)    :: srch
+        type(strategy3D_spec)    :: spec
+        real    :: euls_ref(3), e3_prev, expected, euls_out(3), expected_e3
+        integer :: iproj, nrots, irot_prev, irot_new
+        write(*,'(A)') 'test_previous_inplane_at_poles'
+        allocate(b, p, cline)
+        call one_particle_fixture(PHANTOM, [0., 0.], b, p, cline, srch, spec)
+        nrots     = b%pftc%get_nrots()
+        irot_prev = 1 + nrots / 5
+        irot_new  = irot_prev + nrots / 8
+        e3_prev   = 360. - (b%pftc%get_rot(irot_prev) + 0.3 * b%pftc%get_dang())
+        do iproj = 1, b%eulspace%get_noris()
+            euls_ref = b%eulspace%get_euler(iproj)
+            call assert_true(abs(cos(euls_ref(2) * PI / 180.)) > 0.9999999, &
+                &'each direction of the two-direction c1 grid is a pole')
+            call b%spproj_field%set_euler(1, [euls_ref(1), euls_ref(2), e3_prev])
+            call srch%prep4prob
+            call assert_int(iproj, srch%prev_proj, 'the previous direction is the pole the pose was stored at')
+            call assert_int(irot_prev, srch%prev_roind, 'the previous in-plane index at a pole is the bin of the stored angle')
+            call assign_ori(srch, iproj, irot_new, 0.5, [0., 0.], euler_out=euls_out)
+            expected_e3 = 360. - b%pftc%get_rot(irot_new)
+            call assert_real(euls_ref(1), euls_out(1), 1.e-3, 'assign_ori returns the reference e1 at either pole')
+            call assert_real(expected_e3, euls_out(3), 1.e-3, 'assign_ori returns the insertion angle at either pole')
+            call assert_true(maxval(abs(euler2m(euls_out) - euler2m(b%spproj_field%get_euler(1)))) < 1.e-5, &
+                &'the insertion triplet represents the committed rotation at either pole')
+            expected = abs(b%pftc%get_rot(irot_new) - b%pftc%get_rot(irot_prev))
+            expected = min(expected, 360. - expected)
+            call assert_real(expected, b%spproj_field%get(1, 'dist_inpl'), 1.e-3, &
+                &'at either pole the in-plane distance is the difference of the discrete grid angles')
+            srch%continuous_active = .true.
+            call assign_ori(srch, iproj, irot_new, 0.5, [0., 0.], real(irot_new) + 0.25, .true., euler_out=euls_out)
+            call assert_real(expected_e3 - 0.25 * b%pftc%get_dang(), euls_out(3), 1.e-3, &
+                &'assign_ori preserves the continuous insertion angle at either pole')
+            srch%continuous_active = .false.
+        enddo
+        call srch%kill
+        call clean_strategy3D
+        call b%pftc%kill
+        call b%kill_strategy3D_tbox
+        call b%kill_general_tbox
+        call cline%kill
+        call del_file(PHANTOM)
+    end subroutine test_previous_inplane_at_poles
 
     !> a one-particle strategy3D toolbox on a small phantom (two directions), the particle at a stored shift, the
     !! search object prepared for the probabilistic route; trs a shift search's window (none by default)

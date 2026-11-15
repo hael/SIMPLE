@@ -426,8 +426,8 @@ contains
     end function count_inserted_poses
 
     !> A particle's in-plane posterior entries (l_inpl_posterior) into the half-map: per pose of positive weight (the
-    !! committed one from fplane, each extra from fplane re-shifted once by its shift minus the committed one), every
-    !! entry of its block at its in-plane angle with wbase times the pose's weight times the entry's share
+    !! committed one from fplane at its triplet about its direction, each extra from fplane re-shifted once by its
+    !! shift minus the committed one), every entry of its block at its in-plane angle with wbase x pose weight x share
     subroutine insert_inpl_entries( se, orientation, fplane, recvol, extra, iloc, wbase, scale, fpl_shifted )
         class(sym),              intent(inout) :: se
         class(ori),              intent(in)    :: orientation
@@ -445,7 +445,8 @@ contains
         do k = 0,extra%nextra(iloc)
             if( k == 0 )then
                 wpose = extra%wc(iloc)
-                euler = orientation%get_euler()
+                ! not the orientation's Euler angles: their normalisation folds e3 into e1 at e2 = 0 or 180
+                euler = extra%committed_euler(:,iloc)
             else
                 ipose = extra%first(iloc) + k - 1
                 wpose = extra%w(ipose)
