@@ -87,5 +87,5 @@ kept in `state_refs/`; each later publication is merged into rows that only grow
 `cls_expansion`, matched against the references (`assign_cavgs_states`, `simple_cavgs_state_match`
 in `src/main/class`), rejected by fit, mapped to its particles and refined locally with states fixed
 (`refine3D refine=cont`) in `assign/it_<n>/`. The method (rules, check, mapping, seeds, command
-lines) is `src/main/solve/simple_state_assignment.f90`, shared with `solve3D_pyramid`.
+lines) is `src/main/solve/simple_state_assignment.f90`.
 `doc/policies/stream/stream_3D_ingestion_policy.md` sections 4, 9 and 10.

@@ -68,7 +68,7 @@ The callers, with the preset and the context each applies:
 | `model_cavgs_rejection` program | `chunk100mics`, or `quality_model` / `infile` | the model artifact's | selection, annotation, analysis, learning, evaluation |
 | particle sieve (`simple_ptcl_sieve`): both tiers in stream p05, the coarse tier in p03 | `sieve` | `sieve` | rejection of class averages with their particles; with `use_model=no` the `sieve` hard gates only |
 | stream initial analysis (p03, `simple_stream_stage_initial_analysis`) | `chunk100mics` | `chunk` | class selection of both cycles |
-| multistate stream stage (p07) and the batch `solve3D_pyramid`, through `score_cavgs_with_model` (`simple_state_assignment`) | `pool` | `pool` | the class selection of the route to the reference volumes (applied); each assignment's class averages are scored beside the fit's rejection, logged and not applied |
+| multistate stream stage (p07), through `score_cavgs_with_model` (`simple_state_assignment`) | `pool` | `pool` | the class selection of the route to the reference volumes (applied); each assignment's class averages are scored beside the fit's rejection, logged and not applied |
 
 Every caller but the program scores through `score_project_cavgs` (`simple_cavg_quality_selection`),
 which takes the class averages' pixel size so that the relational feature's mask radius is right.

@@ -12,14 +12,13 @@ use simple_solve3D_chunks_plan, only: chunks_report, chunks_step, &
 use simple_refine3D_fnames,          only: refine3D_fsc_fname
 use simple_ui,                       only: get_prg_ptr
 use simple_ui_program,               only: ui_program
+use simple_defs_solve3D,             only: CHUNKS_SOURCE_PROJ, CHUNKS_BASE_PROJ
 implicit none
 
 public :: commander_solve3D_chunks
 private
 #include "simple_local_flags.inc"
 
-character(len=*), parameter :: SOURCE_PROJ_NAME    = 'source.simple'
-character(len=*), parameter :: BASE_PROJ_NAME      = 'base.simple'
 
 type, extends(commander_base) :: commander_solve3D_chunks
     contains
@@ -137,7 +136,7 @@ contains
         enddo
         ! ---- the source copy: no 3D solution, no run registration
         call prepare_chunks_source(spproj)
-        source_fname = edir%to_char()//'/'//SOURCE_PROJ_NAME
+        source_fname = edir%to_char()//'/'//CHUNKS_SOURCE_PROJ
         call spproj%projinfo%set(1, 'projfile', source_fname%to_char())
         call spproj%write(source_fname)
         call spproj%kill
@@ -145,7 +144,7 @@ contains
         report_fname = edir%to_char()//'/'//CHUNKS_REPORT_FNAME
         ! ---- the base run
         write(logfhandle,'(A)') '>>> SOLVE3D_CHUNKS BASE RUN'
-        step_proj = edir%to_char()//'/'//BASE_PROJ_NAME
+        step_proj = edir%to_char()//'/'//CHUNKS_BASE_PROJ
         call write_solve3D_step_project(source_fname, step_proj, part, 0)
         cline_base = cline_entry
         call cline_base%set('prg', 'solve3D')

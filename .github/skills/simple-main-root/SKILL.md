@@ -21,7 +21,7 @@ controllers may run whole programs through commanders (policy section 4). Not he
   go, reference item 8); `simple_simulator.f90`.
 - `solve/`: stage controllers (`simple_solve3D_controller.f90`, a submodule of
   `simple_solve3D_utils.f90`; `simple_solve2D_controller.f90`), run manifest, chunk plans, add-on
-  report, `simple_state_assignment.f90` (stream p07 and solve3D_pyramid): `references/solve_controllers.md`.
+  report, `simple_state_assignment.f90` (stream p07): `references/solve_controllers.md`.
 
 ## Rules
 

@@ -383,7 +383,7 @@ contains
     subroutine test_mirrored_references_contract()
         character(len=24), parameter :: PROGRAMS(*) = [character(len=24) :: &
             'refine3D', 'refine3D_auto', 'refine3D_states', 'refine3D_states_cavgs', &
-            'solve3D', 'solve3D_cavgs', 'solve3D_addon', 'solve3D_chunks', 'solve3D_pyramid']
+            'solve3D', 'solve3D_cavgs', 'solve3D_addon', 'solve3D_chunks']
         type(string) :: choices
         logical :: found
         integer :: i

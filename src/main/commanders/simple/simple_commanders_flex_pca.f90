@@ -2,21 +2,10 @@
 module simple_commanders_flex_pca
 use simple_commanders_api, only: autoscale, builder, cmdline, commander_base, file_exists, image, logfhandle, &
     &parameters, simple_end, simple_exception, sp_project, simple_abspath, string
+use simple_defs_flex,      only: COV_LP_OVER_NYQUIST, COV_LP_DEFAULT, COV_MINBOX, FLEX_PCG_MAXITS_DEFAULT, FLEX_PCG_RTOL_DEFAULT
 implicit none
 
 #include "simple_local_flags.inc"
-
-! 2*smpd_crop is the working Nyquist; the 1.25 safety factor keeps the covariance band clear of it
-real,    parameter :: COV_LP_OVER_NYQUIST   = 2.5
-real,    parameter :: COV_LP_DEFAULT = 16.0   !< default lp (A); smpd_target = lp / COV_LP_OVER_NYQUIST; the flex_pca UI declares the same value
-!> smallest working box
-integer, parameter :: COV_MINBOX = 64
-
-!> rec_backend=pcg defaults: fixed 4-iteration budget of the warm-started basis M-step (rtol=0 disarms the rtol
-!! and FLEX_PCG_XTOL stops). Matches the flex_pca UI declaration. State maps are reconstructed by the
-!! reconstruction service (reconstruct3D) with the run's maxits_pcg.
-integer, parameter :: FLEX_PCG_MAXITS_DEFAULT = 4
-real,    parameter :: FLEX_PCG_RTOL_DEFAULT   = 0.0
 
 type, extends(commander_base) :: commander_flex_pca
   contains

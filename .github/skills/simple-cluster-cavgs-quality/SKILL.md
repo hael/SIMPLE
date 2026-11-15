@@ -111,7 +111,7 @@ The library callers score through `score_project_cavgs` and keep their own polic
   `simple-main-sieve`;
 - the stream's initial analysis: the `chunk100mics` preset;
 - `score_cavgs_with_model` in `src/main/solve/simple_state_assignment.f90`,
-  used by `solve3D_pyramid` and the stream's solve3D stage: the `pool` preset;
+  used by the stream's solve3D stage: the `pool` preset;
 - `trajectory_solve3D` (SINGLE) runs the program with `quality_model=nano`, then its own model gate
   (see the rules above).
 

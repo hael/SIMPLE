@@ -9,21 +9,13 @@ use simple_parameters,          only: parameters
 use simple_sp_project,          only: sp_project
 use simple_string,              only: string
 use simple_commanders_refine2D, only: commander_refine2D
+use simple_defs_center,         only: CENTER_NSAMPLE, CENTER_NCLS, CENTER_REF_MAXITS, CENTER_LP, CENTER_LPSTOP,&
+    &CENTER_SHIFT_SIGMA, CENTER_SAMPLE_PROJ, CENTER_PASS_PROJ, CENTER_PASS_DIR
 implicit none
 
 public :: commander_center_ptcls
 private
 #include "simple_local_flags.inc"
-
-integer, parameter :: CENTER_NSAMPLE     = 10000 !< the references' sample: enough particles for ten low-resolution classes
-integer, parameter :: CENTER_NCLS        = 10    !< ten references centred twice as many trpv1 picks within 3 A as the rotational average (Phase 1)
-integer, parameter :: CENTER_REF_MAXITS  = 15    !< the references' iterations: refine2D stops earlier on the sample (7 to 13), more changed nothing
-real,    parameter :: CENTER_LP          = 20.   !< the references' band (A)
-real,    parameter :: CENTER_LPSTOP      = 12.   !< the pass's band (A): finer than the references', which centred more particles
-real,    parameter :: CENTER_SHIFT_SIGMA = 10.   !< the shift prior (A): a 3-sigma disk of 30 A covers the picking error's 95th percentile
-character(len=*), parameter :: SAMPLE_PROJ = 'center_sample.simple'
-character(len=*), parameter :: PASS_PROJ   = 'center_pass.simple'
-character(len=*), parameter :: PASS_DIR    = 'center_pass'        !< the pass runs as a first iteration (every particle not yet centred) in its own folder
 
 type, extends(commander_base) :: commander_center_ptcls
   contains
@@ -96,12 +88,12 @@ contains
         do i = 1,nsample
             call work%os_ptcl2D%set_state(pinds_sample(i), 1)
         enddo
-        call work%update_projinfo(string(SAMPLE_PROJ))
-        call work%write(string(SAMPLE_PROJ))
+        call work%update_projinfo(string(CENTER_SAMPLE_PROJ))
+        call work%write(string(CENTER_SAMPLE_PROJ))
         call work%kill
         write(logfhandle,'(A,I0,A,I0,A,F6.2,A)') '>>> CENTER_PTCLS: references from ', nsample, ' particles, ', params%ncls, &
             &' classes at ', params%lp, ' A'
-        call set_child(cline_ref, SAMPLE_PROJ, params%lp)
+        call set_child(cline_ref, CENTER_SAMPLE_PROJ, params%lp)
         call cline_ref%set('cls_init', 'rand')
         call cline_ref%set('maxits',   CENTER_REF_MAXITS)
         call cline_ref%set('center',   'yes')
@@ -114,22 +106,22 @@ contains
         ! the stored width, zero for raw picks, and search only the window)
         projabs = simple_abspath(params%projfile)
         call simple_getcwd(cwd)
-        call simple_mkdir(PASS_DIR)
-        call simple_chdir(PASS_DIR)
+        call simple_mkdir(CENTER_PASS_DIR)
+        call simple_chdir(CENTER_PASS_DIR)
         call work%read(projabs)
         call work%os_ptcl2D%delete_2Dclustering(keepshifts=.true.)
-        call work%update_projinfo(string(PASS_PROJ))
-        call work%write(string(PASS_PROJ))
+        call work%update_projinfo(string(CENTER_PASS_PROJ))
+        call work%write(string(CENTER_PASS_PROJ))
         call work%kill
         write(logfhandle,'(A,I0,A,F6.2,A)') '>>> CENTER_PTCLS: one pass of ', nptcls, ' particles at ', params%lpstop, ' A'
-        call set_child(cline_ref, PASS_PROJ, params%lpstop)
+        call set_child(cline_ref, CENTER_PASS_PROJ, params%lpstop)
         call cline_ref%set('refs',   refs%to_char())
         call cline_ref%set('maxits', 1)
         call cline_ref%set('center', 'no')
         call xrefine2D%execute(cline_ref)
         call cline_ref%kill
         ! the shifts, their widths and moves into the owner's project, in both particle fields
-        call work%read_segment('ptcl2D', string(PASS_PROJ))
+        call work%read_segment('ptcl2D', string(CENTER_PASS_PROJ))
         call simple_chdir(cwd)
         do i = 1,nptcls
             iptcl = pinds(i)

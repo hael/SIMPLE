@@ -14,7 +14,8 @@
 !   The 3D route's settings (nstates_pickrefs, nstages_pickrefs,
 !   lpstop_pickrefs, nspace_pickrefs, nthr3D_pickrefs, and nrestarts_collapse,
 !   lpstart_ini3D, lpstop_ini3D) and the jobs' resources (nthr2D, nparts,
-!   nchunks) come from the master, or the defaults below when run on its own.
+!   nchunks) come from the master, or from simple_defs_stream_commanders when
+!   run on its own.
 !
 ! ENTRY POINT:
 !   commander_stream_p03_initial_analysis%execute(cline)
@@ -34,26 +35,14 @@ use simple_cmdline,                       only: cmdline
 use simple_commander_base,                only: commander_base
 use simple_stream_stage_initial_analysis, only: stream_stage_initial_analysis
 use simple_stream_sigterm,                only: install_sigterm_handler, restore_sigterm_handler, sigterm_received
+use simple_defs_stream_commanders,       only: P03_NPARTS2D, P03_NTHR2D, P03_NCHUNKS, NSTATES_PICKREFS, NSTAGES_PICKREFS,&
+    &LPSTOP_PICKREFS, NSPACE_PICKREFS, NTHR3D_PICKREFS, NRESTARTS_COLLAPSE, LPSTART_INI3D, LPSTOP_INI3D
 implicit none
 
 public :: commander_stream_p03_initial_analysis
 public :: set_initial_analysis_cline ! for simple_stream_stage_initial_analysis_tester
 private
 #include "simple_local_flags.inc"
-
-integer, parameter :: NPARTS2D = 8 ! persistent workers for the stage's jobs
-! the defaults when the master gives none (the stage run on its own; simple_stream_master_resources)
-integer, parameter :: NTHR2D_JOBS  = 16 ! threads of the 2D jobs and of the sieve's chunks
-integer, parameter :: NCHUNKS      = 4  ! the sieve's chunks at once
-! the 3D route to the picking references (stream fix plan, decision 20)
-integer, parameter :: NSTATES_PICKREFS   = 3
-integer, parameter :: NSTAGES_PICKREFS   = 3
-real,    parameter :: LPSTOP_PICKREFS    = 8.   ! A
-integer, parameter :: NSPACE_PICKREFS    = 50   ! reprojections
-integer, parameter :: NTHR3D_PICKREFS    = 16   ! threads of the 3D job and the reprojection
-integer, parameter :: NRESTARTS_COLLAPSE = 3
-real,    parameter :: LPSTART_INI3D      = 100. ! A
-real,    parameter :: LPSTOP_INI3D       = 20.  ! A
 
 type, extends(commander_base) :: commander_stream_p03_initial_analysis
   contains
@@ -99,8 +88,8 @@ contains
         if( .not. cline%defined('amsklp')         ) call cline%set('amsklp',         20.)
         if( .not. cline%defined('edge')           ) call cline%set('edge',           6)
         ! the jobs' resources
-        if( .not. cline%defined('nthr2D')          ) call cline%set('nthr2D',          NTHR2D_JOBS)
-        if( .not. cline%defined('nchunks')         ) call cline%set('nchunks',         NCHUNKS)
+        if( .not. cline%defined('nthr2D')          ) call cline%set('nthr2D',          P03_NTHR2D)
+        if( .not. cline%defined('nchunks')         ) call cline%set('nchunks',         P03_NCHUNKS)
         ! the 3D route to the picking references; 0 means the default
         call default_unless_positive('nstates_pickrefs',   real(NSTATES_PICKREFS))
         call default_unless_positive('nstages_pickrefs',   real(NSTAGES_PICKREFS))
@@ -114,8 +103,8 @@ contains
         ! the threads each of the stage's jobs claims on a persistent worker (the master's server,
         ! or the stage's own when it runs alone): as many as the largest of them uses, the 2D jobs
         ! and the sieve's chunks (nthr2D) or the 3D job (nthr3D_pickrefs); the extractions use
-        ! fewer. The NPARTS2D workers start only when the stage runs alone
-        call cline%set('workers', NPARTS2D)
+        ! fewer. The P03_NPARTS2D workers start only when the stage runs alone
+        call cline%set('workers', P03_NPARTS2D)
         call cline%set('worker_nthr', max(cline%get_iarg('nthr2D'), cline%get_iarg('nthr3D_pickrefs')))
 
     contains

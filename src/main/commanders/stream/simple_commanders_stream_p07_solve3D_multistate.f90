@@ -10,8 +10,8 @@
 !
 ! 3D JOBS:
 !   The settings of the jobs (the route to the reference volumes, each
-!   publication's expansion, matching and reconstruction) are the named
-!   constants below; a command line overrides them with nstates (the
+!   publication's expansion, matching and reconstruction) are named
+!   constants; a command line overrides them with nstates (the
 !   reference volumes' states at most), and nparts3D and nthr3D (the jobs'
 !   parts and threads; the stage's own nparts and nthr are the master's
 !   settings for the stage). nspace, when given, sizes the grid of the local
@@ -35,16 +35,13 @@ use simple_commander_base,          only: commander_base
 use simple_stream_stage_solve3D, only: stream_stage_solve3D
 use simple_stream_sigterm,          only: install_sigterm_handler, restore_sigterm_handler, sigterm_received
 use simple_gui_metadata_stream_solve3D_multistate, only: MAX_STATES_SOLVE3D_MULTISTATE
+use simple_defs_stream_commanders,  only: P07_NSTATES, P07_NPARTS3D, P07_NTHR3D
 implicit none
 #include "simple_local_flags.inc"
 
 public :: commander_stream_p07_solve3D_multistate
 public :: set_solve3D_cline ! the stage's command-line defaults, for the chained stream tests
 private
-
-integer, parameter :: NSTATES3D = 3 ! states of the reference volumes at most
-integer, parameter :: NPARTS3D  = 8 ! parts and threads of each 3D job
-integer, parameter :: NTHR3D    = 8
 
 type, extends(commander_base) :: commander_stream_p07_solve3D_multistate
   contains
@@ -83,14 +80,14 @@ contains
         class(cmdline), intent(inout) :: cline
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'yes')
-        if( .not. cline%defined('nstates')  ) call cline%set('nstates',  NSTATES3D)
+        if( .not. cline%defined('nstates')  ) call cline%set('nstates',  P07_NSTATES)
         if( cline%get_iarg('nstates') < 2 ) THROW_HARD('multistate 3D needs nstates of 2 at least')
         if( cline%get_iarg('nstates') > MAX_STATES_SOLVE3D_MULTISTATE ) THROW_HARD('multistate 3D takes nstates of 20 at most')
         if( cline%defined('nspace') )then
             if( mod(cline%get_iarg('nspace'), 2) /= 0 .or. cline%get_iarg('nspace') < 2 ) THROW_HARD('multistate 3D needs an even nspace of 2 at least')
         endif
-        if( .not. cline%defined('nparts3D') ) call cline%set('nparts3D', NPARTS3D)
-        if( .not. cline%defined('nthr3D')   ) call cline%set('nthr3D',   NTHR3D)
+        if( .not. cline%defined('nparts3D') ) call cline%set('nparts3D', P07_NPARTS3D)
+        if( .not. cline%defined('nthr3D')   ) call cline%set('nthr3D',   P07_NTHR3D)
         if( .not. cline%defined('projfile') )then
             call cline%set('projname', 'stream_3Dmultistate')
             call cline%set('projfile', 'stream_3Dmultistate'//METADATA_EXT)

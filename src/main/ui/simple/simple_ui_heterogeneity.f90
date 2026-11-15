@@ -1,6 +1,7 @@
 !@descr: module defining the user interfaces for heterogeneity-analysis programs in the simple_exec suite
 module simple_ui_heterogeneity
 use simple_ui_modules
+use simple_defs_flex, only: COV_LP_DEFAULT, FLEX_PCG_MAXITS_DEFAULT, FLEX_PCG_RTOL_DEFAULT
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = &
@@ -134,13 +135,13 @@ contains
             '# iterations >= 2', .false., 4.0, &
         &visibility=UI_VIS_ADVANCED, preserve_default=.true.)
         ! lp/smpd_target/box_crop are derived from the project (derive_flex_pca_sampling); preserve_default
-        ! keeps the declared values (lp 16 A = COV_LP_DEFAULT)
+        ! keeps the declared values
         call flex_pca%add_input(UI_FILT, 'lp', 'num', &
             'Variance resolution limit (default 16 A)', &
             'Resolution to which the variability is resolved. It sets the working sampling to lp/2.5 and the &
             &working box from it (magic-box autoscale, never finer than the data, floor 64). With an explicit &
             &box_crop, lp instead defaults to 2.5*smpd_crop', &
-            'low-pass limit in Angstroms', .false., 16.0, &
+            'low-pass limit in Angstroms', .false., COV_LP_DEFAULT, &
         &group="regularization", visibility=UI_VIS_STANDARD, preserve_default=.true.)
         call flex_pca%add_input(UI_PARM, smpd_target, required_override=.false., &
             label_override='Working sampling distance (expert alias of lp; default lp/2.5)', &
@@ -174,13 +175,13 @@ contains
         &visibility=UI_VIS_ADVANCED, preserve_default=.true.)
         call flex_pca%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
         &'Iterations of each warm-started PCG basis solve (every M-step and the merge''s joint solve); &
-        &used only when rec_backend=pcg', 'iterations{4}', .false., 4., &
+        &used only when rec_backend=pcg', 'iterations{4}', .false., real(FLEX_PCG_MAXITS_DEFAULT), &
         &visibility=UI_VIS_ADVANCED, preserve_default=.true., &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call flex_pca%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Stop at this true L2 relative residual (a diminishing-returns stop on the update applies too); &
         &<=0, the default, runs exactly maxits_pcg iterations', 'tolerance{0}', &
-        &.false., 0.0, visibility=UI_VIS_ADVANCED, preserve_default=.true., &
+        &.false., FLEX_PCG_RTOL_DEFAULT, visibility=UI_VIS_ADVANCED, preserve_default=.true., &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call flex_pca%add_input(UI_FILT, 'pcg_mskfile', 'file', 'PCG support-constraint mask volume', &
         &'Real-space [0,1] mask volume at the project box installed as the hard support of every PCG solve &

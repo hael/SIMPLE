@@ -53,7 +53,7 @@ Silent ones first: nothing reports these.
   `iterate` until `finished` -> `finalize` -> `kill`. A new parameter's default goes in the
   commander's `set_<stage>_cline` (chain tests use it), and in p00's `make_stage_clines` if the GUI
   run needs it (forwarded only when given). Restore changes: RESTART header, restart policy §3.
-- `simple_state_assignment` is shared with `solve3D_pyramid`, `automask2D_mskdiam` with
+- `simple_state_assignment` holds p07's method; `automask2D_mskdiam` is shared with
   `make_pickrefs`; p04's `moldiam.txt` is p05's mask (p05 stops without it).
 
 ## Tests

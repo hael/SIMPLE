@@ -22,8 +22,7 @@ preserve.
   `assign_cavgs_states` (`exec_assign_cavgs_states` in `simple_commanders_cavgs`).
 - p07's 3D snapshots (section 8): `apply_gui_updates` and `write_snapshot` in the same file.
 - The method's rules, constants, steps on projects and job command lines, without the stage:
-  `simple_state_assignment` (`src/main/solve/`, since 15 October 2026), shared with the batch
-  program `solve3D_pyramid` (`doc/policies/3D/solve3D_pyramid_policy.md`). The stage keeps its
+  `simple_state_assignment` (`src/main/solve/`, since 15 October 2026). The stage keeps its
   phases, jobs, retries, fallbacks, publications and GUI, and calls the shared module for the
   rest: the pool model's scoring (`score_cavgs_with_model`, `select_route_classes`,
   `model_rejected_rows`), the check (`check_state_refs`, `refs_usable`, `docked_pair_cc`,
@@ -233,7 +232,7 @@ completed iteration left it.
 - A change of the merge keeps the row invariants of section 5.
 - A change of the check, the rejection or the ambiguity flag keeps its rule a pure function
   (`refs_usable`, `reject_by_fit`, `flag_ambiguous` in `simple_state_assignment`; `best_attempt`
-  of the stage), tested on fixed numbers; it is shared with `solve3D_pyramid`.
+  of the stage), tested on fixed numbers.
 - Tests:
   - `unit_stream` "pool 2D": `test_publication_holds_classified_stacks` (classified stacks only,
     renumbering, image indices, the selected particles counted as published, nothing to publish

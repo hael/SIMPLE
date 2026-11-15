@@ -21,7 +21,7 @@
 !   then the large ones (STOP_ONE_BY_ONE: multistate 3D, pool 2D, reference
 !   picking) one after another, each asked once the one before has stopped, so
 !   their final writes do not hold their memory at the same time. A stage still
-!   running STOP_TIMEOUT_S after it was asked is killed. The master exits once
+!   running MASTER_STOP_TIMEOUT_S after it was asked is killed. The master exits once
 !   all have stopped, after a last heartbeat, sent again until the GUI accepts
 !   it (send_last_heartbeat).
 !==============================================================================
@@ -35,6 +35,9 @@ use simple_defs_fname,                                  only: METADATA_EXT
 use simple_defs_stream,                                 only: PREPROC_JOB_NAME, OPTICS_JOB_NAME, INITIAL_ANALYSIS_JOB_NAME, REFPICK_JOB_NAME,&
                                                              &INITIAL_ANALYSIS_PICKREFS, SIEVING_JOB_NAME, CLASS2D_JOB_NAME, MULTISTATE3D_JOB_NAME, PREPROC_NINIPICK,&
                                                              &STREAM_IDLE_MARKER, STREAM_FINISHED_MARKER
+use simple_defs_stream_commanders,                      only: MASTER_POOL2D_NCLS, MASTER_NCUNITS, MASTER_QSYS_NTHR, MASTER_HEARTBEAT_S,&
+    &MASTER_LAST_HEARTBEAT_TRIES, MASTER_LAST_HEARTBEAT_WAIT_S, MASTER_MEMLOG_EVERY, MASTER_OPTICS_STOP_TIMEOUT_S,&
+    &MASTER_STOP_TIMEOUT_S, MASTER_STARTUP_STOP_TIMEOUT_S, MASTER_LISTENER_SLEEP_US
 use simple_error,                                       only: simple_exception
 use simple_string,                                      only: string
 use simple_fileio,                                      only: simple_getcwd, file_exists, simple_touch
@@ -62,26 +65,12 @@ public :: commander_stream_p00_master
 private
 #include "simple_local_flags.inc"
 
-! what the master gives the stages (its choices for a stream run from the GUI); their threads
-! and parts are in simple_stream_master_resources
-integer, parameter :: POOL2D_NCLS           = 150
 ! the initial analysis' 3D route settings (decision 20): forwarded to it only when given, kept off
 ! preprocessing's command line (it is the master's own); nthr3D_pickrefs also has a table default
 character(len=*), parameter :: PICKREFS_3D_KEYS(7) = [character(len=18) :: 'nstates_pickrefs', 'nstages_pickrefs',&
     &'lpstop_pickrefs', 'nspace_pickrefs', 'nrestarts_collapse', 'lpstart_ini3D', 'lpstop_ini3D']
-! the master itself
-integer, parameter :: MASTER_NCUNITS        = 16    ! computing units of the master's queue environment
-integer, parameter :: MASTER_QSYS_NTHR      = 16
-integer, parameter :: HEARTBEAT_S           = 5     ! between heartbeats
-integer, parameter :: LAST_HEARTBEAT_TRIES  = 3     ! tries of the last heartbeat, LAST_HEARTBEAT_WAIT_S apart
-integer, parameter :: LAST_HEARTBEAT_WAIT_S = 1
-integer, parameter :: MEMLOG_EVERY          = 12    ! heartbeats between memory logs
-integer, parameter :: OPTICS_STOP_TIMEOUT_S = 60    ! optics assignment stops first, waited for up to this
-integer, parameter :: STOP_TIMEOUT_S        = 600   ! a stage still running this long after it was asked to stop is killed
 ! the large stages, stopped one after another (downstream first), each when the one before has stopped
 integer, parameter :: STOP_ONE_BY_ONE(3)    = [STAGE_SOLVE3D, STAGE_POOL2D, STAGE_REFERENCE_PICKING]
-integer, parameter :: STARTUP_STOP_TIMEOUT_S = 60   ! after a start-up failure, the stages are killed after this
-integer, parameter :: LISTENER_SLEEP_US     = 10000 ! the listener's pause between drains
 
 ! What the listener thread shares with the main loop; it gets the address.
 type :: master_shared
@@ -216,14 +205,14 @@ contains
             else
                 call send_heartbeat()
             endif
-            if( mod(loop_counter, MEMLOG_EVERY) == 0 ) call log_memory()
+            if( mod(loop_counter, MASTER_MEMLOG_EVERY) == 0 ) call log_memory()
             if( l_last_loop ) exit
             if( l_stop .or. sigterm_received() )then
                 call stop_stages()
                 call assembler%set_stoptime()
-                if( .not. l_last_loop ) call sleep(HEARTBEAT_S)
+                if( .not. l_last_loop ) call sleep(MASTER_HEARTBEAT_S)
             else
-                call sleep(HEARTBEAT_S)
+                call sleep(MASTER_HEARTBEAT_S)
             endif
             call flush(logfhandle)
         enddo
@@ -288,23 +277,23 @@ contains
         end subroutine send_heartbeat
 
         ! The last heartbeat, once every stage has stopped, with the stream's stop time and final
-        ! status: sent again, up to LAST_HEARTBEAT_TRIES times LAST_HEARTBEAT_WAIT_S apart, until
+        ! status: sent again, up to MASTER_LAST_HEARTBEAT_TRIES times MASTER_LAST_HEARTBEAT_WAIT_S apart, until
         ! the GUI accepts it. Lost, it would leave the stream running in NICE, which marks a running
         ! stream failed once it has heard no heartbeat for a minute. Without a GUI (no niceserver)
         ! it is sent once.
         subroutine send_last_heartbeat()
             integer :: itry
             logical :: l_accepted
-            do itry = 1,LAST_HEARTBEAT_TRIES
+            do itry = 1,MASTER_LAST_HEARTBEAT_TRIES
                 call send_heartbeat(l_accepted)
                 if( l_accepted .or. params%niceserver%strlen() == 0 ) return
-                if( itry < LAST_HEARTBEAT_TRIES ) call sleep(LAST_HEARTBEAT_WAIT_S)
+                if( itry < MASTER_LAST_HEARTBEAT_TRIES ) call sleep(MASTER_LAST_HEARTBEAT_WAIT_S)
             enddo
             THROW_WARN('the GUI did not accept the last heartbeat; it may show the stream as failed')
         end subroutine send_last_heartbeat
 
         ! A start-up failure once stages are forked: they are asked to stop, and killed (their
-        ! jobs cancelled) when still running after STARTUP_STOP_TIMEOUT_S, before the master
+        ! jobs cancelled) when still running after MASTER_STARTUP_STOP_TIMEOUT_S, before the master
         ! stops. The persistent-worker server ends with this process, and its workers, which
         ! leave when they lose it, with it.
         subroutine abort_startup( msg )
@@ -316,7 +305,7 @@ contains
             do jd = 1,NSTAGES
                 if( shared%stages(jd)%is_running() ) call shared%stages(jd)%request_stop()
             enddo
-            do ipoll = 1,(STARTUP_STOP_TIMEOUT_S * 1000000) / POLL_US
+            do ipoll = 1,(MASTER_STARTUP_STOP_TIMEOUT_S * 1000000) / POLL_US
                 l_any = .false.
                 do jd = 1,NSTAGES
                     if( shared%stages(jd)%is_running() ) l_any = .true.
@@ -371,7 +360,7 @@ contains
         ! One step of the stop: the first time, the optics assignment and then every other stage but
         ! the large ones (STOP_ONE_BY_ONE) are asked to stop; every time, the first large stage still
         ! running is asked once those before it have stopped, the stages asked and still running are
-        ! asked again and listed, and each is killed once STOP_TIMEOUT_S has passed since it was
+        ! asked again and listed, and each is killed once MASTER_STOP_TIMEOUT_S has passed since it was
         ! asked. A large stage waiting its turn runs on. l_last_loop once none runs.
         subroutine stop_stages()
             integer :: k
@@ -382,7 +371,7 @@ contains
                 if( shared%stages(STAGE_ASSIGN_OPTICS)%is_running() )then
                     call shared%stages(STAGE_ASSIGN_OPTICS)%request_stop()
                     stop_times(STAGE_ASSIGN_OPTICS) = simple_gettime()
-                    call wait_for_stop(shared%stages(STAGE_ASSIGN_OPTICS), OPTICS_STOP_TIMEOUT_S)
+                    call wait_for_stop(shared%stages(STAGE_ASSIGN_OPTICS), MASTER_OPTICS_STOP_TIMEOUT_S)
                 endif
                 do id = 1,NSTAGES
                     if( any(STOP_ONE_BY_ONE == id) ) cycle
@@ -402,7 +391,7 @@ contains
                 if( stop_times(id) == 0 ) cycle ! a large stage waiting its turn
                 call shared%stages(id)%request_stop()
                 write(logfhandle,'(A)') shared%stages(id)%get_label()//' STILL RUNNING. WAITING FOR TERMINATION'
-                if( simple_gettime() - stop_times(id) > STOP_TIMEOUT_S ) call shared%stages(id)%force_stop()
+                if( simple_gettime() - stop_times(id) > MASTER_STOP_TIMEOUT_S ) call shared%stages(id)%force_stop()
             enddo
         end subroutine stop_stages
 
@@ -416,7 +405,7 @@ contains
             write(logfhandle,'(A)') shared%stages(id)%get_label()//' ASKED TO STOP'
         end subroutine ask_to_stop
 
-        ! Waits for @p stage to stop, for up to @p timeout_s, with a heartbeat every HEARTBEAT_S so
+        ! Waits for @p stage to stop, for up to @p timeout_s, with a heartbeat every MASTER_HEARTBEAT_S so
         ! the GUI does not lose the master meanwhile.
         subroutine wait_for_stop( stage, timeout_s )
             type(stream_master_stage), intent(inout) :: stage
@@ -425,7 +414,7 @@ contains
             integer :: ipoll, rc_wait
             do ipoll = 1,(timeout_s * 1000000) / POLL_US
                 if( .not. stage%is_running() ) return
-                if( mod(ipoll, (HEARTBEAT_S * 1000000) / POLL_US) == 0 ) call send_heartbeat()
+                if( mod(ipoll, (MASTER_HEARTBEAT_S * 1000000) / POLL_US) == 0 ) call send_heartbeat()
                 rc_wait = c_usleep(POLL_US)
             enddo
             write(logfhandle,'(A)') stage%get_label()//' DID NOT TERMINATE WITHIN TIMEOUT'
@@ -551,7 +540,7 @@ contains
                 call c%set('optics_dir',      cwd//'/'//OPTICS_JOB_NAME)
                 call c%set('nthr',            res%pool2D_nthr)
                 call c%set('nparts',          res%pool2D_nparts)
-                call c%set('ncls',            POOL2D_NCLS)
+                call c%set('ncls',            MASTER_POOL2D_NCLS)
                 call c%set('mkdir',           'yes')
                 call c%set('nicedispid',      params%nicedispid)
                 call c%set('worker_priority', 'high')
@@ -635,7 +624,7 @@ contains
             call lock(shared%stop_mutex)
             l_continue = .not. shared%l_listener_stop
             call unlock(shared%stop_mutex)
-            rc = c_usleep(LISTENER_SLEEP_US)
+            rc = c_usleep(MASTER_LISTENER_SLEEP_US)
         enddo
     end subroutine metadata_listener
 

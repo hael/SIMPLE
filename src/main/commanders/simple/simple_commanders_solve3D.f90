@@ -28,6 +28,7 @@ use simple_sigma2_state_file,                      only: sigma2_state_header, si
     &SIGMA2_STATE_FNAME
 use simple_ptcl_layout,                            only: ptcl_layout_digest
 use simple_solve3D_addon_report,                   only: solve3D_addon_report, ADDON_REPORT_FNAME
+use simple_defs_solve3D,                           only: CAVGS_SIGMA2_STATE_FNAME
 implicit none
 
 public :: commander_solve3D_cavgs, commander_solve3D_cavgs_conditional_restarts
@@ -35,7 +36,6 @@ public :: commander_solve3D, commander_solve3D_addon
 private
 #include "simple_local_flags.inc"
 
-character(len=*), parameter :: CAVGS_SIGMA2_STATE_FNAME = 'solve3D_cavgs_sigma2_state.bin'
 
 type, extends(commander_base) :: commander_solve3D_cavgs
     contains

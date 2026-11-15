@@ -1,8 +1,8 @@
 # `src/main/solve`: the stage controllers and what a stage change must keep
 
 The workflow rules are in `doc/policies/3D/solve3D_policy.md` (section 3: the stage controller),
-`doc/policies/2D/solve2D_policy.md`, `doc/policies/3D/solve3D_addon_policy.md`,
-`doc/policies/3D/solve3D_chunks_policy.md` and `doc/policies/3D/solve3D_pyramid_policy.md`.
+`doc/policies/2D/solve2D_policy.md`, `doc/policies/3D/solve3D_addon_policy.md` and
+`doc/policies/3D/solve3D_chunks_policy.md`.
 
 ## Files
 
@@ -19,8 +19,8 @@ The workflow rules are in `doc/policies/3D/solve3D_policy.md` (section 3: the st
 - `simple_solve2D_chunk.f90`: one subset of `solve2D_chunks`.
 - `simple_solve3D_manifest.f90`: the run manifest; `simple_solve3D_addon_report.f90`: the add-on's
   validation against the base run; `simple_solve3D_chunks_plan.f90`: the `solve3D_chunks` split.
-- `simple_state_assignment.f90`: multi-state 3D by class-average assignment, shared by stream p07
-  (`simple_stream_stage_solve3D`) and `solve3D_pyramid`.
+- `simple_state_assignment.f90`: multi-state 3D by class-average assignment for stream p07
+  (`simple_stream_stage_solve3D`).
 
 The drivers are commanders: `exec_solve3D`, `exec_solve3D_cavgs`, `exec_solve3D_addon`
 (`simple_commanders_solve3D.f90`), `exec_solve2D` (`simple_commanders_solve2D.f90`).
@@ -83,5 +83,5 @@ The drivers are commanders: `exec_solve3D`, `exec_solve3D_cavgs`, `exec_solve3D_
 `test=lib_reconstruction suite=addon_report_docking`. High level: `test=simulated_workflow`
 (solve2D and solve3D; `suite=1jxy` also runs solve3D distributed), `test=solve3D_addon`,
 `test=multistate_workflows` (the `cavgs` route is solve3D_cavgs), `test=stream_chains` and
-`test=unit_stream suite=solve_3D` (state assignment through p07). No entry runs `solve3D_chunks`,
-`solve3D_pyramid` or `solve2D_chunks` end to end.
+`test=unit_stream suite=solve_3D` (state assignment through p07). No entry runs `solve3D_chunks`
+or `solve2D_chunks` end to end.

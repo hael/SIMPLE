@@ -1,11 +1,10 @@
-!@descr: multistate 3D by class-average assignment, shared by stream p07 and solve3D_pyramid: the rules, the reference check, the matching's mapping onto the particles, the local refinement's seeds and result, and the jobs' command lines
+!@descr: multistate 3D by class-average assignment for stream p07: the rules, the reference check, the matching's mapping onto the particles, the local refinement's seeds and result, and the jobs' command lines
 !==============================================================================
 ! MODULE: simple_state_assignment
 !
 ! PURPOSE:
-!   The method of stream p07 (simple_stream_stage_solve3D) without its stage, so the batch program
-!   solve3D_pyramid (simple_commanders_solve3D_pyramid) runs the same steps on the same rules
-!   (doc/policies/stream/stream_3D_ingestion_policy.md, doc/policies/3D/solve3D_pyramid_policy.md):
+!   The method of stream p07 (simple_stream_stage_solve3D) without its stage
+!   (doc/policies/stream/stream_3D_ingestion_policy.md):
 !     - the route to the reference volumes: solve2D of a first set into NCLS2D_FIRST classes, the
 !       pool model's selection of them (select_route_classes), cls_expansion into expansion_budget
 !       sub-classes, solve3D_cavgs on the sub-class averages;
@@ -13,14 +12,12 @@
 !       the volumes, their record and the class averages per state written into one folder;
 !     - the assignment: assign_cavgs_states' matching mapped onto the particles (map_assignment:
 !       reject_by_fit, flag_ambiguous, map2ptcls), the matched class averages per state
-!       (write_matched_cavgs); for solve3D_pyramid, a solve3D_cavgs of each state's class averages
-!       alone (select_state_classes), its volume docked onto the state's reference
-!       (docked_cc_common_grid) and its poses mapped onto the state's particles (map_state_poses);
+!       (write_matched_cavgs);
 !     - the local refinement: its seeds (set_refine_seeds), its project with the states renumbered
 !       (write_refine_project) and its result mapped back (map_refine_result);
-!     - the command lines of the jobs (set_*_cline): the keys that make the method, set alike by
-!       both callers, which add the resources (threads, parts) themselves.
-!   Free procedures without state: the callers own the projects, the folders and the jobs.
+!     - the command lines of the jobs (set_*_cline): the keys that make the method; the stage adds
+!       the resources (threads, parts) itself.
+!   Free procedures without state: the stage owns the projects, the folders and the jobs.
 !==============================================================================
 module simple_state_assignment
 use simple_defs,                   only: logfhandle, COSMSKHALFWIDTH
@@ -33,7 +30,7 @@ use simple_fileio,                 only: add2fbody, del_file, file_exists, fname
 use simple_syslib,                 only: simple_mkdir
 use simple_math,                   only: round2even
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use simple_imghead,                only: find_ldim_nptcls, find_img_smpd
+use simple_imghead,                only: find_ldim_nptcls
 use simple_refine3D_fnames,        only: refine3D_oris_heatmap_fname, refine3D_reprojs_fname
 use simple_oris,                   only: oris
 use simple_sym,                    only: sym
@@ -60,15 +57,15 @@ public :: QUALITY_DIR, SELECTED_CAVGS, REJECTED_CAVGS
 public :: refs_check, assign_stats
 ! rules
 public :: expansion_budget, count_active_classes
-public :: fit_mskdiam, median_of, usable_job_2D, cut_whole_stacks
+public :: fit_mskdiam, median_of, usable_job_2D
 ! steps
 public :: score_cavgs_with_model, select_route_classes, model_rejected_rows
-public :: check_state_refs, docked_pair_cc, docked_cc_common_grid, read_refs_record
-public :: map_assignment, write_matched_cavgs, select_state_classes, map_state_poses
+public :: check_state_refs, docked_pair_cc, read_refs_record
+public :: map_assignment, write_matched_cavgs
 public :: set_refine_seeds, write_refine_project, map_refine_result
 public :: cavgs_fbody, log_jpeg
 ! the jobs' command lines
-public :: set_solve2D_route_cline, set_clsexp_cline, set_cavgs3D_cline, set_state_cavgs3D_cline, set_assign_cline
+public :: set_solve2D_route_cline, set_clsexp_cline, set_cavgs3D_cline, set_assign_cline
 public :: set_refine_cont_cline
 public :: run_all_state_assignment_tests
 public :: refs_usable, reject_by_fit, flag_ambiguous, compact_states, write_state_cavgs
@@ -338,50 +335,6 @@ contains
         if( l_ok ) l_ok = file_exists(add2fbody(stk, ext%to_char(), '_even')) .and.&
             &file_exists(add2fbody(stk, ext%to_char(), '_odd'))
     end function usable_job_2D
-
-    !> The first @p nmax of the rows @p selected, whole stacks in row (arrival) order: a stack
-    !! (@p stkind, the rows of one stack consecutive) is taken with all its selected rows while they
-    !! fit, and the stack that crosses @p nmax ends the cut, so the cut may hold fewer; when the
-    !! first stack with selected rows alone exceeds @p nmax, its first @p nmax selected rows. Every
-    !! selected row when they are @p nmax at most.
-    pure function cut_whole_stacks( selected, stkind, nmax ) result( l_in )
-        logical, intent(in) :: selected(:)
-        integer, intent(in) :: stkind(:), nmax
-        logical :: l_in(size(selected))
-        integer :: i, j, k, ntaken, nstk
-        l_in = .false.
-        if( nmax < 1 ) return
-        if( count(selected) <= nmax )then
-            l_in = selected
-            return
-        endif
-        ntaken = 0
-        i      = 1
-        do while( i <= size(selected) )
-            ! rows i..j: one stack
-            j = i
-            do while( j < size(selected) )
-                if( stkind(j + 1) /= stkind(i) ) exit
-                j = j + 1
-            enddo
-            nstk = count(selected(i:j))
-            if( ntaken + nstk > nmax )then
-                if( ntaken == 0 )then
-                    ! the first stack alone exceeds the count: its first nmax selected rows
-                    do k = i,j
-                        if( .not. selected(k) ) cycle
-                        if( ntaken == nmax ) exit
-                        l_in(k) = .true.
-                        ntaken  = ntaken + 1
-                    enddo
-                endif
-                return
-            endif
-            l_in(i:j) = selected(i:j)
-            ntaken    = ntaken + nstk
-            i         = j + 1
-        enddo
-    end function cut_whole_stacks
 
     !---------------- the pool model ----------------
 
@@ -656,65 +609,6 @@ contains
         cc = max(cc_direct, cc_mirror)
     end function docked_pair_cc
 
-    !> The docked correlation of the volumes @p vol1 and @p vol2 (docked_pair_cc) on a common grid:
-    !! when their boxes differ, the larger is Fourier-cropped to the smaller's box (written beside it
-    !! as <fbody>_common, removed after), which keeps its extent, so the pixel sizes must then agree.
-    !! The mask diameter @p mskdiam (A) is fitted to the common box. -1, with a warning, when the
-    !! volumes cover different extents.
-    real function docked_cc_common_grid( vol1, vol2, mskdiam, cc_direct, cc_mirror ) result( cc )
-        class(string), intent(in)  :: vol1, vol2
-        real,          intent(in)  :: mskdiam
-        real,          intent(out) :: cc_direct, cc_mirror
-        type(string) :: v1, v2, tmp
-        real    :: smpd1, smpd2
-        integer :: ldim1(3), ldim2(3), n
-        cc        = -1.
-        cc_direct = -1.
-        cc_mirror = -1.
-        call find_ldim_nptcls(vol1, ldim1, n)
-        call find_ldim_nptcls(vol2, ldim2, n)
-        smpd1 = find_img_smpd(vol1)
-        smpd2 = find_img_smpd(vol2)
-        v1    = vol1
-        v2    = vol2
-        if( ldim1(1) > ldim2(1) )then
-            tmp   = add2fbody(vol1, MRC_EXT, '_common')
-            call fourier_crop(vol1, ldim1, smpd1, ldim2(1), tmp)
-            smpd1 = smpd1 * real(ldim1(1)) / real(ldim2(1))
-            v1    = tmp
-        else if( ldim2(1) > ldim1(1) )then
-            tmp   = add2fbody(vol2, MRC_EXT, '_common')
-            call fourier_crop(vol2, ldim2, smpd2, ldim1(1), tmp)
-            smpd2 = smpd2 * real(ldim2(1)) / real(ldim1(1))
-            v2    = tmp
-        endif
-        if( abs(smpd1 - smpd2) <= 1.e-3 * smpd2 )then
-            cc = docked_pair_cc(v1, v2, smpd2, fit_mskdiam(mskdiam, min(ldim1(1), ldim2(1)), smpd2), cc_direct, cc_mirror)
-        else
-            THROW_WARN('the volumes cover different extents; they are not docked')
-        endif
-        if( tmp%strlen() > 0 ) call del_file(tmp)
-
-    contains
-
-        ! the volume @p fname (@p ldim, @p smpd) Fourier-cropped to @p box, written to @p fname_out
-        subroutine fourier_crop( fname, ldim, smpd, box, fname_out )
-            class(string), intent(in) :: fname, fname_out
-            integer,       intent(in) :: ldim(3), box
-            real,          intent(in) :: smpd
-            type(image) :: vol
-            call vol%new(ldim, smpd)
-            call vol%read(fname)
-            call vol%fft()
-            call vol%clip_inplace([box, box, box])
-            call vol%ifft()
-            call vol%set_smpd(smpd * real(ldim(1)) / real(box))
-            call vol%write(fname_out)
-            call vol%kill
-        end subroutine fourier_crop
-
-    end function docked_cc_common_grid
-
     !> The reference volumes recorded in @p dir (REFS_RECORD, check_state_refs): @p vols their
     !! absolute paths, @p box and @p smpd. .false., with none taken, when the record is missing or
     !! unreadable, holds more than @p nstates_max, or a volume is not on disk.
@@ -940,53 +834,6 @@ contains
         call dealloc_imgarr(cavgs)
     end subroutine write_matched_cavgs
 
-    !> The classes of @p proj (the assignment's project, map_assignment done) that state @p s holds
-    !! (cls3D), selected for a solve3D_cavgs of that state alone: cls2D state 1 for them and 0 for
-    !! every other class (the halves' own flags kept). The number selected; 0 when @p proj has no
-    !! matching.
-    integer function select_state_classes( proj, s ) result( nsel )
-        class(sp_project), intent(inout) :: proj
-        integer,           intent(in)    :: s
-        integer :: icls, ncls
-        nsel = 0
-        ncls = proj%os_cls2D%get_noris()
-        if( ncls == 0 .or. proj%os_cls3D%get_noris() /= ncls ) return
-        do icls = 1,ncls
-            if( proj%os_cls3D%get_state(icls) == s )then
-                call proj%os_cls2D%set_state(icls, 1)
-                nsel = nsel + 1
-            else
-                call proj%os_cls2D%set_state(icls, 0)
-            endif
-        enddo
-    end function select_state_classes
-
-    !> The poses of state @p s's particles from the solve3D_cavgs of that state's classes alone
-    !! (@p res, its project), in place of the matching's: res's class poses mapped onto its
-    !! particles (map2ptcls), and each row of @p spproj in state @p s whose class res holds in a
-    !! state given that Euler angles and shift. The state's frame is that run's own: refine3D
-    !! compares each particle with its own state's volume only. The number of rows given a pose; -1,
-    !! with @p spproj unchanged, when @p res holds other rows or no class poses.
-    integer function map_state_poses( spproj, res, s ) result( nposes )
-        class(sp_project), intent(inout) :: spproj, res
-        integer,           intent(in)    :: s
-        integer :: i, n
-        nposes = -1
-        n      = spproj%os_ptcl3D%get_noris()
-        if( n == 0 .or. res%os_ptcl2D%get_noris() /= n ) return
-        if( res%os_cls3D%get_noris() == 0 ) return
-        call res%map2ptcls()
-        if( res%os_ptcl3D%get_noris() /= n ) return
-        nposes = 0
-        do i = 1,n
-            if( spproj%os_ptcl3D%get_state(i) /= s ) cycle
-            if( res%os_ptcl3D%get_state(i) <= 0 ) cycle
-            call spproj%os_ptcl3D%set_euler(i, res%os_ptcl3D%get_euler(i))
-            call spproj%os_ptcl3D%set_shift(i, res%os_ptcl3D%get_2Dshift(i))
-            nposes = nposes + 1
-        enddo
-    end function map_state_poses
-
     !---------------- the local refinement ----------------
 
     !> The seeds of the local refinement on @p spproj's rows (refine=cont continues from a discrete
@@ -1201,23 +1048,6 @@ contains
         call cline%set('force_lp_range',    'yes')
         if( mskdiam > 0. ) call cline%set('mskdiam', mskdiam)
     end subroutine set_cavgs3D_cline
-
-    !> solve3D_cavgs of one state's class averages (a project selecting them, select_state_classes):
-    !! one state, c1, no pruning, and the low-pass limits solve3D_cavgs derives from the class FRCs
-    !! (its defaults, no fixed ramp), so each state has its own.
-    subroutine set_state_cavgs3D_cline( cline, projfile, mskdiam )
-        class(cmdline),   intent(inout) :: cline
-        character(len=*), intent(in)    :: projfile
-        real,             intent(in)    :: mskdiam
-        call cline%kill
-        call cline%set('prg',      'solve3D_cavgs')
-        call cline%set('mkdir',    'no')
-        call cline%set('projfile', projfile)
-        call cline%set('pgrp',     'c1')
-        call cline%set('nstates',  1)
-        call cline%set('prune',    'no')
-        if( mskdiam > 0. ) call cline%set('mskdiam', mskdiam)
-    end subroutine set_state_cavgs3D_cline
 
     !> assign_cavgs_states: every class average of the project matched against the references
     !! @p vols (one per state) at LP_ASSIGN over NSPACE_ASSIGN directions per state.

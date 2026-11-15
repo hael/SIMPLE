@@ -32,7 +32,6 @@ validation, says so in its first lines.
 | 3D | [3D/solve3D_cavgs_policy.md](3D/solve3D_cavgs_policy.md) | the class-average route to a first map |
 | 3D | [3D/solve3D_addon_policy.md](3D/solve3D_addon_policy.md) | extending a solved map with particles it did not contain |
 | 3D | [3D/solve3D_chunks_policy.md](3D/solve3D_chunks_policy.md) | solving a map from all particles in balanced chunks |
-| 3D | [3D/solve3D_pyramid_policy.md](3D/solve3D_pyramid_policy.md) | multistate 3D by class-average assignment, offline |
 | 3D | [3D/reconstruct3D_pcg_policy.md](3D/reconstruct3D_pcg_policy.md) | the PCG reconstruction backend |
 | 3D | [3D/automasking_policy.md](3D/automasking_policy.md) | automasking in refinement, `solve3D` and `volassemble` |
 | 3D | [3D/classify3D_refs_policy.md](3D/classify3D_refs_policy.md) | reference-guided 3D classification |

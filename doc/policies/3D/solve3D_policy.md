@@ -274,8 +274,8 @@ automatic limits. The stage controller still emits `trs=0` for stages 1 and 2,
 which do not search shifts. The class-average and chunked interfaces do not
 expose the override. `shift_sigma` (the polar shift map, `refine3D_policy.md`)
 is on by default (the parameter's 10 A; `shift_sigma=0` is the window search
-in every stage) for solve3D and for solve3D_cavgs, solve3D_addon,
-solve3D_chunks and solve3D_pyramid alike, and goes to every stage with a shift
+in every stage) for solve3D and for solve3D_cavgs, solve3D_addon and
+solve3D_chunks alike, and goes to every stage with a shift
 search (3-8, dense and neighbourhood tables alike), where the tables centre
 each particle as it needs: the disk of 3 sigma for one not yet centred in the
 workflow or whose shift posterior is wider than a third of the stage's window,
