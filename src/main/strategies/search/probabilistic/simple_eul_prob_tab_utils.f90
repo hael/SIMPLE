@@ -1354,14 +1354,14 @@ contains
         character(len=:), allocatable :: label, weight_kind
         if( nptcls < 1 ) return
         write(ninsert,'(F32.2)') 1. + real(npose) / real(nptcls)
-        write(wcommit,'(F32.0)') 100. * real(wc_sum) / real(nptcls)
-        write(pct_capped,'(F32.0)') 100. * real(ncapped) / real(nptcls)
+        ! fmt_dec: whole percentages without the F edit's trailing decimal point (89, not 89.)
+        wcommit     = fmt_dec(100. * real(wc_sum) / real(nptcls), 0)
+        pct_capped  = fmt_dec(100. * real(ncapped) / real(nptcls), 0)
         label       = 'POSES INSERTED'
         weight_kind = 'weight'
         if( l_inpl )then
             label       = 'POSES SELECTED'
             weight_kind = 'table weight'
-            wcommit     = fmt_dec(100. * real(wc_sum) / real(nptcls), 0)
         endif
         ! the capped share says whether topk limits the insertion
         write(logfhandle,'(A)') log_item(label, trim(adjustl(ninsert))//' per particle, '//&

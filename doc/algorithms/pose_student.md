@@ -238,9 +238,11 @@ within the cap, its radius is within the bound (the dense search's cell:
 `prob_athres` or the grid's spacing, whichever is larger, recorded in the model
 with the threshold calibrated against it) and its confidence is at or above
 the threshold; every other particle takes the dense search. The seeded
-particle's record carries the direction as its orientation and, in numbered
-slots of the particle's record, the cone's radius, the confidence and the
-route. With `nparts`, predict_poses is the master of that many parts: given
+particle's record carries the direction as its orientation, with the in-plane
+angle at that direction closest to the particle's stored rotation
+(`euler_inpl_closest`: exact for any two directions and at the poles, where
+copying e3 would be wrong by the change of e1), and, in numbered slots of the
+particle's record, the cone's radius, the confidence and the route. With `nparts`, predict_poses is the master of that many parts: given
 `vol1` it makes the even/odd halves, sigma2 and the reprojection model first,
 which the parts only read; it merges the parts' records, joins their tables in
 part order and writes the project once, the shared-memory run's result byte for

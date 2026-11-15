@@ -4,7 +4,7 @@ use simple_test_utils ! assertions etc.
 use simple_defs       ! dp, STDLEN, etc.
 use simple_ori,       only: ori
 use simple_ori_utils, only: euler2m, m2euler, euler_compose, geodesic_frobdev, genfire2euler, euler2genfire, &
-    &euler_inplrotdist, euler_about_ref
+    &euler_inplrotdist, euler_about_ref, euler_inpl_closest
 use simple_linalg,    only: rad2deg
 use simple_string,    only: string
 use simple_type_defs, only: ctfparams, CTFFLAG_YES, CTFFLAG_FLIP
@@ -47,6 +47,7 @@ contains
         call test_geodesic_metrics()
         call test_inplrotdist_poles()
         call test_euler_about_ref()
+        call test_euler_inpl_closest()
         call test_euler_compose_vs_compeuler()
         call test_ori2str_and_str2ori_roundtrip()
         call test_ori_from_rotmat()
@@ -655,6 +656,63 @@ contains
         call assert_real(130., e(3), DEG_TOL, 'a triplet beside the pole read about the pole takes e1 + e3')
         call a%kill
     end subroutine test_euler_about_ref
+
+    !> euler_inpl_closest against a brute-force scan of trace(R(e1_dir, e2_dir, e3) R^T) over e3: off the poles, at
+    !! both poles (a normalised triplet holds the in-plane angle in e1), beside them, and for the same direction
+    subroutine test_euler_inpl_closest()
+        type(ori) :: a
+        real      :: e3, e3_best, dirs(3,6), poses(3,6)
+        real(dp)  :: tr, tr_best, r(3,3)
+        integer   :: i, j, k
+        write(*,'(A)') 'test_euler_inpl_closest'
+        call a%new_ori(.false.)
+        ! the same direction: the angle of the pose itself, off the poles and at a pole after normalisation
+        call assert_real(20., euler_inpl_closest([10., 60., 20.], [10., 60., 0.]), DEG_TOL, &
+            &'the same direction off the poles keeps the pose''s own in-plane angle')
+        call a%set_euler([37., 0., 112.5])
+        call assert_real(112.5, euler_inpl_closest(a%get_euler(), [37., 0., 0.]), DEG_TOL, &
+            &'at the north pole the folded in-plane angle comes back about the grid direction')
+        call a%set_euler([37., 180., 112.5])
+        call assert_real(112.5, euler_inpl_closest(a%get_euler(), [37., 180., 0.]), DEG_TOL, &
+            &'at the south pole the folded in-plane angle comes back about the grid direction')
+        ! a pole pose carried to a neighbouring direction of another azimuth: the e1 change enters in full
+        call a%set_euler([0., 0., 50.])
+        call assert_real(20., euler_inpl_closest(a%get_euler(), [30., 2., 0.]), 0.2, &
+            &'a pole pose carried beside the pole keeps e1 + e3, not e3')
+        ! against brute force over a set of pose and direction pairs
+        poses = reshape([10.,60.,20., 200.,0.,75., 33.,180.,300., 120.,1.,10., 300.,135.,250., 5.,89.,179.], [3,6])
+        dirs  = reshape([14.,63.,0., 250.,3.,0., 40.,177.,0., 300.,2.,0., 290.,140.,0., 9.,92.,0.], [3,6])
+        do i = 1,6
+            call a%set_euler(poses(:,i))
+            e3 = euler_inpl_closest(a%get_euler(), dirs(:,i))
+            tr_best = -huge(1.d0)
+            e3_best = 0.
+            do j = 0,35999
+                r  = real(matmul(real(euler2m([dirs(1,i), dirs(2,i), real(j) * 0.01]), dp), &
+                    &transpose(real(euler2m(a%get_euler()), dp))), dp)
+                tr = 0.d0
+                do k = 1,3
+                    tr = tr + r(k,k)
+                enddo
+                if( tr > tr_best )then
+                    tr_best = tr
+                    e3_best = real(j) * 0.01
+                endif
+            enddo
+            ! 0.1 degrees: the trace is flat at its maximum (it falls by R d^2 / 2), so with euler2m's single-precision
+            ! entries the scan itself resolves only a few hundredths of a degree
+            call assert_real(0., angdiff(e3, e3_best), 0.1, 'the closest in-plane angle equals the brute-force maximum')
+        enddo
+        call a%kill
+
+    contains
+
+        real function angdiff( x, y )
+            real, intent(in) :: x, y
+            angdiff = abs(modulo(x - y + 180., 360.) - 180.)
+        end function angdiff
+
+    end subroutine test_euler_inpl_closest
 
     !---------------- euler_compose vs compeuler ----------------
 

@@ -7,6 +7,7 @@ use simple_rnd,    only: ran3
 implicit none
 
 public :: euler2m, m2euler, dm2euler, euler_dist, euler_inplrotdist, euler_compose, euler_mirror, euler_about_ref
+public :: euler_inpl_closest
 public :: make_transfmat, rnd_romat, geodesic_frobdev, rotmat2d
 public :: genfire2euler, euler2genfire
 public :: canonical_mirror_frame_angle
@@ -302,6 +303,42 @@ contains
         e(1) = euls_ref(1)
         e(3) = modulo(euls(3) + real(pole) * (euls(1) - euls_ref(1)), 360.)
     end function euler_about_ref
+
+    !> The in-plane angle e3 (degrees, [0,360)) that brings the direction (e1, e2) of euls_dir closest to the rotation
+    !! of euls: the e3 maximising trace(R(e1_dir, e2_dir, e3) R(euls)^T), i.e. minimising their geodesic distance. The
+    !! trace is a cos(e3) + b sin(e3) + c (e3 turns about z on the left, euler2m), so three evaluations give a and b.
+    !! Exact for every pair of directions, the poles included (where the in-plane angle of a normalised triplet sits in
+    !! e1); for the same direction it returns the angle of euls itself. A direction pair without a preferred angle (the
+    !! antipode) keeps euls' own e3
+    pure real function euler_inpl_closest( euls, euls_dir ) result( e3 )
+        real, intent(in) :: euls(3), euls_dir(3)
+        real(dp) :: rt(3,3), f0, f90, f180, a, b
+        rt   = real(transpose(euler2m(euls)), dp)
+        f0   = trace_with(0.)
+        f90  = trace_with(90.)
+        f180 = trace_with(180.)
+        a    = 0.5d0 * (f0 - f180)
+        b    = f90 - 0.5d0 * (f0 + f180)
+        if( a * a + b * b < 1.d-12 )then
+            e3 = modulo(euls(3), 360.)
+        else
+            e3 = modulo(real(atan2(b, a) * 180.d0 / DPI), 360.)
+        endif
+
+    contains
+
+        pure real(dp) function trace_with( ang )
+            real, intent(in) :: ang
+            real(dp) :: r(3,3)
+            integer  :: k
+            r = matmul(real(euler2m([euls_dir(1), euls_dir(2), ang]), dp), rt)
+            trace_with = 0.d0
+            do k = 1,3
+                trace_with = trace_with + r(k,k)
+            enddo
+        end function trace_with
+
+    end function euler_inpl_closest
 
     !>  \brief  is for composing Euler triplets
     pure subroutine euler_compose( euls1, euls2, euls_out )

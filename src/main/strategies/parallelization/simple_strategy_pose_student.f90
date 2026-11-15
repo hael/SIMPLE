@@ -748,7 +748,7 @@ contains
     !! directions) and the confidence, with the error against the particle's stored direction, written to the text
     !! table <fname>_pred.txt. Project: reads the particle field and the stacks; writes nothing
     subroutine predict_poses_exec( params, build, cline )
-        use simple_ori_utils, only: euler_about_ref
+        use simple_ori_utils, only: euler_inpl_closest
         type(parameters), target, intent(inout) :: params
         type(builder),    target, intent(inout) :: build
         class(cmdline),           intent(inout) :: cline
@@ -934,11 +934,11 @@ contains
             if( preds(i)%k99 <= KMAX_STUDENT .and. preds(i)%radius <= cone_bound .and. preds(i)%conf >= conf_threshold ) route = 1
             cone = 0.
             if( route == 1 )then
-                ! the search's in-plane angle about its own direction (iproj_ref; at a pole the stored triplet holds it
-                ! in e1), carried to the mode's direction
-                euls_stored = euler_about_ref(build%spproj_field%get_euler(iptcl), student%grid_euler(iproj_ref(i)))
+                ! the in-plane angle at the mode's direction closest to the search's stored rotation (euler_inpl_closest:
+                ! exact for any pair of directions, the poles included, where copying e3 is wrong by up to e1's change)
+                euls_stored = build%spproj_field%get_euler(iptcl)
                 euls = student%grid_euler(preds(i)%mode)
-                euls(3) = euls_stored(3)
+                euls(3) = euler_inpl_closest(euls_stored, euls)
                 call build%spproj_field%set_euler(iptcl, euls)
                 cone = max(preds(i)%radius, spacing)
                 n_seeded = n_seeded + 1
