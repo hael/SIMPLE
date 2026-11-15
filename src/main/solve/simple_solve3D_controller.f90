@@ -735,8 +735,8 @@ contains
             &.not. cfg%l_gold_standard .and. .not. l_cmdline_lp_override
     end function fsc05_sets_stage_lp
 
-    !> The stage limit is the project's FSC=0.5 resolution, fixed for the stage (an iteration's FSC
-    !! fluctuates; the stage exits end it), bounded by the ladder cap; unchanged without a res05 field
+    !> A project FSC=0.5 finer than the planned rung sets the stage limit, fixed for the stage and bounded
+    !! by the ladder cap; a coarser one (poses not yet settled) keeps the planned rung, never a retreat
     subroutine set_stage_lp_from_fsc05( params, lp_cap, lp, l_set )
         class(parameters), intent(in)    :: params
         real,              intent(in)    :: lp_cap
@@ -744,7 +744,7 @@ contains
         logical,           intent(out)   :: l_set
         real :: res05
         res05 = project_best_fsc05_resolution(params%projfile)
-        l_set = res05 > TINY
+        l_set = res05 > TINY .and. res05 < lp
         if( l_set ) lp = max(res05, lp_cap)
     end subroutine set_stage_lp_from_fsc05
 

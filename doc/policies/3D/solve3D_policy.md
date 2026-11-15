@@ -329,8 +329,8 @@ ladder sets its size.
 particle run, from the first ML-regularized stage (`ML_REG_START_STAGE`, 3)
 until NU filtering or gold standard sets the matching band, the stage limit
 is the project's FSC=0.5 resolution at stage entry (`fsc05_sets_stage_lp`,
-`set_stage_lp_from_fsc05`), whether finer or coarser than the planned rung,
-bounded only by the ladder cap and an explicit `lpstop`; an explicit `lp`
+`set_stage_lp_from_fsc05`) when it is finer than the planned rung (amended
+2026-11-15, below), bounded by the ladder cap and an explicit `lpstop`; an explicit `lp`
 wins. The ML-regularized references already trust the FSC, so the band
 does too. It is fixed for the stage because one iteration's FSC fluctuates;
 the stage exits end the stage when it stops gaining. Without a `res05` field
@@ -344,6 +344,15 @@ advance; restart 8 left stage 3 at 14.79 A, one shell short, ran stage 4 at
 14 A although its FSC=0.5 there was 13.5 A, stalled at overlap 0.36 and 31
 deg and finished at 9.41/7.96 A, while the nine restarts advanced to 12 A
 finished at 7.39-7.57/4.14-4.20 A.
+
+**Never coarser than planned (amendment of 2026-11-15).** A FSC=0.5 coarser
+than the planned rung leaves the rung in place; the limit never retreats.
+Why: on PorF (single state) stage 2 ends at overlap 0.11-0.12 with FSC=0.5 at
+22-24 A, coarser than its own 19.1 A band. Under the 11-13 rule (`4282d58a`,
+4 restarts) stage 3 ran at 22.3-24 A instead of the planned 16.9 A, ended at
+overlap 0.05-0.07 (`fa9b82b5`, 10 restarts at 16.9 A: 0.13-0.16), stage 4 at
+0.20-0.26 (0.36-0.43), and two restarts finished at 5.20 and 4.95 A at
+FSC=0.143 against 4.11-4.22 A for all ten `fa9b82b5` restarts.
 
 **No stage is skipped (ruling of 2026-11-12).** Every stage runs at least
 `STAGE_MINITS` (3) iterations (`minits` on every stage command line, never
