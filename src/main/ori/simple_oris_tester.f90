@@ -654,17 +654,17 @@ contains
         end do
     end function unit_counts
 
-    ! balance=class: every unit the same count capped at its population, lowest updatecnt first.
-    ! balance=cavg: every group the same count capped at its population and, inside a group, every unit
-    ! the same count capped at its population; the remainder of a group's equal split goes to its
-    ! least-updated unit
+    ! balance=class: every unit a share in proportion to the square root of its population, capped at its
+    ! population, lowest updatecnt first. balance=cavg: the same over the groups, then over the units of a
+    ! group; the fractional remainders go to the least-updated units
     subroutine test_nested_class_quota()
         type(oris)                      :: os
         type(class_sample), allocatable :: clssmp(:)
         integer,            allocatable :: inds(:)
         integer :: nsamp, i, cnts3(3), cnts5(5)
         write(*,'(A)') 'test_nested_class_quota'
-        ! class: pops 2, 5, 10; 9 of 17 -> the equal rounds stop at 4 per unit, the first capped at 2
+        ! class: pops 2, 5, 10; 9 of 17 -> real quotas 1.87, 2.95, 4.18, floors 1, 2, 4 and the two
+        ! remaining particles to the units of lowest mean updatecnt: units 2 and 1 (unit 3 holds updated rows)
         call os%new(17, .true.)
         call os%set_all2single('state',     1.0)
         call os%set_all2single('updatecnt', 0.0)
@@ -674,13 +674,14 @@ contains
         call make_units([2,5,10], [0,0,0], clssmp)
         call os%sample4update_class(clssmp, [1, 17], 9./17., nsamp, inds, .true.)
         cnts3 = unit_counts(clssmp, inds)
-        call assert_int(10, nsamp, 'class: equal rounds overshoot by less than the number of units')
-        call assert_true(all(cnts3 == [2,4,4]), 'class: every unit the same count capped at its population')
+        call assert_int(9, nsamp, 'class: the sample size is the target')
+        call assert_true(all(cnts3 == [2,3,4]), 'class: shares in proportion to the square root of the population')
         call assert_true(.not. any(inds == 8) .and. .not. any(inds == 9), 'class: lowest updatecnt first within a unit')
         call free_units(clssmp)
         call os%kill
         ! cavg: group 1 holds units of 2, 6 and 6 particles, group 2 one unit of 3, group 3 one unit of 20.
-        ! 19 of 37: group quotas 8, 3 (capped), 8; inside group 1: 2 (capped), 3, 3
+        ! 19 of 37: group quotas 7.29, 3 (capped), 8.71; inside group 1: 1.63, 2.83, 2.83; floors 1, 2, 2, 3, 8
+        ! and the three remaining particles (all updatecnts equal) to the larger units: 5, 2, 3
         call os%new(37, .true.)
         call os%set_all2single('state',     1.0)
         call os%set_all2single('updatecnt', 0.0)
@@ -689,8 +690,8 @@ contains
         call os%sample4update_class(clssmp, [1, 37], 19./37., nsamp, inds, .true.)
         cnts5 = unit_counts(clssmp, inds)
         call assert_int(19, nsamp, 'cavg: sample size')
-        call assert_true(all(cnts5 == [2,3,3,3,8]), 'cavg: nested equal quota over groups, then units')
-        call assert_int(8, sum(cnts5(1:3)), 'cavg: group 1 gets the equal group count')
+        call assert_true(all(cnts5 == [1,3,3,3,9]), 'cavg: nested square-root quota over groups, then units')
+        call assert_int(7, sum(cnts5(1:3)), 'cavg: group 1 gets its square-root share')
         call free_units(clssmp)
         call os%kill
         ! remainder: one group of three units of 4 and 4 draws -> 1 each and the remainder to the unit
@@ -705,7 +706,7 @@ contains
         call make_units([4,4,4], [1,1,1], clssmp)
         call os%sample4update_class(clssmp, [1, 12], 4./12., nsamp, inds, .true.)
         cnts3 = unit_counts(clssmp, inds)
-        call assert_true(all(cnts3 == [1,2,1]), 'cavg: the group remainder goes to the least-updated unit')
+        call assert_true(all(cnts3 == [1,2,1]), 'cavg: the remainder goes to the least-updated unit')
         call free_units(clssmp)
         call os%kill
         if( allocated(inds) ) deallocate(inds)
@@ -745,14 +746,15 @@ contains
         call assert_true(all(unit_counts(clssmp, inds) == [2,2]), 'class, best first: the quotas of the draw without scores')
         call assert_true(all(inds == [3,6,10,13]), 'class, best first: every unit''s best rows')
         call free_units(clssmp)
-        ! cavg: group 1 one unit of rows 1-4, group 2 units of rows 5-8 and 9-16; group quotas 2 and 2, inside
-        ! group 2 one per unit
+        ! cavg: group 1 one unit of rows 1-4, group 2 units of rows 5-8 and 9-16; group quotas 1.46 and 2.54, inside
+        ! group 2 1.05 and 1.49; floors 1, 1, 1 and the remaining particle to the least-updated units, unit 3 the
+        ! larger of the tie (row 3 of unit 1 was updated)
         call reset_counts()
         call os%set(3, 'updatecnt', 1.)
         call make_units([4,4,8], [1,2,2], clssmp)
         call os%sample4update_class(clssmp, [1, 16], 0.25, nsamp, inds, .false., scores=scores)
-        call assert_true(all(unit_counts(clssmp, inds) == [2,1,1]), 'cavg, best first: the nested quotas of the draw without scores')
-        call assert_true(all(inds == [2,3,6,10]), 'cavg, best first: every unit''s best rows')
+        call assert_true(all(unit_counts(clssmp, inds) == [1,1,2]), 'cavg, best first: the nested quotas of the draw without scores')
+        call assert_true(all(inds == [3,6,10,13]), 'cavg, best first: every unit''s best rows')
         call free_units(clssmp)
         call os%kill
         if( allocated(inds) ) deallocate(inds)
@@ -776,9 +778,11 @@ contains
         write(*,'(A)') 'test_class_sample_sweep'
         call make_units([2,6,6,3,20], [1,1,1,2,3], clssmp)
         call class_sample_quotas(clssmp, 19, quotas)
-        call assert_real(2., quotas(1), 1.e-5, 'quota of the capped unit is its population')
-        call assert_real(3., quotas(2), 1.e-5, 'quota of an open unit of group 1')
-        call assert_real(8., quotas(5), 1.e-5, 'quota of the single-unit group 3')
+        call assert_real(1.6327, quotas(1), 1.e-3, 'quota of the smallest unit of group 1')
+        call assert_real(2.8279, quotas(2), 1.e-3, 'quota of a larger unit of group 1')
+        call assert_real(3.,     quotas(4), 1.e-5, 'quota of the capped single-unit group 2 is its population')
+        call assert_real(8.7115, quotas(5), 1.e-3, 'quota of the single-unit group 3')
+        call assert_real(19.,    sum(quotas), 1.e-3, 'the quotas add up to the target')
         sweep = class_sample_sweep(clssmp, 19)
         call assert_int(3, sweep, 'sweep = max over units of ceil(pop/quota)')
         call os%new(37, .true.)

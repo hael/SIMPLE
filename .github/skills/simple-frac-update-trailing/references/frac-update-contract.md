@@ -28,8 +28,9 @@ the per-stage `refine3D` command line:
 - `sample_ptcls4update3D`: `sample4update_all` when fractional update is
   inactive; `sample4update_rescore` for the sticky schedule
   (`sticky_sampling=yes`, every iteration of a block after its first);
-  `sample4update_class` for the nested equal quota over the sampling units of
-  `clssmp.bin` (`balance=class|cavg`); `sample4update_cnt` for
+  `sample4update_class` for the nested square-root quota over the sampling
+  units of `clssmp.bin` (`balance=class|cavg`; shares in proportion to the
+  square root of the populations, `class` the workflow default); `sample4update_cnt` for
   low-update-count biased sampling (`balance=none`).
 - `master_draws_sample3D`: every distributed `refine=prob*` pass and every
   fractional pass other than the follow-up, missing, eval or sigma is drawn once by

@@ -101,8 +101,9 @@ and reconstruction behavior.
 
 Key routines:
 
-- `sample4update_class`: nested equal quota over the units of `CLASS_SAMPLING_FILE`
-  (equal over groups, then over the units of a group, then lowest `updatecnt`);
+- `sample4update_class`: nested square-root quota over the units of `CLASS_SAMPLING_FILE`
+  (over groups, then over the units of a group, in proportion to the square root of the
+  populations and capped at them, then lowest `updatecnt`);
   `class_sample_quotas` and `class_sample_sweep` give the expected quotas and the
   draws one full sweep takes (`max ceil(pop/quota)`); with the optional `scores`
   (one per row) a unit takes its best-scoring particles, whatever their update

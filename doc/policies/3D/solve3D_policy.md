@@ -177,15 +177,19 @@ average linkage on their aligned correlation between 30 and 6 A, a group with
 fewer than 2.5% of the particles merged into its nearest group, so a preferred
 view spread over many classes no longer dominates the sample and an odd class
 does not become a group of its own. Every fractional update shares
-its target equally over the groups, then equally over the classes of a group
-(the remainder of a split to the class whose particles have the lowest mean
-`updatecnt`), each capped at its population, then lowest `updatecnt` first
-inside a class, drawn from the whole class: no per-particle 2D score enters
-the draw, except the single-state sticky subset's, which takes each unit's
-best particles by the 2D objective (section 3, staged search). Under `class` every
+its target over the groups in proportion to the square root of their
+populations, then over the classes of a group the same way, each capped at its
+population, then lowest `updatecnt` first inside a class, drawn from the whole
+class: no per-particle 2D score enters the draw, except the single-state sticky
+subset's, which takes each unit's best particles by the 2D objective (section 3,
+staged search). Under `class` every
 class is its own group, so a rare view is sampled more often than its
-population alone would give (square-root shares, 2026-11-05, gave way to equal
-shares on 2026-11-06); under `none` the stages sample the
+population alone would give, without one small class taking a large part of
+every draw (equal shares did: on a small membrane protein with six one-class
+groups of odd class averages, `cavg` with equal shares drew 80% of every sample
+from 18% of the particles). The square-root shares of 2026-11-05 (`15d6280a9`)
+were reverted by an unrelated commit the next day (`a027fe3bd`) and restored on
+2026-11-16; every build in between drew with equal shares. Under `none` the stages sample the
 global lowest `updatecnt` tiers, and the file holds class units only for the
 initial sample of the starting volumes. The groups are written
 as `view_partitionNN_cavgs` stacks with the table `view_partition.txt`. The

@@ -113,8 +113,8 @@ The wrapper uses stochastic fractional updates when the active count exceeds
 the normal sample target and full updates otherwise. The automatic target is
 10,000 particles per state, capped at 100,000 total particles per iteration.
 Fractional updates are balanced over the sampling units of `balance=class`: one
-unit per selected 2D class, with an equal share capped at its population, then
-lowest `updatecnt` first inside a class. Without selected class
+unit per selected 2D class, with a share in proportion to the square root of
+its population, then lowest `updatecnt` first inside a class. Without selected class
 averages (or without 2D classification) the wrapper falls back to
 `balance=none`, the global lowest `updatecnt` tiers. Particles inactive in
 `ptcl3D` are not part of any unit, and the sampler never uses the references,

@@ -493,14 +493,14 @@ the unit tests added in Phases 2 and 4.
 | `src/main/params/simple_parameters.f90`, `src/main/params/simple_parameters_phases.f90` | `sticky_sampling=best` and `l_sticky_best` (Decision 14; added 2026-11-16 on Hans's ruling) | 3 |
 | `src/main/strategies/search/simple_matcher_smpl_and_lplims.f90` | the owner's draw passes the `ptcl2D` scores under `best` (Decision 14; added 2026-11-16) | 3 |
 | `src/main/simple_external_reference_pose_initialization.f90` | the pose initialization removes the stage's `sticky_sampling` from its own command line, since a stage-4 entry now carries `best` (Decision 4, ruling (b); added 2026-11-16) | 3 |
-| `src/main/ori/simple_oris.f90` | the interfaces of the samplers' optional scores (Decision 14; added 2026-11-16) | 3 |
+| `src/main/ori/simple_oris.f90` | the interfaces of the samplers' optional scores (Decision 14; added 2026-11-16); the comment of `class_sample_quotas` (square-root quota restored) | 3 |
 | `src/main/simple_convergence.f90`, `src/main/simple_convergence_tester.f90` | the first-time split; the stage summary, if printed there | 2 |
 | `src/main/exec/simple_exec_helpers.f90` | per-restart seeds in `restarted_exec` | 2 |
 | `src/utils/math/simple_rnd.f90` | a getter of the run seed, if needed | 2 |
-| `src/main/ori/simple_oris_sampling.f90`, `src/main/ori/simple_oris_tester.f90` | `set_nonzero_updatecnt` and its test, if needed; the best-first tier order of `sample4update_cnt` and `sample4update_class` and its test | 2, 3 |
+| `src/main/ori/simple_oris_sampling.f90`, `src/main/ori/simple_oris_tester.f90` | `set_nonzero_updatecnt` and its test, if needed; the best-first draw of `sample4update_cnt` and `sample4update_class` and its test; the square-root quota (`sqrt_capped_shares`, `alloc_unit_quotas`, `class_sample_quotas`) and its tests restored from `15d6280a9` (2026-11-16, Hans's request) | 2, 3 |
 | `doc/policies/3D/solve3D_policy.md` | sections 3-4 | 2, 3, 4, 6 |
-| `doc/policies/importance_sampling_fractional_update_policy.md` | sticky sampling schedules; the sampling units (the one scored draw, the equal quotas) | 2, 3, 6 |
-| `doc/policies/3D/classify3D_refs_policy.md`, `doc/policies/heterogeneity/refine3D_states_policy.md`, `doc/algorithms/sampling_and_fractional_updates.md`, `doc/algorithms/solve3d.md` | consistent with the code: equal quotas, the sticky schedule (added 2026-11-16 on Hans's request) | 3 |
+| `doc/policies/importance_sampling_fractional_update_policy.md` | sticky sampling schedules; the sampling units (the one scored draw, the square-root quotas) | 2, 3, 6 |
+| `doc/policies/3D/classify3D_refs_policy.md`, `doc/policies/heterogeneity/refine3D_states_policy.md`, `doc/algorithms/sampling_and_fractional_updates.md`, `doc/algorithms/solve3d.md` | the sticky schedule; the square-root quotas (added 2026-11-16 on Hans's request) | 3 |
 | `.github/skills/simple-solve3d-importance-sampling/`, `.github/skills/simple-frac-update-trailing/` | on approval | 2 (the sampling skill, approved 2026-11-16), 3 (both, requested 2026-11-16), 6 |
 | `doc/implementation_notes/README.md` | the topic row | 6 |
 | this note | Progress | all |
@@ -608,3 +608,24 @@ whatever their counts (an updated row taken, never-updated low scorers not prefe
 from its first stage, an add-on stage to hold no subset, full sampling to hold none and not trail;
 `check_early_stage_sticky(params, 4, 4)` added. Policies (`solve3D_policy.md` section 3, the fractional-update
 policy), `doc/algorithms/{sampling_and_fractional_updates,solve3d}.md` and both skills updated.
+
+**2026-11-16, square-root quotas restored (after `8363af240`; uncompiled).** The follow-up entry above was
+wrong about the quotas: I took the code for the rule and rewrote the documents to equal shares. Hans recalled
+pushing square-root shares. The history: `15d6280a9` (2026-11-05 17:15) introduced them (`sqrt_capped_shares`,
+the floors of the real quotas plus the remainder to the least-updated units with a fractional quota, tests
+asserting 2, 3, 4 and 1, 3, 3, 3, 9); `a027fe3bd` (2026-11-06 01:01, the agent-friendly run, whose plan was
+written 2026-11-04) replaced them with equal rounds in `simple_oris_sampling.f90`, the tester, the comment in
+`simple_oris.f90` and both skill references, without a word in its message or report and without touching the
+policies; the rest of `15d6280a9` (the class default, the cavg group floor, the single-state missing pass)
+survived. The run evidently worked from a base older than `15d6280a9`. Every build since, the last-working
+`3fb0b00b`, `fa9b82b5` and `db20cde7` included, drew with equal shares, so the revert does not separate the
+working from the failing builds; it does shape the best-first sticky subset (equal shares give a small odd class
+the same quota as a large good one). Restored from `15d6280a9`: `alloc_unit_quotas`, `sqrt_capped_shares` and
+`class_sample_quotas` (replacing `group_quotas`), the `sample4update_class` and `class_sample_quotas` comments,
+the assertions of `test_nested_class_quota` and `test_class_sample_sweep`. Today's tests recomputed (checked with
+a small model of the rule that reproduces `15d6280a9`'s expected values): under `cavg` with units of 4 | 4, 8 and
+4 of 16, the quotas are 1.46 | 1.05, 1.49, so 1, 1 and 2 particles (the remainder to the larger of the tied
+least-updated units), and the best rows are 3, 6, 10, 13 in `test_best_first_draw` and `check_sticky_release`;
+the `class` cases (equal populations) and the sweep counts are unchanged. The documents rewritten in the entry
+above are back to the square-root rule, with the revert and the restore recorded in `solve3D_policy.md` and the
+fractional-update policy.

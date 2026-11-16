@@ -248,7 +248,7 @@ scores from 3D sampling for one state as well on 2026-11-11). The outer particle
 - if fractional update is off, select all active particles
 - `none`: no sampling units; update-count-biased sampling over the whole range
   (`sample4update_cnt`, lowest `updatecnt` tiers first)
-- `class` and `cavg`: the nested equal quota of `sample4update_class` over the
+- `class` and `cavg`: the nested square-root quota of `sample4update_class` over the
   sampling units of the class sampling file `clssmp.bin` (below)
 - with `sticky_sampling=yes` the stage draws by the rule above at its first
   iteration (`which_iter == startit`) and calls `sample4update_rescore` at the
@@ -313,28 +313,30 @@ and the keyed shuffle. Each unit carries an integer `group`:
   used or changed. On local execution the clustering in `solve3D` takes the
   idle workers' cores (`nparts*nthr`, capped at the cores the process owns)
 
-The quota of an iteration, `nint(update_frac * active)`, is nested
-(`alloc_unit_quotas`; `class_sample_quotas` gives the real-valued quotas the
-coverage report and the sweep use):
+The quota of an iteration, `nint(update_frac * active)`, is nested:
 
-1. equally over the groups, each capped at its population: rounds of one more
-   particle to every group still below its population, until the target is
-   reached (the last round may overshoot by fewer particles than there are
-   groups);
-2. equally over the units of a group, the same way; the part of a group's share
-   that does not split evenly goes one each to the units whose particles have
-   the lowest mean `updatecnt` (ties: larger population, then lower class
-   index), which the project state fixes, so the master's draw and every
-   partition's reproduction agree on the quotas and the remainder rotates over
-   iterations;
+1. over groups in proportion to the square root of their populations, each
+   capped at its population, the excess shared again over the others;
+2. over the units of a group the same way (`class_sample_quotas` gives the
+   real-valued quotas); a unit draws the floor of its quota, and the
+   particles left to reach the target go one each to the units with a
+   fractional quota whose particles have the lowest mean `updatecnt` (ties:
+   larger population, then lower class index), which the project state fixes,
+   so the master's draw and every partition's reproduction agree on the
+   quotas and the remainder rotates over iterations;
 3. inside a unit, lowest `updatecnt` first, drawn uniformly within a tier (for
    the sticky subset's draw, `sticky_sampling=best`, the best 2D objective values
    instead, whatever the update counts).
 
-Under `class` the first level is the whole rule: equal shares correct the view
-skew of the data fully, against proportional sampling (`none`), which leaves it.
-Square-root shares (2026-11-05) sat between the two and gave way to equal shares
-on 2026-11-06. The nested level
+Under `class` the first level is the whole rule. The square root sits between
+proportional sampling (`none`, which leaves the view skew of the data) and
+equal shares, which correct it fully but hand a small class, often an odd or
+junk one, many times its share: a unit's visits per particle relative to
+another's are the inverse square root of their population ratio, so a class
+100 times smaller is visited 10 times as often, not 100 times. The rule landed
+on 2026-11-05 (`15d6280a9`); an unrelated commit the next day (`a027fe3bd`,
+whose plan predated it) put the equal shares back in the code and its tests
+without saying so, and the square root was restored on 2026-11-16. The nested level
 exists because several conformational states can hide inside one view: 2D
 classification separates them into classes that average linkage merges into
 one group first. The group level keeps the view balance, the unit level keeps
