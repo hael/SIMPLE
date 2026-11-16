@@ -466,7 +466,9 @@ contains
     !> One weight's central difference against its analytic gradient, in single precision. The step is 1e-2: the
     !! rounding of a loss of order one divided by 2h is then about 1e-5, well below the absolute floor, and the
     !! truncation error of order h^2 as well; a kink of the gate or the rectifier inside the step is caught by the
-    !! half step, which must agree instead
+    !! half step, which must agree instead. A weight of a large curvature (a modulus near zero within the step) keeps
+    !! an h^2 error above the tolerance at every step single precision resolves; the Richardson extrapolation of two
+    !! successive steps, (4 D(h/2) - D(h)) / 3, cancels it and is accepted as well
     subroutine check_entry( net, x, g, side, t, w, grad, nbad, nchk, label, tq, tqc )
         type(hhcnn),      intent(inout) :: net
         real(sp),         intent(in)    :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS)
@@ -477,24 +479,38 @@ contains
         real(sp), optional, intent(in)  :: tq(:,:)
         integer,  optional, intent(in)  :: tqc(:)
         real(sp), parameter :: TOL_REL = 1.e-2, TOL_ABS = 2.e-4, STEP = 1.e-2
-        real(dp) :: num
+        real(dp) :: num, num_prev, num_rich
         real(sp) :: step_here
         logical  :: ok
         integer  :: ihalf
         ! the step halved up to three times: a harmonic magnitude or modulus near zero within the step has a
         ! curvature the central difference at STEP cannot follow, below STEP/8 the single-precision loss is noise
         step_here = STEP
+        num_prev  = 0.d0
         do ihalf = 0,3
             num = central_difference(net, x, g, side, t, w, step_here, tq, tqc)
-            ok  = abs(num - real(grad,dp)) <= TOL_REL * max(abs(num), abs(real(grad,dp))) + TOL_ABS
+            ok  = grad_agrees(num)
+            if( .not. ok .and. ihalf > 0 )then
+                num_rich = (4.d0 * num - num_prev) / 3.d0
+                ok       = grad_agrees(num_rich)
+            endif
             if( ok ) exit
+            num_prev  = num
             step_here = 0.5 * step_here
         enddo
         nchk = nchk + 1
         if( .not. ok )then
             nbad = nbad + 1
-            write(*,'(A,A,2(1X,ES12.4))') '  gradient mismatch ', label, num, grad
+            write(*,'(A,A,3(1X,ES12.4))') '  gradient mismatch ', label, num, num_rich, grad
         endif
+
+    contains
+
+        logical function grad_agrees( d )
+            real(dp), intent(in) :: d
+            grad_agrees = abs(d - real(grad,dp)) <= TOL_REL * max(abs(d), abs(real(grad,dp))) + TOL_ABS
+        end function grad_agrees
+
     end subroutine check_entry
 
     real(dp) function central_difference( net, x, g, side, t, w, h, tq, tqc ) result( num )
