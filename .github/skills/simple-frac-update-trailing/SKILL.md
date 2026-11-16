@@ -62,7 +62,9 @@ Then inspect the current code in this order:
   frequency blocks) the same subset is rescored at every iteration of a block,
   so trailing reconstruction gives that sticky subset the cumulative current-map
   coefficient `1 - (1-u)^k` after `k` iterations; no per-unit weight enters the
-  state-level blend.
+  state-level blend. Single-state solve3D holds its sticky subset through stage
+  4 and trails from stage 5 (`TRAILREC_STAGE_SINGLE = STICKY_LAST_STAGE + 1`):
+  only the subset has update counts while it is held, so `u` would be 1.
 - For `trail_rec=yes`, the previous artifact is the per-state accumulator chain
   (`trailrec_stateNN_{even,odd}` + rho files + `trailrec_stateNN.txt`
   manifest): blended, unregularized e/o Fourier sums and sampling densities at

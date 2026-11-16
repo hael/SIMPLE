@@ -34,6 +34,7 @@ contains
         call test_ranked_balanced_sampling()
         call test_empty_partition_sampling()
         call test_nested_class_quota()
+        call test_best_first_draw()
         call test_class_sample_sweep()
         call test_sticky_rescore()
         call test_sample4rec_global_coverage()
@@ -709,6 +710,61 @@ contains
         call os%kill
         if( allocated(inds) ) deallocate(inds)
     end subroutine test_nested_class_quota
+
+    ! With scores (the sticky subset's draw by the 2D objective) the draw takes the best-scoring rows whatever
+    ! their update counts, under every balance mode: none (sample4update_cnt), class and cavg
+    ! (sample4update_class, with the quotas the draw without scores gives)
+    subroutine test_best_first_draw()
+        type(oris)                      :: os
+        type(class_sample), allocatable :: clssmp(:)
+        integer,            allocatable :: inds(:)
+        real    :: scores(16)
+        integer :: nsamp, i
+        write(*,'(A)') 'test_best_first_draw'
+        ! scores of rows 1-16: 5 10 15 3 8 13 1 6 | 11 16 4 9 14 2 7 12
+        scores = [(real(mod(5*i, 17)), i=1,16)]
+        call os%new(16, .true.)
+        call os%set_all2single('state', 1.0)
+        call reset_counts()
+        call os%set(3, 'updatecnt', 1.)   ! the best row of rows 1-8 was updated before
+        ! none: the four best rows, the updated row 3 among them
+        call os%sample4update_cnt([1, 16], 0.25, nsamp, inds, .false., scores=scores)
+        call assert_int(4, nsamp, 'none, best first: sample size')
+        call assert_true(all(inds == [3,6,10,13]), 'none, best first: the best rows whatever their update counts')
+        ! none: never-updated rows that score low are not preferred
+        call os%set_all2single('updatecnt', 1.0)
+        call os%set(1, 'updatecnt', 0.)
+        call os%set(7, 'updatecnt', 0.)
+        call os%sample4update_cnt([1, 16], 0.25, nsamp, inds, .false., scores=scores)
+        call assert_true(all(inds == [3,6,10,13]), 'none, best first: no tier ahead of the scores')
+        ! class: units of rows 1-8 and 9-16, a quota of 2 each, every unit's best rows
+        call reset_counts()
+        call os%set(3, 'updatecnt', 1.)
+        call make_units([8,8], [0,0], clssmp)
+        call os%sample4update_class(clssmp, [1, 16], 0.25, nsamp, inds, .false., scores=scores)
+        call assert_true(all(unit_counts(clssmp, inds) == [2,2]), 'class, best first: the quotas of the draw without scores')
+        call assert_true(all(inds == [3,6,10,13]), 'class, best first: every unit''s best rows')
+        call free_units(clssmp)
+        ! cavg: group 1 one unit of rows 1-4, group 2 units of rows 5-8 and 9-16; group quotas 2 and 2, inside
+        ! group 2 one per unit
+        call reset_counts()
+        call os%set(3, 'updatecnt', 1.)
+        call make_units([4,4,8], [1,2,2], clssmp)
+        call os%sample4update_class(clssmp, [1, 16], 0.25, nsamp, inds, .false., scores=scores)
+        call assert_true(all(unit_counts(clssmp, inds) == [2,1,1]), 'cavg, best first: the nested quotas of the draw without scores')
+        call assert_true(all(inds == [2,3,6,10]), 'cavg, best first: every unit''s best rows')
+        call free_units(clssmp)
+        call os%kill
+        if( allocated(inds) ) deallocate(inds)
+
+    contains
+
+        subroutine reset_counts()
+            call os%set_all2single('updatecnt', 0.0)
+            call os%set_all2single('sampled',   0.0)
+        end subroutine reset_counts
+
+    end subroutine test_best_first_draw
 
     ! a fixed skewed population (the cavg layout above) is visited completely in sweep iterations
     subroutine test_class_sample_sweep()

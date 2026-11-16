@@ -212,6 +212,8 @@ contains
     !> Fractional-update selection by balance: none takes the global lowest-updatecnt tiers, class and cavg
     !! the nested quota over the sampling units of CLASS_SAMPLING_FILE. Under sticky_sampling=yes a stage
     !! draws at its first iteration and rescores that sticky subset at the others; keep rescores at every iteration.
+    !! best draws as yes but takes the particles with the best 2D objective values, whatever their update counts,
+    !! within the same quotas in each balance mode; the rescoring and the later free draws use no score.
     subroutine sample_ptcls4update3D( params, build, pfromto, l_incr_sampl, nptcls2update, pinds, allow_empty )
         class(parameters),    intent(in)    :: params
         class(builder),       intent(inout) :: build
@@ -222,7 +224,9 @@ contains
         logical, optional,    intent(in)    :: allow_empty  !< a distributed partition may sample nothing
         type(class_sample),   allocatable   :: clssmp(:)
         type(rnd_key),        allocatable   :: key
+        real,                 allocatable   :: scores(:)
         type(string) :: fname
+        logical      :: l_best
         if( .not. params%l_update_frac )then
             ! we sample all state > 0
             call build%spproj_field%sample4update_all(pfromto, nptcls2update, pinds, l_incr_sampl)
@@ -234,6 +238,8 @@ contains
             call build%spproj_field%sample4update_rescore(pfromto, nptcls2update, pinds, allow_empty=allow_empty)
             return
         endif
+        l_best = .false.
+        if( params%l_sticky_best ) call sticky_draw_scores(build, scores, l_best)
         select case(trim(params%balance))
             case('class', 'cavg')
                 fname = CLASS_SAMPLING_FILE
@@ -241,15 +247,42 @@ contains
                     THROW_HARD('File for class-balanced sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exist!')
                 endif
                 call read_class_samples(clssmp, fname)
-                call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
-                    &nptcls2update, pinds, l_incr_sampl, allow_empty=allow_empty, key=key)
+                if( l_best )then
+                    call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
+                        &nptcls2update, pinds, l_incr_sampl, allow_empty=allow_empty, scores=scores)
+                else
+                    call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
+                        &nptcls2update, pinds, l_incr_sampl, allow_empty=allow_empty, key=key)
+                endif
                 call deallocate_class_samples(clssmp)
                 call fname%kill
             case DEFAULT
-                call build%spproj_field%sample4update_cnt(pfromto, params%update_frac, &
-                    &nptcls2update, pinds, l_incr_sampl, allow_empty=allow_empty, key=key)
+                if( l_best )then
+                    call build%spproj_field%sample4update_cnt(pfromto, params%update_frac, &
+                        &nptcls2update, pinds, l_incr_sampl, allow_empty=allow_empty, scores=scores)
+                else
+                    call build%spproj_field%sample4update_cnt(pfromto, params%update_frac, &
+                        &nptcls2update, pinds, l_incr_sampl, allow_empty=allow_empty, key=key)
+                endif
         end select
     end subroutine sample_ptcls4update3D
+
+    !> The 2D objective value of every particle (ptcl2D corr, in the row order of the 3D field) for the sticky
+    !! subset's best-first draw. Without 2D scores for these particles (no 2D solution) the subset is drawn at
+    !! random, and the log says so.
+    subroutine sticky_draw_scores( build, scores, l_have )
+        class(builder),    intent(inout) :: build
+        real, allocatable, intent(inout) :: scores(:)
+        logical,           intent(out)   :: l_have
+        l_have = build%spproj%os_ptcl2D%get_noris() == build%spproj_field%get_noris()
+        if( l_have ) l_have = build%spproj%os_ptcl2D%isthere('corr')
+        if( l_have )then
+            scores = build%spproj%os_ptcl2D%get_all('corr')
+            write(logfhandle,'(A)') '>>> STICKY SUBSET DRAWN BY THE 2D OBJECTIVE, BEST FIRST'
+        else
+            write(logfhandle,'(A)') '>>> NO 2D OBJECTIVE VALUES: STICKY SUBSET DRAWN AT RANDOM'
+        endif
+    end subroutine sticky_draw_scores
 
     !> The project owner's seed at the start of a refine3D or refine2D run, before any part is scheduled: a run
     !! that continues (continue=yes) reuses the seed the project records (a SIMPLE_SEED set to another value is

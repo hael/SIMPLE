@@ -1257,28 +1257,31 @@ interface
         type(rnd_key), optional, intent(in) :: key
     end subroutine sample4update_rnd
 
-    module subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty, key )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        real,                 intent(in)    :: update_frac
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
-        logical, optional,    intent(in)    :: allow_empty
-        type(rnd_key), optional, intent(in) :: key
+    module subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty, key, &
+                                        scores )
+        class(oris),             intent(inout) :: self
+        integer,                 intent(in)    :: fromto(2)
+        real,                    intent(in)    :: update_frac
+        integer,                 intent(inout) :: nsamples
+        integer, allocatable,    intent(inout) :: inds(:)
+        logical,                 intent(in)    :: incr_sampled
+        logical,       optional, intent(in)    :: allow_empty
+        type(rnd_key), optional, intent(in)    :: key
+        real,          optional, intent(in)    :: scores(:)
     end subroutine sample4update_cnt
 
     module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, &
-                                        incr_sampled, allow_empty, key )
-        class(oris),          intent(inout) :: self
-        type(class_sample),   intent(inout) :: clssmp(:)
-        integer,              intent(in)    :: fromto(2)
-        real,                 intent(in)    :: update_frac
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
-        logical, optional,    intent(in)    :: allow_empty
-        type(rnd_key), optional, intent(in) :: key
+                                        incr_sampled, allow_empty, key, scores )
+        class(oris),             intent(inout) :: self
+        type(class_sample),      intent(inout) :: clssmp(:)
+        integer,                 intent(in)    :: fromto(2)
+        real,                    intent(in)    :: update_frac
+        integer,                 intent(inout) :: nsamples
+        integer, allocatable,    intent(inout) :: inds(:)
+        logical,                 intent(in)    :: incr_sampled
+        logical,       optional, intent(in)    :: allow_empty
+        type(rnd_key), optional, intent(in)    :: key
+        real,          optional, intent(in)    :: scores(:)
     end subroutine sample4update_class
 
     module subroutine sample4update_reprod( self, fromto, nsamples, inds, allow_empty )

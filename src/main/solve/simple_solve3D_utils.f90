@@ -157,6 +157,13 @@ interface
         integer :: niters
     end function solve3D_remaining_niters
 
+    module function solve3D_first_free_stage( params, first_stage, l_addon ) result( istage )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: first_stage
+        logical,           intent(in) :: l_addon
+        integer :: istage
+    end function solve3D_first_free_stage
+
     module subroutine set_cline_refine3D( params, istage, first_stage, l_cavgs, addon )
         class(parameters),                    intent(in) :: params
         integer,                              intent(in) :: istage, first_stage

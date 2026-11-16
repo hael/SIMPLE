@@ -61,20 +61,30 @@ Sampling by stage:
 
 - every stage carries the run's `update_frac` and `balance` (plus `nclust`
   for `cavg`)
-- no per-particle score in any stage: each unit's quota comes from the whole
-  class, lowest `updatecnt` first
-- single-state shc stages 1-2 (fractional): one sticky subset, drawn at stage 1's
-  first iteration (`sticky_sampling=yes`) and kept by stage 2 (`keep`; a run
-  starting at stage 2 draws with `yes`), because the shc neighbourhood search
-  scans never-searched particles in full; from stage 3 every iteration redraws
+- no per-particle score in any free draw: each unit's quota comes from the
+  whole class, lowest `updatecnt` first
+- single-state, fractional, particles, not an add-on: one sticky subset from
+  the run's first stage through `STICKY_LAST_STAGE` (4; `holds_sticky_subset`,
+  whatever the entry stage), drawn at the first stage's first iteration as every
+  unit's quota of particles with the best 2D objective values
+  (`sticky_sampling=best`), and kept by the next stages through 4 (`keep`): the
+  shc neighbourhood search of stages 1-2 scans never-searched particles in full,
+  and the subset's map consolidates before new particles arrive; a stage-4 entry
+  (supplied volumes, `cavg_ini`, `cavg_ini_ext`) holds it for that stage; from
+  stage 5 every iteration redraws with no score. Multi-state runs, add-ons, the
+  class-average route and full sampling hold none
 - the release: before the first free stage the commander sets every
   `updatecnt` to 0 (`release_sticky_subset`, `simple_solve3D_utils`, called at
   each stage boundary of `exec_solve3D`), so the subset, whose count grew by one
   per sticky iteration, competes with the never-searched particles instead of
   sitting out the free stages; a particle the free stages never draw goes to the
   terminal missing-update pass
-- `trail_rec=yes` from `TRAILREC_STAGE_SINGLE` (3, with the free sampling) single-state and
+- `trail_rec=yes` from `TRAILREC_STAGE_SINGLE` (`STICKY_LAST_STAGE + 1` = 5)
+  single-state, where the free sampling starts (while the subset is held the
+  blend weight would be 1: only the subset has counts), and from
   `TRAILREC_STAGE_MULTI` (8) multi-state
+- the commander's unit table counts its planned draws from the first free stage
+  (`solve3D_first_free_stage`)
 
 Stage omission: a stage after the first, before the last and other than the
 axis-search stage is skipped when the measured FSC=0.5 already resolves past
@@ -94,11 +104,14 @@ Key routines:
 - `sample4update_class`: nested equal quota over the units of `CLASS_SAMPLING_FILE`
   (equal over groups, then over the units of a group, then lowest `updatecnt`);
   `class_sample_quotas` and `class_sample_sweep` give the expected quotas and the
-  draws one full sweep takes (`max ceil(pop/quota)`)
+  draws one full sweep takes (`max ceil(pop/quota)`); with the optional `scores`
+  (one per row) a unit takes its best-scoring particles, whatever their update
+  counts
 - `sample4update_rescore`: the latest round again, `sampled`/`updatecnt` advanced
   once (the `sticky_sampling` schedule of `refine3D_states` frequency blocks and
-  solve3D stages 1-2)
-- `sample4update_cnt`: prefers particles with lower `updatecnt`
+  solve3D stages 1-4)
+- `sample4update_cnt`: prefers particles with lower `updatecnt`; with the
+  optional `scores` the best-scoring active particles instead
 - `sample4update_missing`: the particles never updated (`update_missing`)
 - `sample4update_reprod`: reproduces the most recent sampled subset exactly
 - `sample4update_updated`: retrieves all particles updated in a previous step
@@ -138,9 +151,11 @@ Behavior:
 
 - `update_missing`: `sample4update_missing`
 - otherwise `sample_ptcls4update3D`: all active particles when `l_update_frac`
-  is false; `sample4update_rescore` with `sticky_sampling=yes` and
+  is false; `sample4update_rescore` with `sticky_sampling=yes|best` and
   `which_iter /= startit`, or with `sticky_sampling=keep` at every iteration; `sample4update_class` for `balance=class|cavg`;
-  `sample4update_cnt` for `balance=none`
+  `sample4update_cnt` for `balance=none`; under `best` the draw passes the
+  `ptcl2D` `corr` of every row (`sticky_draw_scores`, random with a log line when
+  the project has none)
 - distributed: when `master_draws_sample3D` holds (every `refine=prob*`
   pass; else fractional, not follow-up/missing/eval/sigma) the master draws once
   over the whole project and writes it; each part reproduces its range with

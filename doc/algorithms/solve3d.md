@@ -99,13 +99,16 @@ the run switches to full updates and disables trailing. The subset is drawn
 over sampling units built from the selected 2D class averages (`balance=class`
 by default; see [sampling](sampling_and_fractional_updates.md)). Each unit's
 quota is drawn from the whole class, lowest update count first; no
-per-particle 2D score enters the draw. The single-state shc neighbourhood
-stages (1-2), whose search scans a never-searched particle in full, refine one
-sticky subset: stage 1 draws it and stage 2 keeps it, so each of its particles is
-scanned in full once. From stage 3 the subset is redrawn every iteration
-and trailing reconstruction blends each iteration's map into the running
-one, so free sampling and trailing start together; multi-state runs start
-trailing at stage 8.
+per-particle 2D score enters the free draws. Single-state runs refine one
+sticky subset from their first stage through stage 4: the first stage takes
+each unit's quota of particles with the best 2D objective values, and the
+stages through 4 keep the set, so each of its particles is scanned in full once
+by the shc neighbourhood search of stages 1-2 and the subset's map consolidates
+before new particles arrive. A run entering at stage 4 (supplied volumes,
+`cavg_ini`) holds it for that stage. From stage 5 the sample is redrawn every
+iteration and trailing reconstruction blends each iteration's map into the
+running one, so free sampling and trailing start together; multi-state runs
+hold no sticky subset and start trailing at stage 8.
 
 **Regularization.** ML regularization starts at stage 3, once the halves are
 independent enough for the FSC-derived signal prior to mean something. From

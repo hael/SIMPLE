@@ -75,19 +75,34 @@ Stage policy includes:
 - staged search by state count:
   - single-state particle runs use `prob_neigh` with `prob_neigh_mode=shc`
     in stages 1-2, middle `prob`, and late `prob_neigh`; under fractional
-    updates the shc stages refine one sticky subset: stage 1 draws it at its first
-    iteration (`sticky_sampling=yes`) and stage 2 keeps it
-    (`sticky_sampling=keep`; a run that starts at stage 2 draws its own),
-    because the shc neighbourhood search scans a never-searched particle in
-    full and a fresh draw every iteration would make these stages a sequence of
-    full scans; from stage 3 the sample is redrawn every iteration and
-    trailing reconstruction blends the maps (`TRAILREC_STAGE_SINGLE`, until
-    2026-11-11 stage 5), so free sampling and trailing start together, as
-    in `solve2D`; before stage 3 the commander resets every `updatecnt` to 0
-    (`release_sticky_subset`, 2026-11-16), so the sticky subset competes with
-    the never-searched particles instead of sitting out the free stages
+    updates every single-state particle run (add-ons excepted) refines one
+    sticky subset from its first stage through stage 4 (`STICKY_LAST_STAGE`,
+    2026-11-16; stages 1-2 before): the first stage draws it at its first
+    iteration, every unit's quota taken by the particles' 2D objective, best
+    first, whatever their update counts (`sticky_sampling=best`, `ptcl2D`
+    `corr`; at random when the project holds no 2D scores), and the next stages
+    through 4 keep it (`sticky_sampling=keep`). A run that enters at stage 4
+    (supplied volumes, `cavg_ini`, `cavg_ini_ext`) holds it for its entry stage.
+    The shc neighbourhood search scans a never-searched particle in full, so a
+    fresh draw every iteration would make the shc stages a sequence of full
+    scans, and the subset's map consolidates before new particles arrive, as
+    with the greedy sample of `3fb0b00b`, which held each class's best particles
+    below stage 5 whatever the entry stage (with it the export gate showed
+    helices from stage 3). From stage 5 the sample is redrawn every iteration
+    from the whole class, lowest `updatecnt` first, with no score; before stage
+    5 the commander resets every `updatecnt` to 0 (`release_sticky_subset`,
+    2026-11-16), so the sticky subset competes with the never-searched particles
+    instead of sitting out the free stages
     (`importance_sampling_fractional_update_policy.md`, "Sticky sampling
-    schedules"); multi-state runs trail from stage 8 (`TRAILREC_STAGE_MULTI`)
+    schedules"). Trailing reconstruction starts with the free sampling, at stage
+    5 (`TRAILREC_STAGE_SINGLE = STICKY_LAST_STAGE + 1`, 2026-11-16; stage 3 from
+    2026-11-11, stage 5 before): while the subset is held only its rows have
+    update counts, so the blend weight `u = n/N` would be 1. A run that enters at
+    stage 5 or later samples freely and trails from its first stage. The
+    external-reference pose initialization of a supplied-volume run draws its own
+    sample (the stage's `sticky_sampling` is removed from its command line).
+    Multi-state runs hold no sticky subset, draw with no score in every stage and
+    trail from stage 8 (`TRAILREC_STAGE_MULTI`)
   - multi-state particle runs use direct `shc` in stages 1-2, `prob` in
     stages 3-5, and `prob_neigh` with `prob_neigh_mode=state` from stage 6
     (`PROB_NEIGH_REFINE_STAGE`, the single-state switch), so the default
@@ -162,15 +177,15 @@ average linkage on their aligned correlation between 30 and 6 A, a group with
 fewer than 2.5% of the particles merged into its nearest group, so a preferred
 view spread over many classes no longer dominates the sample and an odd class
 does not become a group of its own. Every fractional update shares
-its target over the groups in proportion to the square root of their
-populations, then over the classes of a group the same way, each capped at its
-population, then lowest `updatecnt` first inside a class, drawn from the whole
-class: no per-particle 2D score enters the draw. Under `class` every
+its target equally over the groups, then equally over the classes of a group
+(the remainder of a split to the class whose particles have the lowest mean
+`updatecnt`), each capped at its population, then lowest `updatecnt` first
+inside a class, drawn from the whole class: no per-particle 2D score enters
+the draw, except the single-state sticky subset's, which takes each unit's
+best particles by the 2D objective (section 3, staged search). Under `class` every
 class is its own group, so a rare view is sampled more often than its
-population alone would give, without one small class taking a large part of
-every draw (equal shares did: on a small membrane protein with six one-class
-groups of odd class averages, `cavg` with equal shares drew 80% of every sample
-from 18% of the particles); under `none` the stages sample the
+population alone would give (square-root shares, 2026-11-05, gave way to equal
+shares on 2026-11-06); under `none` the stages sample the
 global lowest `updatecnt` tiers, and the file holds class units only for the
 initial sample of the starting volumes. The groups are written
 as `view_partitionNN_cavgs` stacks with the table `view_partition.txt`. The

@@ -183,18 +183,37 @@ contains
         endif
     end subroutine keyed_or_intrinsic_partial_shuffle
 
-    module subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty, key )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        real,                 intent(in)    :: update_frac
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
-        logical, optional,    intent(in)    :: allow_empty
-        type(rnd_key), optional, intent(in) :: key
+    !> the rows of arr reordered by score (scores holds one per row of the field), best first
+    subroutine order_best_first( arr, scores )
+        integer, intent(inout) :: arr(:)
+        real,    intent(in)    :: scores(:)
+        real, allocatable :: keys(:)
+        if( size(arr) < 2 ) return
+        keys = -scores(arr)
+        call hpsort(keys, arr)
+    end subroutine order_best_first
+
+    !> Without scores: lowest update-count tiers first, the cutoff tier drawn uniformly without replacement. With
+    !! scores (one per row of self, larger is better): the best-scoring active rows, whatever their update counts.
+    module subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty, key, &
+        &scores )
+        class(oris),             intent(inout) :: self
+        integer,                 intent(in)    :: fromto(2)
+        real,                    intent(in)    :: update_frac
+        integer,                 intent(inout) :: nsamples
+        integer, allocatable,    intent(inout) :: inds(:)
+        logical,                 intent(in)    :: incr_sampled
+        logical,       optional, intent(in)    :: allow_empty
+        type(rnd_key), optional, intent(in)    :: key
+        real,          optional, intent(in)    :: scores(:)
         integer, allocatable :: states(:), updatecnts(:), candidates(:), selected(:)
         integer :: i, cnt, nptcls, ucnt
         integer :: ncandidates, nfill, nselected
+        logical :: l_scores
+        l_scores = present(scores)
+        if( l_scores )then
+            if( size(scores) /= self%n ) THROW_HARD('sample4update_cnt needs one score per row')
+        endif
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(states(nptcls), updatecnts(nptcls), inds(nptcls), source=0)
@@ -219,46 +238,58 @@ contains
         updatecnts = pack(updatecnts, mask=states > 0)
         deallocate(states)
         nsamples   = min(nptcls, max(1, nint(update_frac * real(nptcls))))
-        allocate(selected(nsamples), source=0)
-        nselected = 0
-        ! Exhaust lower update-count tiers first. At the cutoff tier, draw
-        ! uniformly without replacement.
-        ucnt = minval(updatecnts)
-        do
-            candidates  = pack(inds, mask=updatecnts == ucnt)
-            ncandidates = size(candidates)
-            nfill = min(nsamples - nselected, ncandidates)
-            if( nfill < ncandidates ) call keyed_or_intrinsic_partial_shuffle(candidates, nfill, 1, key)
-            selected(nselected + 1:nselected + nfill) = candidates(:nfill)
-            nselected = nselected + nfill
-            if( nselected == nsamples ) exit
-            ucnt = minval(updatecnts, mask=updatecnts > ucnt)
-        end do
-        if( nselected /= nsamples ) THROW_HARD('insufficient update-count sampling candidates')
-        call move_alloc(selected, inds)
+        if( l_scores )then
+            call order_best_first(inds, scores)
+            inds = inds(:nsamples)
+        else
+            allocate(selected(nsamples), source=0)
+            nselected = 0
+            ! Exhaust lower update-count tiers first. At the cutoff tier, draw
+            ! uniformly without replacement.
+            ucnt = minval(updatecnts)
+            do
+                candidates  = pack(inds, mask=updatecnts == ucnt)
+                ncandidates = size(candidates)
+                nfill = min(nsamples - nselected, ncandidates)
+                if( nfill < ncandidates ) call keyed_or_intrinsic_partial_shuffle(candidates, nfill, 1, key)
+                selected(nselected + 1:nselected + nfill) = candidates(:nfill)
+                nselected = nselected + nfill
+                if( nselected == nsamples ) exit
+                ucnt = minval(updatecnts, mask=updatecnts > ucnt)
+            end do
+            if( nselected /= nsamples ) THROW_HARD('insufficient update-count sampling candidates')
+            call move_alloc(selected, inds)
+        endif
         call hpsort(inds)
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_cnt
 
     !> Nested equal quota: nint(update_frac * active) is shared equally over the groups (capped at their
-    !! populations), each group's share equally over its units (the remainder to the least-updated units),
-    !! and a unit draws its quota from the whole class, lowest updatecnt first, shuffled within a tier.
-    !! Units with group 0 are their own group. No per-particle score enters the draw.
+    !! populations), each group's share equally over its units (the remainder to the least-updated units).
+    !! Without scores a unit draws its quota from the whole class, lowest updatecnt first, shuffled within a
+    !! tier, and no per-particle score enters the draw. With scores (one per row of self, larger is better) a
+    !! unit takes its best-scoring particles, whatever their update counts; the quotas are the same.
     module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, &
-        &allow_empty, key )
-        class(oris),          intent(inout) :: self
-        type(class_sample),   intent(inout) :: clssmp(:)
-        integer,              intent(in)    :: fromto(2)
-        real,                 intent(in)    :: update_frac
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
-        logical, optional,    intent(in)    :: allow_empty
-        type(rnd_key), optional, intent(in) :: key
+        &allow_empty, key, scores )
+        class(oris),             intent(inout) :: self
+        type(class_sample),      intent(inout) :: clssmp(:)
+        integer,                 intent(in)    :: fromto(2)
+        real,                    intent(in)    :: update_frac
+        integer,                 intent(inout) :: nsamples
+        integer, allocatable,    intent(inout) :: inds(:)
+        logical,                 intent(in)    :: incr_sampled
+        logical,       optional, intent(in)    :: allow_empty
+        type(rnd_key), optional, intent(in)    :: key
+        real,          optional, intent(in)    :: scores(:)
         integer, allocatable :: states(:), updatecnts(:), inds_pool(:), inds_fill(:)
         real,    allocatable :: rstates(:)
         integer :: i, j, cnt, nptcls, nsamples_class, states_bal(self%n)
         integer :: nfill, ucnt, ucnt_min, ucnt_max, ishuffle
+        logical :: l_scores
+        l_scores = present(scores)
+        if( l_scores )then
+            if( size(scores) /= self%n ) THROW_HARD('sample4update_class needs one score per row')
+        endif
         rstates        = self%get_all('state')
         nsamples_class = nint(update_frac * real(count(rstates > 0.5)))
         deallocate(rstates)
@@ -267,22 +298,27 @@ contains
         ishuffle   = 0
         do i = 1, size(clssmp)
             if( clssmp(i)%nsample < 1 ) cycle
-            allocate(updatecnts(clssmp(i)%pop), source=0)
-            do j = 1, clssmp(i)%pop
-                updatecnts(j) = self%o(clssmp(i)%pinds(j))%get_int('updatecnt')
-            end do
-            ucnt_min = minval(updatecnts)
-            ucnt_max = maxval(updatecnts)
-            allocate(inds_pool(0), source=0)
-            do ucnt = ucnt_min, ucnt_max
-                if( size(inds_pool) >= clssmp(i)%nsample ) exit
-                inds_fill = pack(clssmp(i)%pinds, mask=updatecnts == ucnt)
-                if( size(inds_fill) == 0 ) cycle
-                ishuffle = ishuffle + 1
-                call keyed_or_intrinsic_shuffle(inds_fill, ishuffle, key)
-                nfill = min(clssmp(i)%nsample - size(inds_pool), size(inds_fill))
-                inds_pool = [inds_pool, inds_fill(1:nfill)]
-            end do
+            if( l_scores )then
+                inds_pool = clssmp(i)%pinds
+                call order_best_first(inds_pool, scores)
+            else
+                allocate(updatecnts(clssmp(i)%pop), source=0)
+                do j = 1, clssmp(i)%pop
+                    updatecnts(j) = self%o(clssmp(i)%pinds(j))%get_int('updatecnt')
+                end do
+                ucnt_min = minval(updatecnts)
+                ucnt_max = maxval(updatecnts)
+                allocate(inds_pool(0), source=0)
+                do ucnt = ucnt_min, ucnt_max
+                    if( size(inds_pool) >= clssmp(i)%nsample ) exit
+                    inds_fill = pack(clssmp(i)%pinds, mask=updatecnts == ucnt)
+                    if( size(inds_fill) == 0 ) cycle
+                    ishuffle = ishuffle + 1
+                    call keyed_or_intrinsic_shuffle(inds_fill, ishuffle, key)
+                    nfill = min(clssmp(i)%nsample - size(inds_pool), size(inds_fill))
+                    inds_pool = [inds_pool, inds_fill(1:nfill)]
+                end do
+            endif
             if( size(inds_pool) < clssmp(i)%nsample ) THROW_HARD('insufficient class-balanced update candidates')
             do j = 1, clssmp(i)%nsample
                 states_bal(inds_pool(j)) = 1

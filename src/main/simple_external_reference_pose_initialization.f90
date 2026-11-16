@@ -63,6 +63,8 @@ contains
         call cline_pose_init%set('refine',          'greedy')
         call cline_pose_init%set('balance',         'none')
         call cline_pose_init%set('trail_rec',       'no')
+        ! one pass over its own sample: the stage's sticky subset is not this pass's
+        call cline_pose_init%delete('sticky_sampling')
         call cline_pose_init%set('volrec',          'no')
         call cline_pose_init%set('cc_emit_sigma',   'yes')
         call cline_pose_init%set('update_frac',     ufrac_pose_init)

@@ -1,7 +1,10 @@
 # solve3D on small membrane proteins: diagnosis and experimental plan
 
-Status, 2026-11-16: planned. The analysis is complete; the release fix (Decision 3) was written on Hans's
-ruling of 2026-11-16 and is uncompiled; no experiment of this plan has been read. Base: `603c44490`. Supersedes: the first analysis under this name and its
+Status, 2026-11-16: in progress. Phase 1 read as Hans reported it (`lpstart=16.25` worse on PorF and PfCRT,
+the export gate unchanged; the start cap is rejected) and the band-versus-sampling control run (Decision 13).
+On Hans's rulings of 2026-11-16 the tree now holds the release fix (Decision 3, committed in `360fbeb4f`), the
+late release through stage 4 (Decision 4, amended) and the best-first sticky draw (Decision 14), the latter two
+uncompiled. Base: `603c44490`. Supersedes: the first analysis under this name and its
 independent review, both written and left uncommitted on 2026-11-15 and merged here (section 2.8 lists what
 the review corrected; the plan adopts its recommendations). Depends on: the logs under
 `~/Processing/solve3D_regression/{PfCRT,PorF,exp_gate}/{current,last_working_*}/` on the Mac (read); the
@@ -261,7 +264,20 @@ logs and the code:
    (`sticky_sampling=keep`) and the release, with the fix of Decision 3, moves to stage 4. A patch build. It
    repeats what `3fb0b00b` did by accident: a fixed subset consolidates before new particles arrive. (Amended
    2026-11-16: the patch leaves `TRAILREC_STAGE_SINGLE` at 3, since while the subset is sticky only its
-   particles have counts, so u = n/N = 1 and the trailing blend is a no-op.)
+   particles have counts, so u = n/N = 1 and the trailing blend is a no-op.) (Amended 2026-11-16 by Hans's
+   ruling, after the control of Decision 13: the subset is held through stage 4 and free sampling starts at
+   stage 5, as at `3fb0b00b`, whose greedy draw (`greedy_sampling=yes`, `STOCH_SAMPL_STAGE` 5) took the same
+   best-scoring particles every iteration through stage 4. Implemented in the tree, not as a patch:
+   `STICKY_LAST_STAGE` = 4 in the controller; the sticky stages are those from a run's first stage, when that is
+   an shc stage, through stage 4; a run that starts later (supplied volumes, stage 4) holds none. Hans asked
+   the same day what trailing from stage 3 gained over a sticky stage 4: nothing, u = 1 there, so the sticky
+   stages emit `trail_rec=no` and trailing starts with the free sampling; `TRAILREC_STAGE_SINGLE` stays 3 for
+   runs without a sticky subset.) (Amended again 2026-11-16, Hans's ruling (b): one boundary for every
+   single-state route. `TRAILREC_STAGE_SINGLE = STICKY_LAST_STAGE + 1`; every single-state fractional particle
+   run, add-ons excepted, holds the sticky subset from its first stage through stage 4, whatever its entry
+   stage, so a stage-4 entry (supplied volumes, `cavg_ini`, `cavg_ini_ext`) holds it for that stage and trails
+   from 5, as `3fb0b00b`'s greedy draw did below `STOCH_SAMPL_STAGE` on every route. Multi-state rules are
+   untouched: no sticky subset, no scored draw, trailing from stage 8.)
 5. (2026-11-15) The *larger sample* (experiment, Phase 3): `nsample=25000`, SLC's setting. On the export gate
    the class quota becomes 417 and the largest class is seen once in 16 iterations instead of 38.
 6. (2026-11-15) Replayable restarts (Phase 2): solve3D fixes its run seed (`ensure_run_seed`) before its
@@ -298,6 +314,17 @@ logs and the code:
     a fifth of the particles cannot reach it. Consolidated: the band suffices and the large set's fractional
     regime is the fault, which the late release and the larger sample address. Not consolidated: a 13 Å stage
     3 is still too coarse for this target, and the next arm is a finer early band (re-plan, section 9 stop 3).
+14. (2026-11-16, Hans's ruling) The *best-first sticky draw*: the sticky subset is drawn by the particles' 2D
+    objective values, best first, as `3fb0b00b` did, and from the first free stage the objective plays no part.
+    `sticky_sampling=best` (a new value of the internal key; no command-line key) draws at the stage's first
+    iteration like `yes`, with the same quotas, but takes the particles with the best `ptcl2D` `corr`, whatever
+    their update counts (amended 2026-11-16 with ruling (b): a stage-4 entry's starting sample has counts of 1,
+    which a tiered draw would skip), under every balance mode: `none` the best active particles, `class` the
+    best of every class, `cavg` the best of every unit, each as many as its quota inside the nested group quota. The
+    project owner reads the scores from the `ptcl2D` field it holds; without them (no 2D solution) the draw is
+    random and the log says so. The rescoring (`keep`) and every free draw are unchanged (no score). Single
+    state only: multi-state solve3D holds no sticky subset (a greedy sample would keep a minority state's start
+    labels, the reason `cf643a192` removed score ranking).
 
 Defaults taken without a question: 16.25 Å for the start cap (the size rule's own start at a 130 Å mask)
 and 13.0 Å for the stage-3 cap (SLC's stage 3); the consolidation thresholds of section 6; the seed stride
@@ -459,17 +486,22 @@ the unit tests added in Phases 2 and 4.
 
 | File | What | Phases |
 | --- | --- | --- |
-| `src/main/solve/simple_solve3D_controller.f90` | the ladder constants and the stage-3 cap; the sticky and trailing stages of the late release; the explicit-`lp` ceiling | 2 (Decision 8), 3 (patch), 4 |
-| `src/main/solve/simple_solve3D_utils.f90` | `set_lplims_from_size` (the cap, single state); the release helper | 2, 4 |
-| `src/main/commanders/simple/simple_commanders_solve3D.f90` | the release at the stage boundary; the run seed; the stage summary, if printed there | 2 |
-| `src/main/solve/simple_solve3D_reseed_tester.f90` | ladder, release and explicit-`lp` tests | 2, 4 |
+| `src/main/solve/simple_solve3D_controller.f90` | the ladder constants and the stage-3 cap; the sticky and trailing stages of the late release (`STICKY_LAST_STAGE`, `holds_sticky_subset`, `solve3D_first_free_stage`); `sticky_sampling=best` at the first sticky stage; the explicit-`lp` ceiling | 2 (Decision 8), 3, 4 |
+| `src/main/solve/simple_solve3D_utils.f90` | `set_lplims_from_size` (the cap, single state); the release helper; the interface of `solve3D_first_free_stage` | 2, 3, 4 |
+| `src/main/commanders/simple/simple_commanders_solve3D.f90` | the release at the stage boundary; the run seed; the stage summary, if printed there; the unit table's planned draws counted from the first free stage | 2, 3 |
+| `src/main/solve/simple_solve3D_reseed_tester.f90` | ladder, release, sticky-stage and best-first tests, under `none`, `class` and `cavg`; explicit-`lp` tests | 2, 3, 4 |
+| `src/main/params/simple_parameters.f90`, `src/main/params/simple_parameters_phases.f90` | `sticky_sampling=best` and `l_sticky_best` (Decision 14; added 2026-11-16 on Hans's ruling) | 3 |
+| `src/main/strategies/search/simple_matcher_smpl_and_lplims.f90` | the owner's draw passes the `ptcl2D` scores under `best` (Decision 14; added 2026-11-16) | 3 |
+| `src/main/simple_external_reference_pose_initialization.f90` | the pose initialization removes the stage's `sticky_sampling` from its own command line, since a stage-4 entry now carries `best` (Decision 4, ruling (b); added 2026-11-16) | 3 |
+| `src/main/ori/simple_oris.f90` | the interfaces of the samplers' optional scores (Decision 14; added 2026-11-16) | 3 |
 | `src/main/simple_convergence.f90`, `src/main/simple_convergence_tester.f90` | the first-time split; the stage summary, if printed there | 2 |
 | `src/main/exec/simple_exec_helpers.f90` | per-restart seeds in `restarted_exec` | 2 |
 | `src/utils/math/simple_rnd.f90` | a getter of the run seed, if needed | 2 |
-| `src/main/ori/simple_oris_sampling.f90`, `src/main/ori/simple_oris_tester.f90` | `set_nonzero_updatecnt` and its test, if needed | 2 |
-| `doc/policies/3D/solve3D_policy.md` | sections 3-4 | 2, 4, 6 |
-| `doc/policies/importance_sampling_fractional_update_policy.md` | sticky sampling schedules | 2, 6 |
-| `.github/skills/simple-solve3d-importance-sampling/`, `.github/skills/simple-frac-update-trailing/` | on approval | 2 (the sampling skill, approved 2026-11-16), 6 |
+| `src/main/ori/simple_oris_sampling.f90`, `src/main/ori/simple_oris_tester.f90` | `set_nonzero_updatecnt` and its test, if needed; the best-first tier order of `sample4update_cnt` and `sample4update_class` and its test | 2, 3 |
+| `doc/policies/3D/solve3D_policy.md` | sections 3-4 | 2, 3, 4, 6 |
+| `doc/policies/importance_sampling_fractional_update_policy.md` | sticky sampling schedules; the sampling units (the one scored draw, the equal quotas) | 2, 3, 6 |
+| `doc/policies/3D/classify3D_refs_policy.md`, `doc/policies/heterogeneity/refine3D_states_policy.md`, `doc/algorithms/sampling_and_fractional_updates.md`, `doc/algorithms/solve3d.md` | consistent with the code: equal quotas, the sticky schedule (added 2026-11-16 on Hans's request) | 3 |
+| `.github/skills/simple-solve3d-importance-sampling/`, `.github/skills/simple-frac-update-trailing/` | on approval | 2 (the sampling skill, approved 2026-11-16), 3 (both, requested 2026-11-16), 6 |
 | `doc/implementation_notes/README.md` | the topic row | 6 |
 | this note | Progress | all |
 
@@ -510,3 +542,69 @@ single-state run that began with the sticky stages (`STICKY_LAST_STAGE_LATE`). O
 control, frozen before its run. Expected for B1 alone on the export gate (the Phase 2 arm): no recovery, since
 the release fix changes which particles the free stages draw and what the final map holds, not whether stage 3
 consolidates.
+
+**2026-11-16, Phase 1 verdict (as Hans reported it; the logs are on another machine, the per-restart table is
+owed).** `lpstart=16.25` at `603c44490`: half of the PorF restarts fail (pooled baseline 1 of 16), PfCRT fails
+3 of 10 (baseline 0 of 15), the export gate is unchanged (every restart fails). Verdict-table row 3 (PfCRT
+fails) and stop condition 2 (all three fail) both apply; the start cap is rejected. The stage-3 cap was not run:
+from stage 3 on it differs from `lpstart=16.25` by at most 0.3 Å.
+
+**2026-11-16, Decision 13 control (as Hans reported it; readout owed).** The random 20,000-particle subset of
+the export gate at `nsample=25000` (full sampling) and `lpstart=16.25`: the map recovers, and the stage-3
+volume shows helices, though the run gets there later than `3fb0b00b` did (Hans's reading). Read: with every
+particle refined every iteration the export gate consolidates, so the full set's fractional regime is the
+fault. Hans ruled the late release through stage 4 (Decision 4, amended) and the best-first sticky draw
+(Decision 14).
+
+**2026-11-16, Decisions 4 (amended) and 14 implemented (session on the Mac's folders; uncompiled, no compiler
+in the session).** The controller holds the sticky subset from a run's first stage, when that is an shc stage,
+through `STICKY_LAST_STAGE` = 4 (`holds_sticky_subset`, single state, particles, fractional updates) and emits
+`sticky_sampling=best` at the first sticky stage, `keep` after; `release_sticky_subset` therefore acts at stage
+5 unchanged. `TRAILREC_STAGE_SINGLE` stays 3 (u = 1 while the subset is held); its comment says so. The
+samplers `sample4update_cnt` and `sample4update_class` take optional per-row scores and then order a tier best
+first (`order_best_first`) instead of shuffling it; the quotas are untouched. `sample_ptcls4update3D` passes
+`ptcl2D` `corr` under `best` (`sticky_draw_scores`, with a log line either way). The commander's unit table counts
+its planned draws from the first free stage (`solve3D_first_free_stage`). Tests: `test_best_first_draw`
+(`simple_oris_tester`: `none` with a partial and a whole lower tier, `class`, `cavg`); in
+`simple_solve3D_reseed_tester` the stage table (stage 1 `best`, 2-4 `keep`, free from 5), a stage-2 start held
+to stage 4, a stage-4 start and the class-average route with none, `check_early_stage_sticky` through stage 4
+(random fallback without `ptcl2D`), and `check_sticky_release` over stages 1-5 under `none`, `class` and `cavg`,
+asserting the best rows of every unit's quota, no release before stage 5, the release at 5 and the first free
+sweep (the negative control unchanged). Policies: `solve3D_policy.md` section 3, the fractional-update policy
+(the `best` rule, the sampling units' one scored draw, sticky sampling schedules). Owed: build, fast gate,
+`simple_test_exec test=unit_ori` and `test=unit_reconstruction`; the skill `simple-solve3d-importance-sampling`
+(its working rule says the sampler never uses objective values) on approval. Proposed runs, at the default
+ladder: the export gate 4, PorF 5 (it holds a sticky subset), PfCRT 2 (full sampling, no sticky subset: the
+negative control); read the log line `STICKY SUBSET DRAWN BY THE 2D OBJECTIVE`, the release line before stage
+5, and the consolidation readout at the end of stages 3 and 4.
+
+**2026-11-16, follow-ups (same session, uncompiled).** Hans's style rulings applied: declaration blocks aligned in
+columns where `scores` was added (interface and implementation), `present(scores)` read once into `l_scores`
+before the loops. The sticky stages emit `trail_rec=no` (Decision 4's amendment); the reseed tester's stage table
+expects trailing from stage 5, and a stage-4 start trailing from its first stage. Skills updated on Hans's
+request: `simple-solve3d-importance-sampling` (`SKILL.md`, `references/coupling-map.md`) and
+`simple-frac-update-trailing` (`SKILL.md`, `references/frac-update-contract.md`). Policies made consistent with
+the code: besides the sticky schedule, the class-unit quotas are equal shares capped at the populations
+(`group_quotas`, `alloc_unit_quotas` since `a027fe3bd`), where `solve3D_policy.md`,
+`importance_sampling_fractional_update_policy.md`, `classify3D_refs_policy.md`, `refine3D_states_policy.md`
+and `doc/algorithms/sampling_and_fractional_updates.md` still said square-root shares;
+`doc/algorithms/solve3d.md` updated for the schedule. Open question from Hans: release earlier to trail sooner
+(more signal) or keep the hold through stage 4; the runs' readout at the end of stage 3 decides whether
+`STICKY_LAST_STAGE` = 3 is safe.
+
+**2026-11-16, ruling (b) implemented (uncompiled).** `TRAILREC_STAGE_SINGLE = STICKY_LAST_STAGE + 1`, the
+`trail_rec=no` override in `emit_refine3D_stage_cfg` removed. `holds_sticky_subset` tests the stage alone (one
+state, particles, fractional, not an add-on, first stage through 4; `l_addon` passed from `set_cline_refine3D`
+through `emit_refine3D_stage_cfg`, and to `solve3D_first_free_stage` from the commander). The `best` draw ranks
+by score alone: `sample4update_cnt` takes the best-scoring active rows, `sample4update_class` each unit's
+best-scoring particles, quotas unchanged; the tiered keyed draw without scores is unchanged. The external-reference
+pose initialization deletes `sticky_sampling` from its command line, which it copies from the stage-4 line. Checked
+for copies of the stage line that would inherit `keep`/`best`: the missing-update pass already deletes it, the
+sigma2 commit and the multi-state final assignment do not sample by it (and multi-state lines never carry it).
+Multi-state audit: `holds_sticky_subset` returns false for `nstates /= 1`, `TRAILREC_STAGE_MULTI` stays 8,
+`refine3D_states` keeps `sticky_sampling=yes` (no score). Tests: `test_best_first_draw` expects the best rows
+whatever their counts (an updated row taken, never-updated low scorers not preferred); the reseed tester expects a
+`cavg_ini` and a stage-4 entry to draw `best` and not trail in stage 4, to trail from 5, a stage-5 entry to trail
+from its first stage, an add-on stage to hold no subset, full sampling to hold none and not trail;
+`check_early_stage_sticky(params, 4, 4)` added. Policies (`solve3D_policy.md` section 3, the fractional-update
+policy), `doc/algorithms/{sampling_and_fractional_updates,solve3d}.md` and both skills updated.

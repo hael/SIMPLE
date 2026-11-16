@@ -1,6 +1,6 @@
 ---
 name: simple-solve3d-importance-sampling
-description: Use when working on SIMPLE solve3D sampling policy, nsample/update_frac behavior and the full-sampling switch, stage-wise sampling (balance units, the stage 1-2 sticky subset, the missing-update pass), the project owner's sample draw (keyed under refine=prob*) and its reproduction by distributed parts, sampled/updatecnt bookkeeping, inner probability-table candidate sampling, or the realized update fraction consumed by trailing reconstruction.
+description: Use when working on SIMPLE solve3D sampling policy, nsample/update_frac behavior and the full-sampling switch, stage-wise sampling (balance units, the stage 1-4 sticky subset and its best-first draw, the missing-update pass), the project owner's sample draw (keyed under refine=prob*) and its reproduction by distributed parts, sampled/updatecnt bookkeeping, inner probability-table candidate sampling, or the realized update fraction consumed by trailing reconstruction.
 ---
 
 # SIMPLE Solve3D Importance Sampling
@@ -37,7 +37,7 @@ Then answer the user request in this order:
 4. Separate particle-domain search decisions from volume-domain trailing-reconstruction effects.
 5. Use exact field names such as `nsample`, `update_frac`, `sampled`,
    `updatecnt`, `balance` (`none|class|cavg`), `nclust`,
-   `sticky_sampling` (`no|yes|keep`), and `ufrac_trec`.
+   `sticky_sampling` (`no|yes|best|keep`), and `ufrac_trec`.
 
 ## Working Rules
 
@@ -60,27 +60,43 @@ Then answer the user request in this order:
 - There is no docked solve3D split, sticky class sampling or `sampled_only`
   restriction; multi-state solve3D is independent from the start. Sticky
   sampling (`sticky_sampling`, one particle subset refined over several
-  iterations) is used by `refine3D_states` frequency blocks and the single-state
-  solve3D shc stages 1-2 (stage 1 `yes`, stage 2 `keep`; free from stage 3).
+  iterations) is used by `refine3D_states` frequency blocks and by every
+  single-state fractional solve3D particle run (add-ons excepted) from its first
+  stage through `STICKY_LAST_STAGE` (4): first stage `best`, the next stages
+  through 4 `keep`, free from stage 5; a stage-4 entry (supplied volumes,
+  `cavg_ini`, `cavg_ini_ext`) holds it for that stage. Trailing starts with the
+  free sampling (`TRAILREC_STAGE_SINGLE = STICKY_LAST_STAGE + 1`). Multi-state
+  runs hold none and never draw by score.
   There is no periodic fill-in: the draws take the least-updated particles
   first and the terminal missing-update pass assigns the rest.
+- `sticky_sampling=best` draws like `yes`, with the same quotas, but takes the
+  particles with the best 2D objective values (`ptcl2D` `corr`, read by the
+  owner from the `ptcl2D` field it holds, `sticky_draw_scores`), whatever their
+  update counts: under `none` the best active particles, under `class`/`cavg`
+  the best of every unit, as many as its quota. Without 2D scores it draws at
+  random and logs it. The samplers take the scores as the optional `scores` of
+  `sample4update_cnt`/`sample4update_class` (`order_best_first`). The
+  external-reference pose initialization removes `sticky_sampling` from its
+  command line.
 - The sticky subset's release: sticky rescoring advances `updatecnt` every
   iteration, so before the first free stage the solve3D commander sets every
   `updatecnt` to 0 (`release_sticky_subset` in `simple_solve3D_utils`, called at
   each stage boundary, acting at the transition from a sticky stage to a free
-  one). Without it the subset's count from stages 1-2 (40 when both run 20
-  iterations) kept it out of the lowest-`updatecnt` draws for the rest of a
-  large run, and its stage-2 poses reached the final map unsearched. After the
+  one). Without it the subset's count from the sticky stages kept it out of the
+  lowest-`updatecnt` draws for the rest of a large run, and its last sticky
+  poses reached the final map unsearched. After the
   release the free sampling's history, the first-time counts and the realized
   update fraction start from the release. Nothing may reconstruct between the
   release and the stage's first draw: with every count at 0, `sample4rec` takes
   every active particle. No other workflow holds a sticky subset into a free
   stage (`refine3D_states` blocks last at most three iterations).
-- The sampler never uses 3D maps, poses, projection directions or per-particle
-  objective values: 2D classes (and `cavg` groups) set strata and quotas only,
-  and a unit's quota is drawn from the whole class by `updatecnt` and a keyed
-  shuffle. `clssmp.bin` carries no scores; `greedy_sampling`/`frac_best` are
-  selection-tool keys (`sample_classes`), not 3D sampling controls.
+- The free draws never use 3D maps, poses, projection directions or
+  per-particle objective values: 2D classes (and `cavg` groups) set strata and
+  quotas only (equal shares, capped at populations), and a unit's quota is
+  drawn from the whole class by `updatecnt` and a keyed shuffle. The one scored
+  draw is the solve3D sticky subset's (`best`). `clssmp.bin` carries no scores;
+  `greedy_sampling`/`frac_best` are selection-tool keys (`sample_classes`), not
+  3D sampling controls.
 - When explaining behavior, call out whether the code path is initial solve3D
   seeding, normal iteration, the sticky subset's release, the terminal
   missing-update pass, or trailing reconstruction.

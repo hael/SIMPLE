@@ -39,40 +39,43 @@ been updated, and `sampled`, the last sampling round that selected it. The
 - **class units** (`balance=class` or `balance=cavg`; `class` is the default
   of `solve3D`, `refine3D_states`, and `classify3D_refs`): share the budget
   over sampling units built from the selected 2D classes. Each unit is one
-  selected class, with its active particles ordered by their 2D score.
+  selected class, with its active particles in index order.
 
-  - Under `class`, every unit gets a share in proportion to the square root
-    of its population, capped at its population. Rare views are sampled more
-    often than proportional sampling would, but a class 100 times smaller is
-    visited 10 times as often per particle, not 100 times, so one small odd
-    class cannot take over the draw.
+  - Under `class`, every unit gets an equal share, capped at its population,
+    so rare views are sampled more often than proportional sampling would.
   - Under `cavg`, the class averages are first clustered into `nclust`
     groups (default 20) by average linkage on their rotation-, shift-, and
     mirror-invariant correlation between 30 and 6 A, so that a preferred view
     split over many classes becomes one group. A group holding fewer than 2.5%
     of the particles keeps merging into its nearest group, so outlier classes
-    do not become groups of their own. The budget is then shared over the groups
-    and, within a group, over its units, in both cases in proportion to the
-    square root of the populations; the remainder of a split goes to the
-    least-updated units. The group level keeps the views
+    do not become groups of their own. The budget is then shared equally over
+    the groups and, within a group, equally over its units, each capped at its
+    population; the remainder of a split goes to the least-updated units. The
+    group level keeps the views
     balanced, and the unit level keeps the classes inside a view, which may
     be different conformational states, on an equal footing.
 
   In both modes the count-tiered rule applies inside each unit, over the
-  whole class: no per-particle score decides who is drawn.
+  whole class: no per-particle score decides who is drawn, except in the draw
+  of single-state `solve3D`'s sticky subset (below).
 - **reproduce**: reuse exactly the particles whose `sampled` equals the
   current maximum. This lets a probabilistic iteration choose the subset once,
   on the master, and have every part's pipeline (the table rows, the draws, the
   matching and the reconstruction) act on the same particles. The draw is
   keyed on the run's seed, the pass, the iteration and the particle, so the
   subset does not depend on the number of parts or threads.
-- **sticky** (`refine3D_states`, and the shc neighbourhood stages 1-2 of
-  single-state `solve3D`): the set drawn at the first iteration of a
-  frequency block or stage is kept for the whole block; with
-  `sticky_sampling=keep` a stage keeps the previous stage's set from its first
-  iteration (solve3D stage 2 keeps stage 1's). Later iterations reproduce it
-  and advance its counters, so that state labels and poses converge on one
-  set.
+- **sticky** (`refine3D_states`, and stages 1-4 of single-state `solve3D`,
+  from whatever stage the run enters at):
+  the set drawn at the first iteration of a frequency block or stage is kept
+  for the whole block; with `sticky_sampling=keep` a stage keeps the previous
+  stage's set from its first iteration (solve3D stages 2-4 keep stage 1's).
+  Later iterations reproduce it and advance its counters, so that state labels
+  and poses converge on one set. `solve3D` draws its set with
+  `sticky_sampling=best`: the same quotas, but each unit's particles with the
+  best 2D objective values (`ptcl2D` `corr`), whatever their update counts; the
+  free draws from stage 5 use no score. Every single-state fractional
+  `solve3D` run holds this set from its first stage through stage 4 and trails
+  from stage 5; multi-state runs hold none.
 - **missing**: every active particle that has never been updated. This is the
   terminal coverage pass.
 

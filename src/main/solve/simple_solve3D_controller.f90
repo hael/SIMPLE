@@ -26,7 +26,8 @@ integer,          parameter :: SYMSRCH_STAGE           = 4           ! search sy
 integer,          parameter :: NOSYMSRCH_STAGE         = 3           ! its counterpart in a run that searches no axis
 integer,          parameter :: VOL_SUPPLIED_STAGE      = NOSYMSRCH_STAGE + 1 ! first stage for supplied volumes
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
-integer,          parameter :: TRAILREC_STAGE_SINGLE   = PROB_REFINE_STAGE ! single state trails from the first freely sampled stage
+integer,          parameter :: STICKY_LAST_STAGE       = 4           ! single state holds its sticky subset through this stage, free from the next
+integer,          parameter :: TRAILREC_STAGE_SINGLE   = STICKY_LAST_STAGE + 1 ! single state trails from the first freely sampled stage
 integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
 integer,          parameter :: GOLD_STD_STAGE          = 6           ! first eligible single-state gold-standard stage
 integer,          parameter :: PCG_START_STAGE         = 6           ! requested PCG backend and order prior; independent of gold_std_stage
@@ -199,6 +200,18 @@ contains
         endif
     end function solve3D_remaining_niters
 
+    !> the first freely sampled stage of a particle run that starts at first_stage: the stage after the sticky
+    !! stages when the run holds a sticky subset, first_stage otherwise
+    module function solve3D_first_free_stage( params, first_stage, l_addon ) result( istage )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: first_stage
+        logical,           intent(in) :: l_addon
+        integer :: istage
+        istage = first_stage
+        if( holds_sticky_subset(params, first_stage, first_stage, .false., force_full_sampling_mode(params), l_addon) ) &
+            &istage = STICKY_LAST_STAGE + 1
+    end function solve3D_first_free_stage
+
     integer function active_refine3D_nstages() result(nstages_active)
         nstages_active = nstages_refine3D
         if( nstages_active <= 0 ) nstages_active = NSTAGES
@@ -224,7 +237,8 @@ contains
                 cfg%l_scan_exit = .false.
             endif
         endif
-        call emit_refine3D_stage_cfg( cfg, params, istage, first_stage, l_cavgs, l_refine3D_lp_override, l_register )
+        call emit_refine3D_stage_cfg( cfg, params, istage, first_stage, l_cavgs, l_refine3D_lp_override, l_addon, &
+            &l_register )
         if( l_addon )then
             if( .not. addon%frozen_rec%is_allocated() ) THROW_HARD('active add-on context without a frozen run context')
             call cline_refine3D%set('frozen_rec', addon%frozen_rec)
@@ -349,6 +363,18 @@ contains
             endif
         endif
     end subroutine set_refine3D_mode_policy
+
+    !> whether stage istage refines the sticky subset: one state, particles, fractional updates, not an add-on,
+    !! and istage from the run's first stage through STICKY_LAST_STAGE, whatever stage the run enters at
+    logical function holds_sticky_subset( params, istage, first_stage, l_cavgs, l_full_update, l_addon ) &
+        &result( l_sticky )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage, first_stage
+        logical,           intent(in) :: l_cavgs, l_full_update, l_addon
+        l_sticky = .false.
+        if( params%nstates /= 1 .or. l_cavgs .or. l_full_update .or. l_addon ) return
+        l_sticky = istage >= first_stage .and. istage <= STICKY_LAST_STAGE
+    end function holds_sticky_subset
 
     subroutine set_refine3D_backend_policy( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
@@ -509,12 +535,14 @@ contains
         end select
     end subroutine apply_refine3D_search_overrides
 
-    subroutine emit_refine3D_stage_cfg( cfg, params, istage, first_stage, l_cavgs, l_cmdline_lp_override, l_register )
+    subroutine emit_refine3D_stage_cfg( cfg, params, istage, first_stage, l_cavgs, l_cmdline_lp_override, l_addon, &
+        &l_register )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         integer,                  intent(in) :: istage, first_stage
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
+        logical,                  intent(in) :: l_addon    !< solve3D_addon stage: the cohort's own sampling, no sticky subset
         logical,                  intent(in) :: l_register !< solve3D_addon registration pass: full update, planned limit
         real :: lp_eff, lpstop_eff, lp_cap
         logical :: l_full_update_stage, l_explicit_lp, l_lp_from_fsc05
@@ -588,15 +616,15 @@ contains
         else
             call cline_refine3D%delete('prob_neigh_mode')
         endif
-        ! the shc neighbourhood search scans a never-searched particle in full: the shc stages refine one
-        ! class-balanced sticky subset, drawn at the first iteration of the run's first such stage and kept by the
-        ! next, so the full scan happens once; the later stages sample freely
-        if( cfg%refine.eq.'prob_neigh' .and. cfg%prob_neigh_mode.eq.PROB_NEIGH_MODE_EARLY .and. &
-            &.not. l_full_update_stage .and. .not. l_cavgs )then
+        ! single state refines one class-balanced sticky subset from the run's first stage through
+        ! STICKY_LAST_STAGE: drawn at the first iteration of the first stage, every unit's quota by the particles'
+        ! 2D objective, best first (best), and kept by the next stages (keep), so its map consolidates before the
+        ! free sampling, which uses no score; trailing starts with the free sampling (TRAILREC_STAGE_SINGLE)
+        if( holds_sticky_subset(params, istage, first_stage, l_cavgs, l_full_update_stage, l_addon) )then
             if( istage > first_stage )then
                 call cline_refine3D%set('sticky_sampling', 'keep')
             else
-                call cline_refine3D%set('sticky_sampling', 'yes')
+                call cline_refine3D%set('sticky_sampling', 'best')
             endif
         else
             call cline_refine3D%delete('sticky_sampling')

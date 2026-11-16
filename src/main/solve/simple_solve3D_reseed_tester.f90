@@ -214,8 +214,8 @@ contains
         call assert_false(cline_refine3D%defined('lp'), 'without NU, gold-standard matching uses the half-map FSC')
         call assert_false(cline_refine3D%defined('lpstop'), 'without NU, gold-standard matching still has no stage ceiling')
         ! no stage passes a score-based sampling control: one state and several draw from the whole class;
-        ! the single-state shc neighbourhood stages (1-2) refine one sticky subset: drawn in stage 1, kept in stage 2;
-        ! trailing reconstruction starts at stage 3 with the free sampling
+        ! one state refines one sticky subset through stage 4: drawn in stage 1 by the 2D objective, best first,
+        ! kept in stages 2-4, free from stage 5, where trailing reconstruction starts
         do istage = 1, 8
             call set_cline_refine3D(params, istage, 1, .false.)
             call assert_int(min(3, cline_refine3D%get_iarg('maxits')), cline_refine3D%get_iarg('minits'), &
@@ -224,11 +224,11 @@ contains
             call assert_false(cline_refine3D%defined('frac_best'),       'one state: no best-fraction control')
             select case(istage)
                 case(1)
-                    call assert_string_eq('yes',  cline_refine3D%get_carg('sticky_sampling'), 'one state: stage 1 draws the sticky subset')
-                case(2)
-                    call assert_string_eq('keep', cline_refine3D%get_carg('sticky_sampling'), 'one state: stage 2 keeps it')
+                    call assert_string_eq('best', cline_refine3D%get_carg('sticky_sampling'), 'one state: stage 1 draws the sticky subset best first')
+                case(2:4)
+                    call assert_string_eq('keep', cline_refine3D%get_carg('sticky_sampling'), 'one state: stages 2-4 keep it')
                 case DEFAULT
-                    call assert_false(cline_refine3D%defined('sticky_sampling'), 'one state: free sampling after the shc stages')
+                    call assert_false(cline_refine3D%defined('sticky_sampling'), 'one state: free sampling from stage 5')
             end select
             ! an intermediate stage from stage 3 moves on at overlap 0.95; stages 1-2 and the last keep 0.99
             if( istage >= 3 .and. istage < 8 )then
@@ -237,10 +237,10 @@ contains
                 call assert_real(OVERLAP_3D, cline_refine3D%get_rarg('overlap'), 1.e-6, 'one state: stages 1-2 and the last keep 0.99')
             endif
             ! trailing reconstruction starts with the free sampling
-            if( istage <= 2 )then
+            if( istage <= 4 )then
                 call assert_string_eq('no',  cline_refine3D%get_carg('trail_rec'), 'one state: no trailing over the sticky subset')
             else
-                call assert_string_eq('yes', cline_refine3D%get_carg('trail_rec'), 'one state: trailing from stage 3')
+                call assert_string_eq('yes', cline_refine3D%get_carg('trail_rec'), 'one state: trailing from stage 5')
             endif
         end do
         l_srch4symaxis = .true.
@@ -259,6 +259,7 @@ contains
         call set_cline_refine3D(params, 4, 4, .false.)
         call assert_int(cline_refine3D%get_iarg('maxits'), cline_refine3D%get_iarg('minits'), 'the particle entry after class averages runs its full budget')
         call assert_real(OVERLAP_3D, cline_refine3D%get_rarg('overlap'), 1.e-6, 'the particle entry keeps the strict overlap')
+        call assert_string_eq('best', cline_refine3D%get_carg('sticky_sampling'), 'the particle entry after class averages holds a sticky subset')
         call set_cline_refine3D(params, 5, 4, .false.)
         call assert_int(3, cline_refine3D%get_iarg('minits'), 'the stage after particle entry returns to the three-iteration minimum')
         addon%active = .true.
@@ -266,17 +267,48 @@ contains
         addon%frozen_rec = 'frozen_context_for_stage_rule'
         call set_cline_refine3D(params, 4, 4, .false., addon=addon)
         call assert_int(3, cline_refine3D%get_iarg('minits'), 'an add-on has no full-budget stage, only the three-iteration minimum')
+        call assert_false(cline_refine3D%defined('sticky_sampling'), 'an add-on keeps its cohort''s sampling: no sticky subset')
         addon%active = .false.
         call addon%frozen_rec%kill
         l_cavg_ini = .false.
-        ! a run that starts at stage 2 has no sticky subset to keep: it draws one
+        ! a run that starts at stage 2 has no sticky subset to keep: it draws one and holds it through stage 4
         call set_cline_refine3D(params, 2, 2, .false.)
-        call assert_string_eq('yes', cline_refine3D%get_carg('sticky_sampling'), 'one state: a stage-2 start draws its sticky subset')
+        call assert_string_eq('best', cline_refine3D%get_carg('sticky_sampling'), 'one state: a stage-2 start draws its sticky subset')
+        call set_cline_refine3D(params, 4, 2, .false.)
+        call assert_string_eq('keep', cline_refine3D%get_carg('sticky_sampling'), 'one state: a stage-2 start keeps it in stage 4')
+        ! a run that enters at stage 4 (supplied volumes, cavg_ini_ext) holds a sticky subset for that stage and
+        ! trails from stage 5
+        call set_cline_refine3D(params, 4, 4, .false.)
+        call assert_string_eq('best', cline_refine3D%get_carg('sticky_sampling'), 'one state: a stage-4 entry draws its sticky subset')
+        call assert_string_eq('no', cline_refine3D%get_carg('trail_rec'), 'one state: a stage-4 entry does not trail over it')
+        call set_cline_refine3D(params, 5, 4, .false.)
+        call assert_false(cline_refine3D%defined('sticky_sampling'), 'one state: a stage-4 entry samples freely from stage 5')
+        call assert_string_eq('yes', cline_refine3D%get_carg('trail_rec'), 'one state: a stage-4 entry trails from stage 5')
+        ! a run that enters after the sticky stages samples freely and trails from its first stage
+        call set_cline_refine3D(params, 5, 5, .false.)
+        call assert_false(cline_refine3D%defined('sticky_sampling'), 'one state: a stage-5 entry has no sticky subset')
+        call assert_string_eq('yes', cline_refine3D%get_carg('trail_rec'), 'one state: a stage-5 entry trails from its first stage')
+        ! full sampling and the class-average route hold none
+        params%nsample = 9500
+        call set_cline_refine3D(params, 1, 1, .false.)
+        call assert_false(cline_refine3D%defined('sticky_sampling'), 'full sampling: no sticky subset')
+        call set_cline_refine3D(params, 5, 1, .false.)
+        call assert_string_eq('no', cline_refine3D%get_carg('trail_rec'), 'full sampling: no trailing')
+        params%nsample = 1000
+        call set_cline_refine3D(params, 1, 1, .true.)
+        call assert_false(cline_refine3D%defined('sticky_sampling'), 'class-average route: no sticky subset')
         call check_early_stage_sticky(params, 1, 1)
         call check_early_stage_sticky(params, 2, 1)
         call check_early_stage_sticky(params, 2, 2)
-        call check_sticky_release(params, .true.)
-        call check_sticky_release(params, .false.)
+        call check_early_stage_sticky(params, 4, 1)
+        call check_early_stage_sticky(params, 4, 2)
+        call check_early_stage_sticky(params, 4, 4)
+        call check_sticky_release(params, 'none',  .true.)
+        call check_sticky_release(params, 'none',  .false.)
+        call check_sticky_release(params, 'class', .true.)
+        call check_sticky_release(params, 'class', .false.)
+        call check_sticky_release(params, 'cavg',  .true.)
+        call check_sticky_release(params, 'cavg',  .false.)
         nstages_refine3D = 8
         params%nstates = 3
         do istage = 1, 8
@@ -357,6 +389,8 @@ contains
             sampling%balance = balance%to_char()
             sampling%l_sticky_sampling = cline_refine3D%defined('sticky_sampling')
             sampling%l_sticky_keep = cline_refine3D%get_carg('sticky_sampling') == 'keep'
+            ! no ptcl2D field: the best-first draw falls back to a random one
+            sampling%l_sticky_best = cline_refine3D%get_carg('sticky_sampling') == 'best'
             do iter = sampling%startit, sampling%startit + NITER - 1
                 sampling%which_iter = iter
                 call sample_ptcls4prob3D(sampling, build, nsamp, inds)
@@ -378,55 +412,83 @@ contains
         nullify(build%spproj_field)
     end subroutine check_early_stage_sticky
 
-    !> Stages 1-3 through the owner's sampler, with the commander's boundary call before every stage on a project
-    !! file: it releases nothing while the stages are sticky, at stage 3 it restarts every update count, and the
-    !! first free sweep reaches the sticky subset; without it (the negative control) that sweep skips the subset
-    subroutine check_sticky_release( params, l_release )
+    !> Stages 1-5 through the owner's sampler under one balance mode (none, class or cavg), with the commander's
+    !! boundary call before every stage on a project file. Stage 1 draws the sticky subset by the 2D objective,
+    !! best first within every unit's quota; stages 2-4 keep it and nothing is released; at stage 5 every update
+    !! count restarts and the first free sweep reaches the sticky subset. Without the release (the negative
+    !! control) that sweep skips the subset.
+    subroutine check_sticky_release( params, mode, l_release )
         use simple_solve3D_utils,           only: cline_refine3D, set_cline_refine3D, nstages_refine3D, &
             &release_sticky_subset
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4prob3D
         use simple_parameters,              only: parameters
         use simple_builder,                 only: builder
         use simple_string,                  only: string
+        use simple_type_defs,               only: class_sample
+        use simple_class_sample_io,         only: write_class_samples, deallocate_class_samples
+        use simple_defs_fname,              only: CLASS_SAMPLING_FILE
+        use simple_oris,                    only: class_sample_sweep
         class(parameters), intent(in) :: params
+        character(len=*),  intent(in) :: mode
         logical,           intent(in) :: l_release
-        integer, parameter :: NPTCLS = 16, NITER = 3
+        integer, parameter :: NPTCLS = 16, NITER = 3, NSTICKY = 4
         class(builder),    allocatable, target :: build
         class(parameters), allocatable :: sampling
-        type(string) :: balance, projfile
-        integer, allocatable :: inds(:), sticky(:)
+        type(class_sample), allocatable :: units(:)
+        type(string) :: projfile
+        integer, allocatable :: inds(:), sticky(:), best(:)
         logical :: drawn(NPTCLS), l_sticky(NPTCLS), l_sticky_prev
         integer :: istage, iter, nsamp, nits, nupdated, i
-        write(*,'(A,L2)') 'check_sticky_release', l_release
+        write(*,'(A,A,L2)') 'check_sticky_release ', mode, l_release
         allocate(build, sampling)
         call build%spproj%os_ptcl3D%new(NPTCLS, is_ptcl=.true.)
         build%spproj_field => build%spproj%os_ptcl3D
         call build%spproj_field%set_all2single('state', 1.)
+        ! the 2D objective of rows 1-16: 5 10 15 3 8 13 1 6 | 31 36 24 29 34 22 27 32
+        call build%spproj%os_ptcl2D%new(NPTCLS, is_ptcl=.true.)
+        call build%spproj%os_ptcl2D%set_all2single('state', 1.)
+        do i = 1, NPTCLS
+            call build%spproj%os_ptcl2D%set(i, 'corr', real(mod(5*i, 17)) + merge(20., 0., i > 8))
+        end do
+        ! the units and the best rows of every unit's quota (4 of 16 drawn)
+        select case(mode)
+            case('none')
+                best = [9,10,13,16]                         ! the four best rows
+            case('class')
+                call make_units([8,8], [0,0])               ! 2 per unit
+                best = [3,6,10,13]
+            case('cavg')
+                call make_units([4,4,8], [1,2,2])           ! group quotas 2 and 2: 2 from rows 1-4, 1 from each other unit
+                best = [2,3,6,10]
+        end select
         projfile = 'sticky_release.simple'
         call build%spproj%update_projinfo(projfile)
         sampling%nptcls = NPTCLS
         sampling%l_prob_align_mode = .true.
         sampling%l_update_frac = .true.
         sampling%l_centring = .false.
-        nstages_refine3D = 3
+        nstages_refine3D = NSTICKY + 1
         drawn = .false.
         l_sticky_prev = .false.
         call cline_refine3D%kill
-        do istage = 1, 3
+        do istage = 1, NSTICKY + 1
             call set_cline_refine3D(params, istage, 1, .false.)
             sampling%startit = cline_refine3D%get_iarg('startit')
             sampling%update_frac = cline_refine3D%get_rarg('update_frac')
-            balance = cline_refine3D%get_carg('balance')
-            sampling%balance = balance%to_char()
+            sampling%balance = mode
             sampling%l_sticky_sampling = cline_refine3D%defined('sticky_sampling')
             sampling%l_sticky_keep = .false.
-            if( sampling%l_sticky_sampling ) sampling%l_sticky_keep = cline_refine3D%get_carg('sticky_sampling') == 'keep'
+            sampling%l_sticky_best = .false.
+            if( sampling%l_sticky_sampling )then
+                sampling%l_sticky_keep = cline_refine3D%get_carg('sticky_sampling') == 'keep'
+                sampling%l_sticky_best = cline_refine3D%get_carg('sticky_sampling') == 'best'
+            endif
             if( l_release )then
                 ! the commander's stage boundary, on the project file the stage starts from
                 call build%spproj%write(projfile)
                 nupdated = count(build%spproj_field%get_all_asint('updatecnt') > 0)
                 call release_sticky_subset(build%spproj, projfile, l_sticky_prev)
-                if( istage < 3 )then
+                if( istage <= NSTICKY )then
                     call assert_int(nupdated, count(build%spproj_field%get_all_asint('updatecnt') > 0), &
                         &'no release while the stages are sticky')
                 else
@@ -438,16 +500,25 @@ contains
                 endif
             endif
             nits = NITER
-            if( istage == 3 )then
-                call assert_false(sampling%l_sticky_sampling, 'stage 3 samples freely')
+            if( istage == 1 ) call assert_true(sampling%l_sticky_best, 'stage 1 draws the sticky subset best first')
+            if( istage > NSTICKY )then
+                call assert_false(sampling%l_sticky_sampling, 'stage 5 samples freely')
                 ! one free sweep: every particle once, if the draws start from a common count
-                nits = NPTCLS / nint(sampling%update_frac * real(NPTCLS))
+                if( allocated(units) )then
+                    nits = class_sample_sweep(units, nint(sampling%update_frac * real(NPTCLS)))
+                else
+                    nits = NPTCLS / nint(sampling%update_frac * real(NPTCLS))
+                endif
             endif
             do iter = sampling%startit, sampling%startit + nits - 1
                 sampling%which_iter = iter
                 call sample_ptcls4prob3D(sampling, build, nsamp, inds)
-                if( istage < 3 )then
+                if( istage <= NSTICKY )then
                     sticky = inds
+                    call assert_int(size(best), size(sticky), 'the sticky subset keeps its size')
+                    if( size(sticky) == size(best) )then
+                        call assert_true(all(sticky == best), 'the sticky subset is every unit''s best rows by the 2D objective')
+                    endif
                 else
                     drawn(inds) = .true.
                 endif
@@ -461,8 +532,30 @@ contains
             call assert_false(any(drawn .and. l_sticky), 'without the release the first free sweep skips the sticky subset')
             call assert_true(all(drawn .neqv. l_sticky), 'without the release the first free sweep takes every other particle')
         endif
+        if( allocated(units) ) call deallocate_class_samples(units)
+        call build%spproj%os_ptcl2D%kill
         call build%spproj%os_ptcl3D%kill
         nullify(build%spproj_field)
+
+    contains
+
+        !> consecutive rows per unit, written as the run's sampling units
+        subroutine make_units( pops, groups )
+            integer, intent(in) :: pops(:), groups(:)
+            integer :: k, j, first
+            allocate(units(size(pops)))
+            first = 1
+            do k = 1, size(pops)
+                units(k)%clsind  = k
+                units(k)%pop     = pops(k)
+                units(k)%group   = groups(k)
+                units(k)%nsample = 0
+                allocate(units(k)%pinds(pops(k)), source=[(j, j=first,first+pops(k)-1)])
+                first = first + pops(k)
+            end do
+            call write_class_samples(units, string(CLASS_SAMPLING_FILE))
+        end subroutine make_units
+
     end subroutine check_sticky_release
 
     !> the randomization acts on the poses the stage wrote into the project file, not on the in-memory

@@ -503,8 +503,10 @@ contains
         endif
         self%l_update_missing = trim(self%update_missing).eq.'yes'
         self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'
-        self%l_sticky_sampling       = trim(self%sticky_sampling).eq.'yes' .or. trim(self%sticky_sampling).eq.'keep'
+        self%l_sticky_sampling       = trim(self%sticky_sampling).eq.'yes' .or. trim(self%sticky_sampling).eq.'keep' &
+            &.or. trim(self%sticky_sampling).eq.'best'
         self%l_sticky_keep           = trim(self%sticky_sampling).eq.'keep'
+        self%l_sticky_best           = trim(self%sticky_sampling).eq.'best'
         self%l_scan_exit             = trim(self%scan_exit).eq.'yes'
     end subroutine derive_sampling_settings
 
@@ -701,9 +703,9 @@ contains
                 THROW_HARD('memreport must be yes or no')
         end select
         select case(trim(self%sticky_sampling))
-            case('yes','no','keep')
+            case('yes','no','keep','best')
             case DEFAULT
-                THROW_HARD('sticky_sampling must be yes, no or keep')
+                THROW_HARD('sticky_sampling must be yes, no, keep or best')
         end select
         if( self%nu_stage < 0 ) THROW_HARD('nu_stage must be non-negative (0 = default)')
         if( self%gold_std_stage < 0 ) THROW_HARD('gold_std_stage must be non-negative (0 = workflow default)')

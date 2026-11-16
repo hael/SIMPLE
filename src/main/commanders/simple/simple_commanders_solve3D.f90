@@ -1183,8 +1183,11 @@ contains
                     endif
                     call make_class_samples(params, spproj, smpl_units, nthr_view, .false., clssmp)
                     call write_class_samples(clssmp, string(CLASS_SAMPLING_FILE))
+                    ! the coverage of the free draws: the sticky stages refine one subset
                     if( trim(params%balance) /= 'none' ) call report_class_sample_coverage(clssmp, params%balance, &
-                        &nint(update_frac * real(nptcls_eff)), solve3D_remaining_niters(start_stage, nstages_refine3D), 'iteration')
+                        &nint(update_frac * real(nptcls_eff)), &
+                        &solve3D_remaining_niters(solve3D_first_free_stage(params, start_stage, l_addon), nstages_refine3D), &
+                        &'iteration')
                 endif
             endif
             if( spproj%os_ptcl3D%has_been_sampled() )then

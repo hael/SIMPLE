@@ -10,8 +10,10 @@ the per-stage `refine3D` command line:
   `nsample / active` exceeds `FULL_SAMPLE_SWITCH_FRAC` (0.9) every stage is a
   full update: no `update_frac`, `nsample` or trailing on the stage
   lines.
-- `trail_rec` turns on the trailing consumer path from stage 3 in single-state
-  runs (`TRAILREC_STAGE_SINGLE`) and stage 8 in multi-state runs
+- `trail_rec` turns on the trailing consumer path from stage 5 in single-state
+  runs (`TRAILREC_STAGE_SINGLE = STICKY_LAST_STAGE + 1`, the first freely
+  sampled stage: while the sticky subset is held only its rows have update
+  counts, so the blend weight would be 1) and stage 8 in multi-state runs
   (`TRAILREC_STAGE_MULTI`).
 - `nspace` and stage search policy are search/reference concerns; they must not
   silently desynchronize the produced handoff artifact from what the next stage

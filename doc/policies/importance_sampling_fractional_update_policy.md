@@ -248,12 +248,20 @@ scores from 3D sampling for one state as well on 2026-11-11). The outer particle
 - if fractional update is off, select all active particles
 - `none`: no sampling units; update-count-biased sampling over the whole range
   (`sample4update_cnt`, lowest `updatecnt` tiers first)
-- `class` and `cavg`: the nested square-root quota of `sample4update_class` over the
+- `class` and `cavg`: the nested equal quota of `sample4update_class` over the
   sampling units of the class sampling file `clssmp.bin` (below)
 - with `sticky_sampling=yes` the stage draws by the rule above at its first
   iteration (`which_iter == startit`) and calls `sample4update_rescore` at the
   others; `sticky_sampling=keep` rescores the previous stage's sticky subset from its
   first iteration (see "Sticky sampling schedules")
+- `sticky_sampling=best` draws as `yes`, with the same quotas under every
+  `balance`, but takes the particles with the best 2D objective values
+  (`ptcl2D` `corr`, which the project owner holds), whatever their update
+  counts, instead of the update-count tiers and the keyed shuffle: under `none`
+  the best active particles, under `class` and `cavg` the best of every unit,
+  as many as its quota. Without 2D scores for the particles it draws at random
+  and the log says so. Only the single-state `solve3D` sticky subset uses it;
+  its rescoring and every later free draw use no score
 
 `class` is the default wherever balanced sampling is the workflow default
 (`solve3D`, `refine3D_states`, `classify3D_refs`);
@@ -266,9 +274,18 @@ those classes have no averages.
 ### Sampling units and the nested quota
 
 A sampling unit is one selected 2D class (`cls2D` state > 0): its active
-particles, in index order. No per-particle objective value enters 3D sampling:
-a 2D score is a noisy measurement of the 2D solution, and ranking by it would
-let that solution decide who is refined. The class labels and the `cavg` groups
+particles, in index order. No per-particle objective value enters the free 3D
+draws: a 2D score is a noisy measurement of the 2D solution, and ranking by it
+every iteration would let that solution decide who is refined (until 2026-11-11
+single state never searched the bottom 15% of each class before the final pass).
+The one exception is the single-state `solve3D` sticky subset (`sticky_sampling=best`,
+2026-11-16): one draw at the first iteration of the run's first stage takes the
+particles with the best 2D objective values in every unit, as many as its quota,
+the subset is refined alone through stage 4, and from stage 5 every particle is
+drawn by update count alone. It restores what `3fb0b00b` did: that build refined
+a fixed subset of each class's best particles below stage 5, and the export
+gate's map consolidated in stage 3. Multi-state runs never draw by score.
+The class labels and the `cavg` groups
 only set the strata and their quotas; inside a unit the draw is by update count
 and the keyed shuffle. Each unit carries an integer `group`:
 
@@ -296,25 +313,28 @@ and the keyed shuffle. Each unit carries an integer `group`:
   used or changed. On local execution the clustering in `solve3D` takes the
   idle workers' cores (`nparts*nthr`, capped at the cores the process owns)
 
-The quota of an iteration, `nint(update_frac * active)`, is nested:
+The quota of an iteration, `nint(update_frac * active)`, is nested
+(`alloc_unit_quotas`; `class_sample_quotas` gives the real-valued quotas the
+coverage report and the sweep use):
 
-1. over groups in proportion to the square root of their populations, each
-   capped at its population, the excess shared again over the others;
-2. over the units of a group the same way (`class_sample_quotas` gives the
-   real-valued quotas); a unit draws the floor of its quota, and the
-   particles left to reach the target go one each to the units with a
-   fractional quota whose particles have the lowest mean `updatecnt` (ties:
-   larger population, then lower class index), which the project state fixes,
-   so the master's draw and every partition's reproduction agree on the
-   quotas and the remainder rotates over iterations;
-3. inside a unit, lowest `updatecnt` first, drawn uniformly within a tier.
+1. equally over the groups, each capped at its population: rounds of one more
+   particle to every group still below its population, until the target is
+   reached (the last round may overshoot by fewer particles than there are
+   groups);
+2. equally over the units of a group, the same way; the part of a group's share
+   that does not split evenly goes one each to the units whose particles have
+   the lowest mean `updatecnt` (ties: larger population, then lower class
+   index), which the project state fixes, so the master's draw and every
+   partition's reproduction agree on the quotas and the remainder rotates over
+   iterations;
+3. inside a unit, lowest `updatecnt` first, drawn uniformly within a tier (for
+   the sticky subset's draw, `sticky_sampling=best`, the best 2D objective values
+   instead, whatever the update counts).
 
-Under `class` the first level is the whole rule. The square root sits between
-proportional sampling (`none`, which leaves the view skew of the data) and
-equal shares, which correct it fully but hand a small class, often an odd or
-junk one, many times its share: a unit's visits per particle relative to
-another's are the inverse square root of their population ratio, so a class
-100 times smaller is visited 10 times as often, not 100 times. The nested level
+Under `class` the first level is the whole rule: equal shares correct the view
+skew of the data fully, against proportional sampling (`none`), which leaves it.
+Square-root shares (2026-11-05) sat between the two and gave way to equal shares
+on 2026-11-06. The nested level
 exists because several conformational states can hide inside one view: 2D
 classification separates them into classes that average linkage merges into
 one group first. The group level keeps the view balance, the unit level keeps
@@ -382,19 +402,24 @@ clean-up of `sampled` and `updatecnt` in the master's draw (`startit == 1`,
 sticky subsets. A full visit takes `sweep`
 blocks; the report states the blocks needed against those planned.
 
-Single-state fractional `solve3D` also keeps one sticky subset across its shc
-neighbourhood stages (1-2). Stage 1 draws it with `sticky_sampling=yes`;
-stage 2 uses `sticky_sampling=keep` to rescore that same set from its first
-iteration. A run starting at stage 2 draws its own sticky subset with `yes`.
-From stage 3 each iteration draws freely again and trailing reconstruction
-starts (`TRAILREC_STAGE_SINGLE`), as fractional class-sum restoration starts
-with free sampling in `solve2D`. Before that first free stage the solve3D
+Single-state fractional `solve3D` also keeps one sticky subset from its first
+stage through stage 4 (`STICKY_LAST_STAGE`; stages 1-2 until 2026-11-16),
+whatever stage the run enters at; add-ons hold none. The first stage draws it
+with `sticky_sampling=best` (above: the best 2D objective values of every unit);
+the next stages through 4 use `sticky_sampling=keep` to rescore that same set
+from their first iteration. A run entering at stage 4 (supplied volumes,
+`cavg_ini`, `cavg_ini_ext`) holds it for that stage. Trailing reconstruction
+starts with the free sampling, at stage 5 (`TRAILREC_STAGE_SINGLE =
+STICKY_LAST_STAGE + 1`): while the subset is held only its rows have update
+counts, so `u = n/N` would be 1. From stage 5 each iteration draws freely again,
+with no score, and trails, as fractional class-sum restoration starts with free
+sampling in `solve2D`. Before that first free stage the solve3D
 commander releases the sticky subset (`release_sticky_subset`): every
 particle's `updatecnt` is set to 0, so the free sampling starts its history
 afresh, as at the run's first iteration. Under sticky sampling `updatecnt`
-counts iterations, and without the release the subset's count from stages
-1-2 (40 when both run their 20 iterations) kept it out of the
-lowest-`updatecnt` draws for the rest of a large run, so its stage-2 poses
+counts iterations, and without the release the subset's count from the sticky
+stages (40 after stages 1-2 at their 20 iterations each) kept it out of the
+lowest-`updatecnt` draws for the rest of a large run, so its last sticky poses
 went unsearched into the final map (on a 111,099-particle set none of the
 10,020 subset particles was drawn again, on a 37,502-particle set about two
 thirds of 10,078; ruled unintended 2026-11-16). After the release the subset
@@ -408,9 +433,11 @@ first-time counts and `% PARTICLES UPDATED SO FAR` count from the release.
 Full-sampling runs use no sticky subset restriction and have nothing to
 release. The sticky subset lets the shc search scan each selected particle in
 full once, then refine it without introducing never-searched particles each
-iteration.
+iteration, and lets its map consolidate before the free sampling brings in
+particles aligned once each.
 
-Trailing reconstruction is unchanged by the sticky subset: the current partials are
+Trailing reconstruction is unchanged by the sticky subsets of `refine3D_states`
+frequency blocks: the current partials are
 scaled by `u/f` and the chain by `(1−u)·N/M`, with current-map coefficient
 `u` (`u = f = n/N` per state unless `ufrac_trec`). Holding one sticky subset for `k`
 iterations therefore gives it a cumulative coefficient `1 − (1−u)^k` while
