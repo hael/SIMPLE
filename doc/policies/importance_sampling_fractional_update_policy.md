@@ -388,8 +388,25 @@ stage 2 uses `sticky_sampling=keep` to rescore that same set from its first
 iteration. A run starting at stage 2 draws its own sticky subset with `yes`.
 From stage 3 each iteration draws freely again and trailing reconstruction
 starts (`TRAILREC_STAGE_SINGLE`), as fractional class-sum restoration starts
-with free sampling in `solve2D`. Full-sampling runs use no sticky subset
-restriction. The sticky subset lets the shc search scan each selected particle in
+with free sampling in `solve2D`. Before that first free stage the solve3D
+commander releases the sticky subset (`release_sticky_subset`): every
+particle's `updatecnt` is set to 0, so the free sampling starts its history
+afresh, as at the run's first iteration. Under sticky sampling `updatecnt`
+counts iterations, and without the release the subset's count from stages
+1-2 (40 when both run their 20 iterations) kept it out of the
+lowest-`updatecnt` draws for the rest of a large run, so its stage-2 poses
+went unsearched into the final map (on a 111,099-particle set none of the
+10,020 subset particles was drawn again, on a 37,502-particle set about two
+thirds of 10,078; ruled unintended 2026-11-16). After the release the subset
+competes with the never-searched particles, the trailing chain seeded by the
+first free iteration represents only particles whose images it holds, and a
+particle the free stages do not reach is assigned by the terminal
+missing-update pass. Nothing may reconstruct between the release and the
+stage's first draw: with every count at 0, `sample4rec` would take every
+active particle, never-searched ones included. From the release on, the log's
+first-time counts and `% PARTICLES UPDATED SO FAR` count from the release.
+Full-sampling runs use no sticky subset restriction and have nothing to
+release. The sticky subset lets the shc search scan each selected particle in
 full once, then refine it without introducing never-searched particles each
 iteration.
 

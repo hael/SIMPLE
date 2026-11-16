@@ -583,6 +583,24 @@ contains
         call spproj%write_segment_inside('ptcl3D', projfile)
     end subroutine symmetry_randomize_poses
 
+    !> At each stage boundary, once the stage's command line is emitted: the first freely sampled stage after sticky
+    !! stages restarts the update history, as the run's first iteration does, so the sticky subset competes with the
+    !! never-searched particles (importance_sampling_fractional_update_policy.md, sticky sampling schedules)
+    subroutine release_sticky_subset( spproj, projfile, l_sticky_prev )
+        class(sp_project), intent(inout) :: spproj
+        class(string),     intent(in)    :: projfile
+        logical,           intent(inout) :: l_sticky_prev !< the previous stage refined a sticky subset; set for this one
+        logical :: l_sticky
+        l_sticky = cline_refine3D%defined('sticky_sampling')
+        if( l_sticky_prev .and. .not. l_sticky )then
+            call spproj%read_segment('ptcl3D', projfile)
+            call spproj%os_ptcl3D%set_nonzero_updatecnt(0)
+            call spproj%write_segment_inside('ptcl3D', projfile)
+            write(logfhandle,'(A)') '>>> SOLVE3D STICKY SUBSET RELEASED: UPDATE COUNTS RESET BEFORE THE FREE SAMPLING'
+        endif
+        l_sticky_prev = l_sticky
+    end subroutine release_sticky_subset
+
     subroutine symmetrize( params, istage, spproj, projfile, xrec3D )
         class(parameters),               intent(inout) :: params
         integer,                         intent(in)    :: istage

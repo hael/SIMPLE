@@ -83,7 +83,11 @@ Stage policy includes:
     full scans; from stage 3 the sample is redrawn every iteration and
     trailing reconstruction blends the maps (`TRAILREC_STAGE_SINGLE`, until
     2026-11-11 stage 5), so free sampling and trailing start together, as
-    in `solve2D`; multi-state runs trail from stage 8 (`TRAILREC_STAGE_MULTI`)
+    in `solve2D`; before stage 3 the commander resets every `updatecnt` to 0
+    (`release_sticky_subset`, 2026-11-16), so the sticky subset competes with
+    the never-searched particles instead of sitting out the free stages
+    (`importance_sampling_fractional_update_policy.md`, "Sticky sampling
+    schedules"); multi-state runs trail from stage 8 (`TRAILREC_STAGE_MULTI`)
   - multi-state particle runs use direct `shc` in stages 1-2, `prob` in
     stages 3-5, and `prob_neigh` with `prob_neigh_mode=state` from stage 6
     (`PROB_NEIGH_REFINE_STAGE`, the single-state switch), so the default

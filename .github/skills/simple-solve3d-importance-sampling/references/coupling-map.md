@@ -67,6 +67,12 @@ Sampling by stage:
   first iteration (`sticky_sampling=yes`) and kept by stage 2 (`keep`; a run
   starting at stage 2 draws with `yes`), because the shc neighbourhood search
   scans never-searched particles in full; from stage 3 every iteration redraws
+- the release: before the first free stage the commander sets every
+  `updatecnt` to 0 (`release_sticky_subset`, `simple_solve3D_utils`, called at
+  each stage boundary of `exec_solve3D`), so the subset, whose count grew by one
+  per sticky iteration, competes with the never-searched particles instead of
+  sitting out the free stages; a particle the free stages never draw goes to the
+  terminal missing-update pass
 - `trail_rec=yes` from `TRAILREC_STAGE_SINGLE` (3, with the free sampling) single-state and
   `TRAILREC_STAGE_MULTI` (8) multi-state
 
@@ -100,7 +106,8 @@ Key routines:
 Interpretation:
 
 - `sampled` identifies the current sampling round
-- `updatecnt` counts how often a particle has been selected for update
+- `updatecnt` counts how often a particle has been selected for update (under
+  sticky sampling: every iteration it spent in the subset)
 - `incr_sampled_updatecnt` advances both the round marker and per-particle
   history when requested
 
@@ -116,6 +123,9 @@ They do not return the command-line target. Per state (or globally):
 
 So the realized fraction is that of the currently updated subset within the
 active updated pool. Under `m_estimator=flex` both are applied weight masses.
+After solve3D's release `N` counts only particles drawn since it, so the
+trailing chain that the first free iteration seeds represents exactly the
+particles whose images it holds.
 
 ## Update Selection During Refinement
 
@@ -144,7 +154,8 @@ by the project owner (the shared-memory matcher, or the distributed master
 before scheduling):
 
 - `updatecnt` and `sampled` are cleared only at `startit == 1` on the first
-  iteration
+  iteration (solve3D's commander also sets every `updatecnt` to 0 between
+  stages, at the sticky subset's release)
 - the active subset is chosen by `sample_ptcls4update3D`, keyed on the run's seed, the program, the
   pass and the iteration (`sample_rnd_key`; `adopt_run_seed` records the seed)
 - the distributed master writes it to the project file before the parts start

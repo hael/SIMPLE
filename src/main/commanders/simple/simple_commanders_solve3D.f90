@@ -898,6 +898,7 @@ contains
         logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
         logical :: l_state_continue
         logical :: l_force_full_sampling
+        logical :: l_sticky_prev !< the previous stage refined a sticky subset (release_sticky_subset)
         logical :: l_no2D   !< the project carries no usable 2D solution (no classes, class averages or class FRCs): balance=none only
         logical :: l_virgin2D !< ptcl2D never searched: no 2D shifts to transfer
         type(string) :: frcs_probe
@@ -1318,6 +1319,7 @@ contains
         endif
         ! Frequency marching
         call print_states(params, 0)
+        l_sticky_prev = .false.
         do istage = start_stage, nstages_refine3D
             ! solve3D_addon: the cohort's random poses are registered against
             ! the frozen references before the stage proper
@@ -1352,6 +1354,8 @@ contains
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',&
                     &cline_refine3D%get_iarg('box_crop')
             endif
+            ! the first freely sampled stage after the sticky stages restarts the update history
+            call release_sticky_subset(spproj, params%projfile, l_sticky_prev)
             ! Executing the refinement with the above settings
             write(logfhandle,'(A,I0)')'>>> SOLVE3D ENTERING REFINE3D STAGE ', istage
             call flush(logfhandle)

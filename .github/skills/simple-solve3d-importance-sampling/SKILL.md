@@ -53,7 +53,8 @@ Then answer the user request in this order:
   participate; `simple_eul_prob_tab` decides which references and in-plane
   angles are sampled for those particles.
 - Treat `sampled` as the marker for the current sampling round and `updatecnt`
-  as persistent history across rounds.
+  as persistent history across rounds, cleared at a run's first iteration and,
+  in solve3D, at the sticky subset's release (below).
 - `solve3D` takes `nsample` only: `nsample_start`/`nsample_stop` are refused
   and the update fraction does not change between stages.
 - There is no docked solve3D split, sticky class sampling or `sampled_only`
@@ -63,13 +64,26 @@ Then answer the user request in this order:
   solve3D shc stages 1-2 (stage 1 `yes`, stage 2 `keep`; free from stage 3).
   There is no periodic fill-in: the draws take the least-updated particles
   first and the terminal missing-update pass assigns the rest.
+- The sticky subset's release: sticky rescoring advances `updatecnt` every
+  iteration, so before the first free stage the solve3D commander sets every
+  `updatecnt` to 0 (`release_sticky_subset` in `simple_solve3D_utils`, called at
+  each stage boundary, acting at the transition from a sticky stage to a free
+  one). Without it the subset's count from stages 1-2 (40 when both run 20
+  iterations) kept it out of the lowest-`updatecnt` draws for the rest of a
+  large run, and its stage-2 poses reached the final map unsearched. After the
+  release the free sampling's history, the first-time counts and the realized
+  update fraction start from the release. Nothing may reconstruct between the
+  release and the stage's first draw: with every count at 0, `sample4rec` takes
+  every active particle. No other workflow holds a sticky subset into a free
+  stage (`refine3D_states` blocks last at most three iterations).
 - The sampler never uses 3D maps, poses, projection directions or per-particle
   objective values: 2D classes (and `cavg` groups) set strata and quotas only,
   and a unit's quota is drawn from the whole class by `updatecnt` and a keyed
   shuffle. `clssmp.bin` carries no scores; `greedy_sampling`/`frac_best` are
   selection-tool keys (`sample_classes`), not 3D sampling controls.
 - When explaining behavior, call out whether the code path is initial solve3D
-  seeding, normal iteration, the terminal missing-update pass, or trailing reconstruction.
+  seeding, normal iteration, the sticky subset's release, the terminal
+  missing-update pass, or trailing reconstruction.
 - Preserve the reconstruction read contract: the reconstruction of the sampled
   subset copies the images (or cropped records) the search pass already read
   into the pass buffer. Do not add a second particle-stack pass unless the
@@ -88,7 +102,7 @@ Inspect:
 Focus on `nsample` (`NSAMPLE_SOLVE3D_DEFAULT`), `UPDATE_FRAC_MAX`,
 `FULL_SAMPLE_SWITCH_FRAC`, `force_full_sampling_mode`, `sample4update_class`,
 `prob_neigh` (and `prob_neigh_mode`), `prob`, `NSPACE_MULTI_MAX`,
-`sticky_sampling`, and `trail_rec`.
+`sticky_sampling`, `release_sticky_subset`, and `trail_rec`.
 
 ### Particle-subset bookkeeping
 

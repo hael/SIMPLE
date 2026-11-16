@@ -1,6 +1,7 @@
 !@descr: unit tests of solve3D stage rules, symmetry randomization, and solve3D_cavgs state reseeding
 ! In-memory labels and scores of the even (1..ncavgs) and odd (ncavgs+1..2*ncavgs) halves of the
-! class averages; no volume or job. The symmetry randomization test writes one small project file.
+! class averages; no volume or job. The symmetry randomization and sticky-release tests each write one
+! small project file.
 module simple_solve3D_reseed_tester
 use simple_solve3D_utils, only: reseed_state_labels, solve3D_symsrch_stage, solve3D_stage_skipping, &
     &symmetry_randomize_poses, solve3D_size_lplims
@@ -274,6 +275,8 @@ contains
         call check_early_stage_sticky(params, 1, 1)
         call check_early_stage_sticky(params, 2, 1)
         call check_early_stage_sticky(params, 2, 2)
+        call check_sticky_release(params, .true.)
+        call check_sticky_release(params, .false.)
         nstages_refine3D = 8
         params%nstates = 3
         do istage = 1, 8
@@ -374,6 +377,93 @@ contains
         call build%spproj%os_ptcl3D%kill
         nullify(build%spproj_field)
     end subroutine check_early_stage_sticky
+
+    !> Stages 1-3 through the owner's sampler, with the commander's boundary call before every stage on a project
+    !! file: it releases nothing while the stages are sticky, at stage 3 it restarts every update count, and the
+    !! first free sweep reaches the sticky subset; without it (the negative control) that sweep skips the subset
+    subroutine check_sticky_release( params, l_release )
+        use simple_solve3D_utils,           only: cline_refine3D, set_cline_refine3D, nstages_refine3D, &
+            &release_sticky_subset
+        use simple_matcher_smpl_and_lplims, only: sample_ptcls4prob3D
+        use simple_parameters,              only: parameters
+        use simple_builder,                 only: builder
+        use simple_string,                  only: string
+        class(parameters), intent(in) :: params
+        logical,           intent(in) :: l_release
+        integer, parameter :: NPTCLS = 16, NITER = 3
+        class(builder),    allocatable, target :: build
+        class(parameters), allocatable :: sampling
+        type(string) :: balance, projfile
+        integer, allocatable :: inds(:), sticky(:)
+        logical :: drawn(NPTCLS), l_sticky(NPTCLS), l_sticky_prev
+        integer :: istage, iter, nsamp, nits, nupdated, i
+        write(*,'(A,L2)') 'check_sticky_release', l_release
+        allocate(build, sampling)
+        call build%spproj%os_ptcl3D%new(NPTCLS, is_ptcl=.true.)
+        build%spproj_field => build%spproj%os_ptcl3D
+        call build%spproj_field%set_all2single('state', 1.)
+        projfile = 'sticky_release.simple'
+        call build%spproj%update_projinfo(projfile)
+        sampling%nptcls = NPTCLS
+        sampling%l_prob_align_mode = .true.
+        sampling%l_update_frac = .true.
+        sampling%l_centring = .false.
+        nstages_refine3D = 3
+        drawn = .false.
+        l_sticky_prev = .false.
+        call cline_refine3D%kill
+        do istage = 1, 3
+            call set_cline_refine3D(params, istage, 1, .false.)
+            sampling%startit = cline_refine3D%get_iarg('startit')
+            sampling%update_frac = cline_refine3D%get_rarg('update_frac')
+            balance = cline_refine3D%get_carg('balance')
+            sampling%balance = balance%to_char()
+            sampling%l_sticky_sampling = cline_refine3D%defined('sticky_sampling')
+            sampling%l_sticky_keep = .false.
+            if( sampling%l_sticky_sampling ) sampling%l_sticky_keep = cline_refine3D%get_carg('sticky_sampling') == 'keep'
+            if( l_release )then
+                ! the commander's stage boundary, on the project file the stage starts from
+                call build%spproj%write(projfile)
+                nupdated = count(build%spproj_field%get_all_asint('updatecnt') > 0)
+                call release_sticky_subset(build%spproj, projfile, l_sticky_prev)
+                if( istage < 3 )then
+                    call assert_int(nupdated, count(build%spproj_field%get_all_asint('updatecnt') > 0), &
+                        &'no release while the stages are sticky')
+                else
+                    call assert_int(0, count(build%spproj_field%get_all_asint('updatecnt') > 0), &
+                        &'the first free stage restarts every update count')
+                    call build%spproj%read_segment('ptcl3D', projfile)
+                    call assert_int(0, count(build%spproj_field%get_all_asint('updatecnt') > 0), &
+                        &'the released counts are in the project file')
+                endif
+            endif
+            nits = NITER
+            if( istage == 3 )then
+                call assert_false(sampling%l_sticky_sampling, 'stage 3 samples freely')
+                ! one free sweep: every particle once, if the draws start from a common count
+                nits = NPTCLS / nint(sampling%update_frac * real(NPTCLS))
+            endif
+            do iter = sampling%startit, sampling%startit + nits - 1
+                sampling%which_iter = iter
+                call sample_ptcls4prob3D(sampling, build, nsamp, inds)
+                if( istage < 3 )then
+                    sticky = inds
+                else
+                    drawn(inds) = .true.
+                endif
+            end do
+            call cline_refine3D%set('endit', sampling%startit + nits - 1)
+        end do
+        l_sticky = [(any(sticky == i), i = 1, NPTCLS)]
+        if( l_release )then
+            call assert_true(all(drawn), 'after the release the first free sweep reaches every particle')
+        else
+            call assert_false(any(drawn .and. l_sticky), 'without the release the first free sweep skips the sticky subset')
+            call assert_true(all(drawn .neqv. l_sticky), 'without the release the first free sweep takes every other particle')
+        endif
+        call build%spproj%os_ptcl3D%kill
+        nullify(build%spproj_field)
+    end subroutine check_sticky_release
 
     !> the randomization acts on the poses the stage wrote into the project file, not on the in-memory
     !! copy of the previous stage: every pose in the file ends as itself or its c2 mate
