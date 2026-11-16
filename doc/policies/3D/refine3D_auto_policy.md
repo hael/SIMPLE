@@ -48,7 +48,15 @@ It also supplies overridable defaults when the user has not provided them:
 - `automsk=yes`
 - `envfsc=yes`
 - `keepvol=no`
-- `regpass=yes`, `regpass_fsc=0.143` (section 5)
+- `regpass=yes`, `regpass_fsc=0.143` (section 5), with an external `vol1`
+
+On a native project (no `vol1`; 2026-11-16) the stored poses and the centring
+state the workflow before left (solve3D) are trusted, as in `refine3D_local`:
+the defaults become `regpass=no`, `shift_sigma=3` A and `keep_centring=yes`,
+so the first iteration keeps the particles' shift-prior widths instead of
+sending every sampled particle through the 30 A disk of a fresh start. The
+search stays `prob_neigh_mode=state`. Each remains overridable; `regpass=yes`
+restores the global registration pass of section 5.
 
 The default `envfsc=yes` is guarded, so an explicit user value remains
 authoritative -- except that active automasking (`yes` or `nu`) implies
@@ -140,7 +148,7 @@ iterations, the run stops.
 
 ## 5. Registration Pass, Refinement and Final Reconstruction
 
-After startup, with `regpass=yes` (default), `refine3D_auto` runs one
+After startup, with `regpass=yes` (the default with an external `vol1`), `refine3D_auto` runs one
 global registration pass (2026-09-16): a single `refine3D` iteration with
 `refine=greedy` (exhaustive argmax over `nspace=5000` directions with the
 incumbent's direction among them, so a particle moves only when a better

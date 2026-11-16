@@ -115,6 +115,10 @@ contains
         &group="search", &
         &choices=ui_choices([character(len=5) :: 'state', 'geom', 'shc', 'snhc']), &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'keep_centring', 'binary', 'Keep the centring state', &
+        &'Keep the particles'' centring state (shift-prior widths) the workflow before left at the first iteration '//&
+        &'instead of restarting it; prob_neigh_mode=geom always keeps it(yes|no){no}', '', .false., 'no', &
+        &group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}','', .false.,&
         &'no', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -216,7 +220,8 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'regpass', 'binary', 'Global registration pass', &
         &'One global (refine=greedy) registration pass of all particles against the masked startup references, &
-        &band-limited at the FSC=regpass_fsc resolution of the startup pair, before the neighbourhood iterations(yes|no){yes}', &
+        &band-limited at the FSC=regpass_fsc resolution of the startup pair, before the neighbourhood iterations; &
+        &without an external vol1 the workflow sets no, trusting the poses of a native project(yes|no){yes}', &
         &'', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)

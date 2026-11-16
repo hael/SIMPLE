@@ -1179,8 +1179,8 @@ contains
         endif
         call invalidate_fresh_start_refs_from_volumes(params, cline, startit)
         ! the dynamic centring's state (shift_sigma > 0): a workflow's first run marks every particle as not yet
-        ! centred (the sentinel), whatever the key's state in this run; a search about the stored poses keeps the
-        ! widths the workflow before left
+        ! centred (the sentinel), whatever the key's state in this run; a search about the stored poses, or
+        ! keep_centring=yes (refine3D_auto on a native project), keeps the widths the workflow before left
         if( startit == 1 )then
             call start_shift_state(build%spproj_field, keeps_shift_state(params))
             l_proj_dirty = .true.
@@ -1662,8 +1662,8 @@ contains
             endif
         endif
         ! the dynamic centring's state (shift_sigma > 0): a workflow's first run marks every particle as not yet
-        ! centred (the sentinel), which the workers read from the project; a search about the stored poses keeps the
-        ! widths the workflow before left
+        ! centred (the sentinel), which the workers read from the project; a search about the stored poses, or
+        ! keep_centring=yes, keeps the widths the workflow before left
         if( params%startit == 1 )then
             call start_shift_state(build%spproj_field, keeps_shift_state(params))
             call build%spproj%write_segment_inside(params%oritype)
@@ -2079,11 +2079,12 @@ contains
     !! thread budget, the thread-seconds product and the master's peak RSS, so
     !! wall time, compute cost and memory read as separate quantities on both
     !! backends (comparison protocol, policy section 12)
-    !> a search about the stored poses (prob_neigh_mode=geom) trusts their shifts: a run's first iteration keeps the
-    !! centring widths the workflow before left
+    !> a search about the stored poses (prob_neigh_mode=geom), or keep_centring=yes, trusts their shifts: a run's first
+    !! iteration keeps the centring widths the workflow before left
     pure logical function keeps_shift_state( params )
         class(parameters), intent(in) :: params
-        keeps_shift_state = trim(params%refine) == 'prob_neigh' .and. trim(params%prob_neigh_mode) == 'geom'
+        keeps_shift_state = trim(params%keep_centring) == 'yes' .or. &
+            &(trim(params%refine) == 'prob_neigh' .and. trim(params%prob_neigh_mode) == 'geom')
     end function keeps_shift_state
 
     subroutine report_rec_master_phase( params, t_start, nthr )

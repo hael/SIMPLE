@@ -77,6 +77,7 @@ type :: parameters
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations(yes|no){no}
     character(len=3)          :: json='no'            !< Print in json format (mainly for nice)(yes|no){no}
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d(yes|no){no}
+    character(len=3)          :: keep_centring='no'   !< refine3D: keep the particles' centring state (shift-prior widths) the workflow before left at the run's first iteration instead of restarting it; prob_neigh_mode=geom always keeps it(yes|no){no}
     character(len=3)          :: lam_anneal='no'      !< anneal lambda parameter(yes|no){no}
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=STDLEN)     :: filt_mode='none'     !< filtering mode(none|uniform|fsc|nonuniform|nonuniform_lpset){none}
@@ -97,7 +98,7 @@ type :: parameters
     character(len=3)          :: norm='no'            !< do statistical normalisation avg(yes|no){no}
     character(len=3)          :: nu_envmsk='no'       !< derive an envelope mask from the nonuniform filter evidence margin(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
-    character(len=3)          :: regpass='yes'        !< refine3D_auto: one global registration pass at the FSC=regpass_fsc band before the neighbourhood iterations(yes|no){yes}
+    character(len=3)          :: regpass='yes'        !< refine3D_auto: one global registration pass at the FSC=regpass_fsc band before the neighbourhood iterations; the workflow sets no without an external vol1(yes|no){yes}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no' !< (yes|no){no}
     character(len=3)          :: pdb_bfac='no'        !< simulate_nanoparticle pdbfile=: the B column broadens the element kernels(yes|no){no}

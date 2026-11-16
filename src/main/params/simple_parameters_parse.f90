@@ -112,6 +112,7 @@ contains
         call reg%add_yesno('iterstats', self%iterstats)
         call reg%add_yesno('json', self%json)
         call reg%add_yesno('keepvol', self%keepvol)
+        call reg%add_yesno('keep_centring', self%keep_centring)
         call reg%add_char('keys', self%keys)
         call reg%add_yesno('lam_anneal', self%lam_anneal)
         call reg%add_yesno('loc_sdev', self%loc_sdev)

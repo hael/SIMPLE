@@ -170,6 +170,13 @@ contains
                 case DEFAULT
                     THROW_HARD('refine3D_auto supports pose_cont=no|yes')
             end select
+            if( .not. l_external_input )then
+                ! a native project: the stored poses and the centring the workflow before left (solve3D) are trusted,
+                ! so no global registration pass, the narrow shift prior of refine3D_local and the widths kept
+                if( .not. cline%defined('regpass')       ) call cline%set('regpass',       'no')
+                if( .not. cline%defined('shift_sigma')   ) call cline%set('shift_sigma',     3.)
+                if( .not. cline%defined('keep_centring') ) call cline%set('keep_centring', 'yes')
+            endif
         endif
 
         ! Set workflow defaults before the single typed parameter construction.
