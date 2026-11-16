@@ -31,7 +31,7 @@ contains
             &'Shortlist length (median)', 'Class averages vs the teacher''s, FRC 0.5 (A)', &
             &'Class averages vs the teacher''s, FRC 0.5 (A)', 'Cost per particle (ms)', 'Cost per particle (ms)', &
             &'same, with the particles perfectly centred (%)', 'Student prediction (predict_classes)', &
-            &'Reference: best class of the unseen (refine2D)', &
+            &'Reference: the physical posterior''s best class', &
             &'Student''s class = full search''s class (%)', 'Student''s class = full search''s class (%)', &
             &'Every list holds the full-search class (%)', 'In-plane angle error, same class (deg, median)', &
             &'Registered shift error, same class (A, median)', 'Centring error before registration (A, median)', &

@@ -30,7 +30,7 @@ public :: sample_bounded_dists, sample_power_dists
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras
-public :: prob_row_record, prob_row_file, PROB_ROW_FILE_VERSION
+public :: prob_row_record, prob_row_marginal, prob_row_file, PROB_ROW_FILE_VERSION
 public :: temperature_or_argmin, prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
 public :: cart_shift_prior_sigma2
 public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS, prob_state_readout
@@ -39,7 +39,7 @@ public :: merge_prob_readouts
 public :: PROB_READOUT_3D_DENSE, PROB_READOUT_3D_NEIGH, PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE
 public :: prob_insert_pose, prob_insert_table, prob_insert_poses, prob_insert_cone
 public :: prob_insert_inpl, inpl_quadrature, inpl_cone_window
-public :: prior_window_centre, inpl_view_weights, inpl_prior_penalty
+public :: prior_window_centre, inpl_view_weights, inpl_prior_penalty, marginal_dist
 public :: prob_inpl_counts, inpl_particle_counts, inpl_entry_pack, inpl_entry_rot, inpl_entry_count, inpl_reserved_bytes
 public :: screen_pool_size, SCREEN_QUANTILE
 public :: shift_needs_disk, disk_radius_px, shift_box_radius, next_shift_width, record_shift_state, start_shift_state
@@ -331,11 +331,30 @@ contains
     procedure :: kill => row_record_kill
 end type prob_row_record
 
-!> The teacher's rows file: a stream of row records, each followed by the whole row's losses (nrefs reals), after a
-!! header of the magic, the version, the record count and nrefs; written record by record as the fill produces
-!! them, read back in the same order
+!> A row's in-plane marginals (the students' teacher, the tables' get_row_marginal), the in-plane posterior insertion's
+!! own (inpl_quadrature at the physical temperature temp, at the shift the insertion would take the entry at): per
+!! reference ln of the sum of exp(-temp (d_r - dmin)) over the rotations, that row's minimum and the shift prior's
+!! term pen of its view weight (inpl_prior_penalty; 0 in 2D, whose insertion has no view weights), so that the view
+!! weight is exp(lnz - temp dmin - pen) (inpl_view_weights; the marginal's loss is marginal_dist(lnz - pen, dmin,
+!! temp)), and the in-plane posteriors over the table's rotation grid of the nin references of largest marginal mass,
+!! in descending mass
+type :: prob_row_marginal
+    integer :: nrefs = 0, nrots = 0, nin = 0
+    real    :: temp = 0.                 !< the physical temperature (posterior_temperature; 0 for the argmin)
+    real(dp), allocatable :: lnz(:)
+    real(dp), allocatable :: pen(:)
+    real,     allocatable :: dmin(:)
+    integer,  allocatable :: refs(:)    !< (nin) compact references
+    real,     allocatable :: rows(:,:)  !< (nrots, nin)
+contains
+    procedure :: kill => row_marginal_kill
+end type prob_row_marginal
+
+!> The teacher's rows file: a stream of row records, each followed by the whole row's losses (nrefs reals) and a flag
+!! whether its in-plane marginals follow (prob_row_marginal: lnz, dmin, the in-plane rows), after a header of the magic,
+!! the version, the record count and nrefs; written record by record as the fill produces them, read back in order
 integer(int64), parameter :: PROB_ROW_FILE_MAGIC   = 7245692431_int64
-integer(int64), parameter :: PROB_ROW_FILE_VERSION = 1_int64
+integer(int64), parameter :: PROB_ROW_FILE_VERSION = 2_int64
 type :: prob_row_file
     private
     integer :: funit    = -1
@@ -745,6 +764,19 @@ contains
         self%has_sh    = .false.
     end subroutine row_record_kill
 
+    subroutine row_marginal_kill( self )
+        class(prob_row_marginal), intent(inout) :: self
+        if( allocated(self%lnz)  ) deallocate(self%lnz)
+        if( allocated(self%pen)  ) deallocate(self%pen)
+        if( allocated(self%dmin) ) deallocate(self%dmin)
+        if( allocated(self%refs) ) deallocate(self%refs)
+        if( allocated(self%rows) ) deallocate(self%rows)
+        self%nrefs = 0
+        self%nrots = 0
+        self%nin   = 0
+        self%temp  = 0.
+    end subroutine row_marginal_kill
+
     !> a rows file opened for writing nrecs records of nrefs references; the header first
     subroutine row_file_open_write( self, fname, nrecs, nrefs )
         class(prob_row_file), intent(inout) :: self
@@ -783,11 +815,12 @@ contains
         self%l_write = .false.
     end subroutine row_file_open_read
 
-    !> one record and its whole row of losses appended
-    subroutine row_file_put( self, rec, dists )
-        class(prob_row_file),   intent(inout) :: self
-        type(prob_row_record),  intent(in)    :: rec
-        real,                   intent(in)    :: dists(:)
+    !> one record and its whole row of losses appended, with the row's in-plane marginals when given
+    subroutine row_file_put( self, rec, dists, marg )
+        class(prob_row_file),              intent(inout) :: self
+        type(prob_row_record),             intent(in)    :: rec
+        real,                              intent(in)    :: dists(:)
+        type(prob_row_marginal), optional, intent(in)    :: marg
         integer :: ihas
         if( .not. (self%l_open .and. self%l_write) ) THROW_HARD('the rows file is not open for writing; prob_row_file%put')
         if( self%ndone >= self%nrecs ) THROW_HARD('more records than the header counts; prob_row_file%put')
@@ -800,15 +833,25 @@ contains
             &rec%temp, rec%pmax, rec%neff, rec%wtail, rec%lmin, rec%x_mode, rec%y_mode
         if( rec%nkept > 0 ) write(self%funit) rec%inds(1:rec%nkept), rec%w(1:rec%nkept)
         write(self%funit) dists(1:self%nrefs)
+        if( present(marg) )then
+            if( marg%nrefs /= self%nrefs ) THROW_HARD('the marginals are of another row length; prob_row_file%put')
+            write(self%funit) 1, marg%nrots, marg%nin, marg%temp
+            write(self%funit) marg%lnz(1:marg%nrefs), marg%pen(1:marg%nrefs), marg%dmin(1:marg%nrefs)
+            if( marg%nin > 0 ) write(self%funit) marg%refs(1:marg%nin), marg%rows(1:marg%nrots,1:marg%nin)
+        else
+            write(self%funit) 0
+        endif
         self%ndone = self%ndone + 1
     end subroutine row_file_put
 
-    !> the next record and its row (dists of size at least nrefs)
-    subroutine row_file_get( self, rec, dists )
-        class(prob_row_file),   intent(inout) :: self
-        type(prob_row_record),  intent(inout) :: rec
-        real,                   intent(inout) :: dists(:)
-        integer :: ihas
+    !> the next record and its row (dists of size at least nrefs), and its in-plane marginals when it carries them
+    !! (marg%nrefs zero otherwise)
+    subroutine row_file_get( self, rec, dists, marg )
+        class(prob_row_file),    intent(inout) :: self
+        type(prob_row_record),   intent(inout) :: rec
+        real,                    intent(inout) :: dists(:)
+        type(prob_row_marginal), intent(inout) :: marg
+        integer :: ihas, imarg
         if( .not. (self%l_open .and. .not. self%l_write) ) THROW_HARD('the rows file is not open for reading; prob_row_file%get')
         if( self%ndone >= self%nrecs ) THROW_HARD('no record left; prob_row_file%get')
         if( size(dists) < self%nrefs ) THROW_HARD('the row buffer is shorter than nrefs; prob_row_file%get')
@@ -821,6 +864,16 @@ contains
             read(self%funit) rec%inds, rec%w
         endif
         read(self%funit) dists(1:self%nrefs)
+        call marg%kill
+        read(self%funit) imarg
+        if( imarg == 1 )then
+            marg%nrefs = self%nrefs
+            read(self%funit) marg%nrots, marg%nin, marg%temp
+            allocate(marg%lnz(marg%nrefs), marg%pen(marg%nrefs), marg%dmin(marg%nrefs), marg%refs(marg%nin),&
+                &marg%rows(marg%nrots,marg%nin))
+            read(self%funit) marg%lnz, marg%pen, marg%dmin
+            if( marg%nin > 0 ) read(self%funit) marg%refs, marg%rows
+        endif
         self%ndone = self%ndone + 1
     end subroutine row_file_get
 
@@ -1948,8 +2001,9 @@ contains
     !! exactly only when k divides the number of rotations (for a phase that is not a tie), otherwise with a
     !! residual on the harmonics of up to about m 2 pi / n. A row with its mass in one rotation gives one entry. No
     !! random number is drawn: the caller's keyed variate is v. neff is exp(entropy) of the row; nent = 0 when no
-    !! distance is valid; lnz (ln of the partition sum) and dmin (the minimum) give the row's in-plane marginal
-    subroutine inpl_quadrature( n, dists, temp, k, v, nent, inds, w, neff, lnz, dmin )
+    !! distance is valid; lnz (ln of the partition sum) and dmin (the minimum) give the row's in-plane marginal, post
+    !! the row's posterior p_r over the rotations (zero where no mass)
+    subroutine inpl_quadrature( n, dists, temp, k, v, nent, inds, w, neff, lnz, dmin, post )
         integer,            intent(in)  :: n, k
         real,               intent(in)  :: dists(n), temp
         real(dp),           intent(in)  :: v
@@ -1957,6 +2011,7 @@ contains
         real,               intent(out) :: w(k), neff
         real(dp), optional, intent(out) :: lnz
         real,     optional, intent(out) :: dmin
+        real,     optional, intent(out) :: post(n)
         real(dp) :: wsum, csum, tgt, arg, p, h
         real     :: dmin_row, invalid, wr(n)
         integer  :: cnt(k), r, j, imin, rlast
@@ -1967,6 +2022,7 @@ contains
         cnt  = 0
         if( present(lnz)  ) lnz  = 0.d0
         if( present(dmin) ) dmin = 0.
+        if( present(post) ) post = 0.
         invalid  = 0.1 * huge(invalid)
         imin     = 0
         dmin_row = huge(dmin_row)
@@ -2021,6 +2077,11 @@ contains
         w(1:nent) = real(cnt(1:nent)) / real(k)
         if( present(lnz)  ) lnz  = log(wsum)
         if( present(dmin) ) dmin = dmin_row
+        if( present(post) )then
+            do r = 1,n
+                if( wr(r) > 0. ) post(r) = real(real(wr(r),dp) / wsum)
+            enddo
+        endif
     end subroutine inpl_quadrature
 
     !> The in-plane row of a pose at rotation bin confined to the insertion cone (inpl_posterior=cone): rotations
@@ -2059,6 +2120,15 @@ contains
         if( .not. (sum(mk) > 0.d0) ) mk = lm
         m = real(mk / sum(mk))
     end subroutine inpl_view_weights
+
+    !> the loss whose tempered weight is a row entry's in-plane marginal: exp(-temp d) = exp(lnz - temp dmin); the
+    !! minimum itself without a temperature (the argmin's rule)
+    elemental real function marginal_dist( lnz, dmin, temp ) result( d )
+        real(dp), intent(in) :: lnz
+        real,     intent(in) :: dmin, temp
+        d = dmin
+        if( temp > 0. ) d = real(real(dmin,dp) - lnz / real(temp,dp))
+    end function marginal_dist
 
     !> A pose's shift-prior term P_k of its view weight, in log units, under the condition the insertion applies it: the
     !! polar shift map's prior on the increment du from the stored shift (l_map), or the window search's on du from

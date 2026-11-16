@@ -8,16 +8,18 @@ private
 public :: NSPACE_STUDENT, KMAX_STUDENT, KMAX_CLASS
 public :: STUDENT_KMAX_ROW, STUDENT_WIDTHS, STUDENT_WIDEST_MIN_ROWS, STUDENT_MAX_EPOCHS, STUDENT_PATIENCE_EPOCHS
 public :: CLASS_STUDENT_NDESIGNS
+public :: KMAX_INPL_ROW, CLASS_STUDENT_PROB_BETA
 public :: STUDENT_SHIFT_AUG_NSIG, STUDENT_SHIFT_SIGMA, STUDENT_TRS, CLASS_STUDENT_TEACHER_ITER
 public :: STUDENT_HOLDOUT_EVERY, STUDENT_CONF_FRACTION, STUDENT_CONF_NONE, STUDENT_NBOOT, STUDENT_DESIGN_QUANTILE
 public :: STUDENT_SMPD_TOL, STUDENT_MSKDIAM_TOL
 public :: STUDENT_SHIFT_REG_HALFWIDTH, STUDENT_SHIFT_REG_MAXITS
 public :: POSE_SHIFT_CHECK_NPTCLS, POSE_SHIFT_CHECK_MAGS, POSE_SHIFT_CHECK_NDIR, POSE_SHIFT_CHECK_NGROUPS
 public :: STUDENT_LP_VALIDATE, POSE_AGREE_DEG, POSE_TWO_STEPS_DEG
-public :: CLASS_DENSE_SHIFT_SIGMA, CLASS_DENSE_PROB_BETA, CLASS_MINPOP_FRC
+public :: CLASS_DENSE_SHIFT_SIGMA, CLASS_MINPOP_FRC
 public :: STUDENT_TRAIN_PROJ, STUDENT_ALL_PROJ, STUDENT_UNSEEN_PROJ
 public :: POSE_STUDENT_MODEL_FNAME, POSE_STUDENT_PRED_TABLE, VALIDATE_POSE_STUDENT_REPORT
-public :: CLASS_STUDENT_MODEL_FNAME, CLASS_STUDENT_PRED_TABLE, CLASS_STUDENT_CAVGS, VALIDATE_CLASS_STUDENT_REPORT
+public :: CLASS_STUDENT_MODEL_FNAME, CLASS_STUDENT_PRED_TABLE, CLASS_STUDENT_CAVGS, CLASS_REFERENCE_FNAME, CLASS_REFERENCE_CAVGS
+public :: VALIDATE_CLASS_STUDENT_REPORT
 public :: VALIDATE_CLASS_STUDENT_DETAILS
 
 ! ---- the students' classes and candidates
@@ -36,6 +38,10 @@ real,    parameter :: STUDENT_SHIFT_AUG_NSIG  = 3.    !< the augmentation's disk
 real,    parameter :: STUDENT_SHIFT_SIGMA     = 2.    !< the training's shift-prior width (A): the teacher's particles are centred (10 A taught the 2D student nothing)
 real,    parameter :: STUDENT_TRS             = 5.    !< the teacher's shift refinement box (pixels)
 integer, parameter :: CLASS_STUDENT_TEACHER_ITER = 1  !< the class averages prepared as a first iteration's: every class polarized, none re-centred
+
+! ---- the class student's physical teacher (doc/algorithms/class_student.md)
+integer, parameter :: KMAX_INPL_ROW           = 8     !< the teacher's classes of largest in-plane marginal whose in-plane posteriors are the rotation targets
+real,    parameter :: CLASS_STUDENT_PROB_BETA = 1.    !< the class teacher's tempering factor (and the validation reference's): the physical posterior
 
 ! ---- the held-out calibration and the design choice
 integer, parameter :: STUDENT_HOLDOUT_EVERY = 10      !< every tenth of the selected particles' micrographs (stacks) is held out, every tenth selected particle when they lie on fewer stacks
@@ -62,8 +68,7 @@ integer, parameter :: POSE_SHIFT_CHECK_NGROUPS = 1             !< the readout ma
 real,    parameter :: STUDENT_LP_VALIDATE     = 15.  !< the students' band in validation (A), the pose student's size-curve study's
 real,    parameter :: POSE_AGREE_DEG          = 6.   !< one step of the pose student's grid
 real,    parameter :: POSE_TWO_STEPS_DEG      = 12.  !< two steps of the pose student's grid
-real,    parameter :: CLASS_DENSE_SHIFT_SIGMA = 10.  !< the dense reference pass's prior (A): center_ptcls's, whose 3-sigma disk covers the picking error
-real,    parameter :: CLASS_DENSE_PROB_BETA   = 100. !< the dense pass draws at this factor: each row's mode, the teacher's class, as the held-out rows are judged
+real,    parameter :: CLASS_DENSE_SHIFT_SIGMA = 10.  !< the reference pass's prior (A): center_ptcls's, whose 3-sigma disk covers the picking error
 integer, parameter :: CLASS_MINPOP_FRC        = 10   !< a class's average is compared when both routes hold this many particles
 
 ! ---- file names
@@ -76,6 +81,8 @@ character(len=*), parameter :: VALIDATE_POSE_STUDENT_REPORT  = 'validate_pose_st
 character(len=*), parameter :: CLASS_STUDENT_MODEL_FNAME     = 'class_student.txt'
 character(len=*), parameter :: CLASS_STUDENT_PRED_TABLE      = 'class_student_pred.txt'
 character(len=*), parameter :: CLASS_STUDENT_CAVGS           = 'cavgs_student.mrc'
+character(len=*), parameter :: CLASS_REFERENCE_FNAME         = 'class_reference.txt'   !< the reference pass's base name (its audit)
+character(len=*), parameter :: CLASS_REFERENCE_CAVGS         = 'cavgs_reference.mrc'   !< the reference's class averages
 character(len=*), parameter :: VALIDATE_CLASS_STUDENT_REPORT = 'validate_class_student_report.txt'
 character(len=*), parameter :: VALIDATE_CLASS_STUDENT_DETAILS = 'validate_class_student_details.txt'
 

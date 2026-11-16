@@ -18,9 +18,10 @@ contains
     end subroutine run_all_polar_student_tests
 
     !> a core of the tiny geometry with random positive shell weights and random templates
-    subroutine make_core( core, seed )
+    subroutine make_core( core, seed, lse )
         type(polar_student), intent(inout) :: core
         integer(int64),      intent(in)    :: seed
+        logical, optional,   intent(in)    :: lse
         real(sp), allocatable :: wk(:,:), xtmpl(:,:,:,:)
         integer :: k, i
         allocate(wk(KFROMTO(1):KFROMTO(2),2))
@@ -28,7 +29,11 @@ contains
             wk(k,1) = 0.5 + ran3()
             wk(k,2) = 0.5 + ran3()
         enddo
-        call core%new(PFTSZ, KFROMTO, BOX, BOX, SMPD, MSKDIAM, LP, wk, .false., NCLASS, .true., WIDTH, seed)
+        if( present(lse) )then
+            call core%new(PFTSZ, KFROMTO, BOX, BOX, SMPD, MSKDIAM, LP, wk, .false., NCLASS, .true., WIDTH, seed, lse=lse)
+        else
+            call core%new(PFTSZ, KFROMTO, BOX, BOX, SMPD, MSKDIAM, LP, wk, .false., NCLASS, .true., WIDTH, seed, lse=.true.)
+        endif
         allocate(xtmpl(core%get_pftsz_net(), NK, 2, NCLASS))
         do i = 1,NCLASS
             call random_tensor(xtmpl(:,:,:,i))
@@ -106,10 +111,11 @@ contains
     end subroutine test_weights_helpers
 
     !> The core's model file: the owner's keys come back in order, the core's geometry and records travel, and a core
-    !! rebuilt from the header and loaded predicts bit for bit as the written one
+    !! rebuilt from the header and loaded predicts bit for bit as the written one; the log-sum-exp readout is recorded,
+    !! the maximum (the pose student's) writes no readout key, so its model files are the base's
     subroutine test_header_roundtrip()
-        type(polar_student)        :: core, back
-        type(polar_student_header) :: hdr
+        type(polar_student)        :: core, back, core_max
+        type(polar_student_header) :: hdr, hdr_max
         type(string)               :: cwd_saved, fixture_root
         real(sp), allocatable :: x(:,:,:)
         real(sp) :: ctf2(NK), p0(NCLASS), p1(NCLASS), t, cf, hs, hr
@@ -129,7 +135,12 @@ contains
         call assert_int(PFTSZ, hdr%pftsz, 'the calculator''s half ring travels')
         call assert_true(all(hdr%kfromto == KFROMTO), 'the band travels')
         call back%new(hdr%pftsz, hdr%kfromto, hdr%box, hdr%box_crop, hdr%smpd, hdr%mskdiam, hdr%lp, hdr%wk, &
-            &hdr%with_ctf, NCLASS, .true., hdr%width, hdr%seed)
+            &hdr%with_ctf, NCLASS, .true., hdr%width, hdr%seed, lse=.true.)
+        call assert_true(hdr%readout == 'lse', 'the readout travels')
+        call make_core(core_max, 20261127_int64, lse=.false.)
+        call core_max%write(string('model_max.txt'), 'test model', 7, ['first '], ['one  '])
+        call hdr_max%read(string('model_max.txt'))
+        call assert_true(len_trim(hdr_max%readout) == 0, 'the maximum readout records no readout key: its model files are the base''s')
         call back%load(hdr, string('model.txt'))
         call back%get_threshold(t, cf, hs, hr)
         call assert_true(transfer(t, 0) == transfer(0.9900049, 0), 'the threshold reads back bit for bit')
@@ -144,7 +155,9 @@ contains
         call assert_real(1., sum(p0), 1.e-4, 'the class posterior sums to one')
         call leave_fixture(cwd_saved, fixture_root, nfail0)
         call hdr%kill
+        call hdr_max%kill
         call core%kill
+        call core_max%kill
         call back%kill
         deallocate(x)
     end subroutine test_header_roundtrip

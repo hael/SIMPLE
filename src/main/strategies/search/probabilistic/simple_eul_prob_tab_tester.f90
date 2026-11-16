@@ -1,4 +1,4 @@
-!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table on the pipeline's batch, the weighted insertion (the top extras, the cone, the table), geom's cone prefilter, the n_eff and state readouts, the centring state at a run's first iteration
+!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table on the pipeline's batch, the weighted insertion (the top extras, the cone, the table), geom's cone prefilter, the n_eff and state readouts, the centring state at a run's first iteration, the students' teacher's in-plane marginal against a brute-force sum and the rows file
 ! The seed table holds the particle-frame seed every candidate of a particle was scored with; an assigned, unrefined
 ! candidate records it as it is, whatever its in-plane angle. A refined candidate keeps the shift of its search.
 ! The pipeline's batch assignment draws every particle's reference, state and direction together, from its tempered
@@ -17,15 +17,20 @@ use simple_eul_prob_tab_utils, only: record_seed_shift, cone_view_dist, cone_cel
     &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss, update_screen_best, start_shift_state, &
     &prob_readout, write_prob_readout, read_prob_readout, add_prob_readout, inpl_quadrature, inpl_view_weights, &
     &inpl_prior_penalty, inpl_entry_pack, inpl_entry_rot, inpl_entry_count, inpl_reserved_bytes, inpl_particle_counts, &
-    &prob_inpl_counts, PROB_READOUT_3D_DENSE, report_prob_readout, inpl_cone_window
-use simple_rnd,                only: seed_rnd_fixed, ran3, rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
+    &prob_inpl_counts, PROB_READOUT_3D_DENSE, report_prob_readout, inpl_cone_window, prob_row_marginal, prob_row_record, &
+    &prob_row_file, marginal_dist
+use simple_eul_prob_marginal,  only: eul_prob_marginal, inpl_insert_temp
+use simple_polarft_calc,       only: polarft_calc
+use simple_cmdline,            only: cmdline
+use simple_rnd,                only: seed_rnd_fixed, ran3, rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN, gasdev, &
+    &rnd_scope_key, RND_PROG_REFINE3D, RND_PASS_ALIGN
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_sym,                only: sym
 use simple_ori_utils,          only: euler_mirror
 use simple_oris,               only: oris
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
-!$ use omp_lib, only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
+!$ use omp_lib, only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads, omp_get_thread_num, omp_get_num_threads
 implicit none
 private
 public :: run_all_eul_prob_tab_tests
@@ -37,6 +42,9 @@ real,    parameter :: SEED(2) = [1.5, -0.5]
 integer, parameter :: NPTCLS_TAB = 150
 integer, parameter :: SEED_TAB   = 20261016   !< the distances and the particles' angular distances
 integer, parameter :: SEED_DRAW  = 20261017   !< the assignment's draws
+! the marginal's calculator: random references and particles
+integer, parameter :: MG_BOX = 48, MG_PFTSZ = 16, MG_NREFS = 6, MG_NPTCLS = 3, MG_KIN = 3, MG_KFROMTO(2) = [2, 10]
+real(sp), allocatable, target :: mg_sigma2(:,:)   !< the calculator keeps a reference to its sigma2: module lifetime
 
 contains
 
@@ -94,8 +102,330 @@ contains
         write(*,'(A)') 'test_neff_readout'
         call test_neff_readout()
         call test_neff_report()
+        write(*,'(A)') 'test_inpl_marginal'
+        call test_inpl_marginal()
+        write(*,'(A)') 'test_row_file_marginal'
+        call test_row_file_marginal()
         call fix_test_seed()
     end subroutine run_all_eul_prob_tab_tests
+
+    !> The students' teacher's in-plane marginal (simple_eul_prob_marginal) on a calculator of random references and
+    !! particles: an entry drawn through its route is gen_posterior_val's (and the bank kernel's), bit for bit, so the
+    !! fill's entries do not change; its row's log partition sum and minimum are the in-plane insertion's quadrature's
+    !! (inpl_quadrature at the insertion's physical temperature) bit for bit, and the brute-force sum's over every
+    !! rotation to the single precision of the quadrature's terms; an entry rescored at another shift takes that
+    !! shift's row; a row's heaviest references are those of largest lnz - T dmin - pen with the insertion's in-plane
+    !! posteriors at their shifts; marginal_dist's tempered weights are the view weights; the audit finds no difference
+    !! against the insertion's route at the entry's shift and finds the one at another shift; the entries at a team of
+    !! four are those at one thread, bit for bit
+    subroutine test_inpl_marginal()
+        real,    parameter :: TEMP = 0.8, S1(2) = [0.7, -0.4], S2(2) = [1.5, 0.9]
+        real(dp), parameter :: TOL_SP = 1.d-6 !< the quadrature's terms are single precision
+        class(parameters),   allocatable, target :: p
+        class(polarft_calc), allocatable :: calc
+        type(eul_prob_marginal) :: marg
+        type(prob_row_marginal) :: mrow
+        type(rnd_key)           :: scope
+        complex(sp), allocatable :: bank(:,:)
+        real,    allocatable :: row(:), post(:), lm(:), dist1(:,:), distn(:,:), drow(:), dmin_ins(:), wq(:)
+        real(dp),allocatable :: lnz1(:,:), lnzn(:,:), pens(:), lnz_ins(:)
+        integer, allocatable :: irot1(:,:), irotn(:,:), iref_of(:), iq(:)
+        real(dp) :: lnz_bf, lnz_q, dev(7), vdev(2)
+        real     :: dist, dist_ref, dmin_bf, dmin_q, ratio_d, ratio_m, tphys, neff
+        integer  :: iref, irot, irot_ref, nbad_draw, nbad_sum, nbad_bank, nbad_q, k, ir, nrots, nthr_prev, nteam
+        integer  :: order(MG_NREFS), nthr_glob_prev, nent
+        nthr_glob_prev = nthr_glob
+        allocate(p, calc)
+        call make_marginal_fixture(p, calc)
+        nrots = calc%get_nrots()
+        scope = rnd_scope_key(20261115_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 2)
+        call calc%set_rnd_scope(scope)
+        allocate(row(nrots), post(nrots), lm(MG_NREFS), iref_of(MG_NREFS), pens(MG_NREFS), drow(MG_NREFS))
+        allocate(lnz_ins(MG_NREFS), dmin_ins(MG_NREFS), wq(INPL_POSTERIOR_BUDGET), iq(INPL_POSTERIOR_BUDGET))
+        allocate(bank(MG_PFTSZ+1, MG_KFROMTO(2)-MG_KFROMTO(1)+1))
+        do iref = 1,MG_NREFS
+            iref_of(iref) = iref
+        enddo
+        ! the insertion's temperature: the physical one, not the draw's
+        tphys = inpl_insert_temp(calc, 1)
+        call assert_true(tphys > 0. .and. tphys < 0.5 * huge(1.) .and. abs(tphys - TEMP) > 1.e-3 * TEMP, &
+            &'the fixture''s particle has a physical temperature apart from the draw''s')
+        call marg%new(calc, MG_NREFS, MG_KIN, 1, MG_NPTCLS, 1)
+        ! the draw and the sum: the shifted-reference kernel and the bank
+        nbad_draw = 0
+        nbad_sum  = 0
+        nbad_bank = 0
+        nbad_q    = 0
+        call calc%memoize_shifted_ptcl(1, S1, bank)
+        do iref = 1,MG_NREFS
+            call marg%score_entry(calc, scope, iref, iref, 1, 1, S1, TEMP, 1, dist, irot)
+            call calc%gen_posterior_val(iref, 1, S1, TEMP, dist_ref, irot_ref)
+            if( transfer(dist,0) /= transfer(dist_ref,0) .or. irot /= irot_ref ) nbad_draw = nbad_draw + 1
+            call calc%gen_euclid_dists(iref, 1, S1, row)
+            call brute_force(row, tphys, lnz_bf, dmin_bf)
+            call inpl_quadrature(nrots, row, tphys, INPL_POSTERIOR_BUDGET, 0.5d0, nent, iq, wq, neff, lnz=lnz_q, dmin=dmin_q)
+            call marg%get_marginal(1, mrow)
+            if( abs(mrow%lnz(iref) - lnz_bf) > TOL_SP * max(1.d0, abs(lnz_bf)) .or. mrow%dmin(iref) /= dmin_bf ) nbad_sum = nbad_sum + 1
+            if( mrow%lnz(iref) /= lnz_q .or. mrow%dmin(iref) /= dmin_q ) nbad_q = nbad_q + 1
+            call marg%score_entry(calc, scope, iref, iref, 2, 1, S1, TEMP, 1, dist, irot, bank=bank)
+            call calc%gen_posterior_val_bank(iref, 1, bank, TEMP, dist_ref, irot_ref)
+            if( transfer(dist,0) /= transfer(dist_ref,0) .or. irot /= irot_ref ) nbad_draw = nbad_draw + 1
+            call calc%gen_euclid_dists_bank(iref, 1, bank, row)
+            call brute_force(row, tphys, lnz_bf, dmin_bf)
+            call marg%get_marginal(2, mrow)
+            if( abs(mrow%lnz(iref) - lnz_bf) > TOL_SP * max(1.d0, abs(lnz_bf)) .or. mrow%dmin(iref) /= dmin_bf ) nbad_bank = nbad_bank + 1
+        enddo
+        call assert_int(0, nbad_draw, 'an entry drawn through the marginal''s route is the fill''s (kernel and bank), bit for bit')
+        call assert_int(0, nbad_q,    'its row''s log partition sum and minimum are the insertion''s quadrature''s, bit for bit')
+        call assert_int(0, nbad_sum,  'and the brute-force sum''s over every rotation at the physical temperature')
+        call assert_int(0, nbad_bank, 'and on the bank''s row')
+        ! the bank's row (the particle shifted once, as the fill and the insertions above SHERRSQ) from here on: the
+        ! rescore at another shift takes that shift's row
+        call marg%rescore_entry(calc, 2, 2, 2, 1, S2, 1)
+        call calc%memoize_shifted_ptcl(1, S2, bank)
+        call calc%gen_euclid_dists_bank(2, 1, bank, row)
+        call brute_force(row, tphys, lnz_bf, dmin_bf)
+        call marg%get_marginal(2, mrow)
+        call assert_true(abs(mrow%lnz(2) - lnz_bf) <= TOL_SP * max(1.d0, abs(lnz_bf)) .and. mrow%dmin(2) == dmin_bf, &
+            &'an entry rescored at its refined shift takes that shift''s row')
+        ! the heaviest references, under the view weights' shift-prior terms, and their in-plane posteriors
+        do iref = 1,MG_NREFS
+            pens(iref) = 0.25d0 * real(mod(iref, 3), dp)
+        enddo
+        call marg%finish_row(calc, 2, 1, iref_of, pens, 1)
+        call marg%get_marginal(2, mrow)
+        call assert_true(all(mrow%pen == pens) .and. abs(mrow%temp - tphys) <= 1.e-6 * tphys, &
+            &'the row carries the shift-prior terms and its physical temperature')
+        do iref = 1,MG_NREFS
+            lm(iref) = real(mrow%lnz(iref) - real(tphys,dp) * real(mrow%dmin(iref),dp) - pens(iref))
+            order(iref) = iref
+        enddo
+        call hpsort(lm, order)
+        call assert_int(MG_KIN, mrow%nin, 'the row keeps its heaviest references'' in-plane rows')
+        call assert_true(all(mrow%refs(1:MG_KIN) == order(MG_NREFS:MG_NREFS-MG_KIN+1:-1)), 'those of largest lnz - T dmin - pen, in descending mass')
+        call assert_true(all(marginal_dist(mrow%lnz(mrow%refs(1:MG_KIN-1)) - pens(mrow%refs(1:MG_KIN-1)), &
+            &mrow%dmin(mrow%refs(1:MG_KIN-1)), tphys) <= marginal_dist(mrow%lnz(mrow%refs(2:MG_KIN)) - &
+            &pens(mrow%refs(2:MG_KIN)), mrow%dmin(mrow%refs(2:MG_KIN)), tphys)), 'in ascending marginal loss, as the row reads it')
+        nbad_sum = 0
+        nbad_q   = 0
+        do k = 1,mrow%nin
+            ir = mrow%refs(k)
+            if( ir == 2 )then
+                call calc%memoize_shifted_ptcl(1, S2, bank)
+            else
+                call calc%memoize_shifted_ptcl(1, S1, bank)
+            endif
+            call calc%gen_euclid_dists_bank(ir, 1, bank, row)
+            call brute_force(row, tphys, lnz_bf, dmin_bf, post)
+            if( maxval(abs(mrow%rows(:,k) - post)) > 1.e-6 ) nbad_sum = nbad_sum + 1
+            if( abs(sum(real(mrow%rows(:,k),dp)) - 1.d0) > 1.d-5 ) nbad_sum = nbad_sum + 1
+            call inpl_quadrature(nrots, row, tphys, INPL_POSTERIOR_BUDGET, 0.5d0, nent, iq, wq, neff, post=post)
+            if( any(mrow%rows(:,k) /= post) ) nbad_q = nbad_q + 1
+        enddo
+        call assert_int(0, nbad_sum, 'with the brute-force in-plane posteriors at their shifts, each summing to one')
+        call assert_int(0, nbad_q,   'which are the insertion''s quadrature''s, bit for bit')
+        ! marginal_dist: the tempered weights are the view weights exp(lnz - T dmin - pen)
+        ratio_d = exp(-tphys * (marginal_dist(mrow%lnz(1) - pens(1), mrow%dmin(1), tphys) - &
+            &marginal_dist(mrow%lnz(3) - pens(3), mrow%dmin(3), tphys)))
+        ratio_m = real(exp((mrow%lnz(1) - real(tphys,dp) * real(mrow%dmin(1),dp) - pens(1)) - &
+            &(mrow%lnz(3) - real(tphys,dp) * real(mrow%dmin(3),dp) - pens(3))))
+        call assert_true(abs(ratio_d - ratio_m) <= 1.e-4 * max(1., ratio_m), 'marginal_dist''s tempered weights are the view weights')
+        ! the audit: none at the entries' own shifts and terms, a difference at another shift and another term
+        nbad_q = 0
+        do iref = 1,MG_NREFS
+            if( iref == 2 )then
+                call marg%audit_entry(calc, iref, iref, 2, 1, S2, pens(iref), 1, dev, lnz_ins(iref), dmin_ins(iref))
+            else
+                call marg%audit_entry(calc, iref, iref, 2, 1, S1, pens(iref), 1, dev, lnz_ins(iref), dmin_ins(iref))
+            endif
+            if( any(dev(1:6) > 0.d0) ) nbad_q = nbad_q + 1
+            drow(iref) = marginal_dist(mrow%lnz(iref) - pens(iref), mrow%dmin(iref), tphys)
+        enddo
+        call assert_int(0, nbad_q, 'the audit finds the teacher''s terms equal to the insertion''s route''s')
+        call marg%audit_view_weights(2, lnz_ins, dmin_ins, pens, drow, vdev)
+        call assert_true(vdev(1) <= vdev(2), 'and its class marginals the insertion''s view weights within their rounding')
+        call marg%audit_entry(calc, 3, 3, 2, 1, S2, pens(3) + 0.5d0, 1, dev, lnz_ins(3), dmin_ins(3))
+        call assert_true(dev(1) > 0.d0 .and. dev(3) > 0.d0 .and. dev(5) > 0.d0, 'the audit finds another shift and another prior term')
+        drow(mrow%refs(1)) = drow(mrow%refs(1)) + 1. / tphys
+        call marg%audit_view_weights(2, lnz_ins, dmin_ins, pens, drow, vdev)
+        call assert_true(vdev(1) > vdev(2), 'and a class marginal off the view weights')
+        call marg%kill
+        ! the team: every particle's row at one thread and at four
+        nthr_prev = 1
+        !$ nthr_prev = omp_get_max_threads()
+        allocate(dist1(MG_NREFS,MG_NPTCLS), distn(MG_NREFS,MG_NPTCLS), lnz1(MG_NREFS,MG_NPTCLS), lnzn(MG_NREFS,MG_NPTCLS))
+        allocate(irot1(MG_NREFS,MG_NPTCLS), irotn(MG_NREFS,MG_NPTCLS))
+        !$ call omp_set_num_threads(1)
+        call score_all(dist1, irot1, lnz1, nteam)
+        !$ call omp_set_num_threads(4)
+        call score_all(distn, irotn, lnzn, nteam)
+        !$ call omp_set_num_threads(nthr_prev)
+        call assert_int(4, nteam, 'the identity check''s team of 4 formed: a serial run proves nothing')
+        call assert_true(all(transfer(dist1,0,size(dist1)) == transfer(distn,0,size(distn))) .and. all(irot1 == irotn) .and. &
+            &all(transfer(lnz1,0_int64,size(lnz1)) == transfer(lnzn,0_int64,size(lnzn))), &
+            &'the entries and their marginals at a team of four are those at one thread, bit for bit')
+        call mrow%kill
+        call calc%kill
+        deallocate(row, post, lm, iref_of, pens, drow, lnz_ins, dmin_ins, wq, iq, bank, dist1, distn, lnz1, lnzn, irot1, irotn,&
+            &calc, p)
+        nthr_glob = nthr_glob_prev
+
+    contains
+
+        !> ln sum_r exp(-t (d_r - d_min)) over every rotation in double, no term dropped, the minimum, the posterior
+        subroutine brute_force( r_here, t_here, lnz_here, dmin_here, p_here )
+            real,           intent(in)  :: r_here(:), t_here
+            real(dp),       intent(out) :: lnz_here
+            real,           intent(out) :: dmin_here
+            real, optional, intent(out) :: p_here(:)
+            real(dp) :: zz
+            integer  :: jj
+            dmin_here = minval(r_here)
+            zz = 0.d0
+            do jj = 1,size(r_here)
+                zz = zz + exp(-real(t_here,dp) * real(r_here(jj) - dmin_here,dp))
+            enddo
+            lnz_here = log(zz)
+            if( present(p_here) )then
+                do jj = 1,size(r_here)
+                    p_here(jj) = real(exp(-real(t_here,dp) * real(r_here(jj) - dmin_here,dp)) / zz)
+                enddo
+            endif
+        end subroutine brute_force
+
+        !> every particle's entries through the marginal's route on the team in use, its size returned
+        subroutine score_all( d_out, r_out, l_out, nteam_out )
+            real,     intent(out) :: d_out(:,:)
+            integer,  intent(out) :: r_out(:,:), nteam_out
+            real(dp), intent(out) :: l_out(:,:)
+            type(eul_prob_marginal) :: mg
+            type(prob_row_marginal) :: mr
+            integer :: ij, ii, jr, ithr_here, nthr_here
+            nthr_here = 1
+            !$ nthr_here = omp_get_max_threads()
+            call mg%new(calc, MG_NREFS, MG_KIN, 1, MG_NPTCLS, nthr_here)
+            nteam_out = 1
+            !$omp parallel default(shared) private(ij,ii,jr,ithr_here)
+            !$omp masked
+            !$ nteam_out = omp_get_num_threads()
+            !$omp end masked
+            !$omp do schedule(dynamic)
+            do ij = 1,MG_NREFS*MG_NPTCLS
+                ii = 1 + (ij - 1) / MG_NREFS
+                jr = 1 + mod(ij - 1, MG_NREFS)
+                ithr_here = 1
+                !$ ithr_here = omp_get_thread_num() + 1
+                call mg%score_entry(calc, scope, jr, jr, ii, ii, S1, TEMP, ithr_here, d_out(jr,ii), r_out(jr,ii))
+            enddo
+            !$omp end do
+            !$omp end parallel
+            do ii = 1,MG_NPTCLS
+                call mg%get_marginal(ii, mr)
+                l_out(:,ii) = mr%lnz
+            enddo
+            call mr%kill
+            call mg%kill
+        end subroutine score_all
+
+    end subroutine test_inpl_marginal
+
+    !> the calculator of the marginal's test: MG_NREFS random references (both halves) and MG_NPTCLS random particles,
+    !! no CTF, two unequal spectra as sigma2
+    subroutine make_marginal_fixture( p, calc )
+        class(parameters),   intent(inout) :: p
+        class(polarft_calc), intent(inout) :: calc
+        type(cmdline) :: cline
+        complex(sp), allocatable :: pft(:,:)
+        integer :: iref, iptcl, ieo, k, pp
+        call cline%set('box',     real(MG_BOX))
+        call cline%set('smpd',    1.0)
+        call cline%set('mskdiam', 40.)
+        call cline%set('pftsz',   real(MG_PFTSZ))
+        call cline%set('nptcls',  real(MG_NPTCLS))
+        call cline%set('nthr',    4.0)
+        call cline%set('ctf',     'no')
+        call cline%set('objfun',  'euclid')
+        call p%new(cline, silent=.true.)
+        call seed_rnd_fixed(20261115)
+        call calc%new(p, MG_NREFS, [1,MG_NPTCLS], MG_KFROMTO)
+        allocate(pft(MG_PFTSZ,MG_KFROMTO(1):MG_KFROMTO(2)))
+        do iref = 1,MG_NREFS
+            do ieo = 1,2
+                do k = MG_KFROMTO(1),MG_KFROMTO(2)
+                    do pp = 1,MG_PFTSZ
+                        pft(pp,k) = cmplx(gasdev(), gasdev())
+                    enddo
+                enddo
+                call calc%set_ref_pft(iref, pft, iseven=(ieo == 1))
+            enddo
+        enddo
+        do iptcl = 1,MG_NPTCLS
+            do k = MG_KFROMTO(1),MG_KFROMTO(2)
+                do pp = 1,MG_PFTSZ
+                    pft(pp,k) = cmplx(gasdev(), gasdev())
+                enddo
+            enddo
+            call calc%set_eo(iptcl, .true.)
+            call calc%set_ptcl_pft(iptcl, pft)
+        enddo
+        if( allocated(mg_sigma2) ) deallocate(mg_sigma2)
+        allocate(mg_sigma2(MG_KFROMTO(1):MG_KFROMTO(2),2))
+        do k = MG_KFROMTO(1),MG_KFROMTO(2)
+            mg_sigma2(k,1) = 20. + 2. * real(k)
+            mg_sigma2(k,2) = 20. + 2. * real(k)
+        enddo
+        call calc%assign_sigma2_noise(mg_sigma2)
+        call calc%memoize_refs
+        call calc%memoize_ptcls
+        call calc%memoize_sigma2_weights
+        deallocate(pft)
+        call cline%kill
+    end subroutine make_marginal_fixture
+
+    !> The rows file (version 2): a record with its in-plane marginals and one without, written and read back exactly
+    subroutine test_row_file_marginal()
+        type(prob_row_file)     :: rf
+        type(prob_row_record)   :: rec, back
+        type(prob_row_marginal) :: mrow, mback
+        type(string)            :: fname
+        real :: dists(5), dback(5)
+        fname = 'test_rows_marginal.bin'
+        rec%iptcl = 7
+        rec%nvalid = 5
+        rec%imin = 2
+        rec%nkept = 2
+        allocate(rec%inds(2), rec%w(2))
+        rec%inds = [2, 4]
+        rec%w    = [0.7, 0.2]
+        dists = [1., 0.5, 2., 0.9, 3.]
+        mrow%nrefs = 5
+        mrow%nrots = 4
+        mrow%nin   = 2
+        mrow%temp  = 2.5
+        allocate(mrow%lnz(5), source=[0.1d0, 0.2d0, 0.3d0, 0.4d0, 0.5d0])
+        allocate(mrow%pen(5), source=[0.d0, 0.5d0, 0.d0, 1.5d0, 0.25d0])
+        allocate(mrow%dmin(5), source=[1., 2., 3., 4., 5.])
+        allocate(mrow%refs(2), source=[2, 4])
+        allocate(mrow%rows(4,2), source=reshape([0.1, 0.2, 0.3, 0.4, 0.4, 0.3, 0.2, 0.1], [4,2]))
+        call rf%open_write(fname, 2, 5)
+        call rf%put(rec, dists, mrow)
+        call rf%put(rec, dists)
+        call rf%close
+        call rf%open_read(fname)
+        call rf%get(back, dback, mback)
+        call assert_true(back%iptcl == 7 .and. all(back%inds == [2,4]) .and. all(dback == dists), 'the record and its row read back')
+        call assert_true(mback%nrefs == 5 .and. mback%nrots == 4 .and. mback%nin == 2 .and. all(mback%lnz == mrow%lnz) .and. &
+            &all(mback%pen == mrow%pen) .and. mback%temp == mrow%temp .and. all(mback%dmin == mrow%dmin) .and. all(mback%refs == mrow%refs) .and. all(mback%rows == mrow%rows), &
+            &'its in-plane marginals read back exactly')
+        call rf%get(back, dback, mback)
+        call assert_int(0, mback%nrefs, 'a record without marginals reads back without them')
+        call rf%close
+        call del_file(fname)
+        call rec%kill
+        call back%kill
+        call mrow%kill
+        call mback%kill
+    end subroutine test_row_file_marginal
 
     subroutine test_screen_width_shortlist()
         integer, parameter :: N = 12, K = 3

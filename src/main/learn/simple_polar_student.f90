@@ -16,7 +16,7 @@ use simple_polar_feats,  only: polar_feats, polar_feat
 !$ use omp_lib,          only: omp_get_max_threads
 implicit none
 
-public :: polar_student, polar_student_header, student_train_profile, polar_student_targets
+public :: polar_student, polar_student_header, student_train_profile, polar_student_targets, teacher_rot_bin
 public :: run_all_polar_student_tests
 private
 #include "simple_local_flags.inc"
@@ -46,7 +46,7 @@ type :: polar_student_header
     real(sp) :: conf_threshold = 0., conf_fraction = 0., heldout_seeded = 0., heldout_recovered = 0.
     integer(int64) :: seed = 0_int64, selection_hash = 0_int64
     logical  :: with_ctf = .true.
-    character(len=:), allocatable :: weights_file, holdout_rule, teacher_project
+    character(len=:), allocatable :: weights_file, holdout_rule, teacher_project, readout
     real(sp),     allocatable :: wk(:,:)
     type(string), allocatable :: keys(:), vals(:)
   contains
@@ -62,6 +62,7 @@ type :: polar_student
     real(sp) :: lp = 0., smpd = 0., mskdiam = 0.
     logical  :: with_ctf = .true.
     logical  :: l_refl   = .true.               !< the classes score the reflected map too (the pose student's mirror pairs)
+    logical  :: l_lse    = .false.              !< the log-sum-exp readout: a class's logit is its in-plane marginal
     real(sp), allocatable :: wk(:,:)             !< (kfromto(1):kfromto(2), 2) the frozen shell weights per half
     type(polar_feats)        :: feats
     type(hhcnn), allocatable :: net
@@ -93,6 +94,8 @@ type :: polar_student
     procedure :: get_kfromto
     procedure :: get_nk
     procedure :: get_nclass
+    procedure :: get_nrot_targets
+    procedure :: get_lse
     procedure :: get_lp
     procedure :: get_box
     procedure :: get_box_crop
@@ -121,15 +124,16 @@ end interface
 contains
 
     !> A core for training: the calculator's geometry (half ring, band, box and crop), sampling, mask, low-pass, the
-    !! frozen shell weights wk, the CTF treatment, the classes, whether they score the reflected map, the network's
-    !! width and seed
-    subroutine new( self, pftsz, kfromto, box, box_crop, smpd, mskdiam, lp, wk, with_ctf, nclass, reflect, width, seed )
+    !! frozen shell weights wk, the CTF treatment, the classes, whether they score the reflected map, the network's width
+    !! and seed, and the readout the owner chooses (lse: the log-sum-exp over the rotations; the maximum without it)
+    subroutine new( self, pftsz, kfromto, box, box_crop, smpd, mskdiam, lp, wk, with_ctf, nclass, reflect, width, seed, lse )
         class(polar_student), intent(inout) :: self
         integer,              intent(in)    :: pftsz, kfromto(2), box, box_crop, nclass, width
         real(sp),             intent(in)    :: smpd, mskdiam, lp
         real(sp),             intent(in)    :: wk(kfromto(1):kfromto(2),2)
         logical,              intent(in)    :: with_ctf, reflect
         integer(int64),       intent(in)    :: seed
+        logical, optional,    intent(in)    :: lse
         call self%kill
         self%pftsz    = pftsz
         self%kfromto  = kfromto
@@ -142,6 +146,8 @@ contains
         self%with_ctf = with_ctf
         self%nclass   = nclass
         self%l_refl   = reflect
+        self%l_lse    = .false.
+        if( present(lse) ) self%l_lse = lse
         self%width    = width
         self%seed     = seed
         allocate(self%wk(kfromto(1):kfromto(2),2), source=wk)
@@ -150,7 +156,7 @@ contains
         self%pftsz_net = self%feats%get_pftsz()
         self%nrots     = 2 * self%pftsz_net
         allocate(self%net)
-        call self%net%new(self%pftsz_net, self%nk, nclass, width, seed, reflect)
+        call self%net%new(self%pftsz_net, self%nk, nclass, width, seed, reflect, self%l_lse)
         self%nweights = self%net%get_nweights()
         self%exists   = .true.
     end subroutine new
@@ -204,6 +210,22 @@ contains
         enddo
         if( z > 0.d0 ) t = real(real(t,dp) / z)
     end subroutine polar_student_targets
+
+    !> the readout's rotation (1..nrots of its grid) whose read-out pose is the teacher's in-plane rotation at angle
+    !! ang_t (e3 = 360 - ang_t, the search's convention), to the nearest rotation: the map's turn ang_t, or a mirror
+    !! pair's reflected member's 360 - ang_t - frame (the pose student's readout_e3 inverted)
+    pure integer function teacher_rot_bin( ang_t, frame, refl, nrots ) result( b )
+        real(sp), intent(in) :: ang_t, frame
+        logical,  intent(in) :: refl
+        integer,  intent(in) :: nrots
+        real(sp) :: ang
+        if( refl )then
+            ang = modulo(360. - ang_t - frame, 360.)
+        else
+            ang = modulo(ang_t, 360.)
+        endif
+        b = 1 + modulo(nint(ang * real(nrots) / 360.), nrots)
+    end function teacher_rot_bin
 
     !> two uniforms in (0,1) keyed on (seed, epoch, sample) through a Lehmer generator warmed over the key
     subroutine keyed_uniforms( seed, epoch, isample, u1, u2 )
@@ -261,17 +283,23 @@ contains
     end subroutine keyed_permutation
 
     !> The training on n rows' tensors and soft class targets, held(n) the early stopping's rows: every epoch shifts each
-    !! training row by a keyed draw in the disk of shift_aug_px; Adam on batches until the held-out loss has not
-    !! improved for patience epochs (at most max_epochs), the best epoch's weights kept
+    !! training row by a keyed draw in the disk of shift_aug_px; Adam on batches until the held-out loss (the class
+    !! cross-entropy) has not improved for patience epochs (at most max_epochs), the best epoch's weights kept. With
+    !! the log-sum-exp readout, rot_targets(get_nrot_targets, kq, n) the rows' rotation targets of the classes
+    !! rot_classes(kq, n) (0 for none) add their cross-entropy to the training loss
     subroutine train( self, n, x, ctf2, side, targets, held, prob_beta, shift_aug_px, max_epochs, patience, nthr, &
-        &log_unit )
+        &log_unit, rot_targets, rot_classes )
         class(polar_student), intent(inout) :: self
         integer,              intent(in)    :: n, max_epochs, patience, nthr, log_unit
         real(sp),             intent(in)    :: x(self%pftsz_net, self%nk, 2, n), ctf2(self%nk, n), side(n)
         real(sp),             intent(in)    :: targets(self%nclass, n), prob_beta, shift_aug_px
         logical,              intent(in)    :: held(n)
+        real(sp), optional,   intent(in)    :: rot_targets(:,:,:)
+        integer,  optional,   intent(in)    :: rot_classes(:,:)
         type(hhcnn), allocatable :: best
-        real(sp), allocatable :: xb(:,:,:,:), gb(:,:), sb(:), tb(:,:)
+        real(sp), allocatable :: xb(:,:,:,:), gb(:,:), sb(:), tb(:,:), tqb(:,:,:)
+        integer,  allocatable :: tcb(:,:)
+        logical :: l_rot
         integer,  allocatable :: train_inds(:), held_inds(:), perm(:)
         real(sp) :: loss, fm, loss_held, fm_held, best_loss
         real(dp) :: loss_sum, fm_sum
@@ -311,8 +339,14 @@ contains
         !$ nthr_here = omp_get_max_threads()
         call self%net%prepare_work(nthr_here)
         allocate(xb(self%pftsz_net, self%nk, 2, BATCH_MAX), gb(self%nk, BATCH_MAX), sb(BATCH_MAX), tb(self%nclass, BATCH_MAX))
+        l_rot = present(rot_targets)
+        if( l_rot )then
+            if( .not. present(rot_classes) ) THROW_HARD('rotation targets without their classes; polar_student%train')
+            allocate(tqb(size(rot_targets,1), size(rot_targets,2), BATCH_MAX), source=0.)
+            allocate(tcb(size(rot_classes,1), BATCH_MAX), source=0)
+        endif
         allocate(best)
-        call best%new(self%pftsz_net, self%nk, self%nclass, self%width, self%seed, self%l_refl)
+        call best%new(self%pftsz_net, self%nk, self%nclass, self%width, self%seed, self%l_refl, self%l_lse)
         best_loss  = huge(best_loss)
         since_best = 0
         bsz        = min(BATCH_MAX, max(BATCH_MIN, ntr / BATCH_FRAC))
@@ -332,7 +366,11 @@ contains
                 ta = tic()
                 call assemble_batch(nbatch, train_inds(perm(i0:i1)), epoch)
                 self%rt_assemble = self%rt_assemble + real(toc(ta),dp)
-                call self%net%train_batch(nbatch, xb, gb, sb, tb, LEARNING_RATE, WEIGHT_DECAY, loss, fm)
+                if( l_rot )then
+                    call self%net%train_batch(nbatch, xb, gb, sb, tb, LEARNING_RATE, WEIGHT_DECAY, loss, fm, tqb, tcb)
+                else
+                    call self%net%train_batch(nbatch, xb, gb, sb, tb, LEARNING_RATE, WEIGHT_DECAY, loss, fm)
+                endif
                 loss_sum = loss_sum + real(loss,dp) * real(nbatch,dp)
                 fm_sum   = fm_sum   + real(fm,dp)   * real(nbatch,dp)
             enddo
@@ -361,6 +399,7 @@ contains
         self%time_train_s = real(toc(t0))
         call best%kill
         deallocate(best, xb, gb, sb, tb, train_inds, held_inds, perm)
+        if( allocated(tqb) ) deallocate(tqb, tcb)
 
     contains
 
@@ -381,6 +420,10 @@ contains
                 gb(:,ii) = ctf2(:,isample)
                 sb(ii)   = (side(isample) - self%side_mean) / self%side_sd
                 tb(1:self%nclass,ii) = targets(:,isample)
+                if( l_rot )then
+                    tqb(:,:,ii) = rot_targets(:,:,isample)
+                    tcb(:,ii)   = rot_classes(:,isample)
+                endif
             enddo
             !$omp end parallel do
         end subroutine assemble_batch
@@ -492,6 +535,7 @@ contains
         write(funit,'(A,F10.3)')  'mskdiam=', self%mskdiam
         write(funit,'(A,L1)')     'with_ctf=', self%with_ctf
         write(funit,'(A,I0)')     'width=', self%width
+        if( self%l_lse ) write(funit,'(A)') 'readout=lse'
         write(funit,'(A,I0)')     'nweights=', self%nweights
         write(funit,'(A,I0)')     'seed=', self%seed
         write(funit,'(A,F8.4)')   'prob_beta=', self%prob_beta
@@ -619,6 +663,7 @@ contains
         self%weights_file = ''
         self%holdout_rule = ''
         self%teacher_project = ''
+        self%readout = ''
         allocate(self%keys(MAX_EXTRA), self%vals(MAX_EXTRA))
         l_wk_even = .false.
         l_wk_odd  = .false.
@@ -669,6 +714,7 @@ contains
                         case('heldout_seeded'); read(val,*) self%heldout_seeded
                         case('heldout_recovered'); read(val,*) self%heldout_recovered
                         case('teacher_project'); self%teacher_project = val
+                        case('readout');        self%readout = val
                         case('teacher_selection_hash'); read(val,*) self%selection_hash
                         case('wk_even', 'wk_odd')
                         case default
@@ -706,6 +752,7 @@ contains
         if( allocated(self%weights_file)    ) deallocate(self%weights_file)
         if( allocated(self%holdout_rule)    ) deallocate(self%holdout_rule)
         if( allocated(self%teacher_project) ) deallocate(self%teacher_project)
+        if( allocated(self%readout)         ) deallocate(self%readout)
         self%nextra  = 0
         self%version = -1
     end subroutine header_kill
@@ -719,6 +766,7 @@ contains
         character(len=:), allocatable :: msg
         type(string) :: wfile
         if( .not. self%exists ) THROW_HARD('student not constructed; polar_student%load')
+        if( (hdr%readout == 'lse') .neqv. self%l_lse ) THROW_HARD('the model was trained with another readout; polar_student%load')
         call header_weights_path(fname, hdr%weights_file, wfile, msg)
         if( len(msg) > 0 ) THROW_HARD(msg)
         call self%net%read_weights(wfile)
@@ -774,6 +822,17 @@ contains
         class(polar_student), intent(in) :: self
         get_nclass = self%nclass
     end function get_nclass
+
+    !> the length of a class's rotation targets: the network's rotations, then the reflection's where it has them
+    pure integer function get_nrot_targets( self )
+        class(polar_student), intent(in) :: self
+        get_nrot_targets = merge(2, 1, self%l_refl) * self%nrots
+    end function get_nrot_targets
+
+    pure logical function get_lse( self )
+        class(polar_student), intent(in) :: self
+        get_lse = self%l_lse
+    end function get_lse
 
     pure real(sp) function get_lp( self )
         class(polar_student), intent(in) :: self

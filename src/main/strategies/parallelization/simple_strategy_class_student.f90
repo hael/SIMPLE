@@ -12,7 +12,7 @@ use simple_image,                   only: image
 use simple_eo_partition,            only: ensure_field_halves
 use simple_classaverager,           only: cavger_new, cavger_read_all, cavger_kill
 use simple_eul_prob_tab2D,          only: eul_prob_tab2D
-use simple_eul_prob_tab_utils,      only: prob_row_record, prob_row_file
+use simple_eul_prob_tab_utils,      only: prob_row_record, prob_row_file, prob_row_marginal
 use simple_matcher_ptcl_batch,      only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D, check_pass_team
 use simple_matcher_ptcl_io,         only: ptcl_read_session
 use simple_matcher_pftc_prep,       only: prep_pftc4align2D
@@ -22,18 +22,20 @@ use simple_qsys_funs,               only: qsys_declare_part_finished
 use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad
 use simple_polar_feats,             only: polar_feats, polar_feat, polar_feats_hash_ints
 use simple_class_student,           only: class_student, class_pred
-use simple_strategy_student_common, only: student_holdout_split, student_conf_threshold, student_geometry_mismatch, &
+use simple_polar_student,           only: polar_student_targets
+use simple_strategy_student_common, only: report_teacher_audit, report_mapping_audit, report_class_mass_audit, student_holdout_split, student_conf_threshold, student_geometry_mismatch, &
     &file_hash, choose_student_design, fname_base, student_part_pinds, student_predict_parts, student_sigma2_for_pass
 use simple_defs_hhcnn,              only: KMAX_CLASS, STUDENT_CONF_FRACTION, STUDENT_KMAX_ROW, STUDENT_WIDTHS, &
     &STUDENT_WIDEST_MIN_ROWS, STUDENT_MAX_EPOCHS, STUDENT_PATIENCE_EPOCHS, STUDENT_SHIFT_AUG_NSIG, &
-    &STUDENT_SHIFT_REG_HALFWIDTH, STUDENT_SHIFT_REG_MAXITS, CLASS_STUDENT_TEACHER_ITER, CLASS_STUDENT_NDESIGNS
+    &STUDENT_SHIFT_REG_HALFWIDTH, STUDENT_SHIFT_REG_MAXITS, CLASS_STUDENT_TEACHER_ITER, CLASS_STUDENT_NDESIGNS, &
+    &KMAX_INPL_ROW
 use simple_rnd,                     only: rnd_run_seed
 use simple_type_defs,               only: OBJFUN_EUCLID, PTCL2D_SEG
 use simple_binoris_io,              only: binwrite_oritab
 use simple_class_candidates,        only: class_candidates
 implicit none
 
-public :: run_learn_class_student, learn_class_student_exec, run_predict_classes, predict_classes_exec
+public :: run_learn_class_student, learn_class_student_exec, run_class_posterior_mode, run_predict_classes, predict_classes_exec
 private
 #include "simple_local_flags.inc"
 
@@ -54,13 +56,31 @@ contains
         call simple_end('**** SIMPLE_LEARN_CLASS_STUDENT NORMAL STOP ****', print_simple=.false.)
     end subroutine run_learn_class_student
 
+    !> The physical posterior's best class of the project's selected particles against the class averages refs, as the
+    !! hard assignment at the end of a solve2D run takes it (validate_class_student's reference): the dense
+    !! table filled as learn_class_student fills it at the caller's prob_beta (1: the physical posterior), each
+    !! particle's class of largest in-plane marginal mass exp(lnz - T dmin), its in-plane mode and its refined shift
+    !! written as refine2D writes a pose. Project: writes the particle field; no student is trained
+    subroutine run_class_posterior_mode( cline )
+        class(cmdline), intent(inout) :: cline
+        type(parameters), target :: params
+        type(builder)            :: build
+        call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
+        call learn_class_student_exec(params, build, cline, mode=.true.)
+        call build%kill_strategy2D_tbox
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_CLASS_POSTERIOR_MODE NORMAL STOP ****', print_simple=.false.)
+    end subroutine run_class_posterior_mode
+
     !> The dense 2D table's rows of the selected particles against the class averages refs at the band lp (refine2D's
     !! preparation and fill), written beside fname, and the student trained on them and written as fname. Project:
-    !! reads the particle field; writes what refine2D's setup writes (the halves, the sigma2 bootstrap)
-    subroutine learn_class_student_exec( params, build, cline )
+    !! reads the particle field; writes what refine2D's setup writes (the halves, the sigma2 bootstrap). With mode, the
+    !! physical posterior's best class of every particle written to the particle field instead (run_class_posterior_mode)
+    subroutine learn_class_student_exec( params, build, cline, mode )
         type(parameters), target, intent(inout) :: params
         type(builder),    target, intent(inout) :: build
         class(cmdline),           intent(inout) :: cline
+        logical, optional,        intent(in)    :: mode
         type(eul_prob_tab2D)     :: tab
         type(ptcl_read_session)  :: reads
         type(image), allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_imgs(:)
@@ -68,6 +88,7 @@ contains
         type(polar_feat)         :: feat
         type(prob_row_file)      :: rows
         type(prob_row_record)    :: rec
+        type(prob_row_marginal)  :: marg
         type(class_student)      :: student, reread
         type(class_pred)         :: pred
         type(string)             :: base, fname_rows, fname_stats, fname_header, projpath
@@ -78,6 +99,14 @@ contains
         logical, allocatable     :: held(:), recov(:,:)
         integer, allocatable     :: pinds(:), batches(:,:), mode_all(:), held_inds(:), group_held(:), group_of(:), stkinds(:)
         integer, allocatable     :: k99_held(:), ncand_held(:), mode_held_s(:), states(:)
+        integer, allocatable     :: inpl_cls(:,:)     !< the rotation loss: each row's KMAX_INPL_ROW heaviest classes
+        real,    allocatable     :: inpl_rows(:,:,:)  !< and their in-plane posteriors on the teacher's rotation grid
+        real,    allocatable     :: rot_t(:)          !< the teacher's rotation grid's angles (the mapping's audit)
+        real(dp)                 :: audit_rep(10), mass_rep(4)
+        real                     :: map_err(3)
+        integer                  :: nmap
+        logical                  :: l_mapped
+        type(string)             :: fname_audit
         integer(int64)           :: cavgs_hash
         integer(timer_int_kind)  :: t0, t_all
         real(timer_int_kind)     :: rt_prep, rt_batch, rt_fill, rt_rows, rt_train, rt_all
@@ -89,9 +118,12 @@ contains
         integer  :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, nk, nheld, j, icls, ntry
         integer  :: stat_unit, head_unit, io_stat, nthr_here, iw_best, ntried, nsel, ncls
         integer  :: nptcls_train, nheldout, epochs_run, best_epoch, nweights
-        logical  :: l_rebuilt, l_by_stack
+        logical  :: l_rebuilt, l_by_stack, l_mode
         character(len=:), allocatable :: msg
         t_all = tic()
+        l_mode = .false.
+        if( present(mode) ) l_mode = mode
+        mass_rep = 0.d0
         call check_pass_team('learn_class_student')
         ! the contract
         if( params%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('the teacher is the Euclidean posterior: objfun=euclid; learn_class_student')
@@ -104,6 +136,8 @@ contains
         fname_rows   = base%to_char()//'_rows.bin'
         fname_stats  = base%to_char()//'_rows.txt'
         fname_header = base%to_char()//'_rows_header.txt'
+        fname_audit  = base%to_char()//'_teacher_audit.txt'
+        l_mapped     = .false.
         ! the selected particles and the held-out micrographs
         call build%spproj_field%get_pinds(1, 'state', pinds)
         if( .not. allocated(pinds) ) THROW_HARD('no selected particle; learn_class_student')
@@ -163,8 +197,23 @@ contains
         cavgs_hash = file_hash(params%refs)
         ! the table of the pass: the iteration's model from the complete field, the assignment opened
         call tab%new_pipeline(params, build, pinds)
+        ! the physical teacher: the in-plane marginal at the physical temperature, as solve2D's insertion weighs a row,
+        ! and the in-plane posteriors of each row's heaviest classes as the rotation targets
+        call tab%set_inpl_marginal(KMAX_INPL_ROW)
+        if( .not. l_mode )then
+            allocate(inpl_cls(KMAX_INPL_ROW, nptcls), source=0)
+            allocate(inpl_rows(build%pftc%get_nrots(), KMAX_INPL_ROW, nptcls), source=0.)
+            allocate(rot_t(build%pftc%get_nrots()))
+            do j = 1,size(rot_t)
+                rot_t(j) = build%pftc%get_rot(j)
+            enddo
+        endif
         call tab%set_model_from_field
         call tab%open_assignment
+        if( l_mode )then
+            call write_physical_modes
+            return
+        endif
         call rows%open_write(fname_rows, nptcls, ncls)
         call fopen(stat_unit, fname_stats, status='replace', action='write', iostat=io_stat)
         call fileiochk('learn_class_student; open '//fname_stats%to_char(), io_stat)
@@ -195,10 +244,21 @@ contains
             rt_fill = rt_fill + toc(t0)
             t0 = tic()
             call tab%keep_batch_rows(b0, b1)
+            if( ibatch == 1 )then
+                ! the first batch's rows weighed again by the in-plane insertion's route
+                call tab%audit_inpl_marginal(b0, b1, audit_rep)
+                call report_teacher_audit('learn_class_student', fname_audit%to_char(), audit_rep)
+            endif
             do i = b0,b1
                 iptcl = pinds(i)
                 call tab%get_posterior_row(i, params%prob_beta, STUDENT_KMAX_ROW, rec, dists)
-                call rows%put(rec, dists)
+                call tab%get_row_marginal(i, marg)
+                call rows%put(rec, dists, marg)
+                if( ibatch == 1 ) call audit_class_masses
+                do j = 1,marg%nin
+                    inpl_cls(j,i)    = marg%refs(j)
+                    inpl_rows(:,j,i) = marg%rows(:,j)
+                enddo
                 call feats%build(build%pftc, iptcl, feat)
                 x_all(:,:,:,i) = feat%x
                 ctf2_all(:,i)  = feat%ctf2
@@ -214,6 +274,8 @@ contains
                     &e3_all(i), rec%x_mode, rec%y_mode, build%spproj_field%get_class(iptcl), feat%wsq, feat%logpow
             enddo
             rt_rows = rt_rows + toc(t0)
+            if( ibatch == 1 ) call report_class_mass_audit('learn_class_student', &
+                &fname_audit%to_char(), mass_rep)
             call tab%assign_batch(b0, b1)
         enddo
         call tab%close_assignment
@@ -222,6 +284,7 @@ contains
         call reads%kill
         call feat%kill
         call rec%kill
+        call marg%kill
         call clean_batch_particles2D(build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
         call tab%kill
         call build%pftc%kill
@@ -280,14 +343,130 @@ contains
         call feats%kill
         deallocate(dists, pinds, batches, wk, x_all, ctf2_all, side_all, dists_all, temps_all, e3_all, held, mode_all, &
             &group_of, xcavgs, states, held_inds, group_held, conf_held, e3_held, k99_held, ncand_held, mode_held_s, recov, prob)
+        deallocate(inpl_cls, inpl_rows, rot_t)
 
     contains
+
+        !> the class distribution the student trains on (polar_student_targets of the row at its temperature) against
+        !! the physical posterior over the classes, exp(lnz - T dmin) normalised at the physical T, for row
+        !! i: mass_rep(1) the rows, (2) those read at another temperature than T, (3) the largest difference of a class's
+        !! mass, (4) its largest ratio to the rounding bound of the single-precision losses
+        subroutine audit_class_masses
+            real(dp) :: lm(ncls), m(ncls), bound, tphys
+            real     :: t(ncls), dmax
+            integer  :: k
+            mass_rep(1) = mass_rep(1) + 1.d0
+            if( rec%temp /= marg%temp ) mass_rep(2) = mass_rep(2) + 1.d0
+            call polar_student_targets(ncls, dists(1:ncls), rec%temp, t)
+            if( .not. (marg%temp > 0.) ) return
+            tphys = real(marg%temp, dp)
+            lm    = -huge(1.d0)
+            dmax  = 0.
+            do k = 1,ncls
+                if( marg%dmin(k) < 0.1 * huge(1.) )then
+                    lm(k) = marg%lnz(k) - tphys * real(marg%dmin(k),dp) - marg%pen(k)
+                    dmax  = max(dmax, abs(dists(k)))
+                endif
+            enddo
+            m = 0.d0
+            where( lm > -huge(1.d0) ) m = exp(lm - maxval(lm))
+            m = m / sum(m)
+            ! each loss carries a rounding of half its spacing: a mass moves by at most T times twice that
+            bound       = 2.d0 * tphys * real(spacing(dmax),dp) + 1.d-6
+            mass_rep(3) = max(mass_rep(3), maxval(abs(real(t,dp) - m)))
+            mass_rep(4) = max(mass_rep(4), maxval(abs(real(t,dp) - m)) / bound)
+        end subroutine audit_class_masses
+
+        !> the mode's pass: every batch filled, each particle's class of largest in-plane marginal mass (the row read
+        !! at the physical temperature: its argmin is the marginal's mode) at its in-plane mode and shift, as refine2D's
+        !! assignment writes a pose (the stored shift plus the refined increment, e3 = 360 - rot), the first batch
+        !! audited against the insertion's route; the particle field written once
+        subroutine write_physical_modes
+            real(dp) :: lm_k, lm_best, lm_mode, d_mode, tol
+            real     :: sh_prev(2)
+            integer  :: k, kbest, nwritten, noff, ntie
+            nwritten = 0
+            noff     = 0
+            ntie     = 0
+            fname_audit = base%to_char()//'_reference_audit.txt'
+            call reads%new(params)
+            call reads%expect(pinds)
+            do ibatch = 1,nbatches
+                b0      = batches(ibatch,1)
+                b1      = batches(ibatch,2)
+                batchsz = b1 - b0 + 1
+                call build_batch_particles2D(params, build, batchsz, pinds(b0:b1), reads, ptcl_match_imgs=ptcl_match_imgs, &
+                    &ptcl_match_imgs_pad=ptcl_match_imgs_pad)
+                call tab%fill_tab_range(b0, b1)
+                call tab%keep_batch_rows(b0, b1)
+                if( ibatch == 1 )then
+                    call tab%audit_inpl_marginal(b0, b1, audit_rep)
+                    call report_teacher_audit('class_posterior_mode', fname_audit%to_char(), audit_rep)
+                endif
+                do i = b0,b1
+                    iptcl = pinds(i)
+                    call tab%get_posterior_row(i, params%prob_beta, 1, rec)
+                    if( rec%imin < 1 .or. rec%inpl_mode < 1 ) cycle
+                    ! the class written is the row's largest physical marginal mass, lnz - T dmin (no pen in 2D), to the
+                    ! rounding of the single-precision losses the row is read from (a near-tie may come out either way)
+                    call tab%get_row_marginal(i, marg)
+                    kbest   = 0
+                    lm_best = -huge(1.d0)
+                    do k = 1,ncls
+                        if( .not. (marg%dmin(k) < 0.1 * huge(1.)) ) cycle
+                        lm_k = -real(marg%dmin(k),dp)  ! a particle without a temperature is read at its argmin
+                        if( marg%temp > 0. ) lm_k = marg%lnz(k) - real(marg%temp,dp) * real(marg%dmin(k),dp) - marg%pen(k)
+                        if( lm_k > lm_best )then
+                            lm_best = lm_k
+                            kbest   = k
+                        endif
+                    enddo
+                    if( kbest /= rec%imin )then
+                        lm_mode = -real(marg%dmin(rec%imin),dp)
+                        tol     = 1.d-9
+                        if( marg%temp > 0. )then
+                            lm_mode = marg%lnz(rec%imin) - real(marg%temp,dp) * real(marg%dmin(rec%imin),dp) - marg%pen(rec%imin)
+                            d_mode  = real(marg%dmin(rec%imin),dp) - (marg%lnz(rec%imin) - marg%pen(rec%imin)) / real(marg%temp,dp)
+                            tol     = 2.d0 * real(marg%temp,dp) * real(spacing(real(abs(d_mode))),dp) + 1.d-9
+                        endif
+                        if( lm_best - lm_mode > tol )then
+                            noff = noff + 1
+                        else
+                            ntie = ntie + 1
+                        endif
+                    endif
+                    nwritten = nwritten + 1
+                    sh_prev = build%spproj_field%get_2Dshift(iptcl)
+                    call build%spproj_field%set(iptcl, 'class', real(rec%imin))
+                    call build%spproj_field%set(iptcl, 'inpl',  real(rec%inpl_mode))
+                    call build%spproj_field%e3set(iptcl, 360. - build%pftc%get_rot(rec%inpl_mode))
+                    call build%spproj_field%set_shift(iptcl, sh_prev + [rec%x_mode, rec%y_mode])
+                enddo
+                call tab%assign_batch(b0, b1)
+            enddo
+            call tab%close_assignment
+            if( noff > 0 ) THROW_HARD('a written class is not the physical posterior''s largest marginal mass; class_posterior_mode')
+            call reads%kill
+            call rec%kill
+            call marg%kill
+            call clean_batch_particles2D(build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
+            call tab%kill
+            call build%pftc%kill
+            call build%esig%kill
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+            call feats%kill
+            if( allocated(xcavgs) ) deallocate(xcavgs)
+            write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> CLASS POSTERIOR MODE: ', nwritten, ' of ', nptcls, &
+                &' particles at their physical posterior''s best class (each checked against its row''s marginals; ', ntie, &
+                &' near-ties within the losses'' rounding)'
+        end subroutine write_physical_modes
 
         !> design iw (choose_student_design's trial): built with the class averages as its templates, trained on the
         !! rows, and judged on the held-out rows, recov_iw the particles it recovers
         subroutine try_design( iw_here, recov_iw )
             integer, intent(in)    :: iw_here
             logical, intent(inout) :: recov_iw(:)
+            integer :: jmap
             call student%new(feats%get_pftsz_in(), params%kfromto, params%box, params%box_crop, params%smpd, &
                 &params%mskdiam, params%lp, wk, trim(params%ctf) /= 'no', ncls, states, STUDENT_WIDTHS(iw_here), rnd_run_seed())
             call student%init_readout(xcavgs)
@@ -298,8 +477,19 @@ contains
             endif
             write(logfhandle,'(A,I0,A,I0,A,I0,A,F6.2,A)') '>>> CLASS STUDENT TRAINING: width ', STUDENT_WIDTHS(iw_here), ', ', &
                 &nptcls - nheld, ' rows, ', nheld, ' held out, shifts augmented within ', shift_aug, ' px'
+            if( .not. l_mapped )then
+                ! the rotation targets' mapping on every row
+                map_err = 0.
+                nmap    = 0
+                do jmap = 1,nptcls
+                    call student%mapping_error(inpl_cls(:,jmap), inpl_rows(:,:,jmap), rot_t, map_err, nmap)
+                enddo
+                call report_mapping_audit('learn_class_student', fname_audit%to_char(), nmap, 0, map_err)
+                l_mapped = .true.
+            endif
             call student%train(nptcls, x_all, ctf2_all, side_all, dists_all, temps_all, held, params%prob_beta, &
-                &shift_aug, STUDENT_MAX_EPOCHS, STUDENT_PATIENCE_EPOCHS, params%nthr, logfhandle)
+                &shift_aug, STUDENT_MAX_EPOCHS, STUDENT_PATIENCE_EPOCHS, params%nthr, logfhandle, inpl_cls=inpl_cls, &
+                &inpl_rows=inpl_rows)
             call student%get_record(nptcls_train, nheldout, epochs_run, best_epoch, loss_train, loss_held, mode_held, &
                 &time_train_s, nweights)
             rt_cand(iw_here)    = time_train_s
@@ -411,7 +601,8 @@ contains
             call fopen(head_unit, fname_header, status='replace', action='write', iostat=io_stat)
             call fileiochk('learn_class_student; open '//fname_header%to_char(), io_stat)
             write(head_unit,'(A)')        '# class student teacher rows'
-            write(head_unit,'(A)')        'rows_version=1'
+            write(head_unit,'(A)')        'rows_version=2'
+            write(head_unit,'(A,I0)')     'kmax_inpl_row=', KMAX_INPL_ROW
             write(head_unit,'(A,A)')      'projfile=', projpath%to_char()
             write(head_unit,'(A,I0)')     'project_rows=', build%spproj_field%get_noris()
             write(head_unit,'(A,I0)')     'nptcls=', nptcls

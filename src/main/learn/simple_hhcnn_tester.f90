@@ -1,4 +1,4 @@
-!@descr: unit tests of simple_hhcnn: the Hermitian contract of every layer, the rotation test of the template readout, the mirror invariance against the calculator's mirrored references, the gradient check and the thread identity with and without the reflected scores, the switch itself, the tiled blocks against the whole im2col matrix, the toy problem, the weights' round trip
+!@descr: unit tests of simple_hhcnn: the Hermitian contract of every layer, the rotation test of the template readout, the mirror invariance against the calculator's mirrored references, the gradient check and the thread identity with and without the reflected scores and with the log-sum-exp readout and its rotation targets, the log-sum-exp readout against a brute-force marginal and under rotation, conjugation and the mirror, the switch itself, the tiled blocks against the whole im2col matrix, the toy problem, the weights' round trip
 submodule (simple_hhcnn) simple_hhcnn_tester
 use simple_test_utils
 use simple_cmdline,     only: cmdline
@@ -11,7 +11,7 @@ use simple_sym,         only: sym
 use simple_polar_feats, only: polar_feats, polar_feat
 use simple_polarft_calc, only: polarft_calc
 use simple_string_utils, only: int2str
-use simple_rnd,         only: ran3, gasdev
+use simple_rnd,         only: ran3, gasdev, seed_rnd_fixed
 use simple_timer,       only: tic, toc, timer_int_kind
 !$ use omp_lib,         only: omp_set_num_threads, omp_get_num_threads, omp_get_thread_limit
 implicit none
@@ -26,12 +26,20 @@ contains
         call test_hermitian_contract()
         call test_mirror_invariance()
         call test_ctf_normalisation()
-        call test_gradient_check(.true.)
-        call test_gradient_check(.false.)
+        call test_gradient_check(.true.,  .false., .false.)
+        call test_gradient_check(.false., .false., .false.)
+        call test_gradient_check(.true.,  .true.,  .false.)
+        call test_gradient_check(.false., .true.,  .false.)
+        call test_gradient_check(.true.,  .true.,  .true.)
+        call test_gradient_check(.false., .true.,  .true.)
+        call test_lse_readout(.true.)
+        call test_lse_readout(.false.)
         call test_no_reflection()
         call test_tiled_blocks()
-        call test_thread_identity(.true.)
-        call test_thread_identity(.false.)
+        call test_thread_identity(.true.,  .false., .false.)
+        call test_thread_identity(.false., .false., .false.)
+        call test_thread_identity(.true.,  .true.,  .true.)
+        call test_thread_identity(.false., .true.,  .true.)
         call test_weights_roundtrip()
         call test_toy_problem()
     end subroutine run_all_hhcnn_tests
@@ -129,7 +137,7 @@ contains
         logical  :: ok_re, ok_im, ok_rot, ok_col, ok_out, ok_shift
         real(sp) :: maxdiff
         write(*,'(A)') 'test_hermitian_contract'
-        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261106_int64, .true.)
+        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261106_int64, .true., .false.)
         call random_templates(net)
         call random_input(x, g, side)
         ! the reference pass and its layers
@@ -265,7 +273,7 @@ contains
         integer  :: r0(T_NCLS), r1(T_NCLS), ia, b, ic, istep, nrots, nsteps_psi, nchk
         logical  :: refl0(T_NCLS), ok_rot
         write(*,'(A)') 'test_mirror_invariance'
-        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261109_int64, .true.)
+        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261109_int64, .true., .false.)
         call random_templates(net)
         call assert_true(kernels_symmetric(net), 'the kernels are symmetric along the angle')
         allocate(p, cline, calc)
@@ -331,6 +339,91 @@ contains
         call net%kill
     end subroutine test_mirror_invariance
 
+    !> The log-sum-exp readout: each class's logit is ln sum over its rotations (and the reflection's) of exp(scale s),
+    !! the in-plane marginal, against a brute-force sum in double, with each class's rotation posterior summing to one;
+    !! the class posterior is unchanged by a rotation of the input by one grid step and by conjugation, and with the
+    !! reflection by the calculator's mirror at frames of 0, 180 and 75 degrees (to single-precision rounding: the sums
+    !! run over the same terms in another order)
+    subroutine test_lse_readout( reflect )
+        logical, intent(in) :: reflect
+        real,    parameter  :: ANG(3) = [0., 180., 75.]
+        type(hhcnn) :: net
+        class(parameters),   allocatable, target :: p
+        class(cmdline),      allocatable :: cline
+        class(polarft_calc), allocatable :: calc
+        complex(sp), allocatable :: bank(:,:,:)
+        real(sp) :: x(T_PFTSZ, T_NK, 2), xr(T_PFTSZ, T_NK, 2), xm(T_PFTSZ, T_NK, 2), g(T_NK), side, prob0(T_NCLS)
+        real(dp) :: z, mx
+        integer  :: ic, side_k, jc, r, ia, nbad_lse, nbad_pi
+        write(*,'(A,L1)') 'test_lse_readout reflect=', reflect
+        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261115_int64, reflect, .true.)
+        call random_templates(net)
+        call random_input(x, g, side)
+        g = 1.
+        call net%forward_sample(net%work(1), x, g, side)
+        prob0    = net%work(1)%prob
+        nbad_lse = 0
+        nbad_pi  = 0
+        do ic = 1,T_NCLS
+            mx = -huge(mx)
+            do side_k = 1,merge(2, 1, reflect)
+                jc = ic + (side_k - 1) * T_NCLS
+                do r = 1,net%nrots
+                    mx = max(mx, real(net%rd%scale,dp) * real(net%work(1)%scores(r,jc),dp))
+                enddo
+            enddo
+            z = 0.d0
+            do side_k = 1,merge(2, 1, reflect)
+                jc = ic + (side_k - 1) * T_NCLS
+                do r = 1,net%nrots
+                    z = z + exp(real(net%rd%scale,dp) * real(net%work(1)%scores(r,jc),dp) - mx)
+                enddo
+            enddo
+            if( abs(real(net%work(1)%logits(ic),dp) - (mx + log(z))) > 1.d-5 * max(1.d0, abs(mx)) ) nbad_lse = nbad_lse + 1
+            z = 0.d0
+            do side_k = 1,merge(2, 1, reflect)
+                z = z + sum(real(net%work(1)%pis(:,ic + (side_k - 1) * T_NCLS),dp))
+            enddo
+            if( abs(z - 1.d0) > 1.d-5 ) nbad_pi = nbad_pi + 1
+        enddo
+        call assert_int(0, nbad_lse, 'every class''s logit is the log of the sum over its rotations of exp(scale s), the brute-force sum''s')
+        call assert_int(0, nbad_pi, 'every class''s posterior over its rotations sums to one')
+        call assert_true(abs(sum(prob0) - 1.) <= 1.e-5, 'the class posterior sums to one')
+        call rotate_one(1, T_PFTSZ, T_NK, x, xr)
+        call net%forward_sample(net%work(1), xr, g, side)
+        call assert_true(maxval(abs(net%work(1)%prob - prob0)) <= 1.e-5, 'the class posterior is unchanged by a rotation of one grid step')
+        xr(:,:,1) =  x(:,:,1)
+        xr(:,:,2) = -x(:,:,2)
+        call net%forward_sample(net%work(1), xr, g, side)
+        call assert_true(maxval(abs(net%work(1)%prob - prob0)) <= 1.e-5, 'the class posterior is unchanged by conjugation')
+        if( reflect )then
+            allocate(p, cline, calc)
+            call cline%set('box',     32.)
+            call cline%set('smpd',    1.)
+            call cline%set('mskdiam', 24.)
+            call cline%set('pftsz',   real(T_PFTSZ))
+            call cline%set('nptcls',  2.)
+            call cline%set('nthr',    1.)
+            call cline%set('ctf',     'no')
+            call cline%set('objfun',  'euclid')
+            call p%new(cline, silent=.true.)
+            call calc%new(p, 2, [1,2], [2,T_NK+1])
+            allocate(bank(T_PFTSZ, T_NK, 2))
+            do ia = 1,size(ANG)
+                bank(:,:,1) = cmplx(x(:,:,1), x(:,:,2), kind=sp)
+                bank(:,:,2) = (0., 0.)
+                call calc%mirror_ref_bank(bank, [2], [ANG(ia)])
+                xm(:,:,1) = real(bank(:,:,2))
+                xm(:,:,2) = aimag(bank(:,:,2))
+                call net%forward_sample(net%work(1), xm, g, side)
+                call assert_true(maxval(abs(net%work(1)%prob - prob0)) <= 1.e-4, 'the class posterior is unchanged by the mirror at a frame on the grid')
+            enddo
+            call calc%kill
+            call cline%kill
+        endif
+        call net%kill
+    end subroutine test_lse_readout
+
     logical function kernels_symmetric( net )
         type(hhcnn), intent(in) :: net
         integer :: b, cin, ci, ik, rlo
@@ -346,26 +439,43 @@ contains
         enddo
     end function kernels_symmetric
 
-    !> the loss of one sample at the current weights
-    subroutine sample_loss_now( net, x, g, side, t, loss )
+    !> the loss of one sample at the current weights, with the rotation targets tq of classes tqc the cross-entropy of
+    !! each class's rotation posterior against them added (-ln pi_c(j) = logit_c - scale s_c(j))
+    subroutine sample_loss_now( net, x, g, side, t, loss, tq, tqc )
         type(hhcnn), intent(inout) :: net
         real(sp),    intent(in)    :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS)
         real(dp),    intent(out)   :: loss
+        real(sp), optional, intent(in) :: tq(:,:)
+        integer,  optional, intent(in) :: tqc(:)
+        integer :: k, side_k, j, jc
         call net%forward_sample(net%work(1), x, g, side)
         call net%sample_loss(T_NCLS, net%work(1)%prob, t, loss)
+        if( .not. present(tq) ) return
+        do k = 1,size(tqc)
+            if( tqc(k) < 1 ) cycle
+            do side_k = 1,merge(2, 1, net%l_refl)
+                jc = tqc(k) + (side_k - 1) * T_NCLS
+                do j = 1,net%nrots
+                    loss = loss + real(tq((side_k-1)*net%nrots + j, k),dp) * (real(net%work(1)%logits(tqc(k)),dp) - &
+                        &real(net%rd%scale,dp) * real(net%work(1)%scores(j,jc),dp))
+                enddo
+            enddo
+        enddo
     end subroutine sample_loss_now
 
     !> One weight's central difference against its analytic gradient, in single precision. The step is 1e-2: the
     !! rounding of a loss of order one divided by 2h is then about 1e-5, well below the absolute floor, and the
     !! truncation error of order h^2 as well; a kink of the gate or the rectifier inside the step is caught by the
     !! half step, which must agree instead
-    subroutine check_entry( net, x, g, side, t, w, grad, nbad, nchk, label )
+    subroutine check_entry( net, x, g, side, t, w, grad, nbad, nchk, label, tq, tqc )
         type(hhcnn),      intent(inout) :: net
         real(sp),         intent(in)    :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS)
         real(sp),         intent(inout) :: w
         real(sp),         intent(in)    :: grad
         integer,          intent(inout) :: nbad, nchk
         character(len=*), intent(in)    :: label
+        real(sp), optional, intent(in)  :: tq(:,:)
+        integer,  optional, intent(in)  :: tqc(:)
         real(sp), parameter :: TOL_REL = 1.e-2, TOL_ABS = 2.e-4, STEP = 1.e-2
         real(dp) :: num
         real(sp) :: step_here
@@ -375,7 +485,7 @@ contains
         ! curvature the central difference at STEP cannot follow, below STEP/8 the single-precision loss is noise
         step_here = STEP
         do ihalf = 0,3
-            num = central_difference(net, x, g, side, t, w, step_here)
+            num = central_difference(net, x, g, side, t, w, step_here, tq, tqc)
             ok  = abs(num - real(grad,dp)) <= TOL_REL * max(abs(num), abs(real(grad,dp))) + TOL_ABS
             if( ok ) exit
             step_here = 0.5 * step_here
@@ -387,17 +497,19 @@ contains
         endif
     end subroutine check_entry
 
-    real(dp) function central_difference( net, x, g, side, t, w, h ) result( num )
+    real(dp) function central_difference( net, x, g, side, t, w, h, tq, tqc ) result( num )
         type(hhcnn), intent(inout) :: net
         real(sp),    intent(in)    :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS), h
         real(sp),    intent(inout) :: w
+        real(sp), optional, intent(in) :: tq(:,:)
+        integer,  optional, intent(in) :: tqc(:)
         real(dp) :: lp, lm
         real(sp) :: w0
         w0 = w
         w  = w0 + h
-        call sample_loss_now(net, x, g, side, t, lp)
+        call sample_loss_now(net, x, g, side, t, lp, tq, tqc)
         w = w0 - h
-        call sample_loss_now(net, x, g, side, t, lm)
+        call sample_loss_now(net, x, g, side, t, lm, tq, tqc)
         w  = w0
         num = (lp - lm) / (2.d0 * real(h,dp))
     end function central_difference
@@ -415,7 +527,7 @@ contains
         integer  :: idef, c, k0, ia, ik, ntested, nbad_one, nbad_raw
         logical  :: l_signal
         write(*,'(A)') 'test_ctf_normalisation'
-        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261112_int64, .true.)
+        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261112_int64, .true., .false.)
         call random_templates(net)
         side     = 0.
         ntested  = 0
@@ -472,23 +584,37 @@ contains
     end subroutine test_ctf_normalisation
 
     !> the gradient check of every layer and of the readout (the pointwise map, the templates, the scale) in single
-    !! precision
-    subroutine test_gradient_check( reflect )
-        logical, intent(in) :: reflect
+    !! precision; with the log-sum-exp readout (lse) and its rotation targets (rot: two classes' targets, one of them
+    !! on both sides where the network reflects), on inputs of a fixed seed: the central differences fail across a
+    !! modulus near zero on some inputs, for either readout alike
+    subroutine test_gradient_check( reflect, lse, rot )
+        logical, intent(in) :: reflect, lse, rot
         type(hhcnn) :: net
         type(cnn_grad) :: gr
         real(sp) :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS)
-        real(dp) :: loss
+        real(sp), allocatable :: tq(:,:)
+        integer  :: tqc(2)
+        real(dp) :: loss, loss_chk
         integer  :: b, i, nbad, nchk, c, r, n, kb, m, ic, part, it, nch
         character(len=40) :: label
-        write(*,'(A,L1)') 'test_gradient_check reflect=', reflect
-        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261107_int64, reflect)
+        write(*,'(A,L1,A,L1,A,L1)') 'test_gradient_check reflect=', reflect, ' lse=', lse, ' rot=', rot
+        if( lse ) call seed_rnd_fixed(20261101)
+        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261107_int64, reflect, lse)
         call random_templates(net)
         call random_input(x, g, side)
         do i = 1,T_NCLS
             t(i) = 0.1 + ran3()
         enddo
         t = t / sum(t)
+        if( rot )then
+            allocate(tq(net%get_nrot_targets(), 2), source=0.)
+            tqc = [2, 4]
+            do i = 1,size(tq,1),3
+                tq(i,1) = 0.05 * ran3()
+            enddo
+            tq(5,2) = 0.2
+            tq(size(tq,1),2) = 0.1
+        endif
         ! a positive gate bias so that its branch is exercised without a kink inside the step
         do b = 1,CNN_NBLK
             net%conv(b)%b = 0.05
@@ -497,7 +623,11 @@ contains
         call net%zero_grad(gr)
         call net%ensure_chunks(1, nch)
         call net%forward_sample(net%work(1), x, g, side)
-        call net%backward_sample(net%work(1), t, gr, loss, 1)
+        if( rot )then
+            call net%backward_sample(net%work(1), t, gr, loss, 1, tq, tqc)
+        else
+            call net%backward_sample(net%work(1), t, gr, loss, 1)
+        endif
         call net%template_grads(1)
         nbad = 0
         nchk = 0
@@ -506,18 +636,18 @@ contains
                 do c = 1,net%conv(b)%cout
                     if( b > 1 .and. mod(c + r, 5) /= 0 ) cycle
                     write(label,'(A,I0,A,I0,A,I0)') 'conv', b, ' w(', c, ',', r
-                    call check_entry(net, x, g, side, t, net%conv(b)%w(c,r), gr%blk(b)%dw(c,r), nbad, nchk, trim(label))
+                    call check_entry(net, x, g, side, t, net%conv(b)%w(c,r), gr%blk(b)%dw(c,r), nbad, nchk, trim(label), tq, tqc)
                 enddo
             enddo
             do c = 1,net%conv(b)%cout
                 write(label,'(A,I0,A,I0)') 'conv', b, ' b(', c
-                call check_entry(net, x, g, side, t, net%conv(b)%b(c), gr%blk(b)%db(c), nbad, nchk, trim(label))
+                call check_entry(net, x, g, side, t, net%conv(b)%b(c), gr%blk(b)%db(c), nbad, nchk, trim(label), tq, tqc)
             enddo
         enddo
         do c = 1,net%rd%cout
             do n = 1,CNN_NREAD
                 write(label,'(A,I0,A,I0)') 'readout wread(', n, ',', c
-                call check_entry(net, x, g, side, t, net%rd%wread(n,c), gr%dwread(n,c), nbad, nchk, trim(label))
+                call check_entry(net, x, g, side, t, net%rd%wread(n,c), gr%dwread(n,c), nbad, nchk, trim(label), tq, tqc)
             enddo
         enddo
         do ic = 1,T_NCLS
@@ -529,15 +659,19 @@ contains
                             if( mod(n + kb + m + ic + part, 7) /= 0 ) cycle
                             it = net%tix(n, kb, m, ic, part)
                             write(label,'(A,I0,A,I0,A,I0,A,I0,A,I0)') 'template(', n, ',', kb, ',', m, ',', ic, ',', part
-                            call check_entry(net, x, g, side, t, net%rd%tmpl(it), net%gtmpl(it), nbad, nchk, trim(label))
+                            call check_entry(net, x, g, side, t, net%rd%tmpl(it), net%gtmpl(it), nbad, nchk, trim(label), tq, tqc)
                         enddo
                     enddo
                 enddo
             enddo
         enddo
-        call check_entry(net, x, g, side, t, net%rd%scale, gr%dscale, nbad, nchk, 'readout scale')
+        call check_entry(net, x, g, side, t, net%rd%scale, gr%dscale, nbad, nchk, 'readout scale', tq, tqc)
         write(*,'(A,I0,A,I0)') '  single-precision gradient entries checked: ', nchk, ', mismatches: ', nbad
         call assert_int(0, nbad, 'every layer''s and the readout''s analytic gradient matches the central difference at 1e-2 in single precision')
+        if( rot )then
+            call sample_loss_now(net, x, g, side, t, loss_chk, tq, tqc)
+            call assert_true(abs(loss_chk - loss) <= 1.d-5 * max(1.d0, abs(loss)), 'the step''s loss is the class and rotation cross-entropies')
+        endif
         call net%grad_kill(gr)
         call net%kill
     end subroutine test_gradient_check
@@ -554,8 +688,8 @@ contains
         integer  :: rb_r(T_NCLS), rb_n(T_NCLS), it, ic, nwon
         logical  :: refl, l_none, l_le, l_eq
         write(*,'(A)') 'test_no_reflection'
-        call net_r%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261113_int64, .true.)
-        call net_n%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261113_int64, .false.)
+        call net_r%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261113_int64, .true., .false.)
+        call net_n%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261113_int64, .false., .false.)
         call random_templates(net_r)
         call net_n%copy_weights_from(net_r)
         call net_r%prepare_work(1)
@@ -627,7 +761,7 @@ contains
             t(i) = 0.1 + ran3()
         enddo
         t = t / sum(t)
-        call net%new(PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261110_int64, .true.)
+        call net%new(PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261110_int64, .true., .false.)
         call net%prepare_work(1)
         call net%init_templates(xr, [(1., i = 1,T_NK)])
         call net%alloc_grad(gr)
@@ -662,42 +796,60 @@ contains
     !> the same training steps at one thread and at an actual team of four (the fast gate's cap) give the same weights,
     !! bit for bit, on the build's arithmetic path; a team of sixteen too where the thread limit allows it (by hand: a
     !! serial run fails the check that the team formed)
-    subroutine test_thread_identity( reflect )
-        logical, intent(in) :: reflect
+    subroutine test_thread_identity( reflect, lse, rot )
+        logical, intent(in) :: reflect, lse, rot
         integer, parameter :: N = 40, NSTEPS = 3, NTEAMS(2) = [4, 16]
         type(hhcnn) :: net1, netn
-        real(sp), allocatable :: x(:,:,:,:), g(:,:), side(:), t(:,:)
+        real(sp), allocatable :: x(:,:,:,:), g(:,:), side(:), t(:,:), tq(:,:,:)
+        integer,  allocatable :: tqc(:,:)
         real(sp) :: loss1, lossn, fm1, fmn
         integer  :: i, istep, nthr_prev, nteam_run, it, limit
-        write(*,'(A,L1)') 'test_thread_identity reflect=', reflect
+        write(*,'(A,L1,A,L1,A,L1)') 'test_thread_identity reflect=', reflect, ' lse=', lse, ' rot=', rot
         allocate(x(T_PFTSZ, T_NK, 2, N), g(T_NK, N), side(N), t(T_NCLS, N))
         do i = 1,N
             call random_input(x(:,:,:,i), g(:,i), side(i))
             t(:,i) = 0.
             t(1 + mod(i, T_NCLS), i) = 1.
         enddo
+        if( rot )then
+            allocate(tq(merge(2, 1, reflect) * 2 * T_PFTSZ, 2, N), source=0.)
+            allocate(tqc(2, N), source=0)
+            do i = 1,N
+                tqc(1,i) = 1 + mod(i, T_NCLS)
+                tq(1 + mod(3*i, size(tq,1)), 1, i) = 0.7
+                tq(1 + mod(5*i, size(tq,1)), 1, i) = 0.3
+            enddo
+        endif
         nthr_prev = 1
         !$ nthr_prev = omp_get_max_threads()
         limit = NTEAMS(1)
         !$ limit = omp_get_thread_limit()
-        call net1%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261108_int64, reflect)
+        call net1%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261108_int64, reflect, lse)
         call net1%prepare_work(1)
         call net1%init_templates(x(:,:,:,1:T_NCLS), g(:,1))
         !$ call omp_set_num_threads(1)
         do istep = 1,NSTEPS
-            call net1%train_batch(N, x, g, side, t, 1.e-3, 1.e-5, loss1, fm1)
+            if( rot )then
+                call net1%train_batch(N, x, g, side, t, 1.e-3, 1.e-5, loss1, fm1, tq, tqc)
+            else
+                call net1%train_batch(N, x, g, side, t, 1.e-3, 1.e-5, loss1, fm1)
+            endif
         enddo
         do it = 1,size(NTEAMS)
             if( it > 1 .and. limit < NTEAMS(it) )then
                 write(*,'(A,I0,A)') 'test_thread_identity: the team of ', NTEAMS(it), ' skipped under the thread limit'
                 cycle
             endif
-            call netn%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261108_int64, reflect)
+            call netn%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261108_int64, reflect, lse)
             call netn%prepare_work(1)
             call netn%init_templates(x(:,:,:,1:T_NCLS), g(:,1))
             !$ call omp_set_num_threads(NTEAMS(it))
             do istep = 1,NSTEPS
-                call netn%train_batch(N, x, g, side, t, 1.e-3, 1.e-5, lossn, fmn)
+                if( rot )then
+                    call netn%train_batch(N, x, g, side, t, 1.e-3, 1.e-5, lossn, fmn, tq, tqc)
+                else
+                    call netn%train_batch(N, x, g, side, t, 1.e-3, 1.e-5, lossn, fmn)
+                endif
             enddo
             nteam_run = NTEAMS(it)
             !$omp parallel default(shared)
@@ -714,6 +866,7 @@ contains
         !$ call omp_set_num_threads(nthr_prev)
         call net1%kill
         deallocate(x, g, side, t)
+        if( allocated(tq) ) deallocate(tq, tqc)
     end subroutine test_thread_identity
 
     !> the weights written and read back are the same bit for bit, and give the same probabilities
@@ -725,7 +878,7 @@ contains
         write(*,'(A)') 'test_weights_roundtrip'
         nfail0 = tests_failed
         call enter_fixture('hhcnn_weights', cwd_saved, fixture_root)
-        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261109_int64, .true.)
+        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261109_int64, .true., .false.)
         call random_templates(net)
         fname = 'weights.bin'
         call net%write_weights(fname)
@@ -896,7 +1049,7 @@ contains
             call feats%build_from_pft(refs(:,:,idir), ctfmat, .true., feat)
             xref(:,:,:,idir) = feat%x
         enddo
-        call net%new(PFTSZ, NK, NDIR/2, width, 20261111_int64, .true.)
+        call net%new(PFTSZ, NK, NDIR/2, width, 20261111_int64, .true., .false.)
         call net%prepare_work(1)
         call net%init_templates(xref, gtr(:,1))
         allocate(order(ntr))

@@ -91,6 +91,7 @@ type :: readout_layer
     real(sp), allocatable :: wread(:,:), mwread(:,:), vwread(:,:)
     real(sp), allocatable :: tmpl(:), mtmpl(:), vtmpl(:)
     real(sp), allocatable :: rotb(:,:)          !< (nrots, CNN_NQ) the rotation basis: S(r) = rotb(r,:) . the class's coefficients
+    real(sp), allocatable :: rotbt(:,:)         !< (CNN_NQ, nrots) its transpose (the log-sum-exp readout's backward)
     real(sp)              :: scale = 1., mscale = 0., vscale = 0.
 end type readout_layer
 
@@ -124,6 +125,9 @@ type :: cnn_work
     real(sp), allocatable :: pq(:,:,:)      !< (4, nclasses, 0:CNN_MREAD) per order the classes' products with the four columns
     real(sp), allocatable :: q(:,:)         !< (CNN_NQ, 2 nclasses) the score coefficients of the map's classes, then the reflection's
     real(sp), allocatable :: scores(:,:)    !< (nrots, 2 nclasses) every class's score at every rotation, the map's then the reflection's
+    real(sp), allocatable :: pis(:,:)       !< (nrots, 2 nclasses) the log-sum-exp readout's posterior over each class's rotations
+    real(sp), allocatable :: dsr(:,:)       !< (nrots, 2 nclasses) the scores' gradient (the log-sum-exp readout)
+    real(sp), allocatable :: gqc(:,:)       !< (CNN_NQ, 2 nclasses) the score coefficients' gradient (the log-sum-exp readout)
     real(sp), allocatable :: gq(:,:,:)      !< (4, nclasses, 0:CNN_MREAD) the products' gradients through the maximising rotations
     real(sp), allocatable :: yq(:,:)        !< (CNN_LT, 4) one order's templates times those gradients
 end type cnn_work
@@ -163,6 +167,7 @@ type :: hhcnn
     integer :: pftsz = 0, nrots = 0, nk = 0, nclasses = 0, width = 0, nfeat = 0, ntmpl = 0
     integer :: adam_step = 0
     logical :: l_refl = .true.   !< a class also scores the reflected map (the pose student's mirror pairs); off for classes without mirrors
+    logical :: l_lse  = .false.  !< a class's logit is the log-sum-exp over its rotations (and reflections) at the scale, the in-plane marginal; off, the scale times the maximum
     integer(int64) :: seed = 0_int64
     type(conv_layer)    :: conv(CNN_NBLK)
     type(readout_layer) :: rd
@@ -178,6 +183,7 @@ type :: hhcnn
     procedure :: get_nweights
     procedure :: get_shape
     procedure :: get_seed
+    procedure :: get_nrot_targets
     procedure :: prepare_work
     procedure :: predict
     procedure :: get_features
@@ -242,12 +248,12 @@ contains
 
     !> the network of width channels in the first block (doubling per block) over pftsz angles and nk rings, with
     !! nclasses outputs (one template each), its weights drawn from seed (recorded in the model); the templates start
-    !! at zero until init_templates sets them from the classes' reprojections
-    subroutine new( self, pftsz, nk, nclasses, width, seed, reflect )
+    !! at zero until init_templates sets them from the classes' reprojections; lse the log-sum-exp readout
+    subroutine new( self, pftsz, nk, nclasses, width, seed, reflect, lse )
         class(hhcnn),   intent(inout) :: self
         integer,        intent(in)    :: pftsz, nk, nclasses, width
         integer(int64), intent(in)    :: seed
-        logical,        intent(in)    :: reflect
+        logical,        intent(in)    :: reflect, lse
         integer(int64) :: state
         integer :: b, nkin, cin, kb, nper, r, m
         real(sp) :: scale
@@ -260,6 +266,7 @@ contains
         self%width    = width
         self%seed     = seed
         self%l_refl   = reflect
+        self%l_lse    = lse
         state         = modulo(seed, 2147483646_int64) + 1_int64
         nkin = nk
         cin  = 1
@@ -312,6 +319,7 @@ contains
                 self%rd%rotb(r,1+CNN_MREAD+m) = real(-2.d0 * sin(DTWOPI * real(m,dp) * real(r-1,dp) / real(self%nrots,dp)) / real(self%nrots,dp))
             enddo
         enddo
+        self%rd%rotbt = transpose(self%rd%rotb)
         self%rd%scale  = 1.
         self%rd%mscale = 0.
         self%rd%vscale = 0.
@@ -379,6 +387,12 @@ contains
         get_seed = self%seed
     end function get_seed
 
+    !> the length of a class's rotation targets (train_batch's tq): its rotations, then the reflection's where it has them
+    pure integer function get_nrot_targets( self )
+        class(hhcnn), intent(in) :: self
+        get_nrot_targets = merge(2, 1, self%l_refl) * self%nrots
+    end function get_nrot_targets
+
     ! ===== WORKSPACES =====
 
     !> one workspace per thread of the team that will run the regions (read omp_get_max_threads before them)
@@ -437,6 +451,8 @@ contains
         allocate(wk%xs(CNN_LT, 4, 0:CNN_MREAD), wk%yq(CNN_LT, 4), source=0.)
         allocate(wk%pq(4, self%nclasses, 0:CNN_MREAD), wk%gq(4, self%nclasses, 0:CNN_MREAD), source=0.)
         allocate(wk%q(CNN_NQ, 2*self%nclasses), wk%scores(self%nrots, 2*self%nclasses), source=0.)
+        if( self%l_lse ) allocate(wk%pis(self%nrots, 2*self%nclasses), wk%dsr(self%nrots, 2*self%nclasses), &
+            &wk%gqc(CNN_NQ, 2*self%nclasses), source=0.)
         ! the full ring's harmonics (order m over nrots = 2 pftsz angles) at the half ring's angles and at the
         ! rotation grid, computed in double
         do m = 0,CNN_MREAD
@@ -945,11 +961,41 @@ contains
             endif
             wk%smax(ic)   = smx
             wk%logits(ic) = self%rd%scale * smx
+            if( self%l_lse ) call lse_class(ic)
         enddo
         zmax    = maxval(wk%logits)
         wk%prob = exp(wk%logits - zmax)
         ssum    = sum(real(wk%prob,dp))
         wk%prob = real(real(wk%prob,dp) / ssum)
+
+    contains
+
+        !> the log-sum-exp readout of class ic: logit = ln sum_j exp(scale s_j) over its rotations (and the reflection's),
+        !! about the largest term, in double; the posterior over them kept for the backward pass
+        subroutine lse_class( ic_here )
+            integer, intent(in) :: ic_here
+            real(dp) :: zsum, a, mx
+            integer  :: jc_here, nside, side
+            a     = real(self%rd%scale,dp)
+            nside = merge(2, 1, self%l_refl)
+            mx    = -huge(mx)
+            do side = 1,nside
+                jc_here = ic_here + (side - 1) * self%nclasses
+                mx = max(mx, maxval(a * real(wk%scores(:,jc_here),dp)))
+            enddo
+            zsum = 0.d0
+            do side = 1,nside
+                jc_here = ic_here + (side - 1) * self%nclasses
+                wk%pis(:,jc_here) = real(exp(a * real(wk%scores(:,jc_here),dp) - mx))
+                zsum = zsum + sum(real(wk%pis(:,jc_here),dp))
+            enddo
+            do side = 1,nside
+                jc_here = ic_here + (side - 1) * self%nclasses
+                wk%pis(:,jc_here) = real(real(wk%pis(:,jc_here),dp) / zsum)
+            enddo
+            wk%logits(ic_here) = real(mx + log(zsum))
+        end subroutine lse_class
+
     end subroutine readout_rotations
 
     !> the readout map of the last block's pooled maps and its full-ring angular spectrum wk%fhat
@@ -1003,13 +1049,17 @@ contains
 
     !> the readout's backward from the logits' gradient wk%dlogits for sample isample of the batch: the scale's and the
     !! map's gradients into gr, the last block's dpooled, the sample's spectrum columns and products' gradients kept
-    !! for the templates' gradient (template_grads); it flows through each class's maximising rotation
-    subroutine readout_backward( self, wk, gr, isample )
+    !! for the templates' gradient (template_grads); it flows through each class's maximising rotation, or with the
+    !! log-sum-exp readout through every rotation, with the rotation targets tq of classes tqc (loss_rot their loss)
+    subroutine readout_backward( self, wk, gr, isample, loss_rot, tq, tqc )
         class(hhcnn),   intent(inout) :: self
         type(cnn_work), intent(inout) :: wk
         type(cnn_grad), intent(inout) :: gr
         integer,        intent(in)    :: isample
-        integer  :: cout, kb, part, p, n, kk, c, m, ic, r, nb, j, k, nl, ldt
+        real(dp),       intent(out)   :: loss_rot
+        real(sp), optional, intent(in) :: tq(:,:)
+        integer,  optional, intent(in) :: tqc(:)
+        integer  :: cout, kb, part, p, n, kk, c, m, ic, r, nb, j, k, nl, ldt, jc, side
         real(sp) :: ds, inv_n, fr, fi
         real(dp) :: acc, dsc
         cout  = self%rd%cout
@@ -1017,20 +1067,38 @@ contains
         nl    = 2 * CNN_NREAD * self%rd%kread
         ldt   = CNN_LT * (CNN_MREAD + 1)
         dsc   = 0.d0
+        loss_rot = 0.d0
         ! the products' gradients: d Re P(m) and d Im P(m) at each class's maximising rotation, in the map's columns
         ! (1, 2) or the reflection's (3, 4)
         wk%gq = 0.
-        do ic = 1,self%nclasses
-            dsc = dsc + real(wk%dlogits(ic) * wk%smax(ic),dp)
-            ds  = wk%dlogits(ic) * self%rd%scale
-            r   = wk%rbest(ic)
-            j   = merge(3, 1, wk%refl(ic))
-            wk%gq(j,ic,0) = ds * inv_n
-            do m = 1,CNN_MREAD
-                wk%gq(j,ic,m)   =  ds * 2. * inv_n * wk%cosr(r,m)
-                wk%gq(j+1,ic,m) = -ds * 2. * inv_n * wk%sinr(r,m)
+        if( self%l_lse )then
+            call lse_score_grads
+            call gemm_nn(CNN_NQ, merge(2, 1, self%l_refl)*self%nclasses, self%nrots, self%rd%rotbt, CNN_NQ, wk%dsr, &
+                &self%nrots, wk%gqc, CNN_NQ, 0.0)
+            do ic = 1,self%nclasses
+                do side = 1,merge(2, 1, self%l_refl)
+                    jc = ic + (side - 1) * self%nclasses
+                    j  = 1 + 2 * (side - 1)
+                    wk%gq(j,ic,0) = wk%gqc(1,jc)
+                    do m = 1,CNN_MREAD
+                        wk%gq(j,ic,m)   = wk%gqc(1+m,jc)
+                        wk%gq(j+1,ic,m) = wk%gqc(1+CNN_MREAD+m,jc)
+                    enddo
+                enddo
             enddo
-        enddo
+        else
+            do ic = 1,self%nclasses
+                dsc = dsc + real(wk%dlogits(ic) * wk%smax(ic),dp)
+                ds  = wk%dlogits(ic) * self%rd%scale
+                r   = wk%rbest(ic)
+                j   = merge(3, 1, wk%refl(ic))
+                wk%gq(j,ic,0) = ds * inv_n
+                do m = 1,CNN_MREAD
+                    wk%gq(j,ic,m)   =  ds * 2. * inv_n * wk%cosr(r,m)
+                    wk%gq(j+1,ic,m) = -ds * 2. * inv_n * wk%sinr(r,m)
+                enddo
+            enddo
+        endif
         ! per order: the sample's columns and gradients kept for the templates' gradient, the spectrum's gradient (the
         ! templates times the products' gradients, folded back from the four columns)
         do m = 0,CNN_MREAD
@@ -1096,6 +1164,49 @@ contains
                 enddo
             enddo
         enddo
+
+    contains
+
+        !> The log-sum-exp readout's scores' gradient: with pi_c the posterior over class c's rotations, q_c its rotation
+        !! targets and Q_c their mass, G_c = (dlogit_c + Q_c) pi_c - q_c, the scores' gradient scale G and the scale's
+        !! sum_j s_c(j) G_c(j); the rotation loss sum_j q_c(j) (logit_c - scale s_c(j)), the cross-entropy against pi_c
+        subroutine lse_score_grads
+            real(dp) :: qmass(self%nclasses), a
+            integer  :: kq, ncol, off
+            a     = real(self%rd%scale,dp)
+            ncol  = merge(2, 1, self%l_refl) * self%nclasses
+            qmass = 0.d0
+            if( present(tq) )then
+                do kq = 1,size(tqc)
+                    if( tqc(kq) < 1 ) cycle
+                    qmass(tqc(kq)) = qmass(tqc(kq)) + sum(real(tq(:,kq),dp))
+                enddo
+            endif
+            do jc = 1,ncol
+                ic = 1 + mod(jc - 1, self%nclasses)
+                wk%dsr(:,jc) = real((real(wk%dlogits(ic),dp) + qmass(ic)) * real(wk%pis(:,jc),dp))
+            enddo
+            if( present(tq) )then
+                do kq = 1,size(tqc)
+                    ic = tqc(kq)
+                    if( ic < 1 ) cycle
+                    do side = 1,merge(2, 1, self%l_refl)
+                        jc  = ic + (side - 1) * self%nclasses
+                        off = (side - 1) * self%nrots
+                        wk%dsr(:,jc) = wk%dsr(:,jc) - tq(off+1:off+self%nrots,kq)
+                        do r = 1,self%nrots
+                            if( tq(off+r,kq) > 0. ) loss_rot = loss_rot + real(tq(off+r,kq),dp) * &
+                                &(real(wk%logits(ic),dp) - a * real(wk%scores(r,jc),dp))
+                        enddo
+                    enddo
+                enddo
+            endif
+            do jc = 1,ncol
+                dsc = dsc + sum(real(wk%scores(:,jc),dp) * real(wk%dsr(:,jc),dp))
+            enddo
+            wk%dsr(:,1:ncol) = real(a * real(wk%dsr(:,1:ncol),dp))
+        end subroutine lse_score_grads
+
     end subroutine readout_backward
 
     !> The templates from geometry (ruling R3): each class's template is the readout spectrum of that class's
@@ -1172,22 +1283,31 @@ contains
         enddo
     end subroutine tie_kernel_grads
 
-    !> the backward pass of one sample after forward_sample, for the soft targets t: the gradients accumulated
-    !! into gr; the loss (the cross-entropy against t) returned
-    subroutine backward_sample( self, wk, t, gr, loss, isample )
+    !> the backward pass of one sample after forward_sample, for the soft targets t (and with the log-sum-exp readout
+    !! the rotation targets tq of classes tqc): the gradients accumulated into gr; the loss (the cross-entropy against t,
+    !! plus the rotation targets' against the rotations' posteriors) returned
+    subroutine backward_sample( self, wk, t, gr, loss, isample, tq, tqc )
         class(hhcnn),   intent(inout) :: self
         type(cnn_work), intent(inout) :: wk
         real(sp),       intent(in)    :: t(self%nclasses)
         type(cnn_grad), intent(inout) :: gr
         real(dp),       intent(out)   :: loss
         integer,        intent(in)    :: isample
+        real(sp), optional, intent(in) :: tq(:,:)
+        integer,  optional, intent(in) :: tqc(:)
         real(sp) :: s_norm(self%conv(1)%cout, self%nk), ysum(self%conv(1)%cout), wsum, gterm, gbar(-1:1)
+        real(dp) :: loss_rot
         integer  :: b, cin, cout, nkin, nkout, npos, c, k, p, kk, ik, ia, r, q0, q1, pp0, kk0, pa0
         ! the loss and the logits' gradient, then the readout's backward
         call sample_loss(self%nclasses, wk%prob, t, loss)
         wk%dlogits = wk%prob - t
         if( maxloc(wk%prob, dim=1) == maxloc(t, dim=1) ) gr%nmode = gr%nmode + 1
-        call self%readout_backward(wk, gr, isample)
+        if( present(tq) )then
+            call self%readout_backward(wk, gr, isample, loss_rot, tq, tqc)
+        else
+            call self%readout_backward(wk, gr, isample, loss_rot)
+        endif
+        loss = loss + loss_rot
         ! the blocks, last first
         do b = CNN_NBLK,1,-1
             cin   = self%conv(b)%cin
@@ -1271,32 +1391,48 @@ contains
         enddo
     end subroutine sample_loss
 
-    !> the gradients of samples i0..i1 of the batch into chunk buffer ic, on thread ithr's workspace
-    subroutine grad_chunk( self, ic, ithr, i0, i1, x, g, side, t )
+    !> the gradients of samples i0..i1 of the batch into chunk buffer ic, on thread ithr's workspace (with the rotation
+    !! targets when given)
+    subroutine grad_chunk( self, ic, ithr, i0, i1, x, g, side, t, tq, tqc )
         class(hhcnn), intent(inout) :: self
         integer,      intent(in)    :: ic, ithr, i0, i1
         real(sp),     intent(in)    :: x(self%pftsz, self%nk, 2, *), g(self%nk, *), side(*), t(self%nclasses, *)
+        real(sp), optional, intent(in) :: tq(:,:,:)
+        integer,  optional, intent(in) :: tqc(:,:)
         real(dp) :: loss
         integer  :: i
         call self%zero_grad(self%gchunk(ic))
         do i = i0,i1
             call self%forward_sample(self%work(ithr), x(:,:,:,i), g(:,i), side(i))
-            call self%backward_sample(self%work(ithr), t(:,i), self%gchunk(ic), loss, i)
+            if( present(tq) )then
+                call self%backward_sample(self%work(ithr), t(:,i), self%gchunk(ic), loss, i, tq(:,:,i), tqc(:,i))
+            else
+                call self%backward_sample(self%work(ithr), t(:,i), self%gchunk(ic), loss, i)
+            endif
             self%gchunk(ic)%loss = self%gchunk(ic)%loss + loss
         enddo
     end subroutine grad_chunk
 
     !> One training step on a mini-batch of n samples (x the packed rings, g the ring-averaged CTF squared, side, t the
-    !! soft targets): chunks of chunk_size(n) computed in parallel into their own buffers, reduced in chunk order and
-    !! one Adam step at rate lr with decoupled weight decay wd; the mean loss and the mode agreement returned
-    subroutine train_batch( self, n, x, g, side, t, lr, wd, loss_mean, frac_mode )
+    !! soft targets; with the log-sum-exp readout optionally tq(get_nrot_targets, kq, n) the rotation targets of the
+    !! classes tqc(kq, n), 0 for none): chunks of chunk_size(n) computed in parallel into their own buffers, reduced in
+    !! chunk order and one Adam step at rate lr with decoupled weight decay wd; the mean loss and the mode agreement
+    subroutine train_batch( self, n, x, g, side, t, lr, wd, loss_mean, frac_mode, tq, tqc )
         class(hhcnn), intent(inout) :: self
         integer,      intent(in)    :: n
         real(sp),     intent(in)    :: x(self%pftsz, self%nk, 2, n), g(self%nk, n), side(n), t(self%nclasses, n)
         real(sp),     intent(in)    :: lr, wd
         real(sp),     intent(out)   :: loss_mean, frac_mode
+        real(sp), optional, intent(in) :: tq(:,:,:)
+        integer,  optional, intent(in) :: tqc(:,:)
         integer :: nchunks, ic, ithr, i0, i1, nthr, csz
         integer(timer_int_kind) :: t0
+        if( present(tq) )then
+            if( .not. self%l_lse ) THROW_HARD('rotation targets need the log-sum-exp readout; hhcnn%train_batch')
+            if( .not. present(tqc) ) THROW_HARD('rotation targets without their classes; hhcnn%train_batch')
+            if( size(tq,1) /= self%get_nrot_targets() .or. size(tq,3) < n .or. size(tqc,2) < n .or. size(tqc,1) /= size(tq,2) )&
+                &THROW_HARD('rotation targets of another shape; hhcnn%train_batch')
+        endif
         call self%ensure_chunks(n, nchunks)
         csz  = chunk_size(n)
         nthr = 1
@@ -1308,7 +1444,11 @@ contains
             !$ ithr = omp_get_thread_num() + 1
             i0 = (ic-1) * csz + 1
             i1 = min(n, ic * csz)
-            call self%grad_chunk(ic, ithr, i0, i1, x, g, side, t)
+            if( present(tq) )then
+                call self%grad_chunk(ic, ithr, i0, i1, x, g, side, t, tq, tqc)
+            else
+                call self%grad_chunk(ic, ithr, i0, i1, x, g, side, t)
+            endif
         enddo
         !$omp end parallel do
         self%prof%rt_grad = self%prof%rt_grad + real(toc(t0),dp)
@@ -1569,7 +1709,7 @@ contains
         class(string), intent(in)    :: fname
         integer(int64) :: magic, version, seed
         integer :: funit, io_stat, b, pftsz, nk, nclasses, width, nblk, nread, kread, mread
-        logical :: l_refl_here
+        logical :: l_refl_here, l_lse_here
         if( .not. file_exists(fname) ) THROW_HARD('no weights file '//fname%to_char()//'; hhcnn%read_weights')
         call fopen(funit, fname, 'old', 'read', iostat=io_stat, access='stream', form='unformatted')
         call fileiochk('hhcnn%read_weights; open '//fname%to_char(), io_stat)
@@ -1580,9 +1720,10 @@ contains
         if( nblk /= CNN_NBLK ) THROW_HARD(fname%to_char()//' has another block count; hhcnn%read_weights')
         if( nread /= CNN_NREAD .or. kread /= CNN_KREAD .or. mread /= CNN_MREAD ) THROW_HARD(fname%to_char()//' has another readout shape; hhcnn%read_weights')
         read(funit) seed
-        ! the reflection is the owner's construction, not the file's: the network keeps the one it was built with
+        ! the reflection and the readout are the owner's construction, not the file's: the network keeps those it was built with
         l_refl_here = self%l_refl
-        call self%new(pftsz, nk, nclasses, width, seed, l_refl_here)
+        l_lse_here  = self%l_lse
+        call self%new(pftsz, nk, nclasses, width, seed, l_refl_here, l_lse_here)
         do b = 1,CNN_NBLK
             read(funit) self%conv(b)%w, self%conv(b)%b
         enddo
@@ -1596,6 +1737,7 @@ contains
         class(hhcnn), intent(in)    :: other
         integer :: b
         if( .not. (self%exists .and. other%exists) ) THROW_HARD('both networks must exist; hhcnn%copy_weights_from')
+        if( self%l_lse .neqv. other%l_lse ) THROW_HARD('the networks read out differently; hhcnn%copy_weights_from')
         do b = 1,CNN_NBLK
             if( any(shape(self%conv(b)%w) /= shape(other%conv(b)%w)) ) THROW_HARD('shapes differ; hhcnn%copy_weights_from')
             self%conv(b)%w = other%conv(b)%w
@@ -1656,6 +1798,7 @@ contains
         if( allocated(self%rd%wread)  ) deallocate(self%rd%wread, self%rd%mwread, self%rd%vwread)
         if( allocated(self%rd%tmpl)   ) deallocate(self%rd%tmpl, self%rd%mtmpl, self%rd%vtmpl)
         if( allocated(self%rd%rotb)   ) deallocate(self%rd%rotb)
+        if( allocated(self%rd%rotbt)  ) deallocate(self%rd%rotbt)
         self%rd%cout   = 0
         self%rd%kread  = 0
         self%rd%scale  = 1.
@@ -1710,6 +1853,7 @@ contains
         if( allocated(wk%nscale)  ) deallocate(wk%nscale)
         if( allocated(wk%cosm)    ) deallocate(wk%cosm, wk%sinm, wk%cosr, wk%sinr)
         if( allocated(wk%xs)      ) deallocate(wk%xs, wk%yq, wk%pq, wk%gq, wk%q, wk%scores)
+        if( allocated(wk%pis)     ) deallocate(wk%pis, wk%dsr, wk%gqc)
     end subroutine work_kill
 
     subroutine grad_kill( gr )

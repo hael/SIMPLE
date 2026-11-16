@@ -18,6 +18,7 @@ public :: student_holdout_split, student_boot_quantile, student_conf_threshold, 
 public :: student_part_pinds, student_predict_parts, student_sigma2_for_pass, concat_part_tables
 public :: file_hash, run_all_student_strategy_tests
 public :: student_resampled_gain, choose_student_design, student_design_trial, student_design_keep, fname_base
+public :: report_teacher_audit, report_mapping_audit, report_class_mass_audit
 private
 #include "simple_local_flags.inc"
 
@@ -386,6 +387,80 @@ contains
     ! ===== HELPERS =====
 
     !> the hash of a file's bytes, read as 32-bit words (the references' provenance)
+    !> The audit of the teacher's in-plane weighting against the in-plane posterior insertion's, rep as the
+    !! tables' audit_inpl_marginal gives it, to the log and to fname (replaced): the shift, the temperature, lnz, dmin,
+    !! the shift prior's term and the in-plane posteriors must equal the insertion's, the view weights must lie within
+    !! their rounding bound, else it stops
+    subroutine report_teacher_audit( label, fname, rep )
+        character(len=*), intent(in) :: label, fname
+        real(dp),         intent(in) :: rep(10)
+        integer :: funit, io_stat
+        call fopen(funit, string(fname), status='replace', action='write', iostat=io_stat)
+        call fileiochk(label//'; open '//fname, io_stat)
+        write(funit,'(A)')          '# the teacher''s in-plane weighting against the in-plane posterior insertion''s'
+        write(funit,'(A,I0)')       'entries=', nint(rep(1))
+        write(funit,'(A,I0)')       'kept_inpl_rows=', nint(rep(2))
+        write(funit,'(A,ES12.4)')   'max_diff_shift_px=', rep(3)
+        write(funit,'(A,ES12.4)')   'max_diff_temperature=', rep(4)
+        write(funit,'(A,ES12.4)')   'max_diff_lnz=', rep(5)
+        write(funit,'(A,ES12.4)')   'max_diff_dmin=', rep(6)
+        write(funit,'(A,ES12.4)')   'max_diff_shift_prior=', rep(7)
+        write(funit,'(A,ES12.4)')   'max_diff_inpl_posterior=', rep(8)
+        write(funit,'(A,ES12.4)')   'max_diff_view_weight=', rep(9)
+        write(funit,'(A,ES12.4)')   'max_view_weight_diff_over_rounding_bound=', rep(10)
+        call fclose(funit)
+        write(logfhandle,'(A,I0,A,I0,A,4ES10.2,A,2ES10.2,A,ES10.2)') '>>> TEACHER AUDIT: ', nint(rep(1)), ' entries, ', &
+            &nint(rep(2)), ' in-plane rows; max |diff| shift, temp, lnz, dmin', rep(3:6), '; pen, posterior', rep(7:8), &
+            &'; view weights / bound', rep(10)
+        if( any(rep(3:8) > 0.d0) ) THROW_HARD('the teacher''s in-plane marginal differs from the insertion''s; '//label)
+        if( rep(10) > 1.d0 ) THROW_HARD('the teacher''s class marginals differ from the insertion''s view weights; '//label)
+    end subroutine report_teacher_audit
+
+    !> The audit of the class distribution a student trains on against the physical posterior over the classes, rep(4)
+    !! as the class student's learn program gives it, appended to fname and the log: every row read at the physical
+    !! temperature, the masses within their rounding bound; else it stops
+    subroutine report_class_mass_audit( label, fname, rep )
+        character(len=*), intent(in) :: label, fname
+        real(dp),         intent(in) :: rep(4)
+        integer :: funit, io_stat
+        call fopen(funit, string(fname), status='old', action='write', position='append', iostat=io_stat)
+        call fileiochk(label//'; open '//fname, io_stat)
+        write(funit,'(A,I0)')     'class_mass_rows=', nint(rep(1))
+        write(funit,'(A,I0)')     'class_mass_rows_off_physical_temperature=', nint(rep(2))
+        write(funit,'(A,ES12.4)') 'class_mass_max_diff=', rep(3)
+        write(funit,'(A,ES12.4)') 'class_mass_max_diff_over_rounding_bound=', rep(4)
+        call fclose(funit)
+        write(logfhandle,'(A,I0,A,I0,A,ES10.2,A,ES10.2)') '>>> TEACHER AUDIT: class masses of ', nint(rep(1)), ' rows (', &
+            &nint(rep(2)), ' off the physical temperature), max |diff| ', rep(3), ', / bound ', rep(4)
+        if( rep(2) > 0.d0 ) THROW_HARD('a row of the class distribution is not at the physical temperature; '//label)
+        if( rep(4) > 1.d0 ) THROW_HARD('the class distribution differs from the physical posterior; '//label)
+    end subroutine report_class_mass_audit
+
+    !> The audit of the rotation targets' mapping on real rows, appended to fname and the log: nread
+    !! references read (nrefl on a reflection's side), err(1) the largest angular difference between a teacher's
+    !! in-plane mode and its target's read-out angle, within err(3) (half the student's rotation step), err(2) the
+    !! teacher grid's largest departure from the uniform grid the targets assume, within round-off; else it stops
+    subroutine report_mapping_audit( label, fname, nread, nrefl, err )
+        character(len=*), intent(in) :: label, fname
+        integer,          intent(in) :: nread, nrefl
+        real(sp),         intent(in) :: err(3)
+        real(sp) :: half_step
+        integer  :: funit, io_stat
+        half_step = err(3)
+        call fopen(funit, string(fname), status='old', action='write', position='append', iostat=io_stat)
+        call fileiochk(label//'; open '//fname, io_stat)
+        write(funit,'(A,I0)')     'mapping_refs_read=', nread
+        write(funit,'(A,I0)')     'mapping_refs_reflected=', nrefl
+        write(funit,'(A,F10.5)')  'mapping_max_err_deg=', err(1)
+        write(funit,'(A,F10.5)')  'mapping_half_step_deg=', half_step
+        write(funit,'(A,ES12.4)') 'teacher_grid_max_dev_deg=', err(2)
+        call fclose(funit)
+        write(logfhandle,'(A,I0,A,I0,A,F8.4,A,F8.4,A,ES10.2)') '>>> TEACHER AUDIT: mapping of ', nread, ' references (', &
+            &nrefl, ' reflected), max error ', err(1), ' deg (half step ', half_step, '), grid ', err(2)
+        if( err(1) > half_step + 1.e-3 ) THROW_HARD('a rotation target maps off its teacher angle; '//label)
+        if( err(2) > 1.e-3 ) THROW_HARD('the teacher''s rotation grid is not the targets'' uniform grid; '//label)
+    end subroutine report_mapping_audit
+
     function file_hash( fname ) result( h )
         class(string), intent(in) :: fname
         integer(int32), allocatable :: words(:)

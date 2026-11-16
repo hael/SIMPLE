@@ -1,8 +1,10 @@
 # The pose student with an amplitude channel
 
-Status, 2026-11-15: planned, not started. Runs after `planned/student_inplane_posterior.md` and shares its Phase 0;
-its base is that plan's outcome (the adopted network, or the base if both variants are rejected), pinned when this
-plan starts. Supersedes: none. Depends on: the 3D posterior weighting (landed in `86babf86b`; it changes the teacher's
+Status, 2026-11-15: planned, not started. Runs after `planned/student_inplane_posterior.md` and shares its Phase 0.
+That plan adopted its variant P for the class student only (2026-11-15, ruling R7); the pose student keeps its
+teacher and network. This plan's base is therefore the pose student as it is in `603c44490`, the same network as
+`86babf86b`'s, read for read on the run's sets. That plan's Phase 0 measurements stand as this plan's Phase 0 on that
+base: A at three seeds, the shift check, the decentring curve. Supersedes: none. Depends on: the 3D posterior weighting (landed in `86babf86b`; it changes the teacher's
 rows), the pose student (validated: yes, `completed/pose_student_training_speed_report.md`).
 
 ## 1. Why
@@ -133,3 +135,14 @@ are.
 ## Progress
 
 (one entry per phase, written by the run)
+
+### Phase 0, shared with `student_inplane_posterior.md` (2026-11-15, the Dell)
+
+Measured in that plan's Phase 0 on the base `86babf86b` (see its Progress, Phase 0): A, the base pose student, at
+seeds 1 to 3 on `T200`, `T1000`, `T5000`, `T` and bgal, every held-out read of decision 5 with its spread; the shift
+check of `predict_poses` at 2, 5 and 10 px for every prediction; the decentring curve of the `T` students on the
+test half decentred by exactly r = 0, 1, 2, 3, 5, 8 px
+(`/data2/agent_runs/student_inplane/scratch/keep/sets_extra/S_decentred/`, built with SIMPLE's programs and checked
+against `S.simple`). The truth in the cone of the `T` students is 0.710 [0.704, 0.716] at 3 px and 0.216 [0.213,
+0.217] at 5 px (mean [min, max] over the seeds). Whether these stand as this plan's Phase 0 depends on that plan's
+verdict (its Phase 4); training and prediction times are in the same tables.

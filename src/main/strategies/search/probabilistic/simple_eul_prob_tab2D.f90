@@ -15,7 +15,8 @@ use simple_eul_prob_tab_utils, only: update_screen_best, eulprob_dist_switch, re
     &posterior_temperature, draw_posterior_row, prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN,&
     &screen_pool_size, shift_needs_disk, disk_radius_px, prob_rnd_scope, keyed_candidate_order, shift_prior_sigma2,&
     &prob_readout, prob_readout_fname, write_prob_readout, report_prob_readout, PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE, &
-    &posterior_row_stats, temperature_or_argmin, prob_row_record
+    &posterior_row_stats, temperature_or_argmin, prob_row_record, prob_row_marginal, marginal_dist
+use simple_eul_prob_marginal,  only: eul_prob_marginal
 use simple_rnd,                only: rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use simple_class_candidates,   only: class_candidates, CANDS_OK, CANDS_NONE
 implicit none
@@ -61,6 +62,10 @@ type :: eul_prob_tab2D
     integer                     :: inpl_kmax = 1, inpl_mmax = 0
     integer(int64)              :: inpl_nptcls = 0_int64, inpl_npose = 0_int64, inpl_nsingle = 0_int64
     real(dp)                    :: inpl_neff_sum = 0.d0
+    ! the students' teacher (set_inpl_marginal): the batch's in-plane marginals beside its rows; off, the fill is the base's
+    logical                     :: l_marg   = .false.
+    integer                     :: marg_kin = 0       !< the heaviest classes whose in-plane rows are kept
+    type(eul_prob_marginal), allocatable :: marg
     contains
     ! CONSTRUCTOR
     procedure :: new_pipeline
@@ -72,6 +77,9 @@ type :: eul_prob_tab2D
     procedure :: open_assignment
     procedure :: keep_batch_rows
     procedure :: get_posterior_row
+    procedure :: set_inpl_marginal
+    procedure :: get_row_marginal
+    procedure :: audit_inpl_marginal
     procedure :: assign_batch
     procedure :: set_inpl_counts
     procedure :: close_assignment
@@ -88,6 +96,7 @@ type :: eul_prob_tab2D
     procedure, private :: new_common
     procedure, private :: initialize_storage
     procedure, private :: finalize_candidate_assignment
+    procedure, private :: finish_marginal2D
 end type eul_prob_tab2D
 
 type :: eval2D_sparse_ws
@@ -235,6 +244,8 @@ contains
         real     :: loss_cell, scr_xy(2,self%nclasses), scr_sdev(self%nclasses), width_best(self%nclasses)
         integer  :: irho, ialpha, kscreen, scr_irot(self%nclasses)
         logical  :: l_bank, l_map, l_disk, l_cont_refined
+        integer, allocatable :: marg_icls(:)        !< the students' teacher: the classes in order
+        real,    allocatable :: marg_shifts(:,:,:)  !< per thread: the shift each entry was last scored at
         if( self%l_sparse_snhc )then
             call self%fill_tab_prob_neigh_range(i_first, i_last)
             return
@@ -275,6 +286,14 @@ contains
             endif
         end do
         nhood_sz_loc = min(self%nhood_sz, nactive)
+        if( self%l_marg )then
+            if( .not. allocated(self%marg) ) allocate(self%marg)
+            call self%marg%new(self%b_ptr%pftc, self%nclasses, self%marg_kin, i_from, i_to, nthr_glob)
+            allocate(marg_icls(self%nclasses), marg_shifts(2,self%nclasses,nthr_glob))
+            do icls = 1,self%nclasses
+                marg_icls(icls) = icls
+            enddo
+        endif
         t_region = omp_get_wtime()
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
@@ -359,7 +378,18 @@ contains
                 cls_dists = huge(1.0)
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
-                    call score_seeded_class(self, icls, iptcl, cxy(2:3), seed_bank(:,:,ithr), l_bank, inpl_dist, irot)
+                    if( self%l_marg )then
+                        ! the same draw, its row's in-plane marginal kept (the students' teacher)
+                        if( l_bank )then
+                            call self%marg%score_entry(self%b_ptr%pftc, self%rnd_scope, icls, icls, i, iptcl, cxy(2:3),&
+                                &self%b_ptr%pftc%ptcl_posterior_temp(iptcl), ithr, inpl_dist, irot, bank=seed_bank(:,:,ithr))
+                        else
+                            call self%marg%score_entry(self%b_ptr%pftc, self%rnd_scope, icls, icls, i, iptcl, cxy(2:3),&
+                                &self%b_ptr%pftc%ptcl_posterior_temp(iptcl), ithr, inpl_dist, irot)
+                        endif
+                    else
+                        call score_seeded_class(self, icls, iptcl, cxy(2:3), seed_bank(:,:,ithr), l_bank, inpl_dist, irot)
+                    endif
                     call self%record_sparse_eval(i, ithr, icls, inpl_dist, irot, 0., 0., .false.)
                     cls_dists(icls) = inpl_dist
                 end do
@@ -420,6 +450,7 @@ contains
                     endif
                     cls_dists_work(icls) = huge(1.0)
                 end do
+                if( self%l_marg ) call self%finish_marginal2D(i, iptcl, ithr, cxy(2:3), marg_icls, marg_shifts(:,:,ithr))
                 ts_refine(ithr) = ts_refine(ithr) + (omp_get_wtime() - t0)
             end do
             !$omp end parallel do
@@ -434,10 +465,16 @@ contains
                 self%temps(i) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), self%b_ptr%pftc%get_pftsz())
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
-                    call self%b_ptr%pftc%gen_posterior_val(icls, iptcl, [0.,0.], self%b_ptr%pftc%ptcl_posterior_temp(iptcl),&
-                        &inpl_dist, irot)
+                    if( self%l_marg )then
+                        call self%marg%score_entry(self%b_ptr%pftc, self%rnd_scope, icls, icls, i, iptcl, [0.,0.],&
+                            &self%b_ptr%pftc%ptcl_posterior_temp(iptcl), ithr, inpl_dist, irot)
+                    else
+                        call self%b_ptr%pftc%gen_posterior_val(icls, iptcl, [0.,0.], self%b_ptr%pftc%ptcl_posterior_temp(iptcl),&
+                            &inpl_dist, irot)
+                    endif
                     call self%record_sparse_eval(i, ithr, icls, inpl_dist, irot, 0., 0., .false.)
                 end do
+                if( self%l_marg ) call self%finish_marginal2D(i, iptcl, ithr, [0.,0.], marg_icls, marg_shifts(:,:,ithr))
                 ts_score(ithr) = ts_score(ithr) + (omp_get_wtime() - t0)
             end do
             !$omp end parallel do
@@ -1054,7 +1091,8 @@ contains
         real,                  intent(in)    :: beta
         type(prob_row_record), intent(inout) :: rec
         real, optional,        intent(inout) :: dists(:)
-        real,    allocatable :: w(:)
+        type(prob_row_marginal) :: marg
+        real,    allocatable :: w(:), drow(:)
         integer, allocatable :: inds(:)
         real(dp) :: tot
         integer  :: j, k, n
@@ -1067,7 +1105,18 @@ contains
         allocate(w(n), inds(n))
         rec%iptcl = self%pinds(i)
         rec%temp  = beta * self%temps(i)
-        call posterior_row_stats(n, self%batch_rows(:,i)%dist, temperature_or_argmin(rec%temp), w, inds, &
+        allocate(drow(n), source=self%batch_rows(:,i)%dist)
+        if( self%l_marg )then
+            if( .not. allocated(self%marg) ) THROW_HARD('no marginals were filled; eul_prob_tab2D%get_posterior_row')
+            ! the loss whose weight at the physical temperature is the class's in-plane marginal under the insertion's
+            ! weighing; the row is read at beta times it, as the drawn losses are
+            call self%marg%get_marginal(i, marg)
+            do j = 1,n
+                if( marg%dmin(j) < 0.1 * huge(1.) ) drow(j) = marginal_dist(marg%lnz(j) - marg%pen(j), marg%dmin(j), &
+                    &marg%temp)
+            enddo
+        endif
+        call posterior_row_stats(n, drow, temperature_or_argmin(rec%temp), w, inds, &
             &rec%imin, rec%pmax, rec%neff, rec%k99, rec%nvalid)
         ! w ascending with its classes in inds: the mass sits at the top
         rec%nkept = min(kmax, rec%nvalid)
@@ -1084,6 +1133,12 @@ contains
         if( rec%imin > 0 )then
             rec%lmin      = self%batch_rows(rec%imin,i)%dist
             rec%inpl_mode = self%batch_rows(rec%imin,i)%inpl
+            if( self%l_marg .and. rec%temp > 0. )then
+                rec%lmin = marg%dmin(rec%imin)
+                do j = 1,marg%nin
+                    if( marg%refs(j) == rec%imin ) rec%inpl_mode = maxloc(marg%rows(:,j), dim=1)
+                enddo
+            endif
             do j = 1,self%batch_nrefined(i)
                 if( self%batch_refined(j,i)%ri == rec%imin )then
                     rec%x_mode = self%batch_refined(j,i)%x
@@ -1095,10 +1150,113 @@ contains
         endif
         if( present(dists) )then
             if( size(dists) < n ) THROW_HARD('the row buffer is shorter than nclasses; eul_prob_tab2D%get_posterior_row')
-            dists(1:n) = self%batch_rows(:,i)%dist
+            dists(1:n) = drow
         endif
-        deallocate(w, inds)
+        call marg%kill
+        deallocate(w, inds, drow)
     end subroutine get_posterior_row
+
+    !> the students' teacher: the dense fills that follow keep each row's in-plane marginals and the in-plane posteriors
+    !! of its kin heaviest classes (get_row_marginal), and get_posterior_row reads the marginals
+    subroutine set_inpl_marginal( self, kin )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer,               intent(in)    :: kin
+        if( kin < 1 ) THROW_HARD('kin must be positive; eul_prob_tab2D%set_inpl_marginal')
+        if( self%l_sparse_snhc ) THROW_HARD('the sparse table keeps no rows; eul_prob_tab2D%set_inpl_marginal')
+        self%l_marg   = .true.
+        self%marg_kin = kin
+    end subroutine set_inpl_marginal
+
+    !> row i's in-plane marginals of the kept batch (set_inpl_marginal first)
+    subroutine get_row_marginal( self, i, marg )
+        class(eul_prob_tab2D),   intent(in)    :: self
+        integer,                 intent(in)    :: i
+        type(prob_row_marginal), intent(inout) :: marg
+        if( .not. self%l_marg ) THROW_HARD('no in-plane marginals: set_inpl_marginal before the fill; eul_prob_tab2D%get_row_marginal')
+        if( .not. allocated(self%marg) ) THROW_HARD('no marginals were filled; eul_prob_tab2D%get_row_marginal')
+        call self%marg%get_marginal(i, marg)
+    end subroutine get_row_marginal
+
+    !> The audit of the teacher's in-plane weighting on the kept rows i_first..i_last: every class
+    !! recomputed by the in-plane insertion's route (insert_inplane) at the shift it would take the class at, were it
+    !! committed (row_candidate, record_seed_shift; zero without shifts), against the teacher's marginal
+    !! (eul_prob_marginal%audit_entry), and each row's class marginals over its kept classes against its training
+    !! losses (audit_view_weights, no shift-prior term). rep as eul_prob_tab%audit_inpl_marginal's
+    subroutine audit_inpl_marginal( self, i_first, i_last, rep )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer,               intent(in)    :: i_first, i_last
+        real(dp),              intent(out)   :: rep(10)
+        type(prob_row_record) :: rec
+        type(prob_candidate)  :: candidate
+        type(ptcl_ref)        :: assgn
+        real(dp), allocatable :: lnz_ins(:,:), pen_ins(:,:), devs(:,:)
+        real,     allocatable :: dmin_ins(:,:), drow(:,:)
+        real(dp) :: dev(7), vdev(2)
+        real     :: sh(2)
+        integer  :: i, icls, ithr
+        if( .not. (self%l_marg .and. allocated(self%marg)) ) THROW_HARD('no marginals were filled; eul_prob_tab2D%audit_inpl_marginal')
+        allocate(lnz_ins(self%nclasses,i_first:i_last), pen_ins(self%nclasses,i_first:i_last), source=0.d0)
+        allocate(dmin_ins(self%nclasses,i_first:i_last), drow(self%nclasses,i_first:i_last), source=0.)
+        allocate(devs(10,i_first:i_last), source=0.d0)
+        do i = i_first,i_last
+            call self%get_posterior_row(i, self%p_ptr%prob_beta, 1, rec, drow(:,i))
+        enddo
+        !$omp parallel do default(shared) private(i,icls,ithr,sh,candidate,assgn,dev,vdev) schedule(static) &
+        !$omp proc_bind(close) num_threads(nthr_glob)
+        do i = i_first,i_last
+            ithr = omp_get_thread_num() + 1
+            do icls = 1,self%nclasses
+                candidate    = self%row_candidate(icls, i)
+                assgn%x      = candidate%x
+                assgn%y      = candidate%y
+                assgn%has_sh = candidate%has_sh
+                call record_seed_shift(assgn, self%seed_shifts(:,i), self%seed_has_sh(i), self%p_ptr%l_doshift)
+                sh = 0.
+                if( self%p_ptr%l_doshift .and. assgn%has_sh ) sh = [assgn%x, assgn%y]
+                call self%marg%audit_entry(self%b_ptr%pftc, icls, icls, i, self%pinds(i), sh, pen_ins(icls,i), ithr, &
+                    &dev, lnz_ins(icls,i), dmin_ins(icls,i))
+                devs(1:6,i) = max(devs(1:6,i), dev(1:6))
+                devs(7,i)   = devs(7,i) + dev(7)
+            enddo
+            call self%marg%audit_view_weights(i, lnz_ins(:,i), dmin_ins(:,i), pen_ins(:,i), drow(:,i), vdev)
+            devs(8,i) = vdev(1)
+            devs(9,i) = vdev(1) / vdev(2)
+        enddo
+        !$omp end parallel do
+        rep    = 0.d0
+        rep(1) = real(self%nclasses,dp) * real(i_last - i_first + 1,dp)
+        rep(2) = sum(devs(7,:))
+        do i = i_first,i_last
+            rep(3:8)  = max(rep(3:8), devs(1:6,i))
+            rep(9:10) = max(rep(9:10), devs(8:9,i))
+        enddo
+        call rec%kill
+        deallocate(lnz_ins, pen_ins, devs, dmin_ins, drow)
+    end subroutine audit_inpl_marginal
+
+    !> particle i's row complete (the students' teacher): its refined entries' in-plane rows at their shifts (the
+    !! thread's buffer holds the particle whole), then the heaviest classes' in-plane posteriors, each at the shift its
+    !! entry was last scored at (seed the unrefined ones'); shifts the thread's work
+    subroutine finish_marginal2D( self, i, iptcl, ithr, seed, icls_of, shifts )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer,               intent(in)    :: i, iptcl, ithr, icls_of(:)
+        real,                  intent(in)    :: seed(2)
+        real,                  intent(inout) :: shifts(:,:)
+        real(dp) :: pens(self%nclasses)
+        integer  :: j, icls
+        shifts(1,:) = seed(1)
+        shifts(2,:) = seed(2)
+        do j = self%candidate_buffers(ithr)%nused,1,-1
+            if( self%candidate_buffers(ithr)%particle_indices(j) /= i ) exit
+            if( .not. self%candidate_buffers(ithr)%candidates(j)%has_sh ) cycle
+            icls = self%candidate_buffers(ithr)%candidates(j)%iref
+            shifts(:,icls) = [self%candidate_buffers(ithr)%candidates(j)%x, self%candidate_buffers(ithr)%candidates(j)%y]
+            call self%marg%rescore_entry(self%b_ptr%pftc, icls, icls, i, iptcl, shifts(:,icls), ithr)
+        enddo
+        ! the 2D insertion weighs the committed class's rotations only: no view weight, no shift-prior term
+        pens = 0.d0
+        call self%marg%finish_row(self%b_ptr%pftc, i, iptcl, icls_of, pens, ithr)
+    end subroutine finish_marginal2D
 
     !> the assignment closed: its readouts as a record, published by a distributed part (the master merges the parts'
     !! records in part order and reports) or reported here by the project owner
@@ -1369,6 +1527,12 @@ contains
         self%l_model_set        = .false.
         self%sigma2_prior_model = 0.
         call self%candidate_store%kill
+        if( allocated(self%marg) )then
+            call self%marg%kill
+            deallocate(self%marg)
+        endif
+        self%l_marg   = .false.
+        self%marg_kin = 0
         if( allocated(self%candidate_buffers) )then
             do ithr = 1,size(self%candidate_buffers)
                 call self%candidate_buffers(ithr)%kill

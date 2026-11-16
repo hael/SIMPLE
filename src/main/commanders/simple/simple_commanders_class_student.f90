@@ -2,9 +2,9 @@
 module simple_commanders_class_student
 use simple_commander_base,         only: commander_base
 use simple_cmdline,                only: cmdline
-use simple_strategy_class_student, only: run_learn_class_student, run_predict_classes
+use simple_strategy_class_student, only: run_learn_class_student, run_class_posterior_mode, run_predict_classes
 use simple_defs_hhcnn,             only: KMAX_CLASS, STUDENT_SHIFT_SIGMA, STUDENT_TRS, STUDENT_LP_VALIDATE, CLASS_DENSE_SHIFT_SIGMA, &
-    &CLASS_DENSE_PROB_BETA, CLASS_MINPOP_FRC, STUDENT_TRAIN_PROJ, STUDENT_ALL_PROJ, STUDENT_UNSEEN_PROJ, &
+    &CLASS_MINPOP_FRC, CLASS_STUDENT_PROB_BETA, CLASS_REFERENCE_FNAME, CLASS_REFERENCE_CAVGS, STUDENT_TRAIN_PROJ, STUDENT_ALL_PROJ, STUDENT_UNSEEN_PROJ, &
     &CLASS_STUDENT_MODEL_FNAME, CLASS_STUDENT_PRED_TABLE, CLASS_STUDENT_CAVGS, VALIDATE_CLASS_STUDENT_REPORT, VALIDATE_CLASS_STUDENT_DETAILS
 implicit none
 private
@@ -44,6 +44,8 @@ contains
         call cline%set('objfun',  'euclid')
         call cline%set('refine',  'prob')
         call cline%set('center',  'no')
+        ! the physical teacher: the posterior a solve2D run ends at, no tempering
+        call cline%set('prob_beta', CLASS_STUDENT_PROB_BETA)
         call run_learn_class_student(cline)
     end subroutine exec_learn_class_student
 
@@ -79,10 +81,8 @@ contains
         use simple_parameters,              only: parameters
         use simple_sp_project,              only: sp_project
         use simple_commanders_solve2D,      only: commander_solve2D
-        use simple_commanders_refine2D,     only: commander_refine2D
         use simple_commanders_center_ptcls, only: commander_center_ptcls
         use simple_commanders_mkcavgs,      only: commander_make_cavgs
-        use simple_refine2D_fnames,         only: refine2D_cavgs_fname
         class(commander_validate_class_student), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         integer,          parameter :: NPHASES = 10   !< the validation's timed phases
@@ -90,12 +90,11 @@ contains
         character(len=*), parameter :: PHASE_NAMES(NPHASES) = [character(len=48) :: &
             &'Drawing the training set', 'Teacher: solve2D on the training set', &
             &'Training the student (learn_class_student)', 'Centring every particle (center_ptcls)', &
-            &'Student prediction (predict_classes)', 'Reference: best class of the unseen (refine2D)', &
+            &'Student prediction (predict_classes)', 'Reference: the physical posterior''s best class', &
             &'Class averages of the student''s classes', 'Statistics', 'Project copies and bookkeeping', &
             &'Prediction at ideal shifts (details)']
         integer, parameter :: PHASE_ORDER(NPHASES) = [1, 2, 3, 4, 5, 6, 10, 7, 8, 9] !< the run's order
         type(commander_solve2D)             :: xsolve2D
-        type(commander_refine2D)            :: xrefine2D
         type(commander_center_ptcls)        :: xcenter
         type(commander_make_cavgs)          :: xmkcavgs
         type(commander_learn_class_student) :: xlearn
@@ -258,15 +257,17 @@ contains
         enddo
         call simple_chdir(edir)
         rt_ph(5) = toc(t0)
-        ! ---- the search the student replaces: one dense pass of the same particles against the teacher's averages, as
-        !      the first iteration of its own run (every particle searches the disk), at the student's box and band
+        ! ---- the reference the student is judged against: the physical posterior's best class of the same particles
+        !      against the teacher's averages (the class of largest in-plane marginal mass at the physical temperature,
+        !      as the hard assignment at the end of a solve2D run takes it), every particle searching the
+        !      disk, at the student's box and band, with the class averages of that assignment
         t0 = tic()
         call enter_subdir('dense')
         call write_copy(work, STUDENT_UNSEEN_PROJ)
         rt_ph(9) = rt_ph(9) + toc(t0)
-        write(logfhandle,'(A)') '>>> VALIDATE_CLASS_STUDENT: DENSE PASS OF THE UNSEEN PARTICLES'
+        write(logfhandle,'(A)') '>>> VALIDATE_CLASS_STUDENT: THE PHYSICAL POSTERIOR''S BEST CLASS OF THE UNSEEN PARTICLES'
         t0 = tic()
-        call cl%set('prg',         'refine2D')
+        call cl%set('prg',         'learn_class_student')
         call cl%set('projfile',    STUDENT_UNSEEN_PROJ)
         call cl%set('oritype',     'ptcl2D')
         call cl%set('ncls',        ncls_t)
@@ -274,15 +275,25 @@ contains
         call cl%set('refine',      'prob')
         call cl%set('objfun',      'euclid')
         call cl%set('lp',          STUDENT_LP_VALIDATE)
+        call cl%set('trs',         STUDENT_TRS)
         call cl%set('shift_sigma', CLASS_DENSE_SHIFT_SIGMA)
-        call cl%set('prob_beta',   CLASS_DENSE_PROB_BETA)
-        call cl%set('maxits',      1)
+        call cl%set('prob_beta',   CLASS_STUDENT_PROB_BETA)
         call cl%set('center',      'no')
         call cl%set('mskdiam',     params%mskdiam)
         call cl%set('nthr',        params%nthr)
+        call cl%set('fname',       CLASS_REFERENCE_FNAME)
         call cl%set('mkdir',       'no')
+        call run_class_posterior_mode(cl)
+        call cl%kill
+        call cl%set('prg',      'make_cavgs')
+        call cl%set('projfile', STUDENT_UNSEEN_PROJ)
+        call cl%set('ncls',     ncls_t)
+        call cl%set('refs',     CLASS_REFERENCE_CAVGS)
+        call cl%set('mskdiam',  params%mskdiam)
+        call cl%set('nthr',     params%nthr)
+        call cl%set('mkdir',    'no')
         call set_parts(cl)
-        call xrefine2D%execute(cl)
+        call xmkcavgs%execute(cl)
         call cl%kill
         call res%kill
         call res%read(string(STUDENT_UNSEEN_PROJ))
@@ -292,7 +303,7 @@ contains
             e3_d(i)   = res%os_ptcl2D%e3get(i)
             sh_d(:,i) = res%os_ptcl2D%get_2Dshift(i)
         enddo
-        dense_cavgs = simple_abspath(refine2D_cavgs_fname(1, params%ext%to_char()))
+        dense_cavgs = simple_abspath(string(CLASS_REFERENCE_CAVGS))
         call simple_chdir(edir)
         rt_ph(6) = toc(t0)
         ! ---- the centring's ceiling: the student's prediction of the same particles at the dense pass's shifts
@@ -468,8 +479,10 @@ contains
                 write(uu,'(a)') repeat('=', 96)
                 write(uu,'(a,i0,a,i0,a)') 'The student learns the classes of a solve2D run on ', ntrain, ' particles (', ncls_t, &
                     &' classes). For each'
-                write(uu,'(a)') 'new particle it proposes a shortlist of likely classes; where it is confident, alignment tests'
-                write(uu,'(a,i0,a)') 'only the shortlist. Checked on ', nunseen, ' particles it has not seen, against a full search.'
+                write(uu,'(a)') 'new particle it ranks the classes by how likely they are. Where it is confident (its'
+                write(uu,'(a)') 'calibrated threshold), it gives the particle a shortlist: its few likely classes, the only ones'
+                write(uu,'(a,i0,a)') 'alignment then searches. Every other particle is searched over all ', ncls_t, ' classes.'
+                write(uu,'(a,i0,a)') 'Checked on ', nunseen, ' particles it has not seen, against a full search.'
                 write(uu,'(a)') ''
                 write(uu,'(a,a10,3x,a)') lj('', 54), 'result', 'goal'
                 write(uu,'(a)') RULE
@@ -506,7 +519,10 @@ contains
                         &' of its ', r2s(cost_s, 3), ' ms.'
                 endif
                 write(uu,'(a)') ''
-                write(uu,'(a)') 'Full search: refine2D refine=prob, one iteration over all classes against the teacher''s averages.'
+                write(uu,'(a)') 'Full search: the physical posterior''s best class (the largest in-plane marginal at the physical'
+                write(uu,'(a)') 'temperature) over all classes against the teacher''s averages, as a solve2D run''s hard assignment ends.'
+                write(uu,'(a)') 'Class averages: every unseen particle, shortlisted or not, at the student''s most likely class,'
+                write(uu,'(a)') 'with no search.'
                 write(uu,'(a)') 'The student''s cost includes centring (center_ptcls). Diagnostics: '//VALIDATE_CLASS_STUDENT_DETAILS
                 write(uu,'(a)') ''
                 call write_timings(uu)

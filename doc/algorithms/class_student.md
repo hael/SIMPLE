@@ -15,7 +15,11 @@ The model is the pose student's, through the shared core `polar_student`
 (`src/main/learn/simple_polar_student.f90`):
 - the features: the particle's polar Fourier half ring at the band, whitened by the frozen sigma2 shell weights;
 - the network: the Hermitian HHCNN;
-- the readout: a learned template per class, correlated over every rotation of the ring.
+- the readout: a learned template per class, correlated over every rotation of the ring. A class's logit is the
+  log-sum-exp of its scores over the rotations at the readout's learned scale, so the class posterior is the
+  in-plane marginal of one softmax over class and rotation, and the read-out angle is that softmax's mode. The pose
+  student keeps the core's other readout, the maximum over the rotations; the model file records the log-sum-exp
+  (`readout=lse`) and the class model is at version 2.
 
 Only the classes differ.
 
@@ -32,8 +36,29 @@ Only the classes differ.
 
 `learn_class_student` fills the dense 2D probability table (`eul_prob_tab2D`, `refine=prob`) of the selected
 particles against the teacher's class averages, prepared as refine2D's matcher prepares them, one batch at a time.
-`get_posterior_row` reads each row before the batch's assignment releases it, at the temperature the table draws
-at. The soft targets are those rows' posteriors over the classes.
+`get_posterior_row` reads each row before the batch's assignment releases it.
+
+**The teacher is the physical posterior**, the one a solve2D run ends at. The learn program sets `prob_beta` to 1
+(`CLASS_STUDENT_PROB_BETA`), so the table neither draws nor reads at a tempered temperature. Each class's whole
+in-plane row is weighed by the 2D in-plane insertion's own quadrature:
+- `inpl_quadrature`, at the particle's physical temperature T;
+- at the shift the insertion would take the class at: the refined entry's, else the seed's.
+
+It gives ln Z = ln sum_r exp[-T (d_r - d_min)] and d_min, so the class's mass is the in-plane marginal
+exp(ln Z - T d_min). The soft targets are those masses normalised over the classes
+(`simple_eul_prob_marginal`, `eul_prob_tab2D%set_inpl_marginal`).
+
+**The rotation targets.** For the 8 classes of largest mass (`KMAX_INPL_ROW`) the teacher keeps their in-plane
+posteriors. The rotation loss is the cross-entropy of the network's joint softmax over class and rotation against
+the joint targets: the class's mass times its in-plane posterior, binned onto the network's rotation grid. Its
+weight is 1 per unit of the teacher's mass.
+
+**The audit.** On its first batch the learn program recomputes every entry by the insertion's own route, and stops
+(`<fname>_teacher_audit.txt`) unless:
+- the shift, temperature, ln Z, d_min and in-plane posterior are exactly the insertion's;
+- every row is read at the physical temperature, and the class distribution it trains on equals the normalised
+  exp(ln Z - T d_min) within the rounding of its single-precision losses;
+- on every row, the rotation targets read back the teacher's in-plane angle within half a rotation step.
 
 Training is the core's, as for the pose student:
 - every tenth micrograph is held out for early stopping and calibration;
@@ -97,6 +122,13 @@ On the Dell, Release builds, three seeds unless stated (`doc/implementation_note
   - at converged shifts, for 0.96 and 0.89.
 
   The centring's residual (3 to 4 Å on trpv1, 6 to 8 Å on bgal) against the 2 Å training disk is the gap.
+- **The physical teacher** (2026-11-15, `planned/student_inplane_posterior.md`, eight paired seeds against the
+  base's teacher, the reference being the physical posterior's best class):
+  - it shortlists 10.1 (bgal) and 5.6 (trpv1) more particles in 100, with shorter lists;
+  - its shortlists hold the reference's class for 94.6% on bgal, at the 95% the threshold is calibrated for,
+    against the base's over-cautious 97.7%. On trpv1 they hold it for 98.1% against 99.1%;
+  - it seeds more held-out rows (+0.010 on bgal, +0.044 on trpv1) and reads the angle better on bgal (0.84° against
+    0.90°).
 - **The exact-class read is too strict where the classes repeat views** (bgal's D2). Hans inspected the class
   averages of the student's assignments and judged them good enough (the plan's ruling 15).
 - **Cost:**
@@ -128,8 +160,11 @@ On the Dell, Release builds, three seeds unless stated (`doc/implementation_note
 - `src/main/learn/simple_class_student.f90`: the class (`class_student`), its candidates and read-out, its
   model-file keys; tester `simple_class_student_tester.f90` (suite `class_student`).
 - `src/main/learn/simple_polar_student.f90`: the shared core (suite `polar_student`).
-- `src/main/strategies/parallelization/simple_strategy_class_student.f90`: `learn_class_student_exec`,
-  `predict_classes_exec`; the shared helpers in `simple_strategy_student_common.f90` (suite `student_strategy`).
+- `src/main/strategies/parallelization/simple_strategy_class_student.f90`: `learn_class_student_exec` (and, in its
+  reference mode, `run_class_posterior_mode`), `predict_classes_exec`; the shared helpers and the audit's reports in
+  `simple_strategy_student_common.f90` (suite `student_strategy`).
+- `src/main/strategies/search/probabilistic/simple_eul_prob_marginal.f90`: the teacher's in-plane marginal, drawn
+  and weighed as the fill and the insertion do (tested in `simple_eul_prob_tab_tester.f90`).
 - `src/main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90`: `keep_batch_rows` and `get_posterior_row`
   (the teacher's rows), and the candidates in the sparse fill.
 - `src/main/project/simple_class_candidates.f90`: the artifact (suite `class_candidates` in `unit_project`).
@@ -145,10 +180,12 @@ On the Dell, Release builds, three seeds unless stated (`doc/implementation_note
   - a random sample of `nsample` particles and solve2D on it (the teacher);
   - the student trained on the result;
   - `center_ptcls` on every particle;
-  - the unseen particles predicted, then assigned by the full search, the reference: each particle's best-scoring
-    class over all classes, in-plane rotations and shifts (`refine2D refine=prob` at `prob_beta` 100, one
-    iteration against the teacher's averages). It is not `refine=greedy`: it scores as the table the student
-    learned from;
+  - the unseen particles predicted, then assigned by the full search, the reference: the physical posterior's best
+    class. That is each particle's class of largest in-plane marginal mass at the physical temperature, over all
+    classes against the teacher's averages, every particle searching the shift disk at the full box. It is the hard
+    assignment a solve2D run ends at, and the posterior the student learns (`run_class_posterior_mode`, the learn
+    program's table in its reference mode; each written class is checked against its row's marginals). The class
+    averages of that assignment are the full search's;
   - the same particles predicted again at the full search's shifts (ideal centring);
   - the class averages of the student's assignments.
 

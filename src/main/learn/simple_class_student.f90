@@ -9,7 +9,8 @@ use simple_defs,          only: sp, dp
 use simple_error,         only: simple_exception
 use simple_string,        only: string
 use simple_polar_feats,   only: polar_feat
-use simple_polar_student, only: polar_student, polar_student_header, student_train_profile, polar_student_targets
+use simple_polar_student, only: polar_student, polar_student_header, student_train_profile, polar_student_targets, &
+    &teacher_rot_bin
 use simple_math,          only: hpsort
 use simple_defs_hhcnn,    only: KMAX_CLASS
 implicit none
@@ -18,7 +19,7 @@ public :: class_student, class_pred, CLASS_STUDENT_VERSION, run_all_class_studen
 private
 #include "simple_local_flags.inc"
 
-integer,  parameter :: CLASS_STUDENT_VERSION = 1
+integer,  parameter :: CLASS_STUDENT_VERSION = 2     !< 2: the physical teacher, the log-sum-exp readout recorded
 real(sp), parameter :: CAND_MASS             = 0.99  !< the candidates hold this share of the posterior
 character(len=*), parameter :: MODEL_TITLE   = 'class student model'
 
@@ -49,6 +50,7 @@ type :: class_student
     procedure :: predict_tensor
     procedure :: cands_of
     procedure :: rotation_of
+    procedure :: mapping_error
     procedure :: write
     procedure :: read
     procedure :: get_ncls
@@ -92,7 +94,8 @@ contains
         allocate(self%states(ncls), source=states)
         allocate(self%core)
         ! classes without mirrors: the 2D search tests none, so the readout scores the map alone
-        call self%core%new(pftsz, kfromto, box, box_crop, smpd, mskdiam, lp, wk, with_ctf, ncls, .false., width, seed)
+        call self%core%new(pftsz, kfromto, box, box_crop, smpd, mskdiam, lp, wk, with_ctf, ncls, .false., &
+            &width, seed, lse=.true.)
         self%exists = .true.
     end subroutine new
 
@@ -106,25 +109,68 @@ contains
     end subroutine init_readout
 
     !> The training on the teacher's rows of n particles (the core's training): x, ctf2, side the tensors, dists(ncls, n)
-    !! the rows' losses and temps(n) their temperatures, whose posterior over the classes is each row's soft target
+    !! the rows' losses and temps(n) their temperatures, whose posterior over the classes is each row's soft target.
+    !! With the in-plane posteriors inpl_rows(nrots_t, kq, n) of the rows' classes inpl_cls(kq, n) (0 for none) on the
+    !! teacher's rotation grid, the rotation targets: each class's mass in the row times its in-plane posterior on the
+    !! readout's rotations (teacher_rot_bin, no reflection)
     subroutine train( self, n, x, ctf2, side, dists, temps, held, prob_beta, shift_aug_px, max_epochs, patience, &
-        &nthr, log_unit )
+        &nthr, log_unit, inpl_cls, inpl_rows )
         class(class_student), intent(inout) :: self
         integer,              intent(in)    :: n, max_epochs, patience, nthr, log_unit
         real(sp),             intent(in)    :: x(:,:,:,:), ctf2(:,:), side(n)
         logical,              intent(in)    :: held(n)
         real(sp),             intent(in)    :: dists(self%ncls, n), temps(n), prob_beta, shift_aug_px
-        real(sp), allocatable :: targets(:,:)
-        integer :: isample
+        integer,  optional,   intent(in)    :: inpl_cls(:,:)
+        real(sp), optional,   intent(in)    :: inpl_rows(:,:,:)
+        real(sp), allocatable :: targets(:,:), tq(:,:,:)
+        integer,  allocatable :: tqc(:,:)
+        integer :: isample, kq, nrt
         if( .not. self%exists ) THROW_HARD('student not constructed; class_student%train')
         allocate(targets(self%ncls, n))
+        if( present(inpl_cls) )then
+            if( .not. present(inpl_rows) ) THROW_HARD('in-plane rows without their classes; class_student%train')
+            kq  = size(inpl_cls,1)
+            nrt = self%core%get_nrot_targets()
+            allocate(tq(nrt, kq, n), source=0.)
+            allocate(tqc(kq, n), source=0)
+        endif
         !$omp parallel do default(shared) private(isample) schedule(static) proc_bind(close)
         do isample = 1,n
             call polar_student_targets(self%ncls, dists(:,isample), temps(isample), targets(:,isample))
+            if( allocated(tq) ) call rotation_targets(isample)
         enddo
         !$omp end parallel do
-        call self%core%train(n, x, ctf2, side, targets, held, prob_beta, shift_aug_px, max_epochs, patience, nthr, log_unit)
+        if( allocated(tq) )then
+            call self%core%train(n, x, ctf2, side, targets, held, prob_beta, shift_aug_px, max_epochs, patience, nthr, &
+                &log_unit, rot_targets=tq, rot_classes=tqc)
+            deallocate(tq, tqc)
+        else
+            call self%core%train(n, x, ctf2, side, targets, held, prob_beta, shift_aug_px, max_epochs, patience, nthr, log_unit)
+        endif
         deallocate(targets)
+
+    contains
+
+        !> sample is's rotation targets from its classes' in-plane rows and masses
+        subroutine rotation_targets( is )
+            integer, intent(in) :: is
+            integer  :: k, ic, r, nrt_t, b
+            real(sp) :: ang_t
+            nrt_t = size(inpl_rows,1)
+            do k = 1,kq
+                ic = inpl_cls(k,is)
+                if( ic < 1 ) cycle
+                if( .not. (targets(ic,is) > 0.) ) cycle
+                tqc(k,is) = ic
+                do r = 1,nrt_t
+                    if( .not. (inpl_rows(r,k,is) > 0.) ) cycle
+                    ang_t = real(r - 1) * 360. / real(nrt_t)
+                    b     = teacher_rot_bin(ang_t, 0., .false., nrt)
+                    tq(b,k,is) = tq(b,k,is) + targets(ic,is) * inpl_rows(r,k,is)
+                enddo
+            enddo
+        end subroutine rotation_targets
+
     end subroutine train
 
     !> the workspaces of a team of nthr threads for predict_feat
@@ -193,6 +239,45 @@ contains
         call self%core%class_rotation(ithr, icls, ang, refl)
         e3 = modulo(360. - ang, 360.)
     end function rotation_of
+
+    !> The rotation targets' mapping on one real row: each class cls(k) (0 for none) with its in-plane
+    !! posterior rows(:,k) on the teacher's grid, whose angles rot_t the calculator gives: the mode's target rotation
+    !! (train's rule, teacher_rot_bin) read out as the class's in-plane angle (rotation_of's) against the teacher's
+    !! e3 = 360 - rot_t(mode); err(1) the largest angular difference, err(2) the largest departure of rot_t from the
+    !! uniform grid the targets assume, ncls_read the classes read, each accumulated; err(3) half the student's
+    !! rotation step
+    subroutine mapping_error( self, cls, rows, rot_t, err, ncls_read )
+        class(class_student), intent(in)    :: self
+        integer,              intent(in)    :: cls(:)
+        real(sp),             intent(in)    :: rows(:,:), rot_t(:)
+        real(sp),             intent(inout) :: err(3)
+        integer,              intent(inout) :: ncls_read
+        integer  :: k, r, nrt_t, nrt, b
+        real(sp) :: e3s, e3t
+        nrt_t = size(rows,1)
+        nrt   = self%core%get_nrot_targets()
+        err(3) = 180. / real(nrt)
+        do r = 1,nrt_t
+            err(2) = max(err(2), angle_apart(rot_t(r), real(r - 1) * 360. / real(nrt_t)))
+        enddo
+        do k = 1,size(cls)
+            if( cls(k) < 1 ) cycle
+            r         = maxloc(rows(:,k), dim=1)
+            b         = teacher_rot_bin(real(r - 1) * 360. / real(nrt_t), 0., .false., nrt)
+            e3s       = modulo(360. - real(b - 1) * 360. / real(nrt), 360.)
+            e3t       = modulo(360. - rot_t(r), 360.)
+            err(1)    = max(err(1), angle_apart(e3s, e3t))
+            ncls_read = ncls_read + 1
+        enddo
+
+    contains
+
+        pure real(sp) function angle_apart( a, b ) result( d )
+            real(sp), intent(in) :: a, b
+            d = abs(modulo(a - b + 180., 360.) - 180.)
+        end function angle_apart
+
+    end subroutine mapping_error
 
     ! ===== THE MODEL FILE =====
 
