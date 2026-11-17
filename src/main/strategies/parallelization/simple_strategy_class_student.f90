@@ -12,14 +12,15 @@ use simple_image,                   only: image
 use simple_eo_partition,            only: ensure_field_halves
 use simple_classaverager,           only: cavger_new, cavger_read_all, cavger_kill
 use simple_eul_prob_tab2D,          only: eul_prob_tab2D
-use simple_eul_prob_tab_utils,      only: prob_row_record, prob_row_file, prob_row_marginal
+use simple_eul_prob_tab_utils,      only: prob_row_record, prob_row_file, prob_row_marginal, record_shift_state, disk_radius_px
 use simple_matcher_ptcl_batch,      only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D, check_pass_team
 use simple_matcher_ptcl_io,         only: ptcl_read_session
 use simple_matcher_pftc_prep,       only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims, only: set_bp_range2D, adopt_run_seed
 use simple_sigma2_bootstrap,        only: ensure_sigma2_for_iteration
 use simple_qsys_funs,               only: qsys_declare_part_finished
-use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad
+use simple_class_student_align,     only: class_student_align
+use simple_shiftmap_srch,           only: setup_shiftmap_srch
 use simple_polar_feats,             only: polar_feats, polar_feat, polar_feats_hash_ints
 use simple_class_student,           only: class_student, class_pred
 use simple_polar_student,           only: polar_student_targets
@@ -27,7 +28,7 @@ use simple_strategy_student_common, only: report_teacher_audit, report_mapping_a
     &file_hash, choose_student_design, fname_base, student_part_pinds, student_predict_parts, student_sigma2_for_pass
 use simple_defs_hhcnn,              only: KMAX_CLASS, STUDENT_CONF_FRACTION, STUDENT_KMAX_ROW, STUDENT_WIDTHS, &
     &STUDENT_WIDEST_MIN_ROWS, STUDENT_MAX_EPOCHS, STUDENT_PATIENCE_EPOCHS, STUDENT_SHIFT_AUG_NSIG, &
-    &STUDENT_SHIFT_REG_HALFWIDTH, STUDENT_SHIFT_REG_MAXITS, CLASS_STUDENT_TEACHER_ITER, CLASS_STUDENT_NDESIGNS, &
+    &CLASS_STUDENT_TEACHER_ITER, CLASS_STUDENT_NDESIGNS, &
     &KMAX_INPL_ROW
 use simple_rnd,                     only: rnd_run_seed
 use simple_type_defs,               only: OBJFUN_EUCLID, PTCL2D_SEG
@@ -724,9 +725,9 @@ contains
         call simple_end('**** SIMPLE_PREDICT_CLASSES NORMAL STOP ****', print_simple=.false.)
     end subroutine predict_classes_master
 
-    !> The student's class, in-plane angle, candidates and confidence for the selected particles, the shift registered
-    !! against the predicted class given refs; to <fname>_pred.txt, the records (class, e3, shift, pconf, route) and the
-    !! project's class_candidates artifact
+    !> The student's class, in-plane angle, candidates and confidence for the selected particles; given the class averages
+    !! refs, each particle aligned over the disk about its stored shift against its candidates; to <fname>_pred.txt,
+    !! <fname>_times.txt, the records (class, e3, shift, pconf, route) and the class_candidates artifact
     subroutine predict_classes_exec( params, build, cline )
         type(parameters), target, intent(inout) :: params
         type(builder),    target, intent(inout) :: build
@@ -735,17 +736,19 @@ contains
         type(ptcl_read_session)  :: reads
         type(image), allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_imgs(:)
         type(polar_feats)        :: feats
-        type(string)             :: base, fname_pred
+        type(string)             :: base, fname_pred, fname_times
         type(class_pred), allocatable :: preds(:)
-        type(pftc_shsrch_grad), allocatable :: shsrch(:)
-        real,    allocatable     :: wk(:,:), prob(:,:), e3_pred(:), sh_reg(:,:)
+        type(class_student_align), allocatable :: aln(:)
+        real,    allocatable     :: wk(:,:), prob(:,:), e3_pred(:), sh_in(:,:), e3_aln(:), sh_aln(:,:)
+        real,    allocatable     :: sdev_aln(:)
         integer, allocatable     :: pinds(:), batches(:,:), class_stored(:), routes(:), ncands(:), cands_all(:,:)
+        integer, allocatable     :: cls_aln(:)
         type(class_candidates)   :: cands_art
         character(len=:), allocatable :: msg
         character(len=*), parameter :: PRED_HEADER = '# iptcl eo class pmax k99 ncand conf route e3 x y class_stored cands'
         integer(timer_int_kind)  :: t0, t_all
-        real(timer_int_kind)     :: rt_prep, rt_batch, rt_pred, rt_write, rt_all
-        real     :: conf_threshold, conf_fraction, heldout_seeded, heldout_recovered, lims_reg(2,2)
+        real(timer_int_kind)     :: rt_prep, rt_batch, rt_pred, rt_aln, rt_write, rt_all
+        real     :: conf_threshold, conf_fraction, heldout_seeded, heldout_recovered
         integer  :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, nthr, pred_unit, io_stat, kfromto(2)
         integer, allocatable     :: pinds_part(:)
         integer  :: route, n_seeded, n_capped, n_agree, j
@@ -770,7 +773,8 @@ contains
         call feats%new(student%get_pftsz(), kfromto, params%box, wk)
         base = fname_base(params%fname)
         if( l_part ) base = base%to_char()//'_part'//int2str(params%part)
-        fname_pred = base%to_char()//'_pred.txt'
+        fname_pred  = base%to_char()//'_pred.txt'
+        fname_times = base%to_char()//'_times.txt'
         call build%spproj_field%get_pinds(1, 'state', pinds)
         if( .not. allocated(pinds) ) THROW_HARD('no selected particle; predict_classes')
         if( size(pinds) < 1 ) THROW_HARD('no selected particle; predict_classes')
@@ -790,7 +794,7 @@ contains
         write(logfhandle,'(A,I0,A,I0,A,F7.2,A)') '>>> CLASS STUDENT PREDICTION: ', nptcls, ' particles over ', &
             &student%get_ncls(), ' classes at lp ', params%lp, ' A'
         ! the batches and the calculator: one reference slot (the features need the particles alone), or, given refs, the
-        ! class averages with sigma2, as learn_class_student prepares them, for the shift registration
+        ! class averages with sigma2, as learn_class_student prepares them, and the shift maps of the alignment
         l_reg       = cline%defined('refs')
         batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
         nbatches    = 1 + (nptcls - 1) / batchsz_max
@@ -809,27 +813,34 @@ contains
             if( any(params%kfromto /= kfromto) ) THROW_HARD('the class averages'' band differs from the model''s; predict_classes')
             call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, batchsz_max, CLASS_STUDENT_TEACHER_ITER)
             call cavger_kill
+            call setup_shiftmap_srch(params, build)
         else
             call build%pftc%new(params, 1, [1,batchsz_max], kfromto)
         endif
         nthr = params%nthr
         !$ nthr = omp_get_max_threads()
         if( l_reg )then
-            lims_reg(:,1) = -STUDENT_SHIFT_REG_HALFWIDTH / params%smpd
-            lims_reg(:,2) =  STUDENT_SHIFT_REG_HALFWIDTH / params%smpd
-            allocate(shsrch(nthr))
-            do i = 1,nthr
-                call shsrch(i)%new_fixed(build, lims_reg, maxits=STUDENT_SHIFT_REG_MAXITS, coarse_init=.true.)
+            ! the particles enter at their picked positions, not yet centred: the disk under the prior about the stored shift
+            do i = 1,nptcls
+                call build%spproj_field%set(pinds(i), 'shsig',  -1.)
+                call build%spproj_field%set(pinds(i), 'shincr',  0.)
             enddo
+            allocate(aln(nthr))
+            do i = 1,nthr
+                call aln(i)%new(params, build, KMAX_CLASS)
+            enddo
+            write(logfhandle,'(A,F6.1,A)') '>>> CLASS STUDENT ALIGNMENT: every rotation, shifts within ', &
+                &disk_radius_px(params%shift_sigma, params%smpd, params%box) * params%smpd, ' A of the picked position'
         endif
         call student%prepare_predict(nthr)
         allocate(preds(nptcls), prob(student%get_ncls(), batchsz_max))
-        allocate(e3_pred(nptcls), source=0.)
-        allocate(sh_reg(2,nptcls), source=0.)
-        allocate(class_stored(nptcls), source=0)
+        allocate(e3_pred(nptcls), e3_aln(nptcls), sdev_aln(nptcls), source=0.)
+        allocate(sh_in(2,nptcls), sh_aln(2,nptcls), source=0.)
+        allocate(class_stored(nptcls), cls_aln(nptcls), source=0)
         rt_prep  = toc(t0)
         rt_batch = 0.
         rt_pred  = 0.
+        rt_aln   = 0.
         call reads%new(params)
         call reads%expect(pinds)
         do ibatch = 1,nbatches
@@ -847,13 +858,23 @@ contains
             enddo
             !$omp end parallel do
             rt_pred = rt_pred + toc(t0)
+            if( .not. l_reg ) cycle
+            ! the alignment, timed on its own
+            t0 = tic()
+            !$omp parallel do default(shared) private(i) schedule(dynamic) proc_bind(close)
+            do i = b0,b1
+                call align_one(i, pinds(i))
+            enddo
+            !$omp end parallel do
+            rt_aln = rt_aln + toc(t0)
         enddo
         call reads%kill
         call clean_batch_particles2D(build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
         call build%pftc%kill
         call build%esig%kill
         ! the table and the records: the route seeds a particle whose candidates fit the cap at or above the model's
-        ! confidence threshold; every particle takes the predicted class, angle and shift
+        ! confidence threshold; every particle takes the committed class, angle and shift (the alignment's given refs,
+        ! else the mode, its read-out angle and the stored shift)
         t0 = tic()
         call fopen(pred_unit, fname_pred, status='replace', action='write', iostat=io_stat)
         call fileiochk('predict_classes; open '//fname_pred%to_char(), io_stat)
@@ -877,14 +898,17 @@ contains
             if( preds(i)%mode == class_stored(i) ) n_agree = n_agree + 1
             ncand_sum = ncand_sum + real(preds(i)%ncand,dp)
             conf_sum  = conf_sum  + real(preds(i)%conf,dp)
-            call build%spproj_field%set(iptcl, 'class', preds(i)%mode)
-            call build%spproj_field%e3set(iptcl, e3_pred(i))
-            call build%spproj_field%set_shift(iptcl, sh_reg(:,i))
+            call build%spproj_field%set(iptcl, 'class', cls_aln(i))
+            call build%spproj_field%e3set(iptcl, e3_aln(i))
+            call build%spproj_field%set_shift(iptcl, sh_in(:,i) + sh_aln(:,i))
             call build%spproj_field%set(iptcl, 'pconf', preds(i)%conf)
             call build%spproj_field%set(iptcl, 'route', route)
-            write(pred_unit,'(I0,1X,I0,1X,I0,1X,F8.5,1X,I0,1X,I0,1X,F8.5,1X,I0,3(1X,F8.3),1X,I0)', advance='no') iptcl, &
-                &build%spproj_field%get_eo(iptcl), preds(i)%mode, preds(i)%pmax, preds(i)%k99, preds(i)%ncand, &
-                &preds(i)%conf, route, e3_pred(i), sh_reg(:,i), class_stored(i)
+            ! the alignment's move and the prior width of the next search (the dynamic centring's state)
+            if( l_reg ) call record_shift_state(build%spproj_field, iptcl, norm2(sh_aln(:,i)), sdev_aln(i), &
+                &params%shift_sigma, params%smpd, params%box, params%trs, kfromto)
+            write(pred_unit,'(I0,1X,I0,1X,I0,1X,F8.5,1X,I0,1X,I0,1X,F8.5,1X,I0,3(1X,F8.3),1X,I0)', &
+                &advance='no') iptcl, build%spproj_field%get_eo(iptcl), cls_aln(i), preds(i)%pmax, preds(i)%k99, &
+                &preds(i)%ncand, preds(i)%conf, route, e3_aln(i), sh_in(:,i) + sh_aln(:,i), class_stored(i)
             do j = 1,preds(i)%ncand
                 write(pred_unit,'(1X,I0)', advance='no') preds(i)%cands(j)
             enddo
@@ -902,6 +926,12 @@ contains
             ! the candidate artifact for the sparse 2D table, registered under the particles' layout digest
             call cands_art%publish(build%spproj, build%spproj_field, params%projfile, string(base%to_char()//'_cands.bin'), &
                 &pinds, routes, ncands, cands_all, student%get_ncls())
+            ! the wall times of the prediction and of the alignment, for the validation's costs
+            call fopen(pred_unit, fname_times, status='replace', action='write', iostat=io_stat)
+            call fileiochk('predict_classes; open '//fname_times%to_char(), io_stat)
+            write(pred_unit,'(A)') '# nptcls predict_s align_s'
+            write(pred_unit,'(I0,2(1X,F12.4))') nptcls, rt_pred, rt_aln
+            call fclose(pred_unit)
         endif
         call cands_art%kill
         rt_write = toc(t0)
@@ -912,20 +942,24 @@ contains
             &conf_sum / real(nptcls,dp)
         write(logfhandle,'(A,F8.4)') '>>> CLASS STUDENT PREDICTION: the stored class is the predicted one for ', &
             &real(n_agree) / real(nptcls)
-        write(logfhandle,'(A,F9.2,A,F9.2,A,F9.2,A,F9.2,A,F9.2,A)') '>>> CLASS STUDENT PREDICTION: prep ', rt_prep, &
-            &' s, particles ', rt_batch, ' s, features, forward and registration ', rt_pred, ' s, records ', rt_write, &
-            &' s, total ', rt_all, ' s'
-        write(logfhandle,'(A,F9.3,A)') '>>> CLASS STUDENT PREDICTION: ', rt_pred / real(nptcls,timer_int_kind) * 1000., &
-            &' ms per particle'
+        if( l_reg ) write(logfhandle,'(A,F8.4)') '>>> CLASS STUDENT ALIGNMENT: the mode kept for ', &
+            &real(count(cls_aln == cands_all(1,:))) / real(nptcls)
+        write(logfhandle,'(A,F9.2,A,F9.2,A,F9.2,A,F9.2,A,F9.2,A,F9.2,A)') '>>> CLASS STUDENT PREDICTION: prep ', &
+            &rt_prep, ' s, particles ', rt_batch, ' s, features and forward ', rt_pred, ' s, alignment ', rt_aln, &
+            &' s, records ', rt_write, ' s, total ', rt_all, ' s'
+        write(logfhandle,'(A,F9.3,A,F9.3,A)') '>>> CLASS STUDENT PREDICTION: ', &
+            &rt_pred / real(nptcls,timer_int_kind) * 1000., ' ms per particle, alignment ', &
+            &rt_aln / real(nptcls,timer_int_kind) * 1000., ' ms'
         call student%kill
         call feats%kill
-        if( allocated(shsrch) )then
-            do i = 1,size(shsrch)
-                call shsrch(i)%kill
+        if( allocated(aln) )then
+            do i = 1,size(aln)
+                call aln(i)%kill
             enddo
-            deallocate(shsrch)
+            deallocate(aln)
         endif
-        deallocate(preds, prob, e3_pred, sh_reg, class_stored, pinds, batches, wk, routes, ncands, cands_all)
+        deallocate(preds, prob, e3_pred, e3_aln, sdev_aln, sh_in, sh_aln, class_stored, cls_aln, pinds, &
+            &batches, wk, routes, ncands, cands_all)
 
     contains
 
@@ -948,13 +982,12 @@ contains
             deallocate(pinds, wk)
         end subroutine write_empty_part
 
-        !> one particle's features, forward pass, candidates and read-out angle, and, given the class averages, the
-        !! shift increment registered against the predicted class at that angle, on the calling thread
+        !> one particle's features, forward pass, candidates and read-out angle on the calling thread; without the class
+        !! averages its committed pose is the mode at that angle and the stored shift
         subroutine predict_one( i_here, iptcl_here, islot )
             integer, intent(in) :: i_here, iptcl_here, islot
             type(polar_feat) :: feat_here
-            real    :: cxy(3)
-            integer :: ithr_here, irot
+            integer :: ithr_here
             ithr_here = 1
             !$ ithr_here = omp_get_thread_num() + 1
             call feats%build(build%pftc, iptcl_here, feat_here)
@@ -962,15 +995,23 @@ contains
             call student%cands_of(prob(:,islot), preds(i_here))
             e3_pred(i_here)      = student%rotation_of(ithr_here, preds(i_here)%mode)
             class_stored(i_here) = build%spproj_field%get_class(iptcl_here)
-            sh_reg(:,i_here)     = build%spproj_field%get_2Dshift(iptcl_here)
-            if( l_reg )then
-                irot = build%pftc%get_roind(360. - e3_pred(i_here))
-                call shsrch(ithr_here)%set_indices(preds(i_here)%mode, iptcl_here)
-                cxy = shsrch(ithr_here)%minimize(irot)
-                if( irot > 0 ) sh_reg(:,i_here) = sh_reg(:,i_here) + cxy(2:3)
-            endif
+            sh_in(:,i_here)      = build%spproj_field%get_2Dshift(iptcl_here)
+            cls_aln(i_here)      = preds(i_here)%mode
+            e3_aln(i_here)       = e3_pred(i_here)
             call feat_here%kill
         end subroutine predict_one
+
+        !> the particle aligned against every class of its candidate list, the best alignment kept
+        subroutine align_one( i_here, iptcl_here )
+            integer, intent(in) :: i_here, iptcl_here
+            integer :: ithr_here, irot
+            real    :: corr
+            ithr_here = 1
+            !$ ithr_here = omp_get_thread_num() + 1
+            call aln(ithr_here)%align(iptcl_here, preds(i_here)%cands(1:preds(i_here)%ncand), cls_aln(i_here), irot, &
+                &corr, sh_aln(:,i_here), sdev_aln(i_here))
+            e3_aln(i_here) = modulo(360. - build%pftc%get_rot(irot), 360.)
+        end subroutine align_one
 
     end subroutine predict_classes_exec
 

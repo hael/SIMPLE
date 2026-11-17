@@ -94,11 +94,11 @@ The class FRC on both sets, bgal's classes recovered and trpv1's in-plane error 
 
 | phase | diff | files changed in the repository |
 | --- | --- | --- |
-| 0, the baseline | `review/phase_0.diff` | the plan (Progress, base pin, decision 6's references, decision 7's bars); the amplitude plan (Progress) |
+| 0, the baseline | `review/phase_0.diff` | the plan (Progress, base pin, decision 6's references, decision 7's bars) |
 | 1, the teacher and the readout | `review/phase_1.diff` | the plan (decisions 2 to 4 made precise, three file-table rows, Progress) |
 | 2, the first read | `review/phase_2.diff` | the plan (decision 6 revised before any variant read, Progress) |
 | 3, the matrix | `review/phase_3.diff` | the plan (Progress) |
-| 4, the record, R4 to R7, the adoption | `review/phase_4.diff` | 15 source files (below), `doc/algorithms/class_student.md`, the plan (decision 2's revision, R4 to R7, two file-table rows, status line, Progress), the amplitude plan (status line), this report; the rejected record written and then deleted |
+| 4, the record, R4 to R7, the adoption | `review/phase_4.diff` | 15 source files (below), `doc/algorithms/class_student.md`, the plan (decision 2's revision, R4 to R7, two file-table rows, status line, Progress), this report; the rejected record written and then deleted |
 
 The phase diffs are under `/home/elmlundho/agent_runs/student_inplane/review/`. The driver re-based the repository
 copy onto `4282d58a3` (R5) and then onto `603c44490` (R6), so the raw diff holds only the run's own work.

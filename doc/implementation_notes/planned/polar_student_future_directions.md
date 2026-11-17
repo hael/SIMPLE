@@ -37,7 +37,7 @@ bands). An in-plane rotation by α multiplies F(m) by exp(-i m α). Invariant su
 - **The CTF.** Untrained invariants of CTF-multiplied data cluster by defocus. Option 2 needs phase
   flipping or Wiener filtering first; options 1 and 3 learn around it.
 - **Shift.** The readout invariants are not shift-invariant, since the network sees complex Fourier values
-  whose phases move with a shift. A modulus front end is shift-invariant but loses phase information.
+  whose phases move with a shift.
 - **Mirror.** 2D searches no mirrors, so invariants must keep the sign of m (power invariants are fine;
   bispectrum triples must not be symmetrised).
 
@@ -48,10 +48,9 @@ predict which held-out assignments are wrong?
 ## 2. A shift-robust front end
 
 The supervised student registers shifts after prediction and trains with a measured shift augmentation.
-If the 2D student cannot learn under the picking error of raw particles, there are three alternatives:
+If the 2D student cannot learn under the picking error of raw particles, there are two alternatives:
 - a centring step before the student (a cheap translational alignment to a rotationally averaged
   reference);
-- a front end of Fourier moduli, shift-invariant but phase-blind;
 - a learned equivariance to shifts, folded into option 3 above.
 
 **Measured (2026-11-13, the supervised plan's probes).**
@@ -60,9 +59,6 @@ If the 2D student cannot learn under the picking error of raw particles, there a
 - A power-spectrum student is shift-invariant but learns almost nothing.
 - Even the full polar search reaches only 36% after three passes, against 69% between two converged solve2D
   runs.
-
-An amplitude path beside the complex input (not in place of it) is planned for the pose student:
-`planned/pose_student_amplitude_channel.md`.
 
 A learned centre estimator (a translation-equivariant real-space network supervised by converged shifts)
 remains the candidate. Its target is about 5 Å rather than 3, because the student's candidate set tolerates
@@ -105,3 +101,18 @@ for continuous in-plane refinement after the 2D student's assignment.
 
 **First measurement.** The student's poses and shifts into `refine3D_local refine=cont`, against the same
 poses into `refine3D_local refine=prob_neigh`, at equal iterations on bgal.
+
+## 6. The candidate list as a neighbourhood for the alignment after prediction
+
+The class student on raw picks (`class_student_raw_picks.md`) aligns each particle after prediction against the
+teacher's class averages over the shift disk, either against the predicted class alone (S1) or against every class
+of its candidate list (SK). SK uses the network as a neighbourhood structure rather than as an answer: on raw picks
+the list still holds the reference's class for about 90% of particles while the mode agrees for about a third
+(that plan's Phase 0). Hans (2026-11-16): keep this in mind for the pose student's post-prediction refinement, where
+the cone of candidate directions could play the list's part, each direction's reprojection searched over the disk.
+
+The class student keeps SK (that plan's Phase 2: the aligned class agrees with the reference's far more often than
+S1's on all three sets).
+
+**First measurement.** The pose student's cone directions searched over the disk on uncentred test-half particles,
+against the mode alone, on the fixed truth sets.

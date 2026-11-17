@@ -18,7 +18,8 @@ public :: STUDENT_LP_VALIDATE, POSE_AGREE_DEG, POSE_TWO_STEPS_DEG
 public :: CLASS_DENSE_SHIFT_SIGMA, CLASS_MINPOP_FRC
 public :: STUDENT_TRAIN_PROJ, STUDENT_ALL_PROJ, STUDENT_UNSEEN_PROJ
 public :: POSE_STUDENT_MODEL_FNAME, POSE_STUDENT_PRED_TABLE, VALIDATE_POSE_STUDENT_REPORT
-public :: CLASS_STUDENT_MODEL_FNAME, CLASS_STUDENT_PRED_TABLE, CLASS_STUDENT_CAVGS, CLASS_REFERENCE_FNAME, CLASS_REFERENCE_CAVGS
+public :: CLASS_STUDENT_MODEL_FNAME, CLASS_STUDENT_PRED_TABLE, CLASS_STUDENT_PRED_TIMES, CLASS_STUDENT_CAVGS
+public :: CLASS_REFERENCE_FNAME, CLASS_REFERENCE_CAVGS
 public :: VALIDATE_CLASS_STUDENT_REPORT
 public :: VALIDATE_CLASS_STUDENT_DETAILS
 
@@ -68,7 +69,7 @@ integer, parameter :: POSE_SHIFT_CHECK_NGROUPS = 1             !< the readout ma
 real,    parameter :: STUDENT_LP_VALIDATE     = 15.  !< the students' band in validation (A), the pose student's size-curve study's
 real,    parameter :: POSE_AGREE_DEG          = 6.   !< one step of the pose student's grid
 real,    parameter :: POSE_TWO_STEPS_DEG      = 12.  !< two steps of the pose student's grid
-real,    parameter :: CLASS_DENSE_SHIFT_SIGMA = 10.  !< the reference pass's prior (A): center_ptcls's, whose 3-sigma disk covers the picking error
+real,    parameter :: CLASS_DENSE_SHIFT_SIGMA = 10.  !< the reference pass's and the alignment's prior (A), whose 3-sigma disk covers the picking error
 integer, parameter :: CLASS_MINPOP_FRC        = 10   !< a class's average is compared when both routes hold this many particles
 
 ! ---- file names
@@ -80,6 +81,7 @@ character(len=*), parameter :: POSE_STUDENT_PRED_TABLE       = 'pose_student_pre
 character(len=*), parameter :: VALIDATE_POSE_STUDENT_REPORT  = 'validate_pose_student_report.txt'
 character(len=*), parameter :: CLASS_STUDENT_MODEL_FNAME     = 'class_student.txt'
 character(len=*), parameter :: CLASS_STUDENT_PRED_TABLE      = 'class_student_pred.txt'
+character(len=*), parameter :: CLASS_STUDENT_PRED_TIMES      = 'class_student_times.txt'  !< the prediction's and the alignment's wall times
 character(len=*), parameter :: CLASS_STUDENT_CAVGS           = 'cavgs_student.mrc'
 character(len=*), parameter :: CLASS_REFERENCE_FNAME         = 'class_reference.txt'   !< the reference pass's base name (its audit)
 character(len=*), parameter :: CLASS_REFERENCE_CAVGS         = 'cavgs_reference.mrc'   !< the reference's class averages

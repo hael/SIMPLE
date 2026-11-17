@@ -142,6 +142,7 @@ use simple_online_var_tester,                only: run_all_online_var_tests
 use simple_polar_feats_tester,               only: run_all_polar_feats_tests
 use simple_polar_student,                    only: run_all_polar_student_tests
 use simple_class_student,                    only: run_all_class_student_tests
+use simple_class_student_align_tester,       only: run_all_class_student_align_tests
 use simple_hhcnn,                            only: run_all_hhcnn_tests
 use simple_pose_student,                     only: run_all_pose_student_tests
 use simple_strategy_student_common,          only: run_all_student_strategy_tests
@@ -421,6 +422,7 @@ contains
         call add_suite(s, n, 'HHCNN',                   run_all_hhcnn_tests)
         call add_suite(s, n, 'polar student',           run_all_polar_student_tests)
         call add_suite(s, n, 'class student',           run_all_class_student_tests)
+        call add_suite(s, n, 'class student alignment', run_all_class_student_align_tests)
         call add_suite(s, n, 'pose student',            run_all_pose_student_tests)
         call add_suite(s, n, 'student strategy',        run_all_student_strategy_tests)
     end subroutine suites_numerics

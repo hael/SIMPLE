@@ -80,13 +80,25 @@ the particles the student would seed.
 ## Prediction and the hand-off
 
 `predict_classes` builds each selected particle's features under the model's band and weights and runs the
-forward pass. From the posterior it takes the class of largest mass, its read-out angle and the candidates. Given
-the class averages, it registers the shift against the predicted class at the predicted angle, with the pose
-student's search object (coarse grid, then L-BFGS-B).
+forward pass. From the posterior it takes the class of largest mass, its read-out angle and the candidates.
+
+**The alignment after prediction.** Given the class averages, every particle is aligned to them at its picked
+position (its stored shift; raw picks are not centred first): every in-plane rotation of the polar grid and shifts
+over the disk of the validation's reference pass (three widths of the 10 Å prior, `CLASS_DENSE_SHIFT_SIGMA`, under
+that prior), at the student's band and the physical temperature. The search is the classic searches' polar shift map
+(`shiftmap_srch`): each class scored at the stored shift, a coarse map over the disk, the refinement from its best
+cell; a class keeps the refined pose when it beats its stored-shift score, and the best class by score is kept, as
+the classic 2D search commits (`simple_class_student_align.f90`). The particle is aligned against every class of its
+candidate list (at most `KMAX_CLASS`), the best alignment kept: the network serves as a neighbourhood of classes,
+not as the answer. Aligning against the most likely class alone was measured beside it and rejected: on raw picks
+the list holds the reference's class for about nine particles in ten, the mode for one in three
+(`doc/implementation_notes/planned/class_student_raw_picks.md`). The aligned class, angle and shift are committed;
+the particle's centring state (`shsig`, `shincr`) records the move, as a 2D search leaves it.
 
 It writes:
 - each particle's class, e3, shift, confidence (`pconf`) and route (`route`: 1 seeded, 2 dense) to `ptcl2D`;
 - a text table;
+- the wall times of the prediction and of the alignment (`<fname>_times.txt`, a shared-memory run's);
 - the candidate artifact `class_candidates`.
 
 A particle is seeded when its candidates fit the cap and its confidence reaches the model's threshold.
@@ -103,9 +115,9 @@ project's `out` segment and tied to the particle rows by `ptcl_layout_digest`. I
 project or the class count differ, and the consumer then runs as without it. The consumer is the sparse 2D table
 (`refine=prob_neigh`): a seeded particle scores its candidates alone and searches the shift window, not the disk.
 
-**Unseen particles must be centred first.** Raw picks are centred by `center_ptcls` (`center_ptcls.md`) before
-they are labelled. Particles that are already aligned, for example those the stream's sieve hands to the pool, need
-no such step.
+**No centring.** Unseen particles enter at their picked positions, their shifts as imported; the alignment after
+prediction centres them. `center_ptcls` (`center_ptcls.md`) stays a program of its own, no longer on this route
+(`doc/implementation_notes/planned/class_student_raw_picks.md`).
 
 ## What the reads found
 
@@ -122,6 +134,16 @@ On the Dell, Release builds, three seeds unless stated (`doc/implementation_note
   - at converged shifts, for 0.96 and 0.89.
 
   The centring's residual (3 to 4 Å on trpv1, 6 to 8 Å on bgal) against the 2 Å training disk is the gap.
+- **Raw picks with the alignment after prediction** (2026-11-16, `planned/class_student_raw_picks.md`, eight
+  paired seeds on streptavidin, 30 classes, and bgal and trpv1, 50 each, against the route centred by
+  `center_ptcls`):
+  - on raw picks the candidate list holds the reference's class for 91 to 97% of particles, the most likely class
+    is it for 23 to 34%;
+  - the aligned class agrees with the reference's 2.6, 4.4 and 17.4 points more often than the centred route's
+    (31, 53 and 72%), and the class averages' FRC 0.5 crossing is 0.75, 2.93 and 4.80 Å finer;
+  - the route (prediction and alignment) costs 0.54, 1.16 and 0.85 ms per particle against the full search's 0.44,
+    1.27 and 0.92: above it on streptavidin, where a list of at most 16 classes covers half of the 30. Hans adopted
+    the route (2026-11-16): small sets do not decide the cost.
 - **The physical teacher** (2026-11-15, `planned/student_inplane_posterior.md`, eight paired seeds against the
   base's teacher, the reference being the physical posterior's best class):
   - it shortlists 10.1 (bgal) and 5.6 (trpv1) more particles in 100, with shorter lists;
@@ -163,13 +185,16 @@ On the Dell, Release builds, three seeds unless stated (`doc/implementation_note
 - `src/main/strategies/parallelization/simple_strategy_class_student.f90`: `learn_class_student_exec` (and, in its
   reference mode, `run_class_posterior_mode`), `predict_classes_exec`; the shared helpers and the audit's reports in
   `simple_strategy_student_common.f90` (suite `student_strategy`).
+- `src/main/strategies/parallelization/simple_class_student_align.f90`: the alignment after prediction
+  (`class_student_align`, one per thread); tester `simple_class_student_align_tester.f90` (suite
+  `class_student_alignment` in `unit_numerics`).
 - `src/main/strategies/search/probabilistic/simple_eul_prob_marginal.f90`: the teacher's in-plane marginal, drawn
   and weighed as the fill and the insertion do (tested in `simple_eul_prob_tab_tester.f90`).
 - `src/main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90`: `keep_batch_rows` and `get_posterior_row`
   (the teacher's rows), and the candidates in the sparse fill.
 - `src/main/project/simple_class_candidates.f90`: the artifact (suite `class_candidates` in `unit_project`).
 - `src/defs/simple_defs_hhcnn.f90`: the constants the students' programs share or set (`KMAX_CLASS`, the training
-  designs, the calibration, the shift registration, the validation's settings and file names).
+  designs, the calibration, the validation's settings and file names).
 - `src/main/commanders/simple/simple_commanders_class_student.f90`: the commanders of `learn_class_student` and
   `predict_classes` (private, `simple_private_exec`) and the controller `validate_class_student` (`simple_exec`,
   developer visibility).
@@ -179,29 +204,35 @@ On the Dell, Release builds, three seeds unless stated (`doc/implementation_note
 - `validate_class_student`:
   - a random sample of `nsample` particles and solve2D on it (the teacher);
   - the student trained on the result;
-  - `center_ptcls` on every particle;
-  - the unseen particles predicted, then assigned by the full search, the reference: the physical posterior's best
-    class. That is each particle's class of largest in-plane marginal mass at the physical temperature, over all
-    classes against the teacher's averages, every particle searching the shift disk at the full box. It is the hard
+  - the unseen particles at their picked positions (shift zero, not yet centred), predicted and aligned,
+    then assigned by the full search, the reference: the physical posterior's best class. That is each particle's
+    class of largest in-plane marginal mass at the physical temperature, over all classes against the teacher's
+    averages, every particle searching the shift disk at the full box from its picked position. It is the hard
     assignment a solve2D run ends at, and the posterior the student learns (`run_class_posterior_mode`, the learn
     program's table in its reference mode; each written class is checked against its row's marginals). The class
-    averages of that assignment are the full search's;
-  - the same particles predicted again at the full search's shifts (ideal centring);
-  - the class averages of the student's assignments.
+    averages of that assignment are the reference's;
+  - the same particles predicted again at the reference's shifts (ideal centring, no alignment);
+  - the class averages of the student's assignment (every unseen particle at its aligned class, angle and shift).
 
   Its report (`validate_class_student_report.txt`, also in the log) is written for someone who has not met the
-  student. It calls the candidates of a seeded particle (route 1) its *shortlist*, and the class of the full
-  search the reference. Each line carries a goal and whether it is met:
+  student. It says what the candidate list and the shortlist are (the candidates of a seeded particle, route 1),
+  says what the alignment searches and calls the full search's class the reference. Each line carries a goal and whether
+  it is met:
   - particles given a shortlist (as many as possible);
-  - shortlists containing the full search's class (the target the model's threshold was calibrated for, 95%),
-    and the same with the particles perfectly centred (at the full search's shifts);
+  - shortlists containing the reference's class (the target the model's threshold was calibrated for, 95%), and
+    the same predicted at the reference's shifts;
   - the shortlist's length, against all classes;
-  - the class averages' FRC 0.5 resolution against the teacher's, by the student and by the full search;
-  - the cost per particle, centring and prediction, below the full search's.
+  - the aligned class's agreement with the reference's;
+  - the class averages' FRC 0.5 crossing against the teacher's (interpolated between shells), beside the
+    reference's;
+  - the cost per particle of the route, prediction and alignment, below the full search's.
 
-  One or two sentences then say what failed and why (the centring or the student; the cost of centring), and a
-  table gives the run time of each phase. The diagnostics (agreement on the most probable class, the angle and
-  shift errors, the centring's frame offset, the per-step costs) go to `validate_class_student_details.txt`.
+  One or two sentences then say what failed and why (the picking error or the student; the cost), and a table
+  gives the run time of each phase. The diagnostics go to `validate_class_student_details.txt`: the network's reads
+  at the picked positions and at the reference's shifts (agreement on the most probable class, the lists); for
+  the alignment the agreement, the shift's distance to the reference's (same class and all, median and 90th
+  percentile) and the angle's; the picking error; the class averages' FRC 0.5 (whole shells and interpolated) and
+  mean FRC to 15 Å on one common class set; the costs of the prediction and of the alignment.
   Agreement on the most probable class is not a verdict: near-duplicate classes count as misses there (ruling 15
   of the 2D plan).
 

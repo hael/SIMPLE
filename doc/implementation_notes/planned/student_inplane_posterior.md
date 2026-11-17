@@ -9,8 +9,7 @@ it. Bases: `86babf86b` for Phases 0 to 3 and R4's first audit (ruling R1), `4282
 R5), `603c44490` for R6's readings and the adoption (rulings R6 and R7). Supersedes: none. Depends on: the in-plane
 posterior weighting in 2D and 3D (landed; validated by Hans on solve2D and solve3D), the pose student
 (`completed/pose_student_training_speed_report.md`) and the class student (`completed/class_student_2D.md`), which
-share one core (`simple_polar_student`). Runs before `planned/pose_student_amplitude_channel.md`, which shares this
-plan's Phase 0.
+share one core (`simple_polar_student`).
 
 ## 1. Why
 
@@ -94,7 +93,7 @@ Three expected gains, each read separately:
    base's schedule, decision 9). The variants differ in two constants of `simple_defs_hhcnn` (the marginal with its
    readout; the rotation loss), the patches otherwise identical.
 5. **Teachers**, rebuilt on the base in Phase 0 and frozen with checksums, three training seeds each:
-   - 3D: the medium truth set's `T200`, `T1000`, `T5000`, `T` (24,000) and bgal, as in the amplitude plan;
+   - 3D: the medium truth set's `T200`, `T1000`, `T5000`, `T` (24,000) and bgal;
    - 2D: bgal (2,756 training particles, 50 classes) and trpv1 (10,000, 100 classes), the solve2D teachers of the
      class student's validation, rebuilt with the current solve2D.
 6. **Reads.**
@@ -188,7 +187,6 @@ learned per student, one scalar.
 
 ## 4. Not in this plan
 
-- The amplitude channel (its own plan, after this one; its base is this plan's outcome).
 - The insertion, the tables' draws and the refinement's use of the cones or shortlists.
 - The stream (`planned/class_student_stream.md`).
 - Any file outside the table.
@@ -197,7 +195,7 @@ learned per student, one scalar.
 
 | Phase | Kind | Gate |
 | --- | --- | --- |
-| 0 | measurement | the base's reads at three seeds, frozen; shared with the amplitude plan |
+| 0 | measurement | the base's reads at three seeds, frozen |
 | 1 | patch outside the tree | the teacher's marginal against a brute-force sum; off-state identity of refine2D and refine3D at one thread; the readout's symmetries and thread identity in the HHCNN tester |
 | 2 | experiment | decision 8 |
 | 3 | experiment | decision 7 |
@@ -222,7 +220,7 @@ learned per student, one scalar.
 
 ## 8. Phases
 
-- **Phase 0, baseline (shared with the amplitude plan).** Pin the base. Release and Debug builds, fast gate. Rebuild
+- **Phase 0, baseline.** Pin the base. Release and Debug builds, fast gate. Rebuild
   the seven teachers; train A at three seeds; every read of decision 6; reference matching beside the 2D reads.
   Exit: the reads and spreads frozen in Progress, the teachers' checksums.
 - **Phase 1, the teacher and the readout.** On an export: the marginal and the in-plane rows in both tables and the
@@ -253,7 +251,7 @@ learned per student, one scalar.
 | `src/main/commanders/simple/simple_commanders_class_student.f90` | the physical teacher's `prob_beta`, `validate_class_student`'s reference (added under rulings R3 and R6) | 4 |
 | `src/main/commanders/test/simple_commanders_test_highlevel_class_student.f90` | the `class_student` workflow test reads the reference's renamed timing line (added under rulings R3 and R7) | 4 |
 | `doc/implementation_notes/planned/student_inplane_posterior_rejected.md` | the rejected record, if both variants are rejected (the maintainer moves it to `rejected/`); deleted on the adoption (ruling R7) | 4 |
-| `doc/implementation_notes/README.md`, `doc/implementation_notes/planned/pose_student_amplitude_channel.md` | record (this plan and its report are always allowed) | 0, 1, 2, 3, 4 |
+| `doc/implementation_notes/README.md` | record (this plan and its report are always allowed) | 0, 1, 2, 3, 4 |
 
 ## Progress
 
@@ -262,7 +260,7 @@ learned per student, one scalar.
 **The base and the machine.** HEAD `86babf86b66c26a6e521ca61309e3f78c3745f0c` with the launch's uncommitted
 documentation (this plan, untracked, and five documentation files: `doc/algorithms/class_student.md`,
 `doc/implementation_notes/README.md`, `completed/class_student_vs_reference_matching.md`,
-`planned/class_student_stream.md`, `planned/pose_student_amplitude_channel.md`, 29 lines added and 19 removed); no
+`planned/class_student_stream.md` and a planned note since deleted, 29 lines added and 19 removed); no
 source file differs from HEAD, so the source the run builds is `git archive 86babf86b` (ruling R1: the run works on
 this base and does not follow master). The Dell: Oracle Linux 8.10, Intel Core Ultra 9 285 (24 cores, no
 hyperthreading), 62 GB, GCC 15.2 of gcc-toolset-15, CMake 3.26. Run root `/data2/agent_runs/student_inplane`
@@ -360,8 +358,8 @@ Training at 24 threads 8.2 [7.9, 8.7] s on `T200`, 18.4 [17.9, 18.9] on `T1000`,
 decimal (`T200` seed 1: 0.690, 0.962, 0.116). bgal's in-plane median is 0.70° at every seed: both angles lie on
 rotation grids, so the median takes few values; its spread is zero and (c) of decision 7 reads against M's range.
 
-**The shift check** of `predict_poses` (256 particles moved by 2, 5 and 10 px in four directions; for the amplitude
-plan, reported, not judged), mean over the seeds [min, max]; the truth sets' student on `S`, bgal's on all particles
+**The shift check** of `predict_poses` (256 particles moved by 2, 5 and 10 px in four directions; reported, not
+judged), mean over the seeds [min, max]; the truth sets' student on `S`, bgal's on all particles
 (`shiftcheck_base_p0.txt`, each prediction's `*_shiftcheck.txt` in its run):
 
 | set | px | mode kept | cone holds the mode | cones' Jaccard index | posterior TV (mean) |
@@ -374,7 +372,7 @@ plan, reported, not judged), mean over the seeds [min, max]; the truth sets' stu
 
 The per-seed ranges are within 0.04 of these means (`shiftcheck_base_p0.txt`).
 
-**The decentring curve** of the `T` students (for the amplitude plan, reported): `S` decentred by exactly r px
+**The decentring curve** of the `T` students (reported): `S` decentred by exactly r px
 (`sets_extra/S_decentred/`, built with SIMPLE's `new_project`, `import_particles` and `selection` from an orientation
 table whose truth shifts are moved by r along a seeded direction per particle, the pose_student run's recipe;
 checked row by row against `S.simple`: r = 0 identical, every r moved by r ± 0.0001 px with every other key equal;
@@ -428,7 +426,7 @@ validation's share of particles given a shortlist (bar 98.7%).
 **Exit.** The reads and spreads frozen above (one table per student, mean and range over the seeds per read and
 set); decision 7's margins written; the teachers' checksums recorded; the off-state identity of the base holds with
 empty exclusion lists. Files changed: this plan (Progress, the base pin, decision 6's references, decision 7's
-bars) and `planned/pose_student_amplitude_channel.md` (Progress: where its shared Phase 0 is). Logs:
+bars). Logs:
 `R/scratch/logs/` (`build_base*.log`, `gate_env_*.log`, `identity_base*.log`, `thread3d.log`, `chain_p0.log`), the
 tools and tables under `R/scratch/keep/`.
 
@@ -645,7 +643,7 @@ Decision 7 (c), R over M, has nothing to decide: neither variant is adopted.
 - In 2D, R seeds more held-out rows on bgal, but its shortlists hold the full search's class less often on bgal.
   On trpv1 it is level or slightly worse.
 
-**The decentring curve of the `T` students** (for the amplitude plan; the truth in the cone / the mode within 12°,
+**The decentring curve of the `T` students** (the truth in the cone / the mode within 12°,
 mean over the seeds, on the test half decentred by r px):
 
 | r (px) | 0 | 1 | 2 | 3 | 5 | 8 |
@@ -711,8 +709,7 @@ Decision 7 rejected both variants for both students in Phase 3, so this phase to
 - no source file changed;
 - the record is `student_inplane_posterior_rejected.md` beside this plan (the maintainer moves it to `rejected/`);
 - the report is `student_inplane_posterior_report.md`, also beside this plan, which stays in `planned/`;
-- this plan's status line carries the verdict and the date, and the amplitude plan's names its base: the students
-  of `86babf86b`, with the shared Phase 0 as its own.
+- this plan's status line carries the verdict and the date.
 
 The patches the record names were checked on a fresh `git archive 86babf86b`: the 16 source files of
 `R/scratch/keep/variants/M.patch` and `R.patch` apply cleanly, and R's replay equals the source that was built and
@@ -723,7 +720,6 @@ was unnecessary, and the report lists it among the deviations.
 No source changed, so the fast gate was not re-run, as this phase's rule allows. Exit: the rejected note and the
 report written. Files changed this phase:
 - this plan (status line and this entry);
-- `planned/pose_student_amplitude_channel.md` (status line);
 - the new `planned/student_inplane_posterior_rejected.md` and `planned/student_inplane_posterior_report.md`.
 
 ### Phase 4 reopened under rulings R4 and R5 (2026-11-15, the Dell, stopped for the maintainer)
@@ -876,7 +872,6 @@ no student code runs there.
 
 No repository source changed, so no repository build or gate was needed. Files changed this phase:
 - this plan: decision 2's revision, R4 and R5 in decision 7, the status line and this entry;
-- the amplitude plan's status line;
 - the report, rewritten.
 
 ### Phase 4 under ruling R6: the class student's physical teacher (2026-11-15, the Dell, stopped for the maintainer)
@@ -987,7 +982,6 @@ So the phase stops with the paired table, as R6 item 4 says.
 
 No repository source changed. Files changed:
 - this plan (R6 in decision 7, a file-table row, the status line, this entry);
-- the amplitude plan's status line;
 - the report.
 
 ### Phase 4 under ruling R7: P adopted for the class student (2026-11-15, the Dell, done)
@@ -1033,6 +1027,6 @@ tree `repo/build_debug`:
   base's model header and weights byte for byte (md5 `8f0d176e…`; `R/scratch/keep/r7/pose_check/`).
 
 The rejected record (`student_inplane_posterior_rejected.md`) was deleted, as R7 directs. The report was rewritten
-as the adoption, with the paired tables of R4 and R6 and the base each came from. The status lines of this plan and
-of the amplitude plan say what was delivered. Exit: the gates of section 5 for the class student pass on both trees,
+as the adoption, with the paired tables of R4 and R6 and the base each came from. This plan's status line says
+what was delivered. Exit: the gates of section 5 for the class student pass on both trees,
 and the `pose_student` guard is unchanged.

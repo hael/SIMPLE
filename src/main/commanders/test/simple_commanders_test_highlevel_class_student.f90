@@ -22,26 +22,26 @@ contains
         integer, parameter :: NCLS     = 10
         real,    parameter :: SNR      = 0.5
         real,    parameter :: SHERR_PX = 6.    !< the planted shifts' range (pixels at 2.2 A): the center_ptcls test's
-        integer, parameter :: NREADS   = 17
+        integer, parameter :: NREADS   = 18
+        integer, parameter :: READ_TOP1 = 11  !< the read of the most likely class's agreement with the reference
         ! each read: its file (1 the report, 2 the diagnostics), its row's label and the column of its number
-        integer,          parameter :: READ_FILE(NREADS) = [1,1,1,1,1,1,1,1,1,1, 2,2,2,2,2,2,2]
-        integer,          parameter :: READ_COL(NREADS)  = [1,1,1,1,2,1,2,1,1,1, 1,2,1,1,1,1,1]
+        integer,          parameter :: READ_FILE(NREADS) = [1,1,1,1,1,1,1,1,1,1, 2,2,2,2,2,2,2,2]
+        integer,          parameter :: READ_COL(NREADS)  = [1,1,1,1,2,1,2,1,1,1, 1,2,1,1,1,1,1,1]
         character(len=*), parameter :: READ_LABELS(NREADS) = [character(len=50) :: &
-            &'Particles given a shortlist (%)', 'Shortlists containing the full search''s class (%)', &
+            &'Particles given a shortlist (%)', 'Shortlists containing the reference''s class (%)', &
             &'Shortlist length (median)', 'Class averages vs the teacher''s, FRC 0.5 (A)', &
             &'Class averages vs the teacher''s, FRC 0.5 (A)', 'Cost per particle (ms)', 'Cost per particle (ms)', &
-            &'same, with the particles perfectly centred (%)', 'Student prediction (predict_classes)', &
+            &'same, predicted at the reference''s shifts (%)', 'Prediction and alignment (predict_classes)', &
             &'Reference: the physical posterior''s best class', &
-            &'Student''s class = full search''s class (%)', 'Student''s class = full search''s class (%)', &
-            &'Every list holds the full-search class (%)', 'In-plane angle error, same class (deg, median)', &
-            &'Registered shift error, same class (A, median)', 'Centring error before registration (A, median)', &
-            &'Remaining difference after it (A, median)']
+            &'Most likely class = the reference''s class (%)', 'Most likely class = the reference''s class (%)', &
+            &'Every list holds the reference''s class (%)', 'Aligned class = the reference''s class (%)', &
+            &'Angle to the reference''s, same class (deg, median)', 'Shift to the reference''s, all (A, median)', &
+            &'Picking error (A, median and 90th pct)', 'Alignment']
         character(len=*), parameter :: READ_KEYS(NREADS) = [character(len=40) :: 'shortlisted_pct', &
-            &'shortlist_has_class_pct', 'shortlist_length_median', 'student_cavgs_frc05_A', &
-            &'full_search_cavgs_frc05_A', 'student_cost_ms', 'full_search_cost_ms', &
-            &'perfect_centring_shortlist_has_class_pct', 'predict_wall_s', 'full_search_wall_s', &
-            &'same_class_pct', 'perfect_centring_same_class_pct', 'list_has_class_pct', 'inpl_error_deg', &
-            &'registered_shift_error_A', 'centred_shift_error_A', 'frame_residual_A']
+            &'shortlist_has_class_pct', 'shortlist_length_median', 'student_cavgs_frc05_A', 'full_search_cavgs_frc05_A', &
+            &'student_cost_ms', 'full_search_cost_ms', 'reference_shifts_shortlist_has_class_pct', 'predict_wall_s', &
+            &'full_search_wall_s', 'same_class_pct', 'reference_shifts_same_class_pct', 'list_has_class_pct', &
+            &'aligned_same_class_pct', 'inpl_error_deg', 'shift_error_A', 'picking_error_A', 'alignment_cost_ms']
         class(parameters), allocatable :: params
         type(state_fixture)   :: fix
         type(test_gate)       :: gate
@@ -109,8 +109,8 @@ contains
         call proj%kill
         call gate%check('every_unseen_particle_carries_a_prediction', l_records .and. npred == NPTCLS - NTRAIN)
         call gate%check('no_training_particle_predicted', ntrain_pred == 0)
-        ! the distributed master (two parts) against shared memory on the predicted particles, both registering the
-        ! shifts against the teacher's averages: the table, the candidates and the records the same, byte for byte
+        ! the distributed master (two parts) against shared memory on the predicted particles, both aligning them
+        ! against the teacher's averages: the table, the candidates and the records the same, byte for byte
         call master_as_shared_memory(l_mtable, l_mcands, l_mrecords, l_mclean, l_empty)
         call gate%check('master_table_as_shared_memory',      l_mtable)
         call gate%check('master_candidates_as_shared_memory', l_mcands)
@@ -120,7 +120,7 @@ contains
         ! the reads of the report
         call read_reads(vals, l_found)
         call gate%check('the_report_holds_every_read', all(l_found))
-        top1 = vals(11) / 100.
+        top1 = vals(READ_TOP1) / 100.
         call gate%check('the_student_agrees_with_the_full_search_above_chance', top1 > 2. / real(NCLS))
         do i = 1,NREADS
             call gate%report(trim(READ_KEYS(i)), vals(i))

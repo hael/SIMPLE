@@ -119,9 +119,3 @@ frequency shells and the low frequencies get their share. Where the two differ:
 | CTF and noise | raw coefficients | the CTF cross term, shells whitened by sigma2, the first block normalised by the CTF² envelope |
 | shifts | not handled (the authors note encoders are not robust to them) | phase ramps; robustness from training augmentation |
 | supervision | hard labels; their baselines overfit (99% train, 1 to 50% test) | soft posterior rows of the probability table, a calibrated held-out threshold |
-
-One idea touches a measured weakness: NUViT's amplitude channel is exactly shift-invariant. The prior evidence is
-against amplitudes alone: a pose student on power spectra in place of the complex values reached 0.006 within 6° on
-T1000 (0.80 with phases) and 0.05 on bgal (0.50) (`completed/class_student_2D.md`, the probes after Phase 0). An
-amplitude channel beside the complex input is a different question, and the pose student is where it could pay, its
-full search being far larger, and it is planned there first, in `planned/pose_student_amplitude_channel.md`.
