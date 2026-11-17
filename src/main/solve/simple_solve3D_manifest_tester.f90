@@ -70,7 +70,7 @@ contains
 
     !> a completed eligible solve3D run of nstates over spproj, built the way
     !! exec_solve3D builds it; its artifacts are those spproj registers
-    subroutine make_manifest( man, spproj, nstates, vol1, rec_backend, bundle, nu_stage, gold_std_stage, inpl_posterior )
+    subroutine make_manifest( man, spproj, nstates, vol1, rec_backend, bundle, nu_stage, gold_std_stage )
         type(solve3D_manifest),     intent(inout) :: man
         type(sp_project),           intent(inout) :: spproj
         integer,                    intent(in)    :: nstates
@@ -79,7 +79,6 @@ contains
         character(len=*), optional, intent(in)    :: bundle      !< an add-on's carried bundle manifest
         integer,          optional, intent(in)    :: nu_stage    !< the nu_stage given on the run's command line
         integer,          optional, intent(in)    :: gold_std_stage
-        character(len=*), optional, intent(in)    :: inpl_posterior
         type(cmdline) :: cl
         logical :: l_backend
         call man%new(RUN_ID, 'solve3D', .true., spproj)
@@ -101,7 +100,6 @@ contains
         endif
         if( present(nu_stage) ) call cl%set('nu_stage', nu_stage)
         if( present(gold_std_stage) ) call cl%set('gold_std_stage', gold_std_stage)
-        if( present(inpl_posterior) ) call cl%set('inpl_posterior', inpl_posterior)
         call cl%set('nthr',        8)    ! not a manifest input key
         call man%record_inputs(cl)
         if( present(bundle) )then
@@ -575,7 +573,7 @@ contains
         call assert_false(cl%defined('nthr'), 'a key outside the manifest inputs is not replayed')
         call assert_false(cl%defined('nu_stage'), 'a nu_stage the base run did not give is not replayed')
         call assert_false(cl%defined('gold_std_stage'), 'an ordinary run retains the default gold-standard start stage')
-        call assert_false(cl%defined('inpl_posterior'), 'an ordinary run retains pose-only insertion by default')
+        call assert_false(manifest_records_input('inpl_posterior'), 'the in-plane insertion has no key (cone, 2026-11-16)')
         call man%kill
         call make_manifest(man, spproj, 2, nu_stage=7)
         call man%replay(cl_nu)
@@ -595,17 +593,6 @@ contains
         call assert_int(9, cl_nu%get_iarg('gold_std_stage'), 'a switch deferred beyond the run is replayed')
         call cl_nu%kill
         call assert_string_eq('gridding', man%get_rec_backend(), 'no recorded backend is the gridding default')
-        call man%kill
-        call make_manifest(man, spproj, 1, inpl_posterior='yes')
-        call man%replay(cl_nu)
-        call assert_true(manifest_records_input('inpl_posterior'), 'the 3D angular insertion choice is recorded')
-        call assert_false(manifest_overridable_input('inpl_posterior'), 'angular insertion follows the frozen solution')
-        call assert_string_eq('yes', cl_nu%get_carg('inpl_posterior'), 'the explicit angular insertion opt-in is replayed')
-        call man%kill
-        call make_manifest(man, spproj, 1, inpl_posterior='no')
-        call man%replay(cl_nu)
-        call assert_string_eq('no', cl_nu%get_carg('inpl_posterior'), 'explicit no replaces a stale angular insertion opt-in')
-        call cl_nu%kill
         call man%kill
         call spproj%kill
         call cl%kill

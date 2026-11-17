@@ -50,9 +50,9 @@ Silent ones first.
   extras go per batch into `prob_insert_poses` (`setup_range`), resolved by `strategy3D_prob` and inserted by the
   partial reconstruction.
 - In every pass that reconstructs from a table (`l_inpl_posterior`: `refine=prob`, `prob_neigh` in `state|geom`,
-  `objfun=euclid`) each inserted pose enters at a 64-point quadrature of its in-plane row at its solved shift
-  (`inpl_quadrature`), the poses reweighed by their in-plane marginals (`inpl_view_weights`), entries in the part's
-  worst-case reservation (`reserve_inpl`). Only the solved bin takes the continuous angle, a collapsed row included;
+  `objfun=euclid`; no key) each inserted pose enters at a 64-point quadrature of its in-plane row at its solved shift
+  (`inpl_quadrature`), confined to the insertion cone about its own rotation (`inpl_cone_window`, the cone opened at
+  `topk=1` too); the table's view weights stand. Entries go in the part's worst-case reservation (`reserve_inpl`). Only the solved bin takes the continuous angle, a collapsed row included;
   an entry's angle replaces e3 of the pose's triplet about its direction (an extra's own, the committed pose's
   `committed_euler`), never of the project's normalised copy, whose e3 is 0 at a pole.
 - The pass's context memory is checked against `ptcl_buffer_budget` with a warning, not a stop.

@@ -2084,7 +2084,7 @@ contains
         endif
     end subroutine inpl_quadrature
 
-    !> The in-plane row of a pose at rotation bin confined to the insertion cone (inpl_posterior=cone): rotations
+    !> The in-plane row of a pose at rotation bin confined to the insertion cone (the 3D in-plane insertion): rotations
     !! further than angle degrees from bin on the circle invalidated (inpl_quadrature skips them); bin always stays
     pure subroutine inpl_cone_window( n, bin, angle, dists )
         integer, intent(in)    :: n, bin

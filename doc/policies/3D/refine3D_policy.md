@@ -935,13 +935,14 @@ and the exits' margin (`test_posterior_exits_weighted_insertion`). The
 readout: the four sets at `topk=10`, stage-3 maps and finals against the
 control, with the cone's occupancy line read beside them.
 
-**In-plane posterior insertion (2026-11-14, a temporary key until Hans made it the default without one on
-2026-11-15, as the 2D budget; [the plan](../../implementation_notes/planned/inpl_quadrature_insertion_3D.md)).**
-Off by default since 2026-11-15 (`inpl_posterior=no|cone|yes`, refine3D and solve3D, recorded and replayed by the
-solve3D manifest), for an A/B on PorF and the export gate, whose stages 3-5 may have fallen behind with it. `yes` is
-the insertion below; `cone` isolates the angular averaging: the table's view weights stand and each pose's in-plane
-row is confined to the insertion cone's half-angle about its own rotation (`inpl_cone_window`; no FSC yet, no cone:
-the pose's own rotation), the cone opened under `cone` at `topk=1` too.
+**In-plane posterior insertion within the insertion cone (2026-11-14, a temporary key; made the default without
+one on 2026-11-15; off for an A/B on PorF and the export gate on 2026-11-15; the cone, with no key, from 2026-11-16,
+Hans: the full-circle reweighting did not generalise across data sets, the critical ones got worse;
+[the plan](../../implementation_notes/completed/inpl_quadrature_insertion_3D.md)).** The table's view weights stand,
+and each pose's in-plane row is confined to the insertion cone's half-angle about its own rotation
+(`inpl_cone_window`; no FSC yet, no cone: the pose's own rotation), the cone opened at `topk=1` too. The full-circle
+row with the views reweighted by their in-plane marginals (`inpl_view_weights`) is gone from refine3D; the class
+student's teacher still forms that marginal in 2D (`simple_eul_prob_marginal`).
 The weighted insertion
 spreads a particle over directions but never over its in-plane angle: each direction of a row carries
 one angle, and an angle the data do not decide enters the half-map where the particle's own noise put
@@ -965,15 +966,8 @@ the committed one and its extras, enters at a quadrature of its in-plane posteri
   committed pose its triplet from `assign_ori` (`committed_euler`), not the project's copy, which
   `set_euler` normalises and which at e2 = 0 or 180 holds e3 in e1 (the reference spiral's north pole
   except under D, O and I, and under C its south pole);
-- the poses reweighted by their in-plane marginals (`inpl_view_weights`):
-  `log m_k = ln Z_k - T L_min,k - P_k`, normalised over the particle's poses, an extra under
-  `PROB_INSERT_WMIN` dropped and the rest renormalised, the committed pose always kept. `P_k` is the
-  shift prior the insertion applies today (`inpl_prior_penalty`): under the polar shift map the map's
-  prior on the solved increment, under the window search with `shift_prior=yes` the prior on the
-  increment from the refinement's own start (the table keeps each refined entry's centre, the seed
-  rotated to the starting angle and clipped, then converted back: `prior_window_centre`). The
-  selection of the extras stays the table's; in these passes this replaces the rule that their weights
-  stay the table's.
+- the poses keep the table's view weights; only their in-plane angles spread, within the cone. `inpl_prior_penalty`
+  and the row's marginal terms are still computed per pose for the readout; they do not reweight.
 
 Each entry carries its pose's weight times its point count over `K`, so a particle's weights sum to 1
 and the trailing reconstruction's population accounting is unchanged. A particle with a pose without a
@@ -986,10 +980,10 @@ observation batch in chunks of at most `MAXIMGBATCHSZ`, each chunk with its own 
 the accumulators equal one flat accumulation of the same entries. The committed pose, the search, the
 table, its draws and everything the search commits are unchanged. The resolution exits take the weighted
 insertion's margin in these passes (`l_margin`). `POSES SELECTED` reports the table's pose count and weights
-before in-plane reweighting; passes without that reweighting retain `POSES INSERTED`. `IN-PLANE ANGLES`
+(the weights the cone keeps); passes without the in-plane insertion retain `POSES INSERTED`. `IN-PLANE ANGLES`
 reports angles per particle, the share of rows collapsed to one angle, and whether the budget K exceeds
 m_max, the highest angular harmonic the band resolves at the rim. `INSERTED VIEW WEIGHT` reports the
-assigned view's actual weight after reweighting, summed over all table particles including fallbacks.
+assigned view's weight as inserted, summed over all table particles including fallbacks.
 This is the view's total weight across its angles, not the assigned angle's weight. The readout record also
 holds the rows per particle and their mean n_eff; the REC3D bench gives the poses inserted.
 Whether the maps gain is the maintainer's test on PorF, PfCRT, streptavidin and a small membrane protein.

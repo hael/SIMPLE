@@ -2103,7 +2103,7 @@ contains
         assgn%inpl = inpl
     end function unrefined
 
-    !> The cone window (inpl_posterior=cone): a flat row keeps the rotations within the angle of its bin, across the
+    !> The cone window (the 3D in-plane insertion): a flat row keeps the rotations within the angle of its bin, across the
     !! wrap; no cone keeps the bin alone; a lower peak half a turn away does not enter the quadrature
     subroutine test_inpl_cone_window()
         integer, parameter :: NR = 36, KQ = INPL_POSTERIOR_BUDGET

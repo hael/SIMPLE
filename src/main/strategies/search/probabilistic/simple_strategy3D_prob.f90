@@ -3,7 +3,7 @@ module simple_strategy3D_prob
 use simple_core_module_api
 use simple_strategy3D_utils, only: assign_ori, candidate_pose, resolve_inplane_e3
 use simple_eul_prob_tab_utils, only: prob_insert_pose, record_shift_state, prob_inpl_counts, posterior_temperature, &
-    &temperature_or_argmin, prob_rnd_scope, inpl_quadrature, inpl_view_weights, inpl_prior_penalty, inpl_entry_pack, &
+    &temperature_or_argmin, prob_rnd_scope, inpl_quadrature, inpl_prior_penalty, inpl_entry_pack, &
     &inpl_particle_counts, inpl_cone_window
 use simple_rnd,              only: rnd_keyed, rnd_draw_key, RND_FAM_INPLQ
 use simple_polarft_calc,     only: SHERRSQ
@@ -178,7 +178,7 @@ contains
         else
             call self%s%b_ptr%pftc%gen_euclid_dists(iref, iptcl, sh_row, dists)
         endif
-        if( self%s%p_ptr%l_inpl_cone ) call inpl_cone_window(self%s%nrots, bin, &
+        call inpl_cone_window(self%s%nrots, bin, &
             &self%spec%eulprob_obj_part%get_insert_cone_angle((iref - 1) / self%s%p_ptr%nspace + 1), dists)
         temp = temperature_or_argmin(posterior_temperature(self%s%b_ptr%pftc%wsqsum_ptcl_now(iptcl), &
             &self%s%b_ptr%pftc%get_pftsz()))
@@ -198,15 +198,14 @@ contains
         enddo
     end subroutine inpl_pose_row
 
-    !> The committed pose's row after its solve, then the view weights of all the particle's poses (inpl_view_weights) into
-    !! the slots the insertion reads; euler is the committed pose about its direction (assign_ori). A pose without a
-    !! valid row leaves the whole particle to the insertion without the key (its blocks emptied, the table's weights kept)
+    !> The committed pose's row after its solve, its in-plane angles confined to the insertion cone (the table's view
+    !! weights stand) into the slots the insertion reads; euler is the committed pose about its direction (assign_ori). A pose without a
+    !! valid row leaves the whole particle to the pose-only insertion (its blocks emptied, the table's weights kept)
     subroutine insert_inpl_posterior( self, iptcl_map, iref, bin, sh, euler )
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: iptcl_map, iref, bin
         real,                   intent(in)    :: sh(2), euler(3)
         integer :: iloc, npose, k, ithr
-        real    :: temp
         iloc  = self%spec%extra_poses%loc(self%s%iptcl)
         npose = 1 + self%spec%extra_poses%nextra(iloc)
         ithr  = self%s%ithr
@@ -219,19 +218,7 @@ contains
             self%inpl_counts%view_weight_sum = real(self%spec%extra_poses%wc(iloc), dp)
             return
         endif
-        if( self%s%p_ptr%l_inpl_cone )then
-            ! the table's view weights stand: only the angles spread
-            self%inpl_counts = inpl_particle_counts(self%spec%extra_poses, iloc, s3D%inpl_neff(1:npose,ithr))
-            return
-        endif
-        temp = temperature_or_argmin(posterior_temperature(self%s%b_ptr%pftc%wsqsum_ptcl_now(self%s%iptcl), &
-            &self%s%b_ptr%pftc%get_pftsz()))
-        call inpl_view_weights(npose, s3D%inpl_lnz(1:npose,ithr), s3D%inpl_dmin(1:npose,ithr), temp, &
-            &s3D%inpl_pen(1:npose,ithr), PROB_INSERT_WMIN, s3D%inpl_m(1:npose,ithr))
-        self%spec%extra_poses%wc(iloc) = s3D%inpl_m(1,ithr)
-        do k = 1,npose - 1
-            self%spec%extra_poses%w(self%spec%extra_poses%first(iloc) + k - 1) = s3D%inpl_m(k+1,ithr)
-        enddo
+        ! the table's view weights stand: only the angles spread, within the insertion cone
         self%inpl_counts = inpl_particle_counts(self%spec%extra_poses, iloc, s3D%inpl_neff(1:npose,ithr))
     end subroutine insert_inpl_posterior
 

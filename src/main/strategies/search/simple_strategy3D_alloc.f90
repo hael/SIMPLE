@@ -35,7 +35,6 @@ type strategy3D_alloc
     real(dp),       allocatable :: inpl_pen(:,:)            !< the shift prior's term
     real,           allocatable :: inpl_dmin(:,:)           !< the row's minimum
     real,           allocatable :: inpl_neff(:,:)           !< exp(entropy) of the row
-    real,           allocatable :: inpl_m(:,:)              !< the pose's view weight
 end type strategy3D_alloc
 
 type(strategy3D_alloc) :: s3D                         ! singleton
@@ -163,7 +162,7 @@ contains
         if( allocated(s3D%smpl_inpl_athres)    ) deallocate(s3D%smpl_inpl_athres)
         if( allocated(s3D%inpl_bank)           ) deallocate(s3D%inpl_bank)
         if( allocated(s3D%inpl_nent)           ) deallocate(s3D%inpl_nent, s3D%inpl_lnz, s3D%inpl_pen, s3D%inpl_dmin,&
-            &s3D%inpl_neff, s3D%inpl_m)
+            &s3D%inpl_neff)
         if( allocated(s3D%rts) )then
             do ithr=1,size(s3D%rts)
                 call s3D%rts(ithr)%kill
@@ -190,11 +189,11 @@ contains
         !$ nteam = omp_get_max_threads()
         if( allocated(s3D%inpl_bank) ) deallocate(s3D%inpl_bank)
         if( allocated(s3D%inpl_nent) ) deallocate(s3D%inpl_nent, s3D%inpl_lnz, s3D%inpl_pen, s3D%inpl_dmin,&
-            &s3D%inpl_neff, s3D%inpl_m)
+            &s3D%inpl_neff)
         allocate(s3D%inpl_bank(nrow, ncol, nteam))
         allocate(s3D%inpl_nent(npose, nteam), source=0)
         allocate(s3D%inpl_lnz(npose, nteam), s3D%inpl_pen(npose, nteam), source=0.d0)
-        allocate(s3D%inpl_dmin(npose, nteam), s3D%inpl_neff(npose, nteam), s3D%inpl_m(npose, nteam), source=0.)
+        allocate(s3D%inpl_dmin(npose, nteam), s3D%inpl_neff(npose, nteam), source=0.)
     end subroutine prep_strategy3D_inpl_bank
 
     pure integer function ref_state_from_index( iref, nspace ) result( state )

@@ -589,7 +589,7 @@ contains
                 call eulprob_obj_part%new_pipeline(p_ptr, b_ptr, pinds)
             endif
             call eulprob_obj_part%set_model_from_field
-            if( p_ptr%topk > 1 .or. p_ptr%l_inpl_cone ) call eulprob_obj_part%set_insert_cone(insert_cone_from_fsc(p_ptr%nstates, &
+            if( p_ptr%topk > 1 .or. p_ptr%l_inpl_posterior ) call eulprob_obj_part%set_insert_cone(insert_cone_from_fsc(p_ptr%nstates, &
                 &p_ptr%box, p_ptr%smpd, p_ptr%mskdiam, lp_cone, l_report=.not. p_ptr%l_distr_worker))
             call eulprob_obj_part%open_assignment(nglob=neff_nglob, rank0=neff_rank0)
             if( pipeline_bytes > pipeline_budget )then
