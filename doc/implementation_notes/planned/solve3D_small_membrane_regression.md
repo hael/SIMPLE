@@ -230,9 +230,10 @@ logs and the code:
   input-volume and no-2D routes keep their ladders and their sampling.
 - Shared-memory and distributed runs behave the same: the release fix acts in the solve3D commander between
   stages, before any part is scheduled.
-- No new command-line key. Experimental variants are patch builds on an export (`git archive`) of the
-  phase's base, recorded with their diff.
-- `inpl_posterior` stays as each target's command has it (default `no`; SLC's `cone`).
+- No new command-line key, except `nsample_ramp` (Decision 15, the thing compared). Experimental variants are
+  patch builds on an export (`git archive`) of the phase's base, recorded with their diff.
+- `inpl_posterior` stayed as each target's command had it (default `no`; SLC's `cone`) until `fd9af0add`
+  (2026-11-16) removed the 3D in-plane posterior insertion and its key; later runs drop it from SLC's command.
 
 ## 4. Decisions and rulings
 
@@ -325,6 +326,18 @@ logs and the code:
     random and the log says so. The rescoring (`keep`) and every free draw are unchanged (no score). Single
     state only: multi-state solve3D holds no sticky subset (a greedy sample would keep a minority state's start
     labels, the reason `cf643a192` removed score ranking).
+15. (2026-11-16, Hans's ruling) The *sample ramp*, under the switch `nsample_ramp=yes|no` (default `no`; the
+    key is the thing being compared). Single state, fractional particle runs that hold the sticky subset: stage
+    k of the sticky stages draws `nsample*k/(STICKY_LAST_STAGE+1)`, the free stages draw `nsample`, and the
+    default `nsample` under the switch is 25,000 (`NSAMPLE_RAMP_DEFAULT`): 5k, 10k, 15k, 20k, then 25k. Every
+    sticky stage redraws `best` at its first iteration at its own size; the fixed 2D ranking and quotas that grow
+    with the target make each subset contain the previous one (a ±1 change at a unit's margin is possible only
+    for quotas below the stage number). The stage's `update_frac` is the run's fraction scaled to its sample; a
+    stage-4 entry draws its starting sample at the stage-4 size. The full-sampling switch stays on `nsample` for
+    the whole run (PfCRT keeps full sampling, untouched). Refused with several states and without a 2D solution
+    (the random fallback of the best draw would not keep the subset). Switch off: the run is the one of
+    `218f0f289`. Experiment: the ramp against `nsample=25000` without it on the same build (the larger-sample
+    arm of Decision 5, which isolates the ramp), after the candidate's current restarts are read.
 
 Defaults taken without a question: 16.25 Å for the start cap (the size rule's own start at a 130 Å mask)
 and 13.0 Å for the stage-3 cap (SLC's stage 3); the consolidation thresholds of section 6; the seed stride
@@ -449,8 +462,8 @@ the late release or the `nsample` rule. Update `simple_solve3D_reseed_tester` (t
 130, 155, 160, 170, 180 and 200 Å; the cap applied to single state only; the class-average route unchanged)
 and policy section 4.
 Exit: build, fast gate and the unit suites pass, and so do the highlevel entries that run single-state
-solve3D on masks above 130 Å: `simulated_workflow_6vxx`, `simulated_workflow_1jxy` and `solve3D_addon`
-(180 Å) and the consensus route of `multistate_workflows` (200 Å).
+solve3D on masks above 130 Å: `simulated_workflow_6vxx` and `solve3D_addon` (180 Å) and the consensus route of
+`multistate_workflows` (200 Å); `simulated_workflow_1jxy` was removed in `fd9af0add`.
 
 **Phase 5, the panel.** On the candidate build, without `lpstart` on the command line: PorF 10, PfCRT 10, the
 export gate 10, SLC 3 (its best command), streptavidin, beta-galactosidase and TRPV1 3 each (their usual
@@ -486,11 +499,12 @@ the unit tests added in Phases 2 and 4.
 
 | File | What | Phases |
 | --- | --- | --- |
-| `src/main/solve/simple_solve3D_controller.f90` | the ladder constants and the stage-3 cap; the sticky and trailing stages of the late release (`STICKY_LAST_STAGE`, `holds_sticky_subset`, `solve3D_first_free_stage`); `sticky_sampling=best` at the first sticky stage; the explicit-`lp` ceiling | 2 (Decision 8), 3, 4 |
-| `src/main/solve/simple_solve3D_utils.f90` | `set_lplims_from_size` (the cap, single state); the release helper; the interface of `solve3D_first_free_stage` | 2, 3, 4 |
-| `src/main/commanders/simple/simple_commanders_solve3D.f90` | the release at the stage boundary; the run seed; the stage summary, if printed there; the unit table's planned draws counted from the first free stage | 2, 3 |
-| `src/main/solve/simple_solve3D_reseed_tester.f90` | ladder, release, sticky-stage and best-first tests, under `none`, `class` and `cavg`; explicit-`lp` tests | 2, 3, 4 |
-| `src/main/params/simple_parameters.f90`, `src/main/params/simple_parameters_phases.f90` | `sticky_sampling=best` and `l_sticky_best` (Decision 14; added 2026-11-16 on Hans's ruling) | 3 |
+| `src/main/solve/simple_solve3D_controller.f90` | the ladder constants and the stage-3 cap; the sticky and trailing stages of the late release (`STICKY_LAST_STAGE`, `holds_sticky_subset`, `solve3D_first_free_stage`); `sticky_sampling=best` at the first sticky stage; the sample ramp (`solve3D_stage_nsample`, `NSAMPLE_RAMP_DEFAULT`, `best` at every ramped sticky stage, Decision 15); the explicit-`lp` ceiling | 2 (Decision 8), 3, 4 |
+| `src/main/solve/simple_solve3D_utils.f90` | `set_lplims_from_size` (the cap, single state); the release helper; the interfaces of `solve3D_first_free_stage`, `solve3D_stage_nsample` and `solve3D_nsample_default(params)`; `nsample_ramp` stripped from the child command lines | 2, 3, 4 |
+| `src/main/commanders/simple/simple_commanders_solve3D.f90` | the release at the stage boundary; the run seed; the stage summary, if printed there; the unit table's planned draws counted from the first free stage; under `nsample_ramp` the default, the refusals, the stage-4 entry's starting sample and the per-stage log line | 2, 3 |
+| `src/main/solve/simple_solve3D_reseed_tester.f90` | ladder, release, sticky-stage and best-first tests, under `none`, `class` and `cavg`; the ramp's emitted sizes and its growth (`check_ramp_growth`); explicit-`lp` tests | 2, 3, 4 |
+| `src/main/params/simple_parameters.f90`, `src/main/params/simple_parameters_phases.f90` | `sticky_sampling=best` and `l_sticky_best` (Decision 14; added 2026-11-16 on Hans's ruling); `nsample_ramp` and `l_nsample_ramp` (Decision 15) | 3 |
+| `src/main/params/simple_parameters_parse.f90`, `src/main/params/simple_parameters_tester.f90`, `src/main/ui/simple/simple_ui_solve3D.f90` | the `nsample_ramp` key: registry, binding test, solve3D input (Decision 15; added 2026-11-16) | 3 |
 | `src/main/strategies/search/simple_matcher_smpl_and_lplims.f90` | the owner's draw passes the `ptcl2D` scores under `best` (Decision 14; added 2026-11-16) | 3 |
 | `src/main/simple_external_reference_pose_initialization.f90` | the pose initialization removes the stage's `sticky_sampling` from its own command line, since a stage-4 entry now carries `best` (Decision 4, ruling (b); added 2026-11-16) | 3 |
 | `src/main/ori/simple_oris.f90` | the interfaces of the samplers' optional scores (Decision 14; added 2026-11-16); the comment of `class_sample_quotas` (square-root quota restored) | 3 |
@@ -629,3 +643,28 @@ least-updated units), and the best rows are 3, 6, 10, 13 in `test_best_first_dra
 the `class` cases (equal populations) and the sweep counts are unchanged. The documents rewritten in the entry
 above are back to the square-root rule, with the revert and the restore recorded in `solve3D_policy.md` and the
 fractional-update policy.
+
+**2026-11-16, first reading of the candidate (Hans; restarts still running, logs not read here).** With the
+best-first sticky subset held through stage 4 (`8363af240`, square-root quotas restored in `218f0f289`), "everything
+seems to be working": the targets look promising part-way through. Owed when the restarts complete: the build
+each arm ran (`8363af240` alone drew with equal shares, `218f0f289` with square-root shares), the per-restart table
+against the floors of section 6, the consolidation readout at the end of stages 3-4, the stage-3/4 maps of one
+restart per target, and the controls of section 9 (SLC, streptavidin, beta-galactosidase, TRPV1, the highlevel
+solve3D entries) before any default is declared.
+
+**2026-11-16, Decision 15 implemented under its switch (uncompiled; base `218f0f289`).** `nsample_ramp=yes|no`
+(default `no`) in `parameters`, the registry and the solve3D UI (advanced, next to `nsample`), stripped from every
+child command line with the sampling keys. The controller's `solve3D_stage_nsample` is the one rule (nsample, or
+`nsample*istage/5` in the stages that hold the sticky subset); `emit_refine3D_stage_cfg` emits it as the stage's
+`nsample` and scales the run's `update_frac` to it, and under the switch emits `best` at every sticky stage instead
+of `keep`. `solve3D_nsample_default(params)` returns 25,000 under the switch. The commander refuses the switch with
+several states and without a 2D solution, logs the ramp (or that full sampling leaves none), draws a stage-4
+entry's starting sample at its stage's size, and logs `STAGE n DRAWS m PARTICLES PER ITERATION`. Switch off, the
+emitted lines are those of `218f0f289`. Tests: the stage table under the switch (200, 400, 600, 800 of 1000 and
+the scaled fractions, `best` at every sticky stage, 1000 and the run's fraction from stage 5, a stage-4 entry at 800,
+several states and full sampling unramped, switch off `keep`); `check_ramp_growth` under `none`, `class` and
+`cavg` (40 rows, nsample 20: sizes 4, 8, 12, 16, each stage's subset containing the previous through every iteration;
+the `cavg` layout gives a unit nothing at stage 1, checked with the quota model to stay nested);
+`test_nsample_ramp_binding`. Policies, the sampling skill (`SKILL.md`, `coupling-map.md`) updated; the solve3D
+policy's stale "`cavg` by default" corrected to `class`. Owed: build, fast gate, `unit_reconstruction`,
+`unit_ori`, the parameters suite; the experiment of Decision 15 after the current restarts are read.

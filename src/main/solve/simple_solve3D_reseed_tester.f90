@@ -310,6 +310,46 @@ contains
         call check_sticky_release(params, 'cavg',  .true.)
         call check_sticky_release(params, 'cavg',  .false.)
         nstages_refine3D = 8
+        ! nsample_ramp: the sticky stages draw nsample*stage/5, every one redrawing best first, the free stages nsample
+        params%l_nsample_ramp = .true.
+        do istage = 1, 6
+            call set_cline_refine3D(params, istage, 1, .false.)
+            if( istage <= 4 )then
+                call assert_int(nint(1000. * real(istage) / 5.), cline_refine3D%get_iarg('nsample'), &
+                    &'ramp: a sticky stage draws nsample*stage/5')
+                call assert_real(0.25 * real(istage) / 5., cline_refine3D%get_rarg('update_frac'), 1.e-6, &
+                    &'ramp: the update fraction scales with the stage''s sample')
+                call assert_string_eq('best', cline_refine3D%get_carg('sticky_sampling'), &
+                    &'ramp: every sticky stage redraws best first')
+            else
+                call assert_int(1000, cline_refine3D%get_iarg('nsample'), 'ramp: a free stage draws nsample')
+                call assert_real(0.25, cline_refine3D%get_rarg('update_frac'), 1.e-6, 'ramp: a free stage keeps the run''s fraction')
+                call assert_false(cline_refine3D%defined('sticky_sampling'), 'ramp: free sampling from stage 5')
+            endif
+        end do
+        call set_cline_refine3D(params, 4, 4, .false.)
+        call assert_int(800, cline_refine3D%get_iarg('nsample'), 'ramp: a stage-4 entry draws its stage''s share')
+        params%nstates = 2
+        call set_cline_refine3D(params, 2, 1, .false.)
+        call assert_int(1000, cline_refine3D%get_iarg('nsample'), 'ramp: several states keep nsample')
+        params%nstates = 1
+        params%nsample = 9500
+        call set_cline_refine3D(params, 2, 1, .false.)
+        call assert_false(cline_refine3D%defined('nsample'), 'ramp: full sampling has no sample to ramp')
+        params%nsample = 20
+        nptcls_eff     = 40
+        update_frac    = 0.5
+        call check_ramp_growth(params, 'none')
+        call check_ramp_growth(params, 'class')
+        call check_ramp_growth(params, 'cavg')
+        params%nsample = 1000
+        nptcls_eff     = 10000
+        update_frac    = 0.25
+        nstages_refine3D = 8
+        params%l_nsample_ramp = .false.
+        call set_cline_refine3D(params, 2, 1, .false.)
+        call assert_int(1000, cline_refine3D%get_iarg('nsample'), 'no ramp: every stage draws nsample')
+        call assert_string_eq('keep', cline_refine3D%get_carg('sticky_sampling'), 'no ramp: the later sticky stages keep')
         params%nstates = 3
         do istage = 1, 8
             call set_cline_refine3D(params, istage, 1, .false.)
@@ -425,8 +465,7 @@ contains
         use simple_builder,                 only: builder
         use simple_string,                  only: string
         use simple_type_defs,               only: class_sample
-        use simple_class_sample_io,         only: write_class_samples, deallocate_class_samples
-        use simple_defs_fname,              only: CLASS_SAMPLING_FILE
+        use simple_class_sample_io,         only: deallocate_class_samples
         use simple_oris,                    only: class_sample_sweep
         class(parameters), intent(in) :: params
         character(len=*),  intent(in) :: mode
@@ -455,10 +494,10 @@ contains
             case('none')
                 best = [9,10,13,16]                         ! the four best rows
             case('class')
-                call make_units([8,8], [0,0])               ! 2 per unit
+                call write_units([8,8], [0,0], units)       ! 2 per unit
                 best = [3,6,10,13]
             case('cavg')
-                call make_units([4,4,8], [1,2,2])           ! square-root quotas 1.46 | 1.05, 1.49: 1, 1 and 2 (the tie to the larger unit)
+                call write_units([4,4,8], [1,2,2], units)   ! square-root quotas 1.46 | 1.05, 1.49: 1, 1 and 2 (the tie to the larger unit)
                 best = [3,6,10,13]
         end select
         projfile = 'sticky_release.simple'
@@ -536,27 +575,99 @@ contains
         call build%spproj%os_ptcl2D%kill
         call build%spproj%os_ptcl3D%kill
         nullify(build%spproj_field)
-
-    contains
-
-        !> consecutive rows per unit, written as the run's sampling units
-        subroutine make_units( pops, groups )
-            integer, intent(in) :: pops(:), groups(:)
-            integer :: k, j, first
-            allocate(units(size(pops)))
-            first = 1
-            do k = 1, size(pops)
-                units(k)%clsind  = k
-                units(k)%pop     = pops(k)
-                units(k)%group   = groups(k)
-                units(k)%nsample = 0
-                allocate(units(k)%pinds(pops(k)), source=[(j, j=first,first+pops(k)-1)])
-                first = first + pops(k)
-            end do
-            call write_class_samples(units, string(CLASS_SAMPLING_FILE))
-        end subroutine make_units
-
     end subroutine check_sticky_release
+
+    !> Stages 1-4 under nsample_ramp through the owner's sampler under one balance mode (none, class or cavg),
+    !! the caller's run at nsample 20 of 40 active particles: every sticky stage redraws best first at its own
+    !! size, 4, 8, 12 and 16, which contains the previous stage's subset, and keeps it through the stage
+    subroutine check_ramp_growth( params, mode )
+        use simple_solve3D_utils,           only: cline_refine3D, set_cline_refine3D, nstages_refine3D
+        use simple_matcher_smpl_and_lplims, only: sample_ptcls4prob3D
+        use simple_parameters,              only: parameters
+        use simple_builder,                 only: builder
+        use simple_type_defs,               only: class_sample
+        use simple_class_sample_io,         only: deallocate_class_samples
+        class(parameters), intent(in) :: params
+        character(len=*),  intent(in) :: mode
+        integer, parameter :: NPTCLS = 40, NITER = 3, NSTICKY = 4
+        class(builder),    allocatable, target :: build
+        class(parameters), allocatable :: sampling
+        type(class_sample), allocatable :: units(:)
+        integer, allocatable :: inds(:)
+        logical :: l_held(NPTCLS), l_drawn(NPTCLS)
+        integer :: istage, iter, nsamp, i
+        write(*,'(A,A)') 'check_ramp_growth ', mode
+        allocate(build, sampling)
+        call build%spproj%os_ptcl3D%new(NPTCLS, is_ptcl=.true.)
+        build%spproj_field => build%spproj%os_ptcl3D
+        call build%spproj_field%set_all2single('state', 1.)
+        ! distinct 2D objective values, rows 21-40 offset by a half
+        call build%spproj%os_ptcl2D%new(NPTCLS, is_ptcl=.true.)
+        call build%spproj%os_ptcl2D%set_all2single('state', 1.)
+        do i = 1, NPTCLS
+            call build%spproj%os_ptcl2D%set(i, 'corr', real(mod(5*i, 41)) + merge(0.5, 0., i > 20))
+        end do
+        ! under cavg the square-root quotas give unit 2 nothing at stage 1 and grow it later
+        select case(mode)
+            case('class')
+                call write_units([20,20], [0,0], units)
+            case('cavg')
+                call write_units([8,8,24], [1,2,2], units)
+        end select
+        sampling%nptcls = NPTCLS
+        sampling%l_prob_align_mode = .true.
+        sampling%l_update_frac = .true.
+        sampling%l_centring = .false.
+        nstages_refine3D = NSTICKY + 1
+        l_held = .false.
+        call cline_refine3D%kill
+        do istage = 1, NSTICKY
+            call set_cline_refine3D(params, istage, 1, .false.)
+            sampling%startit = cline_refine3D%get_iarg('startit')
+            sampling%update_frac = cline_refine3D%get_rarg('update_frac')
+            sampling%balance = mode
+            sampling%l_sticky_sampling = cline_refine3D%defined('sticky_sampling')
+            sampling%l_sticky_keep = cline_refine3D%get_carg('sticky_sampling') == 'keep'
+            sampling%l_sticky_best = cline_refine3D%get_carg('sticky_sampling') == 'best'
+            call assert_true(sampling%l_sticky_best, 'ramp: every sticky stage draws best first')
+            do iter = sampling%startit, sampling%startit + NITER - 1
+                sampling%which_iter = iter
+                call sample_ptcls4prob3D(sampling, build, nsamp, inds)
+                call assert_int(4 * istage, nsamp, 'ramp: the stage draws nsample*stage/5')
+                l_drawn = .false.
+                l_drawn(inds) = .true.
+                call assert_false(any(l_held .and. .not. l_drawn), 'ramp: a stage keeps every particle held before')
+                l_held = l_drawn
+            end do
+            call cline_refine3D%set('endit', sampling%startit + NITER - 1)
+        end do
+        if( allocated(units) ) call deallocate_class_samples(units)
+        call build%spproj%os_ptcl2D%kill
+        call build%spproj%os_ptcl3D%kill
+        nullify(build%spproj_field)
+    end subroutine check_ramp_growth
+
+    !> consecutive rows per unit, written as the run's sampling units
+    subroutine write_units( pops, groups, units )
+        use simple_type_defs,       only: class_sample
+        use simple_class_sample_io, only: write_class_samples
+        use simple_defs_fname,      only: CLASS_SAMPLING_FILE
+        use simple_string,          only: string
+        integer,                         intent(in)    :: pops(:), groups(:)
+        type(class_sample), allocatable, intent(inout) :: units(:)
+        integer :: k, j, first
+        allocate(units(size(pops)))
+        first = 1
+        do k = 1, size(pops)
+            units(k)%clsind  = k
+            units(k)%pop     = pops(k)
+            units(k)%group   = groups(k)
+            units(k)%nsample = 0
+            allocate(units(k)%pinds(pops(k)), source=[(j, j=first,first+pops(k)-1)])
+            first = first + pops(k)
+        end do
+        call write_class_samples(units, string(CLASS_SAMPLING_FILE))
+    end subroutine write_units
 
     !> the randomization acts on the poses the stage wrote into the project file, not on the in-memory
     !! copy of the previous stage: every pose in the file ends as itself or its c2 mate

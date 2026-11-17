@@ -60,7 +60,9 @@ Search mode by stage:
 Sampling by stage:
 
 - every stage carries the run's `update_frac` and `balance` (plus `nclust`
-  for `cavg`)
+  for `cavg`); under `nsample_ramp=yes` a sticky stage carries its ramped
+  `nsample` (`nsample*stage/5`, `solve3D_stage_nsample`) and the run's fraction
+  scaled to it
 - no per-particle score in any free draw: each unit's quota comes from the
   whole class, lowest `updatecnt` first
 - single-state, fractional, particles, not an add-on: one sticky subset from

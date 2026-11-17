@@ -410,7 +410,13 @@ whatever stage the run enters at; add-ons hold none. The first stage draws it
 with `sticky_sampling=best` (above: the best 2D objective values of every unit);
 the next stages through 4 use `sticky_sampling=keep` to rescore that same set
 from their first iteration. A run entering at stage 4 (supplied volumes,
-`cavg_ini`, `cavg_ini_ext`) holds it for that stage. Trailing reconstruction
+`cavg_ini`, `cavg_ini_ext`) holds it for that stage. Under `nsample_ramp=yes`
+the sticky subset grows instead: stage k draws `nsample*k/5` particles, every
+sticky stage with `sticky_sampling=best` at its first iteration; the 2D ranking
+is fixed and the square-root quotas grow with the target, so each stage's
+subset contains the previous one, and the free stages draw `nsample` (25,000 by
+default then). Only the stage's `update_frac` changes; the samplers are those of
+the switch-off run. Trailing reconstruction
 starts with the free sampling, at stage 5 (`TRAILREC_STAGE_SINGLE =
 STICKY_LAST_STAGE + 1`): while the subset is held only its rows have update
 counts, so `u = n/N` would be 1. From stage 5 each iteration draws freely again,

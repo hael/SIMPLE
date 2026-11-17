@@ -218,6 +218,7 @@ contains
         call reg%add_yesno('cc_emit_sigma', self%cc_emit_sigma)
         call reg%add_yesno('sigma2_anneal', self%sigma2_anneal)
         call reg%add_char('sticky_sampling', self%sticky_sampling)
+        call reg%add_yesno('nsample_ramp', self%nsample_ramp)
         call reg%add_yesno('scan_exit', self%scan_exit)
         call reg%add_yesno('prob_post_diag', self%prob_post_diag)
         call reg%add_yesno('shift_prior', self%shift_prior)

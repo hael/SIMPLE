@@ -133,6 +133,7 @@ type :: parameters
     character(len=3)          :: cc_emit_sigma='no' !< internal: emit Euclidean residual sigmas after CC assignment(yes|no){no}
     character(len=3)          :: sigma2_anneal='no' !< anneal 2D scoring from the log-SG bootstrap to measured noise over the last two solve2D stages(yes|no){no}
     character(len=4)          :: sticky_sampling='no' !< internal: yes draws at a stage's first iteration and rescores that sticky subset after; best draws it by the 2D objective, best first; keep rescores the previous stage's sticky subset from the first iteration(no|yes|best|keep){no}
+    character(len=3)          :: nsample_ramp='no'    !< solve3D, one state: the sticky stages draw a share of nsample growing with the stage (nsample*istage/5), the free stages nsample, 25000 by default(yes|no){no}
     character(len=3)          :: scan_exit='no'       !< internal: multi-state convergence also on the mean % scanned above fracsrch alone(yes|no){no}
     character(len=3)          :: prob_post_diag='no'  !< internal: the dense probability table workers write per-particle pose-posterior statistics (prob_posterior_*.txt)(yes|no){no}
     character(len=3)          :: shift_prior='yes'    !< the probability tables' shift searches carry a Gaussian prior on the stored shift's displacement from the seed (the penalty follows the stored shift at every rotation), width from the previous iteration's shift increments; the window search's, off under the polar shift map (yes|no){yes}
@@ -669,6 +670,7 @@ type :: parameters
     logical :: l_sticky_sampling = .false. !< not a command-line key
     logical :: l_sticky_keep     = .false. !< sticky_sampling=keep; not a command-line key
     logical :: l_sticky_best     = .false. !< sticky_sampling=best; not a command-line key
+    logical :: l_nsample_ramp    = .false. !< nsample_ramp=yes; not a command-line key
     logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone; not a command-line key
     logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics; not a command-line key
     logical :: l_shift_prior     = .false. !< shift_prior=yes; not a command-line key
