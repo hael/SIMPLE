@@ -440,9 +440,12 @@ active particle, never-searched ones included. From the release on, the log's
 first-time counts and `% PARTICLES UPDATED SO FAR` count from the release.
 Full-sampling runs use no sticky subset restriction and have nothing to
 release. The sticky subset lets the shc search scan each selected particle in
-full once, then refine it without introducing never-searched particles each
-iteration, and lets its map consolidate before the free sampling brings in
-particles aligned once each.
+full once (a particle without a search score scores every reference and draws
+from the posterior over all of them; the random start orientation is no search
+result since 2026-11-17), then refine it without introducing never-searched
+particles each iteration, and lets its map consolidate before the free sampling
+brings in particles aligned once each. Under `nsample_ramp=yes` the particles a
+stage adds to the subset take that full scan in their first iteration.
 
 Trailing reconstruction is unchanged by the sticky subsets of `refine3D_states`
 frequency blocks: the current partials are

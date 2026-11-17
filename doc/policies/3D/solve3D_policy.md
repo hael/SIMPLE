@@ -83,7 +83,16 @@ Stage policy includes:
     `corr`; at random when the project holds no 2D scores), and the next stages
     through 4 keep it (`sticky_sampling=keep`). A run that enters at stage 4
     (supplied volumes, `cavg_ini`, `cavg_ini_ext`) holds it for its entry stage.
-    The shc neighbourhood search scans a never-searched particle in full, so a
+    The shc neighbourhood search scans a never-searched particle in full (a
+    record without a search score, `has_search_score`): it scores every
+    reference into the table and draws from the posterior over all of them, so
+    the first iteration of the run and every particle the ramp adds to the
+    subset get a global search instead of a hill climb from the random start
+    orientation. Until 2026-11-17 the dense pass keyed on `has_been_searched`,
+    which counts Euler angles as a pose (as the virgin-field test needs), and the
+    random start (`delete_3Dalignment`, then `rnd_oris`) sets them for every
+    particle, so no particle took the full scan and an added particle's first
+    pose was drawn from a handful of references that beat a random pose. A
     fresh draw every iteration would make the shc stages a sequence of full
     scans, and the subset's map consolidates before new particles arrive, as
     with the greedy sample of `3fb0b00b`, which held each class's best particles

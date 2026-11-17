@@ -70,7 +70,10 @@ Sampling by stage:
   whatever the entry stage), drawn at the first stage's first iteration as every
   unit's quota of particles with the best 2D objective values
   (`sticky_sampling=best`), and kept by the next stages through 4 (`keep`): the
-  shc neighbourhood search of stages 1-2 scans never-searched particles in full,
+  shc neighbourhood search of stages 1-2 scans never-searched particles in full
+  (no search score, `has_search_score`; the random start
+  orientation is no search result, so a particle the ramp adds is drawn from the
+  posterior over every reference),
   and the subset's map consolidates before new particles arrive; a stage-4 entry
   (supplied volumes, `cavg_ini`, `cavg_ini_ext`) holds it for that stage; from
   stage 5 every iteration redraws with no score. Multi-state runs, add-ons, the

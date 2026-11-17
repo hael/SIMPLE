@@ -512,6 +512,7 @@ the unit tests added in Phases 2 and 4.
 | `src/main/exec/simple_exec_helpers.f90` | per-restart seeds in `restarted_exec` | 2 |
 | `src/utils/math/simple_rnd.f90` | a getter of the run seed, if needed | 2 |
 | `src/main/ori/simple_oris_sampling.f90`, `src/main/ori/simple_oris_tester.f90` | `set_nonzero_updatecnt` and its test, if needed; the best-first draw of `sample4update_cnt` and `sample4update_class` and its test; the square-root quota (`sqrt_capped_shares`, `alloc_unit_quotas`, `class_sample_quotas`) and its tests restored from `15d6280a9` (2026-11-16, Hans's request) | 2, 3 |
+| `src/main/ori/simple_ori.f90`, `src/main/ori/simple_oris.f90`, `src/main/ori/simple_oris_getters.f90`, `src/main/ori/simple_ori_tester.f90`, `src/main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90` | `has_search_score` (the search score alone) for the shc stages' dense first pass, so it reaches never-searched particles; `has_been_searched` unchanged; its test; the caller (added 2026-11-17 on Hans's ruling) | 3 |
 | `doc/policies/3D/solve3D_policy.md` | sections 3-4 | 2, 3, 4, 6 |
 | `doc/policies/importance_sampling_fractional_update_policy.md` | sticky sampling schedules; the sampling units (the one scored draw, the square-root quotas) | 2, 3, 6 |
 | `doc/policies/3D/classify3D_refs_policy.md`, `doc/policies/heterogeneity/refine3D_states_policy.md`, `doc/algorithms/sampling_and_fractional_updates.md`, `doc/algorithms/solve3d.md` | the sticky schedule; the square-root quotas (added 2026-11-16 on Hans's request) | 3 |
@@ -668,3 +669,27 @@ the `cavg` layout gives a unit nothing at stage 1, checked with the quota model 
 `test_nsample_ramp_binding`. Policies, the sampling skill (`SKILL.md`, `coupling-map.md`) updated; the solve3D
 policy's stale "`cavg` by default" corrected to `class`. Owed: build, fast gate, `unit_reconstruction`,
 `unit_ori`, the parameters suite; the experiment of Decision 15 after the current restarts are read.
+
+**2026-11-17, the dense first pass reaches never-searched particles (uncompiled; base `76110d3f5`).** Asked what a
+particle the ramp adds (updatecnt 0) meets, I traced it: the shc neighbourhood search forces its dense first pass
+(every reference scored into the table, the draw over the posterior of all of them) only when
+`has_been_searched` is false, and that function counted Euler angles as evidence of a search. solve3D gives every
+particle a random start orientation (`delete_3Dalignment`, then `rnd_oris`), so no particle ever took the full
+scan: an added particle's first pose was drawn from the handful of references that first beat its random pose,
+in effect a random pose inserted into the map. The policies' rationale for the shc stages ("scans a never-searched
+particle in full", written with `cf643a192`) never held on this route. Hans ruled the fix unconditional. The dense
+pass now keys on a new predicate, `has_search_score` (the search score `corr` alone, which only a search writes).
+Reach: stage 1's first iteration on every single-state run (the dense draw over 500 references against the noise
+start instead of shc from the random pose), the particles the ramp adds in stage 2, and a
+`prob_neigh_mode=shc` refine3D on a never-searched or imported `ptcl3D` without `corr`; `prob` stages, multi-state
+(`shc`) and `refine3D_states` are untouched. Test `test_has_search_score` (`unit_ori`'s ori suite): a fresh record
+and a random-start record with kept shifts carry no search score, a search writes one, the solve3D restart clears
+it, and `has_been_searched` still counts the random angles as a pose. Policies and the sampling skill reference say
+what now happens. The current candidate's runs predate the fix: stage 1's first iteration differs on any rerun.
+
+**2026-11-17, correction (Hans's fast gate).** The first version changed `has_been_searched` itself, which I had
+wrongly taken for the dense pass's only caller. It is also read by `is_virgin_field` (and through it the 3D
+matcher's strategy choice, the reference preparation, refine3D's random start and the RELION export), by the 2D
+search and by the 2D matcher. `unit_project` caught it: `test_relion_export_poses` sets Euler angles without `corr`,
+the field became virgin and the export wrote no 3D poses (7 failed checks). `has_been_searched` is restored; the
+dense pass reads `has_search_score`, so nothing else changes.

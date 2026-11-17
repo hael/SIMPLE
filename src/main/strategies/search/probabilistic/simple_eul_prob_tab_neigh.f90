@@ -322,10 +322,10 @@ contains
             endif
             ! the candidate order: the previous reference last, the others keyed on the particle
             call keyed_candidate_order(self%rnd_scope, iptcl_loc, nfull_refs, prev_full_ref_loc, direct_srch_order(:,ithr_loc))
-            ! Only force a dense first pass when the particle truly has no
-            ! search result. Keying this off updatecnt makes iteration 2 behave
-            ! like a full scan for first-time sampled particles.
-            l_greedy_first = l_shc_neigh .and. (.not. self%b_ptr%spproj_field%has_been_searched(iptcl_loc))
+            ! Only force a dense first pass when the particle truly has no search result: no search score (a random
+            ! start orientation or imported angles are none). Keying this off updatecnt would also send first-time
+            ! sampled particles that carry an earlier run's poses through a full scan.
+            l_greedy_first = l_shc_neigh .and. (.not. self%b_ptr%spproj_field%has_search_score(iptcl_loc))
             nrefs_bound    = nfull_refs
             if( self%nrefs < 1 ) THROW_HARD('direct stochastic neighborhood search has no active references')
             nmin_refs      = min(MIN_STOCH_FINE_REFS,self%nrefs)

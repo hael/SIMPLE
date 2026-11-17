@@ -93,6 +93,7 @@ type :: oris
     procedure          :: get_ctfvars
     procedure          :: has_been_sampled
     procedure          :: has_been_searched
+    procedure          :: has_search_score
     procedure          :: any_state_zero
     procedure          :: get_update_frac
     procedure          :: get_group_update_counts
@@ -766,6 +767,12 @@ interface
         integer,     intent(in) :: i
         logical :: has_been_searched
     end function has_been_searched
+
+    module function has_search_score( self, i )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        logical :: has_search_score
+    end function has_search_score
 
     module function any_state_zero( self )
         class(oris), intent(in) :: self
