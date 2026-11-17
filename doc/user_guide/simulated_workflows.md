@@ -38,23 +38,21 @@ fixture settings.
 
 ### Movies through initial 3D reconstruction
 
-List the accepted suites, then run either molecular system:
+List the accepted suites, then run the molecular system:
 
 ```shell
 simple_test_exec test=simulated_workflow suite=list
 simple_test_exec test=simulated_workflow suite=6vxx
-simple_test_exec test=simulated_workflow suite=1jxy
 ```
 
 | Suite | Embedded molecule | Symmetry in this workflow |
 | --- | --- | --- |
 | `6vxx` | SARS-CoV-2 spike, 6VXX | `c3` |
-| `1jxy` | Beta-galactosidase, 1JYX | `d2` |
 
-The beta-galactosidase suite is named `1jxy` in the command line and output
-names, while the embedded coordinate model uses the PDB identifier **1JYX**.
+The beta-galactosidase suite (`1jxy`) was removed on 2026-11-17: its pose recovery was not
+robust enough for a gate.
 
-Each suite performs these stages:
+The suite performs these stages:
 
 1. Generate a centered 192 × 192 × 192 truth volume at 1.3 Å/pixel.
 2. Generate 100 spiral projections and distribute them among ten movies,
@@ -71,17 +69,11 @@ simple_test_exec test=simulated_workflow suite=6vxx picker=new
 
 `picker=new` uses the generated reprojections as picking references and also
 checks the generated reference dimensions, sampling, and physical size.
-Both picker choices are accepted for either molecular suite.
-
-The `1jxy` suite additionally runs `solve3D` from the same `solve2D` project
-with `nparts=2`, using two local worker processes. This second run has its own
-execution directory and final-map validation. The suite fixes `nthr=1`
-internally for its processing stages.
+The suite fixes `nthr=1` internally for its processing stages.
 
 ### Outputs and validation
 
-The run retains its data in `test_simulated_workflow_6vxx/` or
-`test_simulated_workflow_1jxy/` beneath the directory where you launched it.
+The run retains its data in `test_simulated_workflow_6vxx/` beneath the directory where you launched it.
 The truth volume is under `0_pdb2mrc/`, and projections are under
 `1_reproject/`. The movie-generation directory contains numbered files such
 as `simulate_movie_001.mrc`, `optimal_movie_average_001.mrc`, and
@@ -101,7 +93,7 @@ final-map checks require:
   the truth in both possible hands and selecting the better fit.
 - Masked FSC = 0.143 resolution against the truth of 40 Å or better.
 
-The distributed `1jxy` result must pass the same checks. These are regression
+These are regression
 thresholds for the synthetic fixture. The reported truth FSC compares the
 reconstruction with the generating model; it is distinct from a half-map FSC.
 

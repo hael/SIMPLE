@@ -12,8 +12,7 @@ use simple_eul_prob_tab_utils, only: update_screen_best, &
     &prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, top_posterior_extras, temperature_or_argmin, &
     &prob_insert_table, prob_insert_cone, screen_pool_size, shift_needs_disk, disk_radius_px, insert_pose_loss, &
     &prob_rnd_scope, calc_num2sample, shift_prior_sigma2, prob_readout, prob_readout_fname, write_prob_readout, &
-    &report_prob_readout, PROB_READOUT_3D_DENSE, prob_state_readout, prob_row_record, prior_window_centre, &
-    &prob_inpl_counts
+    &report_prob_readout, PROB_READOUT_3D_DENSE, prob_state_readout, prob_row_record
 use simple_rnd,                only: rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_defs,               only: PROB_INSERT_WMIN
@@ -66,11 +65,6 @@ type :: eul_prob_tab
     logical                     :: l_extras      = .false.  !< the weighted insertion's extras are selected (topk > 1, a cone)
     integer                     :: kmax = 1                 !< poses per particle of the weighted insertion
     integer                     :: nmode = 0, ntemp_missing = 0, nbad = 0, nflat = 0
-    ! the in-plane posterior insertion (l_inpl_posterior): the committed entries' window-prior centres, and the
-    ! search's counts and the quadrature's budget and m_max for the readout (set_inpl_counts)
-    real, allocatable           :: prior_centres(:,:)       !< (2,nptcls) the committed entry's centre (prob_refined_entry)
-    type(prob_inpl_counts)      :: inpl_counts
-    integer                     :: inpl_kmax = 1, inpl_mmax = 0
     contains
     ! CONSTRUCTOR
     procedure          :: new_pipeline
@@ -84,8 +78,6 @@ type :: eul_prob_tab
     procedure          :: open_assignment
     procedure          :: assign_batch
     procedure          :: close_assignment
-    procedure          :: open_inpl_assignment
-    procedure          :: copy_inpl_counts
     procedure, private :: assign_rows
     procedure, private :: get_row
     procedure          :: get_posterior_row
@@ -95,10 +87,6 @@ type :: eul_prob_tab
     procedure          :: get_readout
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
     procedure          :: set_insert_cone
-    procedure          :: get_insert_cone_angle
-    procedure          :: get_prior_centre
-    procedure          :: get_shift_prior_sigma2
-    procedure          :: set_inpl_counts
     ! REFERENCE INDEX MAPPING
     procedure          :: ref_state
     procedure          :: ref_proj
@@ -887,7 +875,7 @@ contains
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
             real,    intent(in) :: shift_seed(3)
             integer :: j_loc, ri_loc, istate_loc, iproj_loc, irot_loc, jbest, si_loc, rank_loc
-            real    :: refined_shift(3), dbest, centre(2)
+            real    :: refined_shift(3), dbest
             if( self%nstates > 1 )then
                 do si_loc = 1, self%nstates
                     locn((si_loc-1)*nper+1:si_loc*nper,ithr_loc) = minnloc(dists_refs((si_loc-1)*self%p_ptr%nspace+1:&
@@ -902,10 +890,9 @@ contains
                 iproj_loc  = self%ref_proj(ri_loc)
                 call grad_shsrch_obj(ithr_loc)%set_indices(self%ref_full(ri_loc), iptcl_loc)
                 irot_loc = inpl_refs(ri_loc,ithr_loc)
-                centre   = 0.
                 if( l_sh_first )then
                     refined_shift = seeded_window_refine(grad_shsrch_obj(ithr_loc), self%b_ptr%pftc, shift_seed(2:3), &
-                        &irot_loc, self%p_ptr%trs, centre)
+                        &irot_loc, self%p_ptr%trs)
                 else
                     refined_shift = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true.)
                 endif
@@ -914,7 +901,7 @@ contains
                         &self%p_ptr%cc_objfun), irot_loc)
                     nrefined_batch(i_loc) = nrefined_batch(i_loc) + 1
                     refined_batch(nrefined_batch(i_loc),i_loc) = prob_refined_entry(i_loc, ri_loc,&
-                        &refined_shift(2), refined_shift(3), rows_batch(ri_loc,i_loc)%dist, -1., centre(1), centre(2))
+                        &refined_shift(2), refined_shift(3), rows_batch(ri_loc,i_loc)%dist, -1.)
                 endif
             enddo
             ! the bench record of whether the budget binds: the unrefined rank of the entry lowest after refinement
@@ -1122,8 +1109,6 @@ contains
                 candidate%x      = refined(j)%x
                 candidate%y      = refined(j)%y
                 candidate%sdev   = refined(j)%sdev
-                candidate%cx     = refined(j)%cx
-                candidate%cy     = refined(j)%cy
                 candidate%has_sh = .true.
                 return
             endif
@@ -1159,20 +1144,8 @@ contains
         self%ntemp_missing = 0
         self%nbad          = 0
         self%nflat         = 0
-        call self%open_inpl_assignment
         self%l_assign_open = .true.
     end subroutine open_assignment
-
-    !> the in-plane posterior insertion's part of an opened assignment (both tables): its counts zeroed and, under
-    !! the key, the committed entries' prior centres
-    subroutine open_inpl_assignment( self )
-        class(eul_prob_tab), intent(inout) :: self
-        self%inpl_counts = prob_inpl_counts()
-        self%inpl_kmax   = 1
-        self%inpl_mmax   = 0
-        if( allocated(self%prior_centres) ) deallocate(self%prior_centres)
-        if( self%p_ptr%l_inpl_posterior ) allocate(self%prior_centres(2,max(1,self%nptcls)), source=0.)
-    end subroutine open_inpl_assignment
 
     !> the batch's selection (the pipeline): the rows the fill kept are assigned and released
     subroutine assign_batch( self, i_first, i_last )
@@ -1207,7 +1180,6 @@ contains
         rec%neff_sum_draw = self%neff%sum_neff(self%p_ptr%prob_beta)
         rec%neff_sum_phys = self%neff%sum_neff(1.)
         rec%states        = self%state_rd
-        call self%copy_inpl_counts(rec)
         call self%neff%kill
         call self%state_rd%kill
         if( self%p_ptr%l_distr_worker )then
@@ -1218,22 +1190,6 @@ contains
         self%rec_last      = rec
         self%l_assign_open = .false.
     end subroutine close_assignment
-
-    !> the in-plane posterior insertion's counts into the assignment's record (both tables' close_assignment);
-    !! without the key the record keeps its defaults and no IN-PLANE ANGLES line is printed
-    subroutine copy_inpl_counts( self, rec )
-        class(eul_prob_tab), intent(in)    :: self
-        type(prob_readout),  intent(inout) :: rec
-        if( self%inpl_kmax < 2 ) return
-        rec%inpl_kmax     = self%inpl_kmax
-        rec%inpl_mmax     = self%inpl_mmax
-        rec%inpl_nptcls   = self%inpl_counts%nptcls
-        rec%inpl_nrows    = self%inpl_counts%nrows
-        rec%inpl_npose    = self%inpl_counts%npose
-        rec%inpl_nsingle  = self%inpl_counts%nsingle
-        rec%inpl_neff_sum = self%inpl_counts%neff_sum
-        rec%inpl_committed_view_weight_sum = self%inpl_counts%view_weight_sum
-    end subroutine copy_inpl_counts
 
     !> the selection over the rows i_first..i_last of the batch: per particle one draw from the tempered posterior
     !! over the whole row, every active state's block, so the state and the direction are drawn together; the drawn
@@ -1463,7 +1419,6 @@ contains
         self%assgn_map(iptcl_map)%y      = candidate%y
         self%assgn_map(iptcl_map)%sdev   = candidate%sdev
         self%assgn_map(iptcl_map)%has_sh = candidate%has_sh
-        if( allocated(self%prior_centres) ) self%prior_centres(:,iptcl_map) = [candidate%cx, candidate%cy]
     end subroutine assign_candidate
 
     ! FILE IO
@@ -1479,63 +1434,19 @@ contains
         self%insert_cone = cone
     end subroutine set_insert_cone
 
-    !> the half-angle of state istate's insertion cone at equal shifts, degrees; below zero: no cone
-    pure real function get_insert_cone_angle( self, istate ) result( angle )
-        class(eul_prob_tab), intent(in) :: self
-        integer,             intent(in) :: istate
-        angle = self%insert_cone%get_angle(istate)
-    end function get_insert_cone_angle
-
-    !> the window prior's centre of the committed entry of the table's particle iptcl_map (l_inpl_posterior), a
-    !! stored shift; zero without the key or the seed
-    function get_prior_centre( self, iptcl_map ) result( centre )
-        class(eul_prob_tab), intent(in) :: self
-        integer,             intent(in) :: iptcl_map
-        real :: centre(2)
-        centre = 0.
-        if( allocated(self%prior_centres) )then
-            centre = self%prior_centres(:,iptcl_map)
-        else if( self%p_ptr%l_inpl_posterior )then
-            THROW_HARD('the prior centres are kept from open_assignment under the key; get_prior_centre')
-        endif
-    end function get_prior_centre
-
-    !> the window prior's variance per axis of the iteration (shift_prior=yes; 0 without it), the model the fill read
-    pure real function get_shift_prior_sigma2( self ) result( sigma2 )
-        class(eul_prob_tab), intent(in) :: self
-        sigma2 = 0.
-        if( self%p_ptr%l_shift_prior ) sigma2 = self%sigma2_prior_model
-    end function get_shift_prior_sigma2
-
-    !> the in-plane posterior insertion's counts of the search (summed over the team), its quadrature budget kmax and
-    !! the band's highest angular harmonic mmax, set before close_assignment puts them into the record
-    subroutine set_inpl_counts( self, kmax, mmax, counts )
-        class(eul_prob_tab),    intent(inout) :: self
-        integer,                intent(in)    :: kmax, mmax
-        type(prob_inpl_counts), intent(in)    :: counts
-        if( .not. self%l_assign_open ) THROW_HARD('no open assignment; eul_prob_tab%set_inpl_counts')
-        self%inpl_kmax   = kmax
-        self%inpl_mmax   = mmax
-        self%inpl_counts = counts
-    end subroutine set_inpl_counts
-
     ! read from the global assignment map to local partition for shift search and further refinement
 
     !> A seeded window refinement of a table entry (the single-state seed, both tables): the particle-frame seed as the
-    !! shift at the starting rotation irot, clipped to the window, starts the search; centre is the prior's centre the
-    !! search keeps for it (prior_window_centre at the start's rotation: the search may end at another)
-    function seeded_window_refine( gso, pftc, seed, irot, trs, centre ) result( cxy )
+    !! shift at the starting rotation irot, clipped to the window, starts the search
+    function seeded_window_refine( gso, pftc, seed, irot, trs ) result( cxy )
         class(pftc_shsrch_grad), intent(inout) :: gso
         class(polarft_calc),     intent(in)    :: pftc
         real,                    intent(in)    :: seed(2), trs
         integer,                 intent(inout) :: irot
-        real,                    intent(out)   :: centre(2)
         real :: cxy(3), xy_start(2)
         xy_start = seed
         if( irot > 0 ) xy_start = shift_ptcl2ref(seed, pftc%get_rot(irot))
         xy_start = max(-trs, min(trs, xy_start))
-        centre   = xy_start
-        if( irot > 0 ) centre = prior_window_centre(xy_start, irot, pftc%get_nrots(), pftc%get_rot(irot))
         cxy = gso%minimize(irot=irot, sh_rot=.true., xy_in=xy_start)
     end function seeded_window_refine
 
@@ -1566,10 +1477,6 @@ contains
         self%ntemp_missing = 0
         self%nbad          = 0
         self%nflat         = 0
-        if( allocated(self%prior_centres) ) deallocate(self%prior_centres)
-        self%inpl_counts   = prob_inpl_counts()
-        self%inpl_kmax     = 1
-        self%inpl_mmax     = 0
         call self%insert_tab%kill
         call self%insert_cone%kill
         if( allocated(self%seed_shifts)  ) deallocate(self%seed_shifts)

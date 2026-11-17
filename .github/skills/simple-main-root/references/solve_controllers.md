@@ -81,7 +81,7 @@ The drivers are commanders: `exec_solve3D`, `exec_solve3D_cavgs`, `exec_solve3D_
 `cavgs_work_project`), `test=unit_reconstruction` (`solve3D_cavgs_stage_rules`,
 `state_assignment_rules`), `test=unit_pftc_align2D3D suite=solve2D_stage_rules`,
 `test=lib_reconstruction suite=addon_report_docking`. High level: `test=simulated_workflow`
-(solve2D and solve3D; `suite=1jxy` also runs solve3D distributed), `test=solve3D_addon`,
+(solve2D and solve3D, `suite=6vxx`; no entry runs solve3D distributed), `test=solve3D_addon`,
 `test=multistate_workflows` (the `cavgs` route is solve3D_cavgs), `test=stream_chains` and
 `test=unit_stream suite=solve_3D` (state assignment through p07). No entry runs `solve3D_chunks`
 or `solve2D_chunks` end to end.

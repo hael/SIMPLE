@@ -663,7 +663,6 @@ type :: parameters
     logical :: l_regpass         = .true. !< not a command-line key
     logical :: l_prob_inpl       = .false. !< not a command-line key
     logical :: l_prob_align_mode = .false. !< not a command-line key
-    logical :: l_inpl_posterior  = .false. !< a refine3D pass that reconstructs from a posterior table (refine=prob, prob_neigh in state|geom; objfun=euclid): the table's view weights, each pose's in-plane angle spread within the insertion cone; not a command-line key
     logical :: l_cart_refine     = .false. !< a Cartesian (continuous-pose) pass (refine=cont); not a command-line key
     logical :: l_cont_followup     = .false. !< the Cartesian followup pass after a discrete one; not a command-line key
     logical :: l_cont_shift_first = .false. !< cont_route=shift_then_joint: the shift-only LM stage first; not a command-line key

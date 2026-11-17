@@ -1,10 +1,8 @@
 !@descr: phase-local estimates and bounded particle-batch capacity for the matchers
 module simple_matcher_memory
 use, intrinsic :: iso_fortran_env, only: int64
-use simple_parameters,         only: parameters
-use simple_type_defs,          only: ptcl_ref
-use simple_defs,               only: INPL_POSTERIOR_BUDGET
-use simple_eul_prob_tab_utils, only: inpl_reserved_bytes
+use simple_parameters, only: parameters
+use simple_type_defs,  only: ptcl_ref
 implicit none
 private
 public :: matcher_memory_terms, matcher_batch_capacity
@@ -31,8 +29,6 @@ contains
         fixed_bytes = fixed_bytes + int(nptcls,int64) * &
             &int(storage_size(entry)/8 + 16 + 64*max(1,params%topk),int64)
         fixed_bytes = fixed_bytes + 4_int64 * nrows * (box/2_int64)
-        ! the in-plane posterior insertion's reservation, its worst case exactly
-        if( params%l_inpl_posterior ) fixed_bytes = fixed_bytes + inpl_reserved_bytes(nptcls, params%topk, INPL_POSTERIOR_BUDGET)
         fixed_bytes = fixed_bytes + int(nthreads,int64) * &
             &(128_int64*(p+1_int64)*max(ni,nk) + 8_int64*(crop*crop+pad*pad))
         particle_bytes = 12_int64*p*ni + 16_int64*(p+1_int64)*nk + 8_int64*nk + 32_int64

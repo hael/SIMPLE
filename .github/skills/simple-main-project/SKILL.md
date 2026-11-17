@@ -68,8 +68,8 @@ Silent ones first: nothing reports these.
 - `build/bin/simple_test_exec test=unit_project` (about 2 s): `suite=project_records` (the part
   merge), `binoris`, `project_merge`, `eo_partition`, `state_weight_set` (both with earlier-release
   cases), `project_superset`, `particle_subset`, `micrograph_subset`.
-- A format or merge change: `test=simulated_workflow suite=1jxy` (a distributed solve3D merges part
-  documents); superset or side files: `test=solve3D_addon`; a refactor: `test=identity` (project
+- A format or merge change: `test=cont_refine3D_1jxy` (its distributed refine3D merges part documents;
+  no registered entry runs solve3D distributed since 2026-11-17); superset or side files: `test=solve3D_addon`; a refactor: `test=identity` (project
   files are compared record by record).
 
 ## See also

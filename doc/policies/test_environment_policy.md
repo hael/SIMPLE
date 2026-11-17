@@ -83,8 +83,8 @@ found. It can also be rerun explicitly after a coarray build with
 `cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 46: 15 fast,
-7 library, 23 highlevel and 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 45: 15 fast,
+7 library, 22 highlevel and 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -134,7 +134,7 @@ convenience and deliberately not a CTest entry.
 | `pcg_recon` | library | gated stages of the PCG reconstruction operator on generated data, each stage's decision a row of its table; in process, so a library entry (it was a high-level one until 2026-10-18) |
 | `pcg_frac_update` | library | the PCG fractional-update gates (additivity of the reconstruction sums, the continuation weighting, full-mass preservation, replay) on a project of 600 blob particles at their true poses that the multi-state fixture builds |
 | `mini_stream_6vxx`, `mini_stream_1jxy` | highlevel | independent embedded-model mini-stream validations |
-| `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | highlevel | simulated particles in movies (6vxx: 160 particles in 16 movies from 100 reprojections at SNR 1.0; 1jxy: 100 particles in 10 movies at SNR 0.2) through import, motion correction, CTF, picking, extraction, `solve2D`, `solve3D`; each fixture converts only its own embedded atomic model. 6vxx exercises the C1-to-C3 symmetry-axis route; 1jxy starts in its known D2 symmetry and then runs `solve3D` a second time from the same `solve2D` project with `nparts=2` (two local worker processes, the distributed strategy), in a directory of its own and checked against the same truth, so that the master's job scheduling and assembly between parts are covered (owner decision 2026-10-15); the test asserts that the distributed run wrote its second part's record. The truth correlation, FSC=0.143 resolution, median pair-pose error and pair fraction within 5 degrees are correctness gates. Both suites reseed the whole workflow with the root seed 20260923, printed in the log |
+| `simulated_workflow_6vxx` | highlevel | simulated particles in movies (160 particles in 16 movies from 100 reprojections at SNR 1.0) through import, motion correction, CTF, picking, extraction, `solve2D`, `solve3D`, converting only its own embedded atomic model; it exercises the C1-to-C3 symmetry-axis route. The truth correlation, FSC=0.143 resolution, median pair-pose error and pair fraction within 5 degrees are correctness gates. It reseeds the whole workflow with the root seed 20260923, printed in the log. `simulated_workflow_1jxy` (beta-galactosidase, D2, with a second `solve3D` over two worker processes) was removed on 2026-11-17: its pose recovery split in two groups in about a third of seeds; no registered entry runs solve3D distributed since then |
 | `single_workflow_fcc`, `single_workflow_alloy`, `single_workflow_wurtzite` | highlevel | independent SINGLE pipelines on simulated FCC Pt, random-site FCC Pt/Ni and wurtzite CdSe nanoparticles (fcc through `trajectory_solve3D`, whose gates may lose at most 5% of the frames, alloy and wurtzite by hand with the atomicity-prior refinement); the poses are judged by their median rotation error against the truth after one docking of the `autorefine3D_nano` map, up to the rotations of the lattice's group (O for FCC and the alloy, D6 for wurtzite), since these near-symmetric particles are posed only up to them |
 | `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume; `simulate_particles` with three blob volumes and given populations (exact state counts, every image closest to the projection of its own state's volume at its true pose); 50 images without CTF, each correlating better with the reprojection at its own recorded pose than with one at another image's pose |
 | `state_fixture` | highlevel | the multi-state test fixture (`simple_test_state_fixture`): blob phantoms in its search, known-pose and exact-view modes (built twice, the second from the cache) and the compositional and conformational beta-galactosidase states, each truth holding its declared point group and no larger one (its correlation over the group at least 0.99 and at least 0.01 above its correlation over the next larger group) |
@@ -1060,23 +1060,24 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
   only and have no control.
 - Cost: 6vxx 59 s at 8 threads (reserving 2 cores); 1jxy 66 s at 8 threads (reserving 3 cores); each commander one thread.
 
-**`simulated_workflow_6vxx`, `simulated_workflow_1jxy`**
+**`simulated_workflow_6vxx`**
 
-- Claim: simulated particles (6vxx: 160 in 16 movies; 1jxy: 100 in 10 movies) go through import,
+- Claim: simulated particles (160 in 16 movies) go through import,
   motion correction, CTF estimation, picking, extraction, `solve2D` and `solve3D`, and the map
-  matches the map of the atomic model; 1jxy runs `solve3D` a second time distributed over two worker
-  processes. 6vxx exercises C1-to-C3 symmetry-axis discovery; 1jxy starts in known D2 symmetry.
+  matches the map of the atomic model. It exercises C1-to-C3 symmetry-axis discovery.
 - Checks: at least 4 extracted particles and one class; the map written with the expected box and
   sampling; truth correlation at least 0.80; FSC=0.143 no worse than 6 Å; median pair-pose error at
   most 15 degrees; and pair fraction within 5 degrees at least 0.45.
-- Path: the distributed run wrote its second part's record.
 - Control: the map is compared directly with the fixture's own truth volume and planted particle
   poses; the other molecule is not rendered or used by this workflow.
 - Prior profile (2026-10-19, one thread): 6vxx missed the map in 2 of 20 runs, including the fixed
   seed, while the found maps correlated at 0.88 (s 0.02-0.03) with FSC 4.5-4.8 Å. The current
   configuration needs a fresh seed profile; its fixed seed is a correctness gate.
 - Identity: the declared outputs of a one-thread run (the entry is deterministic).
-- Cost: 6vxx 1129 s at 1 thread (reserving 2 cores); 1jxy 999 s at 1 thread (reserving 3 cores) with two one-thread workers in its distributed step.
+- Cost: 1129 s at 1 thread (reserving 2 cores).
+- Removed (2026-11-17): `simulated_workflow_1jxy`. Its shared-memory or distributed solve3D failed the pose gate in 13 of 40
+  solves of a 20-seed profile, the pair fraction within 5 degrees at 0.48-0.50 in every failure while the map passed;
+  the maintainer had it removed rather than chase it.
 
 **`single_workflow_fcc`, `single_workflow_alloy`, `single_workflow_wurtzite`**
 
@@ -1466,7 +1467,7 @@ written as `sub-suite` (entry).
 
 | old test | now |
 | --- | --- |
-| `abinitio2D_stream` | deleted; `solve2D` runs nightly in `simulated_workflow_6vxx` and `simulated_workflow_1jxy` |
+| `abinitio2D_stream` | deleted; `solve2D` runs nightly in `simulated_workflow_6vxx` |
 | `angres` | the program `simple_exec prg=measure_projspace_angres nspace=<n>` (about 223/sqrt(n) degrees for c1) |
 | `ansi_colors` | `string` (`unit_core`) |
 | `assign_optics` | `optics assignment` (`lib_stream`) |
@@ -1552,7 +1553,7 @@ written as `sub-suite` (entry).
 | `sieve_cavgs` | `particle sieve` (`unit_project`) |
 | `sigma2_state` | `sigma2 state` (`unit_pftc_align2D3D`) |
 | `simulate_particles` | the workflow entry `simulate_particles` |
-| `simulated_workflow` | the workflow entries `simulated_workflow_6vxx`, `simulated_workflow_1jxy` |
+| `simulated_workflow` | the workflow entry `simulated_workflow_6vxx` (`simulated_workflow_1jxy` removed 2026-11-17) |
 | `single_workflow` | the workflow entries `single_workflow_fcc`, `single_workflow_alloy`, `single_workflow_wurtzite` |
 | `socket_client`, `socket_comm_distr`, `socket_io`, `socket_server` | deleted with the socket modules; `IPC TCP socket` (`unit_ipc`) tests the live transport |
 | `sp_project` | `project records` (`unit_project`) |

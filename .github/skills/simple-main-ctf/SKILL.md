@@ -71,7 +71,7 @@ Silent ones first: nothing reports these.
   registered under `unit_image`.
 - No unit test fits a spectrum. `test=stream_preproc` gates the fitted defocus of five simulated
   movies within 0.20 microns of the truth (`ctfpatch=no`). `test=simulated_workflow suite=6vxx`
-  (or `1jxy`) fits with patches but judges only the final map, a robustness profile: one run shows
+  fits with patches but judges only the final map, a robustness profile: one run shows
   breakage, not improvement.
 - Phase across folders: `test=unit_project suite=project_records` and `suite=star_project`,
   `test=unit_ui suite=ui_visibility`.

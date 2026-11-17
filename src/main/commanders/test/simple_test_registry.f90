@@ -80,9 +80,6 @@ contains
         ! at master's sizes (160 particles) its run directory reached 4.1 GiB in the profile of 2026-10-19
         &test_entry('simulated_workflow_6vxx', 'simulated_workflow', 'suite=6vxx', 1, 0, 0, 2, 7200, ENTRY_GATE, &
             &outputs_of(SIMWF//'6vxx', SIMWF_OUT), mem_gb=2.5, disk_gb=5.5, scales=.false.), &
-        ! its distributed solve3D runs two one-thread workers while the master waits
-        &test_entry('simulated_workflow_1jxy', 'simulated_workflow', 'suite=1jxy', 1, 2, 1, 3, 7200, ENTRY_GATE, &
-            &outputs_of(SIMWF//'1jxy', SIMWF_OUT), mem_gb=5.0, disk_gb=5.5, scales=.false.), &
         &test_entry('single_workflow_fcc', 'single_workflow', 'suite=fcc smpd=0.358', 1, 0, 0, 2, 7200, ENTRY_GATE, &
             &outputs_of(SINGLEWF//'fcc', SINGLEWF_FCC_OUT), mem_gb=2.0, disk_gb=1.0, scales=.false.), &
         &test_entry('single_workflow_alloy', 'single_workflow', 'suite=alloy smpd=0.358', 1, 0, 0, 2, 7200, ENTRY_GATE, &

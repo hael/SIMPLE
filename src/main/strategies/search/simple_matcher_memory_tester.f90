@@ -4,8 +4,6 @@ use, intrinsic :: iso_fortran_env, only: int64
 use simple_matcher_memory, only: matcher_batch_capacity, matcher_memory_terms
 use simple_parameters,    only: parameters
 use simple_test_utils,    only: assert_int, assert_true
-use simple_defs,          only: INPL_POSTERIOR_BUDGET
-use simple_eul_prob_tab_utils, only: inpl_reserved_bytes
 implicit none
 private
 public :: run_all_matcher_memory_tests
@@ -44,17 +42,6 @@ contains
         call assert_true(larger_slot > slot_bytes, '2D reserves batch images and candidate staging')
         call matcher_memory_terms(params,50,1000,4,params%box,fixed,slot_bytes)
         call assert_true(fixed > larger_fixed .and. slot_bytes > larger_slot, 'full-size class sums reserve more memory than cropped sums')
-        ! the in-plane posterior insertion's reservation (l_inpl_posterior): its bytes exactly, per particle, nothing else
-        params%topk = 3
-        params%l_inpl_posterior = .false.
-        call matcher_memory_terms(params,50,1000,4,0,fixed,slot_bytes)
-        params%l_inpl_posterior = .true.
-        call matcher_memory_terms(params,50,1000,4,0,larger_fixed,larger_slot)
-        call assert_true(larger_fixed - fixed == inpl_reserved_bytes(1000, 3, INPL_POSTERIOR_BUDGET), &
-            &'the key adds the reservation of max(1,topk) blocks of K entries per particle to the fixed storage')
-        call assert_true(inpl_reserved_bytes(1000, 3, INPL_POSTERIOR_BUDGET) == 804000_int64, &
-            &'804 bytes per particle at topk 3 and K 64: three blocks of 8 + 4 K bytes and a 12-byte committed triplet')
-        call assert_true(larger_slot == slot_bytes, 'the reservation adds nothing per batch slot')
         deallocate(params)
     end subroutine run_all_matcher_memory_tests
 

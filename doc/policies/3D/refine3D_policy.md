@@ -868,8 +868,7 @@ convergence statistics unchanged; `topk=1` is bit for bit the single-draw
 run. The part keeps the extras in its insertion table (`prob_insert_table`:
 per particle the committed weight and the extras as reference, in-plane
 index, refined shift and weight), publishes their counts in its readout
-record, and the master logs `POSES INSERTED` from the merged counts (`POSES SELECTED`
-when the in-plane posterior subsequently reweights them) with the
+record, and the master logs `POSES INSERTED` from the merged counts with the
 insertions per particle, the mean committed weight and the fraction of
 particles with more eligible entries than `topk - 1`: near zero the insertion is
 the full average within the cone, above it `topk` is binding (the record also
@@ -904,8 +903,8 @@ committed poses, so the last iteration's map and a `reconstruct3D` from the
 project differ under `topk > 1`. The shc and snhc neighbourhood modes of solve3D's stages 1-2
 insert the committed pose alone, their candidates being the hill climb's
 unrefined proposals; the 2D route has its own in-plane insertion (`INPL_POSTERIOR_BUDGET = 64`,
-[solve2D policy](../2D/solve2D_policy.md), "In-plane insertion"), which the 3D route carries to every
-pose a 3D particle is inserted at (below, "In-plane posterior insertion"). No file carries the
+[solve2D policy](../2D/solve2D_policy.md), "In-plane posterior insertion"), which the 3D route does not
+have (below, "In-plane posterior insertion: removed from 3D"). No file carries the
 assignment or the extras: the rows, the draws and the insertion table live in
 the part's memory for the batch. State assignment stays hard: the
 extras are drawn from the committed state's block alone (the dense table's
@@ -935,58 +934,20 @@ and the exits' margin (`test_posterior_exits_weighted_insertion`). The
 readout: the four sets at `topk=10`, stage-3 maps and finals against the
 control, with the cone's occupancy line read beside them.
 
-**In-plane posterior insertion within the insertion cone (2026-11-14, a temporary key; made the default without
-one on 2026-11-15; off for an A/B on PorF and the export gate on 2026-11-15; the cone, with no key, from 2026-11-16,
-Hans: the full-circle reweighting did not generalise across data sets, the critical ones got worse;
-[the plan](../../implementation_notes/completed/inpl_quadrature_insertion_3D.md)).** The table's view weights stand,
-and each pose's in-plane row is confined to the insertion cone's half-angle about its own rotation
-(`inpl_cone_window`; no FSC yet, no cone: the pose's own rotation), the cone opened at `topk=1` too. The full-circle
-row with the views reweighted by their in-plane marginals (`inpl_view_weights`) is gone from refine3D; the class
-student's teacher still forms that marginal in 2D (`simple_eul_prob_marginal`).
-The weighted insertion
-spreads a particle over directions but never over its in-plane angle: each direction of a row carries
-one angle, and an angle the data do not decide enters the half-map where the particle's own noise put
-it (the self-reinforcement measured on PfCRT, `prob_post_diag=yes`). On `refine=prob` and on `prob_neigh`
-with `prob_neigh_mode=state|geom` under `objfun=euclid`, in a refine3D pass that reconstructs
-(`l_inpl_posterior`; in solve3D single-state stages 3 to 8 and multi-state stages from 3; not the shc/snhc
-neighbourhoods of stages 1-2, the multi-state final assignment, which reconstructs nothing, or the final
-and bootstrap reconstructions), every pose a particle is inserted at,
-the committed one and its extras, enters at a quadrature of its in-plane posterior:
-
-- after each pose's continuous solve (`resolve_extra_poses`, then the committed pose's), the row of
-  Euclidean losses over every grid rotation at the pose's solved increment in the stored frame
-  (`memoize_shifted_ptcl` into the thread's bank, `gen_euclid_dists_bank`; the unshifted row below
-  `SHERRSQ`), at the physical temperature `T`;
-- the `K = INPL_POSTERIOR_BUDGET` point quadrature of that row (`inpl_quadrature`) with a phase keyed on
-  the particle and the reference (`RND_FAM_INPLQ`), so it depends on no thread, batch or part; the points
-  in the solved bin are inserted at the pose's continuous angle, every other entry at its grid angle.
-  This also holds for a row collapsed to one entry: its selected bin can differ from the solved bin,
-  because the tempered draw and local solve need not select the physical posterior's dominant peak.
-  The angles replace e3 of the pose's triplet about its direction: an extra's own, and for the
-  committed pose its triplet from `assign_ori` (`committed_euler`), not the project's copy, which
-  `set_euler` normalises and which at e2 = 0 or 180 holds e3 in e1 (the reference spiral's north pole
-  except under D, O and I, and under C its south pole);
-- the poses keep the table's view weights; only their in-plane angles spread, within the cone. `inpl_prior_penalty`
-  and the row's marginal terms are still computed per pose for the readout; they do not reweight.
-
-Each entry carries its pose's weight times its point count over `K`, so a particle's weights sum to 1
-and the trailing reconstruction's population accounting is unchanged. A particle with a pose without a
-valid row enters at the table's weights, one angle per pose. The entries live in a worst-case reservation laid out at the first
-batch for the part (`prob_insert_poses%reserve_inpl`: `max(1,topk)` blocks of `K` packed entries and the
-committed triplet per particle, `max(1,topk)(8 + 4K) + 12` bytes, the memory estimate's term). Gridding inserts each entry from the
-committed plane, re-shifted once per extra pose (`insert_inpl_entries`). PCG expands the entries per
-observation batch in chunks of at most `MAXIMGBATCHSZ`, each chunk with its own records and
-`prep_particles` (`accumulate_pcg_inpl_entries`), so the per-entry metadata is bounded by one chunk, and
-the accumulators equal one flat accumulation of the same entries. The committed pose, the search, the
-table, its draws and everything the search commits are unchanged. The resolution exits take the weighted
-insertion's margin in these passes (`l_margin`). `POSES SELECTED` reports the table's pose count and weights
-(the weights the cone keeps); passes without the in-plane insertion retain `POSES INSERTED`. `IN-PLANE ANGLES`
-reports angles per particle, the share of rows collapsed to one angle, and whether the budget K exceeds
-m_max, the highest angular harmonic the band resolves at the rim. `INSERTED VIEW WEIGHT` reports the
-assigned view's weight as inserted, summed over all table particles including fallbacks.
-This is the view's total weight across its angles, not the assigned angle's weight. The readout record also
-holds the rows per particle and their mean n_eff; the REC3D bench gives the poses inserted.
-Whether the maps gain is the maintainer's test on PorF, PfCRT, streptavidin and a small membrane protein.
+**In-plane posterior insertion: removed from 3D (decision, 2026-11-17).** From 2026-11-14 to 2026-11-17
+refine3D inserted every pose of a table pass (`refine=prob`, `prob_neigh` in `state|geom`, `objfun=euclid`,
+`volrec=yes`) at a `K = INPL_POSTERIOR_BUDGET` point quadrature of its in-plane posterior instead of at its one
+angle: first over the full circle with the views reweighted by their in-plane marginals, from 2026-11-16 confined
+to the insertion cone with the table's view weights standing
+([the plan and its record](../../implementation_notes/completed/inpl_quadrature_insertion_3D.md)). On 2026-11-17
+the maintainer removed it from 3D: "Remove the in-plane posterior weighting that we put in as default. It causes
+more failures than pose weighting alone. In-plane posterior weighting doesn't work in 3D but works well in 2D."
+refine3D and solve3D (gridding and PCG) insert each pose at its own angle with the table's pose weights: the
+committed pose with its weight and, under `topk > 1`, the extras with theirs (above); the insertion cone opens
+only under `topk > 1`, the resolution exits take the margin only under `topk > 1` (`l_margin`), and the log
+reports `POSES INSERTED`. 2D keeps its in-plane insertion (`strategy2D_prob%insert_inplane`;
+[solve2D policy](../2D/solve2D_policy.md), "In-plane posterior insertion"), and the class student's teacher still
+forms the in-plane marginal (`simple_eul_prob_marginal`).
 
 ### Neighbourhood-table assignment (`assign_rows_neigh`)
 

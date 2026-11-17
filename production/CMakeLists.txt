@@ -305,12 +305,6 @@ if(BUILD_TESTS)
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=mini_stream suite=1jxy)
   simple_add_test(simulated_workflow_6vxx highlevel 7200 1 PROCESSORS 2
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=6vxx)
-  # 1jxy runs solve3D twice from the same solve2D project: in shared memory and
-  # with nparts=2 (two local simple_private_exec workers), both checked against
-  # the truth, so a simulated suite covers the distributed strategy (owner
-  # decision 2026-10-15).
-  simple_add_test(simulated_workflow_1jxy highlevel 7200 1 PROCESSORS 3
-    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=1jxy)
   # The FCC Pt, random-site FCC Pt/Ni and wurtzite CdSe fixtures are independent
   # workflows and therefore receive isolated working directories and verdicts.
   # fcc runs trajectory_solve3D and checks that its gates lose at most 5% of the
@@ -447,7 +441,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 46)   # 15 fast + 1 platform + 23 highlevel + 7 library (class_student, 2026-11-14: completed/class_student_2D.md decision 16)
+  set(SIMPLE_CTEST_BUDGET 45)   # 15 fast + 1 platform + 22 highlevel + 7 library (simulated_workflow_1jxy removed 2026-11-17)
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

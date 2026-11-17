@@ -53,8 +53,6 @@ contains
         call test_posterior_anneal_tail2D()
         write(*,'(A)') 'test_posterior_exits_weighted_insertion'
         call test_posterior_exits_weighted_insertion()
-        write(*,'(A)') 'test_posterior_exits_inpl_posterior'
-        call test_posterior_exits_inpl_posterior()
         write(*,'(A)') 'test_stage_plateau_exit'
         call test_stage_plateau_exit()
         write(*,'(A)') 'test_stage_exit_progress'
@@ -482,65 +480,6 @@ contains
         end subroutine run_stage
 
     end subroutine test_posterior_exits_weighted_insertion
-
-    !> the in-plane posterior insertion (l_inpl_posterior) takes the weighted insertion's margin on the resolution
-    !! exits at topk = 1: the stage at 7.5, 7.0, 7.0, 7.0 A exits at its fourth iteration, as under topk 2, and at
-    !! 7.2 A not at all before the plateau; without the key topk = 1 keeps the single draw's rules (the third)
-    subroutine test_posterior_exits_inpl_posterior()
-        class(parameters), allocatable :: params
-        type(convergence) :: conv_off, conv_on, conv_shell
-        type(cmdline)     :: cline
-        type(oris)        :: os
-        real    :: res05(6), res143(6)
-        logical :: at_off(6), at_on(6)
-        integer :: it
-        call del_file(STATS_FILE)
-        allocate(params)
-        params%nstates           = 1
-        params%trs               = 5.
-        params%refine            = 'prob'
-        params%l_prob_align_mode = .true.
-        params%prob_beta         = 0.3
-        params%prob_beta_end     = 0.3
-        params%startit           = 1
-        params%maxits            = 25
-        params%box               = 100
-        params%smpd              = 1.
-        params%lpexit            = 8.
-        params%topk              = 1
-        call cline%set('trs',      5.)
-        call cline%set('overlap',  0.99)
-        call cline%set('fracsrch', 99.)
-        res05  = [7.5, 7.0, 7.0, 7.0, 7.0, 7.0]
-        res143 = [6.5, 6.0, 6.0, 6.0, 6.0, 6.0]
-        params%l_inpl_posterior = .false.
-        call run_stage(conv_off, at_off)
-        params%l_inpl_posterior = .true.
-        call run_stage(conv_on, at_on)
-        call assert_true(.not. any(at_off(1:2)) .and. at_off(3), 'topk 1 without the key exits at the third iteration')
-        call assert_true(.not. any(at_on(1:3)) .and. at_on(4), 'topk 1 under the key takes the margin: the fourth iteration')
-        res05 = [7.5, 7.2, 7.2, 7.2, 7.2, 7.2]
-        call run_stage(conv_shell, at_on)
-        call assert_true(.not. any(at_on(1:4)), 'under the key the FSC must pass the next shell (7.143 A): no exit at 7.2 A')
-        call cline%kill
-        deallocate(params)
-        call del_file(STATS_FILE)
-
-    contains
-
-        subroutine run_stage( conv, at )
-            type(convergence), intent(inout) :: conv
-            logical,           intent(out)   :: at(6)
-            call del_file(STATS_FILE)
-            do it = 1, 6
-                params%which_iter = it
-                call posterior_field(os, res05(it), res143(it))
-                at(it) = conv%check_conv3D(params, cline, os, 40.)
-                call os%kill
-            enddo
-        end subroutine run_stage
-
-    end subroutine test_posterior_exits_inpl_posterior
 
     !> the plateau exit (lpexit set, here far finer than the stage reaches): no gain on the stage's best FSC=0.5
     !! or FSC=0.143 and no overlap rise of 0.02 for three iterations ends the stage; any of them restarts the

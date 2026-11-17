@@ -74,7 +74,7 @@ Silent ones first: nothing reports these.
   `test=unit_image suite=image` (flips), `test=unit_stream suite=preprocessing`.
 - `test=stream_preproc` (five simulated movies through the stage and its worker jobs),
   `test=lib_stream suite=pick_and_extract`, `test=lib_reconstruction suite=fraction_dose_export`.
-- Alignment, sums or extraction: `test=simulated_workflow suite=6vxx` (or `1jxy`). Its map
+- Alignment, sums or extraction: `test=simulated_workflow suite=6vxx`. Its map
   correlation is a robustness profile: one run shows breakage, not improvement.
 
 ## See also

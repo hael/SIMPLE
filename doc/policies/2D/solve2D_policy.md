@@ -751,9 +751,9 @@ sum at that angle, and the angular residue of the reference grows. The fixed
 `INPL_POSTERIOR_BUDGET = 64` in `src/defs/simple_defs.f90` lets a particle enter
 the class sums at the in-plane angles of a quadrature of its posterior instead
 of at the one drawn angle. This is an internal numerical budget, with no CLI
-key, shared by every probabilistic 2D caller. The 3D counterpart applies the
-same quadrature to every pose a 3D particle is inserted at (refine3D policy,
-"In-plane posterior insertion").
+key, shared by every probabilistic 2D caller. Its 3D counterpart was removed on
+2026-11-17 (it caused more failures than pose weighting alone; refine3D policy,
+"In-plane posterior insertion: removed from 3D"); 2D keeps it.
 
 - **Where it acts.** The iterations of the stages with a probability table
   (`refine=prob|prob_neigh`: stage 2 on), including the `cls_init=prev` seed
@@ -788,8 +788,7 @@ same quadrature to every pose a 3D particle is inserted at (refine3D policy,
   there, at weight 1: the committed rotation comes from the tempered draw, which
   need not select the physical posterior's dominant peak (with two opposite
   peaks of losses 0 and 6, the second has probability 0.142 at `prob_beta` 0.3
-  and 0.0025 at the physical temperature). The 3D insertion follows the same
-  rule (refine3D policy).
+  and 0.0025 at the physical temperature).
 - **Averages are generated differently at the end, on purpose.** The class
   averages of the stage iterations take a particle at its quadrature entries.
   The terminal greedy pass, which turns the final solution into a hard

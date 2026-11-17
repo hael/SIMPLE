@@ -17,7 +17,7 @@ use simple_eul_prob_tab_utils, only: prob_insert_poses
 implicit none
 
 public :: init_rec, prep_imgs4rec, gen_rec_plane, cleanup_rec_buffers, write_state_half_partial, calc_3Drec
-public :: write_rec3D_bench, count_inserted_poses, insert_inpl_entries
+public :: write_rec3D_bench, count_inserted_poses
 private
 #include "simple_local_flags.inc"
 
@@ -314,8 +314,7 @@ contains
     !! With extra (the weighted insertion, topk > 1) a particle with an entry enters at its committed pose
     !! with its committed weight and at each extra pose from its plane re-shifted by the pose's shift minus
     !! the committed one (fplane_shift: a phase ramp, no second read or transform), with the extra's weight;
-    !! a particle without an entry enters as without extra, so topk = 1 is this routine's plain path bit for bit;
-    !! under l_inpl_posterior a particle with blocks enters at its in-plane entries (insert_inpl_entries)
+    !! a particle without an entry enters as without extra, so topk = 1 is this routine's plain path bit for bit
     subroutine update_state_half_rec( state, eo, build, nptcls, pinds, fplanes, recvol, weights, extra, shift_scale )
         integer,                           intent(in)    :: state, eo, nptcls, pinds(nptcls)
         class(builder),                    intent(inout) :: build
@@ -348,13 +347,8 @@ contains
                 iloc  = extra%loc(iptcl)
                 wbase = 1.
                 if( present(weights) ) wbase = weights(i)
-                if( extra%has_blocks(iloc) )then
-                    call insert_inpl_entries(build%pgrpsyms, orientation, fplanes(i), recvol, extra, iloc, wbase, scale,&
-                        &fpl_shifted)
-                else
-                    call recvol%insert_plane_oversamp(build%pgrpsyms, orientation, fplanes(i), w=wbase * extra%wc(iloc))
-                    call insert_extra_poses(build, orientation, fplanes(i), recvol, extra, iloc, wbase, scale, fpl_shifted)
-                endif
+                call recvol%insert_plane_oversamp(build%pgrpsyms, orientation, fplanes(i), w=wbase * extra%wc(iloc))
+                call insert_extra_poses(build, orientation, fplanes(i), recvol, extra, iloc, wbase, scale, fpl_shifted)
             else if( present(weights) )then
                 call recvol%insert_plane_oversamp(build%pgrpsyms, orientation, fplanes(i), w=weights(i))
             else
@@ -398,7 +392,7 @@ contains
     end subroutine insert_extra_poses
 
     !> the poses a reconstruction pass inserts: one per particle image (its committed pose) and one per extra of the
-    !! weighted insertion that the search filled with a positive weight, or under the key one per entry of a pose
+    !! weighted insertion that the search filled with a positive weight
     integer(int64) function count_inserted_poses( pinds, extra ) result( nposes )
         integer,                           intent(in) :: pinds(:)
         type(prob_insert_poses), optional, intent(in) :: extra
@@ -409,64 +403,11 @@ contains
         do i = 1,size(pinds)
             if( .not. extra%has(pinds(i)) ) cycle
             iloc = extra%loc(pinds(i))
-            if( extra%has_blocks(iloc) )then
-                ! the in-plane posterior entries of the particle's poses of positive weight, in place of its image
-                nposes = nposes - 1_int64
-                if( extra%wc(iloc) > 0. ) nposes = nposes + int(extra%blk_nent(extra%block(iloc, 0)), int64)
-                do k = 1,extra%nextra(iloc)
-                    if( extra%w(extra%first(iloc) + k - 1) > 0. ) nposes = nposes + &
-                        &int(extra%blk_nent(extra%block(iloc, k)), int64)
-                enddo
-                cycle
-            endif
             do k = 1,extra%nextra(iloc)
                 if( extra%w(extra%first(iloc) + k - 1) > 0. ) nposes = nposes + 1_int64
             enddo
         enddo
     end function count_inserted_poses
-
-    !> A particle's in-plane posterior entries (l_inpl_posterior) into the half-map: per pose of positive weight (the
-    !! committed one from fplane at its triplet about its direction, each extra from fplane re-shifted once by its
-    !! shift minus the committed one), every entry of its block at its in-plane angle with wbase x pose weight x share
-    subroutine insert_inpl_entries( se, orientation, fplane, recvol, extra, iloc, wbase, scale, fpl_shifted )
-        class(sym),              intent(inout) :: se
-        class(ori),              intent(in)    :: orientation
-        type(fplane_type),       intent(in)    :: fplane
-        class(reconstructor),    intent(inout) :: recvol
-        type(prob_insert_poses), intent(in)    :: extra
-        integer,                 intent(in)    :: iloc
-        real,                    intent(in)    :: wbase, scale
-        type(fplane_type),       intent(inout) :: fpl_shifted
-        type(ori) :: o_entry
-        real    :: sh_committed(2), euler(3), wpose, w
-        integer :: k, ipose, iblk, j
-        sh_committed = orientation%get_2Dshift()
-        o_entry      = orientation
-        do k = 0,extra%nextra(iloc)
-            if( k == 0 )then
-                wpose = extra%wc(iloc)
-                ! not the orientation's Euler angles: their normalisation folds e3 into e1 at e2 = 0 or 180
-                euler = extra%committed_euler(:,iloc)
-            else
-                ipose = extra%first(iloc) + k - 1
-                wpose = extra%w(ipose)
-                euler = extra%euler(:,ipose)
-            endif
-            if( .not. (wpose > 0.) ) cycle
-            if( k > 0 ) call fplane_shift(fplane, (extra%shift(:,ipose) - sh_committed) * scale, OSMPL_PAD_FAC, fpl_shifted)
-            iblk = extra%block(iloc, k)
-            do j = 1,extra%blk_nent(iblk)
-                call o_entry%set_euler([euler(1), euler(2), extra%entry_e3(iblk, j, euler(3))])
-                w = wbase * wpose * extra%entry_weight(iblk, j)
-                if( k == 0 )then
-                    call recvol%insert_plane_oversamp(se, o_entry, fplane, w=w)
-                else
-                    call recvol%insert_plane_oversamp(se, o_entry, fpl_shifted, w=w)
-                endif
-            enddo
-        enddo
-        call o_entry%kill
-    end subroutine insert_inpl_entries
 
     !> Write one half-map partial in the existing Cartesian volume/rho format.
     subroutine write_state_half_partial( params, recvol, state, eo )

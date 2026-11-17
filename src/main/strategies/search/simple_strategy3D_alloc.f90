@@ -5,7 +5,7 @@ use simple_builder, only: builder
 implicit none
 #include "simple_local_flags.inc"
 
-public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread, prep_strategy3D_inpl_bank
+public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread
 public :: ref_state_from_index, ref_proj_from_index
 public :: seed_continuous_inplane_candidate
 private
@@ -28,13 +28,6 @@ type strategy3D_alloc
     integer,        allocatable :: srch_order(:,:)          !< stochastic search index
     integer,        allocatable :: inpl_order(:,:)          !< stochastic inpl search index
     integer,        allocatable :: srch_order_sub(:,:)      !< stochastic search index, subspace
-    complex,        allocatable :: inpl_bank(:,:,:)         !< shifted-particle memo of the in-plane posterior rows (l_inpl_posterior)
-    ! per thread and pose of a particle (the committed pose first): its row's results (l_inpl_posterior)
-    integer,        allocatable :: inpl_nent(:,:)           !< the quadrature's entries (0: no valid row)
-    real(dp),       allocatable :: inpl_lnz(:,:)            !< ln of the row's partition sum
-    real(dp),       allocatable :: inpl_pen(:,:)            !< the shift prior's term
-    real,           allocatable :: inpl_dmin(:,:)           !< the row's minimum
-    real,           allocatable :: inpl_neff(:,:)           !< exp(entropy) of the row
 end type strategy3D_alloc
 
 type(strategy3D_alloc) :: s3D                         ! singleton
@@ -160,9 +153,6 @@ contains
         if( allocated(s3D%proj_space_inplinds) ) deallocate(s3D%proj_space_inplinds)
         if( allocated(s3D%proj_space_inplvalid) ) deallocate(s3D%proj_space_inplvalid)
         if( allocated(s3D%smpl_inpl_athres)    ) deallocate(s3D%smpl_inpl_athres)
-        if( allocated(s3D%inpl_bank)           ) deallocate(s3D%inpl_bank)
-        if( allocated(s3D%inpl_nent)           ) deallocate(s3D%inpl_nent, s3D%inpl_lnz, s3D%inpl_pen, s3D%inpl_dmin,&
-            &s3D%inpl_neff)
         if( allocated(s3D%rts) )then
             do ithr=1,size(s3D%rts)
                 call s3D%rts(ithr)%kill
@@ -178,23 +168,6 @@ contains
         endif
         srch_order_allocated = .false.
     end subroutine clean_strategy3D
-
-    !> the per-thread shifted-particle banks of the in-plane posterior rows (l_inpl_posterior) and the rows' results
-    !! for npose poses per particle, sized by the team the pass's regions run; after prep_strategy3D, which cleans them
-    subroutine prep_strategy3D_inpl_bank( nrow, ncol, npose )
-        !$ use omp_lib, only: omp_get_max_threads
-        integer, intent(in) :: nrow, ncol, npose !< pftsz + 1, the number of shells of the band, max(1,topk)
-        integer :: nteam
-        nteam = nthr_glob
-        !$ nteam = omp_get_max_threads()
-        if( allocated(s3D%inpl_bank) ) deallocate(s3D%inpl_bank)
-        if( allocated(s3D%inpl_nent) ) deallocate(s3D%inpl_nent, s3D%inpl_lnz, s3D%inpl_pen, s3D%inpl_dmin,&
-            &s3D%inpl_neff)
-        allocate(s3D%inpl_bank(nrow, ncol, nteam))
-        allocate(s3D%inpl_nent(npose, nteam), source=0)
-        allocate(s3D%inpl_lnz(npose, nteam), s3D%inpl_pen(npose, nteam), source=0.d0)
-        allocate(s3D%inpl_dmin(npose, nteam), s3D%inpl_neff(npose, nteam), source=0.)
-    end subroutine prep_strategy3D_inpl_bank
 
     pure integer function ref_state_from_index( iref, nspace ) result( state )
         integer, intent(in) :: iref, nspace

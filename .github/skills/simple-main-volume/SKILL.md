@@ -69,7 +69,7 @@ Call orders (callers `calc_3Drec`, `restore_state_from_parts`, `accumulate_pcg_s
   preconditioner or box conversion adds a kernel-versus-matrix-free gate there.
 - Nightly: `test=lib_reconstruction` (`pcg_half_set`, `pcg_sparse_sampling`,
   `fractional_reconstruction`, ...), `test=pcg_frac_update`; `flex/`: `test=unit_heterogeneity`.
-- Behaviour: `simulated_workflow_6vxx`/`_1jxy` (a robustness profile: 1-2 misses in 20 runs is normal),
+- Behaviour: `simulated_workflow_6vxx` (a robustness profile: 1-2 misses in 20 runs is normal),
   `solve3D_addon`, `multistate_workflows suite=states`, `cont_refine3D_1jxy suite=nu_handoff`;
   `test=rec3D_backends` compares the backends on a real project.
 

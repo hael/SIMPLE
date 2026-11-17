@@ -65,7 +65,7 @@ Silent ones first: nothing reports these.
   envelope, the tent identity, the label field repeated at every processor.
 - `simple_exec prg=nu_filt3D` on a refined half-map pair before and after: `_nu_filt`, `_nu_locres`,
   the `>>> NU` lines. In refinement: the `VOLASSEMBLE` NU split, `NU AUX MEMBER`, `NU HANDOFF`.
-- Behaviour: `simulated_workflow_6vxx`/`_1jxy` (NU from solve3D stage 5; a robustness profile),
+- Behaviour: `simulated_workflow_6vxx` (NU from solve3D stage 5; a robustness profile),
   `cont_refine3D_1jxy suite=nu_handoff`.
 
 ## See also

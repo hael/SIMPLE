@@ -18,7 +18,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
     use simple_oris,               only: oris
     use simple_fileio,             only: fopen, fclose
     use simple_molecule_data,      only: molecule_data
-    use simple_test_molecule_fixture, only: betagal_1jyx, sars_cov2_spkgp_6vxx
+    use simple_test_molecule_fixture, only: sars_cov2_spkgp_6vxx
     use simple_refine3D_fnames,    only: refine3D_state_vol_fname
     use simple_string_utils,       only: lowercase
     use simple_ui,                 only: make_ui
@@ -52,15 +52,12 @@ module subroutine exec_test_simulated_workflow( self, cline )
     integer,          parameter :: GOLD_STD_2D    = 6   ! half-specific references in the last of the 6 solve2D stages only
     integer,          parameter :: GOLD_STD_3D    = 9   ! past the 8 solve3D stages: no gold-standard stage
     integer,          parameter :: NPROJS_6VXX    = 160
-    integer,          parameter :: NPROJS_1JXY    = NREPROJS
     integer,          parameter :: MOVIE_DIM      = 1536
     integer,          parameter :: NFRAMES        = 16
     integer,          parameter :: NMOVIES_6VXX   = 16
-    integer,          parameter :: NMOVIES_1JXY   = 10
     integer,          parameter :: EXTRACT_BOX    = 192
     integer,          parameter :: NTHR           = 1
     integer,          parameter :: SEED_6VXX      = 20260923
-    integer,          parameter :: SEED_1JXY      = 20260923
     ! A recovered map must correlate with its truth and have a resolved FSC crossing.
     real,             parameter :: MIN_VOL_CORR   = 0.80
     ! Pose recovery is checked against the planted particles up to frame, hand and point group.
@@ -70,7 +67,6 @@ module subroutine exec_test_simulated_workflow( self, cline )
     real,             parameter :: MAX_FSC0143    = 6.0
     real,             parameter :: DOCK_HP        = 100.0
     real,             parameter :: DOCK_LP        = 20.0
-    integer,          parameter :: NPARTS_DISTR   = 2
     class(cmdline), allocatable         :: cline_projection, cline_sim_mov, cline_new_project
     class(cmdline), allocatable         :: cline_import_movies, cline_mot_corr, cline_ctf_est
     class(cmdline), allocatable         :: cline_pick, cline_extract, cline_solve2D, cline_solve3D
@@ -94,7 +90,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
     type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname, ptcls_fname
     type(oris)                          :: reproj_poses
     type(string)                        :: truth_volume, solve3D_dir, solve3D_project, final_volume
-    type(string), allocatable           :: movie_files(:), bench_parts(:), ptcls_files(:)
+    type(string), allocatable           :: movie_files(:), ptcls_files(:)
     character(len=XLONGSTRLEN)          :: workflow_root_path
     integer                             :: i, j, ldim(3), nprojs_stk, nmovies, nprojs, nper_movie
     integer, allocatable                :: proj_inds(:), projection_order(:)
@@ -102,22 +98,19 @@ module subroutine exec_test_simulated_workflow( self, cline )
     real                                :: pickref_smpd, pickref_width, sim_snr
     real                                :: volume_corr, volume_fsc0143
     real                                :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
-    real                                :: distr_corr, distr_fsc0143
-    real                                :: distr_dock_direct, distr_dock_mirrored, distr_dock_selected
     integer                             :: rnd_defocus, test_seed
-    logical                             :: volume_ok, distr_ok, gate_ok
+    logical                             :: volume_ok, gate_ok
 
     ! The test executable initializes only the test UI.  Directly invoked SIMPLE
     ! commanders need the regular UI metadata to implement mkdir=yes correctly.
     allocate(cline_projection, cline_sim_mov, cline_new_project, cline_import_movies, cline_mot_corr, cline_ctf_est, cline_pick, cline_extract, cline_solve2D, cline_solve3D, spproj)
     call make_ui
-    if( .not. cline%defined('suite') ) THROW_HARD('The suite keyword is required; use suite=6vxx or suite=1jxy')
+    if( .not. cline%defined('suite') ) THROW_HARD('The suite keyword is required; use suite=6vxx')
     system_name = cline%get_carg('suite')
     system_name = lowercase(system_name%to_char())
     if( system_name == 'list' )then
         write(logfhandle,'(a)') 'Available suites for simulated_workflow:'
         write(logfhandle,'(a)') '  6vxx'
-        write(logfhandle,'(a)') '  1jxy'
         return
     endif
     workflow_picker = 'segdiam'
@@ -137,14 +130,6 @@ module subroutine exec_test_simulated_workflow( self, cline )
             test_seed   = SEED_6VXX
             nmovies     = NMOVIES_6VXX
             nprojs      = NPROJS_6VXX
-        case('1jxy')
-            vol_file    = '1JXY.mrc'
-            reproj_file = 'reprojs_1JXY.mrcs'
-            pgrp        = 'd2'
-            sim_snr     = 0.2
-            test_seed   = SEED_1JXY
-            nmovies     = NMOVIES_1JXY
-            nprojs      = NPROJS_1JXY
         case default
             THROW_HARD('no sub-suite '//system_name%to_char()//' in simulated_workflow; use suite=list')
     end select
@@ -175,9 +160,6 @@ module subroutine exec_test_simulated_workflow( self, cline )
     select case(system_name%to_char())
         case('6vxx')
             mol = sars_cov2_spkgp_6vxx()
-        case('1jxy')
-            ! SIMPLE's embedded provider uses the underlying 1JYX PDB identifier.
-            mol = betagal_1jyx()
     end select
     call molecule%pdb2mrc(volfile=vol_file, smpd=SMPD, mol=mol, center_pdb=.true., &
         &vol_dim=[EXTRACT_BOX, EXTRACT_BOX, EXTRACT_BOX])
@@ -395,37 +377,20 @@ module subroutine exec_test_simulated_workflow( self, cline )
     call spproj%kill()
 
     write(logfhandle,'(a)') '>>> Step 10: solve3D'
-    call run_solve3D_step(0, '', 'solve3D', volume_ok, volume_corr, volume_fsc0143, &
+    call run_solve3D_step('solve3D', volume_ok, volume_corr, volume_fsc0143, &
         &dock_corr_direct, dock_corr_mirrored, dock_corr_selected)
     call return_to_stage_root('solve3D')
-
-    ! 1jxy also runs the distributed strategy (job scheduling, the master's sample draw and
-    ! volume assembly between parts) from the same input project, which mkdir=yes left unchanged
-    distr_ok = .true.
-    if( system_name == '1jxy' )then
-        write(logfhandle,'(a,i0,a)') '>>> Step 11: solve3D distributed over ', NPARTS_DISTR, ' parts'
-        call run_solve3D_step(NPARTS_DISTR, 'solve3D_distr', 'solve3D_distr', distr_ok, distr_corr, distr_fsc0143, &
-            &distr_dock_direct, distr_dock_mirrored, distr_dock_selected)
-    endif
 
     gate_ok = gate%passed()
     call gate%kill
     call simple_chdir(cwd_root, status)
     if( status /= 0 ) THROW_HARD('Could not restore the original working directory')
     if( .not. volume_ok ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: final-volume validation failed')
-    if( .not. distr_ok  ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: distributed final-volume validation failed')
-    ! the parts record is a gate row only
     if( .not. gate_ok   ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: a gate row failed (metrics.tsv)')
     write(logfhandle,'(a,a,a,f7.4,a,f7.4,a,f7.4,a,f7.4,a,f7.2,a)') 'PASS: simulated_workflow ', &
         &system_name%to_char(), ' docking correlation direct=', dock_corr_direct, ', mirrored=', dock_corr_mirrored, &
         &', selected=', dock_corr_selected, ', whole-volume correlation=', volume_corr, &
         &', FSC=0.143 at ', volume_fsc0143, ' A'
-    if( system_name == '1jxy' )then
-        write(logfhandle,'(a,a,a,i0,a,f7.4,a,f7.4,a,f7.4,a,f7.4,a,f7.2,a)') 'PASS: simulated_workflow ', &
-            &system_name%to_char(), ' nparts=', NPARTS_DISTR, ' docking correlation direct=', distr_dock_direct, &
-            &', mirrored=', distr_dock_mirrored, ', selected=', distr_dock_selected, &
-            &', whole-volume correlation=', distr_corr, ', FSC=0.143 at ', distr_fsc0143, ' A'
-    endif
     call simple_end('**** SIMPLE_TEST_SIMULATED_WORKFLOW NORMAL STOP ****')
 
   contains
@@ -442,22 +407,17 @@ module subroutine exec_test_simulated_workflow( self, cline )
         if( file_exists(PROJFILE) ) project_path = simple_abspath(string(PROJFILE))
     end subroutine update_project_path
 
-    !> solve3D on the solve2D project with the suite's settings, shared-memory (nparts=0) or
-    !! distributed, in its own execution directory; the final map is checked against the truth,
-    !! in the gate rows named after tag
-    subroutine run_solve3D_step( nparts, dir_exec, tag, ok, corr, fsc0143, dcorr_direct, dcorr_mirrored, dcorr_selected )
-        integer,          intent(in)  :: nparts
-        character(len=*), intent(in)  :: dir_exec, tag
+    !> solve3D on the solve2D project with the suite's settings, in shared memory; the final map is checked
+    !! against the truth, in the gate rows named after tag
+    subroutine run_solve3D_step( tag, ok, corr, fsc0143, dcorr_direct, dcorr_mirrored, dcorr_selected )
+        character(len=*), intent(in)  :: tag
         logical,          intent(out) :: ok
         real,             intent(out) :: corr, fsc0143, dcorr_direct, dcorr_mirrored, dcorr_selected
         call cline_solve3D%set('prg',                   'solve3D')
         call cline_solve3D%set('projfile',              project_path)
         call cline_solve3D%set('mkdir',                        'yes')
-        if( len(dir_exec) > 0 ) call cline_solve3D%set('dir_exec', dir_exec)
         call cline_solve3D%set('pgrp',                          pgrp)
-        if( system_name == '1jxy' ) call cline_solve3D%set('pgrp_start', pgrp)
         call cline_solve3D%set('mskdiam',                    MSKDIAM)
-        if( nparts > 0 ) call cline_solve3D%set('nparts',     nparts)
         call cline_solve3D%set('gold_std_stage',         GOLD_STD_3D)
         call cline_solve3D%set('nthr',                          NTHR)
         call xsolve3D%execute(cline_solve3D)
@@ -469,11 +429,6 @@ module subroutine exec_test_simulated_workflow( self, cline )
             &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, gate, tag, corr, fsc0143, &
             &dcorr_direct, dcorr_mirrored, dcorr_selected, ok)
         call pose_recovery(tag)
-        ! the distributed step ran its parts: the record of the second part's work exists
-        if( nparts > 1 )then
-            call simple_list_files(solve3D_dir%to_char()//'/BENCH/*PART'//int2str(nparts)//'*', bench_parts)
-            call gate%check(tag//'_ran_'//int2str(nparts)//'_parts', size(bench_parts) > 0)
-        endif
     end subroutine run_solve3D_step
 
     !> the recovered poses against the planted ones: every active particle of the solve3D project is

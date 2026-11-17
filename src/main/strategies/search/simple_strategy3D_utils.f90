@@ -50,9 +50,7 @@ contains
     end subroutine candidate_pose
 
 
-    !> euler_out: the stored triplet about its direction (euler_about_ref): set_euler normalises the project's copy,
-    !! which at e2 = 0 or 180 folds e3 into e1; elsewhere it is the stored triplet itself
-    subroutine assign_ori( s, ref, inpl, corr, sh, continuous_coord, continuous_valid, euler_out )
+    subroutine assign_ori( s, ref, inpl, corr, sh, continuous_coord, continuous_valid )
         use simple_ori_utils, only: euler_about_ref
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: ref, inpl  ! ref here is multi-state ref index
@@ -60,7 +58,6 @@ contains
         real,                   intent(in)    :: sh(2)
         real,          optional, intent(in)    :: continuous_coord
         logical,       optional, intent(in)    :: continuous_valid
-        real,          optional, intent(out)   :: euler_out(3)
         type(ori) :: osym, o_prev, o_new
         integer   :: state, proj, neff_states, nrefs_eval, nrefs_tot
         real      :: euler(3), shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac
@@ -85,7 +82,6 @@ contains
                 &s%continuous_active, s%b_ptr%pftc%get_dang())
         endif
         call s%b_ptr%spproj_field%set_euler(s%iptcl, euler)
-        if( present(euler_out) ) euler_out = euler_about_ref(s%b_ptr%spproj_field%get_euler(s%iptcl), euler)
         ! shift
         shvec_incr = 0.
         if( s%doshift ) shvec_incr = sh

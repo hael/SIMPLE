@@ -49,12 +49,8 @@ Silent ones first.
   one gets no cone; the master, not the parts, reports it); `open_assignment` stops without the direction space; the
   extras go per batch into `prob_insert_poses` (`setup_range`), resolved by `strategy3D_prob` and inserted by the
   partial reconstruction.
-- In every pass that reconstructs from a table (`l_inpl_posterior`: `refine=prob`, `prob_neigh` in `state|geom`,
-  `objfun=euclid`; no key) each inserted pose enters at a 64-point quadrature of its in-plane row at its solved shift
-  (`inpl_quadrature`), confined to the insertion cone about its own rotation (`inpl_cone_window`, the cone opened at
-  `topk=1` too); the table's view weights stand. Entries go in the part's worst-case reservation (`reserve_inpl`). Only the solved bin takes the continuous angle, a collapsed row included;
-  an entry's angle replaces e3 of the pose's triplet about its direction (an extra's own, the committed pose's
-  `committed_euler`), never of the project's normalised copy, whose e3 is 0 at a pole.
+- 3D has no in-plane insertion since 2026-11-17 (removed by the maintainer; `refine3D_policy.md`): each pose enters
+  at its own angle with the table's weight. 2D keeps it (`strategy2D_prob%insert_inplane`).
 - The pass's context memory is checked against `ptcl_buffer_budget` with a warning, not a stop.
 
 ## Where to start
@@ -74,9 +70,9 @@ Silent ones first.
   generator's pinned vectors).
 - `test=polar_matching_bench suite=fills`: each route's pipeline at one thread against the team, in batches and parts,
   compared by particle (`polar_fill_identity.tsv`). Without `suite` it times the kernels.
-- Workflows: `simulated_workflow` (solve2D and solve3D run the probabilistic modes; 1jxy also over two parts), judged
-  as a profile. No unit tester covers the readout records or `merge_prob_readouts`; only the 1jxy two-part run
-  exercises them.
+- Workflows: `simulated_workflow suite=6vxx` (solve2D and solve3D run the probabilistic modes), judged as a profile.
+  No unit tester covers the readout records or `merge_prob_readouts`, and no registered entry runs solve3D over
+  parts since 2026-11-17: check a change there with a distributed solve3D run by hand.
 
 ## See also
 

@@ -66,7 +66,7 @@ Silent ones first: nothing reports these.
 - `solve/`: `test=unit_project` (`solve3D_manifest`, `solve3D_addon_report`, `solve3D_chunks_plan`),
   `test=unit_reconstruction` (`solve3D_cavgs_stage_rules`, `state_assignment_rules`),
   `test=unit_pftc_align2D3D suite=solve2D_stage_rules`, `lib_reconstruction suite=addon_report_docking`.
-- Builder, cmdline, convergence: `test=units`, then `test=simulated_workflow suite=1jxy`; a
+- Builder, cmdline, convergence: `test=units`, then `test=simulated_workflow suite=6vxx`; a
   controller: its entry (skill `simple-main-commanders`); refactors: `test=identity`.
 
 ## See also

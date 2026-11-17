@@ -46,10 +46,11 @@ Unit suites are in the subfolder guides. Workflow checks (`build/bin/simple_test
 
 - A change that claims identical results: `test=identity` on two builds at one thread
   (`doc/policies/test_environment_policy.md` section 1.5); never judged on multi-threaded runs.
-- `simulated_workflow suite=1jxy`: its second `solve3D` runs `nparts=2`, the only registered run of the
-  probabilistic refine3D master over several parts (the sample draw, the parts' batch pipeline and the readout
-  merge, assembly, sigma2 commit). The map correlation is a robustness profile (1-2 misses in 20 runs is
-  normal): one run shows breakage, not improvement; compare `test=profile` runs with `dir1=`/`dir2=`.
+- `simulated_workflow suite=6vxx`: solve2D and solve3D in shared memory. No registered entry runs the
+  probabilistic refine3D master over several parts since `simulated_workflow_1jxy` was removed (2026-11-17): a
+  change to the sample draw, the parts' batch pipeline, the readout merge, assembly or the sigma2 commit needs a
+  distributed solve3D run by hand (`nparts=2`, the local queue). The map correlation is a robustness profile:
+  one run shows breakage, not improvement; compare `test=profile` runs with `dir1=`/`dir2=`.
 - `cont_refine3D_1jxy` (`refine=cont` over two parts, the `pose_cont` follow-up), `multistate_workflows`
   (`suite=states` or `consensus`; 1 913 s at eight threads for all routes), `flex_pca_blobs` (two workers).
 - The distributed refine2D master runs only in the stream's 2D pool (`mini_stream_*`, `stream_chains`;

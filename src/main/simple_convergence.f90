@@ -505,9 +505,9 @@ contains
         res143_now = 0.
         if( any(res05_state_avg > TINY) ) res05_now  = minval(res05_state_avg, mask=res05_state_avg > TINY)
         if( any(res_state_avg   > TINY) ) res143_now = minval(res_state_avg,   mask=res_state_avg   > TINY)
-        ! the weighted insertion's and the in-plane posterior insertion's margin on the resolution exits (the
-        ! tail's stall test, the stage exit): a shell and an iteration more than the single draw's
-        l_margin = params%l_prob_align_mode .and. (params%topk > 1 .or. params%l_inpl_posterior)
+        ! the weighted insertion's margin on the resolution exits (the tail's stall test, the stage exit): a shell
+        ! and an iteration more than the single draw's
+        l_margin = params%l_prob_align_mode .and. params%topk > 1
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX ', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'

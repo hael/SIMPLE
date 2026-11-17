@@ -64,7 +64,8 @@ programs (skill `simple-main-nano`).
   `lib_<area>`, `units`. A high-level entry is a row of `test/simple_test_registry.f90` plus its
   `production/CMakeLists.txt` registration, added together (`scripts/check_test_registry.py`).
 - A commander change: `scripts/run_fast_gate.sh build`, then its program's entry:
-  `test=simulated_workflow suite=1jxy` (solve2D, solve3D, then solve3D with `nparts=2`; ~1000 s),
+  `test=simulated_workflow suite=6vxx` (solve2D, solve3D; ~1100 s; no registered entry runs solve3D distributed
+  since 2026-11-17),
   `test=multistate_workflows suite=<cavgs|shc|states|consensus>`, `test=cont_refine3D_1jxy`
   (refine3D_auto/local), `test=solve3D_addon`, `test=flex_pca_blobs` (refine3D_states_cavgs).
 - A simulated workflow's map correlation is a robustness profile (1-2 misses in 20 seeds is

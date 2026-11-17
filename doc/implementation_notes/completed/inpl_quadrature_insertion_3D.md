@@ -1,5 +1,10 @@
 # In-plane quadrature insertion in 3D
 
+**Removed from 3D on 2026-11-17 (Hans): "In-plane posterior weighting doesn't work in 3D but works well in 2D"; it
+caused more failures than pose weighting alone. 3D inserts each pose at its own angle with the table's pose weights;
+2D keeps its in-plane insertion. The decision record is in `doc/policies/3D/refine3D_policy.md` ("In-plane posterior
+insertion: removed from 3D").**
+
 ## PfCRT regression investigation, 2026-11-15
 
 The maintainer reports visibly worse maps with identical commands and projects. The supplied logs compare

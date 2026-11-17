@@ -3,7 +3,7 @@
 ! (pftc%gen_posterior_val); here the row is computed once and drawn with the same keyed variate (the same entry, bit
 ! for bit). The same row is weighed by the insertion's own quadrature (inpl_quadrature) at the insertion's physical
 ! temperature: its log partition sum, minimum and in-plane posterior are the insertion's for the shift it would take
-! the entry at, and the shift prior's term of the view weight is the caller's (inpl_prior_penalty). The marginal mass
+! the entry at, and the shift prior's term of the view weight is the caller's (0 in 2D). The marginal mass
 ! of a reference is the insertion's view weight exp(lnz - T dmin - pen) (the class student's teacher,
 ! doc/algorithms/class_student.md); only the class student's learn program and its validation reference ask for it.
 ! audit_entry recomputes one entry by the insertion's route and reports the differences.
@@ -48,7 +48,7 @@ end type eul_prob_marginal
 
 contains
 
-    !> the in-plane posterior insertion's temperature of particle iptcl (inpl_pose_row, insert_inplane): the physical
+    !> the in-plane posterior insertion's temperature of particle iptcl (insert_inplane): the physical
     !! one, the argmin's marker without a scale
     real function inpl_insert_temp( pftc, iptcl ) result( temp )
         class(polarft_calc), intent(in) :: pftc
@@ -181,7 +181,7 @@ contains
 
     !> The audit of entry ri of row i: the in-plane posterior insertion's own weighing of reference iref
     !! for particle iptcl at the shift sh_ins the insertion would take the entry at, with its shift-prior term pen_ins
-    !! (inpl_pose_row's route: the particle shifted once above SHERRSQ, else the shifted-reference kernel; its
+    !! (the insertion's route: the particle shifted once above SHERRSQ, else the shifted-reference kernel; its
     !! temperature; inpl_quadrature at its budget), against the teacher's: dev(1:5) the absolute differences of the
     !! shift, the temperature, lnz, dmin and pen, dev(6) the largest of the in-plane posterior when the entry is one
     !! of the row's kept rows (0 otherwise), dev(7) 1 when it is kept; lnz_ins and dmin_ins the insertion's. On thread

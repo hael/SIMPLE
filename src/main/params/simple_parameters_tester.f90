@@ -37,7 +37,6 @@ contains
         call test_odd_box_refused()
         call test_worker_project_recorded()
         call test_mirr_proj_binding()
-        call test_inpl_posterior_binding()
         call leave_fixture(saved, root, nfail0)
         ! The constructor must not leave directory globals pointing into the removed fixture.
         if( allocated(CWD_GLOB) ) deallocate(CWD_GLOB)
@@ -108,49 +107,6 @@ contains
         call cline%set('mskdiam', 12.)
         call cline%set('nthr', 1)
     end subroutine base_cline
-
-    !> The default and explicit no retain pose-only insertion; opt-in is restricted to reconstructing 3D tables.
-    subroutine test_inpl_posterior_binding()
-        use simple_parameters, only: parameters
-        use simple_sp_project, only: sp_project
-        class(parameters), allocatable :: params
-        class(cmdline), allocatable    :: cline
-        class(sp_project), allocatable :: proj
-        character(len=5), parameter :: modes(4) = [character(len=5) :: 'state', 'geom', 'shc', 'snhc']
-        integer :: i
-        allocate(params, cline, proj)
-        call proj%update_projinfo(string('inpl_policy.simple'))
-        call proj%write(string('inpl_policy.simple'))
-        call proj%kill
-        call base_cline(cline)
-        call cline%set('prg', 'refine3D')
-        call cline%set('projfile', 'inpl_policy.simple')
-        call cline%set('objfun', 'euclid')
-        call cline%set('refine', 'prob')
-        call cline%set('volrec', 'yes')
-        call params%new(cline, silent=.true.)
-        call assert_true(params%l_inpl_posterior, 'probabilistic reconstruction inserts within the insertion cone, with no key')
-        call cline%set('refine', 'prob_neigh')
-        do i = 1,size(modes)
-            call cline%set('prob_neigh_mode', trim(modes(i)))
-            call params%new(cline, silent=.true.)
-            call assert_true(params%l_inpl_posterior .eqv. (i <= 2), '3D angular insertion scope: '//trim(modes(i)))
-        enddo
-        call cline%set('refine', 'prob')
-        call cline%set('volrec', 'no')
-        call params%new(cline, silent=.true.)
-        call assert_true(.not. params%l_inpl_posterior, 'assignment-only passes do not enable angular insertion')
-        call cline%set('volrec', 'yes')
-        call cline%set('objfun', 'cc')
-        call params%new(cline, silent=.true.)
-        call assert_true(.not. params%l_inpl_posterior, 'correlation children do not enable angular insertion')
-        call cline%set('objfun', 'euclid')
-        call cline%set('prg', 'refine2D')
-        call cline%set('oritype', 'ptcl2D')
-        call params%new(cline, silent=.true.)
-        call assert_true(.not. params%l_inpl_posterior, 'the 3D switch does not control 2D insertion')
-        call cline%kill
-    end subroutine test_inpl_posterior_binding
 
     subroutine test_mirr_proj_binding()
         use simple_parameters, only: parameters

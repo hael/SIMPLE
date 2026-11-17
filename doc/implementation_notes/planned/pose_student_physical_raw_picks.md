@@ -1,6 +1,6 @@
 # The pose student revisited: the physical teacher, raw picks and alignment over the cone
 
-Status, 2026-11-16: planned, not started. Base: pinned at launch, the commit that makes the 3D in-plane insertion the
+Status, 2026-11-16: planned, not started. Base: `1ea0f8340` (pinned at launch), the commit that makes the 3D in-plane insertion the
 cone with no key (`inpl_posterior` removed). Depends on: the pose student (`doc/algorithms/pose_student.md`), what the
 class student established (`planned/student_inplane_posterior.md` with its report: the physical teacher P;
 `planned/class_student_raw_picks.md` with its report: no centring, alignment after prediction over the candidate

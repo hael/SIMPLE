@@ -139,11 +139,9 @@ Stage policy includes:
 - an explicitly requested PCG order prior (`pcg_order=yes`) from the same
   stage (`PCG_START_STAGE`), on the NU evidence and labels of the
   previous iteration (section 9)
-- the in-plane posterior insertion within the insertion cone (no key, since 2026-11-16; refine3D policy, "In-plane posterior insertion"): it
-  runs where a stage reconstructs from a posterior table outside the hill-climb neighbourhoods,
-  single-state stages 3-8 and multi-state stages from 3, on gridding and on the PCG backend alike;
-  not in the `shc`/`snhc` stages 1-2, not in the final and bootstrap reconstructions, and not in the
-  multi-state final assignment, which reconstructs nothing (`volrec=no`)
+- no in-plane posterior insertion: removed from 3D on 2026-11-17 by the maintainer (refine3D policy,
+  "In-plane posterior insertion: removed from 3D"); every stage inserts each pose at its own angle with
+  the table's pose weights, on gridding and on the PCG backend alike
 
 The downscaled particle cache is a 2D-only feature: `solve3D` rejects
 `cache=yes`, and each stage uses its own crop from the low-pass/downscaling
