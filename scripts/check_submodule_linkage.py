@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""check_tester_linkage.py -- a submodule tester calls no private plain procedure of its module.
+"""check_submodule_linkage.py -- a submodule calls no private plain procedure of its module.
 
-gfortran before 16 gives a private module procedure internal linkage, so a submodule tester (another
-object file) that calls one by name compiles and then fails to link: on the Linux builds, not on a
-macOS build with gfortran 16. Private type-bound procedures (also called by name: they are bound),
-private constants and variables, and separate module procedures link. A procedure a submodule tester
-calls is public, bound to a type, or a separate module procedure with its body in a production submodule
+gfortran before 16 gives a private module procedure internal linkage, so a submodule (another object
+file), production code or tester, that calls one by name compiles and then fails to link: on the Linux
+builds, not on a macOS build with gfortran 16. Private type-bound procedures (also called by name: they
+are bound), private constants and variables, and separate module procedures link. A procedure a
+submodule calls is its own, public, bound to a type, or a separate module procedure
 (doc/policies/test_environment_policy.md, section 4.3).
-usage: scripts/check_tester_linkage.py [ROOT]
-exit status: 0 none found, 1 a tester calls a private plain procedure
+usage: scripts/check_submodule_linkage.py [ROOT]
+exit status: 0 none found, 1 a submodule calls a private plain procedure
 """
 
 import os
@@ -92,8 +92,6 @@ def main():
                 modfile[m.group(1)] = f
     bad = []
     for f in files:
-        if not f.endswith("_tester.f90"):
-            continue
         lines = code_lines(os.path.join(root, f))
         head = next((l for l in lines if re.match(r"\s*submodule\s*\(", l)), None)
         if head is None:
@@ -108,10 +106,10 @@ def main():
                     bad.append("%s:%d calls %s, a private module procedure of %s" % (f, n, name, host))
                     break
     for b in bad:
-        print("check_tester_linkage:", b)
+        print("check_submodule_linkage:", b)
     if bad:
-        print("check_tester_linkage: make each public, bind it to a type, or give it a separate module procedure "
-              "body in a production submodule (gfortran before 16 does not link it)")
+        print("check_submodule_linkage: move each into the submodule that calls it, make it public, bind it to a "
+              "type, or make it a separate module procedure (gfortran before 16 does not link it)")
         return 1
     return 0
 

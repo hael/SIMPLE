@@ -49,6 +49,10 @@ Follow the local style instead of introducing foreign patterns.
 - An `optional` dummy argument must be present at some calls and absent at
   others. When every caller supplies it, make it required; when none does,
   delete it with the code that reads it. Update all callers together.
+- A submodule never calls a private plain procedure of its module: gfortran before 16 does not
+  link it (the Linux builds fail, the Mac's gfortran 16 links). Put a helper only a submodule uses
+  in that submodule; otherwise bind it, make it public or a separate module procedure.
+  `scripts/check_submodule_linkage.py` (fast gate) finds the case.
 - Preserve `new`/`kill` lifecycle symmetry for stateful types.
 - A new stateful module is an encapsulated class: `private` components,
   `new`/`kill`, behavior as type-bound procedures, private helpers, getters

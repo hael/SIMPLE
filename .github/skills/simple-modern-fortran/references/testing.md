@@ -45,7 +45,7 @@ The rule set is `doc/policies/test_environment_policy.md`; section numbers below
   through `simple_core_module_api`), declares no procedure or constant with a module's name, and
   cannot restore an intrinsic the module shadows (`TINY` hides `tiny`). Never make an entity public
   only for a tester, except a plain module procedure the submodule calls: gfortran before 16 gives a
-  private one internal linkage and the Linux build does not link (`check_tester_linkage.py`); a
+  private one internal linkage and the Linux build does not link (`check_submodule_linkage.py`); a
   private binding, constant, variable or separate module procedure links.
 - A fixture or check several tests share is a module `simple_test_<x>_fixture` in
   `src/main/commanders/test/`, never a public procedure of a tester.
@@ -68,7 +68,7 @@ The rule set is `doc/policies/test_environment_policy.md`; section numbers below
 ## Before handing over (4.5)
 
 - The gate's checks: `scripts/check_descr.py`, `check_test_registry.py`, `check_flex_dag.py`,
-  `check_guide_imports.py`, `check_cli_chain.py`, `check_tester_linkage.py`; then the build and the fast gate.
+  `check_guide_imports.py`, `check_cli_chain.py`, `check_submodule_linkage.py`; then the build and the fast gate.
   The gate runs them with the build's Python (`SIMPLE_PYTHON3`, floor 3.7 in the top-level
   `CMakeLists.txt`), not the `python3` on `PATH`: standard library only, nothing newer than the
   floor (policy, section 4.5).

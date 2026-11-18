@@ -42,7 +42,7 @@ run overnight; high-level tests run only when explicitly selected with CTest.
 runs `scripts/run_fast_gate.sh` between `make` and `make install`. It first
 runs `scripts/check_test_registry.py`, `scripts/check_descr.py`,
 `scripts/check_flex_dag.py`, `scripts/check_guide_imports.py`,
-`scripts/check_cli_chain.py` and `scripts/check_tester_linkage.py` (section 4.5), then
+`scripts/check_cli_chain.py` and `scripts/check_submodule_linkage.py` (section 4.5), then
 `ctest -L fast` with half the cores rounded up, then
 `scripts/ctest_budget.py`, which
 fails the build when an entry fails and only warns when the gate takes more
@@ -673,7 +673,9 @@ only the public interface stays a module (both forms are current, by need):
   (also when called by name, as `simple_flex_cls_kernel`'s `nopass` bindings
   are), private constants and variables, and separate module procedures whose
   body is in a production submodule (the `polarft_calc` test hooks) link.
-  `scripts/check_tester_linkage.py` (fast gate) finds the case.
+  `scripts/check_submodule_linkage.py` (fast gate) finds the case in every
+  submodule, production code included (a production submodule broke the Linux
+  link so on 2026-11-18).
 - The submodule sees everything the module sees. It does not `use` a name the
   module already has (gfortran rejects it, also through an umbrella module),
   and it does not declare a procedure or constant with a module's name. An
@@ -732,7 +734,7 @@ Before asking for a build:
 - `python3 scripts/check_cli_chain.py .` — the command-line chain (accepted
   keys, parameter bindings, UI inputs, stream launcher keys, private programs)
   is consistent. The fast gate runs it on every build.
-- `python3 scripts/check_tester_linkage.py .` — no submodule tester calls a
+- `python3 scripts/check_submodule_linkage.py .` — no submodule, production or tester, calls a
   private plain procedure of its module (section 4.3). The fast gate runs it
   on every build; a macOS build with gfortran 16 links such a call, so nothing
   else catches it before a Linux build.

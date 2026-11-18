@@ -44,7 +44,7 @@ PY=$(sed -n 's/^SIMPLE_PYTHON3:INTERNAL=//p' "$BUILD/CMakeCache.txt")
 "$PY" "$ROOT/scripts/check_flex_dag.py" "$ROOT" || exit 1
 "$PY" "$ROOT/scripts/check_guide_imports.py" "$ROOT" || exit 1
 "$PY" "$ROOT/scripts/check_cli_chain.py" "$ROOT" || exit 1
-"$PY" "$ROOT/scripts/check_tester_linkage.py" "$ROOT" || exit 1
+"$PY" "$ROOT/scripts/check_submodule_linkage.py" "$ROOT" || exit 1
 # The nightly build broke twice on commits that left out a new source file
 # (2026-10-28, 2026-10-31). Untracked work in progress is normal: warn, never fail.
 if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
