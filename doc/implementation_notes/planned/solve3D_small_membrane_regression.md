@@ -693,3 +693,9 @@ matcher's strategy choice, the reference preparation, refine3D's random start an
 search and by the 2D matcher. `unit_project` caught it: `test_relion_export_poses` sets Euler angles without `corr`,
 the field became virgin and the export wrote no 3D poses (7 failed checks). `has_been_searched` is restored; the
 dense pass reads `has_search_score`, so nothing else changes.
+
+**2026-11-17, Decision 15 withdrawn (Hans's ruling).** The sample ramp did not speed the runs up; `nsample_ramp`
+and its code are removed (the `src` side of `76110d3f5` reversed: the key, `l_nsample_ramp`,
+`solve3D_stage_nsample`, `NSAMPLE_RAMP_DEFAULT`, the ramp's refusals and log lines, its tests). The sticky stages
+are those of `218f0f289` again: stage 1 draws `best`, stages 2-4 `keep`, every stage at `nsample`. The
+`has_search_score` dense pass of the entry above stays; it serves stage 1's first iteration.

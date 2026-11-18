@@ -60,9 +60,7 @@ Search mode by stage:
 Sampling by stage:
 
 - every stage carries the run's `update_frac` and `balance` (plus `nclust`
-  for `cavg`); under `nsample_ramp=yes` a sticky stage carries its ramped
-  `nsample` (`nsample*stage/5`, `solve3D_stage_nsample`) and the run's fraction
-  scaled to it
+  for `cavg`)
 - no per-particle score in any free draw: each unit's quota comes from the
   whole class, lowest `updatecnt` first
 - single-state, fractional, particles, not an add-on: one sticky subset from
@@ -72,7 +70,7 @@ Sampling by stage:
   (`sticky_sampling=best`), and kept by the next stages through 4 (`keep`): the
   shc neighbourhood search of stages 1-2 scans never-searched particles in full
   (no search score, `has_search_score`; the random start
-  orientation is no search result, so a particle the ramp adds is drawn from the
+  orientation is no search result, so a never-searched particle is drawn from the
   posterior over every reference),
   and the subset's map consolidates before new particles arrive; a stage-4 entry
   (supplied volumes, `cavg_ini`, `cavg_ini_ext`) holds it for that stage; from

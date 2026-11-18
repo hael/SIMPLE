@@ -56,7 +56,6 @@ real,             parameter :: LPSTOP_INDEPENDENT      = 6.   ! conservative def
 real,             parameter :: UPDATE_FRAC_MAX            = 0.9  ! ensures fractional update remains on
 real,             parameter :: FULL_SAMPLE_SWITCH_FRAC    = 0.9  ! force all-active sampling once nsample/active reaches this fraction
 integer,          parameter :: NSAMPLE_SOLVE3D_DEFAULT = 10000
-integer,          parameter :: NSAMPLE_RAMP_DEFAULT    = 25000 ! nsample under nsample_ramp=yes: the free stages' sample
 
 type :: refine3D_stage_cfg
     type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, envfsc
@@ -184,28 +183,10 @@ contains
         istage = ML_REG_START_STAGE
     end function solve3D_ml_reg_start_stage
 
-    !> nsample when the command line gives none: under nsample_ramp the sample of the free stages
-    module function solve3D_nsample_default( params ) result( nsample )
-        class(parameters), intent(in) :: params
+    module function solve3D_nsample_default() result(nsample)
         integer :: nsample
         nsample = NSAMPLE_SOLVE3D_DEFAULT
-        if( params%l_nsample_ramp ) nsample = NSAMPLE_RAMP_DEFAULT
     end function solve3D_nsample_default
-
-    !> The particles stage istage draws per iteration: nsample, or under nsample_ramp, in the stages that hold the
-    !! sticky subset, the share nsample*istage/(STICKY_LAST_STAGE+1), so the subset grows linearly with the stage
-    !! to nsample at the first freely sampled stage. The best-first draw ranks every unit the same way at every
-    !! stage, so a larger draw contains the smaller one.
-    module function solve3D_stage_nsample( params, istage, first_stage, l_cavgs, l_addon ) result( nsample )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: istage, first_stage
-        logical,           intent(in) :: l_cavgs, l_addon
-        integer :: nsample
-        nsample = params%nsample
-        if( .not. params%l_nsample_ramp ) return
-        if( .not. holds_sticky_subset(params, istage, first_stage, l_cavgs, force_full_sampling_mode(params), l_addon) ) return
-        nsample = max(1, nint(real(params%nsample) * real(istage) / real(STICKY_LAST_STAGE + 1)))
-    end function solve3D_stage_nsample
 
     module function solve3D_remaining_niters(first_stage, last_stage) result(niters)
         integer, intent(in) :: first_stage, last_stage
@@ -563,8 +544,7 @@ contains
         logical,                  intent(in) :: l_cmdline_lp_override
         logical,                  intent(in) :: l_addon    !< solve3D_addon stage: the cohort's own sampling, no sticky subset
         logical,                  intent(in) :: l_register !< solve3D_addon registration pass: full update, planned limit
-        real :: lp_eff, lpstop_eff, lp_cap, update_frac_stage
-        integer :: nsample_stage
+        real :: lp_eff, lpstop_eff, lp_cap
         logical :: l_full_update_stage, l_explicit_lp, l_lp_from_fsc05
         l_full_update_stage = force_full_sampling_mode(params) .or. l_register
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
@@ -594,22 +574,16 @@ contains
             if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = max(lpstop_eff, params%lpstop)
         endif
         call cline_refine3D%set('prg',    'refine3D')
-        ! the stage's sample: nsample, or its ramped share in the sticky stages (nsample_ramp), the update fraction
-        ! scaled to it
-        nsample_stage     = solve3D_stage_nsample(params, istage, first_stage, l_cavgs, l_addon)
-        update_frac_stage = cfg%update_frac_dyn
-        if( nsample_stage /= params%nsample ) &
-            &update_frac_stage = cfg%update_frac_dyn * real(nsample_stage) / real(params%nsample)
         if( l_full_update_stage )then
             call cline_refine3D%delete('update_frac')
         else
-            call cline_refine3D%set('update_frac',        update_frac_stage)
+            call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
         endif
         if( .not. l_cavgs )then
             if( l_full_update_stage )then
                 call cline_refine3D%delete('nsample')
             else
-                call cline_refine3D%set('nsample', nsample_stage)
+                call cline_refine3D%set('nsample', params%nsample)
             endif
         endif
         call cline_refine3D%set('box_crop',               solve3D_stage_box_crop(params, istage))
@@ -645,11 +619,9 @@ contains
         ! single state refines one class-balanced sticky subset from the run's first stage through
         ! STICKY_LAST_STAGE: drawn at the first iteration of the first stage, every unit's quota by the particles'
         ! 2D objective, best first (best), and kept by the next stages (keep), so its map consolidates before the
-        ! free sampling, which uses no score; trailing starts with the free sampling (TRAILREC_STAGE_SINGLE).
-        ! Under nsample_ramp every sticky stage draws best first at its own, larger size, which contains the
-        ! previous stage's subset
+        ! free sampling, which uses no score; trailing starts with the free sampling (TRAILREC_STAGE_SINGLE)
         if( holds_sticky_subset(params, istage, first_stage, l_cavgs, l_full_update_stage, l_addon) )then
-            if( istage > first_stage .and. .not. params%l_nsample_ramp )then
+            if( istage > first_stage )then
                 call cline_refine3D%set('sticky_sampling', 'keep')
             else
                 call cline_refine3D%set('sticky_sampling', 'best')

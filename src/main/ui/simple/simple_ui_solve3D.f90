@@ -129,12 +129,6 @@ contains
         &visibility=UI_VIS_ADVANCED)
         if( l_include_nsample )then
             call prg%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
-            call prg%add_input(UI_SRCH, 'nsample_ramp', 'binary', 'Ramp the sample over the sticky stages', &
-            &'One state, fractional updates: the stages that hold the best-scoring sticky subset draw a share of nsample '//&
-            &'growing with the stage, nsample*stage/5, each stage keeping the previous stage''s particles; from stage 5, '//&
-            &'where free sampling starts, every iteration draws nsample, 25000 by default; a run that samples every '//&
-            &'particle has no ramp(yes|no){no}', '', .false., 'no', group="search", &
-            &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         endif
         if( .not. l_stream_compatible )then
             call prg%add_input(UI_SRCH, trs, &

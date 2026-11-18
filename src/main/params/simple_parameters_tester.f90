@@ -37,7 +37,6 @@ contains
         call test_odd_box_refused()
         call test_worker_project_recorded()
         call test_mirr_proj_binding()
-        call test_nsample_ramp_binding()
         call leave_fixture(saved, root, nfail0)
         ! The constructor must not leave directory globals pointing into the removed fixture.
         if( allocated(CWD_GLOB) ) deallocate(CWD_GLOB)
@@ -135,26 +134,6 @@ contains
         call assert_real(0.75,params%sigma2_weight,1.e-6,'worker sigma weight survives construction')
         call cline%kill()
     end subroutine test_mirr_proj_binding
-
-    !> nsample_ramp defaults off and binds yes to its flag
-    subroutine test_nsample_ramp_binding()
-        use simple_parameters, only: parameters
-        use simple_cmdline,    only: cmdline
-        class(parameters), allocatable :: params
-        class(cmdline), allocatable :: cline
-        allocate(params, cline)
-        call cline%set('box',32)
-        call cline%set('smpd',SMPD)
-        call cline%set('mskdiam',12.)
-        call cline%set('nthr',1)
-        call params%new(cline,silent=.true.)
-        call assert_char('no',params%nsample_ramp,'the sample ramp defaults to no')
-        call assert_true(.not. params%l_nsample_ramp,'the sample ramp flag defaults off')
-        call cline%set('nsample_ramp','yes')
-        call params%new(cline,silent=.true.)
-        call assert_true(params%l_nsample_ramp,'nsample_ramp=yes sets the ramp flag')
-        call cline%kill()
-    end subroutine test_nsample_ramp_binding
 
     ! The parameter constructor must retain the selector before the expensive simulation.
     subroutine test_suite_binding()

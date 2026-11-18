@@ -86,9 +86,8 @@ Stage policy includes:
     The shc neighbourhood search scans a never-searched particle in full (a
     record without a search score, `has_search_score`): it scores every
     reference into the table and draws from the posterior over all of them, so
-    the first iteration of the run and every particle the ramp adds to the
-    subset get a global search instead of a hill climb from the random start
-    orientation. Until 2026-11-17 the dense pass keyed on `has_been_searched`,
+    the first iteration of the run gets a global search instead of a hill climb
+    from the random start orientation. Until 2026-11-17 the dense pass keyed on `has_been_searched`,
     which counts Euler angles as a pose (as the virgin-field test needs), and the
     random start (`delete_3Dalignment`, then `rnd_oris`) sets them for every
     particle, so no particle took the full scan and an added particle's first
@@ -110,20 +109,6 @@ Stage policy includes:
     stage 5 or later samples freely and trails from its first stage. The
     external-reference pose initialization of a supplied-volume run draws its own
     sample (the stage's `sticky_sampling` is removed from its command line).
-    Under `nsample_ramp=yes` (2026-11-16, off by default, single state only; a
-    run without a 2D solution is refused) the sticky stages draw
-    `nsample*stage/5` particles (`solve3D_stage_nsample`) and the free stages
-    `nsample`, whose default becomes 25,000 (`NSAMPLE_RAMP_DEFAULT`): 5,000,
-    10,000, 15,000 and 20,000 in stages 1-4, 25,000 from stage 5. Every sticky
-    stage then redraws best first at its own size (`sticky_sampling=best` at each
-    stage's first iteration instead of `keep`); the ranking by the 2D objective
-    is the same at every stage and the square-root quotas grow with the target,
-    so each stage's subset contains the previous one and the new particles are
-    re-aligned every iteration for the rest of the stage. The stage's
-    `update_frac` is the run's fraction scaled to its sample, and a stage-4 entry
-    draws its starting sample at the stage-4 size. The full-sampling switch stays
-    on `nsample` for the whole run: a run that samples every particle has no
-    ramp. Each stage logs `STAGE n DRAWS m PARTICLES PER ITERATION`.
     Multi-state runs hold no sticky subset, draw with no score in every stage and
     trail from stage 8 (`TRAILREC_STAGE_MULTI`)
   - multi-state particle runs use direct `shc` in stages 1-2, `prob` in
@@ -147,7 +132,6 @@ Stage policy includes:
 - staged translation limits
 - staged ML regularization
 - staged fractional update with a fixed `nsample` target while `nsample/active_particles <= 0.9`
-  (under `nsample_ramp=yes` the sticky stages draw a share of it growing with the stage)
 - fractional-update selection over the sampling units of `balance`: `class` by
   default (one unit per selected class), `cavg` (groups of similar class
   averages, then their classes) or `none` (global lowest `updatecnt` tiers)

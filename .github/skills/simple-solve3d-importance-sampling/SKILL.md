@@ -56,13 +56,7 @@ Then answer the user request in this order:
   as persistent history across rounds, cleared at a run's first iteration and,
   in solve3D, at the sticky subset's release (below).
 - `solve3D` takes `nsample` only: `nsample_start`/`nsample_stop` are refused
-  and the update fraction does not change between stages, except under the
-  switch `nsample_ramp=yes` (single state, off by default): the sticky stages
-  draw `nsample*stage/5` (`solve3D_stage_nsample`, emitted as the stage's
-  `nsample` and its scaled `update_frac`), each redrawing `best` at its own
-  size so it contains the previous stage's subset, and the free stages draw
-  `nsample`, 25,000 by default then (`NSAMPLE_RAMP_DEFAULT`). The full-sampling
-  switch stays on `nsample` for the whole run.
+  and the update fraction does not change between stages.
 - There is no docked solve3D split, sticky class sampling or `sampled_only`
   restriction; multi-state solve3D is independent from the start. Sticky
   sampling (`sticky_sampling`, one particle subset refined over several

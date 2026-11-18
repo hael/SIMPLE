@@ -1157,14 +1157,8 @@ contains
             update_frac = 1.0
             nptcls_eff  = spproj%count_state_gt_zero()
             if( nptcls_eff < 1 ) THROW_HARD('No active particles selected in ptcl2D for solve3D')
-            if( .not. cline%defined('nsample') ) params%nsample = solve3D_nsample_default(params)
+            if( .not. cline%defined('nsample') ) params%nsample = solve3D_nsample_default()
             if( params%nsample < 1 ) THROW_HARD('nsample must be >= 1 for solve3D sampled update')
-            if( params%l_nsample_ramp )then
-                ! the ramped sticky stages redraw best first at every stage, which keeps the previous subset only
-                ! when the draw ranks by the 2D objective
-                if( params%nstates > 1 ) THROW_HARD('nsample_ramp=yes is for one state; remove it or nstates')
-                if( l_no2D ) THROW_HARD('nsample_ramp=yes needs a 2D solution: the sticky draws rank by the 2D objective')
-            endif
             sampled_active_frac   = real(params%nsample) / real(nptcls_eff)
             l_force_full_sampling = sampled_active_frac > solve3D_full_sample_switch_frac()
             if( l_force_full_sampling )then
@@ -1172,11 +1166,7 @@ contains
                 write(logfhandle,'(A,F8.4,A,F8.4,A)') &
                     &'>>> SOLVE3D NSAMPLE/ACTIVE FRACTION ', sampled_active_frac, ' > ', &
                     &solve3D_full_sample_switch_frac(), ' -> FORCING FULL ACTIVE SAMPLING (NO FRACTIONAL OR TRAILING UPDATE)'
-                if( params%l_nsample_ramp ) write(logfhandle,'(A)') '>>> SOLVE3D NSAMPLE RAMP NOT APPLIED: FULL SAMPLING'
             else
-                if( params%l_nsample_ramp ) write(logfhandle,'(A,I0,A)') &
-                    &'>>> SOLVE3D NSAMPLE RAMP: THE STICKY STAGES DRAW NSAMPLE*STAGE/5, THE FREE STAGES ', params%nsample, &
-                    &' PARTICLES PER ITERATION'
                 update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
                 update_frac = min(solve3D_update_frac_max(), update_frac) ! keep fractional update on below the switch threshold
                 if( .not. l_no2D )then
@@ -1305,10 +1295,7 @@ contains
                 ! no class units: the global lowest update-count tiers, as the stages sample under balance=none
                 call spproj%os_ptcl3D%sample4update_cnt([1,noris], update_frac, nptcls2update, pinds, .true.)
             else
-                ! the entry stage's sample size (its ramped share under nsample_ramp)
-                call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac * &
-                    &real(solve3D_stage_nsample(params, start_stage, start_stage, .false., l_addon)) / real(params%nsample), &
-                    &nptcls2update, pinds, .true.)
+                call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac, nptcls2update, pinds, .true.)
             endif
             call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
             deallocate(pinds)                             ! these are not needed
@@ -1369,10 +1356,6 @@ contains
             if( cline_refine3D%get_iarg('box_crop') < params%box )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',&
                     &cline_refine3D%get_iarg('box_crop')
-            endif
-            if( params%l_nsample_ramp .and. cline_refine3D%defined('nsample') )then
-                write(logfhandle,'(A,I3,A,I0,A)')'>>> STAGE ', istage, ' DRAWS ', cline_refine3D%get_iarg('nsample'), &
-                    &' PARTICLES PER ITERATION'
             endif
             ! the first freely sampled stage after the sticky stages restarts the update history
             call release_sticky_subset(spproj, params%projfile, l_sticky_prev)

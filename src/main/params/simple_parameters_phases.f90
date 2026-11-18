@@ -507,7 +507,6 @@ contains
             &.or. trim(self%sticky_sampling).eq.'best'
         self%l_sticky_keep           = trim(self%sticky_sampling).eq.'keep'
         self%l_sticky_best           = trim(self%sticky_sampling).eq.'best'
-        self%l_nsample_ramp          = trim(self%nsample_ramp).eq.'yes'
         self%l_scan_exit             = trim(self%scan_exit).eq.'yes'
     end subroutine derive_sampling_settings
 

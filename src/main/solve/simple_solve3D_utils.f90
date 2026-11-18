@@ -148,17 +148,9 @@ interface
         logical :: l_trails
     end function solve3D_stage_trails
 
-    module function solve3D_nsample_default( params ) result( nsample )
-        class(parameters), intent(in) :: params
+    module function solve3D_nsample_default() result(nsample)
         integer :: nsample
     end function solve3D_nsample_default
-
-    module function solve3D_stage_nsample( params, istage, first_stage, l_cavgs, l_addon ) result( nsample )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: istage, first_stage
-        logical,           intent(in) :: l_cavgs, l_addon
-        integer :: nsample
-    end function solve3D_stage_nsample
 
     module function solve3D_remaining_niters(first_stage, last_stage) result(niters)
         integer, intent(in) :: first_stage, last_stage
@@ -284,7 +276,6 @@ contains
         class(cmdline), intent(inout) :: child_cline
         call child_cline%delete('balance')
         call child_cline%delete('nclust')
-        call child_cline%delete('nsample_ramp')
     end subroutine strip_sampling_keys
 
     ! Remove the PCG backend key together with every PCG-only control. Any
