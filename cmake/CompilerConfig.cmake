@@ -154,6 +154,16 @@ if(APPLE)
     string(APPEND CMAKE_EXE_LINKER_FLAGS " -Wl,-headerpad_max_install_names")
 endif()
 
+# Linux: link the compiler's own Fortran runtime into the executables. A
+# toolset compiler (e.g. gcc-toolset-15 on Oracle/RHEL 8) otherwise loads the
+# system's older libgfortran.so.5 (GCC 8.5 there), whose internal WRITE frees
+# its unit number without the unit lock: internal I/O on several OpenMP threads
+# at once corrupted the heap (2026-11-17). System libraries built against the
+# shared runtime (ARPACK, OpenBLAS) keep loading it for their own calls.
+if(NOT APPLE)
+    string(APPEND CMAKE_EXE_LINKER_FLAGS " -static-libgfortran")
+endif()
+
 # ------------------------------------------------------------------------------
 # RPATH for installed shared libraries
 # ------------------------------------------------------------------------------
