@@ -41,8 +41,7 @@ integer,  parameter :: DEFAULT_MAXITS             = 40
 real(dp), parameter :: DEFAULT_ROTATION_SCALE     = 0.1_dp
 real(dp), parameter :: DEFAULT_SHIFT_STEP_NATIVE  = 1._dp  !< native pixels per proposal
 ! bench histogram of actual over predicted reduction at accepted steps (>= 0.25 by the acceptance rule)
-integer,  parameter :: NRATIO_BINS = 5
-real(dp), parameter :: RATIO_EDGES(NRATIO_BINS-1) = [0.75_dp, 1.25_dp, 1.75_dp, 2.5_dp]
+integer,  parameter :: NRATIO_BINS = 5   ! bin edges: RATIO_EDGES in the _system submodule
 character(len=*), parameter :: RATIO_LABELS(NRATIO_BINS) = [character(len=9) :: '0.25-0.75', '0.75-1.25', &
     &'1.25-1.75', '1.75-2.5', '>= 2.5']
 

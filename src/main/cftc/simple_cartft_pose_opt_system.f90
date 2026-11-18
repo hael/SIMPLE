@@ -2,6 +2,9 @@
 submodule (simple_cartft_pose_opt) simple_cartft_pose_opt_system
 implicit none
 
+! lower edges of RATIO_LABELS' bins 2..NRATIO_BINS
+real(dp), parameter :: RATIO_EDGES(NRATIO_BINS-1) = [0.75_dp, 1.25_dp, 1.75_dp, 2.5_dp]
+
 contains
 
     !> Combine enabled priors once, in physical pose coordinates and normalized loss units.
