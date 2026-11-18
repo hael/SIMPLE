@@ -126,8 +126,36 @@ contains
         call assert_false(file_exists(root//'/dose_series.txt'), 'fraction metadata: preparation alone never publishes a manifest')
         call manifest%kill
         call project%kill
+        call test_remove_fraction_stacks()
         call leave_fixture(cwd, root, nfail0)
     end subroutine run_all_refine_motion_model_tests
+
+    !> every interval's stack folder goes, the overlapping last one included; the reconstructions and an
+    !! unrelated frames_* folder stay
+    subroutine test_remove_fraction_stacks()
+        type(string) :: dirs(3)
+        integer :: ind
+        logical :: l_gone
+        write(*,'(A)') 'test_remove_fraction_stacks'
+        ! fromf=1, tof=8, stepf=3: the last window is anchored at tof and overlaps its predecessor
+        dirs = [string('frames_1-3'), string('frames_4-6'), string('frames_6-8')]
+        do ind = 1, 3
+            call simple_mkdir(dirs(ind))
+            call simple_touch(dirs(ind)//'/particles.mrcs')
+        enddo
+        call simple_mkdir(string('rec_frames_01-03'))
+        call simple_touch(string('rec_frames_01-03/recvol_state01_even_unfil.mrc'))
+        call simple_mkdir(string('frames_9-10'))
+        call remove_fraction_stacks(1, 8, 3)
+        l_gone = .true.
+        do ind = 1, 3
+            if( dir_exists(dirs(ind)) ) l_gone = .false.
+        enddo
+        call assert_true(l_gone, 'stack removal: every interval stack folder removed')
+        call assert_true(file_exists(string('rec_frames_01-03/recvol_state01_even_unfil.mrc')), &
+            &'stack removal: the reconstructions stay')
+        call assert_true(dir_exists(string('frames_9-10')), 'stack removal: a folder of no interval stays')
+    end subroutine test_remove_fraction_stacks
 
     !> Verify serialized particle counts and the independently computed fingerprint of this fixture.
     subroutine check_manifest_partition(manifest, root)

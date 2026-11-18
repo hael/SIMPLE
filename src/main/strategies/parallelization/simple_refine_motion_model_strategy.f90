@@ -17,7 +17,7 @@ public :: refine_motion_model_strategy
 public :: refine_motion_model_inmem_strategy
 public :: refine_motion_model_distr_strategy
 public :: create_refine_motion_model_strategy
-public :: prepare_fraction_dose_manifest, reconstruct_motion_fractions
+public :: prepare_fraction_dose_manifest, reconstruct_motion_fractions, remove_fraction_stacks
 public :: run_all_refine_motion_model_tests, run_all_refine_motion_model_lib_tests
 private
 #include "simple_local_flags.inc"
@@ -160,6 +160,18 @@ contains
         type(string)        :: dirname
         dirname = 'frames_'//int2str(fromf)//'-'//int2str(tof)
     end function fraction_output_dir
+
+    !> remove every interval's folder of extracted stacks once its maps or class averages are made; the copies of
+    !! the interval projects in rec_frames_* and cavgs_frames_* then point at stacks that no longer exist
+    subroutine remove_fraction_stacks( fromf, tof, stepf )
+        integer, intent(in) :: fromf, tof, stepf
+        integer :: ind, ffromto(2)
+        write(logfhandle,'(A)') '>>> REMOVING THE INTERVAL PARTICLE STACKS'
+        do ind = 1, count_fractioned_stacks(fromf, tof, stepf)
+            ffromto = fraction_frame_range(ind, fromf, tof, stepf)
+            call simple_rmdir(fraction_output_dir(ffromto(1), ffromto(2)))
+        enddo
+    end subroutine remove_fraction_stacks
 
     ! ====================================================================
     ! WORKER / SHARED-MEMORY STRATEGY
@@ -555,6 +567,7 @@ contains
                 call reconstruct_motion_fractions(params, cline, frame_projects, frame_ranges, &
                     &self%spproj%os_ptcl3D%get_n('state'))
             endif
+            call remove_fraction_stacks(params%fromf, params%tof, params%stepf)
         else
             THROW_WARN('No extracted particles available for interval reconstruction')
         endif

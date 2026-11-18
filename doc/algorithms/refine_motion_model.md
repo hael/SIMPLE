@@ -151,8 +151,10 @@ particle stack per movie, `ptcls_from_<movie>_<start>_<end>`, and a project
 named after the input project. That project points to the block's stacks,
 carries the recentered box coordinates and 2D/3D shifts, and keeps the other
 segments of the input project. Movies with no retained particles are left out.
-These folders, stacks and assembled projects are retained after reconstruction
-so their particle data remain available.
+Once every interval's maps (`ptcl3D`) or class averages (`ptcl2D`) are made,
+the distributed master removes these folders with their stacks and projects
+(`remove_fraction_stacks`); a failed run keeps them. The copies in
+`rec_frames_*` or `cavgs_frames_*` then point at stacks that no longer exist.
 
 ### Reconstruction after extraction
 
@@ -188,8 +190,9 @@ exact `recvol_stateNN_part...` and `rho_recvol_stateNN_part...` even/odd files,
 after validating every populated state's map/FSC and writing output registration.
 Shared filename helpers identify the targets; canonical directory and file
 checks precede deletion. Failed reconstructions retain their partials. Fraction
-stacks and projects in `frames_a-b/` are always retained. Final maps, half maps,
-FSCs and the copied reconstruction project also remain, with usable stack paths.
+stacks and projects in `frames_a-b/` are removed after the last interval (see
+Outputs). Final maps, half maps, FSCs and the copied reconstruction project
+remain.
 
 The master establishes missing even/odd labels once before extraction jobs
 start. Interval reconstruction verifies that selected particle rows and
@@ -227,7 +230,7 @@ or incompatible dose metadata prevents manifest publication, with a reason in
 the log, while leaving successful reconstructions and FSC outputs available.
 The consumer `dose_filter3D` applies its own statistical mask, prunes the
 predecessor of an overlapping final interval and requires at least two disjoint
-windows. Fitting remains a separate application.
+windows. Fitting is the separate application [`dose_filter3D`](dose_filter3D.md).
 
 ## Raw fraction FSC diagnostics
 
@@ -330,6 +333,6 @@ when requested, is performed by that existing workflow.
 The interval caller always sets `refs=fraction_cavgs_aa-bb.mrc`, overriding
 only the parent's output filename. The interval directory therefore contains
 that merged stack, its `_even` and `_odd` stacks, class metadata and class
-FRCs. Fraction stacks remain available. This branch does not produce volume
+FRCs. The fraction stacks are removed after the last interval. This branch does not produce volume
 FSC diagnostics or a volume dose-series manifest; the default `ptcl3D`
 reconstruction path keeps its existing behavior.

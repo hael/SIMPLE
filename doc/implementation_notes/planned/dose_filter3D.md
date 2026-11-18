@@ -811,7 +811,8 @@ handle any existing manifest explicitly so it cannot describe replaced or incomp
 The current application policy forbids dose-compatibility gates rejecting raw maps/FSC. Therefore
 missing or heterogeneous dose/voltage, an unavailable state-1 half pair, an unsupported state-1 selection
 change, or fewer than two disjoint usable windows prevents this new manifest from being published and
-prints an explicit reason. Keep valid reconstructed maps, raw FSC outputs and retained stacks. Do not
+prints an explicit reason. Keep valid reconstructed maps and raw FSC outputs; the interval stacks are
+removed after the last reconstruction either way. Do not
 invent dose, silently remove contributing particles or publish a subset as though the run completed.
 Existing fatal reconstruction/partition corruption checks retain their current behavior. Manifest I/O
 failures must be reported explicitly and must not leave a consumable final file.
