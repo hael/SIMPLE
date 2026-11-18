@@ -30,6 +30,7 @@ integer,          parameter :: STICKY_SAMPL_STAGE = 1                ! the only 
 integer,          parameter :: FRAC_UPDATE_STAGE  = 2                ! fractional class-average carry-over starts here
 integer,          parameter :: FIRST_SHIFT_STAGE  = 2                ! the first stage with shifts: the dense table under the key, the box's mask for an automatic run's mask estimate
 integer,          parameter :: GOLD_STD_STAGE     = 2                ! half-specific references from the first regularized stage
+integer,          parameter :: SIGMA2_FLAT_LAST_STAGE = 3            ! sigma2_anneal=flat reaches the smoothed bootstrap at this stage's end
 integer,          parameter :: NSAMPLE_DEFAULT_2D = 200000
 integer,          parameter :: COVERAGE_NITS_CAP  = 10
 character(len=3), parameter :: EO_STAGE           = 'yes'
@@ -103,21 +104,24 @@ contains
     end subroutine set_cline_refine2D_stage
 
     !> The scoring-noise log-blend weights of a stage: the penultimate ramps 0 to 0.5, the last 0.5 to 1; earlier
-    !! stages hold the anchor (0), or under sigma2_anneal=flat ramp in equal steps from the white ceiling (-1) to it
+    !! stages hold the anchor (0), except that under sigma2_anneal=flat the stages up to SIGMA2_FLAT_LAST_STAGE
+    !! ramp in equal steps from the white ceiling (-1) to it
     subroutine solve2D_sigma2_stage_weights( params, nstages, istage, first, last )
         class(parameters), intent(in)  :: params
         integer,           intent(in)  :: nstages, istage
         real,              intent(out) :: first, last
+        integer :: nflat
         first = 0.
         last  = 0.
+        nflat = min(SIGMA2_FLAT_LAST_STAGE, nstages-2)
         if( istage == nstages-1 )then
             last  = 0.5
         else if( istage == nstages )then
             first = 0.5
             last  = 1.
-        else if( trim(params%sigma2_anneal) == 'flat' )then
-            first = -1. + real(istage-1) / real(nstages-2)
-            last  = -1. + real(istage)   / real(nstages-2)
+        else if( trim(params%sigma2_anneal) == 'flat' .and. istage <= nflat )then
+            first = -1. + real(istage-1) / real(nflat)
+            last  = -1. + real(istage)   / real(nflat)
         endif
     end subroutine solve2D_sigma2_stage_weights
 

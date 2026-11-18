@@ -55,9 +55,9 @@ contains
                 params%sigma2_anneal='flat'
                 call set_cline_refine2D_stage(child,cline,params,stages,20,stage)
                 params%sigma2_anneal='yes'
-                if( stage<=nstages-2 )then
-                    first=-1.+real(stage-1)/real(nstages-2)
-                    last=-1.+real(stage)/real(nstages-2)
+                if( stage<=min(SIGMA2_FLAT_LAST_STAGE,nstages-2) )then
+                    first=-1.+real(stage-1)/real(min(SIGMA2_FLAT_LAST_STAGE,nstages-2))
+                    last=-1.+real(stage)/real(min(SIGMA2_FLAT_LAST_STAGE,nstages-2))
                 endif
                 call assert_real(first,child%get_rarg('sigma2_weight_start'),TOL,'stage starts at its assigned sigma weight')
                 call assert_real(last,child%get_rarg('sigma2_weight_end'),TOL,'stage ends at its assigned sigma weight')
@@ -80,11 +80,16 @@ contains
             params%sigma2_anneal='flat'
             call set_cline_refine2D_stage(child,cline,params,stages,20,1)
             call assert_real(-1.,child%get_rarg('sigma2_weight_start'),TOL,'flat schedule starts white')
-            call set_cline_refine2D_stage(child,cline,params,stages,20,nstages-2)
-            call assert_real(0.,child%get_rarg('sigma2_weight_end'),TOL,'flat ramp reaches the anchor before the tail')
+            call set_cline_refine2D_stage(child,cline,params,stages,20,SIGMA2_FLAT_LAST_STAGE)
+            call assert_real(0.,child%get_rarg('sigma2_weight_end'),TOL,'flat ramp reaches the anchor at its last stage')
+            if( nstages-2 > SIGMA2_FLAT_LAST_STAGE )then
+                call set_cline_refine2D_stage(child,cline,params,stages,20,nstages-2)
+                call assert_real(0.,child%get_rarg('sigma2_weight_start'),TOL,'stages after the flat ramp hold the anchor')
+                call assert_real(0.,child%get_rarg('sigma2_weight_end'),TOL,'stages after the flat ramp hold the anchor')
+            endif
             call set_cline_refine2D_seed_pass(child,params,stages,10,'seed.mrc')
-            call assert_real(-1.+real(PROBREFINE_STAGE-1)/real(nstages-2),child%get_rarg('sigma2_weight_end'),TOL, &
-                &'flat seed pass holds the start of the stage it precedes')
+            call assert_real(-1.+real(PROBREFINE_STAGE-1)/real(min(SIGMA2_FLAT_LAST_STAGE,nstages-2)), &
+                &child%get_rarg('sigma2_weight_end'),TOL,'flat seed pass holds the start of the stage it precedes')
             params%sigma2_anneal='yes'
             deallocate(stages)
         enddo

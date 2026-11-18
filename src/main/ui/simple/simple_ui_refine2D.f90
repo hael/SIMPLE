@@ -24,7 +24,7 @@ contains
             &'yes starts from a seven-shell quadratic Savitzky-Golay bootstrap in log variance and releases it over '//&
             &'the last two solve2D stages (0 to 0.5, then 0.5 to 1 measured weight); flat starts earlier, from white '//&
             &'noise at the bootstrap''s largest variance in the matching band, and reaches the bootstrap in equal '//&
-            &'steps over the stages before those two. Standalone refine2D uses 0 (flat: the white start) to 1 over '//&
+            &'steps over solve2D stages 1-3. Standalone refine2D uses 0 (flat: the white start) to 1 over '//&
             &'its iteration budget. Reconstruction retains measured spectra. Requires Euclidean scoring and a '//&
             &'fresh bootstrap or its saved companion(no|yes|flat){'//default//'}', '', &
             &.false., default, group='search', choices=ui_choices([character(len=4) :: 'no', 'yes', 'flat']), &

@@ -163,10 +163,11 @@ greedy pass uses measured sigmas; a seed pass retains the bootstrap.
 `sigma2_anneal=flat` (experimental, 2026-11-18) starts earlier, from white
 noise: the weight extends to [-1, 0), where `exp(-w log flat + (1+w) log
 anchor)` blends each half's flat ceiling (the anchor's largest variance over
-the pass's matching band, on every shell) into the anchor. The stages before
-the last two ramp from -1 to 0 in equal steps (stage i of n from
--1+(i-1)/(n-2) to -1+i/(n-2)); the last two stages are as above, and a seed
-pass holds the start of the stage it precedes. Standalone refine2D ramps from
+the pass's matching band, on every shell) into the anchor. Stages 1-3
+(`SIGMA2_FLAT_LAST_STAGE`, fewer when only the last two stages follow) ramp
+from -1 to 0 in equal steps; the stages up to the last two then hold the
+anchor, the last two are as above, and a seed pass holds the start of the
+stage it precedes. Standalone refine2D ramps from
 -1 to 1. White scoring is unwhitened L2: it weights low frequencies most and
 gives the hottest posteriors.
 Reconstruction and residual updates always use measured spectra. The beta
