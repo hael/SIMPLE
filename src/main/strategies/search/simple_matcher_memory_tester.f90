@@ -15,13 +15,17 @@ contains
         class(parameters), allocatable :: params
         integer(int64) :: fixed, slot_bytes, larger_fixed, larger_slot
         write(*,'(A)') '**** running matcher memory tests ****'
-        call assert_int(7, matcher_batch_capacity(1000000,1000,3*GIB+7*SLOT+17,3*GIB,SLOT), &
+        call assert_int(7, matcher_batch_capacity(1000000,1000,4,3*GIB+7*SLOT+17,3*GIB,SLOT), &
             &'capacity uses 64-bit byte counts and discards a partial slot')
-        call assert_int(5, matcher_batch_capacity(5,1000,10*GIB,0_int64,SLOT), 'capacity is bounded by the sample')
-        call assert_int(12, matcher_batch_capacity(1000,12,10*GIB,0_int64,SLOT), 'capacity preserves the preferred batch')
-        call assert_int(1, matcher_batch_capacity(0,12,10*GIB,0_int64,SLOT), 'an empty part keeps one calculator slot')
-        call assert_int(1, matcher_batch_capacity(1000,12,GIB,2*GIB,SLOT), 'fixed storage over budget leaves one slot')
-        call assert_int(12, matcher_batch_capacity(1000,12,0_int64,GIB,SLOT), 'unknown memory keeps the preferred batch')
+        call assert_int(5, matcher_batch_capacity(5,1000,8,10*GIB,0_int64,SLOT), 'capacity is bounded by the sample')
+        call assert_int(12, matcher_batch_capacity(1000,12,8,10*GIB,0_int64,SLOT), 'capacity preserves the preferred batch')
+        call assert_int(1, matcher_batch_capacity(0,12,8,10*GIB,0_int64,SLOT), 'an empty part keeps one calculator slot')
+        call assert_int(8, matcher_batch_capacity(1000,12,8,3*GIB+3*SLOT,3*GIB,SLOT), &
+            &'a tight budget keeps one particle per thread')
+        call assert_int(8, matcher_batch_capacity(1000,12,8,GIB,2*GIB,SLOT), 'fixed storage over budget keeps one particle per thread')
+        call assert_int(5, matcher_batch_capacity(5,12,8,GIB,2*GIB,SLOT), 'the thread floor is bounded by the sample')
+        call assert_int(4, matcher_batch_capacity(1000,4,8,GIB,2*GIB,SLOT), 'the thread floor is bounded by the preferred batch')
+        call assert_int(12, matcher_batch_capacity(1000,12,8,0_int64,GIB,SLOT), 'unknown memory keeps the preferred batch')
         allocate(params)
         params%box = 128
         params%box_crop = 64

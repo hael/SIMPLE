@@ -43,15 +43,22 @@ contains
     end subroutine matcher_memory_terms
 
     !> Keep the preferred capacity when it fits; an empty part still needs one calculator slot.
-    !! A missing budget leaves capacity unchanged; fixed storage over budget leaves one slot and no cache.
-    pure integer function matcher_batch_capacity( nptcls, preferred, budget, fixed_bytes, particle_bytes ) result(capacity)
-        integer, intent(in) :: nptcls, preferred
+    !! A missing budget leaves capacity unchanged. A tight budget never reduces it below one particle
+    !! per thread (within the sample and the preferred batch): a batch's parallel loops give each
+    !! thread a particle, and the fixed storage does not scale with the batch, so a smaller batch
+    !! saves a few slots of memory and idles the rest of the team. Fixed storage over budget leaves
+    !! that floor and no cache.
+    pure integer function matcher_batch_capacity( nptcls, preferred, nthreads, budget, fixed_bytes, particle_bytes ) &
+        &result(capacity)
+        integer,        intent(in) :: nptcls, preferred, nthreads
         integer(int64), intent(in) :: budget, fixed_bytes, particle_bytes
         integer(int64) :: available
+        integer        :: team_floor
         capacity = max(1,min(nptcls,preferred))
         if( budget <= 0_int64 .or. particle_bytes <= 0_int64 ) return
-        available = max(0_int64,budget-max(0_int64,fixed_bytes))
-        capacity = int(max(1_int64,min(int(capacity,int64),available/particle_bytes)))
+        team_floor = max(1,min(capacity,nthreads))
+        available  = max(0_int64,budget-max(0_int64,fixed_bytes))
+        capacity   = int(max(int(team_floor,int64),min(int(capacity,int64),available/particle_bytes)))
     end function matcher_batch_capacity
 
 end module simple_matcher_memory

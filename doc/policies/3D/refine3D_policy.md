@@ -1027,11 +1027,16 @@ insertion-pose files and their deleter were retired on 2026-11-05 with the
 Before allocating a probabilistic matcher's particle slots, `simple_matcher_memory`
 estimates dominant fixed and per-particle storage from geometry, the interpolation
 and scoring bands, references, team size and candidate staging. Its byte counts
-are 64-bit. The preferred thread-based batch capacity is reduced when necessary;
-the retained 3D observation buffer receives only the remaining alignment budget.
+are 64-bit. The preferred thread-based batch capacity is reduced when necessary,
+but never below one particle per thread (within the part's sample and the
+preferred batch): the batch's parallel loops give each thread a particle, and
+the fixed storage dominates, so a one-particle batch saves a few slots and runs
+the fill and search on one thread (PorF refine3D_local, 2026-11-17: fixed storage
+1.4-1.5x the budget, fill load balance 0.10-0.12 at eight threads).
+The retained 3D observation buffer receives only the remaining alignment budget.
 These are planning estimates, not a bound on library plans or total process RSS.
 Fixed storage that already exceeds the budget retains the existing warning and
-the minimum one-particle batch, with no retained observation buffer.
+the one-particle-per-thread batch, with no retained observation buffer.
 
 The shift search of the tables keeps a double-precision copy of the
 reference for one minimisation (`load_ref_aln_8`, which records the

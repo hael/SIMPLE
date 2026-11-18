@@ -372,7 +372,8 @@ contains
                     call matcher_memory_terms(p_ptr, p_ptr%ncls, nptcls2update, nthreads, &
                         &merge(p_ptr%box_crop,p_ptr%box,ctrl%l_crop_sums), fixed_bytes, particle_bytes)
                     preferred   = batchsz_max
-                    batchsz_max = matcher_batch_capacity(nptcls2update, preferred, pipeline_budget, fixed_bytes, particle_bytes)
+                    batchsz_max = matcher_batch_capacity(nptcls2update, preferred, nthreads, pipeline_budget, &
+                        &fixed_bytes, particle_bytes)
                     if( batchsz_max < preferred ) write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
                         &'>>> MEMORY BUDGET: alignment batch reduced from ', preferred, ' to ', batchsz_max, &
                         &' particles (', pipeline_budget, ' bytes); refine2D_exec'

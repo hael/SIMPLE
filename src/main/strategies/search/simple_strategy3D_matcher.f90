@@ -533,7 +533,7 @@ contains
                 !$ nthreads = omp_get_max_threads()
                 call matcher_memory_terms(p_ptr, nrefs, nptcls, nthreads, 0, fixed_bytes, particle_bytes)
                 preferred   = batchsz_max
-                batchsz_max = matcher_batch_capacity(nptcls, preferred, pipeline_budget, fixed_bytes, particle_bytes)
+                batchsz_max = matcher_batch_capacity(nptcls, preferred, nthreads, pipeline_budget, fixed_bytes, particle_bytes)
                 if( batchsz_max < preferred ) write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
                     &'>>> MEMORY BUDGET: alignment batch reduced from ', preferred, ' to ', batchsz_max, &
                     &' particles (', pipeline_budget, ' bytes); refine3D_exec'
