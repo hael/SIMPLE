@@ -48,11 +48,12 @@ contains
         ! PROGRAM SPECIFICATION
         call validate_pose_student%new(&
         &'validate_pose_student',&                                                               ! name
-        &'Validate the pose student: solve3D teacher, training, prediction',&                    ! summary
+        &'Validate the pose student: solve3D teacher, training, prediction and alignment',&      ! summary
         &'is a developer workflow that draws a class-balanced greedy sample of nsample particles from the 2D '//&
-        &'solution, runs solve3D on every sampled particle in every iteration, trains the pose student on the '//&
-        &'resulting poses and map, predicts the directions of every selected particle, and reports the '//&
-        &'agreement statistics and the timings of the phases',&                                  ! help
+        &'solution, runs solve3D on every sampled particle in every iteration (or takes the frozen teacher of '//&
+        &'dir_refine), trains the pose student on the resulting poses and map, predicts the other selected '//&
+        &'particles at their 2D shifts and aligns them over the predicted cone, and reports their agreement '//&
+        &'with the physical posterior''s best pose, the maps and the timings of the phases',&   ! help
         &'simple_exec',&                                                                         ! executable
         &.true., visibility=UI_VIS_DEVELOPER, display_name='Validate Pose Student')              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -62,6 +63,10 @@ contains
         &'# particles', .true., 0., group='search', visibility=UI_VIS_STANDARD)
         call add_solve3D_base_inputs(validate_pose_student, l_stream_compatible=.false., l_include_nsample=.false., &
             &l_include_pcg=.true.)
+        call validate_pose_student%add_input(UI_FILE, 'dir_refine', 'file', 'Frozen teacher', &
+        &'A solve3D directory of an earlier validation on the same sample (its training_set.simple and map), used '//&
+        &'instead of a new solve3D; its pose_reference.txt, when present, replaces the reference pass', &
+        &'e.g. 1_validate_pose_student/1_solve3D', .false., '', group='data', visibility=UI_VIS_DEVELOPER)
         ! add to ui_hash
         call add_ui_program('validate_pose_student', validate_pose_student, prgtab, UI_CATEGORY)
     end subroutine new_validate_pose_student

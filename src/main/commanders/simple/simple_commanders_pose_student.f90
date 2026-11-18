@@ -2,10 +2,14 @@
 module simple_commanders_pose_student
 use simple_commander_base,        only: commander_base
 use simple_cmdline,               only: cmdline
-use simple_strategy_pose_student, only: run_learn_pose_student, run_predict_poses
+use simple_error,                 only: simple_exception
+use simple_strategy_pose_student, only: run_learn_pose_student, run_predict_poses, run_pose_posterior_mode
+use simple_strategy_student_common, only: fname_base
 use simple_defs_hhcnn,            only: NSPACE_STUDENT, KMAX_STUDENT, STUDENT_TRS, STUDENT_SHIFT_SIGMA, STUDENT_LP_VALIDATE, &
-    &POSE_AGREE_DEG, POSE_TWO_STEPS_DEG, STUDENT_TRAIN_PROJ, STUDENT_ALL_PROJ, POSE_STUDENT_MODEL_FNAME, &
-    &POSE_STUDENT_PRED_TABLE, VALIDATE_POSE_STUDENT_REPORT
+    &POSE_AGREE_DEG, POSE_TWO_STEPS_DEG, STUDENT_TRAIN_PROJ, STUDENT_UNSEEN_PROJ, POSE_STUDENT_MODEL_FNAME, &
+    &POSE_STUDENT_PRED_TABLE, POSE_STUDENT_PRED_TIMES, VALIDATE_POSE_STUDENT_REPORT, VALIDATE_POSE_STUDENT_DETAILS, &
+    &POSE_STUDENT_PROB_BETA, POSE_DENSE_SHIFT_SIGMA, POSE_REFERENCE_FNAME, &
+    &POSE_REFERENCE_MODEL_FNAME
 implicit none
 private
 public :: commander_learn_pose_student, commander_predict_poses, commander_validate_pose_student
@@ -44,15 +48,16 @@ contains
         call cline%set('objfun',  'euclid')
         call cline%set('refine',  'prob')
         call cline%set('center',  'no')
+        ! the teacher is the physical posterior a solve3D run ends at: no tempering
+        call cline%set('prob_beta', POSE_STUDENT_PROB_BETA)
         call run_learn_pose_student(cline)
     end subroutine exec_learn_pose_student
 
     !> The student's prediction for the project's selected particles under the model infile: per particle the mode
-    !! direction, the cone holding 99% of the posterior and the confidence, to the text table beside fname
-    !! (simple_private_exec). With nparts it is the master of that many parts; a part is given its range as the master
-    !! hands it (part, nparts, fromp, top, outfile)
+    !! direction, the cone holding 99% of the posterior and the confidence, and, given the map vol1, the alignment over
+    !! the reference pass's disk, to the text tables beside fname (simple_private_exec). With nparts it is the master of
+    !! that many parts; a part is given its range as the master hands it (part, nparts, fromp, top, outfile)
     subroutine exec_predict_poses( self, cline )
-        use simple_error, only: simple_exception
         class(commander_predict_poses), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         if( cline%defined('part') )then
@@ -64,12 +69,41 @@ contains
         if( .not. cline%defined('fname') ) call cline%set('fname', POSE_STUDENT_MODEL_FNAME)
         call cline%set('oritype', 'ptcl3D')
         call cline%set('objfun',  'euclid')
+        ! the map is the model's frame: never re-centred (centring would move every particle's shift by its offset)
+        call cline%set('center',  'no')
+        if( cline%defined('vol1') )then
+            ! the alignment's disk and prior are the reference pass's, at the physical temperature
+            call cline%set('refine', 'prob')
+            if( .not. cline%defined('trs')         ) call cline%set('trs',         STUDENT_TRS)
+            if( .not. cline%defined('shift_sigma') ) call cline%set('shift_sigma', POSE_DENSE_SHIFT_SIGMA)
+            call cline%set('prob_beta', POSE_STUDENT_PROB_BETA)
+        endif
         call run_predict_poses(cline)
     end subroutine exec_predict_poses
 
+    !> The physical posterior's best pose of the project's selected particles against vol1 (the validation's reference),
+    !! the dense table at the student's grid and the band lp, from the stored shifts over the reference pass's disk
+    subroutine pose_posterior_mode( cline )
+        class(cmdline), intent(inout) :: cline
+        call cline%set('mkdir',       'no')
+        call cline%set('nspace',      NSPACE_STUDENT)
+        call cline%set('trs',         STUDENT_TRS)
+        call cline%set('shift_sigma', POSE_DENSE_SHIFT_SIGMA)
+        call cline%set('prob_beta',   POSE_STUDENT_PROB_BETA)
+        call cline%set('fname',       POSE_REFERENCE_MODEL_FNAME)
+        call cline%set('oritype',     'ptcl3D')
+        call cline%set('objfun',      'euclid')
+        call cline%set('refine',      'prob')
+        call cline%set('center',      'no')
+        call run_pose_posterior_mode(cline)
+    end subroutine pose_posterior_mode
+
+
     !> validate_pose_student: a class-balanced greedy sample of nsample particles of the 2D solution, solve3D on all of
-    !! it (full sampling), the student trained on its poses and map, its prediction for every selected particle, the
-    !! statistics and the phase timings (doc/algorithms/pose_student.md). Every step but the training runs over nparts
+    !! it (the teacher; or the frozen teacher of a solve3D directory dir_refine run on the same sample), the student
+    !! trained on its poses and map, the other selected particles predicted at their 2D shifts (centred by the prior
+    !! solve2D, as the training particles) and aligned after the prediction, judged against the physical posterior's best
+    !! pose (doc/algorithms/pose_student.md)
     subroutine exec_validate_pose_student( self, cline )
         use simple_core_module_api
         use simple_parameters,              only: parameters
@@ -80,40 +114,40 @@ contains
         use simple_commanders_rec,          only: commander_rec3D
         class(commander_validate_pose_student), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
-        integer,          parameter :: NPHASES = 7   !< the validation's timed phases
-        integer,          parameter :: NRECS   = 6   !< the reconstructions from the student's poses and the control
-        character(len=*), parameter :: PHASE_NAMES(NPHASES) = [character(len=40) :: &
+        integer,          parameter :: NPHASES = 8   !< the validation's timed phases
+        integer,          parameter :: NRECS   = 2   !< the unseen particles' maps
+        character(len=*), parameter :: PHASE_NAMES(NPHASES) = [character(len=48) :: &
             &'class-balanced training sample', 'solve3D on the training set (teacher)', &
-            &'student training (learn_pose_student)', 'student prediction (predict_poses)', &
-            &'statistics', 'reconstructions from the poses', 'project copies and bookkeeping']
-        character(len=*), parameter :: REC_NAMES(NRECS) = [character(len=32) :: 'unseen_student_2Dshifts', &
-            &'unseen_student_registered', 'training_student_2Dshifts', 'training_student_registered', &
-            &'training_student_teacher_shifts', 'training_teacher']
+            &'student training (learn_pose_student)', 'reference and dense search (the dense table)', &
+            &'prediction and alignment (predict_poses)', 'statistics', 'reconstructions from the poses', &
+            &'project copies and bookkeeping']
+        character(len=*), parameter :: REC_NAMES(NRECS) = [character(len=32) :: 'unseen_aligned_cone', &
+            &'unseen_reference']
         character(len=*), parameter :: REC_HELP(NRECS) = [character(len=80) :: &
-            &'unseen particles: the student''s poses, the 2D shifts (no search)', &
-            &'unseen particles: the student''s poses, the shifts registered at them', &
-            &'training particles: the student''s poses, the 2D shifts (no search)', &
-            &'training particles: the student''s poses, the shifts registered at them', &
-            &'training particles: the student''s poses, the teacher''s shifts', &
-            &'training particles: the teacher''s poses and shifts (the control)']
-        type(commander_solve3D)          :: xsolve3D
+            &'the unseen particles at the alignment over the cone''s poses and shifts (SK)', &
+            &'the unseen particles at the reference''s poses and shifts']
+        type(commander_solve3D)            :: xsolve3D
         type(commander_learn_pose_student) :: xlearn
-        type(commander_predict_poses)    :: xpredict
-        type(commander_rec3D)            :: xrec3D
-        type(parameters)                 :: params
-        type(sp_project)                 :: spproj, res
-        type(cmdline)                    :: cline_entry, cl
-        type(class_sample), allocatable  :: clssmp(:)
-        type(string) :: edir, result_proj, vol_fname, model_abs, table_abs, fname
-        integer, allocatable :: states(:), cls(:)
-        logical, allocatable :: active(:), train(:)
-        real,    allocatable :: euls_teacher(:,:), dshift(:), sh_teacher(:,:), euls_student(:,:), sh_2D(:,:), sh_student(:,:)
-        real    :: rec_res(4,NRECS)   ! per reconstruction: FSC 0.5 and 0.143 against the teacher's map, then of its halves
-        integer :: rec_n(NRECS)
+        type(commander_predict_poses)      :: xpredict
+        type(commander_rec3D)              :: xrec3D
+        type(parameters)                   :: params
+        type(sp_project)                   :: spproj, res, tproj
+        type(cmdline)                      :: cline_entry, cl
+        type(class_sample), allocatable    :: clssmp(:)
+        type(string) :: edir, result_proj, vol_fname, model_abs, table_abs, times_abs, fname, teacher_dir
+        integer, allocatable :: states(:)
+        logical, allocatable :: active(:), train(:), unseen(:), has_ref(:)
+        real,    allocatable :: sh_2D(:,:), euls_ref(:,:), sh_ref(:,:)
+        real,    allocatable :: euls_sk(:,:), sh_sk(:,:)
+        real(dp) :: ref_cost(2)               ! the reference pass per particle (s): the table fill; setup, particles and fill
+        real     :: rec_res(4,NRECS)          ! per map: FSC 0.5 and 0.143 against the teacher's map, then of its halves
+        real     :: times(2)                  ! the prediction's and the alignment's walls (s)
+        integer  :: rec_n(NRECS)
         real(timer_int_kind) :: rt(NPHASES), rt_all
         integer(timer_int_kind) :: t0, t_all
         real    :: smpd_vol
-        integer :: nptcls, navail, ntrain, nactive, i, box_vol, funit, fnr, io_stat, ncls2D
+        integer :: nptcls, navail, ntrain, nactive, nunseen, i, box_vol, funit, dunit, fnr, io_stat, ncls2D
+        logical :: l_frozen
         t_all = tic()
         rt    = 0.
         ! ---- the command line: one state, an execution directory, the training sample's size
@@ -125,9 +159,11 @@ contains
             if( .not. (cline%get_carg('mkdir') == 'yes') ) THROW_HARD('validate_pose_student needs mkdir=yes: its steps live in its execution directory')
         endif
         call cline%set('mkdir', 'yes')
+        l_frozen = cline%defined('dir_refine')
         cline_entry = cline
         call params%new(cline)
         call simple_getcwd(edir)
+        if( l_frozen ) teacher_dir = simple_abspath(params%dir_refine)
         ! ---- the training sample: class-balanced and greedy (best 2D scores first) over the selected classes
         t0 = tic()
         call spproj%read(params%projfile)
@@ -135,11 +171,9 @@ contains
         if( nptcls < 1 ) THROW_HARD('the project has no particles (ptcl2D)')
         if( spproj%os_ptcl3D%get_noris() /= nptcls ) THROW_HARD('ptcl2D and ptcl3D differ in size')
         if( spproj%os_cls2D%get_noris() < 1 ) THROW_HARD('validate_pose_student needs a 2D solution (cls2D)')
-        allocate(active(nptcls), train(nptcls), source=.false.)
-        allocate(cls(nptcls), source=0)
+        allocate(active(nptcls), train(nptcls), unseen(nptcls), has_ref(nptcls), source=.false.)
         do i = 1,nptcls
             active(i) = spproj%os_ptcl2D%get_state(i) > 0
-            cls(i)    = spproj%os_ptcl2D%get_class(i)
         enddo
         nactive = count(active)
         ncls2D  = spproj%os_cls2D%get_noris()
@@ -155,60 +189,74 @@ contains
         allocate(states(nptcls), source=0)
         call spproj%os_ptcl2D%sample_balanced(clssmp, ntrain, .true., states, exact=.true.)
         call deallocate_class_samples(clssmp)
-        train = states > 0
-        ntrain = count(train)
+        train   = states > 0
+        ntrain  = count(train)
+        unseen  = active .and. .not. train
+        nunseen = count(unseen)
+        if( nunseen < 1 ) THROW_HARD('validate_pose_student: no selected particle is left unseen; lower nsample')
         write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> VALIDATE_POSE_STUDENT: ', ntrain, ' training particles of ', nactive, &
             &' selected, from ', ncls2D, ' classes'
         rt(1) = toc(t0)
-        ! ---- the training project: the sample alone selected
-        t0 = tic()
-        do i = 1,nptcls
-            if( train(i) ) cycle
-            call spproj%os_ptcl2D%set_state(i, 0)
-            call spproj%os_ptcl3D%set_state(i, 0)
-        enddo
-        fname = edir%to_char()//'/'//STUDENT_TRAIN_PROJ
-        call spproj%projinfo%set(1, 'projfile', fname%to_char())
-        call spproj%projinfo%set(1, 'projname', 'training_set')
-        call spproj%write(fname)
-        call spproj%kill
-        rt(7) = rt(7) + toc(t0)
-        ! ---- the teacher: solve3D on every training particle in every iteration (nsample at the sample's size forces
-        !      full sampling: no fractional update, no trailing reconstruction)
-        write(logfhandle,'(A)') '>>> VALIDATE_POSE_STUDENT: SOLVE3D ON THE TRAINING SET'
-        t0 = tic()
-        cl = cline_entry
-        call cl%set('prg',      'solve3D')
-        call cl%set('projfile', fname%to_char())
-        call cl%set('nsample',  ntrain)
-        call cl%set('mkdir',    'yes')
-        call xsolve3D%execute(cl)
-        call simple_chdir(edir)
-        result_proj = simple_abspath(cl%get_carg('projfile'))
-        call cl%kill
-        rt(2) = toc(t0)
+        if( l_frozen )then
+            ! ---- the frozen teacher: a solve3D directory's result, trained on this sample
+            t0 = tic()
+            call spproj%kill
+            fname = teacher_dir%to_char()//'/'//STUDENT_TRAIN_PROJ
+            if( .not. file_exists(fname) ) THROW_HARD('dir_refine holds no training_set.simple: not a teacher''s solve3D directory')
+            call tproj%read(fname)
+            if( tproj%os_ptcl3D%get_noris() /= nptcls ) THROW_HARD('the frozen teacher holds another particle count')
+            do i = 1,nptcls
+                if( (tproj%os_ptcl3D%get_state(i) > 0) .neqv. train(i) ) THROW_HARD('the frozen teacher was trained on another sample')
+            enddo
+            call tproj%kill
+            result_proj = simple_abspath(fname)
+            write(logfhandle,'(A,A)') '>>> VALIDATE_POSE_STUDENT: THE FROZEN TEACHER ', result_proj%to_char()
+            rt(8) = rt(8) + toc(t0)
+        else
+            ! ---- the training project: the sample alone selected
+            t0 = tic()
+            do i = 1,nptcls
+                if( train(i) ) cycle
+                call spproj%os_ptcl2D%set_state(i, 0)
+                call spproj%os_ptcl3D%set_state(i, 0)
+            enddo
+            fname = edir%to_char()//'/'//STUDENT_TRAIN_PROJ
+            call spproj%projinfo%set(1, 'projfile', fname%to_char())
+            call spproj%projinfo%set(1, 'projname', 'training_set')
+            call spproj%write(fname)
+            call spproj%kill
+            rt(8) = rt(8) + toc(t0)
+            ! ---- the teacher: solve3D on every training particle in every iteration (nsample at the sample's size forces
+            !      full sampling: no fractional update, no trailing reconstruction)
+            write(logfhandle,'(A)') '>>> VALIDATE_POSE_STUDENT: SOLVE3D ON THE TRAINING SET'
+            t0 = tic()
+            cl = cline_entry
+            call cl%set('prg',      'solve3D')
+            call cl%set('projfile', fname%to_char())
+            call cl%set('nsample',  ntrain)
+            call cl%set('mkdir',    'yes')
+            call xsolve3D%execute(cl)
+            call simple_chdir(edir)
+            result_proj = simple_abspath(cl%get_carg('projfile'))
+            call cl%kill
+            rt(2) = toc(t0)
+        endif
         ! ---- the student: trained on the teacher's poses and map
         t0 = tic()
         call res%read(result_proj)
         if( .not. res%isthere_in_osout('vol', 1) ) THROW_HARD('the solve3D result registers no volume')
         call res%get_vol('vol', 1, vol_fname, smpd_vol, box_vol)
         vol_fname = simple_abspath(vol_fname)
-        ! the teacher's poses, and how far its shifts moved from the 2D solution's (the unseen rows keep the latter)
-        allocate(euls_teacher(3,nptcls), sh_teacher(2,nptcls), euls_student(3,nptcls), sh_2D(2,nptcls), &
-            &sh_student(2,nptcls), source=0.)
-        allocate(dshift(nptcls), source=-1.)
+        allocate(sh_2D(2,nptcls), euls_ref(3,nptcls), sh_ref(2,nptcls), &
+            &euls_sk(3,nptcls), sh_sk(2,nptcls), source=0.)
         do i = 1,nptcls
             sh_2D(:,i) = res%os_ptcl2D%get_2Dshift(i)
-            if( .not. train(i) ) cycle
-            euls_teacher(:,i) = res%os_ptcl3D%get_euler(i)
-            sh_teacher(:,i)   = res%os_ptcl3D%get_2Dshift(i)
-            dshift(i) = sqrt(sum((res%os_ptcl3D%get_2Dshift(i) - res%os_ptcl2D%get_2Dshift(i))**2))
         enddo
         call enter_subdir('learn')
         fname = edir%to_char()//'/learn/'//STUDENT_TRAIN_PROJ
         call res%projinfo%set(1, 'projfile', fname%to_char())
         call res%write(fname)
-        rt(7) = rt(7) + toc(t0)
+        rt(8) = rt(8) + toc(t0)
         write(logfhandle,'(A)') '>>> VALIDATE_POSE_STUDENT: STUDENT TRAINING'
         t0 = tic()
         call cl%set('prg',      'learn_pose_student')
@@ -225,30 +273,27 @@ contains
         call simple_chdir(edir)
         model_abs = simple_abspath(string('learn/'//POSE_STUDENT_MODEL_FNAME))
         rt(3) = toc(t0)
-        ! ---- the prediction: every selected particle, the training rows at the teacher's poses, the others at their
-        !      2D shifts and no direction
+        ! ---- the reference (the physical posterior's best pose, from the 2D solution's shifts): a frozen teacher's
+        !      directory may hold it, else the dense table's pass makes it
         t0 = tic()
+        call dense_pass('reference', POSE_REFERENCE_FNAME, has_ref, euls_ref, sh_ref, ref_cost)
+        rt(4) = toc(t0)
+        ! ---- the prediction and the alignment: the unseen particles at their 2D shifts, the reference's pose stored for
+        !      the table's reference columns
+        t0 = tic()
+        call select_unseen(res)
         do i = 1,nptcls
-            if( active(i) )then
-                call res%os_ptcl2D%set_state(i, 1)
-                call res%os_ptcl3D%set_state(i, 1)
-            else
-                call res%os_ptcl2D%set_state(i, 0)
-                call res%os_ptcl3D%set_state(i, 0)
-            endif
-            if( active(i) .and. .not. train(i) )then
-                call res%os_ptcl3D%set_euler(i, [0.,0.,0.])
-                call res%os_ptcl3D%set_shift(i, res%os_ptcl2D%get_2Dshift(i))
-            endif
+            if( .not. unseen(i) ) cycle
+            call res%os_ptcl3D%set_euler(i, [0.,0.,0.])
+            if( has_ref(i) ) call res%os_ptcl3D%set_euler(i, euls_ref(:,i))
         enddo
         call enter_subdir('predict')
-        fname = edir%to_char()//'/predict/'//STUDENT_ALL_PROJ
+        fname = edir%to_char()//'/predict/'//STUDENT_UNSEEN_PROJ
         call res%projinfo%set(1, 'projfile', fname%to_char())
-        call res%projinfo%set(1, 'projname', 'all_particles')
+        call res%projinfo%set(1, 'projname', 'unseen_particles')
         call res%write(fname)
-        call res%kill
-        rt(7) = rt(7) + toc(t0)
-        write(logfhandle,'(A)') '>>> VALIDATE_POSE_STUDENT: STUDENT PREDICTION FOR EVERY SELECTED PARTICLE'
+        rt(8) = rt(8) + toc(t0)
+        write(logfhandle,'(A)') '>>> VALIDATE_POSE_STUDENT: STUDENT PREDICTION AND ALIGNMENT FOR THE UNSEEN PARTICLES'
         t0 = tic()
         call cl%set('prg',      'predict_poses')
         call cl%set('projfile', fname%to_char())
@@ -262,26 +307,28 @@ contains
         call cl%kill
         call simple_chdir(edir)
         table_abs = simple_abspath(string('predict/'//POSE_STUDENT_PRED_TABLE))
-        rt(4) = toc(t0)
-        ! ---- the statistics and the report
+        times_abs = simple_abspath(string('predict/'//POSE_STUDENT_PRED_TIMES))
+        rt(5) = toc(t0)
+        ! ---- the reads and the report
         t0 = tic()
+        call read_times(times_abs, times)
         call fopen(funit, string(VALIDATE_POSE_STUDENT_REPORT), status='replace', action='write', iostat=io_stat)
         call fileiochk('validate_pose_student; open '//VALIDATE_POSE_STUDENT_REPORT, io_stat)
-        call report_statistics(funit, model_abs, table_abs, trim(params%pgrp), nptcls, active, train, cls, euls_teacher, &
-            &dshift, 3. * STUDENT_SHIFT_SIGMA / params%smpd, sh_teacher, sh_2D, euls_student, sh_student)
-        rt(5) = toc(t0)
-        ! ---- the maps from the student's poses straight from its readout, no search and no refinement; the unseen
-        !      particles' map against the teacher's is cross-validated (disjoint particles)
-        write(logfhandle,'(A)') '>>> VALIDATE_POSE_STUDENT: RECONSTRUCTIONS FROM THE STUDENT''S POSES'
-        t0 = tic()
-        call rec_from_poses(1, active .and. .not. train, euls_student, sh_2D)
-        call rec_from_poses(2, active .and. .not. train, euls_student, sh_student)
-        call rec_from_poses(3, train, euls_student, sh_2D)
-        call rec_from_poses(4, train, euls_student, sh_student)
-        call rec_from_poses(5, train, euls_student, sh_teacher)
-        call rec_from_poses(6, train, euls_teacher, sh_teacher)
-        call write_recs(funit)
+        call fopen(dunit, string(VALIDATE_POSE_STUDENT_DETAILS), status='replace', action='write', iostat=io_stat)
+        call fileiochk('validate_pose_student; open '//VALIDATE_POSE_STUDENT_DETAILS, io_stat)
+        call write_header(funit)
+        call report_reads(funit, dunit, model_abs, table_abs, trim(params%pgrp), params%smpd, nptcls, unseen, has_ref, &
+            &euls_ref, sh_ref, sh_2D, ref_cost, times, euls_sk, sh_sk)
+        call fclose(dunit)
         rt(6) = toc(t0)
+        ! ---- the maps from the aligned poses and from the reference's; against the teacher's map they are
+        !      cross-validated (disjoint particles)
+        write(logfhandle,'(A)') '>>> VALIDATE_POSE_STUDENT: RECONSTRUCTIONS FROM THE POSES'
+        t0 = tic()
+        call rec_from_poses(1, unseen, euls_sk, sh_sk)
+        call rec_from_poses(2, unseen .and. has_ref, euls_ref, sh_ref)
+        call write_recs(funit)
+        rt(7) = toc(t0)
         rt_all = toc(t_all)
         call write_timings(funit)
         call fclose(funit)
@@ -290,15 +337,18 @@ contains
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a,i0)')   'validation selected particles       : ', nactive
             write(fnr,'(a,i0)')   'validation training particles       : ', ntrain
+            write(fnr,'(a,i0)')   'validation unseen particles         : ', nunseen
             write(fnr,'(a,i0)')   'validation classes (cls2D)          : ', ncls2D
             write(fnr,'(a,i0)')   'validation threads                  : ', params%nthr
             write(fnr,'(a,f0.2)') 'validation student band (lp, A)     : ', STUDENT_LP_VALIDATE
+            write(fnr,'(a,l1)')   'validation frozen teacher           : ', l_frozen
             write(fnr,'(a)') ''
             call write_timings(fnr)
             call fclose(fnr)
         endif
         call cline_entry%kill
-        deallocate(states, cls, active, train, euls_teacher, dshift, sh_teacher, euls_student, sh_2D, sh_student)
+        call res%kill
+        deallocate(states, active, train, unseen, has_ref, sh_2D, euls_ref, sh_ref, euls_sk, sh_sk)
         call simple_end('**** VALIDATE_POSE_STUDENT NORMAL STOP ****')
 
     contains
@@ -316,6 +366,88 @@ contains
             call simple_chdir(string(dir))
         end subroutine enter_subdir
 
+        !> the unseen particles alone selected in proj at the 2D solution's shifts, their shifts not yet refined
+        subroutine select_unseen( proj )
+            type(sp_project), intent(inout) :: proj
+            integer :: j
+            do j = 1,nptcls
+                if( unseen(j) )then
+                    call proj%os_ptcl2D%set_state(j, 1)
+                    call proj%os_ptcl3D%set_state(j, 1)
+                    call proj%os_ptcl3D%set_euler(j, [0.,0.,0.])
+                    call proj%os_ptcl3D%set_shift(j, sh_2D(:,j))
+                    call proj%os_ptcl3D%set(j, 'shsig',  -1.)
+                    call proj%os_ptcl3D%set(j, 'shincr',  0.)
+                else
+                    call proj%os_ptcl2D%set_state(j, 0)
+                    call proj%os_ptcl3D%set_state(j, 0)
+                endif
+            enddo
+        end subroutine select_unseen
+
+        !> the poses of a pass of the dense table over the unseen particles (the physical posterior's best, from the 2D
+        !! solution's shifts): the frozen teacher's file fname when it holds one, else the pass in <tag>/, its poses
+        !! copied to fname in the execution directory
+        subroutine dense_pass( tag, fname_poses, has, euls, shs, cost )
+            character(len=*), intent(in)    :: tag, fname_poses
+            logical,          intent(inout) :: has(nptcls)
+            real,             intent(inout) :: euls(3,nptcls), shs(2,nptcls)
+            real(dp),         intent(out)   :: cost(2)
+            type(sp_project) :: proj
+            type(string)     :: poses, made
+            integer          :: status
+            poses = ''
+            if( l_frozen )then
+                poses = teacher_dir%to_char()//'/'//fname_poses
+                if( .not. file_exists(poses) ) poses = ''
+            endif
+            if( poses%strlen_trim() > 0 )then
+                write(logfhandle,'(A,A,A,A)') '>>> VALIDATE_POSE_STUDENT: ', tag, ' FROM THE FROZEN TEACHER ', poses%to_char()
+            else
+                write(logfhandle,'(A,A)') '>>> VALIDATE_POSE_STUDENT: THE DENSE TABLE AT THE PHYSICAL TEMPERATURE, ', tag
+                call proj%read(result_proj)
+                call select_unseen(proj)
+                call enter_subdir(tag)
+                fname = edir%to_char()//'/'//tag//'/'//STUDENT_UNSEEN_PROJ
+                call proj%projinfo%set(1, 'projfile', fname%to_char())
+                call proj%projinfo%set(1, 'projname', 'unseen_particles')
+                call proj%write(fname)
+                call proj%kill
+                call cl%set('prg',      'learn_pose_student')
+                call cl%set('projfile', fname%to_char())
+                call cl%set('vol1',     vol_fname%to_char())
+                call cl%set('lp',       STUDENT_LP_VALIDATE)
+                call cl%set('mskdiam',  params%mskdiam)
+                call cl%set('pgrp',     trim(params%pgrp))
+                call cl%set('nthr',     params%nthr)
+                call pose_posterior_mode(cl)
+                call cl%kill
+                call simple_chdir(edir)
+                made = fname_base(string(POSE_REFERENCE_MODEL_FNAME))
+                made = edir%to_char()//'/'//tag//'/'//made%to_char()//'_poses.txt'
+                poses = edir%to_char()//'/'//fname_poses
+                call simple_copy_file(made, poses, status)
+                if( status /= 0 ) THROW_HARD('could not copy a dense pass''s poses')
+            endif
+            call read_pose_file(poses, nptcls, unseen, has, euls, shs, cost)
+            write(logfhandle,'(A,A,A,I0,A,I0,A)') '>>> VALIDATE_POSE_STUDENT: ', tag, ' holds ', count(has), ' of ', &
+                &nunseen, ' unseen particles'
+        end subroutine dense_pass
+
+        !> the validation's provenance: the teacher, the sample, the model's calibration
+        subroutine write_header( u )
+            integer, intent(in) :: u
+            integer :: iu, units(2)
+            units = [u, logfhandle]
+            do iu = 1,2
+                write(units(iu),'(a)') '*** POSE STUDENT VALIDATION ***'
+                write(units(iu),'(a,a)') 'teacher: ', result_proj%to_char()
+                write(units(iu),'(a,l1)') 'teacher frozen (dir_refine): ', l_frozen
+                write(units(iu),'(a,i0,a,i0,a,i0,a)') 'particles: ', nactive, ' selected, ', ntrain, ' training, ', &
+                    &nunseen, ' unseen (predicted at their 2D shifts)'
+            enddo
+        end subroutine write_header
+
         !> reconstruct3D of the masked rows at the given poses and shifts in rec_<name>/, and its map's FSC against the
         !! teacher's map and between its halves
         subroutine rec_from_poses( ir, mask, euls, shifts )
@@ -327,7 +459,7 @@ contains
             integer :: j
             dir = 'rec_'//trim(REC_NAMES(ir))
             call enter_subdir(dir%to_char())
-            call proj%read(string(edir%to_char()//'/predict/'//STUDENT_ALL_PROJ))
+            call proj%read(string(edir%to_char()//'/predict/'//STUDENT_UNSEEN_PROJ))
             do j = 1,nptcls
                 if( mask(j) )then
                     call proj%os_ptcl2D%set_state(j, 1)
@@ -372,7 +504,7 @@ contains
             integer :: j, iu, units(2)
             units = [u, logfhandle]
             do iu = 1,2
-                write(units(iu),'(a)') '*** MAPS FROM THE POSES (no search, no refinement; FSC resolution in A) ***'
+                write(units(iu),'(a)') '*** MAPS FROM THE POSES (no further search; FSC resolution in A) ***'
                 write(units(iu),'(a)') '# map                              particles | vs teacher map 0.5 0.143 | halves 0.5 0.143'
                 do j = 1,NRECS
                     write(units(iu),'(a32,1x,i9,a,2(1x,f6.2),a,2(1x,f6.2))') REC_NAMES(j), rec_n(j), '   |       ', &
@@ -381,7 +513,7 @@ contains
                 do j = 1,NRECS
                     write(units(iu),'(a,a,a,a)') '  ', trim(REC_NAMES(j)), ': ', trim(REC_HELP(j))
                 enddo
-                write(units(iu),'(a)') '  the unseen map against the teacher''s is cross-validated: the two share no particle'
+                write(units(iu),'(a)') '  an unseen map against the teacher''s is cross-validated: the two share no particle'
             enddo
         end subroutine write_recs
 
@@ -394,17 +526,14 @@ contains
             do iu = 1,2
                 write(units(iu),'(a)') '*** TIMINGS (s) ***'
                 do j = 1,NPHASES
-                    write(line,'(a40,a,1x,f10.2,1x,a,f6.1,a)') PHASE_NAMES(j), ':', rt(j), '(', &
+                    write(line,'(a48,a,1x,f10.2,1x,a,f6.1,a)') PHASE_NAMES(j), ':', rt(j), '(', &
                         &100. * rt(j) / max(rt_all, real(1.e-9,timer_int_kind)), ' %)'
                     write(units(iu),'(a)') trim(line)
                 enddo
-                write(units(iu),'(a40,a,1x,f10.2)') 'total time', ':', rt_all
-                write(units(iu),'(a40,a,1x,f10.1)') '% accounted for', ':', 100. * sum(rt) / max(rt_all, real(1.e-9,timer_int_kind))
-                write(units(iu),'(a40,a,1x,f10.3)') 'solve3D per training particle (ms)', ':', 1000. * rt(2) / real(max(1,ntrain))
-                write(units(iu),'(a40,a,1x,f10.3)') 'training per training particle (ms)', ':', 1000. * rt(3) / real(max(1,ntrain))
-                write(units(iu),'(a40,a,1x,f10.3)') 'prediction per selected particle (ms)', ':', 1000. * rt(4) / real(max(1,nactive))
-                if( rt(4) > 0. ) write(units(iu),'(a40,a,1x,f10.1)') 'prediction throughput (particles/s)', ':', &
-                    &real(nactive) / rt(4)
+                write(units(iu),'(a48,a,1x,f10.2)') 'total time', ':', rt_all
+                write(units(iu),'(a48,a,1x,f10.1)') '% accounted for', ':', 100. * sum(rt) / max(rt_all, real(1.e-9,timer_int_kind))
+                write(units(iu),'(a48,a,1x,f10.3)') 'solve3D per training particle (ms)', ':', 1000. * rt(2) / real(max(1,ntrain))
+                write(units(iu),'(a48,a,1x,f10.3)') 'training per training particle (ms)', ':', 1000. * rt(3) / real(max(1,ntrain))
                 write(units(iu),'(a)') 'phase breakdowns: BENCH/ of the solve3D directory, learn/BENCH/POSE_STUDENT_LEARN_BENCH.txt, '//&
                     &'predict/BENCH/POSE_STUDENT_PREDICT_BENCH.txt'
             enddo
@@ -412,46 +541,118 @@ contains
 
     end subroutine exec_validate_pose_student
 
-    !> The validation's statistics from the model and its prediction table, to unit u and the log. Distances fold the
-    !! point group and the mirror pair. Unseen rows have no teacher but a 2D class: a class's teacher medoid is the
-    !! training pose nearest all the class's others. dshift: the training rows' 3D-2D shift distance (px), r_aug the disk;
-    !! euls_student, sh_student: the readout's full pose and the registered shift of every predicted row (the table's
-    !! last columns), compared with sh_teacher and the 2D solution's sh_2D
-    subroutine report_statistics( u, model, table, pgrp, nptcls, active, train, cls, euls_teacher, dshift, r_aug, &
-        &sh_teacher, sh_2D, euls_student, sh_student )
-        use simple_defs,          only: logfhandle
+    !> the poses of a dense pass (iptcl e1 e2 e3 x y ...; its costs per particle after 'fill:' in the header); a row of
+    !! a particle that is not unseen stops the validation
+    subroutine read_pose_file( fname, nptcls, unseen, has, euls, shs, cost )
+        use simple_defs,   only: dp
+        use simple_string, only: string
+        use simple_fileio, only: fopen, fclose, fileiochk
+        class(string), intent(in)    :: fname
+        integer,       intent(in)    :: nptcls
+        logical,       intent(in)    :: unseen(nptcls)
+        logical,       intent(inout) :: has(nptcls)
+        real,          intent(inout) :: euls(3,nptcls), shs(2,nptcls)
+        real(dp),      intent(out)   :: cost(2)
+        character(len=1024) :: line
+        real    :: v(6)
+        integer :: u, ios, iptcl, j
+        cost = -1.d0
+        call fopen(u, fname, status='old', action='read', iostat=ios)
+        call fileiochk('validate_pose_student; open '//fname%to_char(), ios)
+        do
+            read(u,'(A)', iostat=ios) line
+            if( ios /= 0 ) exit
+            if( line(1:1) == '#' )then
+                j = index(line, 'fill:')
+                if( j > 0 ) read(line(j+5:),*, iostat=ios) cost
+                cycle
+            endif
+            read(line,*, iostat=ios) v
+            if( ios /= 0 ) cycle
+            iptcl = nint(v(1))
+            if( iptcl < 1 .or. iptcl > nptcls ) THROW_HARD('a pose of a dense pass names no particle of the project')
+            if( .not. unseen(iptcl) ) THROW_HARD('a pose of a dense pass is not an unseen particle''s: another sample')
+            euls(:,iptcl) = v(2:4)
+            shs(:,iptcl)  = v(5:6)
+            has(iptcl)    = .true.
+        enddo
+        call fclose(u)
+    end subroutine read_pose_file
+
+    !> the prediction's and the alignment's wall times (s) of predict_poses' times table
+    subroutine read_times( fname, times )
+        use simple_string, only: string
+        use simple_fileio, only: fopen, fclose, fileiochk, file_exists
+        class(string), intent(in)  :: fname
+        real,          intent(out) :: times(2)
+        character(len=256) :: line
+        integer :: u, ios, n
+        times = -1.
+        n     = 0
+        ! a distributed prediction's parts time themselves: no table of the whole run
+        if( .not. file_exists(fname) ) return
+        call fopen(u, fname, status='old', action='read', iostat=ios)
+        call fileiochk('validate_pose_student; open '//fname%to_char(), ios)
+        do
+            read(u,'(A)', iostat=ios) line
+            if( ios /= 0 ) exit
+            if( line(1:1) == '#' ) cycle
+            read(line,*, iostat=ios) n, times
+            if( ios /= 0 ) n = 0
+            exit
+        enddo
+        call fclose(u)
+        if( n > 0 )then
+            times = times / real(n)
+        else
+            times = -1.
+        endif
+    end subroutine read_times
+
+    !> The reads on the unseen particles against the reference, per arm (RO the readout at the stored shift sh_in, SK
+    !! the alignment over the cone), with a READS line each, the details, the costs per particle; SK's committed poses
+    !! for the map (doc/algorithms/pose_student.md)
+    subroutine report_reads( u, dunit, model, table, pgrp, smpd, nptcls, unseen, has_ref, euls_ref, sh_ref, sh_in, &
+        &ref_cost, times, euls_sk, sh_sk )
+        use simple_defs,          only: logfhandle, dp
         use simple_string,        only: string
         use simple_fileio,        only: fopen, fclose, fileiochk
         use simple_sym,           only: sym
-        use simple_ori_utils,     only: euler_mirror
         use simple_srch_sort_loc, only: hpsort
-        use simple_pose_student,  only: pose_student
         use simple_ori,           only: ori
-        integer,          intent(in) :: u, nptcls, cls(nptcls)
-        class(string),    intent(in) :: model, table
-        character(len=*), intent(in) :: pgrp
-        logical,          intent(in) :: active(nptcls), train(nptcls)
-        real,             intent(in) :: euls_teacher(3,nptcls), dshift(nptcls), r_aug
-        real,             intent(in)  :: sh_teacher(2,nptcls), sh_2D(2,nptcls)
-        real,             intent(out) :: euls_student(3,nptcls), sh_student(2,nptcls)
+        use simple_pose_student,  only: pose_student
+        integer,          intent(in)  :: u, dunit, nptcls
+        class(string),    intent(in)  :: model, table
+        character(len=*), intent(in)  :: pgrp
+        real,             intent(in)  :: smpd, times(2)
+        logical,          intent(in)  :: unseen(nptcls), has_ref(nptcls)
+        real,             intent(in)  :: euls_ref(3,nptcls), sh_ref(2,nptcls), sh_in(2,nptcls)
+        real(dp),         intent(in)  :: ref_cost(2)
+        real,             intent(out) :: euls_sk(3,nptcls), sh_sk(2,nptcls)
+        integer,          parameter   :: NARMS = 2
+        character(len=2), parameter   :: ARMS(NARMS) = ['RO', 'SK']
         type(pose_student) :: student
-        type(ori)          :: o_st, o_te, o_sym
-        type(sym)          :: symop
-        integer, allocatable :: mode(:), k99(:), route(:), in_cone(:), medoid(:), members(:)
-        real,    allocatable :: conf(:), radius(:), d_teach(:), d_pred_med(:), d_teach_med(:), dmat(:,:)
-        real,    allocatable :: d_dir(:), d_inpl(:), e_reg(:), e_2D(:)
-        real    :: vals(19), conf_threshold, conf_fraction, heldout_seeded, heldout_recovered
-        integer :: i, j, c, ncls, nm, io_stat, funit, iptcl, iu, units(2)
-        character(len=512) :: line
+        type(sym) :: symop
+        type(ori) :: o_ref, o_st, o_sym
+        integer, allocatable :: mode(:), k99(:), route(:), in_cone(:), rank_ref(:)
+        real,    allocatable :: conf(:), dist_mode(:), euls_ro(:,:), euls(:,:), sh(:,:), d_dir(:), d_inpl(:), d_sh(:)
+        logical, allocatable :: m(:), has(:)
+        real    :: vals(22), q(16), conf_threshold, conf_fraction, heldout_seeded, heldout_recovered
+        integer :: ia, i, funit, io_stat, iptcl, n, iu, units(2)
+        character(len=1024) :: line
         call student%read(model)
         call student%get_threshold(conf_threshold, conf_fraction, heldout_seeded, heldout_recovered)
+        call student%kill
         call symop%new(pgrp)
-        allocate(mode(nptcls), k99(nptcls), route(nptcls), in_cone(nptcls), source=0)
-        allocate(conf(nptcls), radius(nptcls), d_teach(nptcls), d_pred_med(nptcls), d_teach_med(nptcls), &
-            &d_dir(nptcls), d_inpl(nptcls), e_reg(nptcls), e_2D(nptcls), source=-1.)
-        euls_student = 0.
-        sh_student   = sh_2D
-        ! the prediction table: iptcl eo mode pmax k99 ncone conf radius_deg iproj_ref dist_mode dist_cone rank_ref in_cone route
+        call o_ref%new(is_ptcl=.true.)
+        call o_st%new(is_ptcl=.true.)
+        allocate(mode(nptcls), k99(nptcls), route(nptcls), in_cone(nptcls), rank_ref(nptcls), source=0)
+        allocate(conf(nptcls), dist_mode(nptcls), d_dir(nptcls), d_inpl(nptcls), d_sh(nptcls), source=-1.)
+        allocate(euls_ro(3,nptcls), euls(3,nptcls), sh(2,nptcls), source=0.)
+        allocate(m(nptcls), has(nptcls), source=.false.)
+        euls_sk = 0.
+        sh_sk   = 0.
+        ! the prediction table (predict_poses' columns): the committed pose is the cone's alignment, then the readout
         call fopen(funit, table, status='old', action='read', iostat=io_stat)
         call fileiochk('validate_pose_student; open '//table%to_char(), io_stat)
         do
@@ -462,186 +663,118 @@ contains
             if( io_stat /= 0 ) cycle
             iptcl = nint(vals(1))
             if( iptcl < 1 .or. iptcl > nptcls ) cycle
-            mode(iptcl)    = nint(vals(3))
-            k99(iptcl)     = nint(vals(5))
-            conf(iptcl)    = vals(7)
-            radius(iptcl)  = vals(8)
-            in_cone(iptcl) = nint(vals(13))
-            route(iptcl)   = nint(vals(14))
-            euls_student(:,iptcl) = vals(15:17)
-            sh_student(:,iptcl)   = vals(18:19)
+            mode(iptcl)      = nint(vals(3))
+            k99(iptcl)       = nint(vals(5))
+            conf(iptcl)      = vals(7)
+            dist_mode(iptcl) = vals(10)
+            rank_ref(iptcl)  = nint(vals(12))
+            in_cone(iptcl)   = nint(vals(13))
+            route(iptcl)     = nint(vals(14))
+            euls_sk(:,iptcl) = vals(15:17)
+            sh_sk(:,iptcl)   = vals(18:19)
+            euls_ro(:,iptcl) = vals(20:22)
+            has(iptcl)       = mode(iptcl) > 0
         enddo
         call fclose(funit)
-        ! the mode against the teacher's pose (training rows); the readout's full pose against it, unfolded: the
-        ! direction with the mirror the readout chose, and the in-plane angle
-        call o_st%new(is_ptcl=.true.)
-        call o_te%new(is_ptcl=.true.)
-        do i = 1,nptcls
-            if( .not. (train(i) .and. mode(i) > 0) ) cycle
-            d_teach(i) = pair_angle(mode(i), euls_teacher(:,i))
-            call o_st%set_euler(euls_student(:,i))
-            call o_te%set_euler(euls_teacher(:,i))
-            call symop%sym_dists(o_te, o_st, o_sym, d_dir(i), d_inpl(i))
-            e_reg(i) = sqrt(sum((sh_student(:,i) - sh_teacher(:,i))**2))
-            e_2D(i)  = sqrt(sum((sh_2D(:,i)      - sh_teacher(:,i))**2))
-        enddo
-        call o_st%kill
-        call o_te%kill
-        call o_sym%kill
-        ! the classes' teacher medoids and every row's distance to its class's
-        ncls = maxval(cls)
-        allocate(medoid(max(1,ncls)), source=0)
-        do c = 1,ncls
-            members = pack([(i, i=1,nptcls)], train .and. cls == c)
-            nm = size(members)
-            if( nm < 2 ) cycle
-            allocate(dmat(nm,nm), source=0.)
-            do i = 1,nm
-                do j = i+1,nm
-                    dmat(i,j) = euls_angle(euls_teacher(:,members(i)), euls_teacher(:,members(j)))
-                    dmat(j,i) = dmat(i,j)
-                enddo
-            enddo
-            medoid(c) = members(minloc(sum(dmat, dim=2), dim=1))
-            deallocate(dmat)
-        enddo
-        do i = 1,nptcls
-            if( .not. active(i) ) cycle
-            if( cls(i) < 1 .or. cls(i) > ncls ) cycle
-            if( medoid(cls(i)) == 0 ) cycle
-            if( mode(i) > 0 ) d_pred_med(i) = pair_angle(mode(i), euls_teacher(:,medoid(cls(i))))
-            if( train(i) .and. i /= medoid(cls(i)) ) d_teach_med(i) = &
-                &euls_angle(euls_teacher(:,i), euls_teacher(:,medoid(cls(i))))
-        enddo
+        write(dunit,'(A)') '# iptcl arm route in_cone rank_ref dist_mode_deg d_dir_deg d_inpl_deg d_shift_A conf k99'
         units = [u, logfhandle]
         do iu = 1,2
-            write(units(iu),'(a)') '*** POSE STUDENT VALIDATION ***'
             write(units(iu),'(a,f0.4,a,f0.3,a)') 'model: confidence threshold ', conf_threshold, ' (teacher in the cone for ', &
                 &conf_fraction, ' of the held-out rows)'
             write(units(iu),'(a,f0.4,a,f0.4)') 'model: held-out rows seeded ', heldout_seeded, ', recovered ', heldout_recovered
-            call shift_stats(units(iu))
-            call group_stats(units(iu), 'all selected particles', active, .false.)
-            call group_stats(units(iu), 'training particles (in sample)', active .and. train, .true.)
-            call group_stats(units(iu), 'unseen particles', active .and. .not. train, .false.)
-            write(units(iu),'(a)') 'student mode against the teacher (training particles, folded pair and point group):'
-            call dist_stats(units(iu), '  all', d_teach, active .and. train)
-            call dist_stats(units(iu), '  seeded', d_teach, active .and. train .and. route == 1)
-            write(units(iu),'(a)') 'the readout''s full pose against the teacher''s (training particles, no search; point group folded, mirror not):'
-            call dist_stats(units(iu), '  direction', d_dir, active .and. train)
-            call dist_stats(units(iu), '  in-plane, direction within 12 deg', d_inpl, active .and. train .and. d_dir <= POSE_TWO_STEPS_DEG)
-            call dist_stats(units(iu), '  direction, seeded', d_dir, active .and. train .and. route == 1)
-            call dist_stats(units(iu), '  in-plane, seeded and direction within 12 deg', d_inpl, &
-                &active .and. train .and. route == 1 .and. d_dir <= POSE_TWO_STEPS_DEG)
-            write(units(iu),'(a)') 'shift against the teacher''s (training particles):'
-            call shift_err_stats(units(iu), '  2D shift', e_2D, active .and. train)
-            call shift_err_stats(units(iu), '  registered at the read-out pose', e_reg, active .and. train)
-            call shift_err_stats(units(iu), '  2D shift, direction within 6 deg', e_2D, active .and. train .and. d_dir <= POSE_AGREE_DEG)
-            call shift_err_stats(units(iu), '  registered, direction within 6 deg', e_reg, active .and. train .and. d_dir <= POSE_AGREE_DEG)
-            write(units(iu),'(a)') 'class consistency: distance to the 2D class''s teacher medoid (classes with two or more training particles):'
-            call dist_stats(units(iu), '  teacher, training particles (baseline)', d_teach_med, active .and. train)
-            call dist_stats(units(iu), '  student, training particles', d_pred_med, active .and. train)
-            call dist_stats(units(iu), '  student, unseen particles', d_pred_med, active .and. .not. train)
-            call dist_stats(units(iu), '  student, unseen and seeded', d_pred_med, active .and. .not. train .and. route == 1)
+            write(units(iu),'(a)') '*** THE UNSEEN PARTICLES AGAINST THE REFERENCE (the physical posterior''s best pose) ***'
+            write(units(iu),'(a,i0,a,i0,a,i0)') 'unseen particles ', count(unseen), ', with a reference ', &
+                &count(unseen .and. has_ref), ', predicted ', count(unseen .and. has)
+            call quant(pack(sqrt(sh_ref(1,:)**2 + sh_ref(2,:)**2) * smpd, unseen .and. has_ref), q(1:3))
+            write(units(iu),'(a,3(1x,f0.2))') 'the reference''s shift from the picked position (A): q50 q90 q99', q(1:3)
+            write(units(iu),'(a)') 'arms: RO the readout''s pose (no search), SK aligned over the cone''s directions and '//&
+                &'their mirrors (committed)'
         enddo
-        call student%kill
+        do ia = 1,NARMS
+            d_dir = -1.
+            d_inpl = -1.
+            d_sh = -1.
+            select case(ARMS(ia))
+                case('RO')
+                    euls = euls_ro
+                    sh   = sh_in
+                    m    = unseen .and. has_ref .and. has
+                case DEFAULT
+                    euls = euls_sk
+                    sh   = sh_sk
+                    m    = unseen .and. has_ref .and. has
+            end select
+            do i = 1,nptcls
+                if( .not. m(i) ) cycle
+                call o_ref%set_euler(euls_ref(:,i))
+                call o_st%set_euler(euls(:,i))
+                call symop%sym_dists(o_ref, o_st, o_sym, d_dir(i), d_inpl(i))
+                d_sh(i) = sqrt(sum((sh(:,i) - sh_ref(:,i))**2)) * smpd
+                write(dunit,'(I0,1X,A,1X,I0,1X,I0,1X,I0,4(1X,F8.3),1X,F8.5,1X,I0)') i, ARMS(ia), route(i), in_cone(i), &
+                    &rank_ref(i), dist_mode(i), d_dir(i), d_inpl(i), d_sh(i), conf(i), k99(i)
+            enddo
+            n = count(m)
+            if( n < 1 ) cycle
+            q = -1.
+            q(1)  = real(count(m .and. route == 1)) / real(n)
+            q(2)  = real(count(m .and. in_cone == 1)) / real(n)
+            if( count(m .and. route == 1) > 0 ) q(3) = real(count(m .and. route == 1 .and. in_cone == 1)) / &
+                &real(count(m .and. route == 1))
+            q(4)  = real(count(m .and. dist_mode <= POSE_AGREE_DEG)) / real(n)
+            q(5)  = real(count(m .and. dist_mode <= POSE_TWO_STEPS_DEG)) / real(n)
+            call quant(pack(dist_mode, m), q(8:9))
+            q(16) = real(count(m .and. k99 > KMAX_STUDENT)) / real(n)
+            q(6) = real(count(m .and. d_dir <= POSE_AGREE_DEG)) / real(n)
+            q(7) = real(count(m .and. d_dir <= POSE_TWO_STEPS_DEG)) / real(n)
+            call quant(pack(d_dir, m), q(10:11))
+            call quant(pack(d_inpl, m .and. d_dir <= POSE_AGREE_DEG), q(12:13))
+            call quant(pack(d_sh, m), q(14:15))
+            do iu = 1,2
+                write(units(iu),'(a,a,a,i0)') 'arm ', ARMS(ia), ': n ', n
+                write(units(iu),'(a,f0.4,a,f0.4,a,f0.4,a,f0.4)') '  seeded ', q(1), ', cone holds the reference''s direction ', &
+                    &q(2), ' (seeded: ', q(3), '), cone capped ', q(16)
+                write(units(iu),'(a,f0.4,a,f0.4,a,f0.2,a,f0.2,a)') '  mode within 6 deg ', q(4), ', 12 deg ', q(5), &
+                    &' (median ', q(8), ', q90 ', q(9), ' deg; folded pair)'
+                write(units(iu),'(a,f0.4,a,f0.4,a,f0.2,a,f0.2,a)') '  committed direction within 6 deg ', q(6), &
+                    &', 12 deg ', q(7), ' (median ', q(10), ', q90 ', q(11), ' deg; mirror not folded)'
+                write(units(iu),'(a,f0.2,a,f0.2,a,f0.2,a,f0.2,a)') '  in-plane error (direction within 6 deg) median ', q(12), &
+                    &' q90 ', q(13), ' deg; shift to the reference''s median ', q(14), ' q90 ', q(15), ' A'
+                write(units(iu),'(a,a,1x,i0,16(1x,f0.5))') 'READS ', ARMS(ia), n, q
+            enddo
+        enddo
+        do iu = 1,2
+            write(units(iu),'(a)') '*** COSTS PER PARTICLE (ms, wall) ***'
+            write(units(iu),'(a,f0.4)') 'prediction (features and forward pass)          : ', 1000. * times(1)
+            write(units(iu),'(a,f0.4)') 'alignment over the cone (SK)                    : ', 1000. * times(2)
+            write(units(iu),'(a,f0.4)') 'the reference pass (the full search), fill      : ', 1000. * real(ref_cost(1))
+            write(units(iu),'(a,f0.4)') 'the reference pass, setup, particles and fill   : ', 1000. * real(ref_cost(2))
+            write(units(iu),'(a,3(1x,f0.5))') 'COSTS predict sk reference ', 1000. * times(1), 1000. * times(2), &
+                &1000. * real(ref_cost(1))
+        enddo
         call symop%kill
+        call o_ref%kill
+        call o_st%kill
+        call o_sym%kill
 
     contains
 
-        !> the angle between a grid direction's mirror pair and an orientation (the smaller of the two)
-        real function pair_angle( iproj, e )
-            integer, intent(in) :: iproj
-            real,    intent(in) :: e(3)
-            pair_angle = min(student%angle_between(iproj, e), student%angle_between(student%mirror_of(iproj), e))
-        end function pair_angle
+        !> the median and the 90th percentile of x (q50, q90, q99 when three are asked); -1 when x is empty
+        subroutine quant( x, qq )
+            real, intent(in)  :: x(:)
+            real, intent(out) :: qq(:)
+            real, allocatable :: y(:)
+            integer :: nn
+            qq = -1.
+            nn = size(x)
+            if( nn < 1 ) return
+            y = x
+            call hpsort(y)
+            qq(1) = y(max(1,nint(0.5*nn)))
+            qq(2) = y(max(1,nint(0.9*nn)))
+            if( size(qq) > 2 ) qq(3) = y(max(1,nint(0.99*nn)))
+        end subroutine quant
 
-        !> the angle between two orientations' directions, folded by the point group and the mirror
-        real function euls_angle( e1, e2 )
-            real, intent(in) :: e1(3), e2(3)
-            real :: em(3), es(3), d1, d2, inpl
-            call symop%sym_dists(e1, e2, es, d1, inpl)
-            call euler_mirror(e1, em)
-            call symop%sym_dists(em, e2, es, d2, inpl)
-            euls_angle = min(d1, d2)
-        end function euls_angle
-
-        !> l_teacher: the rows carry the teacher's poses, so the cone's coverage of the stored direction means something
-        subroutine group_stats( uu, label, mask, l_teacher )
-            integer,          intent(in) :: uu
-            character(len=*), intent(in) :: label
-            logical,          intent(in) :: mask(nptcls), l_teacher
-            real, allocatable :: r(:), cf(:)
-            integer :: n
-            n = count(mask .and. mode > 0)
-            write(uu,'(a,a,i0,a)') label, ': ', n, ' predicted'
-            if( n < 1 ) return
-            r  = pack(radius, mask .and. mode > 0)
-            cf = pack(conf,   mask .and. mode > 0)
-            call hpsort(r)
-            call hpsort(cf)
-            write(uu,'(a,f0.4,a,f0.4)') '  seeded (neighbourhood search from the cone) ', &
-                &real(count(mask .and. route == 1)) / real(n), ', cone capped at KMAX_STUDENT ', &
-                &real(count(mask .and. mode > 0 .and. k99 > KMAX_STUDENT)) / real(n)
-            if( l_teacher ) write(uu,'(a,f0.4)') '  teacher''s direction in the cone ', real(count(mask .and. in_cone == 1)) / real(n)
-            write(uu,'(a,3(1x,f0.4))') '  confidence quartiles  ', cf(max(1,nint(0.25*n))), cf(max(1,nint(0.5*n))), &
-                &cf(max(1,nint(0.75*n)))
-            write(uu,'(a,3(1x,f0.2))') '  cone radius (deg) q50 q90 max', r(max(1,nint(0.5*n))), r(max(1,nint(0.9*n))), r(n)
-        end subroutine group_stats
-
-        !> the training rows' shift change from the 2D solution to the teacher's, against the training's shift disk
-        subroutine shift_stats( uu )
-            integer, intent(in) :: uu
-            real, allocatable :: x(:)
-            integer :: n
-            x = pack(dshift, train .and. dshift >= 0.)
-            n = size(x)
-            if( n < 1 ) return
-            call hpsort(x)
-            write(uu,'(a,f0.2,a,f0.2,a,f0.2,a,f0.4,a,f0.2,a)') 'teacher''s shift minus the 2D shift (training, px): median ', &
-                &x(max(1,nint(0.5*n))), ', q90 ', x(max(1,nint(0.9*n))), ', max ', x(n), '; within the training''s disk ', &
-                &real(count(x <= r_aug)) / real(n), ' (', r_aug, ' px); unseen particles are predicted at their 2D shifts'
-        end subroutine shift_stats
-
-        !> a shift error's quantiles (px) and the fractions within 1 and 3 px
-        subroutine shift_err_stats( uu, label, e, mask )
-            integer,          intent(in) :: uu
-            character(len=*), intent(in) :: label
-            real,             intent(in) :: e(nptcls)
-            logical,          intent(in) :: mask(nptcls)
-            real, allocatable :: x(:)
-            integer :: n
-            x = pack(e, mask .and. e >= 0.)
-            n = size(x)
-            if( n < 1 )then
-                write(uu,'(a,a)') label, ': none'
-                return
-            endif
-            call hpsort(x)
-            write(uu,'(a,a,i0,a,f0.2,a,f0.2,a,f0.4,a,f0.4)') label, ': n ', n, ', median ', x(max(1,nint(0.5*n))), &
-                &' px, q90 ', x(max(1,nint(0.9*n))), ' px, within 1 px ', real(count(x <= 1.)) / real(n), &
-                &', within 3 px ', real(count(x <= 3.)) / real(n)
-        end subroutine shift_err_stats
-
-        subroutine dist_stats( uu, label, d, mask )
-            integer,          intent(in) :: uu
-            character(len=*), intent(in) :: label
-            real,             intent(in) :: d(nptcls)
-            logical,          intent(in) :: mask(nptcls)
-            real, allocatable :: x(:)
-            integer :: n
-            x = pack(d, mask .and. d >= 0.)
-            n = size(x)
-            if( n < 1 )then
-                write(uu,'(a,a)') label, ': none'
-                return
-            endif
-            call hpsort(x)
-            write(uu,'(a,a,i0,a,f0.2,a,f0.2,a,f0.4,a,f0.4)') label, ': n ', n, ', median ', x(max(1,nint(0.5*n))), &
-                &' deg, q90 ', x(max(1,nint(0.9*n))), ' deg, within 6 deg ', real(count(x <= POSE_AGREE_DEG)) / real(n), &
-                &', within 12 deg ', real(count(x <= POSE_TWO_STEPS_DEG)) / real(n)
-        end subroutine dist_stats
-
-    end subroutine report_statistics
+    end subroutine report_reads
 
     !> the FSC of two maps on disk, both soft-masked at mskrad (pixels): the resolutions at 0.5 and 0.143 (A)
     subroutine map_fsc( f1, f2, box, smpd, mskrad, r05, r0143 )

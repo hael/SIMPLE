@@ -141,13 +141,27 @@ discarded it, which is why it was replaced.
 particle, the row of the dense probability table at the student's grid and
 band, filled as the production search fills it against the training set's map,
 each direction scored at its drawn in-plane rotation with the best candidates
-refined in shift. The soft target is the row's tempered posterior
-`t_c = exp[-tau (L_c - L_min)] / sum_j exp[-tau (L_j - L_min)]`, `tau` the
-search's tempering factor times the particle's own temperature; the whole row
+refined in shift. The soft target is the row's physical posterior, the
+posterior a solve3D run ends at,
+`t_c = exp[-T (L_c - L_min)] / sum_j exp[-T (L_j - L_min)]`, `T` the
+particle's own temperature with no tempering factor (learn sets `prob_beta`
+to 1, as the class student's teacher); the whole row
 is kept, so a broad posterior stays broad, and it is folded onto the mirror
 pairs (a pair's target is the sum of its two directions') before the loss. The
 teacher scores all 1,000 directions; only the student's classes are pairs. The
 shell weights the rows were whitened with are frozen in the model.
+
+**The teacher's audit.** Every row is audited against the physical posterior
+recomputed from its losses at the table's own temperature,
+`exp[-T (L_c - L_min)]` normalised over the valid directions: the training's
+targets must equal it within the rounding bound of the single-precision losses
+(twice T times the losses' spacing); learn stops on a row read at another
+temperature or beyond the bound (`<fname>_rows_header.txt` records the audit).
+The physical teacher replaced the search's tempered rows (`prob_beta` times T):
+with the alignment over the cone, its unseen maps were as good on every set
+measured and finer on one (streptavidin), the maps being the judge
+(`doc/implementation_notes/planned/pose_student_physical_raw_picks.md`,
+Phase 3).
 
 **The loss** is the cross-entropy against those soft rows, minimised with Adam
 (rate 1e-3, decoupled weight decay 1e-5) on mini-batches of at most 256, every
@@ -217,14 +231,43 @@ the mirror partner with `e3 = ang + psi`, `psi` the pair's frame angle (the
 reflection `mirror_ref_bank` applies; the HHCNN tester pins it at 0, 75 and
 180 degrees). The template's frame is the unmirrored direction's reprojection
 at `e3 = 0`, where its training starts. The network does not estimate the
-shift: it is trained to tolerate it. Given the map (`vol1`), `predict_poses`
-registers each particle's shift against the map's reprojection at the
-read-out pose, its direction and rotation fixed: a 5 x 5 grid over 25 Å
-about the stored shift, then L-BFGS-B, the search's own fixed-rotation shift
-search (`pftc_shsrch_grad`), with the references and sigma2 prepared as
-learn_pose_student prepares them. The table's last five
-columns are the pose and the shift (the stored shift without `vol1`); the
-route and the records do not use them.
+shift: it is trained to tolerate it.
+
+**The centring policy** (Hans, 2026-11-18): centring comes from the solve2D
+run prior to solve3D, on the particles the student is trained on and on the
+particles it predicts; shift refinement enters only after the prediction, over
+the cone, against the reference obtained from the training set (the teacher's
+map). This mirrors the class student and is what the stream needs: there the
+unseen particles' 2D shifts come from the class student's own alignment after
+its prediction. Predicting on raw picks (no 2D shift) was measured and not
+adopted: its unseen map was coarser than the centred route's on streptavidin,
+while the policy's was as good or finer on every set
+(`doc/implementation_notes/planned/pose_student_physical_raw_picks.md`,
+Phase 4).
+
+**The alignment after prediction.** Given the map (`vol1`), `predict_poses`
+takes every particle at its stored (2D) shift, its shift not yet refined, and
+aligns it against the map's reprojections at the student's grid and
+band, with the references and sigma2 prepared as learn_pose_student prepares
+them: every in-plane rotation of the polar grid and shifts over a disk of
+three widths of a 10 Å prior (`POSE_DENSE_SHIFT_SIGMA`) about the stored
+shift, the classic searches' polar shift map (`shiftmap_srch`, as the class
+student's alignment), at the physical temperature, over every direction of
+the cone with its mirror partner (SK, at most 128 references). The best
+alignment is committed: its direction, its in-plane angle and the stored
+shift plus its increment, with the dynamic centring's state of the next
+search (`shsig`, `shincr`). Aligning over the mode's mirror pair alone (S1)
+costs a fiftieth to a seventieth as much but agrees with the reference far less
+often, on every set measured
+(`doc/implementation_notes/planned/pose_student_physical_raw_picks.md`,
+Phase 2); it was removed. The particles are prepared as the search
+prepares one whose shift is not yet refined (the box's mask). The map is never re-centred
+(`center=no`, learn's setting: re-centring would move every particle's
+shift by the map's offset). The table holds the committed pose and shift
+and the readout's pose; `<fname>_times.txt` the walls of the prediction and
+of the alignment. Without `vol1` the readout's pose is
+reported at the stored shift and a seeded particle takes the mode's
+direction, as before.
 
 The posterior is **over mirror pairs**: each pair's mass is placed on its
 unmirrored direction of the grid, the mode and the smallest set holding 99% of
@@ -246,7 +289,7 @@ particle's record, the cone's radius, the confidence and the route. With `nparts
 `vol1` it makes the even/odd halves, sigma2 and the reprojection model first,
 which the parts only read; it merges the parts' records, joins their tables in
 part order and writes the project once, the shared-memory run's result byte for
-byte (the `pose_student` workflow test checks it at two parts, registering).
+byte (the `pose_student` workflow test checks it at two parts, aligning).
 A part is given its range as every master hands it (`part`, `nparts`, `fromp`,
 `top`, with `outfile`); its tables carry its number, it writes its range's
 records to `outfile`, never the project, and a range without a selected
@@ -340,7 +383,7 @@ have.
 The strategy helpers both students use (the held-out cohort, the resampled design comparison, the confidence
 threshold, the geometry check, a part's range, a file's hash) are in
 `simple_strategy_student_common`. The constants both students' programs set (the grid, the caps, the training
-designs, the calibration, the shift registration, the validation's settings and file names) are in
+designs, the calibration, the teacher and the alignment, the validation's settings and file names) are in
 `src/defs/simple_defs_hhcnn.f90`. The programs
 `learn_pose_student` and `predict_poses` are
 strategy routines on the caller's `(params, build)` with thin private
@@ -357,31 +400,38 @@ inputs on a project with a 2D solution; its `nsample` is the training set: a
 class-balanced greedy sample of the selected classes, best 2D scores first.
 It runs solve3D on that sample with `nsample` at the sample's size, so every
 iteration searches every training particle (no fractional update, no
-trailing reconstruction). It trains the student on solve3D's poses and map at
-15 Å, with a shift disk of three times 2 Å since every particle is centred by
-the 2D or 3D solution, and predicts every selected particle: the training
-rows at the teacher's poses, the others at their 2D shifts. The report
-(`validate_pose_student_report.txt`, also in the log) gives:
+trailing reconstruction), or, given `dir_refine`, takes the frozen teacher of
+an earlier validation's solve3D directory, which must hold the same sample. It
+trains the student on solve3D's poses and map at 15 Å, with a shift disk of
+three times 2 Å since every training particle is centred by the 2D or 3D
+solution. The other selected particles are the unseen ones, predicted at
+their 2D shifts (the centring policy above) and aligned after the prediction.
+
+They are judged against **the reference, the physical posterior's best
+pose**: the dense table at the physical temperature against the teacher's map,
+at the student's grid and band, over the 30 Å disk, started from the 2D
+solution's shifts (from the raw picks the table's screen misses off-centre
+modes), each particle's mode with its in-plane angle and refined shift
+(`run_pose_posterior_mode`); it is the full search the student's route
+replaces. A frozen teacher's directory may hold it as `pose_reference.txt`
+(it is not reproducible bit for bit, so a comparison over several runs freezes
+it); otherwise the validation makes it. The report (`validate_pose_student_report.txt`, also in the log;
+`validate_pose_student_details.txt` per particle) gives:
 
 - the model's threshold and held-out recovery;
-- the seeded and capped fractions, the confidence and the cone radius of all,
-  training and unseen particles;
-- the student's mode against the teacher on the training particles;
-- class consistency: the distance of every particle's direction to its 2D
-  class's teacher medoid, the teacher's own spread being the baseline;
-- the training rows' shift change from the 2D solution to the teacher's,
-  against the training's shift disk;
-- the readout's full pose against the teacher's on the training particles
-  (the direction with the readout's mirror, and the in-plane angle);
-- the registered shifts against the teacher's, beside the 2D shifts;
-- six maps by reconstruct3D from poses with no orientation search: the unseen
-  particles at the student's poses with their 2D shifts and with the
-  registered shifts (their FSC against the teacher's map is cross-validated:
-  the two share no particle), the training particles likewise, the training
-  particles at the student's poses and the teacher's shifts, and the
-  teacher's own poses as the control; each with its FSC against the teacher's
-  map and between its halves;
-- the phases' wall times with the per-particle costs.
+- per arm (RO the readout's pose at the stored shift with no search, SK the
+  alignment over the cone): the seeded and capped fractions, the
+  cone holding the reference's direction and the mode's agreement (mirror
+  pairs folded), the committed direction against the reference's (point group
+  folded, mirror not), the in-plane error where it agrees within 6°, the
+  shift's distance to the reference's; a `READS` line per arm for scripts;
+- the costs per particle: the prediction, the alignment, the reference pass
+  (the full search);
+- two maps by reconstruct3D from the unseen particles' poses with no further
+  search: SK's and the reference's, each with its FSC against the
+  teacher's map (cross-validated: the two share no particle) and between its
+  halves;
+- the phases' wall times.
 
 The phases' own records are `BENCH/VALIDATE_POSE_STUDENT_BENCH.txt`, solve3D's
 `BENCH/` in its directory, `learn/BENCH/POSE_STUDENT_LEARN_BENCH.txt` and
@@ -394,8 +444,8 @@ region), reduction with the Adam steps and the held-out evaluation, with the
 steps, the samples per second, the held-out prediction and the design choice.
 **`POSE_STUDENT_PREDICT`** splits predict_poses into its phases and the
 per-particle steps in thread-seconds (features, forward pass, cone, the
-reference error, ruling R2's shift check) with the team's utilisation and load
-balance. **`test=pose_student_bench`** (simple_test_exec, no CTest entry) times
+reference error, ruling R2's shift check, the alignment) with the team's
+utilisation and load balance. **`test=pose_student_bench`** (simple_test_exec, no CTest entry) times
 the HHCNN kernels on synthetic tensors per ring count and width: the forward
 pass split into the blocks and the readout, the backward pass, a training step
 of 256 samples at one thread and at the team, the team's prediction throughput

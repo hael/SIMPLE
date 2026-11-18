@@ -1,4 +1,4 @@
-!@descr: the pose student's strategy routines: the teacher's rows of the selected particles at the student grid and band, their resolvability and their features, the student's training (learn_pose_student), and its prediction of the mode, the cone and the confidence (predict_poses)
+!@descr: the pose student's strategy routines: the teacher's rows of the selected particles at the student grid and band, audited, with their features, the student's training (learn_pose_student), the rows' best poses (the validation's reference), and the prediction of the mode, the cone and the confidence with the alignment over the cone (predict_poses)
 ! The teacher is the probabilistic machinery's posterior (doc/implementation_notes/completed/learned_pose_state_assignment.md,
 ! section 4): the dense table's rows as the production fill computes them against the references prepared as
 ! refine3D's matcher prepares them, batch by batch, each row read before the batch's assignment releases it.
@@ -14,33 +14,33 @@ use simple_ori,                only: ori
 use simple_eo_partition,       only: ensure_field_halves
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: prob_row_record, prob_row_file, prob_fill_profile, write_fill_profile_bench, &
-    &temperature_or_argmin
+    &temperature_or_argmin, record_shift_state, disk_radius_px
 use simple_matcher_refvol_utils,    only: materialize_reprojection_model_from_volumes, read_reprojection_model, &
     &complete_volume_source_available
 use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D, &
     &check_pass_team
 use simple_matcher_ptcl_io,         only: ptcl_read_session
-use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D, adopt_run_seed
 use simple_sigma2_bootstrap,        only: ensure_sigma2_for_iteration
 use simple_qsys_funs,               only: qsys_declare_part_finished
 use simple_polar_feats,             only: polar_feats, polar_feat, polar_feats_cache, polar_feats_contract, &
     &polar_feats_hash_ints, POLAR_FEATS_NHEAD
-use simple_pose_student,  only: pose_student, student_pred
+use simple_pose_student,  only: pose_student, student_pred, physical_row_audit
+use simple_pose_student_align, only: pose_student_align, pose_align_result
+use simple_shiftmap_srch,       only: setup_shiftmap_srch
 use simple_polar_student, only: student_train_profile
 use simple_strategy_student_common, only: student_holdout_split, student_conf_threshold, student_geometry_mismatch, &
     &student_part_pinds, file_hash, choose_student_design, fname_base, student_predict_parts, student_sigma2_for_pass
 use simple_defs_hhcnn,    only: NSPACE_STUDENT, KMAX_STUDENT, STUDENT_CONF_FRACTION, STUDENT_DESIGN_QUANTILE, STUDENT_KMAX_ROW, &
     &STUDENT_WIDTHS, STUDENT_WIDEST_MIN_ROWS, STUDENT_MAX_EPOCHS, STUDENT_PATIENCE_EPOCHS, STUDENT_SHIFT_AUG_NSIG, &
-    &STUDENT_SHIFT_REG_HALFWIDTH, STUDENT_SHIFT_REG_MAXITS, POSE_SHIFT_CHECK_NPTCLS, POSE_SHIFT_CHECK_MAGS, &
-    &POSE_SHIFT_CHECK_NDIR, POSE_SHIFT_CHECK_NGROUPS
+    &POSE_SHIFT_CHECK_NPTCLS, POSE_SHIFT_CHECK_MAGS, POSE_SHIFT_CHECK_NDIR, POSE_SHIFT_CHECK_NGROUPS
 use simple_rnd,          only: rnd_run_seed
 use simple_math,         only: hpsort
 use simple_type_defs,    only: OBJFUN_EUCLID, PTCL3D_SEG
 use simple_binoris_io,   only: binwrite_oritab
 implicit none
 
-public :: run_learn_pose_student, learn_pose_student_exec, run_predict_poses, predict_poses_exec
+public :: run_learn_pose_student, learn_pose_student_exec, run_pose_posterior_mode, run_predict_poses, predict_poses_exec
 private
 #include "simple_local_flags.inc"
 
@@ -61,17 +61,27 @@ contains
         call simple_end('**** SIMPLE_LEARN_POSE_STUDENT NORMAL STOP ****', print_simple=.false.)
     end subroutine run_learn_pose_student
 
-    !> The teacher's rows of the project's selected particles (state 1 of ptcl3D) at the student grid (nspace) and
-    !! band (lp) against the references vol1, prepared as refine3D's matcher prepares them, filled batch by batch
-    !! with the production fill; each row's record with its resolvability, its whole row, its error against the
-    !! particle's stored direction and its feature tensor are written beside fname. Then the student is trained on
-    !! the rows and the features (every tenth particle held out for the early stopping) and written as the model
-    !! fname with its weights beside it. Project: reads the particle field; writes what refine3D's setup writes
-    !! (the halves, the sigma2 bootstrap, the run seed), nothing else
-    subroutine learn_pose_student_exec( params, build, cline )
+    !> The physical posterior's best pose of the selected particles against vol1 (the validation's reference): learn's
+    !! rows at the caller's prob_beta (1), each row's mode with its in-plane angle and refined shift, to the particle
+    !! field and to <fname base>_poses.txt. Project: writes the particle field; no student
+    subroutine run_pose_posterior_mode( cline )
+        class(cmdline), intent(inout) :: cline
+        type(parameters), target :: params
+        type(builder)            :: build
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        call learn_pose_student_exec(params, build, cline, mode=.true.)
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_POSE_POSTERIOR_MODE NORMAL STOP ****', print_simple=.false.)
+    end subroutine run_pose_posterior_mode
+
+    !> The teacher's rows of the selected particles at the student grid and band against vol1 (refine3D's preparation
+    !! and fill), audited against the physical posterior, written beside fname with their features, and the student
+    !! trained on them and written as fname; with mode each row's best pose instead (doc/algorithms/pose_student.md)
+    subroutine learn_pose_student_exec( params, build, cline, mode )
         type(parameters), target, intent(inout) :: params
         type(builder),    target, intent(inout) :: build
         class(cmdline),           intent(inout) :: cline
+        logical, optional,        intent(in)    :: mode
         class(eul_prob_tab), allocatable :: tab
         type(ptcl_read_session)  :: reads
         type(image), allocatable :: ptcl_imgs(:), ptcl_imgs_pad(:)
@@ -111,8 +121,15 @@ contains
         logical  :: l_rebuilt, l_cache, l_by_stack
         character(len=:), allocatable :: msg
         type(pose_student)       :: reread
+        type(prob_row_record)    :: rec_phys
+        real(dp)                 :: audit_dev(2), audit_rep(4)
+        real,    allocatable     :: pose_m(:,:), shift_m(:,:), lmin_m(:)   ! the mode pass: each row's best pose
         integer                  :: nsel
+        logical                  :: l_mode
         t_all = tic()
+        l_mode = .false.
+        if( present(mode) ) l_mode = mode
+        audit_rep  = 0.d0
         call check_pass_team('learn_pose_student')
         ! the contract
         if( params%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('the teacher is the Euclidean posterior: objfun=euclid; learn_pose_student')
@@ -185,9 +202,12 @@ contains
         mtime = int(statbuf(10),int64)
         key   = polar_feats_contract(projpath%to_char(), mtime, build%spproj_field%get_noris(), params%box, params%box_crop, &
             &params%smpd, pinds, build%pftc%get_pftsz(), params%kfromto, wk, trim(params%ctf) /= 'no')
-        call cache%new(fname_feats)
-        call cache%create(feats, maxval(pinds), status)
-        l_cache   = status == 0
+        l_cache = .false.
+        if( .not. l_mode )then
+            call cache%new(fname_feats)
+            call cache%create(feats, maxval(pinds), status)
+            l_cache = status == 0
+        endif
         vol_hash  = file_hash(params%vols(1))
         ! the table of the pass: the iteration's model from the complete field, the assignment opened
         allocate(eul_prob_tab :: tab)
@@ -200,8 +220,13 @@ contains
         write(stat_unit,'(A)') '# iptcl eo temp nvalid iproj_mode pmax neff k99 nkept wtail lmin inpl_mode x_mode y_mode '//&
             &'dist_mode_deg iproj_ref w_ref rank_ref in_cone in_k99 wsq logpow dfx tazim'
         call write_grid
-        ! the training set in memory: the tensors, the rows' losses and temperatures
-        allocate(x_all(feats%get_pftsz(), nk, 2, nptcls), ctf2_all(nk, nptcls), side_all(nptcls), source=0.)
+        ! the training set in memory: the tensors, the rows' losses and temperatures; the mode's pass keeps the poses
+        if( l_mode )then
+            allocate(x_all(0,0,0,0), ctf2_all(0,0), side_all(0))
+            allocate(pose_m(3,nptcls), shift_m(2,nptcls), lmin_m(nptcls), source=0.)
+        else
+            allocate(x_all(feats%get_pftsz(), nk, 2, nptcls), ctf2_all(nk, nptcls), side_all(nptcls), source=0.)
+        endif
         allocate(dists_all(params%nspace, nptcls), temps_all(nptcls), source=0.)
         allocate(mode_all(nptcls), source=0)
         rt_prep  = toc(t0)
@@ -227,14 +252,18 @@ contains
                 iptcl = pinds(i)
                 call tab%get_posterior_row(i, params%prob_beta, STUDENT_KMAX_ROW, rec, dists)
                 call rows%put(rec, dists)
-                call feats%build(build%pftc, iptcl, feat)
-                if( l_cache ) call cache%put(iptcl, feat)
-                x_all(:,:,:,i)  = feat%x
-                ctf2_all(:,i)   = feat%ctf2
-                side_all(i)     = feat%logpow
+                if( .not. l_mode )then
+                    call feats%build(build%pftc, iptcl, feat)
+                    if( l_cache ) call cache%put(iptcl, feat)
+                    x_all(:,:,:,i)  = feat%x
+                    ctf2_all(:,i)   = feat%ctf2
+                    side_all(i)     = feat%logpow
+                endif
                 dists_all(:,i)  = dists(1:params%nspace)
                 temps_all(i)    = rec%temp
                 if( rec%imin > 0 ) mode_all(i) = tab%ref_proj(rec%imin)
+                call audit_row
+                if( l_mode ) call keep_mode_pose
                 call write_stats_line
             enddo
             rt_rows = rt_rows + toc(t0)
@@ -248,6 +277,7 @@ contains
         call reads%kill
         call feat%kill
         call rec%kill
+        call rec_phys%kill
         call clean_batch_particles3D(build, ptcl_imgs, ptcl_imgs_pad)
         call tab%kill
         deallocate(tab)
@@ -255,6 +285,19 @@ contains
         call build%esig%kill
         write(logfhandle,'(A,F9.2,A,F9.2,A)') '>>> POSE STUDENT ROWS: fill ', rt_fill, ' s wall, ', &
             &rt_fill / real(nptcls,timer_int_kind) * 1000., ' ms per particle'
+        call report_audit
+        if( l_mode )then
+            ! the mode's pass: each row's best pose to the particle field and beside the rows; no student
+            call write_mode_poses
+            rt_all = toc(t_all)
+            call write_mode_header
+            call feats%kill
+            call o%kill
+            deallocate(dists, pinds, batches, wk, x_all, ctf2_all, side_all, dists_all, temps_all, held, mode_all, group_of, &
+                &xrefs, pose_m, shift_m, lmin_m)
+            if( allocated(statbuf) ) deallocate(statbuf)
+            return
+        endif
         ! the students, cheapest first (the widest only on a large set), trained on the rows with the shift augmentation of
         ! the centring's disk; a wider design replaces the kept one when it recovers clearly more held-out seeds (a seed recovered, ruling R1: the
         ! teacher's direction or its mirror partner inside a folded cone within the cap and within the route's bound,
@@ -337,6 +380,96 @@ contains
         if( allocated(statbuf) ) deallocate(statbuf)
 
     contains
+
+        !> the row the student trains on against the physical posterior at the table's own temperature (audit_rep: the
+        !! rows, those read off the physical temperature, the largest mass difference and its ratio to the rounding bound)
+        subroutine audit_row
+            call tab%get_posterior_row(i, 1., 1, rec_phys)
+            call physical_row_audit(params%nspace, dists(1:params%nspace), rec%temp, rec_phys%temp, audit_dev)
+            audit_rep(1) = audit_rep(1) + 1.d0
+            if( rec%temp /= rec_phys%temp ) audit_rep(2) = audit_rep(2) + 1.d0
+            audit_rep(3) = max(audit_rep(3), audit_dev(1))
+            audit_rep(4) = max(audit_rep(4), audit_dev(2))
+        end subroutine audit_row
+
+        !> the audit to the log; the teacher (the student's rows and the mode's pass) must read every row at the physical
+        !! temperature and give the physical masses within their rounding bound
+        subroutine report_audit
+            write(logfhandle,'(A,I0,A,I0,A,ES10.2,A,ES10.2)') '>>> POSE STUDENT TEACHER AUDIT: ', nint(audit_rep(1)), &
+                &' rows, ', nint(audit_rep(2)), ' off the physical temperature, max |mass - physical| ', audit_rep(3), &
+                &', / rounding bound ', audit_rep(4)
+            if( audit_rep(2) > 0.d0 ) THROW_HARD('a row of the teacher is not at the physical temperature; learn_pose_student')
+            if( audit_rep(4) > 1.d0 ) THROW_HARD('the teacher''s rows differ from the physical posterior; learn_pose_student')
+        end subroutine report_audit
+
+        !> the mode's pose of row i: its direction, the in-plane angle of its rotation (e3 = 360 - rot) and the stored
+        !! shift plus its refined increment, as refine3D's assignment commits a pose
+        subroutine keep_mode_pose
+            if( rec%imin < 1 ) return
+            pose_m(:,i)  = build%eulspace%get_euler(tab%ref_proj(rec%imin))
+            pose_m(3,i)  = modulo(360. - build%pftc%get_rot(rec%inpl_mode), 360.)
+            shift_m(:,i) = build%spproj_field%get_2Dshift(iptcl) + [rec%x_mode, rec%y_mode]
+            lmin_m(i)    = rec%lmin
+        end subroutine keep_mode_pose
+
+        !> the mode's poses to the particle field (written once) and to <base>_poses.txt (iptcl e1 e2 e3 x y iproj lmin,
+        !! the costs per particle in the header); the shift's centring state is left to the caller
+        subroutine write_mode_poses
+            type(string) :: fname_poses
+            integer      :: pose_unit, i_here
+            fname_poses = base%to_char()//'_poses.txt'
+            call fopen(pose_unit, fname_poses, status='replace', action='write', iostat=io_stat)
+            call fileiochk('pose_posterior_mode; open '//fname_poses%to_char(), io_stat)
+            write(pose_unit,'(A,2(1X,ES14.6))') '# iptcl e1 e2 e3 x y iproj lmin ; cost_s_per_ptcl fill, setup+particles+fill:', &
+                &rt_fill / real(nptcls,timer_int_kind), (rt_prep + rt_batch + rt_fill) / real(nptcls,timer_int_kind)
+            do i_here = 1,nptcls
+                if( mode_all(i_here) < 1 ) cycle
+                call build%spproj_field%set_euler(pinds(i_here), pose_m(:,i_here))
+                call build%spproj_field%set_shift(pinds(i_here), shift_m(:,i_here))
+                write(pose_unit,'(I0,5(1X,F10.4),1X,I0,1X,ES14.6)') pinds(i_here), pose_m(:,i_here), shift_m(:,i_here), &
+                    &mode_all(i_here), lmin_m(i_here)
+            enddo
+            call fclose(pose_unit)
+            call build%spproj%write_segment_inside(params%oritype)
+            write(logfhandle,'(A,I0,A,A)') '>>> POSE POSTERIOR MODE: ', count(mode_all > 0), ' poses to the particle field and ', &
+                &fname_poses%to_char()
+        end subroutine write_mode_poses
+
+        !> the mode's pass's provenance and cost
+        subroutine write_mode_header
+            call fopen(head_unit, fname_header, status='replace', action='write', iostat=io_stat)
+            call fileiochk('pose_posterior_mode; open '//fname_header%to_char(), io_stat)
+            write(head_unit,'(A)')        '# pose posterior mode rows (no student)'
+            write(head_unit,'(A,A)')      'projfile=', projpath%to_char()
+            write(head_unit,'(A,I0)')     'nptcls=', nptcls
+            write(head_unit,'(A,I0)')     'nspace=', params%nspace
+            write(head_unit,'(A,F10.4)')  'lp=', params%lp
+            write(head_unit,'(A,I0)')     'pftsz=', feats%get_pftsz_in()
+            write(head_unit,'(A,F8.4)')   'prob_beta=', params%prob_beta
+            write(head_unit,'(A,F8.3)')   'trs=', params%trs
+            write(head_unit,'(A,F8.3)')   'shift_sigma=', params%shift_sigma
+            write(head_unit,'(A,A)')      'vol1=', params%vols(1)%to_char()
+            write(head_unit,'(A,I0)')     'vol1_hash=', vol_hash
+            write(head_unit,'(A,I0)')     'nthr=', params%nthr
+            write(head_unit,'(A,F10.3)')  'time_prep_s=', rt_prep
+            write(head_unit,'(A,F10.3)')  'time_batch_prep_s=', rt_batch
+            write(head_unit,'(A,F10.3)')  'time_fill_s=', rt_fill
+            write(head_unit,'(A,F10.3)')  'time_rows_s=', rt_rows
+            write(head_unit,'(A,F10.3)')  'time_total_s=', rt_all
+            write(head_unit,'(A,F12.5)')  'fill_s_per_ptcl=', rt_fill / real(nptcls,timer_int_kind)
+            call write_audit_keys(head_unit)
+            call write_fill_profile_bench(head_unit, 'rows', profile, params%nstates)
+            call fclose(head_unit)
+        end subroutine write_mode_header
+
+        !> the audit's record in a header
+        subroutine write_audit_keys( u )
+            integer, intent(in) :: u
+            write(u,'(A,I0)')     'audit_rows=', nint(audit_rep(1))
+            write(u,'(A,I0)')     'audit_rows_off_physical_temperature=', nint(audit_rep(2))
+            write(u,'(A,ES12.4)') 'audit_max_mass_diff=', audit_rep(3)
+            write(u,'(A,ES12.4)') 'audit_max_mass_diff_over_rounding_bound=', audit_rep(4)
+        end subroutine write_audit_keys
 
         !> BENCH/POSE_STUDENT_LEARN_BENCH.txt: the context, the rows' costs, every design's training broken into the
         !! batch assembly, the gradients (the parallel region), the optimiser steps and the held-out evaluation, the
@@ -544,6 +677,17 @@ contains
         !! point group, the stored direction's nearest grid point with its mass and rank in the row, whether it lies in
         !! the cone (the KMAX_STUDENT entries of largest mass) and in the 99% set
         subroutine write_stats_line
+            real(dp) :: fw
+            real     :: fl, ft
+            ! the feature's columns: none in the mode's pass, which builds no feature
+            fw = -1.d0
+            fl = -1.
+            ft = -1.
+            if( .not. l_mode )then
+                fw = feat%wsq
+                fl = feat%logpow
+                ft = feat%tazim
+            endif
             call build%spproj_field%get_ori(iptcl, o)
             euls_ref   = o%get_euler()
             iproj_ref  = build%eulspace%find_closest_proj(o)
@@ -577,7 +721,7 @@ contains
                 &iptcl, build%spproj_field%get_eo(iptcl), rec%temp, rec%nvalid, iproj_mode, rec%pmax, rec%neff, rec%k99, &
                 &rec%nkept, rec%wtail, rec%lmin, rec%inpl_mode, rec%x_mode, rec%y_mode, euldist, iproj_ref, w_ref, rank_ref, &
                 &merge(1, 0, rank_ref >= 1 .and. rank_ref <= KMAX_STUDENT), merge(1, 0, rank_ref >= 1 .and. rank_ref <= rec%k99), &
-                &feat%wsq, feat%logpow, build%spproj_field%get(iptcl, 'dfx'), feat%tazim
+                &fw, fl, build%spproj_field%get(iptcl, 'dfx'), ft
         end subroutine write_stats_line
 
         logical function valid_dist( d )
@@ -659,6 +803,7 @@ contains
             write(head_unit,'(A,F8.5)')   'heldout_seeded=', heldout_seeded
             write(head_unit,'(A,F8.5)')   'heldout_recovered=', heldout_recovered
             write(head_unit,'(A,F8.3)')   'cone_bound_deg=', cone_bound
+            call write_audit_keys(head_unit)
             write(head_unit,'(A)')        'recovery=folded_sphere_within_cap_and_bound'
             write(head_unit,'(A,I0)')     'train_rows=', nptcls_train
             write(head_unit,'(A,I0)')     'heldout_rows=', nheldout
@@ -726,13 +871,18 @@ contains
         type(parameters), target  :: params
         type(builder)             :: build
         type(string), allocatable :: part_bases(:)
+        type(cmdline)             :: cline_sigma2
         logical :: l_rebuilt
         call build%init_params_and_build_general_tbox(cline, params, do3d=cline%defined('vol1'))
         if( complete_volume_source_available(params) )then
-            ! as predict_poses_exec prepares the registration, before any part reads it
+            ! as predict_poses_exec prepares the alignment, before any part reads it; the sigma2 bootstrap in this
+            ! process, as a shared-memory run makes it (over parts it sums in another order and moves the alignments)
             call ensure_field_halves(build%spproj, params%oritype, params%projfile)
-            call ensure_sigma2_for_iteration(cline, params%projfile, params%oritype, 1, params%box, params%smpd, &
+            cline_sigma2 = cline
+            call cline_sigma2%delete('nparts')
+            call ensure_sigma2_for_iteration(cline_sigma2, params%projfile, params%oritype, 1, params%box, params%smpd, &
                 &'POSE STUDENT SIGMA2', l_rebuilt)
+            call cline_sigma2%kill
             if( l_rebuilt ) call build%spproj%read_segment('projinfo', params%projfile)
             call set_bp_range3D(params, build, cline)
             call materialize_reprojection_model_from_volumes(params, build, cline, cleanup_pftc=.true.)
@@ -743,16 +893,19 @@ contains
         call simple_end('**** SIMPLE_PREDICT_POSES NORMAL STOP ****', print_simple=.false.)
     end subroutine predict_poses_master
 
-    !> The student's prediction for the project's selected particles: per particle the features under the model's
-    !! band and weights, the forward pass, the mode, the cone holding 99% of the posterior (at most KMAX_STUDENT
-    !! directions) and the confidence, with the error against the particle's stored direction, written to the text
-    !! table <fname>_pred.txt. Project: reads the particle field and the stacks; writes nothing
+    !> The student's prediction for the selected particles (the mode, the 99% cone, the confidence) and, given the map
+    !! vol1, each particle at its stored shift (the prior solve2D's) aligned over the cone's directions and their
+    !! mirrors (committed); to <fname>_pred.txt and <fname>_times.txt (doc/algorithms/pose_student.md)
     subroutine predict_poses_exec( params, build, cline )
         use simple_ori_utils, only: euler_inpl_closest
         type(parameters), target, intent(inout) :: params
         type(builder),    target, intent(inout) :: build
         class(cmdline),           intent(inout) :: cline
         integer, parameter       :: TH_NSTEPS = 6   !< the timed per-particle steps
+        ! the committed pose (the cone's alignment given the map, the readout's at the stored shift otherwise) and the
+        ! readout's direction and in-plane angle
+        character(len=*), parameter :: PRED_HEADER = '# iptcl eo mode pmax k99 ncone conf radius_deg iproj_ref dist_mode_deg '//&
+            &'dist_cone_deg rank_ref in_cone route e1 e2 e3 x y e1_ro e2_ro e3_ro'
         type(pose_student)       :: student
         type(ptcl_read_session)  :: reads
         type(image), allocatable :: ptcl_imgs(:), ptcl_imgs_pad(:)
@@ -766,11 +919,14 @@ contains
         integer, allocatable     :: iproj_ref(:), rank_ref(:), in_cone(:)
         integer(timer_int_kind)  :: t0, t_all
         real(timer_int_kind)     :: rt_prep, rt_batch, rt_pred, rt_all, rt_table, rt_write, rt_chkout
-        real(dp), allocatable    :: th_s(:,:)       ! per thread: features, forward, cone, reference error, shift check, registration
+        real(dp), allocatable    :: th_s(:,:)       ! per thread: features, forward, cone, reference error, shift check, alignment
         integer,  allocatable    :: th_n(:)
-        type(pftc_shsrch_grad), allocatable :: shsrch(:)
-        real,    allocatable     :: sh_reg(:,:), corr_reg(:)
-        real     :: lims_reg(2,2)
+        type(pose_student_align), allocatable :: aln(:)
+        type(pose_align_result),  allocatable :: res_sk(:)
+        real,    allocatable     :: sh_in(:,:), euls_sk(:,:), euls_out(:,:), sh_out(:,:)
+        integer, allocatable     :: mirr_map(:)
+        real(timer_int_kind)     :: rt_sk
+        type(string)             :: fname_times
         logical  :: l_reg, l_rebuilt
         integer(int64)           :: clock_rate
         integer  :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, nthr, pred_unit, io_stat, kfromto(2)
@@ -802,7 +958,8 @@ contains
         base = fname_base(params%fname)
         ! a part's tables carry its number: the parts of one caller share fname
         if( l_part ) base = base%to_char()//'_part'//int2str(params%part)
-        fname_pred = base%to_char()//'_pred.txt'
+        fname_pred  = base%to_char()//'_pred.txt'
+        fname_times = base%to_char()//'_times.txt'
         ! the selected particles (a part's range of them; a part may hold none and writes its range unchanged)
         l_reg = complete_volume_source_available(params)
         call build%spproj_field%get_pinds(1, 'state', pinds)
@@ -833,7 +990,7 @@ contains
             &student%get_nspace(), ' and lp ', params%lp, ' A'
         ! the batches and the calculator: one reference slot (the features need the particles alone), or, given vol1,
         ! the map's reprojections at the student's grid and band with sigma2, as learn_pose_student prepares them,
-        ! for the shift registration against the read-out pose
+        ! and the shift maps of the alignment
         batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
         nbatches    = 1 + (nptcls - 1) / batchsz_max
         batches     = split_nobjs_even(nptcls, nbatches)
@@ -854,22 +1011,32 @@ contains
             call build%vol_odd%kill
             call build%vol2%kill
             call build%pftc%memoize_refs(eulspace=build%eulspace)
+            call setup_shiftmap_srch(params, build)
         else
             call build%pftc%new(params, 1, [1,batchsz_max], kfromto)
             call alloc_ptcl_imgs(params, build, ptcl_imgs, ptcl_imgs_pad, batchsz_max)
         endif
         nthr = params%nthr
         !$ nthr = omp_get_max_threads()
-        allocate(sh_reg(2,nptcls), corr_reg(nptcls), source=0.)
+        allocate(sh_in(2,nptcls), euls_sk(3,nptcls), euls_out(3,nptcls), sh_out(2,nptcls), source=0.)
+        allocate(res_sk(nptcls))
         if( l_reg )then
-            lims_reg(:,1) = -STUDENT_SHIFT_REG_HALFWIDTH / params%smpd
-            lims_reg(:,2) =  STUDENT_SHIFT_REG_HALFWIDTH / params%smpd
-            allocate(shsrch(nthr))
-            do i = 1,nthr
-                call shsrch(i)%new_fixed(build, lims_reg, maxits=STUDENT_SHIFT_REG_MAXITS, coarse_init=.true.)
+            ! the particles enter at their stored shifts, not yet refined: the disk under the prior about the stored
+            ! shift, for the alignment, and the box's mask in their preparation, as the search treats such a particle
+            do i = 1,nptcls
+                call build%spproj_field%set(pinds(i), 'shsig',  -1.)
+                call build%spproj_field%set(pinds(i), 'shincr',  0.)
             enddo
-            write(logfhandle,'(A,F6.1,A)') '>>> POSE STUDENT PREDICTION: shifts registered against the map''s reprojection at the read-out pose, within ', &
-                &STUDENT_SHIFT_REG_HALFWIDTH, ' A of the stored shift'
+            allocate(mirr_map(student%get_nspace()))
+            do i = 1,student%get_nspace()
+                mirr_map(i) = student%mirror_of(i)
+            enddo
+            allocate(aln(nthr))
+            do i = 1,nthr
+                call aln(i)%new(params, build, 2 * KMAX_STUDENT)
+            enddo
+            write(logfhandle,'(A,F6.1,A)') '>>> POSE STUDENT ALIGNMENT: the cone''s directions with their mirrors, every rotation, shifts within ', &
+                &disk_radius_px(params%shift_sigma, params%smpd, params%box) * params%smpd, ' A of the stored shift'
         endif
         call student%prepare_predict(nthr)
         allocate(th_s(TH_NSTEPS, nthr), source=0.d0)
@@ -889,6 +1056,7 @@ contains
         rt_prep  = toc(t0)
         rt_batch = 0.
         rt_pred  = 0.
+        rt_sk    = 0.
         call reads%new(params)
         call reads%expect(pinds)
         do ibatch = 1,nbatches
@@ -905,7 +1073,19 @@ contains
             enddo
             !$omp end parallel do
             rt_pred = rt_pred + toc(t0)
+            if( .not. l_reg ) cycle
+            ! the alignment after the prediction, timed on its own
+            t0 = tic()
+            !$omp parallel do default(shared) private(i) schedule(dynamic) proc_bind(close)
+            do i = b0,b1
+                call align_one(i, pinds(i))
+            enddo
+            !$omp end parallel do
+            rt_sk = rt_sk + toc(t0)
         enddo
+        if( l_reg )then
+            if( any(res_sk%iref < 1) ) THROW_HARD('the alignment found no reference; predict_poses')
+        endif
         call reads%kill
         call clean_batch_particles3D(build, ptcl_imgs, ptcl_imgs_pad)
         call build%pftc%kill
@@ -913,7 +1093,7 @@ contains
         t0 = tic()
         call fopen(pred_unit, fname_pred, status='replace', action='write', iostat=io_stat)
         call fileiochk('predict_poses; open '//fname_pred%to_char(), io_stat)
-        write(pred_unit,'(A)') '# iptcl eo mode pmax k99 ncone conf radius_deg iproj_ref dist_mode_deg dist_cone_deg rank_ref in_cone route e1 e2 e3 x y'
+        write(pred_unit,'(A)') PRED_HEADER
         n_in_cone    = 0
         n_within_two = 0
         n_capped     = 0
@@ -927,13 +1107,22 @@ contains
             iptcl = pinds(i)
             ! the route (ruling R1): the neighbourhood search from the student's folded cone when the cone is within
             ! the cap, its radius within the model's bound (the dense search's cell) and the confidence at or above
-            ! the model's threshold; the dense search otherwise. A seeded particle takes the mode (the heavier of the
-            ! pair) as its direction (the in-plane rotation and the shift stay the search's; the search tries the
-            ! antipode too), the cone's radius at least the grid's spacing; the confidence and the route in their slots
+            ! the model's threshold; the dense search otherwise. Without the map a seeded particle takes the mode (the
+            ! heavier of the pair) as its direction, the rotation and the shift left to the search (which tries the
+            ! antipode too); given the map every particle takes the cone's alignment. The cone's radius at least the
+            ! grid's spacing; the confidence and the route in their slots
             route = 2
             if( preds(i)%k99 <= KMAX_STUDENT .and. preds(i)%radius <= cone_bound .and. preds(i)%conf >= conf_threshold ) route = 1
             cone = 0.
-            if( route == 1 )then
+            ! the committed pose: the cone's alignment, at the stored shift plus its increment, given the map; the
+            ! readout's pose at the stored shift otherwise
+            euls_out(:,i) = euls_pose(:,i)
+            sh_out(:,i)   = sh_in(:,i)
+            if( l_reg )then
+                euls_out(:,i) = euls_sk(:,i)
+                sh_out(:,i)   = sh_in(:,i) + res_sk(i)%sh
+            endif
+            if( route == 1 .and. .not. l_reg )then
                 ! the in-plane angle at the mode's direction closest to the search's stored rotation (euler_inpl_closest:
                 ! exact for any pair of directions, the poles included, where copying e3 is wrong by up to e1's change)
                 euls_stored = build%spproj_field%get_euler(iptcl)
@@ -944,13 +1133,25 @@ contains
                 n_seeded = n_seeded + 1
                 n_in_cone_seeded = n_in_cone_seeded + in_cone(i)
             endif
+            if( route == 1 .and. l_reg )then
+                cone = max(preds(i)%radius, spacing)
+                n_seeded = n_seeded + 1
+                n_in_cone_seeded = n_in_cone_seeded + in_cone(i)
+            endif
+            if( l_reg )then
+                ! the aligned pose committed, with the dynamic centring's state of the next search
+                call build%spproj_field%set_euler(iptcl, euls_out(:,i))
+                call build%spproj_field%set_shift(iptcl, sh_out(:,i))
+                call record_shift_state(build%spproj_field, iptcl, norm2(res_sk(i)%sh), res_sk(i)%sdev, params%shift_sigma, &
+                    &params%smpd, params%box, params%trs, kfromto)
+            endif
             call build%spproj_field%set(iptcl, 'cone',  cone)
             call build%spproj_field%set(iptcl, 'pconf', preds(i)%conf)
             call build%spproj_field%set(iptcl, 'route', real(route))
-            write(pred_unit,'(I0,1X,I0,1X,I0,1X,F8.5,1X,I0,1X,I0,1X,F8.5,1X,F8.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,1X,I0,1X,I0,5(1X,F8.3))') &
+            write(pred_unit,'(I0,1X,I0,1X,I0,1X,F8.5,1X,I0,1X,I0,1X,F8.5,1X,F8.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,1X,I0,1X,I0,8(1X,F8.3))') &
                 &iptcl, build%spproj_field%get_eo(iptcl), preds(i)%mode, preds(i)%pmax, preds(i)%k99, preds(i)%ncone, &
                 &preds(i)%conf, preds(i)%radius, iproj_ref(i), dist_mode(i), dist_cone(i), rank_ref(i), in_cone(i), route, &
-                &euls_pose(:,i), sh_reg(:,i)
+                &euls_out(:,i), sh_out(:,i), euls_pose(:,i)
             n_in_cone = n_in_cone + in_cone(i)
             if( dist_mode(i) >= 0. .and. dist_mode(i) <= 12. ) n_within_two = n_within_two + 1
             if( preds(i)%k99 > KMAX_STUDENT ) n_capped = n_capped + 1
@@ -982,6 +1183,16 @@ contains
             &rt_batch, ' s, features and forward ', rt_pred, ' s, total ', rt_all, ' s'
         write(logfhandle,'(A,F9.3,A)') '>>> POSE STUDENT PREDICTION: ', rt_pred / real(nptcls,timer_int_kind) * 1000., &
             &' ms per particle (features and forward)'
+        if( l_reg )then
+            write(logfhandle,'(A,F9.3,A)') '>>> POSE STUDENT ALIGNMENT: ', rt_sk / real(nptcls,timer_int_kind) * 1000., &
+                &' ms per particle over the cone'
+        endif
+        ! the wall times of the prediction and of the alignment, for the validation's costs
+        call fopen(pred_unit, fname_times, status='replace', action='write', iostat=io_stat)
+        call fileiochk('predict_poses; open '//fname_times%to_char(), io_stat)
+        write(pred_unit,'(A)') '# nptcls predict_s align_s'
+        write(pred_unit,'(I0,2(1X,F12.4))') nptcls, rt_pred, rt_sk
+        call fclose(pred_unit)
         t0 = tic()
         call write_shift_check
         rt_chkout = toc(t0)
@@ -989,13 +1200,14 @@ contains
         if( L_BENCH_GLOB ) call write_predict_bench
         call student%kill
         call feats%kill
-        if( allocated(shsrch) )then
-            do i = 1,size(shsrch)
-                call shsrch(i)%kill
+        if( allocated(aln) )then
+            do i = 1,size(aln)
+                call aln(i)%kill
             enddo
-            deallocate(shsrch)
+            deallocate(aln, mirr_map)
         endif
-        deallocate(preds, prob, dist_mode, dist_cone, euls_pose, sh_reg, corr_reg, iproj_ref, rank_ref, in_cone, pinds, batches, wk)
+        deallocate(preds, prob, dist_mode, dist_cone, euls_pose, sh_in, euls_sk, euls_out, sh_out, res_sk, &
+            &iproj_ref, rank_ref, in_cone, pinds, batches, wk)
         deallocate(chk_tv, chk_jacc, chk_fchg, chk_mode, chk_cone, th_s, th_n)
         call fname_chk%kill
 
@@ -1006,7 +1218,7 @@ contains
         subroutine write_empty_part
             call fopen(pred_unit, fname_pred, status='replace', action='write', iostat=io_stat)
             call fileiochk('predict_poses; open '//fname_pred%to_char(), io_stat)
-            write(pred_unit,'(A)') '# iptcl eo mode pmax k99 ncone conf radius_deg iproj_ref dist_mode_deg dist_cone_deg rank_ref in_cone route e1 e2 e3 x y'
+            write(pred_unit,'(A)') PRED_HEADER
             call fclose(pred_unit)
             call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [params%fromp, params%top], isegment=PTCL3D_SEG)
             write(logfhandle,'(A,I0,A,I0,A)') '>>> POSE STUDENT PREDICTION: no selected particle in the part''s range ', &
@@ -1022,7 +1234,7 @@ contains
             use simple_bench_io, only: open_bench_report
             character(len=*), parameter :: STEP_NAMES(TH_NSTEPS) = [character(len=32) :: 'features (pooled tensor)', &
                 &'forward pass (HHCNN)', 'folded cone and readout pose', 'reference direction error', 'shift check (R2)', &
-                &'shift registration (vol1)']
+                &'alignment over the cone']
             integer  :: fnr, k
             real(dp) :: th_tot(nthr), busy
             call open_bench_report(fnr, 'POSE_STUDENT_PREDICT')
@@ -1037,19 +1249,21 @@ contains
             write(fnr,'(a,i0)')   'student batches                     : ', nbatches
             write(fnr,'(a,i0)')   'student shift-checked particles     : ', nchk
             write(fnr,'(a,l1)')   'student distributed part            : ', l_part
-            write(fnr,'(a,l1)')   'student shift registration (vol1)   : ', l_reg
+            write(fnr,'(a,l1)')   'student alignment (vol1)            : ', l_reg
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f0.2)') 'model read and calculator setup      :', rt_prep
             write(fnr,'(a,1x,f0.2)') 'particle reading and preparation     :', rt_batch
             write(fnr,'(a,1x,f0.2)') 'prediction (parallel, wall)          :', rt_pred
             write(fnr,'(a,1x,f0.3)') 'prediction per particle (ms, wall)   :', 1000. * rt_pred / real(max(1,nptcls))
+            write(fnr,'(a,1x,f0.2)') 'alignment (parallel, wall)           :', rt_sk
+            write(fnr,'(a,1x,f0.3)') 'alignment per particle (ms, wall)    :', 1000. * rt_sk / real(max(1,nptcls))
             write(fnr,'(a,1x,f0.2)') 'routes and prediction table          :', rt_table
             write(fnr,'(a,1x,f0.2)') 'records write                        :', rt_write
             write(fnr,'(a,1x,f0.2)') 'shift check table                    :', rt_chkout
             write(fnr,'(a,1x,f0.2)') 'total time                           :', rt_all
-            write(fnr,'(a,1x,f0.2)') '% accounted for                      :', 100. * (rt_prep + rt_batch + rt_pred + rt_table + &
-                &rt_write + rt_chkout) / max(rt_all, real(1.e-9,timer_int_kind))
+            write(fnr,'(a,1x,f0.2)') '% accounted for                      :', 100. * (rt_prep + rt_batch + rt_pred + &
+                &rt_sk + rt_table + rt_write + rt_chkout) / max(rt_all, real(1.e-9,timer_int_kind))
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** PREDICTION STEPS (thread-seconds, ms per particle) ***'
             do k = 1,TH_NSTEPS
@@ -1059,8 +1273,8 @@ contains
             th_tot = sum(th_s, dim=1)
             busy   = sum(th_tot)
             write(fnr,'(a32,a,1x,f0.3)') 'all steps', ':', busy
-            if( rt_pred > 0. ) write(fnr,'(a32,a,1x,f0.1)') 'team utilisation (%)', ':', &
-                &100.d0 * busy / (real(nthr,dp) * real(rt_pred,dp))
+            if( rt_pred + rt_sk > 0. ) write(fnr,'(a32,a,1x,f0.1)') 'team utilisation (%)', ':', &
+                &100.d0 * busy / (real(nthr,dp) * real(rt_pred + rt_sk,dp))
             if( busy > 0.d0 ) write(fnr,'(a32,a,1x,f0.3)') 'load imbalance (max/mean thread)', ':', &
                 &maxval(th_tot) / (busy / real(nthr,dp))
             write(fnr,'(a32,a,1x,i0,1x,i0)') 'particles per thread (min, max)', ':', minval(th_n), maxval(th_n)
@@ -1074,8 +1288,8 @@ contains
             integer, intent(in) :: i_here, iptcl_here, islot
             type(polar_feat) :: feat_here
             type(ori)        :: o_here
-            real    :: euls_ref(3), d, cxy(3)
-            integer :: ithr_here, j, ip_ref, ip_pose, irot
+            real    :: euls_ref(3), d
+            integer :: ithr_here, j, ip_ref, ip_pose
             integer(int64) :: c0
             ithr_here = 1
             !$ ithr_here = omp_get_thread_num() + 1
@@ -1087,19 +1301,7 @@ contains
             call student%cone_of(prob(:,islot), preds(i_here))
             call student%pose_of(ithr_here, preds(i_here)%mode, euls_pose(:,i_here), ip_pose)   ! before the shift check reuses the readout
             call lap(3, ithr_here, c0)
-            ! the shift: the stored one, plus, given the map, the increment registered against the reference at the read-out
-            ! pose (its direction and rotation fixed; the search's convention e3 = 360 - rot(irot))
-            sh_reg(:,i_here) = build%spproj_field%get_2Dshift(iptcl_here)
-            if( l_reg )then
-                irot = build%pftc%get_roind(360. - euls_pose(3,i_here))
-                call shsrch(ithr_here)%set_indices(ip_pose, iptcl_here)
-                cxy = shsrch(ithr_here)%minimize(irot)
-                if( irot > 0 )then
-                    sh_reg(:,i_here) = sh_reg(:,i_here) + cxy(2:3)
-                    corr_reg(i_here) = cxy(1)
-                endif
-                call lap(6, ithr_here, c0)
-            endif
+            sh_in(:,i_here) = build%spproj_field%get_2Dshift(iptcl_here)
             if( i_here <= nchk )then
                 call shift_check(i_here, ithr_here, islot, feat_here)
                 call lap(5, ithr_here, c0)
@@ -1124,6 +1326,21 @@ contains
             call lap(4, ithr_here, c0)
             th_n(ithr_here) = th_n(ithr_here) + 1
         end subroutine predict_one
+
+        !> one particle at its stored shift aligned against the map's reprojections of the cone's directions and
+        !! their mirrors, on the calling thread: the best alignment and its pose (e3 = 360 - rot)
+        subroutine align_one( i_here, iptcl_here )
+            integer, intent(in) :: i_here, iptcl_here
+            integer        :: ithr_here
+            integer(int64) :: c0
+            ithr_here = 1
+            !$ ithr_here = omp_get_thread_num() + 1
+            call system_clock(count=c0)
+            call aln(ithr_here)%align(iptcl_here, preds(i_here)%cone(1:preds(i_here)%ncone), mirr_map, res_sk(i_here))
+            euls_sk(:,i_here) = build%eulspace%get_euler(res_sk(i_here)%iref)
+            euls_sk(3,i_here) = modulo(360. - build%pftc%get_rot(res_sk(i_here)%irot), 360.)
+            call lap(6, ithr_here, c0)
+        end subroutine align_one
 
         !> the time since c0 to step k of thread ithr_here, c0 moved on (system_clock: tic/toc share module state)
         subroutine lap( k, ithr_here, c0 )

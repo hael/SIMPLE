@@ -1,4 +1,4 @@
-!@descr: constants of the polar students on the HHCNN (the pose and class students): their grids and candidate caps, the teacher's rows and the training designs, the held-out calibration, the shift registration, and the learn, predict and validation programs
+!@descr: constants of the polar students on the HHCNN (the pose and class students): their grids and candidate caps, the teacher's rows and the training designs, the held-out calibration, the pose student's teacher and alignment, and the learn, predict and validation programs
 ! The network's own constants (CNN_*) and the trainer's step settings stay private to simple_hhcnn and
 ! simple_polar_student. doc/algorithms/pose_student.md and doc/algorithms/class_student.md say what each controls.
 module simple_defs_hhcnn
@@ -12,12 +12,13 @@ public :: KMAX_INPL_ROW, CLASS_STUDENT_PROB_BETA
 public :: STUDENT_SHIFT_AUG_NSIG, STUDENT_SHIFT_SIGMA, STUDENT_TRS, CLASS_STUDENT_TEACHER_ITER
 public :: STUDENT_HOLDOUT_EVERY, STUDENT_CONF_FRACTION, STUDENT_CONF_NONE, STUDENT_NBOOT, STUDENT_DESIGN_QUANTILE
 public :: STUDENT_SMPD_TOL, STUDENT_MSKDIAM_TOL
-public :: STUDENT_SHIFT_REG_HALFWIDTH, STUDENT_SHIFT_REG_MAXITS
+public :: POSE_STUDENT_PROB_BETA, POSE_DENSE_SHIFT_SIGMA
 public :: POSE_SHIFT_CHECK_NPTCLS, POSE_SHIFT_CHECK_MAGS, POSE_SHIFT_CHECK_NDIR, POSE_SHIFT_CHECK_NGROUPS
 public :: STUDENT_LP_VALIDATE, POSE_AGREE_DEG, POSE_TWO_STEPS_DEG
 public :: CLASS_DENSE_SHIFT_SIGMA, CLASS_MINPOP_FRC
 public :: STUDENT_TRAIN_PROJ, STUDENT_ALL_PROJ, STUDENT_UNSEEN_PROJ
-public :: POSE_STUDENT_MODEL_FNAME, POSE_STUDENT_PRED_TABLE, VALIDATE_POSE_STUDENT_REPORT
+public :: POSE_STUDENT_MODEL_FNAME, POSE_STUDENT_PRED_TABLE, POSE_STUDENT_PRED_TIMES, VALIDATE_POSE_STUDENT_REPORT
+public :: POSE_REFERENCE_FNAME, POSE_REFERENCE_MODEL_FNAME, VALIDATE_POSE_STUDENT_DETAILS
 public :: CLASS_STUDENT_MODEL_FNAME, CLASS_STUDENT_PRED_TABLE, CLASS_STUDENT_PRED_TIMES, CLASS_STUDENT_CAVGS
 public :: CLASS_REFERENCE_FNAME, CLASS_REFERENCE_CAVGS
 public :: VALIDATE_CLASS_STUDENT_REPORT
@@ -55,9 +56,9 @@ real,    parameter :: STUDENT_DESIGN_QUANTILE = 0.05    !< a wider design is kep
 real, parameter :: STUDENT_SMPD_TOL    = 1.e-4 !< a model's sampling (A/pixel) equals the project's within the header's five decimals
 real, parameter :: STUDENT_MSKDIAM_TOL = 1.e-2 !< a model's mask diameter (A) equals the project's within the header's three decimals
 
-! ---- the shift registration of a prediction
-real,    parameter :: STUDENT_SHIFT_REG_HALFWIDTH = 25. !< its box: +/- this (A) about the stored shift
-integer, parameter :: STUDENT_SHIFT_REG_MAXITS    = 50  !< its L-BFGS-B evaluations after the coarse grid
+! ---- the pose student's teacher and its alignment after prediction (doc/algorithms/pose_student.md)
+real,    parameter :: POSE_STUDENT_PROB_BETA        = 1.      !< the teacher's, the reference's and the alignment's tempering factor (physical)
+real,    parameter :: POSE_DENSE_SHIFT_SIGMA        = 10.     !< the reference pass's and the alignment's prior (A), whose 3-sigma disk covers the picking error
 
 ! ---- predict_poses' shift check (ruling R2 of the pose student)
 integer, parameter :: POSE_SHIFT_CHECK_NPTCLS  = 256           !< the first selected particles predicted again
@@ -78,7 +79,11 @@ character(len=*), parameter :: STUDENT_ALL_PROJ              = 'all_particles.si
 character(len=*), parameter :: STUDENT_UNSEEN_PROJ           = 'unseen_particles.simple'
 character(len=*), parameter :: POSE_STUDENT_MODEL_FNAME      = 'pose_student.txt'
 character(len=*), parameter :: POSE_STUDENT_PRED_TABLE       = 'pose_student_pred.txt'
+character(len=*), parameter :: POSE_STUDENT_PRED_TIMES       = 'pose_student_times.txt'   !< the prediction's and the alignment's wall times
+character(len=*), parameter :: POSE_REFERENCE_MODEL_FNAME    = 'pose_reference_student.txt' !< a dense pass's base name (its rows)
+character(len=*), parameter :: POSE_REFERENCE_FNAME          = 'pose_reference.txt'   !< the reference's poses (a frozen teacher's directory may hold them)
 character(len=*), parameter :: VALIDATE_POSE_STUDENT_REPORT  = 'validate_pose_student_report.txt'
+character(len=*), parameter :: VALIDATE_POSE_STUDENT_DETAILS = 'validate_pose_student_details.txt'
 character(len=*), parameter :: CLASS_STUDENT_MODEL_FNAME     = 'class_student.txt'
 character(len=*), parameter :: CLASS_STUDENT_PRED_TABLE      = 'class_student_pred.txt'
 character(len=*), parameter :: CLASS_STUDENT_PRED_TIMES      = 'class_student_times.txt'  !< the prediction's and the alignment's wall times

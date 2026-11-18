@@ -15,7 +15,7 @@ use simple_math,          only: hpsort
 use simple_defs_hhcnn,    only: KMAX_STUDENT
 implicit none
 
-public :: pose_student, student_pred
+public :: pose_student, student_pred, physical_row_audit
 public :: POSE_STUDENT_VERSION, run_all_pose_student_tests
 private
 #include "simple_local_flags.inc"
@@ -184,6 +184,43 @@ contains
         call self%core%train(n, x, ctf2, side, targets, held, prob_beta, shift_aug_px, max_epochs, patience, nthr, log_unit)
         deallocate(targets)
     end subroutine train
+
+    !> The physical teacher's audit of a row: the training's targets from dists at temp against exp(-tphys (L - Lmin))
+    !! normalised over the valid entries; dev(1) the largest mass difference, dev(2) its ratio to the rounding bound of
+    !! the single-precision losses (each carries half its spacing)
+    subroutine physical_row_audit( n, dists, temp, tphys, dev )
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        integer,  intent(in)  :: n
+        real(sp), intent(in)  :: dists(n), temp, tphys
+        real(dp), intent(out) :: dev(2)
+        real(sp) :: t(n), dmin, dmax, invalid
+        real(dp) :: m(n), bound
+        logical  :: valid(n)
+        integer  :: i
+        dev     = 0.d0
+        invalid = 0.1 * huge(invalid)
+        do i = 1,n
+            valid(i) = ieee_is_finite(dists(i))
+            if( valid(i) ) valid(i) = dists(i) < invalid
+        enddo
+        if( .not. any(valid) ) return
+        call polar_student_targets(n, dists, temp, t)
+        dmin = minval(dists, mask=valid)
+        dmax = maxval(abs(dists), mask=valid)
+        m    = 0.d0
+        if( tphys > 0. )then
+            do i = 1,n
+                if( valid(i) ) m(i) = exp(-max(0.d0, min(700.d0, real(tphys,dp) * real(dists(i) - dmin,dp))))
+            enddo
+            m = m / sum(m)
+        else
+            ! no temperature: the posterior is the argmin's
+            m(minloc(dists, dim=1, mask=valid)) = 1.d0
+        endif
+        bound  = 2.d0 * real(tphys,dp) * real(spacing(dmax),dp) + 1.d-6
+        dev(1) = maxval(abs(real(t,dp) - m))
+        dev(2) = dev(1) / bound
+    end subroutine physical_row_audit
 
     !> the workspaces of a team of nthr threads for predict_feat
     subroutine prepare_predict( self, nthr )

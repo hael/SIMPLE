@@ -46,6 +46,14 @@ Silent ones first.
 - One write of the particle field per iteration; the extra writes are listed in the policy's section 8: add
   none. Write segments (`write_segment_inside`) mid-run; after a full read call `update_projinfo`.
 - A `<x>_exec` never calls `params%new` or reseeds; `run_<x>` and the strategies' `initialize` build them.
+- The students (`simple_strategy_class_student.f90`, `simple_strategy_pose_student.f90`) learn the physical
+  posterior (`prob_beta` 1; learn audits every row against it) and refine shifts only after the prediction: the
+  class student over its shortlist (`simple_class_student_align`), the pose student over the cone's directions and
+  their mirrors against the training set's map (`simple_pose_student_align`). The pose student's training and
+  predicted particles are centred by the solve2D before solve3D (in the stream the class student's alignment gives
+  the 2D shifts); predicting on raw picks was measured and rejected (`doc/algorithms/pose_student.md`).
+- `predict_poses`' distributed master bootstraps sigma2 in its own process (`nparts` off that command line): a
+  bootstrap over the parts sums the spectra in another order, and the master no longer equals shared memory.
 - Do not import a concrete commander module into a strategy module beyond those the policy's section 8 lists.
   A nested reconstruction calls the strategy routine `run_rec3D(cline)` (`simple_rec3D_strategy.f90`), whose
   thin wrapper is `commander_rec3D`.
@@ -59,6 +67,8 @@ Silent ones first.
   `search/probabilistic/simple_eul_prob_tab_utils.f90`.
 - `simple_rec3D_*`: reconstruct3D (service, gridding, PCG, wave). Preprocessing strategies share one pattern:
   mic-row part documents merged by `merge_algndocs`; extract-type steps assemble part projects.
+- `simple_strategy_*_student.f90` and `simple_strategy_student_common.f90`: the class and pose students' learn
+  and predict passes (network in `learn/`); `doc/algorithms/class_student.md`, `doc/algorithms/pose_student.md`.
 
 ## Tests
 

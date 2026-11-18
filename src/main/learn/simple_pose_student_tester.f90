@@ -20,7 +20,42 @@ contains
         call test_weights_contract()
         call test_threshold_roundtrip()
         call test_wide_band()
+        call test_physical_row_audit()
     end subroutine run_all_pose_student_tests
+
+    !> the physical teacher's audit: rows of losses at a physical temperature give the training's targets within the
+    !! rounding bound, read at that temperature; the same rows read at half or twice it (a tempered teacher) exceed it;
+    !! invalid entries carry no mass
+    subroutine test_physical_row_audit()
+        integer,  parameter :: N = 500, NROWS = 20
+        real(sp), parameter :: TEMPS(3) = [50., 800., 3000.]
+        real(sp) :: dists(N), t(N)
+        real(dp) :: dev(2), dev_lo(2), dev_hi(2), worst
+        integer  :: irow, i, it
+        write(*,'(A)') 'test_physical_row_audit'
+        call set_fixed_seed(20261117)
+        worst = 0.d0
+        do it = 1,size(TEMPS)
+            do irow = 1,NROWS
+                ! losses spread over 20 / T: the posterior holds a few to a few hundred directions at any temperature
+                do i = 1,N
+                    dists(i) = 0.4 + (20. / TEMPS(it)) * ran3()
+                enddo
+                ! a few invalid entries, as a row whose references were not scored
+                dists(1 + mod(13*irow, N)) = huge(1.)
+                dists(1 + mod(17*irow, N)) = 0.2 * huge(1.)
+                call physical_row_audit(N, dists, TEMPS(it), TEMPS(it), dev)
+                worst = max(worst, dev(2))
+                call physical_row_audit(N, dists, 0.5 * TEMPS(it), TEMPS(it), dev_lo)
+                call physical_row_audit(N, dists, 2.0 * TEMPS(it), TEMPS(it), dev_hi)
+                call assert_true(dev_lo(2) > 1.d0 .and. dev_hi(2) > 1.d0, 'a row read at another temperature exceeds the bound')
+                call polar_student_targets(N, dists, TEMPS(it), t)
+                call assert_true(t(1 + mod(13*irow, N)) == 0. .and. t(1 + mod(17*irow, N)) == 0., 'invalid entries carry no mass')
+            enddo
+        enddo
+        call assert_true(worst <= 1.d0, 'rows read at the physical temperature lie within the rounding bound')
+        write(*,'(A,ES10.3)') '   largest deviation over its bound at the physical temperature: ', worst
+    end subroutine test_physical_row_audit
 
     !> a student of the tiny geometry with random positive shell weights (kfromto and box for a wider band)
     subroutine make_student( student, seed, kf, box_here )

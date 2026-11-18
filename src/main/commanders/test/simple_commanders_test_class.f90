@@ -143,6 +143,7 @@ use simple_polar_feats_tester,               only: run_all_polar_feats_tests
 use simple_polar_student,                    only: run_all_polar_student_tests
 use simple_class_student,                    only: run_all_class_student_tests
 use simple_class_student_align_tester,       only: run_all_class_student_align_tests
+use simple_pose_student_align_tester,        only: run_all_pose_student_align_tests
 use simple_hhcnn,                            only: run_all_hhcnn_tests
 use simple_pose_student,                     only: run_all_pose_student_tests
 use simple_strategy_student_common,          only: run_all_student_strategy_tests
@@ -424,6 +425,7 @@ contains
         call add_suite(s, n, 'class student',           run_all_class_student_tests)
         call add_suite(s, n, 'class student alignment', run_all_class_student_align_tests)
         call add_suite(s, n, 'pose student',            run_all_pose_student_tests)
+        call add_suite(s, n, 'pose student alignment',  run_all_pose_student_align_tests)
         call add_suite(s, n, 'student strategy',        run_all_student_strategy_tests)
     end subroutine suites_numerics
 
@@ -603,7 +605,7 @@ contains
 
     !> nightly: the stream stages that run in-process, with the arguments the stream gives them
     !! (Ruben's stream tests; optics assignment waits a minute for the stream watcher);
-    !! section 6 of doc/implementation_notes/planned/testing_and_benchmarking_plan.md says what they should pin beyond counts
+    !! doc/refactoring_notes/planned/stream_area_tests_handover.md says what they should pin beyond counts
     subroutine suites_lib_stream( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
