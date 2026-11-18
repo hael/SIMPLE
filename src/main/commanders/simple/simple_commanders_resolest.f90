@@ -53,6 +53,7 @@ contains
                                       &DOSE_WEIGHTS_FLAT
         use simple_dose_series_manifest, only: dose_series_manifest
         use simple_dose_curve,    only: dose_curve
+        use simple_defs_dose,     only: DOSE_PLOT_RES
         use simple_estimate_ssnr, only: get_resolution
         use simple_syslib,        only: simple_abspath
         use simple_string_utils,  only: posix_quote, fortran_quote
@@ -79,8 +80,6 @@ contains
         real(dp)     :: mask_frac, shell_corr, hdr_smpd, hdr_kv
         real         :: fsc05(4), fsc0143(4), mfsc05(4), mfsc0143(4)
         integer      :: hdr_box, nwin, w, nsh, ncoeff, lp_shell, hp_shell, klo, khi
-        ! the resolutions of the weights plot, in Angstroms
-        real(dp), parameter :: PLOT_RES(5) = [20._dp, 10._dp, 8._dp, 6._dp, 4._dp]
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('bfac_model') ) call cline%set('bfac_model', 'line')
         if( .not. cline%defined('outvol')     ) call cline%set('outvol', 'dose_series.mrc')
@@ -189,8 +188,9 @@ contains
         call series%write_weights_table(outbody//'_weights.txt')
         call series%write_cv_table(outbody//'_cv.txt')
         call series%write_decay_table(outbody//'_decay.txt')
-        call series%write_step_exposure(outbody//'_decay_steps.txt', PLOT_RES)
-        call series%write_resolution_weights(outbody//'_weights_res.txt', PLOT_RES)
+        call series%write_step_exposure(outbody//'_decay_steps.txt', DOSE_PLOT_RES)
+        call series%write_window_fsc(outbody//'_window_fsc.txt')
+        call series%write_resolution_weights(outbody//'_weights_res.txt', DOSE_PLOT_RES)
         ! the model as reextract reads it; the manifest's windows share one physical dose per fraction
         call series%export_curve(curve, win(:)%ffrom, win(:)%fto, &
             &(win(1)%dose_hi - win(1)%dose_lo) / real(win(1)%fto - win(1)%ffrom + 1, dp))
@@ -317,8 +317,6 @@ contains
                 enddo
             end subroutine scatter_half
 
-            !> scatter an accumulated pair and take its FSC in Fourier space; optionally write the halves,
-            !! their FSC and their mean under body
             !> the FSC of a half pair, unmasked and under the soft mask of mskdiam; with l_write the halves,
             !! their mean and both FSCs are written
             subroutine finish_pair( ae, ao, params, fsc, fsc_msk, body, l_write )
@@ -389,7 +387,7 @@ contains
             end subroutine write_coefficients
 
             !> The decay figure (fading per window, critical exposure per shell and between neighbouring windows,
-            !! all against Grant and Grigorieff) and the weights at PLOT_RES, rendered by gnuplot from the tables
+            !! all against Grant and Grigorieff) and the weights at DOSE_PLOT_RES, rendered by gnuplot from the tables
             !! beside them; a failure warns and keeps the tables.
             subroutine plot_decay( body )
                 class(string), intent(in) :: body
@@ -441,13 +439,13 @@ contains
                 call gp(unit, 'set xlabel "Mean dose of the two windows (e/Angstrom^2, scaled)"; set key top right font ",10"')
                 line = 'plot '
                 j = 0
-                do i = 1, size(PLOT_RES)
-                    s = nint(1._dp / (PLOT_RES(i) * kfreq(1)))
+                do i = 1, size(DOSE_PLOT_RES)
+                    s = nint(1._dp / (DOSE_PLOT_RES(i) * kfreq(1)))
                     if( s < klo .or. s > khi ) cycle    ! outside the fitting band
                     j = j + 1
                     if( j > 1 ) line = line//', '
                     line = line//gq(b//'_decay_steps.txt')//' using 2:'//int2str(3*i)//':'//int2str(3*i+1)// &
-                        &' with yerrorlines pt 7 lw 2 lc '//int2str(j)//' title '//gq(int2str(nint(PLOT_RES(i)))//' A')// &
+                        &' with yerrorlines pt 7 lw 2 lc '//int2str(j)//' title '//gq(int2str(nint(DOSE_PLOT_RES(i)))//' A')// &
                         &', '''' using 2:'//int2str(3*i+2)//' with lines dt 2 lw 1.5 lc '//int2str(j)//' notitle'
                 enddo
                 if( j > 0 ) call gp(unit, line)
@@ -459,12 +457,12 @@ contains
                 call gp(unit, 'set key top right font ",10"')
                 line = 'plot '
                 j = 0
-                do i = 1, size(PLOT_RES)
-                    if( PLOT_RES(i) < 2._dp * real(params%smpd,dp) ) cycle    ! past Nyquist
+                do i = 1, size(DOSE_PLOT_RES)
+                    if( DOSE_PLOT_RES(i) < 2._dp * real(params%smpd,dp) ) cycle    ! past Nyquist
                     j = j + 1
                     if( j > 1 ) line = line//', '
                     line = line//gq(b//'_weights_res.txt')//' using 2:'//int2str(1+2*i)// &
-                        &' with linespoints lw 2 pt 7 lc '//int2str(j)//' title '//gq(int2str(nint(PLOT_RES(i)))//' A')// &
+                        &' with linespoints lw 2 pt 7 lc '//int2str(j)//' title '//gq(int2str(nint(DOSE_PLOT_RES(i)))//' A')// &
                         &', '''' using 2:'//int2str(2+2*i)//' with lines dt 2 lw 1.5 lc '//int2str(j)//' notitle'
                 enddo
                 line = line//', 1./'//int2str(nwin)//' with lines dt 3 lc "black" title "equal weights"'

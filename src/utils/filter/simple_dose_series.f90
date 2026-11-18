@@ -78,6 +78,7 @@ type :: dose_series
     procedure :: write_cv_table
     procedure :: write_decay_table
     procedure :: write_step_exposure
+    procedure :: write_window_fsc
     procedure :: write_resolution_weights
     procedure :: export_curve
     procedure :: log_readout
@@ -99,6 +100,7 @@ type :: dose_series
     procedure, private :: set_weights
     procedure, private :: cross_validate
     procedure, private :: own_fsc
+    procedure, private :: pair_fsc
     procedure, private :: atten_star
     procedure, private :: scheme_atten
     procedure, private :: band_difference
@@ -426,6 +428,19 @@ contains
             fsc = self%gram(w,self%nwin+w,s) / sqrt(denom)
         endif
     end function own_fsc
+
+    !> FSC of windows w and v at shell s: the even half of each against the odd half of the other, the two
+    !! averaged, so no noise is shared; w = v is the window's own even/odd FSC
+    real(dp) function pair_fsc( self, w, v, s ) result( fsc )
+        class(dose_series), intent(in) :: self
+        integer,            intent(in) :: w, v, s
+        real(dp) :: d1, d2
+        fsc = 0._dp
+        d1  = self%gram(w,w,s) * self%gram(self%nwin+v,self%nwin+v,s)
+        d2  = self%gram(v,v,s) * self%gram(self%nwin+w,self%nwin+w,s)
+        if( d1 <= DTINY .or. d2 <= DTINY ) return
+        fsc = 0.5_dp * (self%gram(w,self%nwin+v,s) / sqrt(d1) + self%gram(v,self%nwin+w,s) / sqrt(d2))
+    end function pair_fsc
 
     !> steps 3 to 6 of the note, in order; stops when nothing could be measured rather than accumulating blind
     subroutine fit( self )
@@ -1364,6 +1379,38 @@ contains
         enddo
         call fclose(funit)
     end subroutine write_step_exposure
+
+    !> Per shell: the FSC of every pair of windows w <= v, from the statistics pass (the masked halves)
+    subroutine write_window_fsc( self, fname )
+        class(dose_series), intent(in) :: self
+        class(string),      intent(in) :: fname
+        character, parameter :: TAB = achar(9)
+        integer :: funit, s, w, v, io_stat
+        if( .not. self%l_exists ) THROW_HARD('Dose series not constructed')
+        call fopen(funit, file=fname, status='replace', action='write', form='formatted')
+        write(funit,'(A)',iostat=io_stat) '# FSC between windows w and v under the mask: the even half of each against '// &
+            &'the odd half of the other, averaged; fsc_w_w is window w''s own'
+        call fileiochk('Writing window FSC header', io_stat)
+        write(funit,'(A)',advance='no',iostat=io_stat) 'shell'//TAB//'res_A'
+        do w = 1, self%nwin
+            do v = w, self%nwin
+                write(funit,'(A)',advance='no',iostat=io_stat) TAB//'fsc_'//int2str(w)//'_'//int2str(v)
+            enddo
+        enddo
+        write(funit,'(A)',iostat=io_stat) ''
+        call fileiochk('Writing window FSC columns', io_stat)
+        do s = 1, self%nsh
+            write(funit,'(I0,A,ES16.8E3)',advance='no',iostat=io_stat) s, TAB, 1._dp / self%kfreq(s)
+            do w = 1, self%nwin
+                do v = w, self%nwin
+                    write(funit,'(A,F10.5)',advance='no',iostat=io_stat) TAB, self%pair_fsc(w, v, s)
+                enddo
+            enddo
+            write(funit,'(A)',iostat=io_stat) ''
+            call fileiochk('Writing window FSC row', io_stat)
+        enddo
+        call fclose(funit)
+    end subroutine write_window_fsc
 
     subroutine write_resolution_weights( self, fname, res )
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan

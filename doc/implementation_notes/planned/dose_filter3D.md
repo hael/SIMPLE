@@ -600,6 +600,7 @@ All products land in the execution directory unless `outvol` carries a path.
 | `<outvol>_fsc.bin`, `<outvol>_fsc_masked.bin` | The FSC of the model's half pair, unmasked and under the soft mask of `mskdiam`, in SIMPLE's binary format |
 | `<outvol>_control_even.mrc`, `_control_odd.mrc`, `_control.mrc`, `_control_fsc.bin`, `_control_fsc_masked.bin` | The same under the Grant & Grigorieff weights of section 5, for a like-for-like comparison |
 | `<outvol>_fsc.txt` | Per shell: resolution and the FSC of the model's and the control's half pairs, each unmasked and masked |
+| `<outvol>_window_fsc.txt` | Per shell: the FSC of every pair of windows $w \le v$ from the statistics pass (masked halves), the even half of each against the odd half of the other, averaged; `fsc_w_w` is window $w$'s own even/odd FSC |
 | `<outvol>_zerodose.mrc` | With `zerodose=yes`: the extrapolation (15) of $A$ to zero dose; a per-shell rescaling with the same FSC, an interpretation product rather than a resolution claim |
 
 **Tables**

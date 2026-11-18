@@ -37,13 +37,73 @@ contains
         call test_exports_the_dose_curve()
         call test_step_exposure()
         call test_reports_against_the_sharpest()
+        call test_window_fsc()
     end subroutine run_all_dose_series_tests
+
+    !> The FSC between windows follows a_w a_v P / sqrt((a_w^2 P + s_w^2)(a_v^2 P + s_v^2)) for windows with
+    !! independent noise; it is symmetric, its diagonal is each window's own FSC, and the table holds every pair
+    subroutine test_window_fsc()
+        integer,          parameter :: NW = 3
+        character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_window_fsc.txt'
+        ! expected |error| of an FSC from NPERSH complex coefficients, sqrt(2/pi) (1 - fsc^2) / sqrt(2 NPERSH),
+        ! at its largest (fsc = 0); every shell's mean error lies below it
+        real(dp),         parameter :: TOL_FSC_MEAN = 1._dp / sqrt(DPI * real(NPERSH, dp))
+        type(dose_series)        :: ds
+        complex(sp), allocatable :: em(:,:), om(:,:)
+        integer,     allocatable :: shell(:)
+        real(dp),    allocatable :: kfreq(:)
+        real(dp)        :: cw(NW), bw(NW), sigma(NW), a(NW), pwr, truth, dev
+        integer(kind=8) :: seed
+        integer         :: w, v, sh, funit, ios
+        character(len=512) :: text
+        logical         :: l_sym, l_diag
+        write(*,'(A)') 'test_window_fsc'
+        call shell_grid(shell, kfreq)
+        cw    = 1._dp
+        bw    = [0._dp, 20._dp, 40._dp]
+        sigma = [0.3_dp, 0.5_dp, 0.8_dp]
+        seed  = 2718_8
+        call synth(NW, cw, bw, sigma, kfreq, shell, seed, em, om)
+        call ds%new(NW, kfreq, 300._dp, .true.)
+        do w = 1, NW
+            call ds%set_window(w, real(w-1,dp), real(w,dp))
+        enddo
+        call ds%accumulate_gram(em, om, shell, 1._dp, 1._dp)
+        l_sym = .true.; l_diag = .true.
+        do w = 1, NW
+            do v = w, NW
+                dev = 0._dp
+                do sh = 1, NSH
+                    pwr   = exp(-real(sh,dp)/10._dp)
+                    a     = exp(-bw * kfreq(sh)**2 / 4._dp)
+                    truth = a(w)*a(v)*pwr / sqrt((a(w)**2*pwr + sigma(w)**2) * (a(v)**2*pwr + sigma(v)**2))
+                    dev   = dev + abs(ds%pair_fsc(w, v, sh) - truth)
+                    if( ds%pair_fsc(w, v, sh) /= ds%pair_fsc(v, w, sh) ) l_sym = .false.
+                    if( w == v .and. ds%pair_fsc(w, w, sh) /= ds%own_fsc(w, sh) ) l_diag = .false.
+                enddo
+                call assert_true(dev / real(NSH,dp) < TOL_FSC_MEAN, 'the FSC between windows follows its closed form')
+            enddo
+        enddo
+        call assert_true(l_sym,  'the FSC between windows is symmetric')
+        call assert_true(l_diag, 'the FSC of a window with itself is its own even/odd FSC')
+        call ds%write_window_fsc(string(FNAME))
+        call ds%kill
+        open(newunit=funit, file=FNAME, status='old', action='read', iostat=ios)
+        call assert_true(ios == 0, 'the window FSC table is written')
+        if( ios == 0 )then
+            read(funit,*); read(funit,'(A)') text
+            close(funit, status='delete')
+            call assert_true(index(text, 'fsc_1_1') > 0 .and. index(text, 'fsc_1_3') > 0 .and. index(text, 'fsc_3_3') > 0, &
+                &'the window FSC table holds every pair')
+        endif
+        deallocate(em, om, shell, kfreq)
+    end subroutine test_window_fsc
 
     !> A window sharper than window 1 becomes the reference of the model table: it reads c = 1 and B = 0, window 1
     !! reads the positive difference, no B is negative, and the dose slope is the fit's
     subroutine test_reports_against_the_sharpest()
         integer,          parameter :: NW = 5
-        character(len=*), parameter :: FNAME = 'dose_series_tester_sharpest.txt'
+        character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_sharpest.txt'
         type(dose_series)        :: ds
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
@@ -96,8 +156,8 @@ contains
     !! read by the measured estimator still matches the measured critical exposure; the lines' slope does not.
     subroutine test_step_exposure()
         integer,          parameter :: NW = 5
-        character(len=*), parameter :: STEPS_FNAME = 'dose_series_tester_steps.txt'
-        character(len=*), parameter :: DECAY_FNAME = 'dose_series_tester_steps_decay.txt'
+        character(len=*), parameter :: STEPS_FNAME = 'tmp_dose_series_tester_steps.txt'
+        character(len=*), parameter :: DECAY_FNAME = 'tmp_dose_series_tester_steps_decay.txt'
         real(dp),         parameter :: B2 = 1._dp, RES(2) = [12._dp, 6._dp]
         type(dose_series)        :: ds
         complex(sp), allocatable :: em(:,:), om(:,:)
@@ -174,8 +234,8 @@ contains
     !! exposure fades by both lines, 1/(2 gamma + beta k^2/2).
     subroutine test_exports_the_dose_curve()
         integer,          parameter :: NW = 5, NFRAC = 14
-        character(len=*), parameter :: FNAME = 'dose_series_tester_curve.txt'
-        character(len=*), parameter :: DECAY_FNAME = 'dose_series_tester_curve_decay.txt'
+        character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_curve.txt'
+        character(len=*), parameter :: DECAY_FNAME = 'tmp_dose_series_tester_curve_decay.txt'
         real(dp),         parameter :: BETA_TRUE = 4._dp, GAMMA_TRUE = 0.02_dp
         type(dose_series)        :: ds
         type(dose_curve)         :: curve, readback
@@ -263,7 +323,7 @@ contains
     !! is not one B-factor, it recovers their Ne(k), read back from the decay table the program writes
     subroutine test_shell_exposure()
         integer, parameter :: NW = 5
-        character(len=*), parameter :: FNAME = 'dose_series_tester_decay.txt'
+        character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_decay.txt'
         type(dose_series)        :: ds
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
@@ -504,8 +564,8 @@ contains
     subroutine test_exposure_errors_share_the_reference()
         use simple_syslib, only: del_file
         integer, parameter :: NW = 10, NREP = 64, KSHELL = 18
-        character(len=*), parameter :: FNAME = 'dose_series_tester_exposure_errors.txt'
-        character(len=*), parameter :: STEPS = 'dose_series_tester_step_errors.txt'
+        character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_exposure_errors.txt'
+        character(len=*), parameter :: STEPS = 'tmp_dose_series_tester_step_errors.txt'
         type(dose_series) :: ds
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer, allocatable :: shell(:)
@@ -566,7 +626,7 @@ contains
     subroutine test_relative_b_errors_share_the_reference()
         use simple_syslib, only: del_file
         integer, parameter :: NW = 5, NREP = 48
-        character(len=*), parameter :: FNAME = 'dose_series_tester_b_errors.txt'
+        character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_b_errors.txt'
         type(dose_series) :: ds
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer, allocatable :: shell(:)
@@ -612,7 +672,7 @@ contains
     subroutine check_descriptive_cv_table( ds )
         use simple_syslib, only: del_file
         class(dose_series), intent(in) :: ds
-        character(len=*), parameter :: FNAME = 'dose_series_tester_cv.txt'
+        character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_cv.txt'
         character(len=512) :: text
         integer :: u
         call ds%write_cv_table(string(FNAME))
