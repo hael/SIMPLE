@@ -221,4 +221,10 @@ contains
         negligible = sqrt(dot_product(step, step)) < NEGLIGIBLE_STEP
     end function shift_problem_negligible_step
 
+    !> The bench histogram bin of an accepted step's actual over predicted reduction.
+    pure integer function ratio_bin( ratio )
+        real(dp), intent(in) :: ratio
+        ratio_bin = 1 + count(ratio >= RATIO_EDGES)
+    end function ratio_bin
+
 end submodule simple_cartft_pose_opt_system

@@ -842,12 +842,6 @@ contains
 
     ! PRIVATE
 
-    !> The bench histogram bin of an accepted step's actual over predicted reduction.
-    pure integer function ratio_bin( ratio )
-        real(dp), intent(in) :: ratio
-        ratio_bin = 1 + count(ratio >= RATIO_EDGES)
-    end function ratio_bin
-
     pure logical function positive_finite( val )
         real(dp), intent(in) :: val
         positive_finite = ieee_is_finite(val) .and. val > 0._dp
