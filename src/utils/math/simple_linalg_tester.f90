@@ -2,6 +2,7 @@
 ! Symmetric eigensolvers (dense, Jacobi), SVD, inversion, the double-precision Cholesky family,
 ! least-squares fits and the small vector helpers, pinned on matrices with independently computed answers.
 module simple_linalg_tester
+use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 use simple_test_utils    ! assertions etc.
 use simple_defs          ! sp, dp, PI
 use simple_string_utils, only: int2str
@@ -39,6 +40,7 @@ contains
         call test_gemm_tn()
         call test_real_spd_complex_solve()
         call test_spd_cholesky()
+        call test_spd_solve_rel()
     end subroutine run_all_linalg_tests
 
     !---------------- fixtures ----------------
@@ -400,6 +402,34 @@ contains
         call cholesky(b2, l2, 2, ok)
         call assert_true(.not. ok, 'cholesky: refuses an indefinite matrix')
     end subroutine test_spd_cholesky
+
+    !> spd_solve_rel solves the example system and a 1x1 one; it refuses a pivot at its relative floor,
+    !! an indefinite, a zero and a non-finite matrix, returning x = 0
+    subroutine test_spd_solve_rel()
+        real(dp) :: a(N,N), x(N), xref(N), b2(2,2), x2(2), nan
+        logical  :: ok
+        write(*,'(A)') 'test_spd_solve_rel'
+        a    = real(example_matrix(), dp)
+        xref = [1._dp, -2._dp, 0.5_dp, 3._dp, -1._dp]
+        call spd_solve_rel(a, matmul(a, xref), x, ok)
+        call assert_true(ok .and. maxval(abs(x - xref)) < 1.e-12_dp, 'spd_solve_rel: solves A x = b')
+        call spd_solve_rel(reshape([4._dp], [1,1]), [2._dp], x(1:1), ok)
+        call assert_true(ok .and. x(1) == 0.5_dp, 'spd_solve_rel: solves a 1x1 system')
+        b2(:,1) = [1._dp, 0._dp]
+        b2(:,2) = [0._dp, 0.5_dp*sqrt(epsilon(1._dp))]
+        call spd_solve_rel(b2, [1._dp, 1._dp], x2, ok)
+        call assert_true(.not. ok .and. all(x2 == 0._dp), 'spd_solve_rel: refuses a pivot below sqrt(eps) max|A|')
+        b2(:,1) = [1._dp, 2._dp]
+        b2(:,2) = [2._dp, 1._dp]
+        call spd_solve_rel(b2, [1._dp, 1._dp], x2, ok)
+        call assert_true(.not. ok, 'spd_solve_rel: refuses an indefinite matrix')
+        call spd_solve_rel(0._dp*b2, [1._dp, 1._dp], x2, ok)
+        call assert_true(.not. ok, 'spd_solve_rel: refuses a zero matrix')
+        nan = ieee_value(1._dp, ieee_quiet_nan)
+        b2(1,1) = nan
+        call spd_solve_rel(b2, [1._dp, 1._dp], x2, ok)
+        call assert_true(.not. ok .and. all(x2 == 0._dp), 'spd_solve_rel: refuses a non-finite matrix')
+    end subroutine test_spd_solve_rel
 
     !---------------- helpers ----------------
 

@@ -39,6 +39,7 @@ real,    parameter :: S2_ZEROS(3) = [0.00246071, 0.00500494, 0.00755167]
 contains
 
     subroutine run_all_ctf_tests()
+        use simple_ctf_estimate_cost, only: run_all_ctf_estimate_cost_tests
         write(*,'(A)') '**** running all CTF tests ****'
         call test_constructor_and_conventions()
         call test_closed_form_values()
@@ -47,6 +48,7 @@ contains
         call test_fast_kernel_and_ft2img()
         call test_restoration_contracts()
         call test_fit_kill_keeps_ft_maps()
+        call run_all_ctf_estimate_cost_tests()
     end subroutine run_all_ctf_tests
 
     ! kill releases only the fit's own state: the process-wide Fourier maps stay memoised

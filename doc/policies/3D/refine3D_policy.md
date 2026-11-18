@@ -1181,8 +1181,10 @@ Ownership:
 - `src/main/cftc`: `cartft_calc` (reference slots per state and half,
   particle slots of the batch, objective, gradient, normal terms, residual)
   and `cartft_pose_opt` (one bounded Levenberg-Marquardt transaction per
-  particle: the joint five-parameter stage; `cont_route=shift_then_joint` is an
-  internal test seam, C16).
+  particle: the joint five-parameter stage, `lm_solve` of the library's engine
+  `src/utils/math/simple_lm_solver.f90` on a `cartft_pose_problem`; a
+  shift-only solve at a fixed rotation, `refine_shift`, is public for other
+  callers and is not part of the transaction).
 - `simple_strategy3D_cont`: `strategy3D_cont`, the matcher's only
   continuous-pose search object; it extends `strategy3D` beside the polar
   parent `strategy3D_pftc`. The matcher also sums `cartft_pose_work`, the work
@@ -1223,12 +1225,22 @@ The bounds are `trs` (total shift from the stored shift) and `athres_cont`
 the capture range for wrongly assigned orientations); `athres` and
 `prob_athres`, which size the polar searches, do not apply. The solve is the
 joint five-parameter Levenberg-Marquardt stage alone, about a third faster than
-a shift-only stage before it, which the internal `cont_route=shift_then_joint`
-restores for the single-pass capture tests (E25, N20 a-c); repeated passes
-supply what one joint pass misses. `inpl_cont` is overridden to `no` (the
-in-plane angle is part of the solve).
+a shift-only stage before it (the former `shift_then_joint` route, retired in
+`lm_optimizer.md`); repeated passes supply what one joint pass misses.
+`inpl_cont` is overridden to `no` (the in-plane angle is part of the solve).
 
-Steps and stopping (`cartft_pose_opt`):
+Steps and stopping (`cartft_pose_opt` on `simple_lm_solver`). The engine owns
+the step control: the system scaled by (`rotation_scale` x3, 1, 1) and masked to
+the active coordinates, the damped matrix `C + mu*diag(d)` with
+`d_i = max(C_ii, sqrt(eps)*max|C|, eps**2)` solved by `spd_solve_rel`
+(`simple_linalg`), `mu` from `1e-3`, multiplied on a rejection by a factor that
+starts at 4 and doubles, halved when the actual over predicted reduction
+exceeds 0.75, and a step accepted at a positive reduction of at least 0.25 of
+the predicted one; an unreliable damped solve counts as a rejection. The
+transaction's problem owns the rest: the data-only observability veto (the
+prior is added after it, so a prior never rescues an unobservable
+pose: `CARTFT_NO_RELIABLE_UPDATE`), the rotation and shift step caps, the right
+increment and the cumulative guard, the prior terms, and the shell residual.
 
 - **Curvature scale.** Both objectives' Gauss-Newton matrices are multiplied
   by the regression slope of the data on the model, weighted by `|f|^2` as the
@@ -1237,8 +1249,10 @@ Steps and stopping (`cartft_pose_opt`):
   normalized objective overstates the curvature. For `euclid` it corrects the
   over-step of a model brighter than the data.
 - **Stopping.** A stage stops:
-  - when an accepted step reduces the objective by less than `1e-6` of it;
+  - when an accepted step reduces the objective by less than `1e-6` of it, or
+    moves neither the rotation nor the shift by `1e-8` (radians, pixels);
   - when a proposal predicts less than that (it is not evaluated);
+  - when the scaled, masked gradient falls below `1e-8`;
   - after 8 consecutive rejections;
   - at 40 iterations.
 - **Passes per solve.** The joint stage reuses the seed's evaluation and

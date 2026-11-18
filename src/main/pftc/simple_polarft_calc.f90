@@ -260,6 +260,8 @@ type :: polarft_calc
     procedure          :: gen_raw_euclid_grad_for_rot_8
     procedure          :: gen_raw_euclid_grad_at_angle
     procedure          :: gen_corr_grad_at_angle
+    procedure          :: gen_shift_curv_for_rot_8_aln
+    procedure          :: gen_joint_curv_at_angle
     procedure, private :: gen_corr_cc_grad_for_rot_8
     procedure, private :: gen_euclid_grad_for_rot_8
     procedure          :: gen_sigma_contrib
@@ -918,6 +920,20 @@ interface
         real(dp),                    intent(in)    :: shvec(2), rotind_frac
         real(dp),                    intent(out)   :: f, grad(3)
     end subroutine gen_corr_grad_at_angle
+
+    module subroutine gen_shift_curv_for_rot_8_aln( self, iref, iptcl, shvec, irot, f, grad, curv )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, irot
+        real(dp),                    intent(in)    :: shvec(2)
+        real(dp),                    intent(out)   :: f, grad(2), curv(2,2)
+    end subroutine gen_shift_curv_for_rot_8_aln
+
+    module subroutine gen_joint_curv_at_angle( self, iref, iptcl, shvec, rotind_frac, curv )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(dp),                    intent(in)    :: shvec(2), rotind_frac
+        real(dp),                    intent(out)   :: curv(3,3)
+    end subroutine gen_joint_curv_at_angle
 
     module subroutine gen_corr_cc_grad_for_rot_8( self, pft_ref, i, shvec, irot, f, grad)
         class(polarft_calc), target, intent(inout) :: self

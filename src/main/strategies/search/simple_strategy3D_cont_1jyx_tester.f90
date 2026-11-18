@@ -1,7 +1,7 @@
 !@descr: library test of Cartesian pose refinement on simulated 1JYX particles (simple_strategy3D_cont)
 ! Nightly gate (lib_cart_align3D): 1 000 simulated 1JYX particles at box 144 with varying CTF and
 ! noise, every pose perturbed by 10 deg and 2 px, refined through strategy3D_cont as the matcher
-! runs it (default joint and shift_then_joint, trs 5 px, athres_cont 15 deg) under cc and euclid at lp 8 A,
+! runs it (the joint route, trs 5 px, athres_cont 15 deg) under cc and euclid at lp 8 A,
 ! then at 4 A from the 8 A poses. Pinned: objective, rotation and shift errors fall, the refined
 ! map beats the perturbed one, and the floors declared below. Fixture files are removed.
 module simple_strategy3D_cont_1jyx_tester
@@ -77,8 +77,8 @@ character(len=*), parameter :: SIMULATION_ORIENTATION_FILE = '1JYX_simulation_or
 character(len=*), parameter :: TRUTH_ORIENTATION_FILE = '1JYX_truth_orientations.txt'
 ! bounds of the Phase 0 baseline: trs (pixels, box_crop == box) and athres_cont (degrees)
 real, parameter :: TEST_TRS = 5., TEST_ATHRES_CONT = 15.
-integer, parameter :: NROUTES = 2
-character(len=16), parameter :: ROUTE_NAMES(NROUTES) = [character(len=16) :: 'joint', 'shift_then_joint']
+integer, parameter :: NROUTES = 1
+character(len=16), parameter :: ROUTE_NAMES(NROUTES) = [character(len=16) :: 'joint']
 integer, parameter :: NOBJFUNS = 2
 integer, parameter :: TEST_OBJFUNS(NOBJFUNS) = [OBJFUN_CC, OBJFUN_EUCLID]
 character(len=6), parameter :: OBJFUN_NAMES(NOBJFUNS) = ['cc    ', 'euclid']
@@ -244,20 +244,11 @@ contains
             &truth_shifts, initial_shifts, active_upper_shell(minval(TEST_LPS)), nworkers, gain, sigma2)
         write (logfhandle, '(a,1x,es12.4)') 'POSE_CONT_1JYX euclid reference gain:', gain
 
-        ! Stage 5: both routes reuse the one frozen fixture. Test joint first without overriding
-        ! the parameter defaults; the staged route is selected only for its own arm. Each route
-        ! restarts at the injected 8 A poses and continues its own result at 4 A.
+        ! Stage 5: the route runs on the frozen fixture with the parameter defaults; it starts at the
+        ! injected 8 A poses and continues its own result at 4 A.
         do iroute = 1, NROUTES
             route_checks_before = tests_run
             route_failures_before = tests_failed
-            if (iroute == 1) then
-                call assert_true(trim(p%cont_route) == 'joint', '1JYX default route is joint')
-                call assert_false(p%l_cont_shift_first, '1JYX default route has no shift-only prepass')
-            end if
-            if (iroute == 2) then
-                p%cont_route = 'shift_then_joint'
-                p%l_cont_shift_first = .true.
-            end if
             write (logfhandle, '(a,1x,a)') 'POSE_CONT_1JYX ROUTE:', trim(ROUTE_NAMES(iroute))
             median_rotation = 0._dp
             do iband = 1, size(TEST_LPS)
@@ -487,7 +478,7 @@ contains
         type(image), allocatable :: raw_work(:), fourier_work(:)
         integer :: i
 
-        ! The route is owned by the test arm; the remaining policy is identical in both arms.
+        ! The policy of the pass the matcher runs.
         p%oritype = 'ptcl3D'
         p%cc_objfun = objfun
         p%inpl_cont = 'no'

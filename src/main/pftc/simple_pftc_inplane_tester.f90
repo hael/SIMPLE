@@ -13,7 +13,7 @@ use simple_image,                   only: image
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_polarft_calc,            only: polarft_calc, vol_pad2ref_pfts_opt
 use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad, fit_quadratic_step, grid_stencil_exists, FIT_CURVATURE, FIT_STEP, &
-    &shift_ptcl2ref, shift_ref2ptcl
+    &shift_ptcl2ref, shift_ref2ptcl, shsrch_lm_terms
 use simple_strategy2D_srch,         only: strategy2D_srch, strategy2D_spec
 use simple_eul_prob_tab_utils,      only: posterior_temperature, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
 use simple_oris,                    only: oris
@@ -80,8 +80,183 @@ contains
         call test_shift_prior()
         call test_shift_prior_frame()
         call test_shift_prior_grid_fit()
+        call test_lm_curvature_oracles()
+        call test_lm_solver_comparison()
         call del_file(PHANTOM_FILE)
     end subroutine run_all_pftc_inplane_tests
+
+    ! ---- Levenberg-Marquardt ('lm', lm_optimizer.md) ------------------------------
+
+    !> At zero residual (the particle is the reference rotated by a whole grid index and shifted) the 'lm' curvature of
+    !! the shift mode and of the joint mode (euclid with a nonzero prior centre and the angle active; cc) is the
+    !! central-difference Hessian of the analytic gradient, within the gradient check's GRAD_FD_RTOL, and PSD
+    subroutine test_lm_curvature_oracles()
+        use simple_linalg, only: cholesky
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(pftc_shsrch_grad)   :: srch
+        real(sp), allocatable :: scores(:)
+        real(dp) :: dang, theta, sstar(2), vec2(2), vec3(3), f, g2(2), g3(3), gp2(2), gm2(2), gp3(3), gm3(3)
+        real(dp) :: c2(2,2), h2(2,2), c3(3,3), h3(3,3), l3(3,3), err
+        real     :: limits(2,2), joint_limits(3,2), ta
+        integer  :: iobj, irot, d
+        logical  :: ok
+        write(*,'(A)') 'test_lm_curvature_oracles'
+        do iobj = OBJ_EUCLID, OBJ_CC
+            call build_fixture(b, p, iobj, LP_LOW, 0., [0.,0.], .false.)
+            dang = real(b%pftc%get_dang(), dp)
+            call kill_fixture(b)
+            ta = real(10.d0 * dang)
+            call build_fixture(b, p, iobj, LP_LOW, ta, TRUTH_SHIFT, .false.)
+            allocate(scores(b%pftc%get_nrots()))
+            theta = real(ta,dp) * acos(-1.d0) / 180.d0
+            sstar = [cos(theta)*real(TRUTH_SHIFT(1),dp) - sin(theta)*real(TRUTH_SHIFT(2),dp), &
+                    &sin(theta)*real(TRUTH_SHIFT(1),dp) + cos(theta)*real(TRUTH_SHIFT(2),dp)]
+            call b%pftc%gen_objfun_vals(1, 1, real(sstar,sp), scores)
+            irot = maxloc(scores, dim=1)
+            ! shift mode
+            limits(:,1) = -TRS
+            limits(:,2) =  TRS
+            call srch%new_fixed(b, limits, maxits=16, solver='lm')
+            call srch%set_indices(1, 1)
+            vec2 = sstar
+            call shsrch_lm_terms(srch, vec2, f, g2, c2, irot)
+            do d = 1, 2
+                vec2 = sstar
+                vec2(d) = vec2(d) + FD_STEP
+                call shsrch_lm_terms(srch, vec2, f, gp2, h2, irot)
+                vec2(d) = vec2(d) - 2.d0 * FD_STEP
+                call shsrch_lm_terms(srch, vec2, f, gm2, h2, irot)
+                h2(:,d) = (gp2 - gm2) / (2.d0 * FD_STEP)
+            enddo
+            vec2 = sstar
+            call shsrch_lm_terms(srch, vec2, f, g2, c2, irot)
+            err = maxval(abs(c2 - h2)) / maxval(abs(h2))
+            write(*,'(A,I0,A,ES10.3,A,ES10.3)') '  LM oracle shift objfun ', iobj, ': objective ', f, &
+                &', max relative difference to the Hessian ', err
+            call assert_true(err <= GRAD_FD_RTOL, 'lm shift-mode curvature is the Hessian at zero residual')
+            call assert_true(c2(1,1) >= 0.d0 .and. c2(1,1)*c2(2,2) - c2(1,2)*c2(2,1) >= 0.d0 .and. c2(1,2) == c2(2,1), &
+                &'lm shift-mode curvature is symmetric positive semi-definite')
+            call srch%kill
+            ! joint mode, the angle active; euclid with the prior centred at the solution (nonzero centre, zero prior residual)
+            joint_limits(:,1) = [-TRS, -TRS, real(irot)-2.]
+            joint_limits(:,2) = [ TRS,  TRS, real(irot)+2.]
+            call srch%new_joint(b, joint_limits, 100, solver='lm')
+            call srch%set_indices(1, 1)
+            if( iobj == OBJ_EUCLID )then
+                call srch%set_shift_prior(1., 1.)
+                call srch%set_prior_centre(sstar, irot)
+            endif
+            do d = 1, 3
+                vec3 = [sstar(1), sstar(2), real(irot,dp)]
+                vec3(d) = vec3(d) + FD_STEP
+                call shsrch_lm_terms(srch, vec3, f, gp3, c3)
+                vec3(d) = vec3(d) - 2.d0 * FD_STEP
+                call shsrch_lm_terms(srch, vec3, f, gm3, c3)
+                h3(:,d) = (gp3 - gm3) / (2.d0 * FD_STEP)
+            enddo
+            vec3 = [sstar(1), sstar(2), real(irot,dp)]
+            call shsrch_lm_terms(srch, vec3, f, g3, c3)
+            err = maxval(abs(c3 - h3)) / maxval(abs(h3))
+            write(*,'(A,I0,A,ES10.3,A,ES10.3)') '  LM oracle joint objfun ', iobj, ': objective ', f, &
+                &', max relative difference to the Hessian ', err
+            write(*,'(A,9ES11.3)') '  LM oracle joint curvature ', c3
+            write(*,'(A,9ES11.3)') '  LM oracle joint Hessian   ', h3
+            call assert_true(err <= GRAD_FD_RTOL, 'lm joint-mode curvature is the Hessian at zero residual')
+            call cholesky(c3 + 1.d-12*maxval(abs(c3))*reshape([1.d0,0.d0,0.d0,0.d0,1.d0,0.d0,0.d0,0.d0,1.d0],[3,3]), &
+                &l3, 3, ok)
+            call assert_true(ok .and. all(c3 == transpose(c3)), 'lm joint-mode curvature is symmetric positive semi-definite')
+            call srch%kill
+            deallocate(scores)
+            call kill_fixture(b)
+        enddo
+    end subroutine test_lm_curvature_oracles
+
+    !> Both solvers on the recovery fixture (TRUTH_ANGLE, TRUTH_SHIFT): the alternating and the fixed shift search and
+    !! the joint solve from three starts, euclid and cc; one LM_COMPARE row per solver and route (reported, not gated)
+    subroutine test_lm_solver_comparison()
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(pftc_shsrch_grad)   :: srch
+        character(len=6), parameter :: SOLVERS(2) = ['lbfgsb', 'lm    ']
+        character(len=11), parameter :: ROUTES(3) = ['alternating', 'fixed      ', 'joint      ']
+        real(sp), allocatable :: scores(:)
+        real(dp) :: theta, expected(2), joint_coord, err_sh, err_ang, sum_sh, sum_ang, max_sh
+        real     :: limits(2,2), joint_limits(3,2), cxy(3)
+        integer  :: iobj, isolver, iroute, istart, igrid, irot, joint_index, ncases
+        integer(int64) :: obj_evals, grad_evals, alternations, grid_points, minimize_calls, gsum
+        integer(int64) :: c0, c1, crate, csum
+        logical  :: valid, improved
+        write(*,'(A)') 'test_lm_solver_comparison'
+        theta    = real(TRUTH_ANGLE,dp) * acos(-1.d0) / 180.d0
+        expected = [cos(theta)*real(TRUTH_SHIFT(1),dp) - sin(theta)*real(TRUTH_SHIFT(2),dp), &
+                   &sin(theta)*real(TRUTH_SHIFT(1),dp) + cos(theta)*real(TRUTH_SHIFT(2),dp)]
+        limits(:,1) = -TRS
+        limits(:,2) =  TRS
+        do iobj = OBJ_EUCLID, OBJ_CC
+            call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
+            allocate(scores(b%pftc%get_nrots()))
+            call b%pftc%gen_objfun_vals(1, 1, [0.0_sp, 0.0_sp], scores)
+            igrid = maxloc(scores, dim=1)
+            do iroute = 1, 3
+                do isolver = 1, 2
+                    gsum = 0_int64
+                    csum = 0_int64
+                    sum_sh = 0.d0
+                    sum_ang = 0.d0
+                    max_sh = 0.d0
+                    ncases = 0
+                    do istart = 1, size(PROBE_SHIFTS,2)
+                        select case(iroute)
+                            case(1)
+                                call srch%new_alternating(b, limits, maxits=60, solver=trim(SOLVERS(isolver)))
+                            case(2)
+                                call srch%new_fixed(b, limits, maxits=16, solver=trim(SOLVERS(isolver)))
+                            case(3)
+                                joint_limits(:,1) = [-TRS, -TRS, real(igrid)-2.]
+                                joint_limits(:,2) = [ TRS,  TRS, real(igrid)+2.]
+                                call srch%new_joint(b, joint_limits, 100, solver=trim(SOLVERS(isolver)))
+                        end select
+                        call srch%set_indices(1, 1)
+                        call srch%reset_profile
+                        call system_clock(c0, crate)
+                        select case(iroute)
+                            case(3)
+                                joint_index = igrid
+                                cxy = srch%minimize_joint(joint_index, real(PROBE_SHIFTS(:,istart)), sh_rot=.false., &
+                                    &rotind_frac=joint_coord, evaluation_valid=valid, improved=improved, irot_in=igrid)
+                            case DEFAULT
+                                irot = igrid
+                                cxy  = srch%minimize(irot, sh_rot=.false., xy_in=real(PROBE_SHIFTS(:,istart)))
+                                joint_coord = real(irot, dp)
+                                if( irot == 0 )then
+                                    ! no better solution than the start: report the start
+                                    cxy(2:3)    = real(PROBE_SHIFTS(:,istart))
+                                    joint_coord = real(igrid, dp)
+                                endif
+                        end select
+                        call system_clock(c1)
+                        call srch%get_profile(obj_evals, grad_evals, alternations, grid_points, minimize_calls)
+                        gsum    = gsum + grad_evals
+                        csum    = csum + (c1 - c0)
+                        err_sh  = sqrt(sum((real(cxy(2:3),dp) - expected)**2))
+                        err_ang = angular_error(angle_of(b%pftc, joint_coord), -real(TRUTH_ANGLE,dp))
+                        sum_sh  = sum_sh  + err_sh
+                        sum_ang = sum_ang + err_ang
+                        max_sh  = max(max_sh, err_sh)
+                        ncases  = ncases + 1
+                        call srch%kill
+                    enddo
+                    write(*,'(A,I0,1X,A11,1X,A6,A,F7.2,A,ES10.3,A,F8.4,A,F8.4,A,F8.3)') '  LM_COMPARE pftc objfun ', iobj, &
+                        &ROUTES(iroute), SOLVERS(isolver), ' evals/solve ', real(gsum)/real(ncases), ' s/solve ', &
+                        &real(csum,dp)/real(crate,dp)/real(ncases,dp), ' mean shift err ', sum_sh/real(ncases), &
+                        &' max shift err ', max_sh, ' mean angle err ', sum_ang/real(ncases)
+                enddo
+            enddo
+            deallocate(scores)
+            call kill_fixture(b)
+        enddo
+    end subroutine test_lm_solver_comparison
 
     ! ---- fixture ---------------------------------------------------------------
 

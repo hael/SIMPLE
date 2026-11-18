@@ -12,6 +12,7 @@ public :: pftc_shsrch_grad
 public :: fit_quadratic_step, grid_stencil_exists
 public :: shift_ptcl2ref, shift_ref2ptcl
 public :: FIT_EDGE, FIT_CURVATURE, FIT_STEP, FIT_LIMITS, FIT_VALUE, FIT_NREASONS
+public :: shsrch_lm_terms
 private
 #include "simple_local_flags.inc"
 
@@ -20,6 +21,7 @@ integer,  parameter :: SHSRCH_SHIFT = 1, SHSRCH_JOINT = 2
 ! reasons the quadratic grid step falls back to the L-BFGS-B alternations
 integer,  parameter :: FIT_EDGE = 1, FIT_CURVATURE = 2, FIT_STEP = 3, FIT_LIMITS = 4, FIT_VALUE = 5, FIT_NREASONS = 5
 real(dp), parameter :: FIT_MIN_CURV_RATIO = 0.01d0 ! smallest accepted ratio of the Hessian's eigenvalues
+character(len=*), parameter :: SHSRCH_SOLVER = 'lbfgsb' !< the searches' optimiser; testers pass 'lm' to the constructors
 
 type :: pftc_shsrch_grad
     private
@@ -38,6 +40,7 @@ type :: pftc_shsrch_grad
     real(dp)                  :: joint_initial_cost = 0.d0 !< first optimizer evaluation for monotonic acceptance
     logical                   :: joint_initial_cost_valid = .false.
     logical                   :: joint_cc = .false.      !< joint objective is cc (loss = -cc)
+    character(len=8)          :: solver = SHSRCH_SOLVER   !< 'lm' minimises the euclid shift loss L/W + w|d|^2, not -exp(-loss)
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
     integer(int64)            :: profile_objective_evals = 0_int64
     integer(int64)            :: profile_gradient_evals  = 0_int64
@@ -109,9 +112,20 @@ contains
     procedure, private :: objfun_vals
 end type pftc_shsrch_grad
 
+interface
+    !> the 'lm' callback's objective, gradient and curvature at vec (shift mode at grid rotation irot), for the
+    !! testers' curvature oracles (submodule simple_pftc_shsrch_grad_tester, built only with BUILD_TESTS=ON)
+    module subroutine shsrch_lm_terms( srch, vec, f, grad, curv, irot )
+        class(pftc_shsrch_grad), intent(inout) :: srch
+        real(dp),                intent(inout) :: vec(:)
+        real(dp),                intent(out)   :: f, grad(:), curv(:,:)
+        integer, optional,       intent(in)    :: irot
+    end subroutine shsrch_lm_terms
+end interface
+
 contains
 
-    subroutine grad_shsrch_new_alternating( self, build, lims, lims_init, maxits, coarse_init, grid_fit, grid_ptcl )
+    subroutine grad_shsrch_new_alternating( self, build, lims, lims_init, maxits, coarse_init, grid_fit, grid_ptcl, solver )
         class(pftc_shsrch_grad),     intent(inout) :: self
         class(builder),      target, intent(in)    :: build
         real,                        intent(in)    :: lims(:,:)
@@ -120,20 +134,22 @@ contains
         logical,           optional, intent(in)    :: coarse_init
         logical,           optional, intent(in)    :: grid_fit   !< quadratic step from the coarse grid, needs coarse_init
         logical,           optional, intent(in)    :: grid_ptcl  !< particle-frame coarse grid, needs coarse_init
-        call grad_shsrch_new_mode(self, build, lims, lims_init, maxits, .true., coarse_init, grid_fit, grid_ptcl)
+        character(len=*),  optional, intent(in)    :: solver     !< testers only: 'lbfgsb' or 'lm'
+        call grad_shsrch_new_mode(self, build, lims, lims_init, maxits, .true., coarse_init, grid_fit, grid_ptcl, solver)
     end subroutine grad_shsrch_new_alternating
 
-    subroutine grad_shsrch_new_fixed( self, build, lims, lims_init, maxits, coarse_init )
+    subroutine grad_shsrch_new_fixed( self, build, lims, lims_init, maxits, coarse_init, solver )
         class(pftc_shsrch_grad),     intent(inout) :: self
         class(builder),      target, intent(in)    :: build
         real,                        intent(in)    :: lims(:,:)
         real,              optional, intent(in)    :: lims_init(:,:)
         integer,           optional, intent(in)    :: maxits
         logical,           optional, intent(in)    :: coarse_init
-        call grad_shsrch_new_mode(self, build, lims, lims_init, maxits, .false., coarse_init)
+        character(len=*),  optional, intent(in)    :: solver     !< testers only: 'lbfgsb' or 'lm'
+        call grad_shsrch_new_mode(self, build, lims, lims_init, maxits, .false., coarse_init, solver=solver)
     end subroutine grad_shsrch_new_fixed
 
-    subroutine grad_shsrch_new_mode( self, build, lims, lims_init, maxits, opt_angle, coarse_init, grid_fit, grid_ptcl )
+    subroutine grad_shsrch_new_mode( self, build, lims, lims_init, maxits, opt_angle, coarse_init, grid_fit, grid_ptcl, solver )
         use simple_opt_factory, only: opt_factory
         class(pftc_shsrch_grad),     intent(inout) :: self           !< instance
         class(builder),      target, intent(in)    :: build          !< builder object for pftc access
@@ -144,9 +160,12 @@ contains
         logical,           optional, intent(in)    :: coarse_init    !< coarse inital search
         logical,           optional, intent(in)    :: grid_fit       !< quadratic step from the coarse grid
         logical,           optional, intent(in)    :: grid_ptcl      !< particle-frame coarse grid
+        character(len=*),  optional, intent(in)    :: solver         !< 'lbfgsb' (default) or 'lm'
         type(opt_factory) :: opt_fact
         integer :: kfromto(2)
         call self%kill
+        self%solver = SHSRCH_SOLVER
+        if( present(solver) ) self%solver = solver
         self%cur_inpl_rotind = 0.
         ! set pointer to pftc instance for cost function evaluations
         self%b_ptr => build
@@ -157,9 +176,10 @@ contains
         if( present(coarse_init) ) self%coarse_init = coarse_init
         self%search_mode = SHSRCH_SHIFT
         ! make optimizer spec
-        call self%ospec%specify('lbfgsb', 2, ftol=1e-5, gtol=1e-5, factr=1.0d+7, pgtol=1.0d-5, limits=lims,&
+        call self%ospec%specify(trim(self%solver), 2, ftol=1e-5, gtol=1e-5, factr=1.0d+7, pgtol=1.0d-5, limits=lims,&
             max_step=0.01, limits_init=lims_init, maxits=self%maxits)
-        ! generate the optimizer object
+        ! generate the optimizer object ('lm' needs its callback first)
+        self%ospec%fdfcurvfun_8 => grad_shsrch_fdfcurvfun
         call opt_fact%new(self%ospec, self%opt_obj)
         ! get # rotations
         self%nrots = self%b_ptr%pftc%get_nrots()
@@ -185,14 +205,17 @@ contains
         if( self%opt_angle ) self%ospec%opt_callback => grad_shsrch_update_discrete_angle_wrapper
     end subroutine grad_shsrch_new_mode
 
-    subroutine grad_shsrch_new_joint( self, build, lims, maxits )
+    subroutine grad_shsrch_new_joint( self, build, lims, maxits, solver )
         use simple_opt_factory, only: opt_factory
         class(pftc_shsrch_grad),     intent(inout) :: self
         class(builder),      target, intent(in)    :: build
         real,                        intent(in)    :: lims(3,2)
         integer,                     intent(in)    :: maxits
+        character(len=*),  optional, intent(in)    :: solver     !< testers only: 'lbfgsb' or 'lm'
         type(opt_factory) :: opt_fact
         call self%kill
+        self%solver = SHSRCH_SOLVER
+        if( present(solver) ) self%solver = solver
         self%b_ptr => build
         if( .not. self%b_ptr%pftc%is_joint_grad_objfun() )then
             THROW_HARD('joint angle path requires a supported Euclidean or cc objective')
@@ -204,8 +227,9 @@ contains
         self%opt_angle      = .false.
         self%search_mode     = SHSRCH_JOINT
         self%coarse_init     = .false.
-        call self%ospec%specify('lbfgsb', 3, ftol=1e-5, gtol=1e-5, factr=1.0d+7, pgtol=1.0d-5, limits=lims, &
+        call self%ospec%specify(trim(self%solver), 3, ftol=1e-5, gtol=1e-5, factr=1.0d+7, pgtol=1.0d-5, limits=lims, &
             &max_step=0.01, maxits=self%maxits)
+        self%ospec%fdfcurvfun_8 => grad_shsrch_fdfcurvfun
         call opt_fact%new(self%ospec, self%opt_obj)
         self%ospec%costfun_8    => grad_shsrch_costfun
         self%ospec%gcostfun_8   => grad_shsrch_gcostfun
@@ -483,6 +507,63 @@ contains
         end select
     end subroutine grad_shsrch_fdfcostfun
 
+    !> the Levenberg-Marquardt callback ('lm'): the objective, gradient and Gauss-Newton matrix. Shift mode: euclid
+    !! minimises L/W + w|xy - c|^2 (the log of the score with its prior: the minimiser of the L-BFGS-B cost), cc
+    !! minimises -cc; joint mode the L-BFGS-B objective, with the prior's curvature 2w [I,-c']^T [I,-c'].
+    subroutine grad_shsrch_fdfcurvfun( self, vec, f, grad, curv, D )
+        class(*), intent(inout) :: self
+        integer,  intent(in)    :: D
+        real(dp), intent(inout) :: vec(D)
+        real(dp), intent(out)   :: f, grad(D), curv(D,D)
+        real(dp) :: dprior(2), c0(2), dc0(2), dang, jprior(2,3)
+        integer  :: axis
+        select type(self)
+            class is (pftc_shsrch_grad)
+                self%profile_objective_evals = self%profile_objective_evals + 1_int64
+                self%profile_gradient_evals  = self%profile_gradient_evals  + 1_int64
+                if( self%search_mode == SHSRCH_JOINT )then
+                    call joint_grad_at_angle(self, vec(1:3), f, grad)
+                    call self%b_ptr%pftc%gen_joint_curv_at_angle(self%reference, self%particle, vec(1:2), vec(3), curv)
+                    if( .not. self%joint_cc .and. self%prior_w > 0.d0 )then
+                        dang = real(self%b_ptr%pftc%get_dang(),dp)
+                        call self%prior_centre_angle((vec(3) - 1.d0) * dang, dang, c0, dc0)
+                        jprior      = 0.d0
+                        jprior(1,1) = 1.d0
+                        jprior(2,2) = 1.d0
+                        jprior(:,3) = -dc0
+                        curv = curv + 2.d0 * self%prior_w * matmul(transpose(jprior), jprior)
+                    endif
+                    if( .not. self%joint_initial_cost_valid )then
+                        self%joint_initial_cost = f
+                        self%joint_initial_cost_valid = .true.
+                    endif
+                else
+                    call self%b_ptr%pftc%gen_shift_curv_for_rot_8_aln(self%reference, self%particle, vec(1:2), &
+                        &self%cur_inpl_idx, f, grad, curv)
+                    if( self%prior_w > 0.d0 )then
+                        if( self%b_ptr%pftc%is_cc_objfun() ) THROW_HARD('the lm shift search has no cc shift prior')
+                        dprior = vec(1:2) - self%prior_centre_rot(self%cur_inpl_idx)
+                        f      = f    + self%prior_w * sum(dprior**2)
+                        grad   = grad + 2.d0 * self%prior_w * dprior
+                        do axis = 1, 2
+                            curv(axis,axis) = curv(axis,axis) + 2.d0 * self%prior_w
+                        enddo
+                    endif
+                endif
+            class default
+                THROW_HARD('error in grad_shsrch_fdfcurvfun: unknown type')
+        end select
+    end subroutine grad_shsrch_fdfcurvfun
+
+    !> the shift mode's 'lm' cost (the euclid loss with its prior) as the L-BFGS-B cost the search compares: -exp(-loss)
+    subroutine lm_cost_to_score_cost( self, cost )
+        class(pftc_shsrch_grad), intent(in)    :: self
+        real,                    intent(inout) :: cost
+        if( trim(self%solver) /= 'lm' ) return
+        if( self%b_ptr%pftc%is_cc_objfun() ) return
+        cost = -real(exp(-real(cost,dp)))
+    end subroutine lm_cost_to_score_cost
+
     subroutine grad_shsrch_update_discrete_angle( self )
         class(pftc_shsrch_grad), intent(inout) :: self
         real :: corr
@@ -615,6 +696,7 @@ contains
                 do i = 1,self%max_evals
                     self%profile_alternations = self%profile_alternations + 1_int64
                     call self%opt_obj%minimize(self%ospec, self, lowest_cost)
+                    call lm_cost_to_score_cost(self, lowest_cost)
                     loc = self%cur_inpl_idx
                     call self%objfun_vals(self%ospec%x, corrs)
                     self%cur_inpl_idx = maxloc(corrs, dim=1)
@@ -657,6 +739,7 @@ contains
             end if
             ! shift search
             call self%opt_obj%minimize(self%ospec, self, lowest_cost)
+            call lm_cost_to_score_cost(self, lowest_cost)
             if( lowest_cost < lowest_cost_overall )then
                 found_better        = .true.
                 lowest_cost_overall = lowest_cost

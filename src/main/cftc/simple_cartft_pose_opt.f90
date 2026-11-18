@@ -1,15 +1,17 @@
 !@descr: bounded Levenberg-Marquardt optimizer of one five-parameter Cartesian particle pose (refine=cont)
 ! One bounded Levenberg-Marquardt transaction per particle (refine): evaluate the seed, run the
-! joint five-parameter stage (after a shift-only stage on the shift_then_joint test route) within
-! trs and athres_cont of the seed, and commit only a finite, lower objective; any other outcome
-! returns the seed bit for bit with a typed status (CARTFT_*). Rotations update on the right,
-! R exp([omega]x); shifts are increments from the stored shift, committed in native-box pixels.
+! joint five-parameter solve (lm_solve on a cartft_pose_problem) within trs and athres_cont of the
+! seed, and commit only a finite, lower objective; any other outcome returns the seed bit for bit
+! with a typed status (CARTFT_*). Rotations update on the right, R exp([omega]x); shifts are
+! increments from the stored shift, committed in native-box pixels.
 module simple_cartft_pose_opt
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api, only: dp, PI, ori, dm2euler, simple_exception
 use simple_cartft_calc,     only: cartft_calc
 use simple_type_defs,       only: OBJFUN_EUCLID
+use simple_lm_solver,       only: lm_problem, lm_options, lm_outcome, lm_solve, LM_ACCEPTED, LM_NO_IMPROVEMENT, &
+    &LM_NO_RELIABLE_UPDATE, LM_BOUND_REJECTED, LM_INVALID_NUMERICS, LM_ITERATION_LIMIT
 implicit none
 private
 public :: cartft_pose_opt, cartft_pose_work, right_increment_rotation
@@ -21,25 +23,19 @@ public :: run_all_cartft_pose_opt_tests
 
 #include "simple_local_flags.inc"
 
-integer, parameter :: CARTFT_NOT_ATTEMPTED       =  0 !< stage or solve not run
-integer, parameter :: CARTFT_INVALID_PREPARATION = -1 !< the particle slot holds no valid preparation
-integer, parameter :: CARTFT_ACCEPTED            =  1 !< an objective-reducing pose was committed
-integer, parameter :: CARTFT_NO_IMPROVEMENT      =  2 !< finite, no reduction; seed kept
-integer, parameter :: CARTFT_NO_RELIABLE_UPDATE  =  3 !< unobservable or ill-conditioned system; seed kept
-integer, parameter :: CARTFT_BOUND_REJECTED      =  4 !< every proposal left the step or cumulative bound; seed kept
-integer, parameter :: CARTFT_INVALID_NUMERICS    =  5 !< non-finite objective or step; seed kept
-integer, parameter :: CARTFT_ITERATION_LIMIT     =  6 !< iteration cap reached without a decision
+! the engine's outcomes (simple_lm_solver), one to one, and the transaction's own two
+integer, parameter :: CARTFT_NOT_ATTEMPTED       =  0                     !< stage or solve not run
+integer, parameter :: CARTFT_INVALID_PREPARATION = -1                     !< the particle slot holds no valid preparation
+integer, parameter :: CARTFT_ACCEPTED            = LM_ACCEPTED            !< an objective-reducing pose was committed
+integer, parameter :: CARTFT_NO_IMPROVEMENT      = LM_NO_IMPROVEMENT      !< finite, no reduction; seed kept
+integer, parameter :: CARTFT_NO_RELIABLE_UPDATE  = LM_NO_RELIABLE_UPDATE  !< unobservable data system; seed kept
+integer, parameter :: CARTFT_BOUND_REJECTED      = LM_BOUND_REJECTED      !< every proposal left the step or cumulative bound; seed kept
+integer, parameter :: CARTFT_INVALID_NUMERICS    = LM_INVALID_NUMERICS    !< non-finite objective or step; seed kept
+integer, parameter :: CARTFT_ITERATION_LIMIT     = LM_ITERATION_LIMIT     !< iteration cap reached without a decision
 integer, parameter :: CARTFT_STAGE_SHIFT = 1, CARTFT_STAGE_JOINT = 2
 
-! LM numerics
-real(dp), parameter :: NUMERIC_FLOOR                = epsilon(1._dp)**2
-real(dp), parameter :: SHIFT_RESIDUAL_FLOOR         = real(epsilon(1.), dp)**2
-real(dp), parameter :: LM_INITIAL_DAMPING           = 1.e-3_dp
-real(dp), parameter :: LM_INITIAL_REJECTION_MULT    = 4._dp
-real(dp), parameter :: LM_MAX_DAMPING               = 1._dp/epsilon(1._dp)
-real(dp), parameter :: LM_ACCEPTED_RELATIVE_TOL     = 1.e-6_dp
-real(dp), parameter :: LM_PREDICTED_RELATIVE_TOL    = 1.e-6_dp  !< a smaller predicted reduction ends the stage unevaluated
-integer,  parameter :: LM_MAX_CONSECUTIVE_REJECTIONS = 8
+real(dp), parameter :: SHIFT_RESIDUAL_FLOOR = real(epsilon(1.), dp)**2
+real(dp), parameter :: NEGLIGIBLE_STEP      = 1.e-8_dp !< radians or cropped pixels: an accepted step this small ends a solve
 ! default policy
 integer,  parameter :: DEFAULT_MAXITS             = 40
 real(dp), parameter :: DEFAULT_ROTATION_SCALE     = 0.1_dp
@@ -72,7 +68,6 @@ type :: cartft_pose_opt
     integer  :: box_crop = 0               !< box of the calculator
     ! policy
     logical  :: refine_shifts         = .true. !< false when trs = 0: shifts frozen
-    logical  :: shift_first           = .false. !< the shift-only stage before the joint stage
     real(dp) :: shift_prior_weight    = 0._dp !< zero disables the Cartesian shift prior
     real(dp) :: rotation_prior_weight = 0._dp !< fixed-width Matrix-Fisher prior
     integer  :: maxits   = DEFAULT_MAXITS  !< iteration cap of each stage
@@ -98,7 +93,7 @@ contains
     ! solves
     procedure          :: refine
     procedure          :: refine_pose
-    procedure, private :: refine_shift
+    procedure          :: refine_shift
     procedure, private :: refine_joint
     ! record of the last solve
     procedure          :: get_status
@@ -125,6 +120,50 @@ contains
     procedure :: write_bench
 end type cartft_pose_work
 
+!> refine_joint's solve for lm_solve: the current and trial pose, the anchor of the cumulative guard,
+!! the priors, and the stage statistics the engine does not keep (calc is valid during the solve only)
+type, extends(lm_problem) :: cartft_pose_problem
+    class(cartft_calc), pointer :: calc => null()
+    integer  :: state = 0, iptcl = 0
+    logical  :: iseven = .true.
+    real(dp) :: rotmat(3,3) = 0._dp, shift(2) = 0._dp, trial_rotmat(3,3) = 0._dp, trial_shift(2) = 0._dp
+    logical  :: cumulative_guard = .false.
+    real(dp) :: anchor_rotmat(3,3) = 0._dp, anchor_shift(2) = 0._dp
+    real(dp) :: shift_prior_weight = 0._dp, rotation_prior_weight = 0._dp
+    real(dp) :: rotation_scale = 0._dp, shift_step_bound = 0._dp
+    real(dp) :: max_total_rotation = 0._dp, max_total_shift = 0._dp
+    real(dp), allocatable :: residual(:), trial_residual(:) !< whitened |r|^2 per shell (with residual_out)
+    integer  :: npasses = 0
+    integer  :: nratio(NRATIO_BINS) = 0
+    real(dp) :: max_rotation_step = 0._dp, max_shift_step = 0._dp
+contains
+    procedure :: eval            => pose_problem_eval
+    procedure :: limit_step      => pose_problem_limit_step
+    procedure :: propose         => pose_problem_propose
+    procedure :: accept          => pose_problem_accept
+    procedure :: penalty         => pose_problem_penalty
+    procedure :: observable      => pose_problem_observable
+    procedure :: negligible_step => pose_problem_negligible_step
+end type cartft_pose_problem
+
+!> refine_shift's solve for lm_solve: the shift at a fixed rotation, bounded from its start
+type, extends(lm_problem) :: cartft_shift_problem
+    class(cartft_calc), pointer :: calc => null()
+    integer  :: state = 0, iptcl = 0
+    logical  :: iseven = .true.
+    real(dp) :: rotmat(3,3) = 0._dp, shift(2) = 0._dp, trial_shift(2) = 0._dp, anchor_shift(2) = 0._dp
+    real(dp) :: shift_step_bound = 0._dp, max_total_shift = 0._dp
+    integer  :: npasses = 0
+    integer  :: nratio(NRATIO_BINS) = 0
+    real(dp) :: max_shift_step = 0._dp
+contains
+    procedure :: eval            => shift_problem_eval
+    procedure :: limit_step      => shift_problem_limit_step
+    procedure :: propose         => shift_problem_propose
+    procedure :: accept          => shift_problem_accept
+    procedure :: negligible_step => shift_problem_negligible_step
+end type cartft_shift_problem
+
 interface
     pure module subroutine pose_prior_terms( shift_weight, rotation_weight, rotation, shift, seed_rotation, seed_shift, &
         &penalty, gradient, hessian )
@@ -142,39 +181,82 @@ interface
         real(dp), intent(out) :: penalty, gradient(2), hessian(2,2)
     end subroutine shift_prior_terms
 
-    pure module subroutine prepare_pose_data_system( gradient, hessian, rotation_scale, active, &
-        &scaled_gradient, scaled_hessian, identifiable )
-        real(dp), intent(in)  :: gradient(5), hessian(5,5), rotation_scale
-        logical,  intent(in)  :: active(5)
-        real(dp), intent(out) :: scaled_gradient(5), scaled_hessian(5,5)
-        logical,  intent(out) :: identifiable
-    end subroutine prepare_pose_data_system
+    !> The data-only observability test of the joint solve: the scaled, masked system factors
+    pure module function pose_data_observable( scaled_gradient, scaled_hessian ) result( observable )
+        real(dp), intent(in) :: scaled_gradient(:), scaled_hessian(:,:)
+        logical :: observable
+    end function pose_data_observable
 
-    pure module subroutine scale_pose_system( gradient, hessian, rotation_scale, active, scaled_gradient, scaled_hessian )
-        real(dp), intent(in)  :: gradient(5), hessian(5,5), rotation_scale
-        logical, intent(in)   :: active(5)
-        real(dp), intent(out) :: scaled_gradient(5), scaled_hessian(5,5)
-    end subroutine scale_pose_system
+    module subroutine pose_problem_eval( self, f, g, curv )
+        class(cartft_pose_problem), intent(inout) :: self
+        real(dp),                   intent(out)   :: f, g(:), curv(:,:)
+    end subroutine pose_problem_eval
 
-    pure module subroutine build_pose_lm_system( scaled_gradient, scaled_hessian, rotation_scale, mu, &
-        &damping_diagonal, solve_matrix, scaled_step, physical_step, stationary, reliable, bounded, shift_step_bound )
-        real(dp), intent(in)  :: scaled_gradient(5), scaled_hessian(5,5), rotation_scale, mu
-        real(dp), intent(out) :: damping_diagonal(5), solve_matrix(5,5)
-        real(dp), intent(out) :: scaled_step(5), physical_step(5)
-        logical,  intent(out) :: stationary, reliable, bounded
-        real(dp), intent(in)  :: shift_step_bound
-    end subroutine build_pose_lm_system
+    module subroutine pose_problem_limit_step( self, step, bounded )
+        class(cartft_pose_problem), intent(inout) :: self
+        real(dp),                   intent(inout) :: step(:)
+        logical,                    intent(out)   :: bounded
+    end subroutine pose_problem_limit_step
 
-    pure module subroutine apply_pose_parameter_mask( gradient, hessian, active )
-        real(dp), intent(inout) :: gradient(5), hessian(5,5)
-        logical,  intent(in)    :: active(5)
-    end subroutine apply_pose_parameter_mask
+    module function pose_problem_propose( self, step ) result( feasible )
+        class(cartft_pose_problem), intent(inout) :: self
+        real(dp),                   intent(in)    :: step(:)
+        logical :: feasible
+    end function pose_problem_propose
 
-    pure module subroutine solve_pose_cholesky( matrix, rhs, solution, reliable )
-        real(dp), intent(in)  :: matrix(5,5), rhs(5)
-        real(dp), intent(out) :: solution(5)
-        logical,  intent(out) :: reliable
-    end subroutine solve_pose_cholesky
+    module function pose_problem_accept( self, ratio ) result( changed )
+        class(cartft_pose_problem), intent(inout) :: self
+        real(dp),                   intent(in)    :: ratio
+        logical :: changed
+    end function pose_problem_accept
+
+    module function pose_problem_penalty( self, at_trial, penalty, g, curv ) result( has_penalty )
+        class(cartft_pose_problem), intent(inout) :: self
+        logical,                    intent(in)    :: at_trial
+        real(dp),                   intent(out)   :: penalty, g(:), curv(:,:)
+        logical :: has_penalty
+    end function pose_problem_penalty
+
+    module function pose_problem_observable( self, scaled_g, scaled_curv ) result( observable )
+        class(cartft_pose_problem), intent(inout) :: self
+        real(dp),                   intent(in)    :: scaled_g(:), scaled_curv(:,:)
+        logical :: observable
+    end function pose_problem_observable
+
+    module function pose_problem_negligible_step( self, step ) result( negligible )
+        class(cartft_pose_problem), intent(inout) :: self
+        real(dp),                   intent(in)    :: step(:)
+        logical :: negligible
+    end function pose_problem_negligible_step
+
+    module subroutine shift_problem_eval( self, f, g, curv )
+        class(cartft_shift_problem), intent(inout) :: self
+        real(dp),                    intent(out)   :: f, g(:), curv(:,:)
+    end subroutine shift_problem_eval
+
+    module subroutine shift_problem_limit_step( self, step, bounded )
+        class(cartft_shift_problem), intent(inout) :: self
+        real(dp),                    intent(inout) :: step(:)
+        logical,                     intent(out)   :: bounded
+    end subroutine shift_problem_limit_step
+
+    module function shift_problem_propose( self, step ) result( feasible )
+        class(cartft_shift_problem), intent(inout) :: self
+        real(dp),                    intent(in)    :: step(:)
+        logical :: feasible
+    end function shift_problem_propose
+
+    module function shift_problem_accept( self, ratio ) result( changed )
+        class(cartft_shift_problem), intent(inout) :: self
+        real(dp),                    intent(in)    :: ratio
+        logical :: changed
+    end function shift_problem_accept
+
+    module function shift_problem_negligible_step( self, step ) result( negligible )
+        class(cartft_shift_problem), intent(inout) :: self
+        real(dp),                    intent(in)    :: step(:)
+        logical :: negligible
+    end function shift_problem_negligible_step
 
     !> white-box tests (submodule simple_cartft_pose_opt_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_cartft_pose_opt_tests()
@@ -185,14 +267,12 @@ contains
 
     ! LIFECYCLE
 
-    !> Geometry (box of the project shifts, box_crop of the calculator), bounds (trs the total
-    !! shift in native pixels, 0 freezes shifts; rotation_bound the total rotation in degrees) and
-    !! route (shift_first: the shift-only stage first; default the joint stage alone).
-    subroutine new( self, box, box_crop, trs, rotation_bound, shift_first, maxits, rotation_scale, shift_step_bound )
+    !> Geometry (box of the project shifts, box_crop of the calculator) and bounds (trs the total
+    !! shift in native pixels, 0 freezes shifts; rotation_bound the total rotation in degrees).
+    subroutine new( self, box, box_crop, trs, rotation_bound, maxits, rotation_scale, shift_step_bound )
         class(cartft_pose_opt), intent(inout) :: self
         integer,                intent(in)    :: box, box_crop
         real,                   intent(in)    :: trs, rotation_bound
-        logical,  optional,     intent(in)    :: shift_first
         integer,  optional,     intent(in)    :: maxits
         real(dp), optional,     intent(in)    :: rotation_scale, shift_step_bound
         real(dp) :: crop_scale
@@ -207,8 +287,6 @@ contains
         self%max_total_rotation = real(rotation_bound, dp)*real(PI, dp)/180._dp
         self%max_total_shift    = real(trs, dp)*crop_scale
         self%refine_shifts      = trs > 0.
-        self%shift_first        = .false.
-        if( present(shift_first) ) self%shift_first = shift_first
         self%maxits           = DEFAULT_MAXITS
         self%rotation_scale   = DEFAULT_ROTATION_SCALE
         self%shift_step_bound = DEFAULT_SHIFT_STEP_NATIVE*crop_scale
@@ -227,7 +305,6 @@ contains
         self%box                   = 0
         self%box_crop              = 0
         self%refine_shifts         = .true.
-        self%shift_first           = .false.
         self%shift_prior_weight    = 0._dp
         self%rotation_prior_weight = 0._dp
         self%maxits                = DEFAULT_MAXITS
@@ -282,7 +359,6 @@ contains
         real(dp),              intent(in)    :: variance, power
         real(dp) :: crop_scale, weight
         if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
-        if( self%shift_first ) THROW_HARD('cartft_pose_opt shift prior requires the joint route')
         if( .not. positive_finite(variance) .or. .not. positive_finite(power) ) &
             &THROW_HARD('cartft_pose_opt shift prior requires positive finite variance and power')
         crop_scale = real(self%box_crop,dp)/real(self%box,dp)
@@ -298,7 +374,6 @@ contains
         real(dp),              intent(in)    :: sigma_degrees, power
         real(dp) :: sigma, weight
         if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
-        if( self%shift_first ) THROW_HARD('Cartesian rotation prior requires the joint route')
         if( .not. positive_finite(sigma_degrees) .or. .not. positive_finite(power) ) &
             &THROW_HARD('Cartesian rotation prior requires positive finite width and power')
         sigma = sigma_degrees*(acos(-1._dp)/180._dp)
@@ -326,7 +401,7 @@ contains
         logical,                intent(in)    :: iseven
         real(dp),               intent(inout) :: rotmat(3,3), shift(2)
         real(dp) :: staged_rotmat(3,3), staged_shift(2), gradient(5), hessian(5,5)
-        real(dp) :: shift_objective_after, joint_objective_after, sine_half, prior_penalty
+        real(dp) :: joint_objective_after, sine_half, prior_penalty
         real(dp) :: prior_gradient(5), prior_hessian(5,5)
         real(dp), allocatable :: staged_residual(:), joint_residual(:)
         integer  :: kfromto(2)
@@ -341,8 +416,8 @@ contains
             &calc%get_ptcl_objfun(iptcl) /= OBJFUN_EUCLID ) &
             &THROW_HARD('cartft_pose_opt shift prior requires Euclidean loss')
         ! the seed objective is the single acceptance baseline of the transaction; its terms also
-        ! seed the joint stage on the joint route, and its shell residual is the returned pose's
-        ! until a staged pose is committed
+        ! seed the joint stage, and its shell residual is the returned pose's until a staged pose
+        ! is committed
         kfromto = calc%get_ptcl_kfromto(iptcl)
         allocate(self%shell_residual(kfromto(2) - kfromto(1) + 1), joint_residual(kfromto(2) - kfromto(1) + 1))
         call calc%pose_normal_terms(state, iseven, iptcl, rotmat, shift, self%objective_before, gradient, hessian, &
@@ -352,48 +427,24 @@ contains
             self%status = CARTFT_INVALID_NUMERICS
             return
         endif
-        staged_rotmat = rotmat
-        staged_shift  = shift
-        shift_objective_after = self%objective_before
+        staged_rotmat   = rotmat
+        staged_shift    = shift
         staged_residual = self%shell_residual
-        if( self%refine_shifts .and. self%shift_first )then
-            ! stage 1 of the shift-then-joint route: translation only, the seed rotation fixed
-            call self%refine_shift(calc, state, iseven, iptcl, staged_rotmat, staged_shift)
-            call calc%pose_normal_terms(state, iseven, iptcl, staged_rotmat, staged_shift, &
-                &shift_objective_after, gradient, hessian, staged_residual)
-            self%npasses = self%npasses + 1
-            associate( st => self%stages(CARTFT_STAGE_SHIFT) )
-                st%objective_before = self%objective_before
-                st%objective_after  = shift_objective_after
-                ! the cumulative shift bound from the seed, explicitly
-                if( sqrt(sum((staged_shift - shift)**2)) > self%max_total_shift + 10._dp*epsilon(1._dp) )then
-                    st%status      = CARTFT_BOUND_REJECTED
-                    st%nbound_hits = st%nbound_hits + 1
-                endif
-                if( aborts_route(st%status) )then
-                    ! a failed shift stage cannot supply a trustworthy joint-stage seed
-                    self%status          = st%status
-                    self%objective_after = self%objective_before
-                    return
-                endif
-            end associate
-        endif
-        ! joint stage from the route's current endpoint (the shift result or the seed), seeded with
-        ! the terms just evaluated there and returning the objective at its endpoint; both
-        ! cumulative guards stay anchored at the transaction seed
+        ! the joint stage from the seed, seeded with its terms and returning the objective at its
+        ! endpoint; both cumulative guards are anchored at the seed
         if( self%refine_shifts )then
             call self%refine_joint(calc, state, iseven, iptcl, staged_rotmat, staged_shift, &
-                &anchor_rotmat=rotmat, anchor_shift=shift, seed_objective=shift_objective_after, &
+                &anchor_rotmat=rotmat, anchor_shift=shift, seed_objective=self%objective_before, &
                 &seed_gradient=gradient, seed_hessian=hessian, objective_out=joint_objective_after, &
                 &seed_residual=staged_residual, residual_out=joint_residual)
         else
             call self%refine_joint(calc, state, iseven, iptcl, staged_rotmat, staged_shift, &
                 &active=[.true., .true., .true., .false., .false.], anchor_rotmat=rotmat, anchor_shift=shift, &
-                &seed_objective=shift_objective_after, seed_gradient=gradient, seed_hessian=hessian, &
+                &seed_objective=self%objective_before, seed_gradient=gradient, seed_hessian=hessian, &
                 &objective_out=joint_objective_after, seed_residual=staged_residual, residual_out=joint_residual)
         endif
         associate( st => self%stages(CARTFT_STAGE_JOINT) )
-            st%objective_before = shift_objective_after
+            st%objective_before = self%objective_before
             st%objective_after  = joint_objective_after
             if( aborts_route(st%status) )then
                 self%status          = st%status
@@ -435,23 +486,20 @@ contains
         self%shell_residual = joint_residual
     end subroutine refine_pose
 
-    !> The shift-only LM stage alone, with the rotation fixed: damped 2x2 Gauss-Newton steps
-    !! capped at shift_step_bound. shift is updated through accepted steps only. Overwrites
-    !! the CARTFT_STAGE_SHIFT record; an invalid particle slot gives CARTFT_INVALID_NUMERICS.
+    !> The shift-only solve at a fixed rotation: lm_solve on a cartft_shift_problem, steps capped at
+    !! shift_step_bound and trials within trs of the input shift. shift is updated through accepted steps
+    !! only. Overwrites the CARTFT_STAGE_SHIFT record; an invalid particle slot gives CARTFT_INVALID_NUMERICS.
     subroutine refine_shift( self, calc, state, iseven, iptcl, rotmat, shift )
-        class(cartft_pose_opt), intent(inout) :: self
-        class(cartft_calc),     intent(in)    :: calc
-        integer,                intent(in)    :: state, iptcl
-        logical,                intent(in)    :: iseven
-        real(dp),               intent(in)    :: rotmat(3,3)
-        real(dp),               intent(inout) :: shift(2)
-        real(dp) :: gradient(2), hessian(2,2), trial_gradient(2), trial_hessian(2,2)
-        real(dp) :: solve_matrix(2,2), diagonal(2), direction(2), trial_shift(2)
-        real(dp) :: objective, trial_objective, mu, rejection_multiplier
-        real(dp) :: det, predicted, actual, ratio, maxdiag
-        real(dp) :: discriminant, lambda_max, lambda_min, step_norm, relative_reduction
-        integer  :: axis, iteration, naccepted, consecutive_rejections
-        logical  :: bounded_trial
+        class(cartft_pose_opt),     intent(inout) :: self
+        class(cartft_calc), target, intent(in)    :: calc
+        integer,                    intent(in)    :: state, iptcl
+        logical,                    intent(in)    :: iseven
+        real(dp),                   intent(in)    :: rotmat(3,3)
+        real(dp),                   intent(inout) :: shift(2)
+        type(cartft_shift_problem) :: problem
+        type(lm_options)           :: options
+        type(lm_outcome)           :: outcome
+        real(dp) :: objective, gradient(2), hessian(2,2)
         if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
         self%stages(CARTFT_STAGE_SHIFT) = cartft_stage(status=CARTFT_ITERATION_LIMIT)
         associate( st => self%stages(CARTFT_STAGE_SHIFT) )
@@ -461,161 +509,66 @@ contains
             endif
             call calc%shift_normal_terms(state, iseven, iptcl, rotmat, shift, objective, gradient, hessian)
             self%npasses = self%npasses + 1
-            naccepted = 0
-            consecutive_rejections = 0
-            bounded_trial = .false.
             if( .not. ieee_is_finite(objective) .or. any(.not. ieee_is_finite(gradient)) .or. &
                 &any(.not. ieee_is_finite(hessian)) )then
                 st%status = CARTFT_INVALID_NUMERICS
                 return
             endif
+            ! an exact shift leaves nothing a single-precision observation resolves
             if( objective <= SHIFT_RESIDUAL_FLOOR )then
                 st%status = CARTFT_NO_IMPROVEMENT
                 return
             endif
-            mu = LM_INITIAL_DAMPING
-            rejection_multiplier = LM_INITIAL_REJECTION_MULT
-            do iteration = 1, self%maxits
-                st%niter = iteration
-                maxdiag  = max(maxval([(hessian(axis,axis), axis=1,2)]), 1._dp)
-                ! eigenvalues diagnose whether both shift directions are observable
-                discriminant = sqrt(max(0._dp, (hessian(1,1) - hessian(2,2))**2 + 4._dp*hessian(1,2)*hessian(2,1)))
-                lambda_max   = 0.5_dp*(hessian(1,1) + hessian(2,2) + discriminant)
-                lambda_min   = 0.5_dp*(hessian(1,1) + hessian(2,2) - discriminant)
-                if( lambda_max <= sqrt(epsilon(1._dp))*maxdiag .or. &
-                    &lambda_min <= sqrt(epsilon(1._dp))*max(lambda_max, 1._dp) )then
-                    st%status = CARTFT_NO_RELIABLE_UPDATE
-                    exit
-                endif
-                if( sqrt(dot_product(gradient, gradient)) < 1.e-8_dp )then
-                    st%status = merge(CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT, naccepted > 0)
-                    exit
-                endif
-                do axis = 1, 2
-                    diagonal(axis) = max(hessian(axis,axis), sqrt(epsilon(1._dp))*maxdiag, epsilon(1._dp))
-                end do
-                solve_matrix      = hessian
-                solve_matrix(1,1) = solve_matrix(1,1) + mu*diagonal(1)
-                solve_matrix(2,2) = solve_matrix(2,2) + mu*diagonal(2)
-                det = solve_matrix(1,1)*solve_matrix(2,2) - solve_matrix(1,2)*solve_matrix(2,1)
-                if( abs(det) <= epsilon(1._dp)*maxdiag*maxdiag )then
-                    st%status = CARTFT_NO_RELIABLE_UPDATE
-                    exit
-                endif
-                direction(1) = (-solve_matrix(2,2)*gradient(1) + solve_matrix(1,2)*gradient(2))/det
-                direction(2) = ( solve_matrix(2,1)*gradient(1) - solve_matrix(1,1)*gradient(2))/det
-                if( any(.not. ieee_is_finite(direction)) )then
-                    st%status = CARTFT_INVALID_NUMERICS
-                    exit
-                endif
-                ! shift coordinates are pixels; cap every trial displacement at the step bound
-                step_norm = sqrt(dot_product(direction, direction))
-                if( step_norm > self%shift_step_bound )then
-                    direction     = direction*(self%shift_step_bound/step_norm)
-                    bounded_trial = .true.
-                    st%nbound_hits = st%nbound_hits + 1
-                endif
-                step_norm = min(step_norm, self%shift_step_bound)
-                st%max_shift_step = max(st%max_shift_step, step_norm)
-                predicted = -dot_product(gradient, direction) - 0.5_dp*dot_product(direction, matmul(hessian, direction))
-                if( .not. ieee_is_finite(predicted) )then
-                    st%status = CARTFT_INVALID_NUMERICS
-                    exit
-                else if( predicted <= 0._dp )then
-                    consecutive_rejections = consecutive_rejections + 1
-                    call increase_lm_damping(mu, rejection_multiplier)
-                    if( consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS )then
-                        st%status = rejection_terminal_status(naccepted, bounded_trial)
-                        exit
-                    endif
-                    cycle
-                endif
-                ! stop unevaluated below what the objective resolves; the undamped step predicts more,
-                ! so this also ends a converged stage (status as at the rejection limit)
-                if( predicted < LM_PREDICTED_RELATIVE_TOL*max(abs(objective), NUMERIC_FLOOR) )then
-                    st%status = rejection_terminal_status(naccepted, bounded_trial)
-                    exit
-                endif
-                trial_shift   = shift + direction
-                st%nattempted = st%nattempted + 1
-                call calc%shift_normal_terms(state, iseven, iptcl, rotmat, trial_shift, &
-                    &trial_objective, trial_gradient, trial_hessian)
-                st%ntrials   = st%ntrials + 1
-                self%npasses = self%npasses + 1
-                if( .not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
-                    &any(.not. ieee_is_finite(trial_hessian)) )then
-                    consecutive_rejections = consecutive_rejections + 1
-                    call increase_lm_damping(mu, rejection_multiplier)
-                    st%status = CARTFT_INVALID_NUMERICS
-                    if( consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS ) exit
-                    cycle
-                endif
-                actual = objective - trial_objective
-                ratio  = actual/predicted
-                if( actual > 0._dp .and. ratio >= 0.25_dp )then
-                    relative_reduction = actual/max(abs(objective), NUMERIC_FLOOR)
-                    st%nratio(ratio_bin(ratio)) = st%nratio(ratio_bin(ratio)) + 1
-                    shift     = trial_shift
-                    objective = trial_objective
-                    gradient  = trial_gradient
-                    hessian   = trial_hessian
-                    naccepted = naccepted + 1
-                    consecutive_rejections = 0
-                    st%naccepted = naccepted
-                    if( ratio > 0.75_dp ) mu = max(mu/2._dp, epsilon(1._dp))
-                    rejection_multiplier = LM_INITIAL_REJECTION_MULT
-                    st%status = CARTFT_ACCEPTED
-                    if( step_norm < 1.e-8_dp .or. relative_reduction < LM_ACCEPTED_RELATIVE_TOL ) exit
-                else
-                    consecutive_rejections = consecutive_rejections + 1
-                    call increase_lm_damping(mu, rejection_multiplier)
-                    if( consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS )then
-                        st%status = rejection_terminal_status(naccepted, bounded_trial)
-                        exit
-                    endif
-                endif
-            end do
-            if( st%status == CARTFT_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial ) &
-                &st%status = CARTFT_BOUND_REJECTED
+            problem%calc             => calc
+            problem%state            = state
+            problem%iseven           = iseven
+            problem%iptcl            = iptcl
+            problem%rotmat           = rotmat
+            problem%shift            = shift
+            problem%trial_shift      = shift
+            problem%anchor_shift     = shift
+            problem%shift_step_bound = self%shift_step_bound
+            problem%max_total_shift  = self%max_total_shift
+            options%maxits = self%maxits
+            options%scale  = [1._dp, 1._dp]
+            options%active = [.true., .true.]
+            call lm_solve(problem, options, outcome, objective, gradient, hessian)
+            shift = problem%shift
+            call copy_outcome(outcome, st)
+            st%nratio         = problem%nratio
+            st%max_shift_step = problem%max_shift_step
+            self%npasses      = self%npasses + problem%npasses
+            problem%calc => null()
         end associate
     end subroutine refine_shift
 
-    !> The joint five-parameter LM stage alone: scaled, damped steps with the rotation capped
-    !! at rotation_scale and the shift at shift_step_bound. active masks parameters (1:3
-    !! rotation, 4:5 shift; default all). With anchor_rotmat and anchor_shift (both or
-    !! neither) every trial pose must stay within max_total_rotation and max_total_shift of
-    !! the anchor. rotmat and shift are updated through accepted steps only. The seed_* terms (all
-    !! or none) are the caller's pose_normal_terms at the seed, which then is not evaluated again;
-    !! objective_out is the objective at the returned pose, and residual_out its shell residual
-    !! (seed_residual, the seed's, with the seed terms). Overwrites the CARTFT_STAGE_JOINT
-    !! record; an invalid particle slot gives CARTFT_INVALID_NUMERICS. THROW_HARD for no active
-    !! parameter, one anchor without the other, a non-finite anchor or a partial seed.
+    !> The joint five-parameter stage alone: lm_solve on a cartft_pose_problem, the rotation capped at
+    !! rotation_scale and the shift at shift_step_bound per step. active masks parameters (1:3 rotation,
+    !! 4:5 shift; default all). With anchor_rotmat and anchor_shift (both or neither) every trial pose must
+    !! stay within max_total_rotation and max_total_shift of the anchor. rotmat and shift are updated through
+    !! accepted steps only. The seed_* terms (all or none) are the caller's pose_normal_terms at the seed,
+    !! which then is not evaluated again; objective_out is the objective at the returned pose, and
+    !! residual_out its shell residual (seed_residual, the seed's, with the seed terms). Overwrites the
+    !! CARTFT_STAGE_JOINT record; an invalid particle slot gives CARTFT_INVALID_NUMERICS. THROW_HARD for no
+    !! active parameter, one anchor without the other, a non-finite anchor or a partial seed.
     subroutine refine_joint( self, calc, state, iseven, iptcl, rotmat, shift, active, anchor_rotmat, anchor_shift, &
         &seed_objective, seed_gradient, seed_hessian, objective_out, seed_residual, residual_out )
-        class(cartft_pose_opt), intent(inout) :: self
-        class(cartft_calc),     intent(in)    :: calc
-        integer,                intent(in)    :: state, iptcl
-        logical,                intent(in)    :: iseven
-        real(dp),               intent(inout) :: rotmat(3,3), shift(2)
-        logical,  optional,     intent(in)    :: active(5)
-        real(dp), optional,     intent(in)    :: anchor_rotmat(3,3), anchor_shift(2)
-        real(dp), optional,     intent(in)    :: seed_objective, seed_gradient(5), seed_hessian(5,5)
-        real(dp), optional,     intent(out)   :: objective_out
-        real(dp), optional,     intent(in)    :: seed_residual(:)
-        real(dp), optional,     intent(out)   :: residual_out(:)
-        real(dp), allocatable :: residual(:), trial_residual(:)
-        real(dp) :: gradient(5), hessian(5,5), trial_gradient(5), trial_hessian(5,5)
-        real(dp) :: scaled_gradient(5), scaled_hessian(5,5), solve_matrix(5,5)
-        real(dp) :: diagonal(5), scaled_direction(5), direction(5)
-        real(dp) :: trial_rotmat(3,3), trial_shift(2)
-        real(dp) :: objective, trial_objective, mu, rejection_multiplier
-        real(dp) :: total_objective, trial_total, penalty, prior_gradient(5), prior_hessian(5,5)
-        real(dp) :: total_gradient(5), total_hessian(5,5)
-        real(dp) :: predicted, actual, ratio, rotation_norm, shift_norm
-        real(dp) :: relative_reduction, cumulative_rotation, cumulative_shift, sine_half
-        integer  :: iteration, naccepted, consecutive_rejections
-        logical  :: l_active(5), bounded_trial, bounded_step, cumulative_guard
-        logical  :: accept_trial, identifiable, reliable, stationary
+        class(cartft_pose_opt),     intent(inout) :: self
+        class(cartft_calc), target, intent(in)    :: calc
+        integer,                    intent(in)    :: state, iptcl
+        logical,                    intent(in)    :: iseven
+        real(dp),                   intent(inout) :: rotmat(3,3), shift(2)
+        logical,  optional,         intent(in)    :: active(5)
+        real(dp), optional,         intent(in)    :: anchor_rotmat(3,3), anchor_shift(2)
+        real(dp), optional,         intent(in)    :: seed_objective, seed_gradient(5), seed_hessian(5,5)
+        real(dp), optional,         intent(out)   :: objective_out
+        real(dp), optional,         intent(in)    :: seed_residual(:)
+        real(dp), optional,         intent(out)   :: residual_out(:)
+        type(cartft_pose_problem) :: problem
+        type(lm_options)          :: options
+        type(lm_outcome)          :: outcome
+        real(dp) :: objective, gradient(5), hessian(5,5)
+        logical  :: l_active(5)
         if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
         l_active = .true.
         if( present(active) ) l_active = active
@@ -624,10 +577,12 @@ contains
             &THROW_HARD('cartft_pose_opt joint stage requires both anchors or none')
         if( (self%shift_prior_weight > 0._dp .or. self%rotation_prior_weight > 0._dp) .and. .not. present(anchor_shift) ) &
             &THROW_HARD('cartft_pose_opt shift prior requires a transaction anchor')
-        cumulative_guard = present(anchor_rotmat)
-        if( cumulative_guard )then
+        problem%cumulative_guard = present(anchor_rotmat)
+        if( problem%cumulative_guard )then
             if( any(.not. ieee_is_finite(anchor_rotmat)) .or. any(.not. ieee_is_finite(anchor_shift)) ) &
                 &THROW_HARD('cartft_pose_opt cumulative anchor must be finite')
+            problem%anchor_rotmat = anchor_rotmat
+            problem%anchor_shift  = anchor_shift
         endif
         if( (present(seed_objective) .neqv. present(seed_gradient)) .or. (present(seed_objective) .neqv. present(seed_hessian)) ) &
             &THROW_HARD('cartft_pose_opt joint stage requires all seed terms or none')
@@ -636,7 +591,7 @@ contains
             if( present(seed_objective) .neqv. present(seed_residual) ) &
                 &THROW_HARD('cartft_pose_opt joint stage requires the seed residual with the seed terms')
             residual_out = 0._dp
-            allocate(residual(size(residual_out)), trial_residual(size(residual_out)), source=0._dp)
+            allocate(problem%residual(size(residual_out)), problem%trial_residual(size(residual_out)), source=0._dp)
         endif
         self%stages(CARTFT_STAGE_JOINT) = cartft_stage(status=CARTFT_ITERATION_LIMIT)
         associate( st => self%stages(CARTFT_STAGE_JOINT) )
@@ -644,176 +599,48 @@ contains
                 st%status = CARTFT_INVALID_NUMERICS
                 return
             endif
-            naccepted = 0
-            consecutive_rejections = 0
             ! the seed's objective, five-vector gradient and 5x5 Gauss-Newton matrix, evaluated once
             if( present(seed_objective) )then
                 objective = seed_objective
                 gradient  = seed_gradient
                 hessian   = seed_hessian
-                if( allocated(residual) ) residual = seed_residual
+                if( allocated(problem%residual) ) problem%residual = seed_residual
             else
-                call calc%pose_normal_terms(state, iseven, iptcl, rotmat, shift, objective, gradient, hessian, residual)
+                call calc%pose_normal_terms(state, iseven, iptcl, rotmat, shift, objective, gradient, hessian, &
+                    &problem%residual)
                 self%npasses = self%npasses + 1
             endif
             if( present(objective_out) ) objective_out = objective
-            if( present(residual_out) ) residual_out = residual
-            bounded_trial = .false.
-            if( .not. ieee_is_finite(objective) .or. any(.not. ieee_is_finite(gradient)) .or. &
-                &any(.not. ieee_is_finite(hessian)) )then
-                st%status = CARTFT_INVALID_NUMERICS
-                return
-            endif
-            mu = LM_INITIAL_DAMPING
-            rejection_multiplier = LM_INITIAL_REJECTION_MULT
-            do iteration = 1, self%maxits
-                st%niter = iteration
-                ! Check the data system before adding prior curvature.
-                call prepare_pose_data_system(gradient, hessian, self%rotation_scale, l_active, &
-                    &scaled_gradient, scaled_hessian, identifiable)
-                if( .not. identifiable )then
-                    st%status = merge(CARTFT_ACCEPTED, CARTFT_NO_RELIABLE_UPDATE, naccepted > 0)
-                    exit
-                endif
-                total_objective = objective
-                total_gradient = gradient
-                total_hessian = hessian
-                if( (self%shift_prior_weight > 0._dp .or. self%rotation_prior_weight > 0._dp) )then
-                    call pose_prior_terms(self%shift_prior_weight, self%rotation_prior_weight, rotmat, shift, &
-                        &anchor_rotmat, anchor_shift, penalty, prior_gradient, prior_hessian)
-                    total_objective = objective + penalty
-                    total_gradient = gradient + prior_gradient
-                    total_hessian = hessian + prior_hessian
-                    call scale_pose_system(total_gradient, total_hessian, self%rotation_scale, l_active, &
-                        &scaled_gradient, scaled_hessian)
-                    if( .not. ieee_is_finite(total_objective) .or. any(.not. ieee_is_finite(total_gradient)) .or. &
-                        &any(.not. ieee_is_finite(total_hessian)) )then
-                        st%status = CARTFT_INVALID_NUMERICS
-                        exit
-                    endif
-                endif
-                ! Form and solve the small damped LM system.
-                call build_pose_lm_system(scaled_gradient, scaled_hessian, self%rotation_scale, mu, &
-                    &diagonal, solve_matrix, scaled_direction, direction, stationary, reliable, bounded_step, &
-                    &self%shift_step_bound)
-                ! Retain any improvement already accepted when the solve stops.
-                if( stationary )then
-                    st%status = merge(CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT, naccepted > 0)
-                    exit
-                endif
-                if( .not. reliable )then
-                    st%status = CARTFT_NO_RELIABLE_UPDATE
-                    exit
-                endif
-                if( any(.not. ieee_is_finite(direction)) )then
-                    st%status = CARTFT_INVALID_NUMERICS
-                    exit
-                endif
-                bounded_trial = bounded_trial .or. bounded_step
-                if( bounded_step ) st%nbound_hits = st%nbound_hits + 1
-                rotation_norm = sqrt(dot_product(direction(1:3), direction(1:3)))
-                shift_norm    = sqrt(dot_product(direction(4:5), direction(4:5)))
-                st%max_rotation_step = max(st%max_rotation_step, rotation_norm)
-                st%max_shift_step    = max(st%max_shift_step, shift_norm)
-                ! reduction predicted by the local quadratic model: -g^T d - 1/2 d^T H d
-                predicted = -dot_product(total_gradient, direction) - 0.5_dp*dot_product(direction, matmul(total_hessian, direction))
-                if( .not. ieee_is_finite(predicted) )then
-                    st%status = CARTFT_INVALID_NUMERICS
-                    exit
-                else if( predicted <= 0._dp )then
-                    consecutive_rejections = consecutive_rejections + 1
-                    call increase_lm_damping(mu, rejection_multiplier)
-                    if( consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS )then
-                        st%status = rejection_terminal_status(naccepted, bounded_trial)
-                        exit
-                    endif
-                    cycle
-                endif
-                ! stop unevaluated below what the objective resolves; the undamped step predicts more,
-                ! so this also ends a converged stage (status as at the rejection limit)
-                if( predicted < LM_PREDICTED_RELATIVE_TOL*max(abs(total_objective), NUMERIC_FLOOR) )then
-                    st%status = rejection_terminal_status(naccepted, bounded_trial)
-                    exit
-                endif
-                ! the proposed SO(3) and shift increments, without changing the accepted pose yet
-                trial_rotmat  = right_increment_rotation(rotmat, direction(1:3))
-                trial_shift   = shift + direction(4:5)
-                st%nattempted = st%nattempted + 1
-                if( cumulative_guard )then
-                    ! reject proposals that leave the capture basin of the anchor; increase
-                    ! damping and try a smaller step
-                    sine_half = sqrt(sum((trial_rotmat - anchor_rotmat)**2))/(2._dp*sqrt(2._dp))
-                    cumulative_rotation = 2._dp*asin(max(0._dp, min(1._dp, sine_half)))
-                    cumulative_shift    = sqrt(sum((trial_shift - anchor_shift)**2))
-                    if( cumulative_rotation > self%max_total_rotation + 10._dp*epsilon(1._dp) .or. &
-                        &cumulative_shift > self%max_total_shift + 10._dp*epsilon(1._dp) )then
-                        consecutive_rejections = consecutive_rejections + 1
-                        call increase_lm_damping(mu, rejection_multiplier)
-                        if( .not. bounded_step ) st%nbound_hits = st%nbound_hits + 1
-                        bounded_trial = .true.
-                        if( consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS )then
-                            st%status = rejection_terminal_status(naccepted, bounded_trial)
-                            exit
-                        endif
-                        cycle
-                    endif
-                endif
-                ! the trial objective, gradient and normal matrix over the full active disk:
-                ! the dominant cost of an LM iteration
-                call calc%pose_normal_terms(state, iseven, iptcl, trial_rotmat, trial_shift, &
-                    &trial_objective, trial_gradient, trial_hessian, trial_residual)
-                st%ntrials   = st%ntrials + 1
-                self%npasses = self%npasses + 1
-                if( .not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
-                    &any(.not. ieee_is_finite(trial_hessian)) )then
-                    consecutive_rejections = consecutive_rejections + 1
-                    call increase_lm_damping(mu, rejection_multiplier)
-                    st%status = CARTFT_INVALID_NUMERICS
-                    if( consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS ) exit
-                    cycle
-                endif
-                ! accept a trustworthy improvement; otherwise damp and retry from the last accepted pose
-                trial_total = trial_objective
-                if( (self%shift_prior_weight > 0._dp .or. self%rotation_prior_weight > 0._dp) )then
-                    call pose_prior_terms(self%shift_prior_weight, self%rotation_prior_weight, trial_rotmat, trial_shift, &
-                        &anchor_rotmat, anchor_shift, penalty, prior_gradient, prior_hessian)
-                    trial_total = trial_objective + penalty
-                endif
-                actual = total_objective - trial_total
-                ratio  = actual/predicted
-                accept_trial = actual > 0._dp .and. ratio >= 0.25_dp
-                if( accept_trial )then
-                    relative_reduction = actual/max(abs(total_objective), NUMERIC_FLOOR)
-                    st%nratio(ratio_bin(ratio)) = st%nratio(ratio_bin(ratio)) + 1
-                    rotmat    = trial_rotmat
-                    shift     = trial_shift
-                    objective = trial_objective
-                    gradient  = trial_gradient
-                    hessian   = trial_hessian
-                    if( allocated(residual) ) residual = trial_residual
-                    naccepted = naccepted + 1
-                    consecutive_rejections = 0
-                    st%naccepted = naccepted
-                    if( ratio > 0.75_dp ) mu = max(mu/2._dp, epsilon(1._dp))
-                    rejection_multiplier = LM_INITIAL_REJECTION_MULT
-                    st%status = CARTFT_ACCEPTED
-                    ! stop after an accepted but negligible step or reduction
-                    if( max(rotation_norm, shift_norm) < 1.e-8_dp .or. &
-                        &relative_reduction < LM_ACCEPTED_RELATIVE_TOL ) exit
-                else
-                    consecutive_rejections = consecutive_rejections + 1
-                    call increase_lm_damping(mu, rejection_multiplier)
-                    if( consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS )then
-                        st%status = rejection_terminal_status(naccepted, bounded_trial)
-                        exit
-                    endif
-                endif
-            end do
-            if( st%status == CARTFT_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial ) &
-                &st%status = CARTFT_BOUND_REJECTED
+            if( present(residual_out) ) residual_out = problem%residual
+            problem%calc                  => calc
+            problem%state                 = state
+            problem%iseven                = iseven
+            problem%iptcl                 = iptcl
+            problem%rotmat                = rotmat
+            problem%shift                 = shift
+            problem%trial_rotmat          = rotmat
+            problem%trial_shift           = shift
+            problem%shift_prior_weight    = self%shift_prior_weight
+            problem%rotation_prior_weight = self%rotation_prior_weight
+            problem%rotation_scale        = self%rotation_scale
+            problem%shift_step_bound      = self%shift_step_bound
+            problem%max_total_rotation    = self%max_total_rotation
+            problem%max_total_shift       = self%max_total_shift
+            options%maxits = self%maxits
+            options%scale  = [self%rotation_scale, self%rotation_scale, self%rotation_scale, 1._dp, 1._dp]
+            options%active = l_active
+            call lm_solve(problem, options, outcome, objective, gradient, hessian)
+            problem%calc => null()
+            call copy_outcome(outcome, st)
+            st%nratio            = problem%nratio
+            st%max_rotation_step = problem%max_rotation_step
+            st%max_shift_step    = problem%max_shift_step
+            self%npasses         = self%npasses + problem%npasses
+            rotmat = problem%rotmat
+            shift  = problem%shift
         end associate
-        if( present(objective_out) ) objective_out = objective
-        if( present(residual_out) ) residual_out = residual
+        if( present(objective_out) ) objective_out = outcome%f
+        if( present(residual_out) ) residual_out = problem%residual
     end subroutine refine_joint
 
     ! RECORD OF THE LAST SOLVE
@@ -1026,7 +853,7 @@ contains
         positive_finite = ieee_is_finite(val) .and. val > 0._dp
     end function positive_finite
 
-    !> A stage outcome other than an accepted or finite non-improving result ends the route.
+    !> A stage outcome other than an accepted or finite non-improving result ends the transaction.
     pure logical function aborts_route( status )
         integer, intent(in) :: status
         select case(status)
@@ -1037,26 +864,17 @@ contains
         end select
     end function aborts_route
 
-    !> Classify a finite rejection limit without discarding an earlier accepted endpoint.
-    pure integer function rejection_terminal_status( naccepted, bounded_trial ) result( status )
-        integer, intent(in) :: naccepted
-        logical, intent(in) :: bounded_trial
-        if( naccepted > 0 )then
-            status = CARTFT_ACCEPTED
-        else if( bounded_trial )then
-            status = CARTFT_BOUND_REJECTED
-        else
-            status = CARTFT_NO_IMPROVEMENT
-        endif
-    end function rejection_terminal_status
-
-    !> Increase damping aggressively across consecutive rejected proposals; the solver resets
-    !! the multiplier after an accepted proposal.
-    pure subroutine increase_lm_damping( mu, rejection_multiplier )
-        real(dp), intent(inout) :: mu, rejection_multiplier
-        mu = min(mu*rejection_multiplier, LM_MAX_DAMPING)
-        rejection_multiplier = min(2._dp*rejection_multiplier, LM_MAX_DAMPING)
-    end subroutine increase_lm_damping
+    !> The engine's status and counters into a stage record.
+    pure subroutine copy_outcome( outcome, st )
+        type(lm_outcome),   intent(in)    :: outcome
+        type(cartft_stage), intent(inout) :: st
+        st%status      = outcome%status
+        st%niter       = outcome%niter
+        st%nattempted  = outcome%nattempted
+        st%ntrials     = outcome%ntrials
+        st%naccepted   = outcome%naccepted
+        st%nbound_hits = outcome%nbound_hits
+    end subroutine copy_outcome
 
 
 end module simple_cartft_pose_opt

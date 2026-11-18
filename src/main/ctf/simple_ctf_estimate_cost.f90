@@ -10,8 +10,11 @@ use simple_memoize_ft_maps, only: ft_map_spafreqsq, ft_map_astigang
 implicit none
 
 public :: ctf_estimate_cost1D, ctf_estimate_cost2D, ctf_estimate_cost4Dcont
+public :: run_all_ctf_estimate_cost_tests
 private
 #include "simple_local_flags.inc"
+
+character(len=*), parameter :: CTF_CONT_SOLVER = 'lbfgsb' !< the continuous fit's optimiser; testers pass 'lm' to init
 
 type ctf_estimate_cost1D
     private
@@ -62,6 +65,7 @@ type ctf_estimate_cost4Dcont
     real(dp)                  :: kv, cs, angast, phshift, smpd, amp_contr_const, wl, wlsq ! CTF
     real(dp)                  :: conversionfactor = 0.d0    ! unit conversion
     real(dp)                  :: astigtol         = 0.05d0  !< Astigmatic tolerance (microns)
+    character(len=8)          :: solver           = CTF_CONT_SOLVER
     integer                   :: ndim             = 0       !< # of dimensions to optimize
     integer                   :: ldim(3)          = 0       !< dimensions of spectrum
     integer                   :: flims(3,2)       = 0       !< fourier limits
@@ -75,6 +79,12 @@ type ctf_estimate_cost4Dcont
         procedure          :: minimize  => minimize4Dcont
         procedure          :: kill      => kill4Dcont
 end type ctf_estimate_cost4Dcont
+
+interface
+    !> white-box tests (submodule simple_ctf_estimate_cost_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_ctf_estimate_cost_tests()
+    end subroutine run_all_ctf_estimate_cost_tests
+end interface
 
 contains
 
@@ -116,7 +126,8 @@ contains
         call self%ospec%set_costfun(cost2D_wrapper)
     end subroutine init2D
 
-    subroutine init4Dcont( self, pspec, parms, inds, ndim, limits, astigtol)
+    !> solver ('lbfgsb' or 'lm') only from testers
+    subroutine init4Dcont( self, pspec, parms, inds, ndim, limits, astigtol, solver )
         use simple_opt_factory, only: opt_factory
         class(ctf_estimate_cost4Dcont), intent(inout) :: self
         class(image),     target, intent(inout) :: pspec
@@ -125,10 +136,13 @@ contains
         integer,                  intent(in)    :: ndim
         real,                     intent(in)    :: limits(2,ndim)
         real,                     intent(in)    :: astigtol
+        character(len=*), optional, intent(in)  :: solver
         type(opt_factory) :: opt_fact
         real(dp)          :: amp_contr, phaseq
         real              :: optlims(ndim,2)
         call self%kill4Dcont
+        self%solver   = CTF_CONT_SOLVER
+        if( present(solver) ) self%solver = solver
         self%pspec    => pspec
         self%parms    => parms
         self%inds     => inds
@@ -153,12 +167,13 @@ contains
         ! optimizer
         optlims = transpose(limits)
         if( self%ndim >= 3 ) optlims(3,:) = deg2rad(optlims(3,:)) ! astigmatism in radians
-        call self%ospec%specify('lbfgsb', self%ndim, ftol=1e-3, gtol=0.9,&
+        call self%ospec%specify(trim(self%solver), self%ndim, ftol=1e-3, gtol=0.9,&
             &limits=optlims, max_step=0.01, maxits=100)
-        call opt_fact%new(self%ospec, self%opt_obj)
         self%ospec%costfun_8    => f_costfun
         self%ospec%gcostfun_8   => df_costfun
         self%ospec%fdfcostfun_8 => fdf_costfun
+        self%ospec%fdfcurvfun_8 => fdfcurv_costfun
+        call opt_fact%new(self%ospec, self%opt_obj)
     end subroutine init4Dcont
 
     ! 1D ROUTINE
@@ -335,6 +350,19 @@ contains
         end select
     end subroutine fdf_costfun
 
+    subroutine fdfcurv_costfun( self, vec, f, grad, curv, D )
+        class(*), intent(inout) :: self
+        integer,  intent(in)    :: D
+        real(dp), intent(inout) :: vec(D)
+        real(dp), intent(out)   :: f, grad(D), curv(D,D)
+        select type(self)
+        class is(ctf_estimate_cost4Dcont)
+                call self%fdf(D, vec, f, grad, curv)
+            class DEFAULT
+                THROW_HARD('Forbidden type; fdfcurv_costfun')
+        end select
+    end subroutine fdfcurv_costfun
+
     subroutine df_costfun( self, vec, grad, D )
         class(*), intent(inout) :: self
         integer,  intent(in)    :: D
@@ -363,18 +391,22 @@ contains
         end select
     end function f_costfun
 
-    !>  Cost & gradients evaluation
-    subroutine fdf( self, D, vec, f, grad )
+    !>  Cost & gradients evaluation; curv is the normalised model's Gauss-Newton matrix plus the penalty's Hessian
+    !!  (the cost's Hessian where the normalised model equals the normalised data)
+    subroutine fdf( self, D, vec, f, grad, curv )
         class(ctf_estimate_cost4Dcont), intent(inout) :: self
         integer,                        intent(in)    :: D
         real(dp),                       intent(in)    :: vec(D)
         real(dp),                       intent(inout) :: f, grad(D)
+        real(dp), optional,             intent(out)   :: curv(D,D)
         real, pointer :: prmat(:,:,:)
         real(dp)      :: dcc_dangast(2),dcc_ddfx(2),dcc_ddfy(2),dcc_dphshift(2),gpen(2)
         real(dp)      :: dfx,dfy,angast,phshift, df_eff,ang,spaFreqSq,costerm,signctf,denom,denomsq
         real(dp)      :: ctfsq_sum,dotproduct,rn,abstval,tval,tvalsh,ddf_dangast,corr,fpen
         real(dp)      :: dabsctf_ddf,ddf_ddfx,ddf_ddfy,phshift_eff,absctf_obs,A,dabsctf_dphshift
-        integer       :: h,mh,k,mk, i,j, l
+        real(dp)      :: jac(4), sum_jj(4,4), sum_ja(4), hpen
+        integer       :: h,mh,k,mk, i,j, l, m
+        logical       :: l_curv
         ! variables
         dfx = vec(1) * self%conversionfactor    ! pixels
         dfy = vec(2) * self%conversionfactor    ! pixels
@@ -394,9 +426,13 @@ contains
         dcc_ddfy     = 0.d0
         dcc_dangast  = 0.d0
         dcc_dphshift = 0.d0
+        l_curv       = present(curv)
+        sum_jj       = 0.d0
+        sum_ja       = 0.d0
         !$omp parallel do default(shared) private(h,k,i,j,l,spaFreqSq,ang,costerm,df_eff,phshift_eff) &
         !$omp private(tval,abstval,absctf_obs,signctf,tvalsh,dabsctf_ddf,ddf_ddfx,ddf_ddfy,ddf_dangast,dabsctf_dphshift)&
-        !$omp schedule(static) proc_bind(close) reduction(+:ctfsq_sum,dotproduct,dcc_ddfx,dcc_ddfy,dcc_dangast,dcc_dphshift)
+        !$omp private(jac,m) schedule(static) proc_bind(close) &
+        !$omp reduction(+:ctfsq_sum,dotproduct,dcc_ddfx,dcc_ddfy,dcc_dangast,dcc_dphshift,sum_jj,sum_ja)
         do l = 1,self%ninds
             h = self%inds(1,l)
             k = self%inds(2,l)
@@ -437,6 +473,18 @@ contains
                     dcc_dphshift(2)  = dcc_dphshift(2) + dabsctf_dphshift*abstval
                 endif
             endif
+            if( l_curv )then
+                ! the model's derivatives in the optimiser's units (microns, radians)
+                jac    = 0.d0
+                jac(1) = self%conversionfactor*dabsctf_ddf*ddf_ddfx
+                jac(2) = self%conversionfactor*dabsctf_ddf*ddf_ddfy
+                if( D >= 3 ) jac(3) = dabsctf_ddf*(dfx-dfy)*dsin(2.d0*(ang-angast))
+                if( D == 4 ) jac(4) = signctf*tvalsh
+                do m = 1, D
+                    sum_jj(1:D,m) = sum_jj(1:D,m) + jac(1:D)*jac(m)
+                end do
+                sum_ja(1:D) = sum_ja(1:D) + jac(1:D)*abstval
+            endif
         end do
         !$omp end parallel do
         denomsq = rn * ctfsq_sum
@@ -458,6 +506,17 @@ contains
         f         = fpen-corr
         grad(1:2) = grad(1:2)-gpen
         grad      = -grad
+        if( l_curv )then
+            ! J_n^T J_n of the normalised model a/|a|: (J^T J)/P - (J^T a)(J^T a)^T/P^2, P = sum a^2
+            do m = 1, D
+                curv(:,m) = sum_jj(1:D,m)/ctfsq_sum - sum_ja(1:D)*sum_ja(m)/(ctfsq_sum*ctfsq_sum)
+            end do
+            hpen = 1.d0/(rn*self%astigtol**2.d0)
+            curv(1,1) = curv(1,1) + hpen
+            curv(2,2) = curv(2,2) + hpen
+            curv(1,2) = curv(1,2) - hpen
+            curv(2,1) = curv(2,1) - hpen
+        endif
     end subroutine fdf
 
     !>  Optimization routine

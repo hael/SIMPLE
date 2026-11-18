@@ -36,6 +36,7 @@ real,    parameter :: LOGISTIC_THRESHOLDS(20) = [0.02, 0.05, 0.075, 0.10, 0.15, 
                                                  0.55, 0.60, 0.65, 0.70, 0.75, 0.80, &
                                                  0.85, 0.90]
 real,    parameter :: LOGISTIC_COEFF_ABS_BOUND = 20.0
+character(len=*), parameter :: LOGISTIC_SOLVER = 'lbfgsb' !< the fit's optimiser; testers pass 'lm' to new
 
 !> the design: intercept, the policy's features, their pairwise products, optionally one extra (relational) column
 type :: quality_logistic_problem
@@ -49,6 +50,7 @@ type :: quality_logistic_problem
     logical, public :: has_extra      = .false.
     real(kind=8), public :: lambda       = 0.0d0
     real(kind=8), public :: total_weight = 0.0d0
+    character(len=8)          :: solver = LOGISTIC_SOLVER
     real(kind=8), allocatable :: design(:,:)
     real(kind=8), allocatable :: labels(:)
     real(kind=8), allocatable :: weights(:)
@@ -58,6 +60,7 @@ contains
     procedure :: finalize
     procedure :: fit
     procedure :: fdf
+    procedure :: curvature
     procedure :: kill
 end type quality_logistic_problem
 
@@ -69,14 +72,17 @@ end interface
 
 contains
 
-    !> feature indices of the policy (into the caller's bank), the number of observations, the extra column, lambda
-    subroutine new( self, linear_features, nobs, has_extra, lambda )
+    !> feature indices of the policy (into the caller's bank), the number of observations, the extra column, lambda;
+    !! solver ('lbfgsb' or 'lm') only from testers
+    subroutine new( self, linear_features, nobs, has_extra, lambda, solver )
         class(quality_logistic_problem), intent(inout) :: self
         integer,                         intent(in)    :: linear_features(:), nobs
         logical,                         intent(in)    :: has_extra
         real,                            intent(in)    :: lambda
+        character(len=*), optional,      intent(in)    :: solver
         integer :: ilinear, jlinear
         call self%kill()
+        if( present(solver) ) self%solver = solver
         self%n_linear = size(linear_features)
         if( self%n_linear < 1 ) THROW_HARD('empty feature policy; quality_logistic_problem%new')
         if( self%n_linear > QUALITY_MAX_FEATS ) THROW_HARD('too many features; quality_logistic_problem%new')
@@ -136,11 +142,13 @@ contains
         if( self%total_weight <= 0.0d0 ) THROW_HARD('nonpositive total weight; quality_logistic_problem%finalize')
     end subroutine finalize
 
-    !> L-BFGS-B from the weighted log-odds intercept, coefficients bounded by LOGISTIC_COEFF_ABS_BOUND
-    subroutine fit( self, solution, objective )
+    !> L-BFGS-B (or the solver new was given) from the weighted log-odds intercept, coefficients bounded by
+    !! LOGISTIC_COEFF_ABS_BOUND; nevals and niter (testers) are the optimiser's counts
+    subroutine fit( self, solution, objective, nevals, niter )
         class(quality_logistic_problem), intent(inout) :: self
         real(kind=8), allocatable,       intent(inout) :: solution(:)
         real,                            intent(out)   :: objective
+        integer, optional,               intent(out)   :: nevals, niter
         type(opt_factory)         :: ofac
         type(opt_spec)            :: ospec
         class(optimizer), pointer :: opt_obj
@@ -156,18 +164,21 @@ contains
         neg_weight = sum(self%weights, mask=self%labels <= 0.5d0)
         solution(1) = log(max(pos_weight, 1.0d-12) / max(neg_weight, 1.0d-12))
         opt_obj => null()
-        call ospec%specify('lbfgsb', self%ndim, ftol=1e-7, gtol=1e-7, maxits=250, &
+        call ospec%specify(trim(self%solver), self%ndim, ftol=1e-7, gtol=1e-7, maxits=250, &
             factr=1.0d+7, pgtol=1.0d-5, limits=limits)
-        call ofac%new(ospec, opt_obj)
         call ospec%set_costfun_8(logistic_cost_wrapper)
         call ospec%set_gcostfun_8(logistic_gradient_wrapper)
         call ospec%set_fdfcostfun_8(logistic_fdf_wrapper)
+        call ospec%set_fdfcurvfun_8(logistic_fdfcurv_wrapper)
+        call ofac%new(ospec, opt_obj)
         ospec%x   = real(solution)
         ospec%x_8 = solution
         call opt_obj%minimize(ospec, self, objective)
         do i = 1, self%ndim
             solution(i) = ospec%x_8(i)
         end do
+        if( present(nevals) ) nevals = ospec%nevals
+        if( present(niter)  ) niter  = ospec%niter
         call opt_obj%kill()
         deallocate(opt_obj)
         call ospec%kill()
@@ -208,6 +219,37 @@ contains
         end do
     end subroutine fdf
 
+    !> the Hessian of fdf's objective: the weighted Fisher matrix sum w p(1-p) x x^T / W plus the ridge
+    subroutine curvature( self, vec, curv, D )
+        class(quality_logistic_problem), intent(in)  :: self
+        integer,                         intent(in)  :: D
+        real(kind=8),                    intent(in)  :: vec(D)
+        real(kind=8),                    intent(out) :: curv(D,D)
+        integer :: iobs, idim, jdim
+        real(kind=8) :: prob, wpq
+        if( D /= self%ndim ) THROW_HARD('dimension mismatch; quality_logistic_problem%curvature')
+        curv = 0.0d0
+        do iobs = 1, self%nobs
+            prob = stable_sigmoid_8(dot_product(vec, self%design(iobs,:)))
+            wpq  = self%weights(iobs) * prob * (1.0d0 - prob)
+            do jdim = 1, D
+                do idim = 1, jdim
+                    curv(idim,jdim) = curv(idim,jdim) + wpq * self%design(iobs,idim) * self%design(iobs,jdim)
+                end do
+            end do
+        end do
+        ! the lower triangle mirrors the upper one exactly
+        do jdim = 1, D
+            do idim = jdim + 1, D
+                curv(idim,jdim) = curv(jdim,idim)
+            end do
+        end do
+        curv = curv / self%total_weight
+        do idim = 2, D
+            curv(idim,idim) = curv(idim,idim) + self%lambda
+        end do
+    end subroutine curvature
+
     subroutine kill( self )
         class(quality_logistic_problem), intent(inout) :: self
         if( allocated(self%design)  ) deallocate(self%design)
@@ -222,6 +264,7 @@ contains
         self%has_extra         = .false.
         self%lambda            = 0.0d0
         self%total_weight      = 0.0d0
+        self%solver            = LOGISTIC_SOLVER
     end subroutine kill
 
     function logistic_cost_wrapper( fun_self, vec, D ) result( cost )
@@ -264,6 +307,20 @@ contains
             THROW_HARD('invalid optimization context; logistic_fdf_wrapper')
         end select
     end subroutine logistic_fdf_wrapper
+
+    subroutine logistic_fdfcurv_wrapper( fun_self, vec, f, grad, curv, D )
+        class(*),     intent(inout) :: fun_self
+        integer,      intent(in)    :: D
+        real(kind=8), intent(inout) :: vec(D)
+        real(kind=8), intent(out)   :: f, grad(D), curv(D,D)
+        select type(problem => fun_self)
+        class is(quality_logistic_problem)
+            call problem%fdf(vec, f, grad, D)
+            call problem%curvature(vec, curv, D)
+        class default
+            THROW_HARD('invalid optimization context; logistic_fdfcurv_wrapper')
+        end select
+    end subroutine logistic_fdfcurv_wrapper
 
     real(kind=8) function stable_sigmoid_8( eta )
         real(kind=8), intent(in) :: eta

@@ -12,6 +12,7 @@ private
 
 real,     parameter :: TOL    = 1e-4    !< tolerance parameter
 integer,  parameter :: MAXITS = 30      !< maximum number of iterations
+character(len=*), parameter :: FTEXP_SOLVER = 'lbfgsb' !< the search's optimiser; testers pass 'lm' to new
 
 type :: ftexp_shsrch
     private
@@ -20,6 +21,8 @@ type :: ftexp_shsrch
     class(ft_expanded), pointer :: reference    => null()    !< reference ft_exp
     class(ft_expanded), pointer :: particle     => null()    !< particle ft_exp
     real(dp)                    :: denominator        = 0.d0
+    real(dp)                    :: curv(2,2)          = 0.d0 !< the cost's Gauss-Newton matrix of the solve ('lm')
+    character(len=8)            :: solver             = FTEXP_SOLVER
     real                        :: maxHWshift         = 0.   !< maximum half-width of shift
     real                        :: motion_correctftol = 1e-4 !< function error tolerance
     real                        :: motion_correctgtol = 1e-4 !< gradient error tolerance
@@ -37,18 +40,21 @@ end type ftexp_shsrch
 contains
 
     !> Initialise  ftexp_shsrch
-    subroutine ftexp_shsrch_new( self, ref, ptcl, trs, motion_correct_ftol, motion_correct_gtol )
+    subroutine ftexp_shsrch_new( self, ref, ptcl, trs, motion_correct_ftol, motion_correct_gtol, solver )
         use simple_opt_factory, only: opt_factory
         class(ftexp_shsrch),        intent(inout) :: self
         class(ft_expanded), target, intent(in)    :: ref, ptcl
         real,                       intent(in)    :: trs
         real,             optional, intent(in)    :: motion_correct_ftol, motion_correct_gtol
+        character(len=*), optional, intent(in)    :: solver !< testers only: 'lbfgsb' or 'lm'
         type(opt_factory) :: ofac
         real              :: opt_lims(2,2)
         call self%kill()
         self%reference  => ref
         self%particle   => ptcl
         self%maxHWshift =  trs
+        self%solver     =  FTEXP_SOLVER
+        if( present(solver) ) self%solver = solver
         if( present(motion_correct_ftol) )then
             self%motion_correctftol = motion_correct_ftol
         else
@@ -63,10 +69,11 @@ contains
         opt_lims(1,2) =   self%maxHWshift
         opt_lims(2,1) = - self%maxHWshift
         opt_lims(2,2) =   self%maxHWshift
-        call self%ospec%specify('lbfgsb', 2, ftol=self%motion_correctftol, gtol=self%motion_correctgtol, limits=opt_lims)
+        call self%ospec%specify(trim(self%solver), 2, ftol=self%motion_correctftol, gtol=self%motion_correctgtol, limits=opt_lims)
         call self%ospec%set_costfun_8(ftexp_shsrch_cost_8)
         call self%ospec%set_gcostfun_8(ftexp_shsrch_gcost_8)
         call self%ospec%set_fdfcostfun_8(ftexp_shsrch_fdfcost_8)
+        call self%ospec%set_fdfcurvfun_8(ftexp_shsrch_fdfcurv_8)
         ! generate optimizer object with the factory
         if( associated(self%opt_obj) )then
             call self%opt_obj%kill
@@ -101,6 +108,8 @@ contains
         ! call self%calc_tmp_cmat12()
         ! the temp matrix is built on the particle only!
         call self%particle%alloc_and_calc_tmp_cmat12(self%reference, self%denominator )
+        ! the Gauss-Newton matrix does not depend on the shift: once per solve
+        if( trim(self%solver) == 'lm' ) call self%particle%corr_shifted_curv_8(self%denominator, self%curv)
         ! set initial solution to previous shift
         call self%opt_obj%minimize(self%ospec, self, cxy(1))
         call self%reference%corr_normalize(self%particle, cxy(1))
@@ -199,5 +208,20 @@ contains
                 THROW_HARD('unknown type; ftexp_shsrch_fdfcost_8')
         end select
     end subroutine ftexp_shsrch_fdfcost_8
+
+    !> Gradient, cost and the solve's Gauss-Newton matrix, double precision ('lm')
+    subroutine ftexp_shsrch_fdfcurv_8( self, vec, f, grad, curv, D )
+        class(*),     intent(inout) :: self
+        integer,      intent(in)    :: D
+        real(kind=8), intent(inout) :: vec(D)
+        real(kind=8), intent(out)   :: f, grad(D), curv(D,D)
+        select type(self)
+            class is (ftexp_shsrch)
+                call ftexp_shsrch_fdfcost_8(self, vec, f, grad, D)
+                curv = self%curv
+            class DEFAULT
+                THROW_HARD('unknown type; ftexp_shsrch_fdfcurv_8')
+        end select
+    end subroutine ftexp_shsrch_fdfcurv_8
 
 end module simple_ftexp_shsrch

@@ -3,15 +3,18 @@ submodule (simple_quality_logistic) simple_quality_logistic_tester
 use simple_test_utils
 use simple_defs,               only: dp
 use simple_cavg_quality_stats, only: auc_for_values
+use simple_linalg,             only: cholesky
 implicit none
 
 integer, parameter :: NTOY = 400
+character(len=6), parameter :: SOLVERS(2) = ['lbfgsb', 'lm    ']
 
 contains
 
     module subroutine run_all_quality_logistic_tests()
         write(*,'(A)') '**** running all quality logistic tests ****'
         call test_toy_plane_recovered()
+        call test_fisher_is_hessian()
         call test_fit_repeatable()
         call test_roles_weights_macro()
         call test_auc_trajectory_scale()
@@ -20,31 +23,76 @@ contains
     end subroutine run_all_quality_logistic_tests
 
     !> labels from the plane x1 - 2 x2 + 0.5 = 0 with every 20th label flipped: the fitted linear part points along
-    !! the plane's normal, and the fit classifies the clean rows
+    !! the plane's normal, and the fit classifies the clean rows, under both solvers; a comparison row per solver
     subroutine test_toy_plane_recovered()
         type(quality_logistic_problem) :: prob
         real(kind=8), allocatable :: sol(:)
         real    :: x(2,NTOY), obj, cosang
         logical :: good(NTOY)
-        integer :: i, ncorrect, nclean
+        integer :: i, ncorrect, nclean, isolver, nevals, niter
+        integer(kind=8) :: c0, c1, crate
         write(*,'(A)') 'test_toy_plane_recovered'
-        call toy_problem(prob, x, good)
-        call prob%fit(sol, obj)
-        cosang = real((sol(2) * 1.d0 - sol(3) * 2.d0) / (sqrt(sol(2)**2 + sol(3)**2) * sqrt(5.d0)))
-        call assert_true(cosang > 0.99, 'linear coefficients along the plane normal')
-        call assert_true(abs(sol(4)) < 0.25 * sqrt(sol(2)**2 + sol(3)**2), 'interaction coefficient small')
-        ncorrect = 0
-        nclean   = 0
-        do i = 1, NTOY
-            if( mod(i, 20) == 0 ) cycle
-            nclean = nclean + 1
-            if( (stable_sigmoid_8(sol(1) + sol(2) * x(1,i) + sol(3) * x(2,i) + sol(4) * real(x(1,i) * x(2,i), 8)) &
-                &> 0.5d0) .eqv. good(i) ) ncorrect = ncorrect + 1
+        do isolver = 1, size(SOLVERS)
+            call toy_problem(prob, x, good, trim(SOLVERS(isolver)))
+            call system_clock(c0, crate)
+            call prob%fit(sol, obj, nevals, niter)
+            call system_clock(c1)
+            cosang = real((sol(2) * 1.d0 - sol(3) * 2.d0) / (sqrt(sol(2)**2 + sol(3)**2) * sqrt(5.d0)))
+            call assert_true(cosang > 0.99, trim(SOLVERS(isolver))//': linear coefficients along the plane normal')
+            call assert_true(abs(sol(4)) < 0.25 * sqrt(sol(2)**2 + sol(3)**2), &
+                &trim(SOLVERS(isolver))//': interaction coefficient small')
+            ncorrect = 0
+            nclean   = 0
+            do i = 1, NTOY
+                if( mod(i, 20) == 0 ) cycle
+                nclean = nclean + 1
+                if( (stable_sigmoid_8(sol(1) + sol(2) * x(1,i) + sol(3) * x(2,i) + sol(4) * real(x(1,i) * x(2,i), 8)) &
+                    &> 0.5d0) .eqv. good(i) ) ncorrect = ncorrect + 1
+            end do
+            call assert_true(real(ncorrect) / real(nclean) > 0.95, trim(SOLVERS(isolver))//': clean rows classified')
+            call assert_true(obj > 0.0, trim(SOLVERS(isolver))//': objective positive')
+            write(*,'(A,A6,A,I4,A,I4,A,ES10.3,A,F9.6,A,F9.6,A,ES16.8)') '  LM_COMPARE quality_logistic ', &
+                &SOLVERS(isolver), ' evals ', nevals, ' iters ', niter, ' s ', &
+                &real(c1 - c0, 8) / real(crate, 8), ' cos ', cosang, ' clean ', real(ncorrect) / real(nclean), ' obj ', obj
+            call prob%kill
         end do
-        call assert_true(real(ncorrect) / real(nclean) > 0.95, 'clean rows classified')
-        call assert_true(obj > 0.0, 'objective positive')
-        call prob%kill
     end subroutine test_toy_plane_recovered
+
+    !> the curvature is the exact Hessian: the central difference of the analytic gradient within 1e-6 of
+    !! max(1, max|C|) (guessed), at the start and at a point away from it, and positive definite
+    subroutine test_fisher_is_hessian()
+        type(quality_logistic_problem) :: prob
+        real(kind=8), allocatable :: vec(:), gp(:), gm(:), curv(:,:), hfd(:,:), chol(:,:)
+        real(kind=8), parameter :: STEP = 1.d-5
+        real(kind=8) :: f, err
+        real    :: x(2,NTOY)
+        logical :: good(NTOY), ok
+        integer :: ipoint, j, d
+        write(*,'(A)') 'test_fisher_is_hessian'
+        call toy_problem(prob, x, good)
+        d = prob%ndim
+        allocate(vec(d), gp(d), gm(d), curv(d,d), hfd(d,d), chol(d,d))
+        do ipoint = 1, 2
+            vec = 0.d0
+            if( ipoint == 2 ) vec = [0.3d0, 1.7d0, -2.9d0, 0.4d0]
+            call prob%curvature(vec, curv, d)
+            do j = 1, d
+                vec(j) = vec(j) + STEP
+                call prob%fdf(vec, f, gp, d)
+                vec(j) = vec(j) - 2.d0 * STEP
+                call prob%fdf(vec, f, gm, d)
+                vec(j) = vec(j) + STEP
+                hfd(:,j) = (gp - gm) / (2.d0 * STEP)
+            end do
+            err = maxval(abs(curv - hfd)) / max(1.d0, maxval(abs(curv)))
+            write(*,'(A,I0,A,ES10.3)') '  Fisher oracle at point ', ipoint, ': max relative difference to the Hessian ', err
+            call assert_true(err < 1.d-6, 'the Fisher matrix plus the ridge is the Hessian')
+            call assert_true(all(curv == transpose(curv)), 'the curvature is symmetric')
+            call cholesky(curv, chol, d, ok)
+            call assert_true(ok, 'the curvature is positive definite')
+        end do
+        call prob%kill
+    end subroutine test_fisher_is_hessian
 
     !> the same problem fitted twice gives the same solution, bit for bit
     subroutine test_fit_repeatable()
@@ -136,10 +184,11 @@ contains
     end subroutine test_auc_eps_ties
 
     ! the toy design: two features on a deterministic lattice in [-2, 2]^2, balanced weights, lambda 1e-4
-    subroutine toy_problem( prob, x, good )
+    subroutine toy_problem( prob, x, good, solver )
         type(quality_logistic_problem), intent(inout) :: prob
         real,                           intent(out)   :: x(2,NTOY)
         logical,                        intent(out)   :: good(NTOY)
+        character(len=*), optional,     intent(in)    :: solver
         real(kind=8) :: gw, bw
         integer :: i, ng
         do i = 1, NTOY
@@ -150,7 +199,7 @@ contains
         end do
         ng = count(good)
         call logistic_dataset_class_weights(LEARN_ROLE_BALANCED, ng, NTOY - ng, gw, bw)
-        call prob%new([1, 2], NTOY, .false., 1.e-4)
+        call prob%new([1, 2], NTOY, .false., 1.e-4, solver)
         do i = 1, NTOY
             call prob%set_row(i, x(:,i), good(i), merge(gw, bw, good(i)))
         end do

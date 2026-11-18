@@ -1,10 +1,12 @@
 !@descr: unit tests for the continuous pose optimizer (simple_cartft_pose_opt)
 ! The rotation increment (E11), the stage solvers (E12), invalid inputs (E14), the NCC solver
-! (E15), both routes' stage records (E16: shift then joint on request, the joint stage alone by
-! default), rollback (E17), the ori entry point and its scaling (E13, E19, N2), recovery under
-! each objective (N7) and the bounds trs and athres_cont (O6). Ids: pose_cont plan, section 10.
+! (E15), the transaction's stage records (E16: the joint stage alone), rollback (E17), the ori
+! entry point and its scaling (E13, E19, N2), recovery under each objective (N7) and the bounds
+! trs and athres_cont (O6). Ids: pose_cont plan, section 10.
 submodule (simple_cartft_pose_opt) simple_cartft_pose_opt_tester
 use simple_test_cftc_fixture, only: objective_gradient
+use simple_lm_solver,         only: lm_scale_system
+use simple_linalg,            only: spd_solve_rel
 use simple_defs,            only: DPI
 use simple_defs_ori,        only: I_E1, I_E2, I_E3, I_X, I_Y, N_PTCL_ORIPARAMS
 use simple_core_module_api, only: euler2m
@@ -168,14 +170,16 @@ contains
             hessian(i,i) = 1._dp
         end do
         hessian(4,4) = 0._dp
-        call prepare_pose_data_system(gradient, hessian, 1._dp, [.true.,.true.,.true.,.true.,.true.], &
-            &sg, sh, identifiable)
+        call lm_scale_system(gradient, hessian, [1._dp, 1._dp, 1._dp, 1._dp, 1._dp], [.true.,.true.,.true.,.true.,.true.], &
+            &sg, sh)
+        identifiable = pose_data_observable(sg, sh)
         call assert_true(.not. identifiable, 'data-only singular shift must be rejected')
         sh(4,4) = 2._dp
-        call solve_pose_cholesky(sh, sg, direction, rescued)
+        call spd_solve_rel(sh, sg, direction, rescued)
         call assert_true(rescued, 'fixture must become identifiable if prior curvature is added first')
-        call prepare_pose_data_system(gradient, hessian, 1._dp, [.true.,.true.,.true.,.false.,.true.], &
-            &sg, sh, identifiable)
+        call lm_scale_system(gradient, hessian, [1._dp, 1._dp, 1._dp, 1._dp, 1._dp], [.true.,.true.,.true.,.false.,.true.], &
+            &sg, sh)
+        identifiable = pose_data_observable(sg, sh)
         call assert_true(identifiable, 'a frozen singular shift must not invalidate the active system')
     end subroutine test_prior_identifiability
 
@@ -574,8 +578,8 @@ contains
     ! the first proposal predicts a reduction below the relative threshold: the stage ends without
     ! evaluating it, the pose unchanged and the stage bound-rejected (its step was capped)
     ! the shell residual a transaction keeps (cont_lm_acceleration.md, stage 6c) is that of a new
-    ! evaluation at the pose it returns, bit for bit: an accepted joint solve, a rejected one (a
-    ! converged seed) and an accepted solve on the shift-then-joint route
+    ! evaluation at the pose it returns, bit for bit: an accepted joint solve and a rejected one (a
+    ! converged seed)
     subroutine test_committed_shell_residual()
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
@@ -584,18 +588,18 @@ contains
         real(dp), allocatable :: kept(:)
         real(dp) :: rotation(3,3), shift(2), objective, gradient(5), hessian(5,5)
         real(dp) :: fresh(2:TEST_BOX/2)
-        integer  :: iroute
+        integer  :: icase
         integer, parameter :: KFROMTO(2) = [2, TEST_BOX/2]
         call build_test_volume(volume)
         call new_fixture(calc, volume, KFROMTO, 2., OBJFUN_EUCLID, fix)
-        do iroute = 1, 3
-            call opt%new(TEST_BOX, TEST_BOX, 5., 15., shift_first=(iroute == 3))
+        do icase = 1, 2
+            call opt%new(TEST_BOX, TEST_BOX, 5., 15.)
             rotation = fix%seed_rotation
             shift    = fix%seed_shift
             call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
-            ! the second route starts from the first route's endpoint: no pose improves on it
-            if( iroute == 2 ) call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
-            call assert_true(opt%get_status() == merge(CARTFT_NO_IMPROVEMENT, CARTFT_ACCEPTED, iroute == 2), &
+            ! the second case starts from the first case's endpoint: no pose improves on it
+            if( icase == 2 ) call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
+            call assert_true(opt%get_status() == merge(CARTFT_NO_IMPROVEMENT, CARTFT_ACCEPTED, icase == 2), &
                 &'committed-residual fixture did not reach the intended outcome')
             call opt%get_shell_residual(kept)
             call calc%pose_normal_terms(1, .true., 1, rotation, shift, objective, gradient, hessian, fresh)
@@ -696,9 +700,8 @@ contains
         call calc%kill
     end subroutine test_invalid_and_unobservable_inputs
 
-    ! E16: the shift-then-joint route (shift_first) completes both stages and the stage records
-    ! chain the objectives of the transaction; the default (production) route runs the joint
-    ! stage alone from the seed and commits an improving pose
+    ! E16: the transaction runs the joint stage alone from the seed and commits an improving pose;
+    ! the shift-only stage record stays unattempted
     subroutine test_route_transaction_contracts()
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
@@ -711,8 +714,7 @@ contains
         call new_fixture(calc, volume, [2, SMALL_BOX/2 - 1], 1., OBJFUN_CC, fix)
         call assert_true(calc%ptcl_is_valid(1) .and. all(calc%get_ptcl_kfromto(1) == [2, SMALL_BOX/2 - 1]), &
             &'transaction fixture did not prepare a valid particle on the requested shells')
-        ! shift stage, then joint stage
-        call opt%new(SMALL_BOX, SMALL_BOX, 5., 15., shift_first=.true.)
+        call opt%new(SMALL_BOX, SMALL_BOX, 5., 15.)
         rotation = fix%seed_rotation
         shift    = fix%seed_shift
         call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
@@ -722,30 +724,13 @@ contains
             &sh_rot_step, sh_shift_step, sh_before, sh_after)
         call get_stage_counts(opt, CARTFT_STAGE_JOINT, jt_status, jt_niter, jt_att, jt_acc, jt_hits, &
             &jt_rot_step, jt_shift_step, jt_before, jt_after)
-        call assert_true(opt%get_status() == CARTFT_ACCEPTED .and. objective_after < objective_before, &
-            &'transaction did not commit an improving pose')
-        call assert_true(any(sh_status == [CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT]) .and. &
-            &any(jt_status == [CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT]), 'transaction did not complete both LM stages')
-        call assert_true(sh_before == objective_before .and. jt_before == sh_after .and. jt_after == objective_after, &
-            &'stage records do not chain the transaction objectives')
-        call assert_true(sh_att > 0 .and. jt_att > 0 .and. sh_rot_step == 0._dp, 'stage records do not account for both stages')
-        call assert_true(abs(rot_update - rotation_distance(rotation, fix%seed_rotation)) < POSE_UPDATE_TOL .and. &
-            &abs(shift_update - sqrt(sum((shift - fix%seed_shift)**2))) < 1.e-12_dp, &
-            &'reported pose update is not the seed-to-result pose update')
-        ! the production route: the joint stage alone, from the seed
-        call opt%new(SMALL_BOX, SMALL_BOX, 5., 15.)
-        rotation = fix%seed_rotation
-        shift    = fix%seed_shift
-        call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
-        call opt%get_objectives(objective_before, objective_after)
-        call get_stage_counts(opt, CARTFT_STAGE_SHIFT, sh_status, sh_niter, sh_att, sh_acc, sh_hits, &
-            &sh_rot_step, sh_shift_step, sh_before, sh_after)
-        call get_stage_counts(opt, CARTFT_STAGE_JOINT, jt_status, jt_niter, jt_att, jt_acc, jt_hits, &
-            &jt_rot_step, jt_shift_step, jt_before, jt_after)
-        call assert_true(sh_status == CARTFT_NOT_ATTEMPTED .and. sh_att == 0, 'the default route ran the shift-only stage')
+        call assert_true(sh_status == CARTFT_NOT_ATTEMPTED .and. sh_att == 0, 'the transaction ran the shift-only stage')
         call assert_true(opt%get_status() == CARTFT_ACCEPTED .and. objective_after < objective_before .and. &
             &jt_before == objective_before .and. jt_after == objective_after .and. jt_shift_step > 0._dp, &
             &'the joint stage alone did not commit an improving pose with shifts from the seed')
+        call assert_true(abs(rot_update - rotation_distance(rotation, fix%seed_rotation)) < POSE_UPDATE_TOL .and. &
+            &abs(shift_update - sqrt(sum((shift - fix%seed_shift)**2))) < 1.e-12_dp, &
+            &'reported pose update is not the seed-to-result pose update')
         call opt%kill
         call calc%kill
     end subroutine test_route_transaction_contracts

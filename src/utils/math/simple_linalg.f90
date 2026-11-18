@@ -11,7 +11,7 @@ public :: plane_from_points, projz, pythag, rad2deg, deg2rad
 public :: svbksb, svdcmp, svdfit, svd_multifit
 public :: qr_solve
 public :: solve_real_spd_complex
-public :: cholesky, chol_forward, chol_backward, spd_inverse, spd_logdet
+public :: cholesky, chol_forward, chol_backward, spd_inverse, spd_logdet, spd_solve_rel
 public :: trace, vabs, vector_angle_norm, vox2ang, ang2vox
 public :: gemm_tn
 
@@ -915,6 +915,42 @@ pure subroutine cholesky( A, L, n, ok, tol )
     end do
     ok = .true.
 end subroutine cholesky
+
+!> Solve A x = b for a small symmetric positive-definite A by row-wise Cholesky. reliable is false for a
+!! non-finite input, max|A| <= eps**2, a pivot at or below sqrt(eps)*max|A|, or a non-finite x (then x = 0).
+!! The reduction order differs from cholesky's: the LM engine's identity depends on this one.
+pure subroutine spd_solve_rel( matrix, rhs, solution, reliable )
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    real(dp), intent(in)  :: matrix(:,:), rhs(:)
+    real(dp), intent(out) :: solution(:)
+    logical,  intent(out) :: reliable
+    real(dp) :: lower(size(rhs),size(rhs)), intermediate(size(rhs)), pivot, pivot_floor, matrix_scale
+    integer  :: i, j, n
+    n            = size(rhs)
+    solution     = 0._dp
+    intermediate = 0._dp
+    lower        = 0._dp
+    reliable     = .false.
+    if( any(.not. ieee_is_finite(matrix)) .or. any(.not. ieee_is_finite(rhs)) ) return
+    matrix_scale = maxval(abs(matrix))
+    if( matrix_scale <= epsilon(1._dp)**2 ) return
+    pivot_floor = sqrt(epsilon(1._dp))*matrix_scale
+    do i = 1, n
+        do j = 1, i - 1
+            lower(i,j) = (matrix(i,j) - dot_product(lower(i,1:j-1), lower(j,1:j-1)))/lower(j,j)
+        end do
+        pivot = matrix(i,i) - dot_product(lower(i,1:i-1), lower(i,1:i-1))
+        if( .not. ieee_is_finite(pivot) .or. pivot <= pivot_floor ) return
+        lower(i,i) = sqrt(pivot)
+    end do
+    do i = 1, n
+        intermediate(i) = (rhs(i) - dot_product(lower(i,1:i-1), intermediate(1:i-1)))/lower(i,i)
+    end do
+    do i = n, 1, -1
+        solution(i) = (intermediate(i) - dot_product(lower(i+1:n,i), solution(i+1:n)))/lower(i,i)
+    end do
+    reliable = all(ieee_is_finite(solution))
+end subroutine spd_solve_rel
 
 !> y = L^-1 b for the Cholesky factor L
 pure subroutine chol_forward( L, b, y, n )

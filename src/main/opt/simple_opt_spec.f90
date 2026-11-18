@@ -15,6 +15,7 @@ type :: opt_spec
     procedure(costfun_8),    pointer, nopass :: costfun_8    =>null() !< defines cost function, double precision
     procedure(gcostfun_8),   pointer, nopass :: gcostfun_8   =>null() !< defines the gradient of the cost function, double precision
     procedure(fdfcostfun_8), pointer, nopass :: fdfcostfun_8 =>null() !< defines the gradient of the cost function, double precision
+    procedure(fdfcurvfun_8), pointer, nopass :: fdfcurvfun_8 =>null() !< cost, gradient and PSD curvature, double precision ('lm')
     procedure(opt_callback), pointer, nopass :: opt_callback =>null() !< callback function for in-between iteration steps
     character(len=STDLEN)     :: str_opt=''                           !< string descriptor (of optimization routine to be used)
     character(len=STDLEN)     :: str_mode=''                          !< mode string descriptor
@@ -64,12 +65,14 @@ type :: opt_spec
     procedure :: set_costfun_8
     procedure :: set_gcostfun_8
     procedure :: set_fdfcostfun_8
+    procedure :: set_fdfcurvfun_8
     procedure :: eval_f_4
     procedure :: eval_df_4
     procedure :: eval_fdf_4
     procedure :: eval_f_8
     procedure :: eval_df_8
     procedure :: eval_fdf_8
+    procedure :: eval_fdfcurv_8
     generic   :: eval_f  => eval_f_4, eval_f_8
     generic   :: eval_df => eval_df_4, eval_df_8
     generic   :: eval_fdf => eval_fdf_4, eval_fdf_8
@@ -136,6 +139,17 @@ abstract interface
     end subroutine
 end interface
 
+!>  \brief  defines the cost function with its gradient and a symmetric positive semi-definite curvature
+!! (the Gauss-Newton matrix of a least-squares cost, or a Fisher matrix), double precision
+abstract interface
+    subroutine fdfcurvfun_8( fun_self, vec, f, grad, curv, D )
+        class(*),     intent(inout) :: fun_self
+        integer,      intent(in)    :: D
+        real(kind=8), intent(inout) :: vec(D)
+        real(kind=8), intent(out)   :: f, grad(D), curv(D,D)
+    end subroutine
+end interface
+
 !>  \brief  defines a callback routine that can be invoked in-between iteration steps
 abstract interface
     subroutine opt_callback( fun_self )
@@ -186,6 +200,8 @@ contains
             case('stde')
                 ! do nothing
             case('lbfgsb')
+                ! do nothing
+            case('lm')
                 ! do nothing
             case('simplex')
                 if( .not. present(limits) ) THROW_HARD('need limits (variable bounds) for simplex opt; specify')
@@ -420,6 +436,18 @@ contains
         self%ngevals = self%ngevals + 1
     end subroutine eval_fdf_8
 
+    !> cost, gradient and curvature at x, double precision; counts one cost and one gradient evaluation
+    subroutine eval_fdfcurv_8( self, fun_self, x, f, gradient, curvature )
+        class(opt_spec), intent(inout) :: self
+        class(*),        intent(inout) :: fun_self
+        real(dp),        intent(inout) :: x(:)
+        real(dp),        intent(out)   :: f, gradient(:), curvature(:,:)
+        if( .not. associated(self%fdfcurvfun_8) ) THROW_HARD('no fdfcurvfun_8 associated; eval_fdfcurv_8')
+        call self%fdfcurvfun_8(fun_self, x, f, gradient, curvature, self%ndim)
+        self%nevals  = self%nevals  + 1
+        self%ngevals = self%ngevals + 1
+    end subroutine eval_fdfcurv_8
+
     !>  \brief  sets the cost function in the spec object
     subroutine set_costfun( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
@@ -496,6 +524,13 @@ contains
         self%fdfcostfun_8 => fun
     end subroutine set_fdfcostfun_8
 
+    !> sets the cost, gradient and curvature function the 'lm' optimiser requires
+    subroutine set_fdfcurvfun_8( self, fun )
+        class(opt_spec), intent(inout) :: self
+        procedure(fdfcurvfun_8)        :: fun
+        self%fdfcurvfun_8 => fun
+    end subroutine set_fdfcurvfun_8
+
     !>  \brief  is a destructor
     subroutine kill( self )
         class(opt_spec), intent(inout) :: self !< instance
@@ -518,6 +553,7 @@ contains
             self%costfun_8    => null()
             self%gcostfun_8   => null()
             self%fdfcostfun_8 => null()
+            self%fdfcurvfun_8 => null()
             self%opt_callback => null()
             self%exists = .false.
         endif

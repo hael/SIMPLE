@@ -59,8 +59,13 @@ Silent ones first: nothing reports these.
 
 - `simple_cartft_calc.f90`: types, lifecycle, `fill_ptcl`, `pose_normal_terms` (the half-plane production
   kernel); the `*_full_disk` kernels are the tests' reference.
-- `simple_cartft_pose_opt.f90`: statuses, `refine` -> `refine_pose` -> `refine_joint`; `refine_shift`
-  runs only on the `cont_route=shift_then_joint` test route (an `internal:` key, ruled to be retired).
+- `simple_cartft_pose_opt.f90`: statuses, `refine` -> `refine_pose` -> `refine_joint`, which is `lm_solve`
+  (`src/utils/math/simple_lm_solver.f90`) on a `cartft_pose_problem`. The engine owns the step control
+  (scaling, masking, damping, acceptance, stops) and `CARTFT_*` are its `LM_*` outcomes; the problem
+  (bindings in `_system`) owns the observability veto, the step caps, the right increment, the cumulative
+  guard, the priors and the shell residual. A change to the step control changes every LM client of the
+  library; the Cartesian identity gate is in `lm_optimizer.md`. `refine_shift` (public, a fixed rotation)
+  is the shift-only solve on a `cartft_shift_problem`; no transaction runs it.
 
 ## Tests
 

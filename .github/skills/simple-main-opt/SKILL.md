@@ -1,12 +1,14 @@
 ---
 name: simple-main-opt
-description: Use when working in SIMPLE's src/main/opt subsystem, including the optimizer abstraction, the factory and opt_spec (cost and gradient callbacks, limits, tolerances, the fun_self context), L-BFGS-B, Nelder-Mead simplex, differential evolution, the rank-1 preconditioned conjugate-gradient engine of the PCG reconstructions, and the nonlinear conjugate-gradient engine of reconstruct3D_wave.
+description: Use when working in SIMPLE's src/main/opt subsystem, including the optimizer abstraction, the factory and opt_spec (cost and gradient callbacks, limits, tolerances, the fun_self context), L-BFGS-B, Nelder-Mead simplex, differential evolution, the Levenberg-Marquardt adapter lm of the library engine simple_lm_solver, the rank-1 preconditioned conjugate-gradient engine of the PCG reconstructions, and the nonlinear conjugate-gradient engine of reconstruct3D_wave.
 ---
 
 # `src/main/opt`: minimisers and the conjugate-gradient engines
 
-Owns the minimisers behind `opt_spec` and `opt_factory` (`lbfgsb`, `simplex`, `de`) and two engines on
-a client's operator: `pcg_solve` (linear PCG) and `nlcg_solve` (nonlinear CG). It owns no objective:
+Owns the minimisers behind `opt_spec` and `opt_factory` (`lbfgsb`, `simplex`, `de`, `lm`) and two engines on
+a client's operator: `pcg_solve` (linear PCG) and `nlcg_solve` (nonlinear CG). `lm` is the factory's
+adapter of the library's Levenberg-Marquardt engine, `lm_solve` in `src/utils/math/simple_lm_solver.f90`,
+which the Cartesian pose solve (`cftc/`) also runs on; its contract is `lm_optimizer.md`. It owns no objective:
 the cost, its gradient and the meaning and scale of `x` belong to the client (shift searches in `pftc/`
 and `image/simple_ftexp_shsrch`, CTF fitting, `volume/simple_volpft_symsrch`, `quality/`; PCG:
 `volume/simple_reconstructor_pcg`, `simple_pcg_atomic_prior`, `flex/fit/simple_flex_pca_pcg`; NLCG:
@@ -45,7 +47,19 @@ Silent ones first: nothing reports these.
   drawn first, so the random stream does not depend on it).
 - `fun_self` is the client's object (`class(*)`), resolved in the cost by `select type` with a
   `class default` `THROW_HARD`. `opt_callback` runs at each accepted `lbfgsb` iterate, `x` updated, and
-  may change the objective (the discrete in-plane angle of `pftc_shsrch_grad`).
+  may change the objective (the discrete in-plane angle of `pftc_shsrch_grad`); under `lm` it runs after
+  each accepted step, `x` and `x_8` updated, and the objective is evaluated again there (counted).
+- `lm` needs `set_fdfcurvfun_8` (cost, gradient and a symmetric positive semi-definite curvature, in
+  double precision; `new` stops without it) and ignores the other cost pointers: a client that sets both
+  runs under either solver. It starts at `x` (projected into `limits`), `limits` are optional, and on a
+  bound a coordinate whose gradient points outward is frozen while the free step is clipped to the box.
+  `maxits` counts iterations; `niter` is reported (`lbfgsb` leaves it 0). Its step control is the
+  engine's (damping, the 0.25 acceptance ratio); its stops take L-BFGS-B's meaning of the spec's
+  tolerances: both relative stops (predicted and accepted reduction) at `factr` machine epsilons of |f|,
+  the gradient stop at `pgtol` on the free (projected) gradient; `ftol` and `gtol` do not apply. A
+  minimum with a large cost needs a small `factr` (0 switches the relative stops off), else they end the
+  solve before the gradient vanishes (L2 in `lm_optimizer.md`). A coordinate the cost does not depend on
+  (zero gradient and curvature) takes a zero step (L6).
 - Threads: a spec and an optimiser hold all their state (L-BFGS-B's saved locals live in the instance):
   one pair per thread, never shared (`minimize` writes `x`, counters and workspace). Simplex and DE draw
   random numbers: results depend on the seed and the thread.
@@ -72,7 +86,7 @@ Silent ones first: nothing reports these.
 ## Tests
 
 - `build/bin/simple_test_exec test=unit_numerics suite=optimisers` (spec bookkeeping, L-BFGS-B, DE,
-  simplex, PCG with cold restart) and `suite=nonlinear_conjugate_gradient`; all of `unit_numerics`
+  simplex, `lm` L1-L6, PCG with cold restart) and `suite=nonlinear_conjugate_gradient`; all of `unit_numerics`
   takes about 2 s. Clients: `suite=shift_search` (`ftexp_shsrch`), `test=unit_pftc_align2D3D`.
 - PCG engine: `test=pcg_recon`, `test=lib_reconstruction` (its wave reconstruction takes about five
   minutes), `unit_reconstruction`, `unit_heterogeneity`.

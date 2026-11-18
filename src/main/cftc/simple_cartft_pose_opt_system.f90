@@ -1,4 +1,4 @@
-!@descr: private prior terms and linear systems for Cartesian pose refinement
+!@descr: prior terms, the observability test and the LM problems of Cartesian pose refinement
 submodule (simple_cartft_pose_opt) simple_cartft_pose_opt_system
 implicit none
 
@@ -66,119 +66,159 @@ contains
         hessian(2,2) = 2._dp*weight
     end subroutine shift_prior_terms
 
-    !> Scale and test the data-only pose system before constructing a damped proposal.
-    pure module subroutine prepare_pose_data_system( gradient, hessian, rotation_scale, active, &
-        &scaled_gradient, scaled_hessian, identifiable )
-        real(dp), intent(in)  :: gradient(5), hessian(5,5), rotation_scale
-        logical,  intent(in)  :: active(5)
-        real(dp), intent(out) :: scaled_gradient(5), scaled_hessian(5,5)
-        logical,  intent(out) :: identifiable
-        real(dp) :: ignored_step(5)
-        call scale_pose_system(gradient, hessian, rotation_scale, active, scaled_gradient, scaled_hessian)
-        call solve_pose_cholesky(scaled_hessian, -scaled_gradient, ignored_step, identifiable)
-    end subroutine prepare_pose_data_system
+    !> The data-only observability test of the joint solve: the scaled, masked system factors with the
+    !! relative pivot floor. It sees no prior, so a prior can never rescue an unobservable pose.
+    pure module function pose_data_observable( scaled_gradient, scaled_hessian ) result( observable )
+        use simple_linalg, only: spd_solve_rel
+        real(dp), intent(in) :: scaled_gradient(:), scaled_hessian(:,:)
+        logical :: observable
+        real(dp) :: ignored_step(size(scaled_gradient))
+        call spd_solve_rel(scaled_hessian, -scaled_gradient, ignored_step, observable)
+    end function pose_data_observable
 
-    pure module subroutine scale_pose_system( gradient, hessian, rotation_scale, active, scaled_gradient, scaled_hessian )
-        real(dp), intent(in)  :: gradient(5), hessian(5,5), rotation_scale
-        logical, intent(in)   :: active(5)
-        real(dp), intent(out) :: scaled_gradient(5), scaled_hessian(5,5)
-        real(dp) :: coordinate_scale(5)
-        integer :: axis, jaxis
-        coordinate_scale = [rotation_scale, rotation_scale, rotation_scale, 1._dp, 1._dp]
-        do axis = 1, 5
-            scaled_gradient(axis) = coordinate_scale(axis)*gradient(axis)
-            do jaxis = 1, 5
-                scaled_hessian(axis,jaxis) = coordinate_scale(axis)*hessian(axis,jaxis)*coordinate_scale(jaxis)
-            end do
-        end do
-        call apply_pose_parameter_mask(scaled_gradient, scaled_hessian, active)
-    end subroutine scale_pose_system
+    ! THE JOINT SOLVE (refine_joint)
 
-    !> One scaled, damped and independently bounded pose proposal.
-    pure module subroutine build_pose_lm_system( scaled_gradient, scaled_hessian, rotation_scale, mu, &
-        &damping_diagonal, solve_matrix, scaled_step, physical_step, stationary, reliable, bounded, shift_step_bound )
-        real(dp), intent(in)  :: scaled_gradient(5), scaled_hessian(5,5), rotation_scale, mu
-        real(dp), intent(out) :: damping_diagonal(5), solve_matrix(5,5)
-        real(dp), intent(out) :: scaled_step(5), physical_step(5)
-        logical,  intent(out) :: stationary, reliable, bounded
-        real(dp), intent(in)  :: shift_step_bound
-        real(dp) :: coordinate_scale(5), hessian_scale
+    !> objective, gradient and Gauss-Newton matrix at the trial pose, and its shell residual
+    module subroutine pose_problem_eval( self, f, g, curv )
+        class(cartft_pose_problem), intent(inout) :: self
+        real(dp),                   intent(out)   :: f, g(:), curv(:,:)
+        call self%calc%pose_normal_terms(self%state, self%iseven, self%iptcl, self%trial_rotmat, self%trial_shift, &
+            &f, g, curv, self%trial_residual)
+        self%npasses = self%npasses + 1
+    end subroutine pose_problem_eval
+
+    !> the rotation and shift norm caps of one step
+    module subroutine pose_problem_limit_step( self, step, bounded )
+        class(cartft_pose_problem), intent(inout) :: self
+        real(dp),                   intent(inout) :: step(:)
+        logical,                    intent(out)   :: bounded
         real(dp) :: rotation_norm, shift_norm
-        integer  :: axis
-        coordinate_scale = [rotation_scale, rotation_scale, rotation_scale, 1._dp, 1._dp]
-        stationary       = sqrt(dot_product(scaled_gradient, scaled_gradient)) < 1.e-8_dp
-        damping_diagonal = 0._dp
-        solve_matrix     = scaled_hessian
-        scaled_step      = 0._dp
-        physical_step    = 0._dp
-        reliable         = .false.
-        bounded          = .false.
-        if( stationary ) return
-        hessian_scale = max(maxval(abs(scaled_hessian)), NUMERIC_FLOOR)
-        do axis = 1, 5
-            damping_diagonal(axis) = max(scaled_hessian(axis,axis), sqrt(epsilon(1._dp))*hessian_scale, NUMERIC_FLOOR)
-            solve_matrix(axis,axis) = solve_matrix(axis,axis) + mu*damping_diagonal(axis)
-        end do
-        call solve_pose_cholesky(solve_matrix, -scaled_gradient, scaled_step, reliable)
-        if( .not. reliable ) return
-        physical_step = coordinate_scale*scaled_step
-        rotation_norm = sqrt(dot_product(physical_step(1:3), physical_step(1:3)))
-        if( rotation_norm > rotation_scale )then
-            physical_step(1:3) = physical_step(1:3)*(rotation_scale/rotation_norm)
+        bounded       = .false.
+        rotation_norm = sqrt(dot_product(step(1:3), step(1:3)))
+        if( rotation_norm > self%rotation_scale )then
+            step(1:3) = step(1:3)*(self%rotation_scale/rotation_norm)
             bounded = .true.
         endif
-        shift_norm = sqrt(dot_product(physical_step(4:5), physical_step(4:5)))
-        if( shift_norm > shift_step_bound )then
-            physical_step(4:5) = physical_step(4:5)*(shift_step_bound/shift_norm)
+        shift_norm = sqrt(dot_product(step(4:5), step(4:5)))
+        if( shift_norm > self%shift_step_bound )then
+            step(4:5) = step(4:5)*(self%shift_step_bound/shift_norm)
             bounded = .true.
         endif
-    end subroutine build_pose_lm_system
+        if( all(ieee_is_finite(step)) )then
+            self%max_rotation_step = max(self%max_rotation_step, sqrt(dot_product(step(1:3), step(1:3))))
+            self%max_shift_step    = max(self%max_shift_step,    sqrt(dot_product(step(4:5), step(4:5))))
+        endif
+    end subroutine pose_problem_limit_step
 
-    !> Freeze inactive pose coordinates while retaining one five-vector LM path.
-    pure module subroutine apply_pose_parameter_mask( gradient, hessian, active )
-        real(dp), intent(inout) :: gradient(5), hessian(5,5)
-        logical,  intent(in)    :: active(5)
-        integer :: axis
-        do axis = 1, 5
-            if( active(axis) ) cycle
-            gradient(axis)     = 0._dp
-            hessian(axis,:)    = 0._dp
-            hessian(:,axis)    = 0._dp
-            hessian(axis,axis) = 1._dp
-        end do
-    end subroutine apply_pose_parameter_mask
+    !> the right SO(3) increment and the shift increment; infeasible outside the cumulative guard
+    module function pose_problem_propose( self, step ) result( feasible )
+        class(cartft_pose_problem), intent(inout) :: self
+        real(dp),                   intent(in)    :: step(:)
+        logical :: feasible
+        real(dp) :: sine_half, cumulative_rotation, cumulative_shift
+        self%trial_rotmat = right_increment_rotation(self%rotmat, step(1:3))
+        self%trial_shift  = self%shift + step(4:5)
+        feasible = .true.
+        if( .not. self%cumulative_guard ) return
+        ! the capture basin of the anchor
+        sine_half           = sqrt(sum((self%trial_rotmat - self%anchor_rotmat)**2))/(2._dp*sqrt(2._dp))
+        cumulative_rotation = 2._dp*asin(max(0._dp, min(1._dp, sine_half)))
+        cumulative_shift    = sqrt(sum((self%trial_shift - self%anchor_shift)**2))
+        feasible = .not. (cumulative_rotation > self%max_total_rotation + 10._dp*epsilon(1._dp) .or. &
+            &cumulative_shift > self%max_total_shift + 10._dp*epsilon(1._dp))
+    end function pose_problem_propose
 
-    !> Cholesky solve with a relative pivot test for a 5x5 symmetric positive-definite block.
-    pure module subroutine solve_pose_cholesky( matrix, rhs, solution, reliable )
-        real(dp), intent(in)  :: matrix(5,5), rhs(5)
-        real(dp), intent(out) :: solution(5)
-        logical,  intent(out) :: reliable
-        real(dp) :: lower(5,5), intermediate(5), pivot, pivot_floor, matrix_scale
-        integer  :: i, j
-        solution     = 0._dp
-        intermediate = 0._dp
-        lower        = 0._dp
-        reliable     = .false.
-        if( any(.not. ieee_is_finite(matrix)) .or. any(.not. ieee_is_finite(rhs)) ) return
-        matrix_scale = maxval(abs(matrix))
-        if( matrix_scale <= NUMERIC_FLOOR ) return
-        pivot_floor = sqrt(epsilon(1._dp))*matrix_scale
-        do i = 1, 5
-            do j = 1, i - 1
-                lower(i,j) = (matrix(i,j) - dot_product(lower(i,1:j-1), lower(j,1:j-1)))/lower(j,j)
-            end do
-            pivot = matrix(i,i) - dot_product(lower(i,1:i-1), lower(i,1:i-1))
-            if( .not. ieee_is_finite(pivot) .or. pivot <= pivot_floor ) return
-            lower(i,i) = sqrt(pivot)
-        end do
-        do i = 1, 5
-            intermediate(i) = (rhs(i) - dot_product(lower(i,1:i-1), intermediate(1:i-1)))/lower(i,i)
-        end do
-        do i = 5, 1, -1
-            solution(i) = (intermediate(i) - dot_product(lower(i+1:5,i), solution(i+1:5)))/lower(i,i)
-        end do
-        reliable = all(ieee_is_finite(solution))
-    end subroutine solve_pose_cholesky
+    !> adopt the trial pose and its shell residual; bin the ratio for the bench
+    module function pose_problem_accept( self, ratio ) result( changed )
+        class(cartft_pose_problem), intent(inout) :: self
+        real(dp),                   intent(in)    :: ratio
+        logical :: changed
+        self%nratio(ratio_bin(ratio)) = self%nratio(ratio_bin(ratio)) + 1
+        self%rotmat = self%trial_rotmat
+        self%shift  = self%trial_shift
+        if( allocated(self%residual) ) self%residual = self%trial_residual
+        changed = .false.
+    end function pose_problem_accept
 
+    !> the priors anchored at the transaction seed, at the current or the trial pose
+    module function pose_problem_penalty( self, at_trial, penalty, g, curv ) result( has_penalty )
+        class(cartft_pose_problem), intent(inout) :: self
+        logical,                    intent(in)    :: at_trial
+        real(dp),                   intent(out)   :: penalty, g(:), curv(:,:)
+        logical :: has_penalty
+        has_penalty = self%shift_prior_weight > 0._dp .or. self%rotation_prior_weight > 0._dp
+        if( .not. has_penalty )then
+            penalty = 0._dp
+            g       = 0._dp
+            curv    = 0._dp
+        else if( at_trial )then
+            call pose_prior_terms(self%shift_prior_weight, self%rotation_prior_weight, self%trial_rotmat, &
+                &self%trial_shift, self%anchor_rotmat, self%anchor_shift, penalty, g, curv)
+        else
+            call pose_prior_terms(self%shift_prior_weight, self%rotation_prior_weight, self%rotmat, self%shift, &
+                &self%anchor_rotmat, self%anchor_shift, penalty, g, curv)
+        endif
+    end function pose_problem_penalty
+
+    module function pose_problem_observable( self, scaled_g, scaled_curv ) result( observable )
+        class(cartft_pose_problem), intent(inout) :: self
+        real(dp),                   intent(in)    :: scaled_g(:), scaled_curv(:,:)
+        logical :: observable
+        observable = pose_data_observable(scaled_g, scaled_curv)
+    end function pose_problem_observable
+
+    !> neither the rotation (radians) nor the shift (cropped pixels) of an accepted step resolves
+    module function pose_problem_negligible_step( self, step ) result( negligible )
+        class(cartft_pose_problem), intent(inout) :: self
+        real(dp),                   intent(in)    :: step(:)
+        logical :: negligible
+        negligible = max(sqrt(dot_product(step(1:3), step(1:3))), sqrt(dot_product(step(4:5), step(4:5)))) &
+            &< NEGLIGIBLE_STEP
+    end function pose_problem_negligible_step
+
+    ! THE SHIFT-ONLY SOLVE (refine_shift)
+
+    module subroutine shift_problem_eval( self, f, g, curv )
+        class(cartft_shift_problem), intent(inout) :: self
+        real(dp),                    intent(out)   :: f, g(:), curv(:,:)
+        call self%calc%shift_normal_terms(self%state, self%iseven, self%iptcl, self%rotmat, self%trial_shift, f, g, curv)
+        self%npasses = self%npasses + 1
+    end subroutine shift_problem_eval
+
+    module subroutine shift_problem_limit_step( self, step, bounded )
+        class(cartft_shift_problem), intent(inout) :: self
+        real(dp),                    intent(inout) :: step(:)
+        logical,                     intent(out)   :: bounded
+        real(dp) :: step_norm
+        step_norm = sqrt(dot_product(step, step))
+        bounded   = step_norm > self%shift_step_bound
+        if( bounded ) step = step*(self%shift_step_bound/step_norm)
+        if( all(ieee_is_finite(step)) ) self%max_shift_step = max(self%max_shift_step, sqrt(dot_product(step, step)))
+    end subroutine shift_problem_limit_step
+
+    !> infeasible beyond trs of the input shift
+    module function shift_problem_propose( self, step ) result( feasible )
+        class(cartft_shift_problem), intent(inout) :: self
+        real(dp),                    intent(in)    :: step(:)
+        logical :: feasible
+        self%trial_shift = self%shift + step
+        feasible = sqrt(sum((self%trial_shift - self%anchor_shift)**2)) <= self%max_total_shift + 10._dp*epsilon(1._dp)
+    end function shift_problem_propose
+
+    module function shift_problem_accept( self, ratio ) result( changed )
+        class(cartft_shift_problem), intent(inout) :: self
+        real(dp),                    intent(in)    :: ratio
+        logical :: changed
+        self%nratio(ratio_bin(ratio)) = self%nratio(ratio_bin(ratio)) + 1
+        self%shift = self%trial_shift
+        changed    = .false.
+    end function shift_problem_accept
+
+    module function shift_problem_negligible_step( self, step ) result( negligible )
+        class(cartft_shift_problem), intent(inout) :: self
+        real(dp),                    intent(in)    :: step(:)
+        logical :: negligible
+        negligible = sqrt(dot_product(step, step)) < NEGLIGIBLE_STEP
+    end function shift_problem_negligible_step
 
 end submodule simple_cartft_pose_opt_system

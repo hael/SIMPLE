@@ -141,7 +141,6 @@ type :: parameters
     character(len=16)         :: cont_prior='none' !< prior for continuous local refinement (none|shift|pose){none}
     real                      :: cont_prior_shift_sigma=0. !< fixed per-axis shift-prior standard deviation in A; zero uses all-active increments
     real                      :: cont_prior_rot_sigma=0. !< fixed per-axis rotation-prior standard deviation in degrees; required for cont_prior=pose
-    character(len=16)         :: cont_route='joint' !< internal: LM route of a continuous Cartesian pose solve(joint|shift_then_joint){joint}
     character(len=3)          :: sigma_commit_deferred='no' !< internal: caller commits the final canonical sigma update(yes|no){no}
     character(len=4)          :: ref_pose_init='none' !< external-reference pose initialization(cc|none){none}
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
@@ -664,7 +663,6 @@ type :: parameters
     logical :: l_prob_align_mode = .false. !< not a command-line key
     logical :: l_cart_refine     = .false. !< a Cartesian (continuous-pose) pass (refine=cont); not a command-line key
     logical :: l_cont_followup     = .false. !< the Cartesian followup pass after a discrete one; not a command-line key
-    logical :: l_cont_shift_first = .false. !< cont_route=shift_then_joint: the shift-only LM stage first; not a command-line key
     logical :: l_sticky_sampling = .false. !< not a command-line key
     logical :: l_sticky_keep     = .false. !< sticky_sampling=keep; not a command-line key
     logical :: l_sticky_best     = .false. !< sticky_sampling=best; not a command-line key

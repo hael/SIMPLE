@@ -124,7 +124,7 @@ contains
     end subroutine check_cont_seeds
 
     !> Particle identity and the optimizer of the pass's policy: the total bounds trs and
-    !! athres_cont (O6), the route of cont_route (C16; joint in production).
+    !! athres_cont (O6).
     subroutine new_cont( self, params, spec, build )
         class(strategy3D_cont), intent(inout) :: self
         class(parameters),      intent(in)    :: params
@@ -140,7 +140,7 @@ contains
             &THROW_HARD('strategy3D_cont particle index is outside ptcl3D')
         self%spec = spec
         call self%bind(params, build)
-        call self%opt%new(params%box, params%box_crop, params%trs, params%athres_cont, shift_first=params%l_cont_shift_first)
+        call self%opt%new(params%box, params%box_crop, params%trs, params%athres_cont)
         self%exists = .true.
     end subroutine new_cont
 

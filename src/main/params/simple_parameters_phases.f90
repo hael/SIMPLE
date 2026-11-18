@@ -758,13 +758,6 @@ contains
             case DEFAULT
                 THROW_HARD('internal cc_emit_sigma must be yes or no')
         end select
-        ! production runs the joint LM stage alone; the capture tests keep shift_then_joint
-        select case(trim(self%cont_route))
-            case('joint','shift_then_joint')
-            case DEFAULT
-                THROW_HARD('internal cont_route must be joint or shift_then_joint')
-        end select
-        self%l_cont_shift_first = trim(self%cont_route) == 'shift_then_joint'
         select case(trim(self%sigma_commit_deferred))
             case('yes','no')
             case DEFAULT
@@ -1098,7 +1091,6 @@ contains
                 if( .not. ieee_is_finite(self%cont_prior_rot_sigma) .or. self%cont_prior_rot_sigma <= 0. ) &
                     &THROW_HARD('cont_prior=pose requires positive finite cont_prior_rot_sigma in degrees')
             endif
-            if( trim(self%cont_route) /= 'joint' ) THROW_HARD('Cartesian prior requires cont_route=joint')
             if( self%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('Cartesian prior requires objfun=euclid')
             if( self%nstates /= 1 ) THROW_HARD('Cartesian prior requires one state')
             if( trim(self%prg%to_char()) == 'refine3D' .and. trim(self%refine) /= 'cont' ) &

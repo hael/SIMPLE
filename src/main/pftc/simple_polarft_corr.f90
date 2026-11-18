@@ -1470,6 +1470,206 @@ contains
         dval = dval - frequency * aimag(z)
     end subroutine eval_series_at_rotind
 
+    !> The Levenberg-Marquardt terms of the shift search at grid rotation irot, with the reference load_ref_aln_8 holds:
+    !! euclid, the loss L/W the score exp(-L/W) is made of, its gradient and Gauss-Newton matrix (2/W) J^T W J; cc, -cc,
+    !! its gradient and the Gauss-Newton matrix of the equivalent least squares. Both matrices are shift-independent.
+    module subroutine gen_shift_curv_for_rot_8_aln( self, iref, iptcl, shvec, irot, f, grad, curv )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, irot
+        real(dp),                    intent(in)    :: shvec(2)
+        real(dp),                    intent(out)   :: f, grad(2), curv(2,2)
+        complex(dp), pointer :: pft_ref_8(:,:)
+        real(dp) :: ax, ay, amp2, gk(3), g(3), wk, sqsum, ctf8
+        integer  :: ithr, i, ih, k, p, rp
+        ithr = omp_get_thread_num() + 1
+        call check_ref_aln_8(self, ithr, iref, iptcl)
+        pft_ref_8 => self%heap_vars(ithr)%pft_ref_aln_8
+        i  = self%pinds(iptcl)
+        ih = merge(1, 2, self%iseven(i))
+        ! sum over shells and the rotated ring of a a^T |REF.CTF|^2 (xx, xy, yy); |shift phase| = 1
+        g     = 0.d0
+        sqsum = 0.d0
+        do k = self%kfromto(1),self%kfromto(2)
+            gk   = 0.d0
+            amp2 = 0.d0
+            do p = 1, self%pftsz
+                rp   = ring_partner(self, p, irot)
+                ctf8 = real(self%ctfmats(p,k,i), dp)
+                ax   = self%argtransf(rp,k)
+                ay   = self%argtransf(self%pftsz+rp,k)
+                amp2 = real(pft_ref_8(rp,k) * conjg(pft_ref_8(rp,k)), dp) * ctf8 * ctf8
+                gk   = gk + amp2 * [ax*ax, ax*ay, ay*ay]
+                sqsum = sqsum + real(k,dp) * amp2
+            enddo
+            if( self%p_ptr%cc_objfun == OBJFUN_EUCLID )then
+                wk = self%sigma2_wk8(k,ih)
+            else
+                wk = real(k, dp)
+            endif
+            g = g + wk * gk
+        enddo
+        select case(self%p_ptr%cc_objfun)
+            case(OBJFUN_CC)
+                call self%gen_corr_cc_grad_for_rot_8(pft_ref_8, i, shvec, irot, f, grad)
+                f    = -f
+                grad = -grad
+                g    = g / sqrt(sqsum * self%ksqsums_ptcls(i))
+            case(OBJFUN_EUCLID)
+                call gen_euclid_residual_grad(self, pft_ref_8, iptcl, shvec, irot, f, grad)
+                f    = f / self%wsqsums_ptcls(i)
+                grad = 2.d0 * grad / self%wsqsums_ptcls(i)
+                g    = 2.d0 * g / self%wsqsums_ptcls(i)
+            case DEFAULT
+                THROW_HARD('gen_shift_curv_for_rot_8_aln supports cc and euclid only')
+        end select
+        curv(1,1) = g(1)
+        curv(1,2) = g(2)
+        curv(2,1) = g(2)
+        curv(2,2) = g(3)
+    end subroutine gen_shift_curv_for_rot_8_aln
+
+    !> the reference ring index paired with particle ring index p at grid rotation irot (as the shift evaluators pair them)
+    pure integer function ring_partner( self, p, irot ) result( rp )
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: p, irot
+        if( irot <= self%pftsz )then
+            if( p < irot )then
+                rp = p + self%pftsz - irot + 1
+            else
+                rp = p - irot + 1
+            endif
+        else
+            if( p <= irot - self%pftsz - 1 )then
+                rp = p + self%nrots - irot + 1
+            else
+                rp = p - irot + self%pftsz + 1
+            endif
+        endif
+    end function ring_partner
+
+    !> The Gauss-Newton matrix of the joint objective (x, y, rotation index) at a continuous rotation index, prior
+    !! excluded: the derivative sections of S*REF (the ring derivative and the two shift sections) rotated to
+    !! rotind_frac (an inverse FFT through the forward plan by conjugation) and summed with CTF^2 over the full ring;
+    !! euclid J^T W J of the loss gen_raw_euclid_grad_at_angle returns, cc the normalised model's J_n^T J_n.
+    module subroutine gen_joint_curv_at_angle( self, iref, iptcl, shvec, rotind_frac, curv )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(dp),                    intent(in)    :: shvec(2), rotind_frac
+        real(dp),                    intent(out)   :: curv(3,3)
+        complex(sp), pointer :: shmat(:,:), cjoint(:,:)
+        complex(sp) :: denom_coeffs(self%pftsz+1)
+        complex(dp) :: d(3), rot_phase
+        real(dp)    :: tau, w2pi, freq, ctf2, wk, gk(3,3), g(3,3), scale, dm, dm_dtau, jtm(3)
+        integer     :: i, ithr, k, k0, kk, ieo, ih, m, q, isec, a, b, col
+        logical     :: l_cc
+        call self%check_ptcl_memo
+        l_cc = self%is_cc_objfun()
+        if( .not. l_cc ) call self%check_euclid_weights
+        ithr = omp_get_thread_num() + 1
+        i    = self%pinds(iptcl)
+        ih   = merge(1, 2, self%iseven(i))
+        k0   = self%kfromto(1)
+        ieo  = merge(REF_EVEN, REF_ODD, self%iseven(i))
+        cjoint => self%cmat_joint_many(ithr)%c
+        shmat  => self%heap_vars(ithr)%shmat
+        call self%gen_shmat4aln(ithr, real(shvec,sp), shmat)
+        ! the sections of gen_raw_euclid_grad_at_angle: S*REF (kk), x (nk+kk), y (2*nk+kk), Friedel-extended
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            cjoint(1:self%pftsz,kk) = shmat(:,k) * self%pfts_refs(:,k,iref,ieo)
+            cjoint(self%pftsz+1:self%nrots,kk) = conjg(cjoint(1:self%pftsz,kk))
+            cjoint(1:self%pftsz,self%nk+kk) = real(self%argtransf(1:self%pftsz,k),sp) * cjoint(1:self%pftsz,kk)
+            cjoint(self%pftsz+1:self%nrots,self%nk+kk) = -conjg(cjoint(1:self%pftsz,self%nk+kk))
+            cjoint(1:self%pftsz,2*self%nk+kk) = real(self%argtransf(self%pftsz+1:self%nrots,k),sp) * cjoint(1:self%pftsz,kk)
+            cjoint(self%pftsz+1:self%nrots,2*self%nk+kk) = -conjg(cjoint(1:self%pftsz,2*self%nk+kk))
+        enddo
+        call fftwf_execute_dft(self%plan_fwd3_many, cjoint, cjoint)
+        ! rotate every spectrum by tau = rotind_frac - 1 (the model at ring index q is S*REF(q - tau)), differentiate the
+        ! first in tau, and conjugate: the forward transform of the conjugate is the conjugate of the inverse
+        tau  = rotind_frac - 1.d0
+        w2pi = DTWOPI / real(self%nrots,dp)
+        do m = 1, self%nrots
+            if( m - 1 <= self%nrots/2 )then
+                freq = real(m - 1, dp)
+            else
+                freq = real(m - 1 - self%nrots, dp)
+            endif
+            rot_phase = exp(cmplx(0.d0, -freq*w2pi*tau, kind=dp))
+            do col = 1, 3*self%nk
+                d(1) = cmplx(cjoint(m,col), kind=dp) * rot_phase
+                if( col <= self%nk ) d(1) = d(1) * cmplx(0.d0, -freq*w2pi, kind=dp)
+                cjoint(m,col) = cmplx(conjg(d(1)), kind=sp)
+            enddo
+        enddo
+        call fftwf_execute_dft(self%plan_fwd3_many, cjoint, cjoint)
+        ! J^T J over the full ring: dM/dtau = section 1; dM/ds = i * shift section (d(S*REF)/ds = i a S*REF)
+        g = 0.d0
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            gk = 0.d0
+            do q = 1, self%nrots
+                if( q <= self%pftsz )then
+                    ctf2 = real(self%ctfmats(q,k,i), dp)**2
+                else
+                    ctf2 = real(self%ctfmats(q-self%pftsz,k,i), dp)**2
+                endif
+                do isec = 1, 3
+                    d(isec) = conjg(cmplx(cjoint(q,(isec-1)*self%nk+kk), kind=dp)) / real(self%nrots,dp)
+                enddo
+                d(2:3) = cmplx(0.d0, 1.d0, kind=dp) * d(2:3)
+                do b = 1, 3
+                    do a = 1, 3
+                        gk(a,b) = gk(a,b) + ctf2 * real(conjg(d(a)) * d(b), dp)
+                    enddo
+                enddo
+            enddo
+            if( l_cc )then
+                wk = 1.d0
+            else
+                wk = real(self%sigma2_wk(k,ih), dp)
+            endif
+            g = g + wk * gk
+        enddo
+        ! the optimiser's order is (x, y, rotation index)
+        do b = 1, 3
+            do a = 1, 3
+                curv(a,b) = g(perm(a), perm(b))
+            enddo
+        enddo
+        if( l_cc )then
+            ! |model|^2 and its tau derivative from the denominator series of gen_normalized_corr_grad_at_angle
+            denom_coeffs = cmplx(0._sp,0._sp,kind=sp)
+            do k = self%kfromto(1), self%kfromto(2)
+                denom_coeffs = denom_coeffs + self%ft_ctf2(:,k,i) * self%ft_ref2(:,k,iref,ieo)
+            enddo
+            call eval_series_at_rotind(self, denom_coeffs, rotind_frac, dm, dm_dtau)
+            dm      = dm / real(self%nrots,dp)
+            dm_dtau = dm_dtau / real(self%nrots,dp)
+            if( .not. dm > 0.d0 )then
+                curv = 0.d0
+                return
+            endif
+            jtm = [0.d0, 0.d0, 0.5d0*dm_dtau]
+            do b = 1, 3
+                do a = 1, 3
+                    curv(a,b) = curv(a,b)/dm - jtm(a)*jtm(b)/(dm*dm)
+                enddo
+            enddo
+        else
+            ! the raw loss is (1/(2W)) sum_k w_k sum over the full ring, so its Gauss-Newton matrix is (1/W) J^T W J
+            scale = 1.d0 / self%wsqsum_ptcl_now(iptcl)
+            curv  = scale * curv
+        endif
+
+    contains
+
+        pure integer function perm( a )
+            integer, intent(in) :: a
+            perm = merge(a + 1, 1, a < 3)
+        end function perm
+
+    end subroutine gen_joint_curv_at_angle
+
     !> copies reference iref, of the parity of particle iptcl, to the calling thread's buffer of the shift search:
     !! the reference is fixed during one minimisation and the copy to double precision is exact
     module subroutine load_ref_aln_8( self, iref, iptcl )

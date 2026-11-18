@@ -6,6 +6,7 @@ use simple_opt_spec,    only: opt_spec
 use simple_opt_lbfgsb,  only: opt_lbfgsb
 use simple_opt_simplex, only: opt_simplex
 use simple_opt_de,      only: opt_de
+use simple_opt_lm,      only: opt_lm
 implicit none
 
 public :: opt_factory
@@ -34,6 +35,8 @@ contains
                 allocate(opt_de             :: self%optimizer_type)
             case('lbfgsb')
                 allocate(opt_lbfgsb         :: self%optimizer_type)
+            case('lm')
+                allocate(opt_lm             :: self%optimizer_type)
             case DEFAULT
                 THROW_HARD('class: '//trim(spec%str_opt)//' unsupported in opt_factory constructor')
         end select

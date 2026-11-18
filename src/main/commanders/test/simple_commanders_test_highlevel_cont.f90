@@ -93,10 +93,8 @@ end subroutine exec_test_cont_refine3D_1jxy
 !     (Phase 8 finding); stages f, g and h measure the error up to them: the smallest over the
 !     operators of D2, declared from the model's chain arrangement (betagal_frame), never learnt
 !     from the poses, in the truth map's frame, which the refinements share
-!  i  stage a on the production route (the joint stage alone; a-c take the shift-then-joint seam)
-!  j  stage b on the production route
 !  k  verified NU bundle from one base iteration, then one local iteration in a new directory
-!  The negative control of every E25 stage (a, b, c, i, j): its rotation error and basin fraction
+!  The negative control of every E25 stage (a, b, c): its rotation error and basin fraction
 !  against the truth shuffled among the particles fail the floors. The simulation has no shift,
 !  which shuffling keeps, so the shift error has no such control. Every metric goes to metrics.tsv.
 subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
@@ -140,7 +138,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     integer, parameter :: FOLLOWUP_MAXITS = 2
     real,    parameter :: FOLLOWUP_UPDATE_FRAC = 0.3
     ! Floors, declared before the first run (section 10.1; ruling R5: no map or FSC floor).
-    ! Stages a-c, i and j run E25 through the production path: E25's floors at 8 A apply, F1 a tenth of
+    ! Stages a-c run E25 through the production path: E25's floors at 8 A apply, F1 a tenth of
     ! the injected error (median rotation <= 1.5 deg, median shift <= 0.2 px) and F2 the
     ! fraction inside the basin width lp/(mskdiam/2) = 7.64 deg >= 0.95.
     real,    parameter :: MAX_MED_ROT = 0.1*ROT_ERR, MAX_MED_SH = 0.1*SH_ERR, MIN_BASIN = 0.95
@@ -453,11 +451,6 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     call gate%metric('g_sym_pose_error_deg', sym_followup, sym_before + MAX_PAIR_GAIN_LOSS, &
         &sym_followup <= sym_before + MAX_PAIR_GAIN_LOSS, upper=.true.)
     call simple_chdir(gate_root, status)
-    ! ---- i, j: stages a and b on the production route (run last: the earlier stages' draws stay) ----
-    call run_refine3D_cont('i_joint_euclid', 'euclid', 0, run_proj, l_production_route=.true.)
-    call gate_e25('i', run_proj)
-    call run_refine3D_cont('j_joint_cc', 'cc', 0, run_proj, l_production_route=.true.)
-    call gate_e25('j', run_proj)
     ! Continue stage e's saved project; the preceding stages leave other projects in run_proj.
     write(logfhandle,'(a)') '>>> CONT_REFINE3D_1JXY STAGE local_inplace'
     call simple_chdir(filepath(gate_root, 'e_auto'), status)
@@ -523,8 +516,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         logical :: support_verified, sigma_found
         character(len=STDLEN) :: message
         write(logfhandle,'(A)') '>>> CONT_REFINE3D_1JXY STAGE nu_handoff'
-        call run_refine3D_cont('k_nu_producer', 'euclid', 0, run_proj, &
-            &l_production_route=.true., l_nu_producer=.true.)
+        call run_refine3D_cont('k_nu_producer', 'euclid', 0, run_proj, l_nu_producer=.true.)
         producer_dir = filepath(gate_root, 'k_nu_producer')
         call simple_chdir(producer_dir, status)
         if( status /= 0 ) THROW_HARD('Could not enter the NU producer fixture')
@@ -689,17 +681,15 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         call seeded%write(simple_abspath(string(PROJNAME//'.simple'), check_exists=.false.))
     end subroutine enter_stage
 
-    !> one refine3D refine=cont pass against the truth reference on the shift-then-joint route of
-    !! the E25 floors, or on the production route (the joint stage alone) with l_production_route;
+    !> one refine3D refine=cont pass against the truth reference with the E25 bounds;
     !! nparts > 0 distributes it
-    subroutine run_refine3D_cont( dir, objfun, nparts, out, l_production_route, l_nu_producer )
+    subroutine run_refine3D_cont( dir, objfun, nparts, out, l_nu_producer )
         use simple_syslib, only: simple_list_files
         character(len=*),  intent(in)    :: dir, objfun
         integer,           intent(in)    :: nparts
         class(sp_project),  intent(inout) :: out
-        logical, optional, intent(in)    :: l_production_route, l_nu_producer
+        logical, optional, intent(in)    :: l_nu_producer
         type(string), allocatable :: bench_parts(:)
-        logical :: l_seam
         call enter_stage(dir)
         call cl%set('prg',      'refine3D')
         call cl%set('projfile', simple_abspath(string(PROJNAME//'.simple')))
@@ -712,9 +702,6 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         call cl%set('lp',       LP)
         call cl%set('trs',      TRS)
         call cl%set('athres_cont', ATHRES_CONT)
-        l_seam = .true.
-        if( present(l_production_route) ) l_seam = .not. l_production_route
-        if( l_seam ) call cl%set('cont_route', 'shift_then_joint')
         if( present(l_nu_producer) )then
             if( l_nu_producer )then
                 call cl%set('filt_mode', 'nonuniform')

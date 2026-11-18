@@ -58,7 +58,7 @@ type :: ft_expanded
     procedure          :: get_hp_lp
     ! shift optimization
     procedure          :: alloc_and_calc_tmp_cmat12, dealloc_tmp_cmat12
-    procedure          :: corr_shifted_cost_8, corr_gshifted_cost_8, corr_fdfshifted_cost_8
+    procedure          :: corr_shifted_cost_8, corr_gshifted_cost_8, corr_fdfshifted_cost_8, corr_shifted_curv_8
     ! destructor
     procedure          :: kill
 end type ft_expanded
@@ -525,6 +525,35 @@ contains
         grad(1) = (g1(1)+ 2.d0*g2(1)) * num / denominator
         grad(2) = (g1(2)+ 2.d0*g2(2)) * num / denominator
     end subroutine corr_fdfshifted_cost_8
+
+    !< the cost's Gauss-Newton matrix for the Levenberg-Marquardt shift search: num/denominator times the sum over the
+    !! band of w |T| t t^T (T = tmp_cmat12, t the transfer vector, w 1 at h = 0 and 2 beyond), the Hessian at a zero
+    !! residual; it does not depend on the shift
+    subroutine corr_shifted_curv_8( self, denominator, curv )
+        class(ft_expanded), intent(in)  :: self
+        real(dp),           intent(in)  :: denominator
+        real(dp),           intent(out) :: curv(2,2)
+        real(dp) :: c1(2,2), c2(2,2), transf_vec(2), absval
+        integer  :: hind, kind, kkind, kind_shift
+        c1 = 0.d0
+        c2 = 0.d0
+        kind_shift = ftexp_transf_kzero - self%kzero
+        do kind = self%flims(2,1),self%flims(2,2)
+            kkind = kind + kind_shift
+            do hind = self%flims(1,1),self%flims(1,2)
+                if( .not. self%bandmsk(hind,kind) ) cycle
+                transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
+                absval     = abs(self%tmp_cmat12(hind,kind))
+                if( hind == 1 )then ! h = 0
+                    c1 = c1 + absval * spread(transf_vec, 2, 2) * spread(transf_vec, 1, 2)
+                else
+                    c2 = c2 + absval * spread(transf_vec, 2, 2) * spread(transf_vec, 1, 2)
+                endif
+            end do
+        enddo
+        curv      = (c1 + 2.d0*c2) * num / denominator
+        curv(2,1) = curv(1,2)
+    end subroutine corr_shifted_curv_8
 
     ! DESTRUCTOR
 

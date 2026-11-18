@@ -70,7 +70,7 @@ contains
         call cline%kill()
     end subroutine test_cont_prior_binding
 
-    !> Invalid controls and the retiring split route fail before matching.
+    !> Invalid controls fail before matching.
     subroutine test_cont_prior_rejections()
         type(parameters_child) :: child
         class(cmdline), allocatable :: cline
@@ -84,12 +84,6 @@ contains
         call assert_int(FORK_STATUS_FAILED, child%status(), 'pose prior without a width is rejected')
         call child%destroy
         call cline%set('cont_prior', 'shift')
-        call cline%set('cont_route', 'shift_then_joint')
-        call child%start(name=string('PRIOR_ROUTE'), cline=cline)
-        call child%await_final_status()
-        call assert_int(FORK_STATUS_FAILED, child%status(), 'shift prior rejects split route')
-        call child%destroy
-        call cline%set('cont_route', 'joint')
         call cline%set('objfun', 'cc')
         call child%start(name=string('PRIOR_OBJECTIVE'), cline=cline)
         call child%await_final_status()

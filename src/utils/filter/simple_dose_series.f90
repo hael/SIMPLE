@@ -8,6 +8,7 @@ use simple_stat,         only: kish_ess
 use simple_string_utils, only: int2str
 use simple_string,       only: string
 use simple_dose_curve,   only: dose_curve, scaled_dose
+use simple_lm_solver,    only: lm_problem, lm_options, lm_outcome, lm_solve
 implicit none
 #include "simple_local_flags.inc"
 
@@ -23,7 +24,7 @@ integer, parameter :: N_SCHEMES = 3
 integer,  parameter :: MIN_BAND_SHELLS = 6       !< a line in k^2 needs a band to be a line over
 integer,  parameter :: N_ALT_PASSES    = 3       !< alternating passes of the rank-one fit
 integer,  parameter :: N_LM_ITER       = 50      !< Levenberg-Marquardt iterations of the Guinier fit
-integer,  parameter :: N_LM_TRIES      = 12      !< damping increases tried before a step is given up
+real(dp), parameter :: GUINIER_REL_TOL = 1.e-10_dp !< the Guinier fit's relative stops (predicted, accepted reduction)
 integer,  parameter :: N_BANDS         = 8       !< resolution bands of the readout
 real(dp), parameter :: OWN_FSC_FLOOR   = 0.1_dp
 real(dp), parameter :: SE_RATIO        = 2.0_dp  !< shells entering the log-domain start of the Guinier fit
@@ -107,6 +108,17 @@ type :: dose_series
     procedure, private :: sharpest
     procedure, private :: rel_se
 end type dose_series
+
+!> the Guinier fit (10) of one window for lm_solve: (c, B) over the window's resolved shells
+type, extends(lm_problem) :: guinier_problem
+    real(dp), allocatable :: atten(:), wgt(:), k2(:) !< the resolved shells: attenuation, 1/se^2, k^2
+    real(dp) :: x(2) = 0._dp, trial(2) = 0._dp
+contains
+    procedure :: eval       => guinier_eval
+    procedure :: limit_step => guinier_limit_step
+    procedure :: propose    => guinier_propose
+    procedure :: accept     => guinier_accept
+end type guinier_problem
 
 interface
     !> white-box tests (submodule simple_dose_series_tester, built only with BUILD_TESTS=ON)
@@ -593,10 +605,9 @@ contains
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
         class(dose_series), intent(inout) :: self
         character(len=:), allocatable :: msg
-        real(dp) :: k2(self%nsh), wgt, lsum(4), sxy, rhs(2), jtj(3), det, c, b, cn, bn, obj, objn, lam, varc
+        real(dp) :: k2(self%nsh), wgt, lsum(4), sxy, rhs(2), jtj(3), det, c, b, obj, varc
         real(dp) :: db_da(self%nwin,self%nsh)
-        integer  :: w, v, s, it, ntry, nused
-        logical  :: l_step
+        integer  :: w, v, s, nused
         k2 = self%kfreq * self%kfreq
         self%l_rejected = .false.
         db_da = 0._dp
@@ -631,37 +642,9 @@ contains
                 b = 0._dp
                 c = 1._dp
             endif
-            ! Levenberg-Marquardt in the linear domain
+            ! Levenberg-Marquardt in the linear domain: the library's engine
+            call fit_guinier(c, b)
             obj = guinier_obj(c, b)
-            lam = 1.e-3_dp
-            do it = 1, N_LM_ITER
-                call guinier_normal(c, b, jtj, rhs)
-                l_step = .false.
-                do ntry = 1, N_LM_TRIES
-                    det = jtj(1)*(1._dp+lam) * jtj(3)*(1._dp+lam) - jtj(2)*jtj(2)
-                    if( det > DTINY )then
-                        cn   = c + ( jtj(3)*(1._dp+lam)*rhs(1) - jtj(2)*rhs(2)) / det
-                        bn   = b + (-jtj(2)*rhs(1) + jtj(1)*(1._dp+lam)*rhs(2)) / det
-                        objn = guinier_obj(cn, bn)
-                        if( ieee_is_finite(objn) )then
-                            if( objn < obj )then
-                                l_step = .true.
-                                exit
-                            endif
-                        endif
-                    endif
-                    lam = 10._dp * lam
-                enddo
-                if( .not. l_step ) exit
-                c   = cn
-                b   = bn
-                lam = max(1.e-12_dp, 0.1_dp * lam)
-                if( obj - objn <= 1.e-10_dp * obj )then
-                    obj = objn
-                    exit
-                endif
-                obj = objn
-            enddo
             self%cw(w) = c
             self%bw(w) = b
             call guinier_normal(c, b, jtj, rhs)
@@ -736,6 +719,29 @@ contains
                 rhs_out(2) = rhs_out(2) + ww * dbb * rr
             enddo
         end subroutine guinier_normal
+
+        !> lm_solve on the window's resolved shells from (cc, bb); returns the solution there
+        subroutine fit_guinier( cc, bb )
+            real(dp), intent(inout) :: cc, bb
+            type(guinier_problem) :: problem
+            type(lm_options)      :: options
+            type(lm_outcome)      :: outcome
+            logical :: resolved(self%klo:self%khi)
+            resolved      = self%atten_se(w,self%klo:self%khi) < huge(1._dp)
+            problem%atten = pack(self%atten(w,self%klo:self%khi), resolved)
+            problem%wgt   = 1._dp / max(DTINY, pack(self%atten_se(w,self%klo:self%khi), resolved)**2)
+            problem%k2    = pack(k2(self%klo:self%khi), resolved)
+            problem%x     = [cc, bb]
+            problem%trial = problem%x
+            options%maxits        = N_LM_ITER
+            options%predicted_tol = GUINIER_REL_TOL
+            options%accepted_tol  = GUINIER_REL_TOL
+            options%scale         = [1._dp, 1._dp]
+            options%active        = [.true., .true.]
+            call lm_solve(problem, options, outcome)
+            cc = problem%x(1)
+            bb = problem%x(2)
+        end subroutine fit_guinier
 
         integer function nused_shells() result( m )
             integer :: ss
@@ -921,6 +927,50 @@ contains
     end function scheme_atten
 
     !> exp(-B k^2/4), with the argument clamped so a diverging fit cannot overflow
+    ! THE GUINIER PROBLEM (lm_solve)
+
+    !> sum w (a - c e)^2 with e = exp(-B k^2/4), its gradient and Gauss-Newton matrix 2 J^T W J at the trial point
+    subroutine guinier_eval( self, f, g, curv )
+        class(guinier_problem), intent(inout) :: self
+        real(dp),               intent(out)   :: f, g(:), curv(:,:)
+        real(dp) :: e, r, jac(2)
+        integer  :: s
+        f    = 0._dp
+        g    = 0._dp
+        curv = 0._dp
+        do s = 1, size(self%atten)
+            e   = bfac_envelope(self%trial(2), self%k2(s))
+            r   = self%atten(s) - self%trial(1) * e
+            jac = [e, -self%trial(1) * e * self%k2(s) / 4._dp]
+            f   = f + self%wgt(s) * r * r
+            g   = g - 2._dp * self%wgt(s) * r * jac
+            curv(:,1) = curv(:,1) + 2._dp * self%wgt(s) * jac * jac(1)
+            curv(:,2) = curv(:,2) + 2._dp * self%wgt(s) * jac * jac(2)
+        enddo
+    end subroutine guinier_eval
+
+    !> (c, B) are unbounded: no step limit
+    subroutine guinier_limit_step( self, step, bounded )
+        class(guinier_problem), intent(inout) :: self
+        real(dp),               intent(inout) :: step(:)
+        logical,                intent(out)   :: bounded
+        bounded = .false.
+    end subroutine guinier_limit_step
+
+    logical function guinier_propose( self, step ) result( feasible )
+        class(guinier_problem), intent(inout) :: self
+        real(dp),               intent(in)    :: step(:)
+        self%trial = self%x + step
+        feasible   = .true.
+    end function guinier_propose
+
+    logical function guinier_accept( self, ratio ) result( changed )
+        class(guinier_problem), intent(inout) :: self
+        real(dp),               intent(in)    :: ratio
+        self%x  = self%trial
+        changed = .false.
+    end function guinier_accept
+
     pure real(dp) function bfac_envelope( b, k2 ) result( e )
         real(dp), intent(in) :: b, k2
         e = exp(max(-700._dp, min(700._dp, -b * k2 / 4._dp)))
