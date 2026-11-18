@@ -8,8 +8,6 @@ type(ui_program), target :: solve2D
 type(ui_program), target :: refine2D
 type(ui_program), target :: solve2D_chunks
 type(ui_program), target :: make_cavgs
-type(ui_program), target :: bootstrap_cavgs
-type(ui_program), target :: unbootstrap_cavgs
 type(ui_program), target :: map_cavgs_selection
 type(ui_program), target :: sample_classes
 type(ui_program), target :: write_classes
@@ -37,8 +35,6 @@ contains
         call new_refine2D(prgtab)
         call new_solve2D_chunks(prgtab)
         call new_make_cavgs(prgtab)
-        call new_bootstrap_cavgs(prgtab)
-        call new_unbootstrap_cavgs(prgtab)
         call new_map_cavgs_selection(prgtab)
         call new_sample_classes(prgtab)
         call new_write_classes(prgtab)
@@ -326,83 +322,6 @@ contains
         ! add to ui_hash
         call add_ui_program('make_cavgs', make_cavgs, prgtab, UI_CATEGORY)
     end subroutine new_make_cavgs
-
-    subroutine new_bootstrap_cavgs( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call bootstrap_cavgs%new(&
-        &'bootstrap_cavgs', &                                                   ! name
-        &'Bootstrap class averages from existing 2D class memberships',& ! summary
-        &'creates an oversampled class-average stack by stochastic expansion &
-        &of existing 2D class memberships and then runs make_cavgs',&           ! help
-        &'simple_exec',&                                                        ! executable
-        &.true., &
-        &display_name='Bootstrap Class Averages') ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call bootstrap_cavgs%add_input(UI_PARM, 'osmpl_fac', 'num', 'Oversampling factor',&
-        &'Integer factor for class-average oversampling; final class count is usable parent classes times osmpl_fac{2}',&
-        &'oversampling factor{2}', .false., 2., &
-        &visibility=UI_VIS_DEVELOPER)
-        call bootstrap_cavgs%add_input(UI_PARM, 'frac_best', 'num', 'Anchor fraction',&
-        &'Fraction used with the median class population to define the objective-ranked anchor set(0-1){0.5}',&
-        &'fraction{0.5}', .false., 0.5, &
-        &visibility=UI_VIS_DEVELOPER)
-        call bootstrap_cavgs%add_input(UI_IMG, 'refs', 'file', 'Bootstrap reference class averages', &
-        &'Reference class-average stack written for bootstrap processing', 'e.g. cavgs_bootstrap_001.mrc', .false., 'cavgs_bootstrap_001.mrc', &
-        &visibility=UI_VIS_DEVELOPER)
-        ! <no additional inputs>
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call bootstrap_cavgs%add_input(UI_COMP, nparts, required_override=.false., &
-        &visibility=UI_VIS_DEVELOPER)
-        call bootstrap_cavgs%add_input(UI_COMP, nthr, &
-        &visibility=UI_VIS_STANDARD)
-        ! add to ui_hash
-        call add_ui_program('bootstrap_cavgs', bootstrap_cavgs, prgtab, UI_CATEGORY)
-    end subroutine new_bootstrap_cavgs
-
-    subroutine new_unbootstrap_cavgs( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call unbootstrap_cavgs%new(&
-        &'unbootstrap_cavgs', &                                                ! name
-        &'Map bootstrap cls3D back to original project',&                      ! summary
-        &'transfers cls3D alignment from bootstrap originals (child=0) to their bootstrap_parent class indices in the original project and maps to particles',& ! help
-        &'simple_exec',&                                                        ! executable
-        &.true., &
-        &display_name='Map Bootstrap Classes Back') ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! image input/output
-        call unbootstrap_cavgs%add_input(UI_FILE, 'projfile_orig', 'file', 'Original project file', &
-        &'Project file that was used as input to bootstrap_cavgs and should receive the mapped cls3D/ptcl3D parameters', &
-        &'e.g. original.simple', .true., '', &
-        &visibility=UI_VIS_STANDARD)
-        ! <no additional inputs>
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-        ! add to ui_hash
-        call add_ui_program('unbootstrap_cavgs', unbootstrap_cavgs, prgtab, UI_CATEGORY)
-    end subroutine new_unbootstrap_cavgs
 
     subroutine new_map_cavgs_selection( prgtab )
         class(ui_hash), intent(inout) :: prgtab

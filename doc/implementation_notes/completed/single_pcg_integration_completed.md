@@ -16,7 +16,7 @@ implemented) and are kept as history. Companions:
 `pcg_backend_overview.md` (the solver), `reconstruct3D_pcg_policy.md`,
 `pcg_decision_log.md`, `pcg_priors_history.md` (the priors tried before),
 `aet_codes_and_simple.md` (the FePt work) and
-`doc/refactoring_notes/planned/refine_tomo.md`. The species work this feeds is
+`doc/refactoring_notes/completed/refine_tomo.md`. The species work this feeds is
 `species_discovery_completed.md` and `species_discovery_unfinished.md`.
 
 ## 0. What the revision changes

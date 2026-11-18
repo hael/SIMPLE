@@ -1,5 +1,8 @@
 # The class student on raw picks: no centring, alignment after prediction
 
+Archived in `completed/` on 2026-11-17 by maintainer decision. The status and open items below are as
+last written.
+
 Status, 2026-11-16: adopted (ruling R4), uncommitted for review. The class student predicts on raw picks and aligns
 each unseen particle over the shift disk against every class of its candidate list; `center_ptcls` left the route
 and the validation; the amplitude channel was rejected (decision 7 (b)). The report is

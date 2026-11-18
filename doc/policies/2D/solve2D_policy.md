@@ -163,7 +163,7 @@ greedy pass uses measured sigmas; a seed pass retains the bootstrap.
 Reconstruction and residual updates always use measured spectra. The beta
 schedule is independent. The smoothed bootstrap (the anchor) is saved beside
 the canonical sigma2 store as `sigma2_state.bin.anchor`; see
-[`sigma2_anchor_anneal_2D.md`](../../implementation_notes/planned/sigma2_anchor_anneal_2D.md).
+[`sigma2_anchor_anneal_2D.md`](../../implementation_notes/completed/sigma2_anchor_anneal_2D.md).
 
 **Stage omission (2026-11-03).** A stage whose planned limit the class
 averages already resolve past is omitted, as `solve3D` omits a stage behind

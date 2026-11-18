@@ -63,6 +63,6 @@ Silent ones first.
 
 ## See also
 
-`doc/policies/2D/solve2D_policy.md` (ownership, carry-over), `doc/policies/2D/class_average_bootstrap_policy.md`,
-`doc/policies/2D/particle_cache_policy.md`, `doc/policies/sieving_and_rejection/class_compatibility_policy.md`,
+`doc/policies/2D/solve2D_policy.md` (ownership, carry-over), `doc/policies/2D/particle_cache_policy.md`,
+`doc/policies/sieving_and_rejection/class_compatibility_policy.md`,
 `doc/algorithms/refine2d_class_averaging.md`; skills `simple-solve2d`, `simple-cluster-cavgs-quality`.

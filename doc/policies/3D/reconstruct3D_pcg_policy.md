@@ -4,7 +4,7 @@ Contract of the code that runs today: the opt-in CTF- and sigma-weighted
 preconditioned-conjugate-gradient (PCG) reconstruction path. Unless asked, the
 PCG backend carries no regularization of its own beyond the ordinary FSC/SSNR
 `P_tau` replay. The two opt-in priors are the order prior (`pcg_order`,
-`simple_pcg_order_prior`; `doc/implementation_notes/planned/pcg_order_prior.md`),
+`simple_pcg_order_prior`; `doc/implementation_notes/completed/pcg_order_prior.md`),
 which replaced the soft solvent prior `pcg_solvent` on 2026-11-08
 (`pcg_decision_log.md`), and the atomicity prior (`atm_prior`,
 `simple_pcg_atomic_prior`; `single_pcg_integration_completed.md`). The order

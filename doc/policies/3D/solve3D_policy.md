@@ -946,7 +946,7 @@ the same state and box, and the evidence map is written only under
 `pcg_order=yes`: the first iteration of stage 6, and the first at a new box,
 run without it (logged). The
 final reconstruction is prior-free. Design and evidence:
-`doc/implementation_notes/planned/pcg_order_prior.md`.
+`doc/implementation_notes/completed/pcg_order_prior.md`.
 
 The final reconstruction does not apply fractional-update sampling or trailing
 average blending. Final-map postprocessing is classical, even when staged

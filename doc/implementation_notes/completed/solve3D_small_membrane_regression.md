@@ -1,5 +1,8 @@
 # solve3D on small membrane proteins: diagnosis and experimental plan
 
+Archived in `completed/` on 2026-11-17 by maintainer decision. The status and open items below are as
+last written.
+
 Status, 2026-11-16: in progress. Phase 1 read as Hans reported it (`lpstart=16.25` worse on PorF and PfCRT,
 the export gate unchanged; the start cap is rejected) and the band-versus-sampling control run (Decision 13).
 On Hans's rulings of 2026-11-16 the tree now holds the release fix (Decision 3, committed in `360fbeb4f`), the
@@ -9,7 +12,7 @@ independent review, both written and left uncommitted on 2026-11-15 and merged h
 the review corrected; the plan adopts its recommendations). Depends on: the logs under
 `~/Processing/solve3D_regression/{PfCRT,PorF,exp_gate}/{current,last_working_*}/` on the Mac (read); the
 `lpstart=16.25` restarts of PorF, the export gate and PfCRT that Hans started on 2026-11-15 (running, not
-read when this was written). Related: [data-driven stage progression](data_driven_stage_progression.md),
+read when this was written). Related: [data-driven stage progression](../rejected/data_driven_stage_progression.md),
 sections 3-4 of the [solve3D policy](../../policies/3D/solve3D_policy.md) and "Sticky sampling schedules"
 in the [fractional-update policy](../../policies/importance_sampling_fractional_update_policy.md).
 
@@ -350,7 +353,7 @@ of one; the folder names; the wording of the new log lines.
 - The stage-4 FSC=0.5 rule (`set_stage_lp_from_fsc05`) stays; it is revisited only if a stage-4 stall
   happens at a band coarser than the next rung, where the one-rung advance would have gone further.
 - Exit decisions driven by first-time statistics (Decision 7 prints them only).
-- A data-driven release or band progression ([data-driven stage progression](data_driven_stage_progression.md)).
+- A data-driven release or band progression ([data-driven stage progression](../rejected/data_driven_stage_progression.md)).
 - The in-plane posterior insertion, the shape of the class quotas and the 2D side.
 - Analysis scripts in the repository: the stage summary line replaces the external parser.
 

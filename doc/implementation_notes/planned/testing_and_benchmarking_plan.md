@@ -1,9 +1,17 @@
 # Testing and benchmarking: what is left, and in what order
 
-Joint plan, 2026-10-18. **Partly done.** Of the order in section 8, the `speed2d_mac` run (step 1) and `test_truth_sync` Phases 7 to 9 (step 2, commit `34f314fe5`) have landed; `scripts/plot_refine3d_bench.py` exists; the matching-band test is dropped (ruling 1). The rest is open. Rulings of 2026-10-18 in section 2. It gathers the
-open testing and benchmarking items of the planned notes into one order of
-work. The notes it draws on are listed at the end; each item names where its
-detail lives.
+Joint plan begun 2026-10-18; consolidated 2026-11-17. **Partly done.**
+`speed2d_mac` and `test_truth_sync` Phases 7–9 (commit `34f314fe5`) have landed;
+`scripts/plot_refine3d_bench.py` exists; the matching-band test is dropped
+(ruling 1). Section 6 now owns the remaining SINGLE, stream and Phase 5 test/CI
+work, superseding their three handovers. The [nightly triage plan](../../refactoring_notes/planned/nightly_suite_triage.md)
+stays in `planned/` as a plan that can be re-executed; its runs supply evidence here.
+
+The November consolidation checked the relevant test source and CI definitions
+on master `68638be28` plus the current working tree. It ran no new tests and
+attached no new complete nightly result. Other October proposals below retain
+their dated scope and need reconciliation before implementation; they are not a
+fresh audit of every benchmark or method. Existing maintainer rulings still apply.
 
 Terms used throughout:
 
@@ -33,9 +41,8 @@ Terms used throughout:
 - the floor rule;
 - multi-state tests with known labels.
 
-It was merged onto master 43de9b340 on 2026-10-18 and is not yet committed. The
-continuation run `test_truth_sync` (the test-suite plan's Phases 7 to 9) is
-specified and waits for that commit. Its work:
+The overhaul reached master on 2026-10-18. The continuation run
+`test_truth_sync` (Phases 7–9) subsequently landed in `34f314fe5`. Its scope was:
 
 - the speed week's identity check on x86;
 - profiles and floors again on the merged code;
@@ -49,8 +56,8 @@ specified and waits for that commit. Its work:
 - The speed week is on master. Its runs were `prob_speed` and `ms_speed` on the
   Dell, and `speed_mac` on the Mac.
 - Timing reports are appended to `BENCH/` and summarised one run at a time.
-- The run `speed2d_mac` is planned for the Mac. It brings the 2D timing records
-  and the 2D speed items, and a new testing rule: every changed parallel region
+- The delivered run `speed2d_mac` brought the 2D timing records
+  and the 2D speed items, and a testing rule: every changed parallel region
   is stress-tested at the machine's full thread count, 20 repetitions, because
   identity at one thread cannot show thread safety. A race in commit 43de9b340
   passed identity.
@@ -115,9 +122,12 @@ The reference benchmarks are still run by hand:
    starting point, downsampling and number of images, so that it tests what
    it is meant to test in the time it is given (section 5).
 
-## 3. Now: the suite on the merged code (`test_truth_sync`, Dell)
+## 3. Delivered suite reconciliation (`test_truth_sync`, Dell)
 
-Specified in `../completed/test_suite_truth_and_robustness.md`, Phases 7 to 9. Phase 9
+Historical scope of the delivered Phases 7–9 in
+`../completed/test_suite_truth_and_robustness.md`. The stale-text inventory below
+describes the October starting point, not current defects. Stage-rule follow-up
+still belongs to its owning implementation. Phase 9
 times A, A-shm, E and E-shm as `prob_speed` defined them and MS and M as
 `ms_speed` did. It also closes these documentation gaps:
 
@@ -320,74 +330,141 @@ test card:
 - The "dataset with one stack per micrograph" that the week plan asks for is
   defined nowhere: define it or drop it.
 
-## 6. Test gaps to close (small items, a day run or by hand)
+## 6. Consolidated test and CI work
 
-Simulated workflows and streams:
+This is the live list transferred from the SINGLE, stream and Phase 5 handovers.
+Extend existing suites and use independent truth, fixed seeds and negative controls.
+Do not set tighter numerical floors without a supporting profile, or infer a passing
+run from the presence of an assertion. The archived handovers retain fixture details
+and the original tolerance proposals; this section owns their remaining scope.
 
-- **`simulated_workflow`:**
-  - `simulate_movie` saves particle positions, so picking gets precision and
-    recall;
-  - per-movie defocus and drift are compared with the truth files the simulator
-    already writes;
-  - the map correlation is gated again at master's sizes if the profile allows
-    (in `test_truth_sync`).
-- **`mini_stream`:** exercise motion correction, and use its eight CTest
-  threads or lower its reservation.
+### Already implemented in the inspected source
 
-Negative controls:
+- `single_atoms_stats` checks density correlation, detection recall/precision and
+  positional RMS, with a displaced-atom negative control; binary crystals also
+  check their fitted lattice constant and interior coordination number.
+- `single_workflow` has final-map and symmetry-aware relative pose gates. The
+  current fixture uses **300 reprojections**, one thread and trajectory SNR 0.2;
+  it checks the fraction of lost frames. The old 1000-image and 40-thread
+  descriptions must not become new expected values.
+- Stream pick/extract now matches recovered positions to distinct planted particles
+  in one coordinate convention. Stream preprocessing has per-movie defocus, motion
+  and image-correlation truth checks, including a wrong-movie control.
+- `simulate_particles` compares each no-CTF/no-shift image with its generating
+  pose and wrong poses; its multi-state fixture checks populations and image/state
+  identity. Full continuous-refinement tests already include shuffled-pose controls.
+- CI has a concurrency group, explicit job/test-step timeouts, JUnit output and
+  always-uploaded test reports, logs and `metrics.tsv`, retained for 14 days.
 
-- `pcg_recon` against a wrong phantom;
-- `cont_refine3D_1jxy` against shuffled poses.
+These are source observations on 2026-11-17, not fresh runtime sign-offs.
 
-SINGLE:
+### SINGLE residual work
 
-- **`single_workflow`:**
-  - an absolute pose ceiling from the existing profile (medians 4.9° fcc, 1.5°
-    wurtzite; only the +0.5° per stage relative ceiling is gated);
-  - per-stage counts;
-  - Ruben to confirm `smpd=0.358`;
-  - confirm `single_workflow_fcc` passes on the merged code, now that the clamp
-    is reverted.
-- **`single_atoms_stats`:**
-  - a noisy variant (today its spread is zero, so it is a regression check, not
-    a calibrated gate);
-  - one-to-one atom matching;
-  - the nearest-neighbour peak for platinum.
-- **The C-alpha finder:**
-  - one-to-one recovery;
-  - N- and C-terminal exclusion;
-  - candidate count and score;
-  - a negative control;
-  - rotation.
+- **`single_workflow`:** check counts through reprojection, trajectory, denoising
+  and project import against the current fixture and its frame-retention contract;
+  calibrate an absolute angular-error ceiling against the generating orientations,
+  modulo point-group ambiguity; compare the final detected atomic model with the
+  generating atoms end to end. Existing relative pose and file-existence checks do
+  not cover these claims. Retain Ruben's pixel-size confirmation (`smpd=0.358`)
+  and collect current fcc/wurtzite run evidence, without reusing old profile numbers
+  as floors for the changed fixture.
+- **`single_atoms_stats`:** make detection matching one-to-one; add the Pt
+  nearest-neighbour peak at `a/sqrt(2)` (about 2.77 Å for `a=3.92 Å`) with a justified
+  tolerance; add a fixed-seed noisy fixture at stated SNR with profiled floors.
+  Tightening the existing 1 Å position tolerance is optional and needs evidence.
+- **C-alpha — Ruben owns this:** extend the current two assertions to recover all
+  three residue centres one-to-one within 1.5 Å; exclude candidates closer to N/C
+  sites; bound the candidate count by `npeaks=10` and check scores where exported;
+  add an empty-map or geometry-free blob negative control. Rotation is optional.
+  The removed molecular benchmark is not restored by this plan.
 
-  Today it has two assertions (`single_area_tests_handover.md`).
-- **The SINGLE atomic-model comparison** end to end.
+### Stream residual work — Joe and Ruben
 
-Pose and picking paths without a test:
+- **Sieve:** assert the complete blank-class `coarse_reject:no_mask_component` reason
+  (`CAVG_REJECT_REASON_NO_COMPONENT`)
+  and add one small fixture for each other hard gate in the sieve context, checking
+  its exact reason as well as its count.
+- **Optics stage integration:** one cluster with the expected population/centroid;
+  clusters just below and above `tilt_thres`; rerun in the same directory and check
+  `optics_map_2` and unchanged grouping. Reuse lower-level tests where they already
+  cover the numerical rule. Watcher-age configurability is an optional owner
+  decision for runtime reduction, not a prerequisite for correctness.
+- **Picking references:** verify rotation/mirror content and order against
+  independently transformed fixture images (the handover proposes correlation
+  >=0.99); state and test the normalization contract and diameter/box relation
+  from the planted shapes, with the proposed two-pixel extent tolerance reviewed
+  against the implementation.
+- **Pick/extract:** remove or raise `nboxes_max=3` so over-picking can fail; retain
+  the implemented distinct-position check; compare extracted content with the
+  planted reference (proposed masked correlation >=0.9); add a noise-only control
+  with the stage's specified no-picks/rejected outcome.
+- **Heartbeat:** kill a live child and verify failed/error propagation; cover
+  all-failed aggregate status, skipped stages not counted as running, and the
+  shared pid of `initial_picking`/`opening2D`. The assembler's synthetic failed
+  record and the live child's running/finished test already exist.
+- **Chained workflows:** collect current passing evidence for sieve-to-3D and
+  movie-to-3D, including fixture/source provenance. They are now the high-level
+  `stream_chains` entry; the old claim that they live in `lib_stream` and are
+  excluded from nightly is obsolete. Preserve the historical chain-run limits.
+  The retired `abinitio2D_stream` route is not revived; any new chunk-path fixture
+  must target the current stage and be justified separately.
 
-- **`solve3D` with external volumes** copies 2D shifts onto random orientations,
-  the pattern that cost the class-average route most of its poses. Test it, then
-  fix it with the pose-less rule. This is a production defect candidate.
-- **The second picker (`picker=new`):** register it or defer it (a ruling on the
-  process budget).
+### Molecular workflows and simulator checks
 
-Test helpers of the next-release refactor:
+- **`simulated_workflow_6vxx`:** add matched-pick precision/recall and per-movie
+  defocus/drift comparisons using the simulator's truth. Reassess final-map floors
+  only with a suitable profile. `simulated_workflow_1jxy` was removed from the
+  registry on 2026-11-17; do not silently restore it. The routine now sets one
+  thread, so reconcile runtime/reservation policy against the current registry,
+  rather than repeating the old four-versus-eight-thread finding.
+- **`simulate_particles`:** retain the existing image-identity controls and close
+  the independent numerical SNR and CTF-applied image checks; metadata bounds
+  alone do not establish those properties.
+- Recheck the older requests to exercise motion correction in `mini_stream`,
+  align its thread reservation, and supply a wrong-phantom `pcg_recon` control
+  before coding: this consolidation did not establish their present coverage.
+- The external-volume `solve3D` pose/shift concern is an October defect candidate,
+  not a newly reproduced defect. Verify the current path and independent truth
+  test before deciding whether a production change is needed.
+- Register the second picker (`picker=new`) in an existing entry or explicitly
+  defer execution coverage; any additional process needs a budget ruling.
 
-- The staged refactor's test helpers (`staged_domain_driven_design_refactor.md`)
-  are mostly met by `test=identity` and `test=profile`. Its blessed baselines
-  conflict with the policy's "no blessed baselines"; settle that at its M0
-  ruling.
+### CI and runtime evidence — runner closeout owned by Ruben
 
-**Stream (Joe and Ruben):**
+The current process budget is **45 baseline CTest entries**: 15 fast, 7 library,
+22 high-level and 1 platform, plus capability-gated registrations. The registry
+and `production/CMakeLists.txt` remain authoritative; this is a dated inventory.
 
-- the sieve's full rejection reason and one class per hard gate;
-- optics: a one-cluster control, the threshold, restart;
-- picking references;
-- pick and extract (the cap equals the asserted count; positions and a
-  negative control are missing);
-- the heartbeat's failure paths;
-- a recorded passing run of the two chained library tests (`lib_stream`, which
-  the nightly does not run).
+1. Attach complete current Linux/macOS extensive-tier results with source revision,
+   compiler/CMake/host provenance, per-entry verdicts and runtimes, and explicit
+   unsupported-platform cases. Preserve failures and missing results. No complete
+   current unattended run was inspected for this consolidation.
+2. Decide whether Actions satisfies the dedicated-machine runner contract. Keep
+   the delivered concurrency/timeouts/artifact upload; settle durable history and
+   retention beyond the current 14 days, a consolidated provenance/metrics summary,
+   failed-log reporting, notifications and install/runbook ownership.
+3. Retain the carried-over `BUILD_TESTS=OFF` link and hardware-offload evidence
+   requests; capture exact compiler/bounds flags if claiming that Debug coverage.
+   Old green build links are dated evidence, not proof for today's binaries.
+4. Reconcile the archived four-thread reverse-order requirement with the later
+   testing-plan decision not to add it to the nightly. Do not implement it as an
+   unapproved carry-over. Weekly coverage remains optional.
+5. Keep external `SIMPLE_data_testing` evidence separate: the historical seven-case
+   cluster run was interrupted with storage pressure and had no successful final
+   verdict. Confirm provisioned storage and collect an actual rerun before closing
+   that evidence gap; it does not replace generated-data validation.
+
+The [standing nightly triage plan](../../refactoring_notes/planned/nightly_suite_triage.md)
+is reusable. Each execution regenerates its report and brings new evidence back
+here. The deleted old report is not a current result.
+
+### Deferred work
+
+FLEX implementation and validation belong to Afan. C-alpha belongs to Ruben.
+The next-release architecture proposals remain deferred; reconcile their proposed
+helpers with `test=identity`, `test=profile` and the prohibition on blessed
+baselines when that work is opened. `refine_tomo` is closed by maintainer decision;
+its missing phantom check remains an explicit limit in its completed record.
 
 ## 7. Method work the suite now makes possible
 
@@ -430,7 +507,8 @@ Each is a separate project that changes results. Each is judged by a paired
 Validation tests added when their features land. These are not now, but are
 budgeted here so they are not forgotten:
 
-- the `refine_tomo` phantom tilt series with known angle errors;
+- `refine_tomo` is closed (2026-11-17); its unrun phantom tilt-series check is
+  retained in the completed record as a validation limit, not active work here;
 - gate 2 of the PCG atomic prior (a synthetic tilt series, true and damaged
   models);
 - the B-factor `single_workflow` case, and identity with `fit_bfactors=no`;
@@ -442,10 +520,9 @@ FePt with two species, the nonuniform evidence-mask diagnostic.
 
 ## 8. Order
 
-1. **Tonight, Mac:** `speed2d_mac` as planned (2D timing records, identical 2D
-   items, thread stress tests).
-2. **Dell, as soon as the merged code is committed:** `test_truth_sync`, Phases
-   7 to 9.
+1. **Delivered:** `speed2d_mac` (2D timing records, identical 2D items, thread
+   stress tests).
+2. **Delivered:** `test_truth_sync`, Phases 7–9 (`34f314fe5`).
 3. **Dell, one run:** runner and benchmark tooling (section 4), with the seed
    key and the stage-shift rules.
 4. **The real-data cases (section 5).**
@@ -466,7 +543,7 @@ Implementation records and related planned work (paths relative to this note):
 - `../completed/test_suite_truth_and_robustness.md`
 - `../completed/single_state_speed_week_closeout.md`
 - `../completed/multistate_speed_run_completed.md` (its unfinished split was removed on 2026-11-04)
-- `speed_architecture_proposals.md` (the maintainer's tree holds the newer copy)
+- `../completed/speed_architecture_proposals.md`
 - `../completed/hardware_resource_planning_validation_closeout.md`
 - `../completed/species_discovery_status.md`
 - `../completed/atom_bfactor_model.md`
@@ -486,14 +563,16 @@ Under `doc/implementation_notes/completed/`:
 Under `doc/refactoring_notes/completed/`:
 
 - `solve3D_pyramid_plan_2026-10-15.md`
+- `refine_tomo.md` (closed by maintainer decision on 2026-11-17; the phantom test remains a validation limit)
+
+- [Phase 5 handover](../../refactoring_notes/completed/phase5_workflow_gates_and_nightly_runner_handover.md) (superseded by section 6)
+- [SINGLE handover](../../refactoring_notes/completed/single_area_tests_handover.md) (superseded by section 6)
+- [Stream handover](../../refactoring_notes/completed/stream_area_tests_handover.md) (superseded by section 6)
 
 Under `doc/refactoring_notes/planned/`:
 
-- `phase5_workflow_gates_and_nightly_runner_handover.md`
-- `single_area_tests_handover.md`
-- `stream_area_tests_handover.md`
-- `rnd_seed_parameter.md`
-- `refine_tomo.md`
+- `nightly_suite_triage.md` (re-executable plan)
+- `rnd_seed_parameter.md` (approved; updated for 64-bit keyed seeds and restart metadata)
 - `next_release/staged_domain_driven_design_refactor.md`
 
 Elsewhere:

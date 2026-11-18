@@ -1,9 +1,16 @@
-# Class-Average Bootstrap Policy
+# Class-Average Bootstrap Policy (Retired)
+
+Retired 2026-11-17 at the maintainer's request. `cls_expansion` replaces the
+`bootstrap_cavgs` and `unbootstrap_cavgs` applications. Both applications and
+their exclusive `osmpl_fac` and `projfile_orig` parameters have been removed.
+The historical contract below is retained for the existing development records.
+The replacement is described in
+[Class expansion with kernel preimages](../../implementation_notes/completed/cls_expansion_kernel_preimages.md).
 
 This document defines the stochastic class-average expansion before
 `solve3D_cavgs` (`bootstrap_cavgs`). It should be read alongside
-[solve2D_policy.md](solve2D_policy.md) and
-[solve3D_cavgs_policy.md](../3D/solve3D_cavgs_policy.md).
+[solve2D_policy.md](../../policies/2D/solve2D_policy.md) and
+[solve3D_cavgs_policy.md](../../policies/3D/solve3D_cavgs_policy.md).
 
 The workflow creates one `solve3D_cavgs`-compatible bootstrap package from
 an existing class-average project. It builds a bootstrap project from the

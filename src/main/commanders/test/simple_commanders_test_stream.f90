@@ -4,8 +4,8 @@
 ! section 9.7): optics assignment, picking references and pick and extract to lib_stream
 ! (simple_stream_tester), the sieve's collect-and-reject to the particle sieve tests (unit_project),
 ! the master heartbeat to the forked_process platform entry (simple_stream_master_tester);
-! abinitio2D_stream was retired. doc/refactoring_notes/planned/stream_area_tests_handover.md says what this
-! test should compare with the simulation truth.
+! abinitio2D_stream was retired. Section 6 of doc/implementation_notes/planned/testing_and_benchmarking_plan.md
+! (stream) says what this test should compare with the simulation truth.
 module simple_commanders_test_stream
 use simple_commanders_api
 use simple_test_image_fixture, only: draw_square

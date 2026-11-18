@@ -340,7 +340,7 @@ these steps, with a density mask as the PCG support and, by default, two
 iterations at 2 A: longer refinement stretches the tilt range and rotates the
 frame, which the data barely constrain; `import_tilt_series` reads their angle
 convention and `scripts/aet_mat2simple.py` their MATLAB files
-(`doc/refactoring_notes/planned/refine_tomo.md`).
+(`doc/refactoring_notes/completed/refine_tomo.md`).
 
 ## 4. Atom tracing
 

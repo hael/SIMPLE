@@ -1,8 +1,8 @@
 !@descr: unit tests for the C-alpha candidate search in density maps (simple_calpha_finder)
 ! A 32^3 map of three Gaussian residues (CA, N, C sites, the CA brighter) along the diagonal, searched
 ! with a 180 degree step for ten candidates. The checks are weak (some candidate within 1.5 A of some
-! residue centre); doc/refactoring_notes/planned/single_area_tests_handover.md ("C-alpha finder") says what
-! they should pin.
+! residue centre); section 6 of doc/implementation_notes/planned/testing_and_benchmarking_plan.md ("C-alpha")
+! says what they should pin.
 module simple_calpha_finder_tester
 use simple_core_module_api
 use simple_image,         only: image

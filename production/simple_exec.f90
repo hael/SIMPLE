@@ -68,7 +68,7 @@ call exec_other_commander(     trim(prg), cline, l_silent, l_did_execute)
 if( .not. l_did_execute )then
     THROW_HARD('Program "'//trim(prg)//'" not recognized. Use prg=list to see available programs.')
 endif
-call update_job_descriptions_in_project(string('simple_exec'), string(trim(prg)), cline)
+call update_job_descriptions_in_project(string(trim(prg)), cline)
 ! kill any persistent worker server if it was launched by this execution
 if( associated(persistent_worker%server) )then
     call persistent_worker%server%kill()

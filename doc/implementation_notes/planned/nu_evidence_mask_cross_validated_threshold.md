@@ -6,7 +6,7 @@
 
 2026-11-07: the evidence mask with a chosen threshold is now the order weight of
 the PCG order prior (`pcg_order`, in the loop since 2026-11-08), scored through
-the prior rather than the background clamp ([the order prior](pcg_order_prior.md),
+the prior rather than the background clamp ([the order prior](../completed/pcg_order_prior.md),
 offline program `order_prior`). Its tables replace the first step of section 6.
 
 The idea is supported by a synthetic check in numpy (section 4). Nothing has

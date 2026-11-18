@@ -85,10 +85,9 @@ reproducibility before any integration is considered.
 - **The HHCNN, polar-student and class-student suites run in `unit_numerics`** (`suites_numerics` in
   `simple_commanders_test_class`). The highlevel gates are routed in `simple_test_exec_highlevel` and declared in
   `simple_commanders_test_highlevel`.
-- **A planned note also edits `hhcnn` and `polar_student`:** `planned/student_inplane_posterior.md`. It keeps its
-  variants outside the tree until a verdict. Whichever of it or this plan lands its `hhcnn` edit second rebases on
-  the first. The marginal loss acts on the logits,
-  whatever readout computes them. Phase 0 depends on neither.
+- **`hhcnn` and `polar_student` already carry the physical teacher P** of `completed/student_inplane_posterior.md`
+  (adopted 2026-11-15, ruling R7; `1637eeb1c`). This plan's `hhcnn` edit builds on it. The marginal loss acts on the logits,
+  whatever readout computes them. Phase 0 does not depend on it.
 
 ## 4. Decisions and rulings
 

@@ -1,5 +1,8 @@
 # The students learn the in-plane posterior
 
+Archived in `completed/` on 2026-11-17 by maintainer decision. The status and open items below are as
+last written.
+
 Status, 2026-11-15: delivered: P adopted for the class student, 2026-11-15; pose student unchanged (ruling R7). P
 is the in-plane marginal at the physical temperature as the teacher (no `prob_beta`), with the log-sum-exp readout
 and the rotation loss, and `validate_class_student` judges against the physical posterior's best class. M and R

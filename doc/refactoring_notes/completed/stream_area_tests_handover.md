@@ -1,5 +1,14 @@
 # Stream tests in the new test environment: handover to Ruben
 
+**Archived as superseded, 2026-11-17.** The remaining test and CI work is owned by
+[the consolidated testing and benchmarking plan](../../implementation_notes/planned/testing_and_benchmarking_plan.md#6-consolidated-test-and-ci-work).
+The dated handover below is historical evidence, including its original proposals,
+unexecuted checks and validation limits. Archiving does not mean those checks passed.
+Use the consolidated plan for current scope, registrations and ownership; C-alpha
+work belongs to Ruben, and FLEX work belongs to Afan.
+
+## Historical handover
+
 Hans, 2026-09-24. Updated 14 October 2026 against the current source: the delivered items
 are marked as such below, and the sections that still ask for work say what is left.
 

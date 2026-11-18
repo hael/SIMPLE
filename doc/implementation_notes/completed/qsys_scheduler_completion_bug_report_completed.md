@@ -13,8 +13,9 @@ removes stale status before a part is submitted; and `schedule_jobs` and
 `schedule_array_jobs` call `stop_on_failed_parts`, which cancels the other
 parts and names the failed ones. Suggested-direction steps 1 to 3 below are
 therefore implemented. Step 4 (periodic report of outstanding parts, and a
-wall-clock backstop for a part that hangs without exiting) is not; it is in
-[qsys_scheduler_completion_bug_report_unfinished.md](../planned/qsys_scheduler_completion_bug_report_unfinished.md).
+wall-clock backstop for a part that hangs without exiting) was not implemented
+in that work. Its separate open-work note was removed on 2026-11-17; the
+limitation stands.
 The original report is retained below to preserve the reproduction and design
 discussion; its "Where" and "Failure mode" text describes the code before the
 fix.

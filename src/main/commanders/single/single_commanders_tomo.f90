@@ -1,7 +1,7 @@
 !@descr: SINGLE tilt-series commanders for atomic electron tomography: import with angle conventions, staged pose refinement
 ! import_tilt_series makes a refine=cont-ready project from an MRC stack and an angle file (SIMPLE, single-axis tilt or
 ! GENFIRE/RESIRE convention); refine_tomo runs gridding, a density mask, masked PCG and a short refine=cont pass at a
-! fixed low-pass. Plan: doc/refactoring_notes/planned/refine_tomo.md
+! fixed low-pass. Plan: doc/refactoring_notes/completed/refine_tomo.md
 module single_commanders_tomo
 use simple_commanders_api
 implicit none

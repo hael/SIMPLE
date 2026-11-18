@@ -92,7 +92,7 @@ the classic 2D search commits (`simple_class_student_align.f90`). The particle i
 candidate list (at most `KMAX_CLASS`), the best alignment kept: the network serves as a neighbourhood of classes,
 not as the answer. Aligning against the most likely class alone was measured beside it and rejected: on raw picks
 the list holds the reference's class for about nine particles in ten, the mode for one in three
-(`doc/implementation_notes/planned/class_student_raw_picks.md`). The aligned class, angle and shift are committed;
+(`doc/implementation_notes/completed/class_student_raw_picks.md`). The aligned class, angle and shift are committed;
 the particle's centring state (`shsig`, `shincr`) records the move, as a 2D search leaves it.
 
 It writes:
@@ -117,7 +117,7 @@ project or the class count differ, and the consumer then runs as without it. The
 
 **No centring.** Unseen particles enter at their picked positions, their shifts as imported; the alignment after
 prediction centres them. `center_ptcls` (`center_ptcls.md`) stays a program of its own, no longer on this route
-(`doc/implementation_notes/planned/class_student_raw_picks.md`).
+(`doc/implementation_notes/completed/class_student_raw_picks.md`).
 
 ## What the reads found
 
@@ -134,7 +134,7 @@ On the Dell, Release builds, three seeds unless stated (`doc/implementation_note
   - at converged shifts, for 0.96 and 0.89.
 
   The centring's residual (3 to 4 Å on trpv1, 6 to 8 Å on bgal) against the 2 Å training disk is the gap.
-- **Raw picks with the alignment after prediction** (2026-11-16, `planned/class_student_raw_picks.md`, eight
+- **Raw picks with the alignment after prediction** (2026-11-16, `completed/class_student_raw_picks.md`, eight
   paired seeds on streptavidin, 30 classes, and bgal and trpv1, 50 each, against the route centred by
   `center_ptcls`):
   - on raw picks the candidate list holds the reference's class for 91 to 97% of particles, the most likely class
@@ -144,7 +144,7 @@ On the Dell, Release builds, three seeds unless stated (`doc/implementation_note
   - the route (prediction and alignment) costs 0.54, 1.16 and 0.85 ms per particle against the full search's 0.44,
     1.27 and 0.92: above it on streptavidin, where a list of at most 16 classes covers half of the 30. Hans adopted
     the route (2026-11-16): small sets do not decide the cost.
-- **The physical teacher** (2026-11-15, `planned/student_inplane_posterior.md`, eight paired seeds against the
+- **The physical teacher** (2026-11-15, `completed/student_inplane_posterior.md`, eight paired seeds against the
   base's teacher, the reference being the physical posterior's best class):
   - it shortlists 10.1 (bgal) and 5.6 (trpv1) more particles in 100, with shorter lists;
   - its shortlists hold the reference's class for 94.6% on bgal, at the 95% the threshold is calibrated for,

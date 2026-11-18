@@ -2,7 +2,7 @@
 ! Per half: (F^-1 D F + lambda h diag(1 - w_order)) x = F^-1 D F x0, h the mean of D(k) = 1/sigma_n^2(k) of the pair's
 ! difference spectrum, the Fourier-diagonal stand-in for the PCG operator (constant D: the closed form). The
 ! closed-form choice is the loop's (select_order_prior); the same grid solved for real is scored by the same rule.
-! Design: doc/implementation_notes/planned/pcg_order_prior.md.
+! Design: doc/implementation_notes/completed/pcg_order_prior.md.
 module simple_order_prior_offline
 use, intrinsic :: iso_c_binding, only: c_float, c_float_complex
 use simple_defs,            only: dp, TINY, logfhandle

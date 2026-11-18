@@ -2,7 +2,7 @@
 ! Penalty lambda h (1 - w_ord) x^2, w_ord a logistic on the NU-evidence margin at ordered fraction f, h the data
 ! precision per voxel. f and lambda in closed form (octave bands, each shrunk per voxel by D_b/(D_b + lambda h
 ! (1 - w_ord))), keeping 95 % of the protein core's cross-half signal: the most removed from the dense density around
-! it, or with none around it the strongest lambda. Design: doc/implementation_notes/planned/pcg_order_prior.md.
+! it, or with none around it the strongest lambda. Design: doc/implementation_notes/completed/pcg_order_prior.md.
 module simple_pcg_order_prior
 use, intrinsic :: iso_c_binding, only: c_float
 use simple_defs,              only: dp, TINY, logfhandle

@@ -24,7 +24,6 @@ validation, says so in its first lines.
 | Area | Policy | Read before changing |
 |---|---|---|
 | 2D | [2D/solve2D_policy.md](2D/solve2D_policy.md) | `solve2D`, `refine2D`, the 2D matcher and strategy, class-average assembly |
-| 2D | [2D/class_average_bootstrap_policy.md](2D/class_average_bootstrap_policy.md) | stochastic class-average expansion before `solve3D_cavgs` |
 | 2D | [2D/particle_cache_policy.md](2D/particle_cache_policy.md) | the downscaled particle disk cache (`cache=yes`) |
 | 3D | [3D/refine3D_policy.md](3D/refine3D_policy.md) | `refine3D`: the strategy, the matcher, the master's project, assembly, finalization |
 | 3D | [3D/refine3D_auto_policy.md](3D/refine3D_auto_policy.md) | the automated wrapper around `refine3D` |

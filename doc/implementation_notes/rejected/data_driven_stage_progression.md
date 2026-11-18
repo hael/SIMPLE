@@ -1,5 +1,7 @@
 # Data-driven stage progression in solve3D
 
+Rejected 2026-11-17 by maintainer decision; the proposal below was never implemented.
+
 Implementation note, 2026-10-19. **Proposal; nothing implemented.** Written
 after PfCRT `latest9` (run at `8c8d8b42`), where the two progress-measuring
 mechanisms added on 2026-10-18 overruled the planned stage schedule in every

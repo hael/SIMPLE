@@ -24,7 +24,7 @@ Related contracts:
 
 - [Canonical Sigma2 State Refactoring](../completed/canonical_sigma2_state_refactoring.md)
 - [Solve2D Policy](../../policies/2D/solve2D_policy.md)
-- [Class-Average Bootstrap Policy](../../policies/2D/class_average_bootstrap_policy.md)
+- [Class-Average Bootstrap Policy (retired)](class_average_bootstrap_retired.md)
 - [Importance Sampling and Fractional Update Policy](../../policies/importance_sampling_fractional_update_policy.md)
 - [Sampling and Fractional Updates](../../algorithms/sampling_and_fractional_updates.md)
 - [Refine2D Class Averaging](../../algorithms/refine2d_class_averaging.md)

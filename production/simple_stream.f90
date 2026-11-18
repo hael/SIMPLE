@@ -78,7 +78,7 @@ select case(trim(prg))
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
-call update_job_descriptions_in_project(string('simple_stream'), string(trim(prg)), cline)
+call update_job_descriptions_in_project(string(trim(prg)), cline)
 ! kill any persistent worker server if it was launched by this execution
 if( associated(persistent_worker%server) )then
     call persistent_worker%server%kill

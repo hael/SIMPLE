@@ -1,4 +1,4 @@
-!@descr: parameter-constructor bindings used by focused high-level test selection
+!@descr: parameter-constructor bindings and execution-directory project ownership
 module simple_parameters_tester
 use simple_string,         only: string
 use simple_test_utils,     only: assert_char, assert_int, assert_real, assert_true, enter_fixture, leave_fixture, &
@@ -36,6 +36,7 @@ contains
         call test_yes_no_refused()
         call test_odd_box_refused()
         call test_worker_project_recorded()
+        call test_execution_project_copy()
         call test_mirr_proj_binding()
         call leave_fixture(saved, root, nfail0)
         ! The constructor must not leave directory globals pointing into the removed fixture.
@@ -282,6 +283,62 @@ contains
         call assert_true(.not. l_distr_worker_glob, 'the next new is no worker')
         call cline%kill()
     end subroutine test_worker_project_recorded
+
+    !> A public workflow owns a copy of its project in its numbered run directory. The executable is identified
+    !! by its file name alone: a build path containing 'private' made a public run behave as a worker (no copy).
+    subroutine test_execution_project_copy()
+        use simple_parameters, only: parameters
+        use simple_sp_project, only: sp_project
+        use simple_fileio,     only: filepath
+        use simple_syslib,     only: file_exists, simple_getcwd
+        use simple_ui,         only: make_ui
+        class(parameters), allocatable :: params
+        class(cmdline), allocatable    :: cline
+        class(sp_project), allocatable :: proj
+        type(string) :: saved, root, input_project, run_project, cwd, cline_project
+        integer :: nfail0
+        write(*,'(A)') 'test_execution_project_copy'
+        allocate(params, cline, proj)
+        call make_ui
+        nfail0 = tests_failed
+        call enter_fixture('execution_context', saved, root)
+        input_project = filepath(root, 'input.simple')
+        run_project   = filepath(filepath(root, '1_context'), 'input.simple')
+        call proj%update_projinfo(input_project)
+        call proj%os_ptcl2D%new(1, is_ptcl=.true.)
+        call proj%os_ptcl2D%set(1, 'state', 1)
+        call proj%write(input_project)
+        call proj%kill
+        call base_cline(cline)
+        call cline%set('prg',      'make_cavgs')
+        call cline%set('projfile', input_project)
+        call cline%set('oritype',  'ptcl2D')
+        call cline%set('mkdir',    'yes')
+        call cline%set('dir_exec', 'context')
+        call params%new(cline, silent=.true.)
+        call assert_char('simple_test_exec', params%executable%to_char(), 'executable identity excludes its directory')
+        call assert_true(params%sp_required, 'a public project workflow requires its project')
+        call assert_true(file_exists(run_project), 'mkdir copies the input project to the run directory')
+        call simple_getcwd(cwd)
+        call assert_char(root%to_char()//'/1_context', cwd%to_char(), 'a public run enters its numbered directory')
+        call assert_char(run_project%to_char(), params%projfile%to_char(), 'parameters point to the run project')
+        cline_project = cline%get_carg('projfile')
+        call assert_char(run_project%to_char(), cline_project%to_char(), 'child commands inherit the run project')
+        call proj%read_segment('ptcl2D', params%projfile)
+        call proj%os_ptcl2D%set(1, 'state', 0)
+        call proj%write_segment_inside('ptcl2D', params%projfile)
+        call proj%kill
+        call proj%read_segment('ptcl2D', input_project)
+        call assert_int(1, proj%os_ptcl2D%get_state(1), 'writing the run project leaves the input state unchanged')
+        call proj%kill
+        if( file_exists(run_project) )then
+            call proj%read_segment('ptcl2D', run_project)
+            call assert_int(0, proj%os_ptcl2D%get_state(1), 'the changed state belongs to the run project')
+            call proj%kill
+        endif
+        call cline%kill
+        call leave_fixture(saved, root, nfail0)
+    end subroutine test_execution_project_copy
 
     subroutine build_parameters( self, cline )
         use simple_parameters, only: parameters

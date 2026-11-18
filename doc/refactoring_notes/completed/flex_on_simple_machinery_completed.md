@@ -10,9 +10,8 @@ Phases 0 to 4 ran on the test machine and passed their exits. Phases 5 and 6 wer
 and are implemented; the maintainer's first builds ran on 2026-10-08. What is still open is the
 maintainer's tier runs and FLEX A/B of section 8.2 on the Phase 5 diffs, plus a short list of
 follow-ups (the polar-bank symmetry fix, the UMAP default, a reader for the registered embedding).
-That open work is in
-[`../planned/flex_on_simple_machinery_unfinished.md`](../planned/flex_on_simple_machinery_unfinished.md).
-This file is the full record; read it for background.
+Since 2026-11-17 Afan owns that open work and any FLEX follow-up; no separate
+note tracks it.
 
 This note was the maintainer's target. Implementing agents record progress in section 12, and add
 a row to the file table of section 11 (with a one-line reason) before editing a file it does not

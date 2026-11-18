@@ -1,5 +1,8 @@
 # Multi-state ab initio: find what broke, restore what worked, until it separates
 
+Archived in `completed/` on 2026-11-17 by maintainer decision. The status and open items below are as
+last written.
+
 Plan of 2026-11-06 for the autonomous run `ms_abinitio` on dell2. Written after two
 runs on Afan's three-state benchmark (`ms_posterior`, `ms_posterior2`; the second's
 report is `doc/implementation_notes/completed/multistate_posterior_state_draw_report.md`)

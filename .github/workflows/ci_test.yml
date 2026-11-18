@@ -43,7 +43,7 @@ jobs:
         exclude:
           # multistate_workflows takes about 1.5 h on the 4-core Linux runner (deadline 4 h) and
           # timed out on 4 of 5 macOS nights (3 cores): Linux only (owner decision, 2026-11-02;
-          # doc/refactoring_notes/planned/nightly_suite_triage_report.md).
+          # doc/policies/test_environment_policy.md, the multistate_workflows row).
           - os: macos-latest
             group: multistate_workflows
 

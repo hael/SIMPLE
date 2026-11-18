@@ -4,6 +4,7 @@ use simple_core_module_api
 use simple_ui,         only: get_prg_ptr, get_test_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui,list_stream_prgs_in_ui, list_single_prgs_in_ui
 use simple_ui_program, only: ui_program
 use simple_args,       only: args
+use simple_fileio,     only: executable_name
 use simple_private_prgs 
 implicit none
 private
@@ -68,28 +69,24 @@ contains
         type(string), allocatable      :: keys_required(:), defined_keys(:)
         type(args)                     :: allowed_args
         type(ui_program), pointer      :: ptr2prg => null()
-        type(string)                   :: prgname, exec_cmd_ui, exec_cmd, executable
-        character(len=XLONGSTRLEN)     :: arg, buffer
+        type(string)                   :: prgname, exec_cmd_ui, executable
+        character(len=XLONGSTRLEN)     :: arg
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
         logical :: skip_required_keys
         ! parse command line
         self%argcnt = command_argument_count()
         call get_command(self%entire_line)
         cmdline_glob = trim(self%entire_line)
-        call get_command_argument(0,buffer)
-        exec_cmd   = trim(adjustl(buffer))
-        executable = basename(exec_cmd)
-        if( executable%has_substr('.exe') ) executable = executable%substr_remove(string('.exe'))
-        
+        executable = executable_name()
         select case(executable%to_char())
             case('simple_exec', 'single_exec', 'simple_stream', 'simple_private_exec')
                 if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg=flag must be set on command line')
             case('simple_test_exec')
                 if( .not. str_has_substr(self%entire_line,'test=') ) THROW_HARD('test=flag must be set on command line')
             case DEFAULT
-                THROW_HARD('Executable '//exec_cmd%to_char()//' not supported 1')
+                THROW_HARD('Executable '//executable%to_char()//' not supported 1')
         end select
-        if( DEBUG_HERE ) print *, 'exec_cmd from get_command_argument in cmdline class: ', exec_cmd%to_char()
+        if( DEBUG_HERE ) print *, 'executable from get_command_argument in cmdline class: ', executable%to_char()
         ! parse program name
         call get_command_argument(1, arg, cmdlen, cmdstat)
         pos = index(arg, '=') ! position of '='
@@ -103,7 +100,7 @@ contains
             case('simple_test_exec')
                 call get_test_prg_ptr(prgname, ptr2prg)
             case DEFAULT
-                THROW_HARD('Executable '//exec_cmd%to_char()//' not supported 2')
+                THROW_HARD('Executable '//executable%to_char()//' not supported 2')
         end select
         if( .not. associated(ptr2prg) ) THROW_HARD(prgname%to_char()//' is not part of any executable in the code base')
         if( DEBUG_HERE ) print *, 'prgname from UI in cmdline class: ', prgname%to_char()
@@ -111,14 +108,14 @@ contains
         if( DEBUG_HERE ) print *, 'exec_cmd from UI in cmdline class: ', exec_cmd_ui%to_char()
         if( exec_cmd_ui%to_char() .ne. 'all' )then
             if( executable .ne. exec_cmd_ui )then
-                THROW_HARD(prgname%to_char()//' is not executed by '//exec_cmd%to_char()//' but by '//exec_cmd_ui%to_char())
+                THROW_HARD(prgname%to_char()//' is not executed by '//executable%to_char()//' but by '//exec_cmd_ui%to_char())
             endif
         endif
         ! re-parse command line arguments in case of a different executable
         select case(executable%to_char())
             case('simple_exec','single_exec','simple_stream', 'simple_private_exec')
                 if( str_has_substr(self%entire_line, 'prg=list') )then
-                    select case(exec_cmd%to_char())
+                    select case(executable%to_char())
                         case('simple_exec')
                             call list_simple_prgs_in_ui
                             stop
@@ -138,7 +135,7 @@ contains
                     stop
                 endif
             case DEFAULT
-                THROW_HARD('Program '//exec_cmd%to_char()//' not supported 3')
+                THROW_HARD('Program '//executable%to_char()//' not supported 3')
         end select
         if( .not. associated(ptr2prg) )then
             THROW_HARD('inputted prg not supported, use prg=list to list all available programs')

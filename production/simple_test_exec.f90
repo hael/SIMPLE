@@ -62,7 +62,6 @@ call exec_test_stream_commander(   trim(prg), cline, l_silent, l_did_execute)
 if( .not. l_did_execute )then
     THROW_HARD('Program test "'//trim(prg)//'" not recognized. Use test=list to see available programs.')
 endif
-call update_job_descriptions_in_project(string('simple_test_exec'), string(trim(prg)), cline)
 call mem_monitor_finish
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then

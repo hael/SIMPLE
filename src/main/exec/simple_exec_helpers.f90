@@ -211,14 +211,13 @@ contains
         endif
     end subroutine script_exec
 
-    subroutine update_job_descriptions_in_project( exec, name, cline )
-        class(string),  intent(in)    :: exec, name
+    !> appends the job description of a public program (simple_exec, single_exec, simple_stream) to its project
+    subroutine update_job_descriptions_in_project( name, cline )
+        class(string),  intent(in)    :: name
         class(cmdline), intent(inout) :: cline
         type(string)     :: projfile
         type(chash)      :: job_descr
         type(sp_project) :: spproj
-        if( exec%has_substr('test')         ) return
-        if( exec%has_substr('private')      ) return
         if( name%has_substr('print')        ) return
         if( name%has_substr('info')         ) return
         if( name%has_substr('report')       ) return
@@ -239,7 +238,7 @@ contains
         logical :: tests(3)
         if( .not. associated(params%ptr2prg) ) return
         exec = params%ptr2prg%get_executable()
-        if( exec%has_substr('private') ) return
+        if( exec == 'simple_private_exec' ) return
         tests(1) = trim(params%mkdir) .eq. 'yes'
         tests(2) = params%ptr2prg%requires_sp_project()
         tests(3) = file_exists(params%projfile)

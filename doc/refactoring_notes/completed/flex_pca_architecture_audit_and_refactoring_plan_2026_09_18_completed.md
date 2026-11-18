@@ -3,10 +3,12 @@
 Date: 2026-09-18. Revised 2026-09-30.
 
 Status (2026-10-20): the architectural refactor is implemented (phases 0b to 11, ledger in
-section 11). Two items were never done and are tracked in
-[flex_pca_architecture_audit_and_refactoring_plan_2026_09_18_unfinished.md](../planned/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18_unfinished.md):
+section 11). Two items were never done in the recorded work:
 phase 0a (capture of the fixtures F1--F8 on `master` and replay on the refactored code, so the
 "identical" gates are unverified) and the optional late physical splits of section 8.1.
+
+Since 2026-11-17 Afan owns these two items and any FLEX follow-up; no open-work
+note tracks them.
 
 Scope: the 3-D `flex_pca` implementation on `master` only. Feature branches that
 carry their own FLEX changes are out of scope and are not reconciled here.

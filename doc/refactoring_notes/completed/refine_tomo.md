@@ -1,6 +1,8 @@
 # refine_tomo: tilt-series refinement for atomic electron tomography in SINGLE
 
-Status: written 2026-10-15, not compiled; the ground-truth test is still to do (see "Status" at the end). Plan agreed with Hans on 2026-10-15. It turns the hand-run FePt kit
+Status: completed by maintainer decision on 2026-11-17. The implementation is
+compiled; the dedicated ground-truth test remains a validation limit (see
+"Status" at the end). Plan agreed with Hans on 2026-10-15. It turns the hand-run FePt kit
 (`for_simple/run_fept_refine_cont.sh`) into a SINGLE workflow. On the FePt tilt
 series that kit raised level-1 atom recall from 0.35 to 0.39 (their GENFIRE
 map: 0.41) by refining the projection poses with `refine3D refine=cont`.
@@ -123,12 +125,18 @@ GENFIRE volume and their final model.
   anchor, round trip of a grid of triplets through the rotation matrix).
 - `unit_cart_align3D`, `pose statistics` sub-suite: the three parameters are
   honoured, and their defaults are the old constants.
-- A ground-truth test (later): an atomic phantom projected as a tilt series
+- Deferred ground-truth validation: an atomic phantom projected as a tilt series
   with known angle errors; `refine_tomo` must reduce the orientation error
   against the truth. Scored on orientations, not FSC.
 
 ## Status
 
-Written 2026-10-15, not compiled: the convergence parameters, the angle
-conversion and its test, `import_tilt_series`, `refine_tomo` and the converter.
-The ground-truth test is still to do.
+Written 2026-10-15; moved to `completed/` at the maintainer's request on
+2026-11-17. The earlier "not compiled" status is superseded by the observed
+macOS GNU Fortran 16 Release build, including the SINGLE executable, on
+2026-11-17. No new tomography workflow was run for this closeout.
+
+The dedicated phantom test of orientation recovery remains unimplemented.
+It is retained as a validation limit, not a condition on this closeout or a
+claim that the test passed. The historical FePt observations above remain
+dated evidence.

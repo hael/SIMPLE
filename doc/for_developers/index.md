@@ -63,34 +63,37 @@ under [completed implementation evidence](../implementation_notes/README.md#comp
 Their validation and research limits remain explicit; later proposals and the
 testing/benchmarking backlog retain their open scope.
 
-The earlier source-backed audit identified the following open areas. Missing
-split records have been reconstructed from the surviving completed records;
-their absence was not evidence that the outstanding work passed:
+Current navigation (2026-11-17) separates active plans from retained historical
+limits. Removed follow-up notes are not recreated, and their absence does not
+establish a passing result:
 
-1. [Batch scheduler completion detection](../implementation_notes/planned/qsys_scheduler_completion_bug_report_unfinished.md):
-   the batch exit-code and lost-part detection landed (`2307ea96f`); the periodic
-   report of outstanding parts, the wall-clock timeout and the unused
-   `qsys_watcher_diag` remain. Background:
-   [the completed report](../implementation_notes/completed/qsys_scheduler_completion_bug_report_completed.md).
-2. [Stream test handover](../refactoring_notes/planned/stream_area_tests_handover.md):
-   remaining workflow-level coverage is explicitly unfinished. The delivered
-   [stage refactor](../refactoring_notes/completed/stream_refactor.md) is closed,
-   retaining its follow-ups and validation limits.
-3. [Workflow truth gates and nightly runner](../refactoring_notes/planned/phase5_workflow_gates_and_nightly_runner_handover.md)
-   and [standing nightly triage](../refactoring_notes/planned/nightly_suite_triage.md):
-   reconcile the remaining truth checks and unattended evidence with the latest
-   [triage report](../refactoring_notes/planned/nightly_suite_triage_report.md).
-4. [Multi-microscope parameter follow-up](../refactoring_notes/planned/need2basis/multi_microscope_parameters.md):
-   the first phase landed; the CTF-construction audit, most of the merge tests,
-   and the open policy questions remain.
-5. [FLEX PCA architecture validation](../refactoring_notes/planned/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18_unfinished.md):
-   phases 0b--11 landed
-   ([record](../refactoring_notes/completed/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18_completed.md));
-   the phase-0a cluster baseline/replay is still an outstanding validation activity.
+1. [Batch scheduler completion record](../implementation_notes/completed/qsys_scheduler_completion_bug_report_completed.md):
+   the batch exit-code and lost-part detection landed (`2307ea96f`). The completed
+   record retains the periodic-report/wall-clock-backstop limitation; its former
+   planned companion is no longer present. Recheck current code before reopening it.
+2. [Testing and benchmarking](../implementation_notes/planned/testing_and_benchmarking_plan.md#6-consolidated-test-and-ci-work):
+   the single live list of remaining SINGLE, stream, workflow-truth and CI/evidence
+   work, consolidated on 2026-11-17. The three handovers are archived as superseded;
+   their incomplete validation is not a passing result. C-alpha belongs to Ruben.
+3. [Standing nightly triage](../refactoring_notes/planned/nightly_suite_triage.md):
+   a plan that can be re-executed. Each run regenerates its report and updates the
+   consolidated testing plan; the old report is no longer in the tree.
+4. [Random seed parameter](../refactoring_notes/planned/rnd_seed_parameter.md):
+   approved on 2026-10-18, with the design refreshed for 64-bit keyed RNG and
+   restart metadata. Implementation remains open.
+5. [Policy gap register](../refactoring_notes/planned/policy_set_audit_2026-10-21.md):
+   unresolved decisions and candidates, with current checks separated from October
+   claims that need revalidation and from closed history.
+
+[Multi-microscope metadata](../refactoring_notes/planned/need2basis/multi_microscope_parameters.md)
+and MRC suffix naming remain deferred in `need2basis/`; the two architecture
+proposals remain in `next_release/`. [FLEX tree work](../refactoring_notes/planned/flex_tree_strategy.md)
+belongs to Afan. The former FLEX follow-up notes have been removed; the completed
+records retain their historical validation limits without claiming those gates passed.
 
 Splits: where a note mixed finished and open work it was split on 2026-10-20 into
 `<name>_completed.md` (under `completed/`) and `<name>_unfinished.md` (under `planned/`).
 
-Additional feature proposals, active experiments, test handovers and remaining
+Additional feature proposals, active experiments, reusable plans and remaining
 validation are indexed by topic in the two READMEs. Review the owning record
 before starting work so an existing design is extended rather than duplicated.

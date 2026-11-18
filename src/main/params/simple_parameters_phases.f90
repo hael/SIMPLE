@@ -39,22 +39,19 @@ contains
 
     module subroutine setup_execution_context(self, cline, silent)
         use simple_syslib, only: resolve_project_files
+        use simple_fileio, only: executable_name
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical,           intent(in)    :: silent
         type(string), allocatable :: sp_files(:)
-        character(len=STDLEN)     :: str_static
         type(string)              :: str_tmp, absname
         integer :: i, idir, nsp_files
         call simple_getcwd(self%cwd)
         if( .not. allocated(CWD_GLOB_ORIG) ) allocate(CWD_GLOB_ORIG, source=self%cwd%to_char())
         CWD_GLOB = self%cwd%to_char()
         self%pid = get_process_id()
-        call get_command_argument(0, str_static)
-        self%executable = trim(adjustl(str_static))
-        if( self%executable%strlen_trim() == 0 )then
-            THROW_HARD('get_command_argument failed; setup_execution_context')
-        endif
+        ! Directory names do not determine whether this is a public command, worker or stream.
+        self%executable = executable_name()
         if( cline%defined('part') )then
             self%l_distr_worker = .true.
             part_glob = self%part
@@ -81,7 +78,7 @@ contains
             idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
             nsp_files = 0
         endif
-        if( associated(self%ptr2prg) .and. .not. self%executable%has_substr('private') )then
+        if( associated(self%ptr2prg) .and. self%executable /= 'simple_private_exec' )then
             self%sp_required = self%ptr2prg%requires_sp_project()
             if( trim(self%prg%to_char()) == 'model_cavgs_rejection' .and. &
                 (trim(self%quality_mode) == 'learn' .or. trim(self%quality_mode) == 'promote' .or. &
@@ -125,11 +122,11 @@ contains
             worker_projfile_glob = self%projfile%to_char()
         endif
         if( self%mkdir .eq. 'yes' )then
-            if( associated(self%ptr2prg) .and. .not. self%executable%has_substr('simple_private') )then
+            if( associated(self%ptr2prg) .and. self%executable /= 'simple_private_exec' )then
                 if( self%prg .eq. 'mkdir' )then
                     self%exec_dir = int2str(idir)//'_'//self%dir%to_char()
                 else if( cline%defined('dir_exec') )then
-                    if( self%executable%has_substr('simple_stream') )then
+                    if( self%executable == 'simple_stream' )then
                         self%exec_dir = self%dir_exec
                     else
                         self%exec_dir = int2str(idir)//'_'//self%dir_exec%to_char()
@@ -158,7 +155,7 @@ contains
                 CWD_GLOB = self%cwd%to_char()
             endif
         endif
-        if( .not. self%executable%has_substr('private') .and. STDOUT2LOG )then
+        if( self%executable /= 'simple_private_exec' .and. STDOUT2LOG )then
             call fopen(logfhandle, status='replace', file=string(LOGFNAME), action='write')
         endif
     end subroutine setup_execution_context

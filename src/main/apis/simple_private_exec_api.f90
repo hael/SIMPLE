@@ -30,8 +30,8 @@ use simple_commanders_preprocess, only: commander_preprocess, commander_motion_c
 commander_gen_pspecs_and_thumbs, commander_ctf_estimate
 
 ! refine2D commanders, for simultanous 2D alignment and clustering of single-particle images
-use simple_commanders_refine2D, only: commander_make_cavgs, commander_refine2D_distr_worker, commander_refine2D,&
-commander_cavgassemble
+use simple_commanders_refine2D, only: commander_refine2D_distr_worker, commander_refine2D
+use simple_commanders_mkcavgs,  only: commander_make_cavgs, commander_cavgassemble
 use simple_commanders_denoise, only: commander_cls_expansion
 
 ! cavgs commanders, for operations on class averages

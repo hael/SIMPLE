@@ -1,7 +1,7 @@
 !@descr: offline order prior of an even/odd pair (program order_prior)
 ! Outside the refinement loop: the pcg_order closed-form choice on the prior-free pair, checked against full
 ! surrogate solves of the PCG re-solve; the pair's NU label field is composed from the prior'd pair, the
-! references the matcher would see. Design: doc/implementation_notes/planned/pcg_order_prior.md.
+! references the matcher would see. Design: doc/implementation_notes/completed/pcg_order_prior.md.
 module simple_commanders_order_prior
 use simple_defs,           only: logfhandle
 use simple_defs_fname,     only: NUFILT_SUFFIX, NUEVIDENCE_SUFFIX, NULOCRES_SUFFIX

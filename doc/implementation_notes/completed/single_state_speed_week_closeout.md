@@ -12,7 +12,7 @@ their development date; the table records their current disposition.
 | Item | Closeout disposition |
 | --- | --- |
 | 1. High-resolution score-loop profile | Remains a profiling opportunity; reference-locality costs and any resulting optimization need representative measurements. |
-| 2. Single-precision scoring weights | Delivered; the November 3 record in [speed and architecture](../planned/speed_architecture_proposals.md) records the kernel and workflow checks. The double-precision shift-search routines retain their own arithmetic. |
+| 2. Single-precision scoring weights | Delivered; the November 3 record in [speed and architecture](speed_architecture_proposals.md) records the kernel and workflow checks. The double-precision shift-search routines retain their own arithmetic. |
 | 3. Repeated project reads | Distributed-master assembly and sigma2 commit use the master's builder. Shared-memory wrappers still construct another toolbox; reuse there remains an optional cleanup opportunity. |
 | 4. Parallel state assembly | Parked multi-state experiment, subject to the existing memory and numerical constraints; not an unfinished single-state implementation item. |
 | 5. One worker per iteration | Superseded by the [batch-pipeline plan](../completed/prob_align_batch_pipeline.md). The earlier waiting-worker fold was implemented and dropped; its protocol below is historical. |

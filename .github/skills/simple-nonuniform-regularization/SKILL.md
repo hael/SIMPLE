@@ -155,7 +155,7 @@ the protein. Whole-map agreement cannot judge removal: it counts the
 detergent as signal. In the loop it reads the previous iteration's
 `_nu_evidence` and `_nu_locres` maps (lag one), which `nonuniform_filter_state`
 writes under `pcg_order=yes`. Design and results:
-`doc/implementation_notes/planned/pcg_order_prior.md`; tests:
+`doc/implementation_notes/completed/pcg_order_prior.md`; tests:
 `unit_reconstruction suite=order_prior` and `suite=order_prior_offline`.
 
 ## Language To Prefer

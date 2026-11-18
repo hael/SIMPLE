@@ -1,11 +1,19 @@
 # Phase 5: workflow gates and nightly runner handover
 
+**Archived as superseded, 2026-11-17.** The remaining test and CI work is owned by
+[the consolidated testing and benchmarking plan](../../implementation_notes/planned/testing_and_benchmarking_plan.md#6-consolidated-test-and-ci-work).
+The dated handover below is historical evidence, including its original proposals,
+unexecuted checks and validation limits. Archiving does not mean those checks passed.
+Use the consolidated plan for current scope, registrations and ownership; C-alpha
+work belongs to Ruben, and FLEX work belongs to Afan.
+
+## Historical handover
+
 **Status, 2026-10-08:** core workflow gates and scheduled CI are implemented;
 closeout is pending the remaining truth checks and a recorded complete nightly
-run with its artifacts. Keep this note in `planned/` until the checklist below
-is closed or its remaining requirements are explicitly deferred by the owners.
-This is the single living Phase 5 record, replacing the September handover's
-implementation to-do list. Source audit baseline: `43808e946`.
+run with its artifacts. At that date this note owned the Phase 5 closeout, replacing the September
+handover's implementation to-do list. The 2026-11-17 consolidation above supersedes
+that tracking arrangement; it does not close the unchecked validation items. Source audit baseline: `43808e946`.
 
 Updated 14 October 2026: registry manifest (38 entries), the `lib_stream`
 timeout, the new high-level entries and the chain-test fixture history are
@@ -13,7 +21,7 @@ re-read against `production/CMakeLists.txt` and the history below. No new run
 evidence was attached; the 2026-10-08 observations are unchanged.
 
 The original contract is in
-[the completed test-environment plan](../completed/uniform_test_environment_refactoring.md),
+[the completed test-environment plan](uniform_test_environment_refactoring.md),
 sections 5.2.2, 5.2.3 and 12. Day-to-day rules live in
 [the test policy](../../policies/test_environment_policy.md). Part A makes
 simulated workflows fail against known truth; Part B runs and records the
@@ -21,7 +29,7 @@ extensive tier unattended. Implementation evidence and observed passing runs
 are distinguished below: an implemented assertion is not proof that its latest
 workflow has passed on every platform.
 
-## Current test manifest
+## Test manifest at the October handover
 
 `simple_test_exec` remains the only test executable. The authoritative registry
 is `production/CMakeLists.txt`: **38 baseline entries** (`SIMPLE_CTEST_BUDGET`:
@@ -229,12 +237,13 @@ should be explicit.
 
 ### Observed evidence (2026-11-01)
 
-The run of the standing plan [nightly_suite_triage.md](nightly_suite_triage.md)
+The run of the standing plan [nightly_suite_triage.md](../planned/nightly_suite_triage.md)
 records the CI history of `ci_test.yml` from 2026-09-29 to 2026-11-01 (last green
 night 2026-10-01) and three complete local runs of every nightly entry on Linux
 (GCC 15.2, 24 cores), with per-entry verdicts, wall times, peak memory, gate
 values and the identity of the one-thread workflows:
-[nightly_suite_triage_report.md](nightly_suite_triage_report.md). It rewrote
+`nightly_suite_triage_report.md` (historical report removed from the current
+tree). It rewrote
 `ci_test.yml` (parallel groups per platform, `fail-fast: false`, reports uploaded
 as artifacts on every outcome, a concurrency group), which addresses the archive,
 overlap and total-time rows below once its first scheduled run confirms it. No
@@ -293,7 +302,7 @@ such as the user's BeeGFS workspace, with capacity checked before submission.
 No successful rerun or final FSC verdict was observed. This operational work
 complements, but does not replace, generated-data nightly validation.
 
-## Closeout checklist before moving to completed
+## Historical closeout checklist (remaining scope transferred)
 
 - [x] Replace the stale 25-entry/13-fast manifest with the current registry (38 baseline entries as of 2026-10-14).
 - [x] Record implemented map-truth, stream-preprocessing, SINGLE pose and newer application gates.

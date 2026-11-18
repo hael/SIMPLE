@@ -1,5 +1,8 @@
 # The PCG order prior: one solvent and detergent prior for soluble and membrane proteins
 
+Archived in `completed/` on 2026-11-17 by maintainer decision. The status and open items below are as
+last written.
+
 ## Status
 
 **In the loop, 2026-11-08, untested on real data.** `pcg_order=yes` (with
@@ -16,7 +19,7 @@ operator. Unit sub-suites: `unit_reconstruction suite=order_prior` and
 The order prior replaces the solvent prior `pcg_solvent` (decision log
 2026-09-18 to 09-22) and no longer uses its density weight (section 3).
 Sections 9 to 11 record the offline rounds that shaped it. This note takes over the first step of
-[the cross-validated NU-evidence threshold](nu_evidence_mask_cross_validated_threshold.md):
+[the cross-validated NU-evidence threshold](../planned/nu_evidence_mask_cross_validated_threshold.md):
 the evidence mask is the prior's order weight.
 
 ## 1. The problem

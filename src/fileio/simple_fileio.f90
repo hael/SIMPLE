@@ -624,6 +624,17 @@ contains
         if( allocated(fname_tmp) ) deallocate(fname_tmp)
     end function basename
 
+    !> the running executable's identity: argv(0) without its directory or an .exe suffix
+    function executable_name() result( name )
+        type(string)               :: name
+        character(len=XLONGSTRLEN) :: arg0
+        integer                    :: stat
+        call get_command_argument(0, arg0, status=stat)
+        if( stat /= 0 .or. len_trim(arg0) == 0 ) THROW_HARD('get_command_argument(0) failed; executable_name')
+        name = basename(string(trim(adjustl(arg0))))
+        if( name%has_substr('.exe') ) name = name%substr_remove(string('.exe'))
+    end function executable_name
+
     function stemname( fname ) result( new_fname)
         class(string),    intent(in)  :: fname
         character(len=:), allocatable :: fname_tmp

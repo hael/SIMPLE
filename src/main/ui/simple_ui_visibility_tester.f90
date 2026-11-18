@@ -234,6 +234,8 @@ contains
         call assert_program_not_registered('export_manifoldem_starproject')
         call assert_program_not_registered('ppca_denoise')
         call assert_program_not_registered('ppca_denoise_classes')
+        call assert_program_not_registered('bootstrap_cavgs')
+        call assert_program_not_registered('unbootstrap_cavgs')
         call assert_registered_category('tseries_prep4tracking', 'tseries', 'Time-series Pre-processing', 10)
         call assert_program_not_registered('tseries_extractor')
         call assert_registered_category('atoms_stats', 'atom', 'Atom Analysis', 50)

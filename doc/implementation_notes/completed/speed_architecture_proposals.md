@@ -1,5 +1,8 @@
 # Speed and architecture: before the release, and the next release
 
+Archived in `completed/` on 2026-11-17 by maintainer decision. The status and open items below are as
+last written.
+
 Proposal note, 2026-10-18. **Partly implemented: see "Status" below; the architecture review's
 main item, the batch pipeline of probabilistic alignment, was implemented by the run
 `prob_pipeline` (2026-11-04/05).** The maintainer
@@ -184,7 +187,7 @@ schedule simultaneously without demonstrating how all three are met.
    the selection distribution and multi-seed scientific acceptance separately
    from the intentional trajectory change.
 4. **Reuse the same pipeline in whole-command SPMD.** The existing
-   [coarray SPMD proposal](coarray_spmd_execution.md) is the durable route to
+   [coarray SPMD proposal](../planned/coarray_spmd_execution.md) is the durable route to
    multi-iteration scientific residency and in-runtime publication/reduction.
    It needs the pipeline above; collectives alone do not fix object teardown or
    duplicated preparation. Keep transport/collectives in the execution adapter,

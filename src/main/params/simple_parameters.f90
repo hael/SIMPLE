@@ -189,7 +189,7 @@ type :: parameters
     type(string)              :: dir_target           !< put output here
     type(string)              :: dose_curve           !< dose curve written by dose_filter3D(.txt)
     type(string)              :: exec_dir             !< auto-named execution directory; not a command-line key
-    type(string)              :: executable           !< name of executable; not a command-line key
+    type(string)              :: executable           !< file name of the running executable, no directory; not a command-line key
     type(string)              :: ext                  !< file extension{.mrc}
     type(string)              :: fbody                !< file body
     type(string)              :: filetab              !< list of files(.txt)
@@ -228,7 +228,6 @@ type :: parameters
     type(string)              :: prg                  !< SIMPLE program being executed
     type(string)              :: test                 !< SIMPLE TEST program being executed
     type(string)              :: projfile             !< SIMPLE *.simple project file
-    type(string)              :: projfile_orig        !< original SIMPLE *.simple project file (unbootstrap source)
     type(string)              :: projfile_merged      !< merged SIMPLE *.simple project file output
     type(string)              :: projfile_optics      !< SIMPLE *.simple project file containing optics group definitions
     type(string)              :: projfile_out         !< output SIMPLE project file for non-destructive updates
@@ -463,7 +462,6 @@ type :: parameters
     integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correction{5}
     integer :: offset=20           !< pixels offset{20}
     integer :: optics_offset=0
-    integer :: osmpl_fac=2         !< class-average oversampling factor for bootstrap_cavgs
     integer :: part=1
     integer :: pcafit=0            !< flex_pca worker-side fit selector, set by the master (0=all|1=halfset A|2=halfset B)
     integer :: nfits=1             !< flex_pca worker: fits served by this round (1 single, 2 paired halves)
@@ -530,7 +528,7 @@ type :: parameters
     real    :: fny=0. !< not a command-line key
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
-    real    :: frac_best=1.0       !< selection tools: fraction of best particles to sample from per class; bootstrap_cavgs: anchor fraction
+    real    :: frac_best=1.0       !< selection tools: fraction of best particles to sample from per class
     real    :: frac_worst=1.0      !< fraction of worst particles to sample from per class in balanced selection
     real    :: frac_diam=0.5       !< fraction of atomic diameter
     real    :: fracsrch=0.9        !< fraction of serach space scanned for convergence

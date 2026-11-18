@@ -346,8 +346,7 @@ The existing reconstruction strategy
 owns this reporting step and consumes its in-memory FSC matrix directly.
 Keep the command file `fsc_fractions_stateNN.gp` and numerical surface table
 `fsc_fractions_stateNN_surface.tsv` beside the raw matrix TSV so the figures
-can be reproduced. The [implementation record](../implementation_notes/completed/fraction_fsc_diagnostics.md)
-records the surviving export and plotting work.
+can be reproduced.
 
 | Panel | Content |
 |---|---|

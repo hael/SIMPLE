@@ -16,14 +16,22 @@ clears Progress when it starts. For `arun`: `PLAN=PLAN_DONE=` this file,
 
 ## The suite
 
-The nightly is `.github/workflows/ci_test.yml`, on `ubuntu-26.04` and
-`macos-latest`: `./compile_clean.sh` (Release, the fast gate), then
-`ctest -L platform`, `ctest -L library` and `ctest -L highlevel`, in one step.
-The entries and their contracts are in `doc/policies/test_environment_policy.md`
-(sections 1.2 and 1.5) and `src/main/commanders/test/simple_test_registry.f90`;
-`production/CMakeLists.txt` registers them. Ruben owns the runner's closeout
-(`phase5_workflow_gates_and_nightly_runner_handover.md`); Hans reviews floors
-and CTest entries.
+The nightly is `.github/workflows/ci_test.yml`. As checked on 2026-11-17, it
+uses Ubuntu and macOS jobs split into library/platform, workflows, rest and
+multi-state workflow groups (multi-state workflows are Linux-only by the current
+owner ruling). Each builds Release and the fast gate, then runs its CTest
+selection with explicit timeouts, concurrency control and report uploads.
+Re-read the workflow and registry at the start of every execution; group membership
+and the process budget can change. The contracts are in
+`doc/policies/test_environment_policy.md`, with registry rows in
+`src/main/commanders/test/simple_test_registry.f90` and CTest registrations in
+`production/CMakeLists.txt`.
+
+Ruben owns runner closeout in
+[the consolidated testing plan](../../implementation_notes/planned/testing_and_benchmarking_plan.md#6-consolidated-test-and-ci-work);
+Hans reviews floors and CTest entries. The Phase 5 handover this replaces is
+archived. The next run writes a new report; the Progress section below is dated
+history.
 
 GitHub's standard runners are small (Linux 4 cores and 16 GB, macOS 3 cores and
 7 GB) and end a job at 6 hours. A local run on a large machine finds what is
@@ -226,7 +234,8 @@ Exit: the churn and coverage table of the hot areas, and the proposed tests.
    fusions and style changes; the CI changes; the hot areas, their coverage
    and the proposed tests; what is not verified (macOS, the CI runners) and
    how to verify it.
-3. Add the run as evidence to `phase5_workflow_gates_and_nightly_runner_handover.md`.
+3. Add the run as evidence to section 6 of
+   [the consolidated testing plan](../../implementation_notes/planned/testing_and_benchmarking_plan.md#6-consolidated-test-and-ci-work).
 4. End with `git status`.
 
 Exit: the second nightly passes, or every failure in it is in the report with
@@ -238,7 +247,7 @@ its class and proposal.
 | --- | --- | --- |
 | `doc/refactoring_notes/planned/nightly_suite_triage.md` | this plan and its progress | each |
 | `doc/refactoring_notes/planned/nightly_suite_triage_report.md` | the run's report | 6 |
-| `doc/refactoring_notes/planned/phase5_workflow_gates_and_nightly_runner_handover.md` | the run as nightly evidence | 6 |
+| `doc/implementation_notes/planned/testing_and_benchmarking_plan.md` | the run as nightly evidence | 6 |
 | `doc/policies/test_environment_policy.md` | entries, fusions, budget, timings | 1 2 3 |
 | `src/main/commanders/test/` | high-level tests, fixtures, registry, runner | 1 2 3 |
 | `src/main/exec/simple_test_exec_highlevel.f90`, `src/main/apis/simple_test_exec_api.f90` | routers of the test programs | 1 3 |

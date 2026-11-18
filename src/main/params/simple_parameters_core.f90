@@ -65,7 +65,6 @@ contains
         self%plaintexttab=''      !< plain text file of input parameters
         self%prg=''               !< SIMPLE program being executed
         self%projfile=''          !< SIMPLE *.simple project file
-        self%projfile_orig=''     !< original SIMPLE *.simple project file
         self%projfile_merged=''   !< merged SIMPLE *.simple project file output
         self%projfile_optics=''   !< SIMPLE *.simple project file containing optics group definitions
         self%projfile_out=''      !< output SIMPLE project file for non-destructive updates
