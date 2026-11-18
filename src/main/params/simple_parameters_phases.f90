@@ -738,9 +738,17 @@ contains
         if( .not. (self%prob_beta_end > 0.) ) self%prob_beta_end = self%prob_beta
         if( .not. all(ieee_is_finite([self%sigma2_weight_start,self%sigma2_weight_end,self%sigma2_weight])) ) &
             &THROW_HARD('sigma2 annealing weights must be finite')
-        if( min(self%sigma2_weight_start,self%sigma2_weight_end,self%sigma2_weight) < 0. .or. &
+        select case(trim(self%sigma2_anneal))
+            case('no','yes')
+                if( min(self%sigma2_weight_start,self%sigma2_weight_end,self%sigma2_weight) < 0. ) &
+                    &THROW_HARD('sigma2 annealing weights below 0 need sigma2_anneal=flat')
+            case('flat')
+            case DEFAULT
+                THROW_HARD('sigma2_anneal must be no, yes or flat')
+        end select
+        if( min(self%sigma2_weight_start,self%sigma2_weight_end,self%sigma2_weight) < -1. .or. &
             &max(self%sigma2_weight_start,self%sigma2_weight_end,self%sigma2_weight) > 1. ) &
-            &THROW_HARD('sigma2 annealing weights must be in [0,1]')
+            &THROW_HARD('sigma2 annealing weights must be in [-1,1]')
         if( self%sigma2_weight_start > self%sigma2_weight_end ) THROW_HARD('sigma2 annealing weights must increase')
         if( self%topk < 1 ) THROW_HARD('topk must be 1 (the committed pose alone) or more')
         select case(trim(self%balance))

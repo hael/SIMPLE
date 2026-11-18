@@ -181,17 +181,19 @@ contains
     end subroutine read_global
 
     !> Attach the bootstrap/measured log blend to matching; reconstruction and residuals retain measured spectra.
+    !! A weight in [-1,0) blends the flat ceiling of the anchor over the matching band (-1) into the anchor (0).
     subroutine anneal_for_scoring( self, pftc, weight )
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-        use simple_sigma2_anchor, only: read_sigma2_anchor, blend_sigma2
+        use simple_sigma2_anchor, only: read_sigma2_anchor, blend_sigma2, sigma2_flat_ceiling
         class(euclid_sigma2), target, intent(inout) :: self
         class(polarft_calc), intent(inout) :: pftc
         real, intent(in) :: weight
-        real(real32), allocatable :: spectra(:,:)
-        integer :: status
+        real(real32), allocatable :: spectra(:,:), flat(:,:)
+        integer :: status, band(2)
         character(len=STDLEN) :: message
         if( .not. associated(self%p_ptr) ) THROW_HARD('sigma2 scoring needs an initialized noise model')
         if( .not. ieee_is_finite(weight) ) THROW_HARD('sigma2 scoring weight must be finite')
+        if( weight < -1. .or. weight > 1. ) THROW_HARD('sigma2 scoring weight must be in [-1,1]')
         if( self%p_ptr%oritype /= 'ptcl2D' ) THROW_HARD('sigma2_anneal is supported for 2D particle matching only')
         if( weight == 1. )then
             self%spectra_gen = self%spectra_gen + 1_int64
@@ -204,7 +206,18 @@ contains
             &THROW_HARD('sigma2 anchor has incompatible shell bounds')
         if( allocated(self%sigma2_scoring) ) deallocate(self%sigma2_scoring)
         allocate(self%sigma2_scoring(self%kfromto(1):self%kfromto(2),2))
-        call blend_sigma2(spectra, self%sigma2_noise, weight, self%sigma2_scoring, status)
+        if( weight < 0. )then
+            band = self%p_ptr%kfromto
+            if( band(1) < self%kfromto(1) .or. band(2) > self%kfromto(2) .or. band(2) < band(1) ) &
+                &THROW_HARD('matching band outside the sigma2 anchor; anneal_for_scoring')
+            band = band + lbound(spectra,1) - self%kfromto(1)
+            allocate(flat, mold=spectra)
+            call sigma2_flat_ceiling(spectra(band(1):band(2),:), flat, status)
+            if( status /= 0 ) THROW_HARD('invalid flat sigma2 ceiling')
+            call blend_sigma2(flat, spectra, 1.+weight, self%sigma2_scoring, status)
+        else
+            call blend_sigma2(spectra, self%sigma2_noise, weight, self%sigma2_scoring, status)
+        endif
         if( status /= 0 ) THROW_HARD('invalid sigma2 scoring blend')
         self%spectra_gen = self%spectra_gen + 1_int64
         call pftc%assign_sigma2_noise(self%sigma2_scoring, self%spectra_gen)

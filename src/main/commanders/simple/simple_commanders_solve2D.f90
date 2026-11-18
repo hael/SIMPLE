@@ -204,7 +204,7 @@ contains
             ! phase-1 stage's iterations go to the phase-1 stage that follows; the last phase-1 stage's and a
             ! phase-2 stage's are dropped
             if( solve2D_stage_behind_frc05(stage_parms, istage, start_stage, stop_stage, res05_hist, nhist, &
-                &sigma2_anneal=trim(params%sigma2_anneal)=='yes') )then
+                &sigma2_anneal=trim(params%sigma2_anneal)/='no') )then
                 write(logfhandle,'(A,I3,A,F5.1,A,I0,A)')'>>> SOLVE2D OMITTING STAGE ', istage, ': PLANNED LP ', &
                     &stage_parms(istage)%lp, ' A ALREADY REACHED AT FRC=0.5 BY THE CLASSES OF ', &
                     &nint(100.*FRC05_SKIP_PTCL_FRAC), '% OF THE PARTICLES'
@@ -764,7 +764,7 @@ contains
             call cline_refine2D%set('startit',        terminal_start)
             call cline_refine2D%set('minits',         1)
             call cline_refine2D%set('maxits',         1)
-            if( trim(params%sigma2_anneal) == 'yes' )then
+            if( trim(params%sigma2_anneal) /= 'no' )then
                 call cline_refine2D%set('sigma2_weight_start', 1.)
                 call cline_refine2D%set('sigma2_weight_end',   1.)
             endif

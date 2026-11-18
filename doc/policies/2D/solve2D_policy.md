@@ -160,6 +160,15 @@ omitted. A one-iteration stage uses its endpoint, and coverage extensions
 hold it. With two stages the first is already the 0 to 0.5 ramp; a single
 stage ramps from 0.5 to 1, so the bootstrap is never used alone. The terminal
 greedy pass uses measured sigmas; a seed pass retains the bootstrap.
+`sigma2_anneal=flat` (experimental, 2026-11-18) starts earlier, from white
+noise: the weight extends to [-1, 0), where `exp(-w log flat + (1+w) log
+anchor)` blends each half's flat ceiling (the anchor's largest variance over
+the pass's matching band, on every shell) into the anchor. The stages before
+the last two ramp from -1 to 0 in equal steps (stage i of n from
+-1+(i-1)/(n-2) to -1+i/(n-2)); the last two stages are as above, and a seed
+pass holds the start of the stage it precedes. Standalone refine2D ramps from
+-1 to 1. White scoring is unwhitened L2: it weights low frequencies most and
+gives the hottest posteriors.
 Reconstruction and residual updates always use measured spectra. The beta
 schedule is independent. The smoothed bootstrap (the anchor) is saved beside
 the canonical sigma2 store as `sigma2_state.bin.anchor`; see

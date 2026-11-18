@@ -51,6 +51,16 @@ contains
                 endif
                 call assert_real(first,child%get_rarg('sigma2_weight_start'),TOL,'stage starts at its assigned sigma weight')
                 call assert_real(last,child%get_rarg('sigma2_weight_end'),TOL,'stage ends at its assigned sigma weight')
+                ! flat: the stages before the last two ramp from the white ceiling to the anchor in equal steps
+                params%sigma2_anneal='flat'
+                call set_cline_refine2D_stage(child,cline,params,stages,20,stage)
+                params%sigma2_anneal='yes'
+                if( stage<=nstages-2 )then
+                    first=-1.+real(stage-1)/real(nstages-2)
+                    last=-1.+real(stage)/real(nstages-2)
+                endif
+                call assert_real(first,child%get_rarg('sigma2_weight_start'),TOL,'stage starts at its assigned sigma weight')
+                call assert_real(last,child%get_rarg('sigma2_weight_end'),TOL,'stage ends at its assigned sigma weight')
                 call assert_real(0.3,child%get_rarg('prob_beta'),TOL,'sigma scheduling preserves beta')
                 call assert_real(0.,child%get_rarg('prob_beta_end'),TOL,'sigma scheduling preserves explicit beta endpoint')
                 do it=1,5
@@ -67,6 +77,15 @@ contains
                 &'ordinary stage omission remains enabled')
             call set_cline_refine2D_seed_pass(child,params,stages,10,'seed.mrc')
             call assert_real(0.,child%get_rarg('sigma2_weight_end'),TOL,'seed pass keeps the bootstrap')
+            params%sigma2_anneal='flat'
+            call set_cline_refine2D_stage(child,cline,params,stages,20,1)
+            call assert_real(-1.,child%get_rarg('sigma2_weight_start'),TOL,'flat schedule starts white')
+            call set_cline_refine2D_stage(child,cline,params,stages,20,nstages-2)
+            call assert_real(0.,child%get_rarg('sigma2_weight_end'),TOL,'flat ramp reaches the anchor before the tail')
+            call set_cline_refine2D_seed_pass(child,params,stages,10,'seed.mrc')
+            call assert_real(-1.+real(PROBREFINE_STAGE-1)/real(nstages-2),child%get_rarg('sigma2_weight_end'),TOL, &
+                &'flat seed pass holds the start of the stage it precedes')
+            params%sigma2_anneal='yes'
             deallocate(stages)
         enddo
         call assert_real(1.,sigma2_stage_weight(1,1,1.,1.),TOL,'terminal pass is measured')

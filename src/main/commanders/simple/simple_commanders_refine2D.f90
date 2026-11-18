@@ -69,7 +69,7 @@ contains
             niters            = niters + 1
             params%which_iter = params%which_iter + 1
             params%extr_iter  = params%extr_iter  + 1
-            if( trim(params%sigma2_anneal) == 'yes' )then
+            if( trim(params%sigma2_anneal) /= 'no' )then
                 params%sigma2_weight = sigma2_stage_weight(niters, params%maxits, &
                     &params%sigma2_weight_start, params%sigma2_weight_end)
                 call cline%set('sigma2_weight', params%sigma2_weight)

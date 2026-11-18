@@ -50,6 +50,10 @@ Silent ones first.
   owner (`ensure_canonical_sigma2` -> `prepare_sigma2_anchor`) as the companion `<store>.anchor`, only while the
   store still holds the bootstrap; a missing companion stops a continuation and is never made from residuals.
   Workers only read it (`read_sigma2_anchor`, checked against the store's grid and layout).
+- `sigma2_anneal=flat` (experimental) extends `w` to [-1, 0): `exp(-w log flat + (1+w) log anchor)`, where `flat` is
+  each half's largest anchor variance over the pass's matching band (`sigma2_flat_ceiling`), on every shell. Weights
+  below 0 need `flat`; the stage table is `solve2D_sigma2_stage_weights` (`doc/policies/2D/solve2D_policy.md`).
+  Code that only asks whether annealing is on tests `sigma2_anneal /= 'no'`, never `== 'yes'`.
 - `anneal_for_scoring` (called by `prep_sigmas_objfun` instead of `memoize_sigma2_weights`) points the polar
   calculator at the blend in `sigma2_scoring`, or at `sigma2_noise` itself when `w = 1`, and bumps `spectra_gen`.
   The weight `sigma2_weight` is set per iteration by `exec_refine2D` from `sigma2_stage_weight` and the internal

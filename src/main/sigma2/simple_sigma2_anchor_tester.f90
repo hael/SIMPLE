@@ -2,7 +2,8 @@
 module simple_sigma2_anchor_tester
 use, intrinsic :: iso_fortran_env, only: int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
-use simple_sigma2_anchor, only: prepare_sigma2_anchor, read_sigma2_anchor, sigma2_anchor_band_stats, blend_sigma2
+use simple_sigma2_anchor, only: prepare_sigma2_anchor, read_sigma2_anchor, sigma2_anchor_band_stats, blend_sigma2, &
+    &sigma2_flat_ceiling
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_init_header, &
     &sigma2_state_create_candidate, sigma2_state_write_particles, sigma2_state_write_global, &
     &sigma2_state_publish, sigma2_state_read_global, SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL
@@ -26,6 +27,7 @@ contains
         call test_band_readout()
         call test_log_blend()
         call test_matching_separation()
+        call test_flat_start_scoring()
         call test_pole_residuals()
         call leave_fixture(saved, root, nfail0)
     end subroutine run_all_sigma2_anchor_tests
@@ -57,7 +59,90 @@ contains
         measured(1,1)=0.
         call blend_sigma2(anchor, measured, 0.5, blended, status)
         call assert_true(status/=0,'nonpositive variance refused')
+        call sigma2_flat_ceiling(anchor(2:2,:), blended, status)
+        call assert_int(0,status,'flat ceiling accepted')
+        call assert_true(all(blended==reshape([16.,16.,256.,256.],[2,2])),'flat ceiling is each half''s band maximum')
+        call sigma2_flat_ceiling(measured, blended, status)
+        call assert_true(status/=0,'flat ceiling refuses nonpositive variance')
     end subroutine test_log_blend
+
+    !> sigma2_anneal=flat: below weight 0 the scoring spectra blend each half's white ceiling over the matching band
+    !! into the anchor; the measured spectra stay untouched.
+    subroutine test_flat_start_scoring()
+        use simple_type_defs, only: OBJFUN_EUCLID
+        use simple_parameters, only: parameters
+        use simple_polarft_calc, only: polarft_calc
+        use simple_euclid_sigma2, only: euclid_sigma2
+        class(parameters), allocatable, target :: params
+        class(polarft_calc), allocatable :: calc
+        class(euclid_sigma2), allocatable, target :: esig
+        real(real32), allocatable :: anchor(:,:), wk(:,:)
+        real :: bootstrap(NSH,2), measured(NSH,2), expected(NSH,2), flat(2), weight, denom
+        complex :: particle(12,2:NSH), reference(12,2:NSH)
+        integer :: half, k, status, step
+        character(len=512) :: message
+        write(*,'(A)') 'test_flat_start_scoring'
+        allocate(params, calc, esig)
+        params%box = 2*NSH
+        params%box_crop = 2*NSH
+        params%pftsz = 12
+        params%ctf = 'no'
+        params%oritype = 'ptcl2D'
+        params%cc_objfun = OBJFUN_EUCLID
+        params%fromp = 1
+        params%top = 2
+        params%prob_beta = 0.3
+        params%kfromto = [2,8]
+        do half=1,2
+            bootstrap(:,half) = [(real(half)*exp(0.05*real(NSH-k)),k=1,NSH)]
+            measured(:,half)  = [(real(k+half),k=1,NSH)]
+        enddo
+        call write_store(bootstrap, 1_int64, SIGMA2_PROV_PSPEC)
+        call prepare_sigma2_anchor(STORE, status, message)
+        call assert_int(0, status, 'prepare flat fixture')
+        call read_sigma2_anchor(STORE, anchor, status, message)
+        call assert_int(0, status, 'read flat fixture anchor')
+        call write_store(measured, 2_int64, SIGMA2_PROV_RESIDUAL)
+        flat = maxval(anchor(2:8,:),dim=1)
+        call assert_true(all(anchor(1,:) > flat), 'the fixture anchor peaks outside the matching band')
+        particle = (1.,0.)
+        do k=2,NSH
+            reference(:,k) = cmplx(0.1*k,0.)
+        enddo
+        call calc%new(params,1,[1,2],params%kfromto)
+        call esig%new(params,calc,string(STORE),2*NSH)
+        call esig%read_global()
+        call esig%read_part()
+        do half=1,2
+            call calc%set_eo(half,half==1)
+            call calc%set_ptcl_pft(half,particle)
+            call calc%set_ref_pft(1,reference,half==1)
+        enddo
+        call calc%memoize_refs()
+        call calc%memoize_ptcls()
+        do step=0,2
+            weight = -1. + 0.5*real(step)
+            call esig%anneal_for_scoring(calc, weight)
+            call calc%get_sigma2_weights(wk)
+            do half=1,2
+                expected(:,half) = exp(-weight*log(flat(half)) + (1.+weight)*log(anchor(:,half)))
+                do k=2,8
+                    call assert_real(real(k)/expected(k,half),wk(k,half),1.e-5*real(k)/expected(k,half), &
+                        &'flat-to-anchor blend follows the log path')
+                enddo
+                denom = sum([(real(k)/expected(k,half),k=2,8)])
+                call assert_real(12.*denom,real(calc%wsqsum_ptcl_now(half)),1.e-4*12.*denom, &
+                    &'flat-to-anchor blend determines the self-term')
+            enddo
+            if( step == 0 ) call assert_true(all(wk==real(spread([(k,k=2,8)],2,2))/spread(flat,1,7)), &
+                &'weight -1 scores against the exact white ceiling')
+            if( step == 2 ) call assert_true(all(wk==real(spread([(k,k=2,8)],2,2))/anchor(2:8,:)), &
+                &'weight 0 scores against the exact anchor')
+            call assert_true(all(esig%sigma2_noise==measured), 'the flat start leaves the measured spectra intact')
+        enddo
+        call calc%kill()
+        call esig%kill()
+    end subroutine test_flat_start_scoring
 
     subroutine write_store(spectra, generation, provenance, digest)
         real(real32), intent(in) :: spectra(:,:)

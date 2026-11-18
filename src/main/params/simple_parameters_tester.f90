@@ -127,6 +127,12 @@ contains
         call assert_real(0.5,params%sigma2_weight_start,1.e-6,'sigma ramp start survives construction')
         call assert_real(1.,params%sigma2_weight_end,1.e-6,'sigma ramp end survives construction')
         call assert_real(0.75,params%sigma2_weight,1.e-6,'worker sigma weight survives construction')
+        call cline%set('sigma2_anneal','flat')
+        call cline%set('sigma2_weight_start',-1.)
+        call cline%set('sigma2_weight',-0.5)
+        call params%new(cline,silent=.true.)
+        call assert_char('flat',params%sigma2_anneal,'flat sigma annealing survives parameter construction')
+        call assert_real(-1.,params%sigma2_weight_start,1.e-6,'flat ramp starts at the white ceiling')
         call cline%kill()
     end subroutine test_mirr_proj_binding
 
@@ -214,6 +220,12 @@ contains
         call child%start(name=string('PARAMETERS_SIGMA2_ANNEAL_INVALID'), cline=cline)
         call child%await_final_status()
         call assert_int(FORK_STATUS_FAILED, child%status(), 'sigma2_anneal refuses misspelled yes')
+        call child%destroy
+        call cline%set('sigma2_anneal', 'yes')
+        call cline%set('sigma2_weight_start', -1.)
+        call child%start(name=string('PARAMETERS_SIGMA2_NEGATIVE_YES'), cline=cline)
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a weight below 0 needs sigma2_anneal=flat')
         call child%destroy
         call cline%kill()
     end subroutine test_yes_no_refused

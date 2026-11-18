@@ -92,19 +92,34 @@ contains
         type(stage_params),          intent(in)    :: stage_parms(:)
         integer,                     intent(in)    :: maxits, istage
         type(refine2D_stage_cfg) :: cfg
+        real :: first, last
         call build_refine2D_stage_cfg( cfg, cline_refine2D, cline, params, stage_parms, maxits, istage )
         call emit_refine2D_stage_cfg( cline_refine2D, cfg, stage_parms, istage )
-        if( trim(params%sigma2_anneal) == 'yes' )then
-            call cline_refine2D%set('sigma2_weight_start', 0.)
-            call cline_refine2D%set('sigma2_weight_end',   0.)
-            if( istage == size(stage_parms)-1 )then
-                call cline_refine2D%set('sigma2_weight_end', 0.5)
-            else if( istage == size(stage_parms) )then
-                call cline_refine2D%set('sigma2_weight_start', 0.5)
-                call cline_refine2D%set('sigma2_weight_end',   1.)
-            endif
+        if( trim(params%sigma2_anneal) /= 'no' )then
+            call solve2D_sigma2_stage_weights(params, size(stage_parms), istage, first, last)
+            call cline_refine2D%set('sigma2_weight_start', first)
+            call cline_refine2D%set('sigma2_weight_end',   last)
         endif
     end subroutine set_cline_refine2D_stage
+
+    !> The scoring-noise log-blend weights of a stage: the penultimate ramps 0 to 0.5, the last 0.5 to 1; earlier
+    !! stages hold the anchor (0), or under sigma2_anneal=flat ramp in equal steps from the white ceiling (-1) to it
+    subroutine solve2D_sigma2_stage_weights( params, nstages, istage, first, last )
+        class(parameters), intent(in)  :: params
+        integer,           intent(in)  :: nstages, istage
+        real,              intent(out) :: first, last
+        first = 0.
+        last  = 0.
+        if( istage == nstages-1 )then
+            last  = 0.5
+        else if( istage == nstages )then
+            first = 0.5
+            last  = 1.
+        else if( trim(params%sigma2_anneal) == 'flat' )then
+            first = -1. + real(istage-1) / real(nstages-2)
+            last  = -1. + real(istage)   / real(nstages-2)
+        endif
+    end subroutine solve2D_sigma2_stage_weights
 
     subroutine set_solve2D_sampling_policy( params, stage_parms, nstages, nptcls_eff, nsample_target_2D )
         class(parameters),  intent(in)    :: params
@@ -158,6 +173,7 @@ contains
         integer,            intent(in)    :: it_pass
         character(len=*),   intent(in)    :: refs
         integer :: istage
+        real    :: first, last
         istage = min(PROBREFINE_STAGE, size(stage_parms))
         call cline_pass%delete('which_iter')
         call cline_pass%delete('endit')
@@ -177,9 +193,11 @@ contains
         call cline_pass%set('startit',       it_pass)
         call cline_pass%set('minits',        1)
         call cline_pass%set('maxits',        1)
-        if( trim(params%sigma2_anneal) == 'yes' )then
-            call cline_pass%set('sigma2_weight_start', 0.)
-            call cline_pass%set('sigma2_weight_end',   0.)
+        if( trim(params%sigma2_anneal) /= 'no' )then
+            ! the weight the stage this pass precedes starts at
+            call solve2D_sigma2_stage_weights(params, size(stage_parms), istage, first, last)
+            call cline_pass%set('sigma2_weight_start', first)
+            call cline_pass%set('sigma2_weight_end',   first)
         endif
         call cline_pass%set('extr_iter',     params%extr_lim + 1)
         call cline_pass%set('refine',        'prob')

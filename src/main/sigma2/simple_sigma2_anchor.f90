@@ -7,7 +7,8 @@ use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_heade
 use simple_syslib, only: simple_atomic_replace
 implicit none
 private
-public :: prepare_sigma2_anchor, read_sigma2_anchor, sigma2_anchor_band_stats, blend_sigma2, sigma2_stage_weight
+public :: prepare_sigma2_anchor, read_sigma2_anchor, sigma2_anchor_band_stats, blend_sigma2, sigma2_flat_ceiling
+public :: sigma2_stage_weight
 
 character(len=16), parameter :: MAGIC = 'SIMPLE_S2ANC001'
 integer(int64), parameter :: HEADER_BYTES = 56_int64
@@ -47,6 +48,21 @@ contains
         endif
         status = 0
     end subroutine blend_sigma2
+
+    !> The white start of sigma2_anneal=flat: each half's largest anchor variance over the matching band, on every shell.
+    subroutine sigma2_flat_ceiling( anchor_band, flat, status )
+        real(real32), intent(in)  :: anchor_band(:,:)
+        real(real32), intent(out) :: flat(:,:)
+        integer,      intent(out) :: status
+        integer :: half
+        status = 1
+        if( size(anchor_band,1) < 1 .or. size(anchor_band,2) /= 2 .or. size(flat,2) /= 2 ) return
+        if( .not. all(ieee_is_finite(anchor_band)) .or. any(anchor_band <= 0.) ) return
+        do half = 1, 2
+            flat(:,half) = maxval(anchor_band(:,half))
+        enddo
+        status = 0
+    end subroutine sigma2_flat_ceiling
 
     !> Unweighted shell means of log(measured/anchor), the low-pass edge and counts above the anchor.
     subroutine sigma2_anchor_band_stats( committed, band, mean_log, edge_log, nabove, status, message )
