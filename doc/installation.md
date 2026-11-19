@@ -14,7 +14,7 @@ README.
 - libcurl 7 or newer
 - libTIFF 4 or newer
 - jbigkit 2 or newer, optional
-- Python 3.10 or newer
+- Python 3.7 or newer for the core build; NICE currently requires Python 3.10-3.13
 
 SIMPLE always uses its pinned OpenBLAS and ARPACK-NG releases. Their build scratch lives in the build folder;
 their verified source archives and installed libraries persist outside it. OpenBLAS provides both BLAS and
@@ -153,12 +153,17 @@ Use the `compile_gui.sh` script to install SIMPLE with the NICE GUI support:
 bash compile_gui.sh
 ```
 
-Or use run the following commands:
+NICE currently supports Python 3.10 through 3.13 because its pinned NumPy
+2.2.6 provides wheels for those versions. The script prefers Python 3.12 and
+passes the selected interpreter explicitly to CMake. Set
+`NICE_PYTHON3=/path/to/python3.12` to override the automatic selection.
+
+Or run the following commands:
 
 ```shell
 mkdir build
 cd build
-cmake .. -D NICE=on
+cmake .. -DNICE=ON -DPython3_EXECUTABLE="$(command -v python3.12)"
 make -j install
 nice_local
 ```
@@ -211,7 +216,7 @@ make distclean
 
     Add brew to your path
 
-2. Install git, gcc, make, libtiff, jbigkit and cmake. Make sure you have a Python version higher than 3.10. SIMPLE builds its pinned OpenBLAS and ARPACK-NG itself.
+2. Install git, gcc, make, libtiff, jbigkit and cmake. Install Python 3.12 for NICE. SIMPLE builds its pinned OpenBLAS and ARPACK-NG itself.
 
         brew install git
         brew install cmake
@@ -219,7 +224,7 @@ make distclean
         brew install make
         brew install libtiff
         brew install jbigkit
-        brew install python@3.10
+        brew install python@3.12
 
 3. Install fftw and libraries as described above
 

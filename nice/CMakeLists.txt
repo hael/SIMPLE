@@ -10,6 +10,13 @@ endif()
 # Python
 # ------------------------------------------------------------------------------
 find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
+if(Python3_VERSION VERSION_GREATER_EQUAL 3.14)
+  message(FATAL_ERROR
+    "NICE requires Python 3.10-3.13 because its pinned NumPy 2.2.6 has no "
+    "Python 3.14 wheel. Selected ${Python3_EXECUTABLE} (${Python3_VERSION}). "
+    "Use compile_gui.sh or pass -DPython3_EXECUTABLE=/path/to/python3.12."
+  )
+endif()
 execute_process(
   COMMAND ${Python3_EXECUTABLE} -c "import sqlite3; print(sqlite3.sqlite_version)"
   RESULT_VARIABLE NICE_SQLITE3_RESULT
