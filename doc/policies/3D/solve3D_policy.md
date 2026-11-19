@@ -212,6 +212,39 @@ sampler never uses 3D maps, poses or projection directions. The details are in
 The emitted child command line owns `startit` and `which_iter` for the current
 stage. `refine3D` then treats `maxits` as the run length for that stage.
 
+### Scoring-noise annealing
+
+Particle `solve3D` accepts `sigma2_anneal=yes|no`, default `no`. With `yes`,
+matching starts from a white spectrum, reaches the saved smoothed bootstrap
+over stages 1–4 (the sticky sampling window), then reaches the current
+model-residual spectra over stages 5–6. Stages 7–8 use model-residual spectra
+throughout. Each phase is divided evenly across its stages, with linear
+interpolation over each stage's iteration budget. Stages keep their ordinary
+convergence exits: a stage that converges before its weight reaches the end of
+its ramp stops there, and the next stage starts at its own planned weight, so
+the weight can step forward by at most the remaining part of that stage's ramp.
+Annealing therefore costs no iterations over `sigma2_anneal=no`. Each iteration
+logs the weight and the shells' mean log ratio of measured to bootstrap noise
+(`SIGMA2 ANNEAL`), read before the iteration's residual update.
+
+Full-sampling and multi-state particle runs follow the same stage schedule.
+Short or late-entry runs reserve the last two executed stages for model-based
+noise and compress the ramps into the preceding stages. With one preceding
+stage, that stage spans white through bootstrap to model noise; with at most
+two executed stages, all matching uses model noise. Entry at stage 4 in the
+ordinary eight-stage schedule reaches the bootstrap spectrum during stage 4.
+
+This reuses the 2D scoring-only blend: weights -1, 0 and 1 denote the white
+ceiling over the matching band, the log-Savitzky–Golay smoothed bootstrap, and
+the current measured residual spectrum. Reconstruction weights and residual
+updates always use measured spectra. Bootstrap publication saves the anchor
+before an external-reference CC pose-initialization pass can replace the
+canonical seed. Class-average initialization and add-on registration retain
+their existing scoring. The run manifest records the switch as startup
+provenance; add-ons use the frozen model's residual noise and do not replay it.
+Annealing requires polar Euclidean matching, without
+Cartesian continuous refinement or `pose_cont` follow-up.
+
 ### Without a 2D solution
 
 `solve3D` and `solve3D_addon` run on a project without a usable 2D solution

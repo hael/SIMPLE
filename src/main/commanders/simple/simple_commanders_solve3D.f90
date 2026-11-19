@@ -2303,6 +2303,10 @@ contains
             type(string),    allocatable     :: files_that_stay(:)
             character(len=*), parameter      :: INI3D_DIR='solve3D_cavgs/'
             cline_ini3D = cline
+            call cline_ini3D%delete('sigma2_anneal')
+            call cline_ini3D%delete('sigma2_weight_start')
+            call cline_ini3D%delete('sigma2_weight_end')
+            call cline_ini3D%delete('sigma2_weight')
             ! Particle-stage PCG policy belongs to the outer solve3D run;
             ! class-average initialization retains its gridding workflow
             call strip_pcg_backend_keys(cline_ini3D)

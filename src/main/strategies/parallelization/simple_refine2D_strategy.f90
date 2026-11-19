@@ -17,7 +17,8 @@ use simple_classaverager, only: cavger_commit_carryover, cavger_restore_cavgs, c
 use simple_gui_utils,   only: mrc2jpeg_tiled
 use simple_progress,    only: progressfile_update
 use simple_euclid_sigma2, only: sigma2_commit_iter
-use simple_strategy_sigma2, only: prepare_canonical_sigma_update, read_sigma2_bench_counts, commit_sigma2_exec
+use simple_strategy_sigma2, only: prepare_canonical_sigma_update, prepare_canonical_sigma_anchor, &
+    &report_sigma2_anchor, read_sigma2_bench_counts, commit_sigma2_exec
 use simple_refine2D_fnames, only: refine2D_cavgs_fname, refine2D_cavgs_half_fname
 use simple_string_utils, only: fmt_dec, log_item
 implicit none
@@ -522,54 +523,18 @@ contains
     !! registers the state in the project file, so projinfo is re-read
     subroutine ensure_canonical_sigma2( params, build, cline )
         use simple_sigma2_bootstrap, only: ensure_sigma2_for_iteration
-        use simple_sigma2_anchor, only: prepare_sigma2_anchor
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         type(cmdline),    intent(in)    :: cline
-        logical :: l_rebuilt, found
-        type(string) :: fname
-        integer :: status
-        character(len=STDLEN) :: message
+        logical :: l_rebuilt
         if( trim(params%sigma2_anneal) /= 'no' .and. params%cc_objfun /= OBJFUN_EUCLID ) &
             &THROW_HARD('sigma2_anneal requires objfun=euclid')
         if( params%cc_objfun /= OBJFUN_EUCLID ) return
         call ensure_sigma2_for_iteration(cline, params%projfile, params%oritype, params%startit, params%box, &
             &params%smpd, 'REFINE2D SIGMA2', l_rebuilt)
         if( l_rebuilt ) call build%spproj%read_segment('projinfo', params%projfile)
-        if( trim(params%sigma2_anneal) /= 'no' )then
-            call build%spproj%get_sigma2_state_path(fname, found)
-            if( .not. found ) THROW_HARD('sigma2_anneal requires a canonical sigma2 state path')
-            call prepare_sigma2_anchor(fname%to_char(), status, message)
-            if( status /= 0 ) THROW_HARD(trim(message))
-            call fname%kill
-        endif
+        call prepare_canonical_sigma_anchor(params, build)
     end subroutine ensure_canonical_sigma2
-
-    !> Incoming measured spectra versus the fixed scoring spectra, on the band this iteration actually searched.
-    subroutine report_sigma2_anchor( params, build, band )
-        use, intrinsic :: iso_fortran_env, only: real64
-        use simple_sigma2_anchor, only: sigma2_anchor_band_stats
-        type(parameters), intent(in) :: params
-        type(builder), intent(in) :: build
-        integer, intent(in) :: band(2)
-        type(string) :: fname
-        real(real64) :: mean_log(2), edge_log(2)
-        integer :: nabove(2), status
-        logical :: found
-        character(len=512) :: message
-        if( trim(params%sigma2_anneal) == 'no' ) return
-        call build%spproj%get_sigma2_state_path(fname, found)
-        if( .not. found ) THROW_HARD('missing sigma2 store for the sigma2 anchor readout')
-        call sigma2_anchor_band_stats(fname%to_char(), band, mean_log, edge_log, nabove, status, message)
-        if( status /= 0 ) THROW_HARD(trim(message))
-        ! one line: the halves' log ratios averaged (they agree to the printed decimals), the shells above the anchor
-        ! of the half with more of them
-        write(logfhandle,'(A)') log_item('SIGMA2 ANNEAL', 'weight '//fmt_dec(params%sigma2_weight, 3)//', beta '//&
-            &fmt_dec(params%prob_beta, 2)//', log(measured/anchor) '//fmt_dec(real(0.5_real64*sum(mean_log)), 2)//&
-            &' (edge '//fmt_dec(real(0.5_real64*sum(edge_log)), 2)//'), '//int2str(maxval(nabove))//'/'//&
-            &int2str(band(2)-band(1)+1)//' shells above')
-        call fname%kill
-    end subroutine report_sigma2_anchor
 
     !> Shared-memory restoration of the class averages from the sums the matcher accumulated: the carried sums
     !! committed (l_frac: the iteration blends them), the averages restored and written, the class document, and the

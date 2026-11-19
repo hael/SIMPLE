@@ -239,11 +239,46 @@ contains
         endif
         call emit_refine3D_stage_cfg( cfg, params, istage, first_stage, l_cavgs, l_refine3D_lp_override, l_addon, &
             &l_register )
+        call set_refine3D_sigma2_schedule(params, istage, first_stage, l_cavgs .or. l_addon)
         if( l_addon )then
             if( .not. addon%frozen_rec%is_allocated() ) THROW_HARD('active add-on context without a frozen run context')
             call cline_refine3D%set('frozen_rec', addon%frozen_rec)
         endif
     end procedure set_cline_refine3D
+
+    !> Scoring only: white to bootstrap over the sticky window, then to model noise before the last two stages.
+    subroutine set_refine3D_sigma2_schedule( params, istage, first_stage, l_excluded )
+        class(parameters), intent(in) :: params
+        integer, intent(in) :: istage, first_stage
+        logical, intent(in) :: l_excluded
+        integer :: last_ramp, last_flat
+        real :: first, last
+        call cline_refine3D%delete('sigma2_weight')
+        call cline_refine3D%delete('sigma2_weight_start')
+        call cline_refine3D%delete('sigma2_weight_end')
+        if( params%sigma2_anneal == 'no' .or. l_excluded )then
+            call cline_refine3D%delete('sigma2_anneal')
+            return
+        endif
+        first = 1.
+        last  = 1.
+        last_ramp = active_refine3D_nstages() - 2
+        last_flat = min(max(first_stage, STICKY_LAST_STAGE), last_ramp - 1)
+        if( istage <= last_ramp )then
+            if( last_ramp == first_stage )then
+                first = -1.
+            else if( istage <= last_flat )then
+                first = -1. + real(istage-first_stage)   / real(last_flat-first_stage+1)
+                last  = -1. + real(istage-first_stage+1) / real(last_flat-first_stage+1)
+            else
+                first = real(istage-last_flat-1) / real(last_ramp-last_flat)
+                last  = real(istage-last_flat)   / real(last_ramp-last_flat)
+            endif
+        endif
+        call cline_refine3D%set('sigma2_anneal', 'yes')
+        call cline_refine3D%set('sigma2_weight_start', first)
+        call cline_refine3D%set('sigma2_weight_end', last)
+    end subroutine set_refine3D_sigma2_schedule
 
     !> solve3D_addon registration pass: the cohort's random poses are brought
     !! into register against the frozen references by one full-cohort global

@@ -1690,6 +1690,8 @@ contains
         use simple_refine3D_strategy
         use simple_eul_prob_tab_utils, only: prob_beta_at
         use simple_defs,               only: PROB_BETA_TAIL
+        use simple_sigma2_anchor,      only: sigma2_stage_weight
+        use simple_string_utils,       only: fmt_dec, log_item
         class(commander_refine3D), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         class(refine3D_strategy), allocatable :: strategy
@@ -1732,6 +1734,9 @@ contains
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        if( cline%defined('sigma2_anneal') .and. .not. cline%defined('sigma2_weight_start') )then
+            if( cline%get_carg('sigma2_anneal') == 'yes' ) call cline%set('sigma2_weight_start', -1.)
+        endif
         call cline%set('prg', 'refine3D')
         ! Select execution strategy (shared-memory vs distributed master)
         strategy = create_refine3D_strategy(cline)
@@ -1760,6 +1765,12 @@ contains
             niters            = niters + 1
             params%which_iter = params%which_iter + 1
             params%extr_iter  = params%extr_iter  + 1
+            if( params%sigma2_anneal == 'yes' )then
+                params%sigma2_weight = sigma2_stage_weight(niters, params%maxits, &
+                    &params%sigma2_weight_start, params%sigma2_weight_end)
+                call cline%set('sigma2_weight', params%sigma2_weight)
+                write(logfhandle,'(A)') log_item('SIGMA2 ANNEAL', 'weight '//fmt_dec(params%sigma2_weight, 3))
+            endif
             ! the probability tables' posterior draws: the iteration's tempering factor, on the command line for the
             ! workers (check_conv3D reports it as POSTERIOR DRAW BETA). A run with prob_beta_end searches flat at
             ! prob_beta until its resolution stops gaining or its budget nears its end (check_conv3D starts the

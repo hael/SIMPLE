@@ -245,6 +245,11 @@ contains
         call assert_int(4,    cl%get_iarg('nparts'),   'the partitions of the template')
         call assert_int(3600, cl%get_iarg('walltime'), 'the walltime of the template')
         call assert_int(11,   cl%get_argcnt(),         'nothing else: six keys set, five copied')
+        call tmpl%set('sigma2_anneal','yes')
+        call tmpl%set('sigma2_weight',-0.5)
+        call prepare_pspec_cline(tmpl,string('/abs/run/run.simple'),'ptcl3D',1,cl)
+        call assert_string_eq('yes',cl%get_carg('sigma2_anneal'),'bootstrap saves the anchor before any residual pass')
+        call assert_false(cl%defined('sigma2_weight'),'bootstrap inherits no scoring weight')
         call assert_false(cl%defined('update_frac') .or. cl%defined('trail_rec') .or. cl%defined('trail_seed') &
             &.or. cl%defined('frozen_rec') .or. cl%defined('rec_backend') .or. cl%defined('vol1') &
             &.or. cl%defined('box_crop') .or. cl%defined('lp'), 'no sampling, trailing, frozen, backend or map key')
@@ -258,6 +263,10 @@ contains
         type(string)  :: sval
         write(*,'(A)') 'test_residual_pass_cline'
         call make_template(tmpl)
+        call tmpl%set('sigma2_anneal','yes')
+        call tmpl%set('sigma2_weight_start',-1.)
+        call tmpl%set('sigma2_weight_end',0.)
+        call tmpl%set('sigma2_weight',-0.5)
         call prepare_residual_sigma2_pass_cline(tmpl, 3, 1, [string('bootstrap_state01.mrc')], cl)
         sval = cl%get_carg('prg')
         call assert_string_eq('refine3D', sval, 'a refine3D pass')
@@ -271,6 +280,8 @@ contains
         call assert_real(180., cl%get_rarg('mskdiam'),  0., 'the mask of the template')
         call assert_false(cl%defined('update_frac') .or. cl%defined('trail_rec') .or. cl%defined('trail_seed') &
             &.or. cl%defined('frozen_rec'), 'no sampling, trailing or frozen key')
+        call assert_false(cl%defined('sigma2_anneal') .or. cl%defined('sigma2_weight_start') .or. &
+            &cl%defined('sigma2_weight_end') .or. cl%defined('sigma2_weight'),'residual-only pass uses measured noise')
         call tmpl%kill
         call cl%kill
         call sval%kill

@@ -66,7 +66,7 @@ contains
             endif
             call build%esig%read_global
             if( trim(params%sigma2_anneal) /= 'no' )then
-                if( params%l_cart_refine ) THROW_HARD('sigma2_anneal is supported for 2D polar matching only')
+                if( params%l_cart_refine ) THROW_HARD('sigma2_anneal requires polar matching')
                 call build%esig%anneal_for_scoring(build%pftc, params%sigma2_weight)
             else if( .not. params%l_cart_refine )then
                 ! anneal_for_scoring refreshes these weights when attaching its array.

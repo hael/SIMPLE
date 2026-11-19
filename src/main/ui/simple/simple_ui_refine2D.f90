@@ -20,14 +20,14 @@ contains
     subroutine add_annealed_sigma_input( program, default )
         class(ui_program), intent(inout) :: program
         character(len=*),  intent(in)    :: default
-        call program%add_input(UI_SRCH, 'sigma2_anneal', 'multi', 'Anneal bootstrap noise for matching', &
-            &'yes starts from a seven-shell quadratic Savitzky-Golay bootstrap in log variance and releases it over '//&
-            &'the last two solve2D stages (0 to 0.5, then 0.5 to 1 measured weight); flat starts earlier, from white '//&
-            &'noise at the bootstrap''s largest variance in the matching band, and reaches the bootstrap in equal '//&
-            &'steps over solve2D stages 1-3. Standalone refine2D uses 0 (flat: the white start) to 1 over '//&
+        call program%add_input(UI_SRCH, 'sigma2_anneal', 'binary', 'Anneal bootstrap noise for matching', &
+            &'Start from white noise at the smoothed bootstrap''s largest variance in the matching band, then '//&
+            &'reach the seven-shell quadratic Savitzky-Golay bootstrap in log variance in equal steps over '//&
+            &'solve2D stages 1-3. The last two stages release it to measured noise (0 to 0.5, then 0.5 to 1 '//&
+            &'measured weight). Standalone refine2D ramps from white noise to measured noise (-1 to 1) over '//&
             &'its iteration budget. Reconstruction retains measured spectra. Requires Euclidean scoring and a '//&
-            &'fresh bootstrap or its saved companion(no|yes|flat){'//default//'}', '', &
-            &.false., default, group='search', choices=ui_choices([character(len=4) :: 'no', 'yes', 'flat']), &
+            &'fresh bootstrap or its saved companion(yes|no){'//default//'}', '', &
+            &.false., default, group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
             &visibility=UI_VIS_ADVANCED)
     end subroutine add_annealed_sigma_input
 

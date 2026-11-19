@@ -93,6 +93,7 @@ contains
         call cl%set('lpstop',      6.)
         call cl%set('balance',     'cavg')
         call cl%set('nclust',      12)
+        call cl%set('sigma2_anneal', 'yes')
         if( present(vol1) )then
             call cl%set('vol1',    vol1)
         else
@@ -311,6 +312,7 @@ contains
         ! artifacts: the manifest read back is written again record for record
         call back%write(string(MAN_FNAME2), status, msg)
         call assert_true(same_text(MAN_FNAME, MAN_FNAME2), 'every manifest record round trips exactly')
+        call assert_true(file_contains(MAN_FNAME2, 'input sigma2_anneal yes'), 'scoring annealing is recorded as run provenance')
         call assert_char(RUN_ID, trim(back%get_run_id()), 'run identifier round trip')
         call assert_int(2,   back%get_nstates(), 'nstates round trip')
         call assert_int(128, back%get_box(),     'box round trip')
@@ -573,6 +575,8 @@ contains
         call assert_false(cl%defined('nthr'), 'a key outside the manifest inputs is not replayed')
         call assert_false(cl%defined('nu_stage'), 'a nu_stage the base run did not give is not replayed')
         call assert_false(cl%defined('gold_std_stage'), 'an ordinary run retains the default gold-standard start stage')
+        call assert_true(manifest_records_input('sigma2_anneal'), 'scoring annealing is a recorded input')
+        call assert_false(cl%defined('sigma2_anneal'), 'add-on matching uses the frozen model noise without startup annealing')
         call assert_false(manifest_records_input('inpl_posterior'), 'the in-plane insertion has no key (cone, 2026-11-16)')
         call man%kill
         call make_manifest(man, spproj, 2, nu_stage=7)

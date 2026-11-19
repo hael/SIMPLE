@@ -1,18 +1,24 @@
 # Bootstrap noise annealing for 2D matching
 
-Status: two-stage annealing implemented and locally validated, 2026-11-14.
+Status: two-stage annealing implemented and locally validated, 2026-11-14;
+white-start annealing selected by `yes` since 2026-11-19.
 
 ## Contract
 
 `sigma2_anneal=yes` is the default of solve2D and solve2D_chunks (since
 2026-11-14; it was opt-in before); standalone refine2D defaults to `no`. There
-is no separate anchor-only mode. On solve2D and solve2D_chunks,
-keep the smoothed bootstrap through the early stages, then increase the
-measured-spectrum weight from 0 to 0.5 in the penultimate stage and from
+are only two accepted values, `yes|no`. `yes` uses the former `flat` schedule:
+on solve2D and solve2D_chunks, ramp from each half's white ceiling to its
+smoothed bootstrap in equal steps over stages 1-3 (fewer if only the last two
+stages follow), hold the bootstrap until the penultimate stage, then increase
+the measured-spectrum weight from 0 to 0.5 in the penultimate stage and from
 0.5 to 1 in the final stage. The terminal greedy pass uses measured sigmas.
-Standalone refine2D ramps from 0 to 1 over its iteration budget.
+Standalone refine2D ramps from -1 to 1 over its iteration budget.
 
-For each half and shell, scoring uses
+For weights below zero, scoring uses
+`exp(-w*log(flat) + (1+w)*log(anchor))`, where `flat` is each half's largest
+anchor variance over the matching band, on every shell. For nonnegative
+weights, each half and shell uses
 `exp((1-w)*log(anchor) + w*log(measured))`. Zero weight copies the anchor;
 unit weight attaches the measured array directly. Reconstruction and
 canonical residual updates always retain measured spectra. Poses and
@@ -26,17 +32,17 @@ A missing anchor cannot be manufactured from residual spectra.
 
 Each ramp spans its stage's actual iteration budget, including the first and
 last iterations. A one-iteration stage uses its endpoint. Coverage iterations
-beyond the budget hold that endpoint. The two annealing stages cannot be
-omitted; an early convergence verdict cannot stop an unfinished sigma ramp.
+beyond the budget hold that endpoint. The last two stages cannot be omitted;
+an early convergence verdict cannot stop an unfinished sigma ramp.
 The beta schedule and its convergence state are unchanged. In particular,
 the sigma endpoint does not depend on completion of the beta tail. The seed
-pass of a seeded solve2D run stays at zero weight.
+pass of a seeded solve2D run holds the starting weight of the stage it precedes.
 
 Internal typed keys `sigma2_weight_start`, `sigma2_weight_end` and
 `sigma2_weight` carry the stage bounds and current weight. The refine2D owner
 sets the current weight before each iteration and explicitly forwards it to
 partition workers. The readout includes weight, beta, actual matching band,
-and the measured/anchor diagnostics. All weights must be finite, in [0,1],
+and the measured/anchor diagnostics. All weights must be finite, in [-1,1],
 with ordered stage endpoints. No new tuning parameters are exposed in the UI.
 
 A fresh solve2D run anneals without the switch. Keep

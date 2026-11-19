@@ -43,6 +43,7 @@ contains
         call test_lpexit_gain_guard()
         write(*,'(A)') 'test_posterior_overlap_rule'
         call test_posterior_overlap_rule()
+        call test_sigma2_annealing_convergence()
         write(*,'(A)') 'test_posterior_multistate_overlap'
         call test_posterior_multistate_overlap()
         write(*,'(A)') 'test_posterior_minimum_iterations'
@@ -729,6 +730,63 @@ contains
         deallocate(params)
         call del_file(STATS_FILE)
     end subroutine test_posterior_overlap_rule
+
+    !> Complete pose overlap cannot truncate a standalone sigma ramp; a solve3D stage (bounds on the command line) and
+    !! measured stages exit as any stage does.
+    subroutine test_sigma2_annealing_convergence()
+        class(parameters), allocatable :: params
+        class(cmdline), allocatable :: cline
+        type(convergence) :: conv(3), conv_stage
+        type(oris) :: os
+        integer :: phase, it
+        logical :: done
+        write(*,'(A)') 'test_sigma2_annealing_convergence'
+        allocate(params, cline)
+        params%nstates = 1
+        params%trs = 5.
+        params%refine = 'prob'
+        params%l_prob_align_mode = .true.
+        params%prob_beta = 0.3
+        params%prob_beta_end = 0.3
+        params%sigma2_anneal = 'yes'
+        params%startit = 7
+        params%minits = 1
+        params%maxits = 3
+        params%topk = 1
+        call cline%set('trs',5.)
+        call cline%set('overlap',0.95)
+        call cline%set('fracsrch',99.)
+        do phase=1,3
+            call del_file(STATS_FILE)
+            params%sigma2_weight_start = real(phase-2)
+            params%sigma2_weight_end = min(1.,real(phase-1))
+            do it=1,3
+                params%which_iter = params%startit + it - 1
+                params%sigma2_weight = params%sigma2_weight_start + real(it-1) * &
+                    &(params%sigma2_weight_end-params%sigma2_weight_start) / 2.
+                call posterior_field(os,7.5,6.5)
+                call os%set_all2single('mi_proj',1.)
+                done = conv(phase)%check_conv3D(params,cline,os,40.)
+                call assert_true(done .eqv. (it == 3 .or. phase == 3), &
+                    &'sigma ramp holds convergence until its endpoint; measured stages can stop early')
+                call os%kill
+            enddo
+        enddo
+        ! a solve3D stage: the controller's endpoint is on the command line, and the stage exits early mid-ramp
+        call cline%set('sigma2_weight_end',0.)
+        call del_file(STATS_FILE)
+        params%sigma2_weight_start = -1.
+        params%sigma2_weight_end   = 0.
+        params%which_iter          = params%startit
+        params%sigma2_weight       = -1.
+        call posterior_field(os,7.5,6.5)
+        call os%set_all2single('mi_proj',1.)
+        done = conv_stage%check_conv3D(params,cline,os,40.)
+        call assert_true(done,'a solve3D stage exits on convergence before its weight reaches the stage endpoint')
+        call os%kill
+        call cline%kill
+        call del_file(STATS_FILE)
+    end subroutine test_sigma2_annealing_convergence
 
     !> Two populated states and one empty slot: current joint observations alone determine the minimum overlap.
     subroutine test_posterior_multistate_overlap()

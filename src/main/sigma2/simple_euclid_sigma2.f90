@@ -194,7 +194,8 @@ contains
         if( .not. associated(self%p_ptr) ) THROW_HARD('sigma2 scoring needs an initialized noise model')
         if( .not. ieee_is_finite(weight) ) THROW_HARD('sigma2 scoring weight must be finite')
         if( weight < -1. .or. weight > 1. ) THROW_HARD('sigma2 scoring weight must be in [-1,1]')
-        if( self%p_ptr%oritype /= 'ptcl2D' ) THROW_HARD('sigma2_anneal is supported for 2D particle matching only')
+        if( self%p_ptr%oritype /= 'ptcl2D' .and. self%p_ptr%oritype /= 'ptcl3D' ) &
+            &THROW_HARD('sigma2_anneal requires particle matching')
         if( weight == 1. )then
             self%spectra_gen = self%spectra_gen + 1_int64
             call pftc%assign_sigma2_noise(self%sigma2_noise, self%spectra_gen)

@@ -41,9 +41,9 @@ contains
         ! 2D objective function section
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',    'euclid')
         if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',       'yes')
-        ! the flat scoring-noise schedule starts from the white ceiling unless a controller sets the stage's start
+        ! scoring-noise annealing starts from the white ceiling unless a controller sets the stage's start
         if( cline%defined('sigma2_anneal') .and. .not. cline%defined('sigma2_weight_start') )then
-            if( cline%get_carg('sigma2_anneal') == 'flat' ) call cline%set('sigma2_weight_start', -1.)
+            if( cline%get_carg('sigma2_anneal') == 'yes' ) call cline%set('sigma2_weight_start', -1.)
         endif
         call set_automask2D_defaults( cline )
     end subroutine set_refine2D_defaults

@@ -26,8 +26,10 @@ contains
         call test_invalid_companions()
         call test_band_readout()
         call test_log_blend()
-        call test_matching_separation()
-        call test_flat_start_scoring()
+        call test_matching_separation('ptcl2D')
+        call test_matching_separation('ptcl3D')
+        call test_flat_start_scoring('ptcl2D')
+        call test_flat_start_scoring('ptcl3D')
         call test_pole_residuals()
         call leave_fixture(saved, root, nfail0)
     end subroutine run_all_sigma2_anchor_tests
@@ -66,13 +68,14 @@ contains
         call assert_true(status/=0,'flat ceiling refuses nonpositive variance')
     end subroutine test_log_blend
 
-    !> sigma2_anneal=flat: below weight 0 the scoring spectra blend each half's white ceiling over the matching band
+    !> Below weight 0 the scoring spectra blend each half's white ceiling over the matching band
     !! into the anchor; the measured spectra stay untouched.
-    subroutine test_flat_start_scoring()
+    subroutine test_flat_start_scoring( oritype )
         use simple_type_defs, only: OBJFUN_EUCLID
         use simple_parameters, only: parameters
         use simple_polarft_calc, only: polarft_calc
         use simple_euclid_sigma2, only: euclid_sigma2
+        character(len=*), intent(in) :: oritype
         class(parameters), allocatable, target :: params
         class(polarft_calc), allocatable :: calc
         class(euclid_sigma2), allocatable, target :: esig
@@ -87,7 +90,7 @@ contains
         params%box_crop = 2*NSH
         params%pftsz = 12
         params%ctf = 'no'
-        params%oritype = 'ptcl2D'
+        params%oritype = oritype
         params%cc_objfun = OBJFUN_EUCLID
         params%fromp = 1
         params%top = 2
@@ -263,14 +266,15 @@ contains
     end subroutine test_band_readout
 
     !> Analytic radial fields: loss = sum(k/sigma2 * residual**2) / sum(k/sigma2).
-    !! Recreate a worker with a wider search band, as solve2D does between stages.
-    subroutine test_matching_separation()
+    !! Recreate a worker with a wider search band, as staged solves do between stages.
+    subroutine test_matching_separation( oritype )
         use simple_defs, only: DPI
         use simple_type_defs, only: OBJFUN_EUCLID
         use simple_parameters, only: parameters
         use simple_polarft_calc, only: polarft_calc
         use simple_euclid_sigma2, only: euclid_sigma2
         use simple_ori, only: ori
+        character(len=*), intent(in) :: oritype
         class(parameters), allocatable, target :: params
         class(polarft_calc), allocatable :: calc
         class(euclid_sigma2), allocatable, target :: esig
@@ -285,7 +289,7 @@ contains
         params%box_crop = 2*NSH
         params%pftsz = 12
         params%ctf = 'no'
-        params%oritype = 'ptcl2D'
+        params%oritype = oritype
         params%cc_objfun = OBJFUN_EUCLID
         params%fromp = 1
         params%top = 2

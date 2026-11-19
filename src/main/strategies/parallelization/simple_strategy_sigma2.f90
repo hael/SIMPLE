@@ -1,7 +1,7 @@
 !@descr: canonical sigma2 store steps shared by the refine2D and refine3D strategies
 module simple_strategy_sigma2
 use, intrinsic :: iso_fortran_env, only: int64
-use simple_defs,              only: STDLEN
+use simple_defs,              only: STDLEN, logfhandle
 use simple_error,             only: simple_exception
 use simple_string,            only: string
 use simple_parameters,        only: parameters
@@ -11,10 +11,56 @@ use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_heade
 implicit none
 
 public :: prepare_canonical_sigma_update, read_sigma2_bench_counts, run_commit_sigma2, commit_sigma2_exec
+public :: prepare_canonical_sigma_anchor, report_sigma2_anchor
 private
 #include "simple_local_flags.inc"
 
 contains
+
+    !> Incoming measured spectra versus the fixed scoring spectra, on the band this iteration actually searched.
+    !! Read before the iteration's residual commit, so it reports the spectra the iteration scored against.
+    subroutine report_sigma2_anchor( params, build, band )
+        use, intrinsic :: iso_fortran_env, only: real64
+        use simple_sigma2_anchor, only: sigma2_anchor_band_stats
+        use simple_string_utils,  only: fmt_dec, log_item, int2str
+        type(parameters), intent(in) :: params
+        type(builder), intent(in) :: build
+        integer, intent(in) :: band(2)
+        type(string) :: fname
+        real(real64) :: mean_log(2), edge_log(2)
+        integer :: nabove(2), status
+        logical :: found
+        character(len=512) :: message
+        if( trim(params%sigma2_anneal) == 'no' ) return
+        call build%spproj%get_sigma2_state_path(fname, found)
+        if( .not. found ) THROW_HARD('missing sigma2 store for the sigma2 anchor readout')
+        call sigma2_anchor_band_stats(fname%to_char(), band, mean_log, edge_log, nabove, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        ! one line: the halves' log ratios averaged (they agree to the printed decimals), the shells above the anchor
+        ! of the half with more of them
+        write(logfhandle,'(A)') log_item('SIGMA2 ANNEAL', 'weight '//fmt_dec(params%sigma2_weight, 3)//', beta '//&
+            &fmt_dec(params%prob_beta, 2)//', log(measured/anchor) '//fmt_dec(real(0.5_real64*sum(mean_log)), 2)//&
+            &' (edge '//fmt_dec(real(0.5_real64*sum(edge_log)), 2)//'), '//int2str(maxval(nabove))//'/'//&
+            &int2str(band(2)-band(1)+1)//' shells above')
+        call fname%kill
+    end subroutine report_sigma2_anchor
+
+    !> The refinement owner saves/verifies the scoring anchor; reads the caller's project, writes only the companion.
+    subroutine prepare_canonical_sigma_anchor( params, build )
+        use simple_sigma2_anchor, only: prepare_sigma2_anchor
+        type(parameters), intent(in) :: params
+        type(builder), intent(in) :: build
+        type(string) :: state_path
+        integer :: status
+        logical :: found
+        character(len=STDLEN) :: message
+        if( params%sigma2_anneal == 'no' ) return
+        call build%spproj%get_sigma2_state_path(state_path, found)
+        if( .not. found ) THROW_HARD('sigma2_anneal requires a canonical sigma2 state path')
+        call prepare_sigma2_anchor(state_path%to_char(), status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        call state_path%kill
+    end subroutine prepare_canonical_sigma_anchor
 
     !> before the parts write the next generation: the committed store validated, nothing left by another
     !! transaction of that generation

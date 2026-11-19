@@ -21,6 +21,7 @@ end type commander_calc_pspec_assemble
 contains
 
     subroutine exec_calc_pspec_assemble( self, cline )
+        use simple_sigma2_anchor, only: prepare_sigma2_anchor
         class(commander_calc_pspec_assemble), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)                 :: params
@@ -200,6 +201,10 @@ contains
         if( state_status /= 0 ) THROW_HARD(trim(state_message))
         call sigma2_state_publish(candidate_path%to_char(), state_path%to_char(), state_status, state_message)
         if( state_status /= 0 ) THROW_HARD(trim(state_message))
+        if( params%sigma2_anneal == 'yes' )then
+            call prepare_sigma2_anchor(state_path%to_char(), state_status, state_message)
+            if( state_status /= 0 ) THROW_HARD(trim(state_message))
+        endif
         ! the partitions' sums stay until the seed is published, so a failed assembly can be rerun
         do ipart = 1,params%nparts
             call del_file(pspec_part_sums_fname(ipart))

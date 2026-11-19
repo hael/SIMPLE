@@ -280,6 +280,22 @@ subsequent reconstruction uses the newly recorded labels without reassigning the
 
 ### 5.1 Sigma2 bootstrap contract
 
+Polar particle matching can opt into `sigma2_anneal=yes` (default `no`; the key
+is on solve3D's interface and is internal to refine3D). The refinement owner saves or verifies the smoothed bootstrap anchor, interpolates
+`sigma2_weight_start` to `sigma2_weight_end` over the iteration budget, and
+passes the current `sigma2_weight` to workers. A standalone enabled refinement
+defaults to -1 through 1; solve3D supplies its stage bounds (see the solve3D
+policy). Negative weights blend the white ceiling into the smoothed bootstrap;
+nonnegative weights blend the bootstrap into current residual spectra. The
+last iteration reaches the endpoint exactly, including a one-iteration run.
+A standalone ramp is the run's whole schedule, so convergence cannot end it
+short of its endpoint; a solve3D stage, whose bounds the controller supplies,
+exits on convergence like any stage. Each iteration logs the weight and the
+mean log ratio of measured to bootstrap noise over the matching band. Reconstruction and residual
+estimation use measured spectra throughout, and residual-only and assembly
+child commands discard scoring-annealing arguments. Cartesian refinement and
+continuous follow-up do not support this option.
+
 Work that has alignments, or nothing at all, but no noise-power estimate is
 one problem: a fresh solve3D start, the ini3D routes, external starting
 volumes, the refine3D_auto startup, a refine3D started at a later iteration in

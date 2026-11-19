@@ -38,6 +38,13 @@ contains
         &visibility=UI_VIS_STANDARD, display_name='Solve 3D Map Determination')
         ! INPUT PARAMETER SPECIFICATIONS
         call add_solve3D_base_inputs(solve3D, l_stream_compatible=.false., l_include_nsample=.true., l_include_pcg=.true.)
+        call solve3D%add_input(UI_SRCH, 'sigma2_anneal', 'binary', 'Anneal bootstrap noise for matching', &
+            &'Start from white noise and reach the smoothed bootstrap over the sticky sampling stages (1-4), '//&
+            &'then reach model-based noise before the final two stages. The same stage schedule applies to '//&
+            &'full sampling and multiple states; shorter runs compress the ramps. Reconstruction retains '//&
+            &'measured spectra. Requires polar Euclidean matching without continuous follow-up(yes|no){no}', &
+            &'', .false., 'no', group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+            &visibility=UI_VIS_ADVANCED)
         ! add to ui_hash
         call add_ui_program('solve3D', solve3D, prgtab, UI_CATEGORY)
     end subroutine new_solve3D

@@ -15,10 +15,10 @@ private
 #include "simple_local_flags.inc"
 
 !> what calc_pspec takes from the command line it is derived from: the
-!! mask, and the compute and queue settings; the rest of the execution
+!! mask, scoring-anchor request, and compute and queue settings; the rest of the execution
 !! environment is the project's compenv
-character(len=*), parameter :: PSPEC_TEMPLATE_KEYS(5) = [character(len=10) :: &
-    &'mskdiam', 'nthr', 'nparts', 'qsys_name', 'walltime']
+character(len=*), parameter :: PSPEC_TEMPLATE_KEYS(6) = [character(len=13) :: &
+    &'mskdiam', 'nthr', 'nparts', 'qsys_name', 'walltime', 'sigma2_anneal']
 
 contains
 
@@ -141,6 +141,10 @@ contains
         call cline_sigma%delete('frozen_carry')
         call cline_sigma%delete('ufrac_trec')
         call cline_sigma%delete('sticky_sampling')
+        call cline_sigma%delete('sigma2_anneal')
+        call cline_sigma%delete('sigma2_weight_start')
+        call cline_sigma%delete('sigma2_weight_end')
+        call cline_sigma%delete('sigma2_weight')
         call cline_sigma%delete('postprocess')
         call cline_sigma%delete('combine_eo')
         call cline_sigma%delete('outfile')

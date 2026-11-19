@@ -49,15 +49,10 @@ contains
                 if( stage==nstages )then
                     first=0.5; last=1.
                 endif
-                call assert_real(first,child%get_rarg('sigma2_weight_start'),TOL,'stage starts at its assigned sigma weight')
-                call assert_real(last,child%get_rarg('sigma2_weight_end'),TOL,'stage ends at its assigned sigma weight')
-                ! flat: the stages before the last two ramp from the white ceiling to the anchor in equal steps
-                params%sigma2_anneal='flat'
-                call set_cline_refine2D_stage(child,cline,params,stages,20,stage)
-                params%sigma2_anneal='yes'
-                if( stage<=min(SIGMA2_FLAT_LAST_STAGE,nstages-2) )then
-                    first=-1.+real(stage-1)/real(min(SIGMA2_FLAT_LAST_STAGE,nstages-2))
-                    last=-1.+real(stage)/real(min(SIGMA2_FLAT_LAST_STAGE,nstages-2))
+                ! The five/six-stage schedules split the white-to-anchor ramp into thirds.
+                if( stage<=3 )then
+                    first=-1.+real(stage-1)/3.
+                    last=-1.+real(stage)/3.
                 endif
                 call assert_real(first,child%get_rarg('sigma2_weight_start'),TOL,'stage starts at its assigned sigma weight')
                 call assert_real(last,child%get_rarg('sigma2_weight_end'),TOL,'stage ends at its assigned sigma weight')
@@ -75,11 +70,8 @@ contains
                 &'penultimate annealing stage cannot be omitted')
             call assert_true(solve2D_stage_behind_frc05(stages,nstages-1,1,nstages,hist,2,sigma2_anneal=.false.), &
                 &'ordinary stage omission remains enabled')
-            call set_cline_refine2D_seed_pass(child,params,stages,10,'seed.mrc')
-            call assert_real(0.,child%get_rarg('sigma2_weight_end'),TOL,'seed pass keeps the bootstrap')
-            params%sigma2_anneal='flat'
             call set_cline_refine2D_stage(child,cline,params,stages,20,1)
-            call assert_real(-1.,child%get_rarg('sigma2_weight_start'),TOL,'flat schedule starts white')
+            call assert_real(-1.,child%get_rarg('sigma2_weight_start'),TOL,'enabled annealing starts white')
             call set_cline_refine2D_stage(child,cline,params,stages,20,SIGMA2_FLAT_LAST_STAGE)
             call assert_real(0.,child%get_rarg('sigma2_weight_end'),TOL,'flat ramp reaches the anchor at its last stage')
             if( nstages-2 > SIGMA2_FLAT_LAST_STAGE )then
@@ -88,9 +80,8 @@ contains
                 call assert_real(0.,child%get_rarg('sigma2_weight_end'),TOL,'stages after the flat ramp hold the anchor')
             endif
             call set_cline_refine2D_seed_pass(child,params,stages,10,'seed.mrc')
-            call assert_real(-1.+real(PROBREFINE_STAGE-1)/real(min(SIGMA2_FLAT_LAST_STAGE,nstages-2)), &
-                &child%get_rarg('sigma2_weight_end'),TOL,'flat seed pass holds the start of the stage it precedes')
-            params%sigma2_anneal='yes'
+            call assert_real(-1./3.,child%get_rarg('sigma2_weight_start'),TOL,'seed pass starts at stage three''s weight')
+            call assert_real(-1./3.,child%get_rarg('sigma2_weight_end'),TOL,'seed pass holds stage three''s start weight')
             deallocate(stages)
         enddo
         call assert_real(1.,sigma2_stage_weight(1,1,1.,1.),TOL,'terminal pass is measured')

@@ -1,4 +1,4 @@
-!@descr: the log-Savitzky-Golay bootstrap anchor of the 2D scoring-noise annealing
+!@descr: the log-Savitzky-Golay bootstrap anchor of particle scoring-noise annealing
 module simple_sigma2_anchor
 use, intrinsic :: iso_fortran_env, only: int32, int64, real32, real64
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -49,7 +49,7 @@ contains
         status = 0
     end subroutine blend_sigma2
 
-    !> The white start of sigma2_anneal=flat: each half's largest anchor variance over the matching band, on every shell.
+    !> The white start of scoring-noise annealing: each half's largest anchor variance over the matching band, on every shell.
     subroutine sigma2_flat_ceiling( anchor_band, flat, status )
         real(real32), intent(in)  :: anchor_band(:,:)
         real(real32), intent(out) :: flat(:,:)

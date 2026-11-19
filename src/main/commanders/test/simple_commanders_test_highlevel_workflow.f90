@@ -407,8 +407,8 @@ module subroutine exec_test_simulated_workflow( self, cline )
         if( file_exists(PROJFILE) ) project_path = simple_abspath(string(PROJFILE))
     end subroutine update_project_path
 
-    !> solve3D on the solve2D project with the suite's settings, in shared memory; the final map is checked
-    !! against the truth, in the gate rows named after tag
+    !> solve3D on the solve2D project with the suite's settings (optional nsample, nparts and sigma2_anneal from the
+    !! suite's command line); the final map is checked against the truth, in the gate rows named after tag
     subroutine run_solve3D_step( tag, ok, corr, fsc0143, dcorr_direct, dcorr_mirrored, dcorr_selected )
         character(len=*), intent(in)  :: tag
         logical,          intent(out) :: ok
@@ -420,6 +420,9 @@ module subroutine exec_test_simulated_workflow( self, cline )
         call cline_solve3D%set('mskdiam',                    MSKDIAM)
         call cline_solve3D%set('gold_std_stage',         GOLD_STD_3D)
         call cline_solve3D%set('nthr',                          NTHR)
+        call cline_solve3D%copy_arg(cline, 'sigma2_anneal')
+        call cline_solve3D%copy_arg(cline, 'nsample')
+        call cline_solve3D%copy_arg(cline, 'nparts')
         call xsolve3D%execute(cline_solve3D)
         solve3D_project = cline_solve3D%get_carg('projfile')
         call simple_getcwd(solve3D_dir)

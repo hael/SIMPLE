@@ -65,6 +65,10 @@ contains
         call cline_pose_init%set('trail_rec',       'no')
         ! one pass over its own sample: the stage's sticky subset is not this pass's
         call cline_pose_init%delete('sticky_sampling')
+        call cline_pose_init%delete('sigma2_anneal')
+        call cline_pose_init%delete('sigma2_weight_start')
+        call cline_pose_init%delete('sigma2_weight_end')
+        call cline_pose_init%delete('sigma2_weight')
         call cline_pose_init%set('volrec',          'no')
         call cline_pose_init%set('cc_emit_sigma',   'yes')
         call cline_pose_init%set('update_frac',     ufrac_pose_init)

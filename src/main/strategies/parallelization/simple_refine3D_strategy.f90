@@ -13,7 +13,8 @@ use simple_qsys_env,            only: qsys_env
 use simple_convergence,         only: convergence
 use simple_decay_funs,          only: inv_cos_decay, cos_decay
 use simple_cluster_seed,        only: gen_labelling
-use simple_strategy_sigma2,     only: prepare_canonical_sigma_update, read_sigma2_bench_counts, commit_sigma2_exec
+use simple_strategy_sigma2,     only: prepare_canonical_sigma_update, prepare_canonical_sigma_anchor, &
+    &report_sigma2_anchor, read_sigma2_bench_counts, commit_sigma2_exec
 use simple_rec3D_pcg_strategy,  only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr, &
     &pcg_assemble_bench, write_pcg_assemble_bench, remove_pcg_raw_files
 use simple_halfmap_diagnostics, only: rename_support_provenance
@@ -593,6 +594,10 @@ contains
         call cline%delete('cont_prior')
         call cline%delete('cont_prior_rot_sigma')
         call cline%delete('cont_prior_shift_sigma')
+        call cline%delete('sigma2_anneal')
+        call cline%delete('sigma2_weight_start')
+        call cline%delete('sigma2_weight_end')
+        call cline%delete('sigma2_weight')
     end subroutine strip_refine3D_search_only_args
 
     !> Strategy selection based on command-line shape.
@@ -1301,6 +1306,7 @@ contains
         call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs .and. .not. l_followup, &
             &readout=readout)
         call store_state_readout(self%conv, readout)
+        call report_sigma2_anchor(params, build, params%kfromto)
         if( l_followup )then
             ! The continuous pass consumes the committed poses and sample on this same project.
             cline_followup = cline
@@ -1697,6 +1703,7 @@ contains
         else
             write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing committed canonical state'
         endif
+        call prepare_canonical_sigma_anchor(params, build)
     end subroutine ensure_canonical_sigma2
 
 
@@ -1788,6 +1795,8 @@ contains
         call self%job_descr%set( 'startit',    int2str(params%startit))
         call cline%set(          'startit',    params%startit)
         if( params%l_prob_align_mode ) call self%job_descr%set('prob_beta', real2str(params%prob_beta))
+        if( params%sigma2_anneal == 'yes' ) &
+            &call self%job_descr%set('sigma2_weight', real2str(params%sigma2_weight))
         if( params%l_nonuniform_lpset .and. params%l_lpset ) call self%job_descr%set('lp', real2str(params%lp))
         if( trim(params%volrec).eq.'yes' )then
             call remove_partial_rec_files(params)
@@ -1814,6 +1823,8 @@ contains
         ! searches nothing and writes none)
         if( trim(params%refine) /= 'sigma' ) call build%spproj%merge_algndocs(params%nptcls, params%nparts, &
             &params%oritype, ALGN_FBODY, write=l_followup)
+        ! the spectra this iteration scored against, before its residual commit
+        call report_sigma2_anchor(params, build, params%kfromto)
         if( l_followup )then
             ! the continuous followup pass (C8, C19): refine=cont over the discrete pass's particle sample (the
             ! workers reproduce it from the merged project), from the poses it committed, against

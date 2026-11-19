@@ -329,6 +329,7 @@ contains
                 call assert_string_eq('yes', cline_refine3D%get_carg('trail_rec'), 'several states: trailing from stage 8')
             endif
         end do
+        call check_sigma2_schedules(params)
         params%nstates = 1
         call cline_refine3D%kill
         cline_refine3D = saved_cline
@@ -360,6 +361,72 @@ contains
         end subroutine write_res05
 
     end subroutine test_gold_standard_stages
+
+    !> Hand-planned boundaries: short runs reserve two measured stages; full sampling and states share the schedule.
+    subroutine check_sigma2_schedules( params )
+        use simple_solve3D_utils, only: cline_refine3D, set_cline_refine3D, nstages_refine3D
+        use simple_parameters, only: parameters
+        class(parameters), intent(inout) :: params
+        real :: bounds(0:8)
+        integer :: nstages, stage, mode
+        write(*,'(A)') 'check_sigma2_schedules'
+        params%sigma2_anneal = 'yes'
+        do mode=1,3
+            params%nstates = 1
+            params%nsample = 1000
+            if( mode == 2 ) params%nsample = 100000
+            if( mode == 3 ) params%nstates = 2
+            do nstages=1,8
+                nstages_refine3D = nstages
+                bounds = 1.
+                select case(nstages)
+                    case(3)
+                        bounds(0:1) = [-1.,1.]
+                    case(4)
+                        bounds(0:2) = [-1.,0.,1.]
+                    case(5)
+                        bounds(0:3) = [-1.,-0.5,0.,1.]
+                    case(6)
+                        bounds(0:4) = [-1.,-2./3.,-1./3.,0.,1.]
+                    case(7)
+                        bounds(0:5) = [-1.,-0.75,-0.5,-0.25,0.,1.]
+                    case(8)
+                        bounds(0:6) = [-1.,-0.75,-0.5,-0.25,0.,0.5,1.]
+                end select
+                do stage=1,nstages
+                    call set_cline_refine3D(params, stage, 1, .false.)
+                    call assert_string_eq('yes',cline_refine3D%get_carg('sigma2_anneal'),'stage enables scoring annealing')
+                    call assert_real(bounds(stage-1),cline_refine3D%get_rarg('sigma2_weight_start'),1.e-6, &
+                        &'stage starts at its planned annealing boundary')
+                    call assert_real(bounds(stage),cline_refine3D%get_rarg('sigma2_weight_end'),1.e-6, &
+                        &'stage ends at its planned annealing boundary')
+                enddo
+            enddo
+        enddo
+        params%nstates = 1
+        params%nsample = 1000
+        nstages_refine3D = 8
+        bounds(3:8) = [-1.,0.,0.5,1.,1.,1.]
+        do stage=4,8
+            call set_cline_refine3D(params,stage,4,.false.)
+            call assert_real(bounds(stage-1),cline_refine3D%get_rarg('sigma2_weight_start'),1.e-6,'late entry ramp start')
+            call assert_real(bounds(stage),cline_refine3D%get_rarg('sigma2_weight_end'),1.e-6,'late entry ramp end')
+        enddo
+        call set_cline_refine3D(params,6,6,.false.)
+        call assert_real(-1.,cline_refine3D%get_rarg('sigma2_weight_start'),0.,'one pre-final stage starts white')
+        call assert_real(1.,cline_refine3D%get_rarg('sigma2_weight_end'),0.,'one pre-final stage completes both ramps')
+        call set_cline_refine3D(params,7,7,.false.)
+        call assert_real(1.,cline_refine3D%get_rarg('sigma2_weight_start'),0.,'two-stage entry is model based')
+        call set_cline_refine3D(params,4,1,.true.)
+        call assert_false(cline_refine3D%defined('sigma2_anneal'),'class-average initialization keeps its scoring')
+        params%sigma2_anneal = 'no'
+        call cline_refine3D%set('sigma2_anneal','yes')
+        call cline_refine3D%set('sigma2_weight',-1.)
+        call set_cline_refine3D(params,1,1,.false.)
+        call assert_false(cline_refine3D%defined('sigma2_anneal'),'disabled schedule removes an inherited switch')
+        call assert_false(cline_refine3D%defined('sigma2_weight'),'disabled schedule removes a stale worker weight')
+        call assert_false(cline_refine3D%defined('sigma2_weight_start'),'disabled schedule adds no stage bounds')
+    end subroutine check_sigma2_schedules
 
     !> Run emitted early-stop settings through the owner's sampler, over several iterations and the stage handoff.
     subroutine check_early_stage_sticky( params, last_stage, first_stage )

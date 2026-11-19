@@ -151,25 +151,24 @@ reference and filtering rules; the solve2D stage default does not apply to them.
   over every particle (the terminal pass) before the final class averages.
 
 **Scoring-noise annealing.** `sigma2_anneal=yes` (the default of solve2D and
-solve2D_chunks; standalone refine2D defaults to `no`) uses each
-half's saved bootstrap, smoothed by seven-point quadratic Savitzky–Golay in
-log variance, for scoring in the early stages. The penultimate stage ramps
-the measured-sigma log-blend weight from 0 to 0.5; the final stage ramps from
+solve2D_chunks; standalone refine2D defaults to `no`) starts scoring from white
+noise and anneals through each half's saved bootstrap, smoothed by seven-point
+quadratic Savitzky–Golay in log variance, to measured noise. The penultimate
+stage ramps the measured-sigma log-blend weight from 0 to 0.5; the final stage ramps from
 0.5 to 1. Both stages run through their iteration budgets and cannot be
 omitted. A one-iteration stage uses its endpoint, and coverage extensions
 hold it. With two stages the first is already the 0 to 0.5 ramp; a single
 stage ramps from 0.5 to 1, so the bootstrap is never used alone. The terminal
-greedy pass uses measured sigmas; a seed pass retains the bootstrap.
-`sigma2_anneal=flat` (experimental, 2026-11-18) starts earlier, from white
-noise: the weight extends to [-1, 0), where `exp(-w log flat + (1+w) log
-anchor)` blends each half's flat ceiling (the anchor's largest variance over
+greedy pass uses measured sigmas. The white start uses weights in [-1, 0),
+where `exp(-w log flat + (1+w) log anchor)` blends each half's flat ceiling
+(the anchor's largest variance over
 the pass's matching band, on every shell) into the anchor. Stages 1-3
 (`SIGMA2_FLAT_LAST_STAGE`, fewer when only the last two stages follow) ramp
 from -1 to 0 in equal steps; the stages up to the last two then hold the
 anchor, the last two are as above, and a seed pass holds the start of the
 stage it precedes. Standalone refine2D ramps from
 -1 to 1. White scoring is unwhitened L2: it weights low frequencies most and
-gives the hottest posteriors.
+gives the hottest posteriors. The accepted values are `yes|no`; `no` uses measured scoring.
 Reconstruction and residual updates always use measured spectra. The beta
 schedule is independent. The smoothed bootstrap (the anchor) is saved beside
 the canonical sigma2 store as `sigma2_state.bin.anchor`; see

@@ -38,6 +38,7 @@ contains
         call test_worker_project_recorded()
         call test_execution_project_copy()
         call test_mirr_proj_binding()
+        call test_sigma2_anneal_defaults()
         call leave_fixture(saved, root, nfail0)
         ! The constructor must not leave directory globals pointing into the removed fixture.
         if( allocated(CWD_GLOB) ) deallocate(CWD_GLOB)
@@ -127,14 +128,34 @@ contains
         call assert_real(0.5,params%sigma2_weight_start,1.e-6,'sigma ramp start survives construction')
         call assert_real(1.,params%sigma2_weight_end,1.e-6,'sigma ramp end survives construction')
         call assert_real(0.75,params%sigma2_weight,1.e-6,'worker sigma weight survives construction')
-        call cline%set('sigma2_anneal','flat')
         call cline%set('sigma2_weight_start',-1.)
         call cline%set('sigma2_weight',-0.5)
         call params%new(cline,silent=.true.)
-        call assert_char('flat',params%sigma2_anneal,'flat sigma annealing survives parameter construction')
-        call assert_real(-1.,params%sigma2_weight_start,1.e-6,'flat ramp starts at the white ceiling')
+        call assert_char('yes',params%sigma2_anneal,'enabled sigma annealing accepts the white start')
+        call assert_real(-1.,params%sigma2_weight_start,1.e-6,'sigma ramp starts at the white ceiling')
+        call assert_real(-0.5,params%sigma2_weight,1.e-6,'negative worker sigma weight survives construction')
         call cline%kill()
     end subroutine test_mirr_proj_binding
+
+    subroutine test_sigma2_anneal_defaults()
+        use simple_default_clines, only: set_refine2D_defaults
+        class(cmdline), allocatable :: cline
+        write(*,'(A)') 'test_sigma2_anneal_defaults'
+        allocate(cline)
+        call cline%set('mskdiam',12.)
+        call set_refine2D_defaults(cline)
+        call assert_true(.not. cline%defined('sigma2_weight_start'),'default refine2D adds no annealing ramp')
+        call cline%set('sigma2_anneal','no')
+        call set_refine2D_defaults(cline)
+        call assert_true(.not. cline%defined('sigma2_weight_start'),'disabled annealing adds no ramp')
+        call cline%set('sigma2_anneal','yes')
+        call set_refine2D_defaults(cline)
+        call assert_real(-1.,cline%get_rarg('sigma2_weight_start'),0.,'standalone annealing starts white')
+        call cline%set('sigma2_weight_start',0.5)
+        call set_refine2D_defaults(cline)
+        call assert_real(0.5,cline%get_rarg('sigma2_weight_start'),0.,'explicit stage start overrides the white default')
+        call cline%kill()
+    end subroutine test_sigma2_anneal_defaults
 
     ! The parameter constructor must retain the selector before the expensive simulation.
     subroutine test_suite_binding()
@@ -221,11 +242,16 @@ contains
         call child%await_final_status()
         call assert_int(FORK_STATUS_FAILED, child%status(), 'sigma2_anneal refuses misspelled yes')
         call child%destroy
-        call cline%set('sigma2_anneal', 'yes')
-        call cline%set('sigma2_weight_start', -1.)
-        call child%start(name=string('PARAMETERS_SIGMA2_NEGATIVE_YES'), cline=cline)
+        call cline%set('sigma2_anneal', 'flat')
+        call child%start(name=string('PARAMETERS_SIGMA2_FLAT'), cline=cline)
         call child%await_final_status()
-        call assert_int(FORK_STATUS_FAILED, child%status(), 'a weight below 0 needs sigma2_anneal=flat')
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'sigma2_anneal refuses the retired flat value')
+        call child%destroy
+        call cline%set('sigma2_anneal', 'no')
+        call cline%set('sigma2_weight_start', -1.)
+        call child%start(name=string('PARAMETERS_SIGMA2_NEGATIVE_NO'), cline=cline)
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a weight below 0 needs sigma2_anneal=yes')
         call child%destroy
         call cline%kill()
     end subroutine test_yes_no_refused
