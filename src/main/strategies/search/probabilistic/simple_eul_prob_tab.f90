@@ -1463,7 +1463,7 @@ contains
         self%post_slots_identical = .false.
         self%post_has_halves = .false.
         self%post_ref_offset = 0
-        if( allocated(self%assgn_map)    ) deallocate(self%assgn_map)
+        if( allocated(self%assgn_map)      ) deallocate(self%assgn_map)
         if( allocated(self%batch_rows)     ) deallocate(self%batch_rows)
         if( allocated(self%batch_refined)  ) deallocate(self%batch_refined)
         if( allocated(self%batch_nrefined) ) deallocate(self%batch_nrefined)

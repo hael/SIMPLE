@@ -93,6 +93,18 @@ All are recorded in Progress, under each phase.
 
 ## 5. Evidence against the baseline
 
+- **Linux baseline-check portability.** The frozen KB errors were measured on macOS with GCC 16.
+  Linux/GCC 15.2 reproduces the low shells but gives 0.079582 at shell 17 against the frozen
+  0.079389 (0.24 % apart), failing the original 0.1 % reproduction check. That shell's analytic
+  RMS is only 1.23e-6 of shell 2's: the original check demands absolute agreement below
+  1e-10 of shell 2, despite the single-precision phantom and FFT. The reproduction check now
+  adds one single-precision epsilon of shell 2's analytic RMS, converted to each shell's
+  relative-error units. The allowance is capped at the frozen KB error, so the bank must
+  still satisfy the frozen T1 ceiling. A zero-bank negative control must fail at every shell.
+  The frozen T1/T2 accuracy limits, judged shells and production calculations are unchanged.
+  Validation on Linux/GCC 15.2 Release: incremental build and installation passed; the full
+  `unit_pftc_align2D3D` suite passed in reverse order; the fast gate passed all 15 entries in
+  22.40 s, with 6,602/6,602 assertions passing in `unit_pftc_align2D3D`.
 - **No-change case** (`cont_view=no`, Release, `nthr=1`): the 63 identity outputs byte-identical to Phase 0's base run
   after every phase (`scratch/logs/cmp_p1_prob_neigh_final.txt`, `cmp_p2_prob_neigh_final.txt`).
 - **Gates:** fast gate 15/15 on Release and Debug; `fills` 48 rows, no differing entry, its table identical to the
