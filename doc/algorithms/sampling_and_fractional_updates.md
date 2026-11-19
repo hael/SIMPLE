@@ -41,20 +41,17 @@ been updated, and `sampled`, the last sampling round that selected it. The
   over sampling units built from the selected 2D classes. Each unit is one
   selected class, with its active particles in index order.
 
-  - Under `class`, every unit gets a share in proportion to the square root
-    of its population, capped at its population. Rare views are sampled more
-    often than proportional sampling would, but a class 100 times smaller is
-    visited 10 times as often per particle, not 100 times, so one small odd
-    class cannot take over the draw.
+  - Under `class`, every unit gets an equal share, capped at its population,
+    so rare views are sampled more often than proportional sampling would.
   - Under `cavg`, the class averages are first clustered into `nclust`
     groups (default 20) by average linkage on their rotation-, shift-, and
     mirror-invariant correlation between 30 and 6 A, so that a preferred view
     split over many classes becomes one group. A group holding fewer than 2.5%
     of the particles keeps merging into its nearest group, so outlier classes
-    do not become groups of their own. The budget is then shared over the groups
-    and, within a group, over its units, in both cases in proportion to the
-    square root of the populations; the remainder of a split goes to the
-    least-updated units. The group level keeps the views
+    do not become groups of their own. The budget is then shared equally over
+    the groups and, within a group, equally over its units, each capped at its
+    population; the remainder of a split goes to the least-updated units. The
+    group level keeps the views
     balanced, and the unit level keeps the classes inside a view, which may
     be different conformational states, on an equal footing.
 

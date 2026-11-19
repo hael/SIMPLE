@@ -702,3 +702,18 @@ and its code are removed (the `src` side of `76110d3f5` reversed: the key, `l_ns
 `solve3D_stage_nsample`, `NSAMPLE_RAMP_DEFAULT`, the ramp's refusals and log lines, its tests). The sticky stages
 are those of `218f0f289` again: stage 1 draws `best`, stages 2-4 `keep`, every stage at `nsample`. The
 `has_search_score` dense pass of the entry above stays; it serves stage 1's first iteration.
+
+**2026-11-18, square-root quotas and the dense first pass reverted (Hans's ruling after the gate runs; base
+`a8a59331`).** On the same particles and command, today's build against the Nov16 build (`8363af24`), 10 restarts
+each: PorF broke its pseudo-symmetry in stage 5 later (never in 4 restarts of 10, in 0 of 10 before; the sample's
+view-imbalance correction 5.0x against 6.8x), FlhB likewise (p = 0.001 on the break iteration), and PfCRT, full
+sampling with the quotas inactive, was slower in stage 1 (11.6 against 7.9 iterations a shell behind, p = 0.03; one
+restart never recovered). The net source diff between the builds leaves two behavioural changes on solve3D's
+default path: `218f0f289` (square-root quotas, the fractional sample) and `e94681175` (the dense first pass, stage
+1 iteration 1); everything else is net-zero there (the in-plane insertion's removal restores the `no` branch,
+`keep_centring` and the refine3D_auto defaults are the workflow's own, the shift solver's default is unchanged).
+Both reversed: equal shares again (the code, tests and documents of `218f0f289`); the dense pass keys on
+`has_been_searched` again and `has_search_score` is gone. The pass is not needed: the sticky subset is searched at
+every shc iteration, so its particles climb from their random start and refine from there. A sampling policy that
+adds particles during the shc stages must bring its own first-pass rule (the solve3D policy, the fractional-update
+policy and the sampling skill's coupling map say so).

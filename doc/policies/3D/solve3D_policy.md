@@ -83,17 +83,21 @@ Stage policy includes:
     `corr`; at random when the project holds no 2D scores), and the next stages
     through 4 keep it (`sticky_sampling=keep`). A run that enters at stage 4
     (supplied volumes, `cavg_ini`, `cavg_ini_ext`) holds it for its entry stage.
-    The shc neighbourhood search scans a never-searched particle in full (a
-    record without a search score, `has_search_score`): it scores every
-    reference into the table and draws from the posterior over all of them, so
-    the first iteration of the run gets a global search instead of a hill climb
-    from the random start orientation. Until 2026-11-17 the dense pass keyed on `has_been_searched`,
-    which counts Euler angles as a pose (as the virgin-field test needs), and the
-    random start (`delete_3Dalignment`, then `rnd_oris`) sets them for every
-    particle, so no particle took the full scan and an added particle's first
-    pose was drawn from a handful of references that beat a random pose. A
-    fresh draw every iteration would make the shc stages a sequence of full
-    scans, and the subset's map consolidates before new particles arrive, as
+    The shc neighbourhood search forces no dense first pass on a solve3D
+    particle: its dense pass keys on `has_been_searched`, which counts the
+    random start orientation (`delete_3Dalignment`, then `rnd_oris`) as a
+    search, so every particle of the subset climbs from its random start at the
+    first iteration and is searched again at every shc iteration, which the
+    sticky subset guarantees. Keying the pass on the search score instead
+    (`has_search_score`, 2026-11-17 to 2026-11-18) gave every particle a
+    posterior draw over all references at iteration 1 and slowed stage 1 on the
+    gate targets (PfCRT under full sampling: 11.6 against 7.9 iterations a shell
+    behind; one restart never recovered), so it was reverted. The rule: a
+    sampling policy that adds particles to the subset during the shc stages (as
+    the withdrawn `nsample_ramp` did) must bring its own first-pass rule for
+    them, since they arrive with a random start orientation and no dense pass.
+    A fresh draw every iteration would start each new particle from a random
+    orientation, and the subset's map consolidates before new particles arrive, as
     with the greedy sample of `3fb0b00b`, which held each class's best particles
     below stage 5 whatever the entry stage (with it the export gate showed
     helices from stage 3). From stage 5 the sample is redrawn every iteration
@@ -183,19 +187,16 @@ average linkage on their aligned correlation between 30 and 6 A, a group with
 fewer than 2.5% of the particles merged into its nearest group, so a preferred
 view spread over many classes no longer dominates the sample and an odd class
 does not become a group of its own. Every fractional update shares
-its target over the groups in proportion to the square root of their
-populations, then over the classes of a group the same way, each capped at its
-population, then lowest `updatecnt` first inside a class, drawn from the whole
-class: no per-particle 2D score enters the draw, except the single-state sticky
-subset's, which takes each unit's best particles by the 2D objective (section 3,
-staged search). Under `class` every
+its target equally over the groups, then equally over the classes of a group
+(the remainder of a split to the class whose particles have the lowest mean
+`updatecnt`), each capped at its population, then lowest `updatecnt` first
+inside a class, drawn from the whole class: no per-particle 2D score enters
+the draw, except the single-state sticky subset's, which takes each unit's
+best particles by the 2D objective (section 3, staged search). Under `class` every
 class is its own group, so a rare view is sampled more often than its
-population alone would give, without one small class taking a large part of
-every draw (equal shares did: on a small membrane protein with six one-class
-groups of odd class averages, `cavg` with equal shares drew 80% of every sample
-from 18% of the particles). The square-root shares of 2026-11-05 (`15d6280a9`)
-were reverted by an unrelated commit the next day (`a027fe3bd`) and restored on
-2026-11-16; every build in between drew with equal shares. Under `none` the stages sample the
+population alone would give (square-root shares, 2026-11-05, gave way to equal
+shares on 2026-11-06; restored on 2026-11-16 and reverted on 2026-11-18 after
+the gate runs, section 3); under `none` the stages sample the
 global lowest `updatecnt` tiers, and the file holds class units only for the
 initial sample of the starting volumes. The groups are written
 as `view_partitionNN_cavgs` stacks with the table `view_partition.txt`. The

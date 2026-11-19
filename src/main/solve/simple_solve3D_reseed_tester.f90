@@ -458,8 +458,8 @@ contains
                 call make_units([8,8], [0,0])               ! 2 per unit
                 best = [3,6,10,13]
             case('cavg')
-                call make_units([4,4,8], [1,2,2])           ! square-root quotas 1.46 | 1.05, 1.49: 1, 1 and 2 (the tie to the larger unit)
-                best = [3,6,10,13]
+                call make_units([4,4,8], [1,2,2])           ! group quotas 2 and 2: 2 from rows 1-4, 1 from each other unit
+                best = [2,3,6,10]
         end select
         projfile = 'sticky_release.simple'
         call build%spproj%update_projinfo(projfile)

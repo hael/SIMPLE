@@ -93,7 +93,6 @@ type :: oris
     procedure          :: get_ctfvars
     procedure          :: has_been_sampled
     procedure          :: has_been_searched
-    procedure          :: has_search_score
     procedure          :: any_state_zero
     procedure          :: get_update_frac
     procedure          :: get_group_update_counts
@@ -768,12 +767,6 @@ interface
         logical :: has_been_searched
     end function has_been_searched
 
-    module function has_search_score( self, i )
-        class(oris), intent(in) :: self
-        integer,     intent(in) :: i
-        logical :: has_search_score
-    end function has_search_score
-
     module function any_state_zero( self )
         class(oris), intent(in) :: self
         logical :: any_state_zero
@@ -1410,9 +1403,8 @@ interface
         real, optional, intent(in)  :: ufrac
     end subroutine population_blend_weights_mass
 
-    ! Expected particles per iteration of every sampling unit under the nested square-root quota of
-    ! sample4update_class (over groups, then over the units of a group, in proportion to the square root
-    ! of the populations, capped at the populations)
+    ! Expected particles per iteration of every sampling unit under the nested equal quota of
+    ! sample4update_class (equal over groups, then over the units of a group, capped at populations)
     module subroutine class_sample_quotas( clssmp, ntarget, quotas )
         type(class_sample), intent(in)  :: clssmp(:)
         integer,            intent(in)  :: ntarget

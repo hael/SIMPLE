@@ -129,8 +129,8 @@ more subspace directions than that is limited to the 2,500.
 The automatic per-iteration target is 10,000 particles per state, capped at
 100,000. If the active count exceeds the target, the wrapper uses stochastic
 fractional updates over the sampling units of `balance=class`: one unit per
-selected 2D class; every draw shares its target over the classes in
-proportion to the square root of their populations, then lowest `updatecnt`
+selected 2D class; every draw shares its target equally over the classes,
+each capped at its population, then lowest `updatecnt`
 first inside a class. Without
 selected class averages in the project the wrapper falls back to
 `balance=none` (global lowest `updatecnt` tiers). Particles inactive in

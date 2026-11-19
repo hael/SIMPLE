@@ -38,7 +38,6 @@ contains
         call test_copy_nonptcl_to_ptcl()
         call test_delete_2Dclustering()
         call test_delete_3Dalignment()
-        call test_has_search_score()
         call test_transfer_2Dparams()
         call test_transfer_3Dparams()
         call test_mirror3d_involution()
@@ -428,27 +427,6 @@ contains
         call assert_real(0.0, o%get('corr'), 1.0e-6, 'delete_3Dalignment clears corr')
         call assert_real(0.0, o%get('frac'), 1.0e-6, 'delete_3Dalignment clears frac')
     end subroutine test_delete_3Dalignment
-
-    !> the shc stages' dense first pass keys on the search score: the random start orientation solve3D gives every
-    !! particle (delete_3Dalignment, then rnd_ori) carries none, so it is scanned in full; has_been_searched, which
-    !! the virgin-field test and the 2D search read, still counts the angles of a pose
-    subroutine test_has_search_score()
-        type(ori) :: o
-        write(*,'(A)') 'test_has_search_score'
-        call o%new_ori(.true.)
-        call assert_true(.not. o%has_search_score(), 'a fresh record has no search score')
-        call assert_true(.not. o%has_been_searched(), 'a fresh record holds no pose')
-        call o%set_shift([3.0, -4.0])
-        call o%rnd_ori()
-        call assert_true(abs(o%e1get()) + abs(o%e2get()) > 0., 'the random start sets Euler angles')
-        call assert_true(.not. o%has_search_score(), 'random start angles and kept shifts carry no search score')
-        call assert_true(o%has_been_searched(), 'random start angles still count as a pose')
-        call o%set('corr', 0.7)
-        call assert_true(o%has_search_score(), 'a search writes its score')
-        call o%delete_3Dalignment(keepshifts=.true.)
-        call o%rnd_ori()
-        call assert_true(.not. o%has_search_score(), 'the solve3D restart leaves no search score')
-    end subroutine test_has_search_score
 
     !---------------- transfer_2Dparams ----------------
 

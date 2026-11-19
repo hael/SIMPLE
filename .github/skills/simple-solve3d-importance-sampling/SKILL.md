@@ -92,7 +92,7 @@ Then answer the user request in this order:
   stage (`refine3D_states` blocks last at most three iterations).
 - The free draws never use 3D maps, poses, projection directions or
   per-particle objective values: 2D classes (and `cavg` groups) set strata and
-  quotas only (square-root shares, capped at populations), and a unit's quota is
+  quotas only (equal shares, capped at populations), and a unit's quota is
   drawn from the whole class by `updatecnt` and a keyed shuffle. The one scored
   draw is the solve3D sticky subset's (`best`). `clssmp.bin` carries no scores;
   `greedy_sampling`/`frac_best` are selection-tool keys (`sample_classes`), not

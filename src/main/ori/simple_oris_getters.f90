@@ -919,12 +919,6 @@ contains
         has_been_searched = self%o(i)%has_been_searched()
     end function has_been_searched
 
-    module function has_search_score( self, i )
-        class(oris), intent(in) :: self
-        integer,     intent(in) :: i
-        has_search_score = self%o(i)%has_search_score()
-    end function has_search_score
-
     module function any_state_zero( self )
         class(oris), intent(in) :: self
         integer :: i

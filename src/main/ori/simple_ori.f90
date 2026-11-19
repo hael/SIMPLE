@@ -76,7 +76,6 @@ type :: ori
     procedure          :: isstatezero
     procedure          :: isstate
     procedure          :: has_been_searched
-    procedure          :: has_search_score
     procedure          :: pparms2str
     procedure          :: pparms_strlen
     procedure          :: ori2json
@@ -1052,13 +1051,6 @@ contains
         ! if(.not. is_zero(self%get('y'))     )return
         has_been_searched = .false.
     end function has_been_searched
-
-    !> whether the orientation carries a search score (corr), which only a search writes: a pose set without a
-    !! search (the random start orientation of rnd_ori after delete_3Dalignment, or imported angles) has none
-    pure logical function has_search_score( self )
-        class(ori), intent(in) :: self
-        has_search_score = .not. is_zero(self%get('corr'))
-    end function has_search_score
 
     function pparms2str( self ) result( str_out )
         class(ori), intent(in)     :: self

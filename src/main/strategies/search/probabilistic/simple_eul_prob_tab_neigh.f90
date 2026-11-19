@@ -322,10 +322,10 @@ contains
             endif
             ! the candidate order: the previous reference last, the others keyed on the particle
             call keyed_candidate_order(self%rnd_scope, iptcl_loc, nfull_refs, prev_full_ref_loc, direct_srch_order(:,ithr_loc))
-            ! Only force a dense first pass when the particle truly has no search result: no search score (a random
-            ! start orientation or imported angles are none). Keying this off updatecnt would also send first-time
-            ! sampled particles that carry an earlier run's poses through a full scan.
-            l_greedy_first = l_shc_neigh .and. (.not. self%b_ptr%spproj_field%has_search_score(iptcl_loc))
+            ! has_been_searched counts the random start orientation as a search, so no solve3D particle takes the
+            ! dense first pass: the sticky subset climbs from its random start and is searched at every shc iteration.
+            ! A policy that adds particles during the shc stages needs its own first-pass rule (solve3D policy).
+            l_greedy_first = l_shc_neigh .and. (.not. self%b_ptr%spproj_field%has_been_searched(iptcl_loc))
             nrefs_bound    = nfull_refs
             if( self%nrefs < 1 ) THROW_HARD('direct stochastic neighborhood search has no active references')
             nmin_refs      = min(MIN_STOCH_FINE_REFS,self%nrefs)

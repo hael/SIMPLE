@@ -68,10 +68,10 @@ Sampling by stage:
   whatever the entry stage), drawn at the first stage's first iteration as every
   unit's quota of particles with the best 2D objective values
   (`sticky_sampling=best`), and kept by the next stages through 4 (`keep`): the
-  shc neighbourhood search of stages 1-2 scans never-searched particles in full
-  (no search score, `has_search_score`; the random start
-  orientation is no search result, so a never-searched particle is drawn from the
-  posterior over every reference),
+  shc neighbourhood search of stages 1-2 climbs from each particle's random
+  start orientation at the first iteration (no dense first pass:
+  `has_been_searched` counts the random start as a search; a policy that adds
+  particles during the shc stages needs its own first-pass rule for them),
   and the subset's map consolidates before new particles arrive; a stage-4 entry
   (supplied volumes, `cavg_ini`, `cavg_ini_ext`) holds it for that stage; from
   stage 5 every iteration redraws with no score. Multi-state runs, add-ons, the
@@ -104,9 +104,8 @@ and reconstruction behavior.
 
 Key routines:
 
-- `sample4update_class`: nested square-root quota over the units of `CLASS_SAMPLING_FILE`
-  (over groups, then over the units of a group, in proportion to the square root of the
-  populations and capped at them, then lowest `updatecnt`);
+- `sample4update_class`: nested equal quota over the units of `CLASS_SAMPLING_FILE`
+  (equal over groups, then over the units of a group, then lowest `updatecnt`);
   `class_sample_quotas` and `class_sample_sweep` give the expected quotas and the
   draws one full sweep takes (`max ceil(pop/quota)`); with the optional `scores`
   (one per row) a unit takes its best-scoring particles, whatever their update
