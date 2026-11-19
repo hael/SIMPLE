@@ -40,6 +40,7 @@ type :: lm_recorder
     real(dp) :: cb_x(2) = huge(1._dp)
     integer  :: nev = 0, ncb = 0, nreeval = 0, nrepeat = 0
     logical  :: pending = .false.
+    logical  :: clear_unchanged = .false. !< L4b: after its first call the callback reports the objective unchanged
     type(opt_spec), pointer :: spec => null() !< the callback reads the accepted point here
 end type lm_recorder
 
@@ -74,6 +75,7 @@ contains
         call test_lm_coupled_bound()
         call test_lm_flipped_gradient()
         call test_lm_callback()
+        call test_lm_callback_unchanged()
         call test_lm_rank_deficient()
         call test_lm_null_coordinate()
         call test_de_quadratic()
@@ -256,6 +258,7 @@ contains
             type is(lm_recorder)
                 fun_self%ncb = fun_self%ncb + 1
                 fun_self%c   = 1.5_dp
+                if( fun_self%clear_unchanged .and. fun_self%ncb > 1 ) fun_self%spec%callback_changed = .false.
                 if( all(fun_self%cb_x == fun_self%spec%x_8) ) fun_self%nrepeat = fun_self%nrepeat + 1
                 fun_self%cb_x    = fun_self%spec%x_8
                 fun_self%pending = .true.
@@ -551,6 +554,51 @@ contains
         deallocate(opt)
         call spec%kill
     end subroutine test_lm_callback
+
+    ! L4b (R10): the same solve with a callback that clears callback_changed after its first call (the centre no
+    ! longer moves): those callbacks add no evaluation, the path and the minimum are L4's
+    subroutine test_lm_callback_unchanged()
+        integer  :: ncb(2), nevals(2), nreeval(2)
+        real(dp) :: x(2,2)
+        integer  :: irun
+        write(*,'(A)') 'test_lm_callback_unchanged'
+        do irun = 1, 2
+            call run_moving(irun == 2, ncb(irun), nevals(irun), nreeval(irun), x(:,irun))
+        enddo
+        write(*,'(A,I0,A,I0,A,I0)') '  L4b callbacks ', ncb(2), ', evaluations ', nevals(2), ', re-evaluations ', nreeval(2)
+        call assert_true(ncb(2) > 1, 'L4b: the callback runs at more than one accepted step')
+        call assert_int(ncb(1), ncb(2), 'L4b: the same accepted steps as L4')
+        call assert_int(1, nreeval(2), 'L4b: only the callback that changed the objective is followed by an evaluation')
+        call assert_int(nevals(1) - (ncb(2) - 1), nevals(2), 'L4b: a callback that clears the flag adds no evaluation')
+        call assert_true(all(x(:,1) == x(:,2)), 'L4b: the solve reaches L4''s minimum')
+    end subroutine test_lm_callback_unchanged
+
+    subroutine run_moving( clear_unchanged, ncb, nevals, nreeval, x )
+        logical,  intent(in)  :: clear_unchanged
+        integer,  intent(out) :: ncb, nevals, nreeval
+        real(dp), intent(out) :: x(2)
+        class(optimizer), pointer :: opt => null()
+        type(opt_factory)       :: ofac
+        type(opt_spec), target  :: spec
+        type(lm_recorder)       :: rec
+        real :: lowest_cost
+        call spec%specify('lm', 2, limits=LIMS2, factr=1.d7, pgtol=1.d-8)
+        call spec%set_fdfcurvfun_8(moving_fdfcurv)
+        spec%opt_callback => moving_callback
+        call ofac%new(spec, opt)
+        rec%spec            => spec
+        rec%clear_unchanged = clear_unchanged
+        spec%x = [-3., 3.]
+        call opt%minimize(spec, rec, lowest_cost)
+        ncb     = rec%ncb
+        nevals  = spec%nevals
+        nreeval = rec%nreeval
+        x       = spec%x_8
+        rec%spec => null()
+        call opt%kill
+        deallocate(opt)
+        call spec%kill
+    end subroutine run_moving
 
     ! L5 (review 2): r = x + y - 1 has a singular curvature; lm reaches f < 1e-12 and x - y keeps its start
     ! value (to rounding, 1e-12, guessed): the null direction gets no step. factr 1e7, pgtol 1e-8

@@ -36,7 +36,7 @@ real,    parameter :: LOGISTIC_THRESHOLDS(20) = [0.02, 0.05, 0.075, 0.10, 0.15, 
                                                  0.55, 0.60, 0.65, 0.70, 0.75, 0.80, &
                                                  0.85, 0.90]
 real,    parameter :: LOGISTIC_COEFF_ABS_BOUND = 20.0
-character(len=*), parameter :: LOGISTIC_SOLVER = 'lbfgsb' !< the fit's optimiser; testers pass 'lm' to new
+character(len=*), parameter :: LOGISTIC_SOLVER = 'lm' !< the fit's optimiser (R6); testers pass either to new
 
 !> the design: intercept, the policy's features, their pairwise products, optionally one extra (relational) column
 type :: quality_logistic_problem
@@ -142,7 +142,7 @@ contains
         if( self%total_weight <= 0.0d0 ) THROW_HARD('nonpositive total weight; quality_logistic_problem%finalize')
     end subroutine finalize
 
-    !> L-BFGS-B (or the solver new was given) from the weighted log-odds intercept, coefficients bounded by
+    !> LOGISTIC_SOLVER (or the solver new was given) from the weighted log-odds intercept, coefficients bounded by
     !! LOGISTIC_COEFF_ABS_BOUND; nevals and niter (testers) are the optimiser's counts
     subroutine fit( self, solution, objective, nevals, niter )
         class(quality_logistic_problem), intent(inout) :: self

@@ -192,9 +192,12 @@ contains
         call pspec%kill
     end subroutine test_cont_isotropic_start
 
-    !> both solvers from the same eight starts on an astigmatic spectrum normalised as the fit normalises it; one
-    !! LM_COMPARE row per solver (evaluations, iterations, seconds, defocus and angle error; reported, not gated)
+    !> both solvers from the same eight starts on an astigmatic spectrum normalised as the fit normalises it, each start
+    !! timed NTIME times; one LM_COMPARE row per solver (evaluations, iterations, median seconds, defocus and angle error;
+    !! reported, not gated)
     subroutine test_cont_solver_comparison()
+        use simple_stat, only: median
+        integer,          parameter :: NTIME = 5
         character(len=6), parameter :: SOLVERS(2) = ['lbfgsb', 'lm    ']
         real, parameter :: DSTART(2,8) = reshape([0.02,0.01, -0.015,0.02, 0.01,-0.02, -0.02,-0.01, 0.015,0.015, &
             &-0.01,0.015, 0.015,-0.005, -0.02,0.005], [2,8])
@@ -204,8 +207,9 @@ contains
         type(ctfparams), target       :: parms
         integer, allocatable, target :: inds(:,:)
         real    :: limits(2,3), cc, err_df, err_ang, sum_df, max_df, sum_ang
-        integer :: isolver, istart, nevals, niter
+        integer :: isolver, istart, nevals, niter, irep, ntimed
         integer(kind=8) :: c0, c1, crate, csum
+        real(kind=8)    :: times(NTIME*size(ASTART))
         write(*,'(A)') 'test_cont_solver_comparison'
         allocate(pspec)
         call build_spectrum(pspec, inds, TRUE_DFX, TRUE_DFY, TRUE_ANGAST, 0., .false.)
@@ -216,6 +220,8 @@ contains
             sum_df = 0.
             max_df = 0.
             sum_ang = 0.
+            ntimed  = 0
+            do irep = 1, NTIME
             do istart = 1, size(ASTART)
                 call set_parms(parms, TRUE_DFX + DSTART(1,istart), TRUE_DFY + DSTART(2,istart), &
                     &TRUE_ANGAST + ASTART(istart), 0., .false.)
@@ -225,6 +231,12 @@ contains
                 call cost%minimize(parms, cc)
                 call system_clock(c1)
                 csum    = csum + (c1 - c0)
+                ntimed  = ntimed + 1
+                times(ntimed) = real(c1 - c0, 8) / real(crate, 8)
+                if( irep > 1 )then
+                    call cost%kill
+                    cycle
+                endif
                 nevals  = nevals + cost%ospec%nevals
                 niter   = niter  + cost%ospec%niter
                 err_df  = max(abs(parms%dfx - TRUE_DFX), abs(parms%dfy - TRUE_DFY))
@@ -234,10 +246,11 @@ contains
                 sum_ang = sum_ang + err_ang
                 call cost%kill
             enddo
-            write(*,'(A,A6,A,F7.2,A,F6.2,A,ES10.3,A,F8.5,A,F8.5,A,F8.4)') '  LM_COMPARE ctf_cost4Dcont ', SOLVERS(isolver), &
-                &' evals/solve ', real(nevals)/8., ' iters/solve ', real(niter)/8., ' s/solve ', &
-                &real(csum,8)/real(crate,8)/8.d0, ' mean df err ', sum_df/8., ' max df err ', max_df, &
-                &' mean angle err ', sum_ang/8.
+            enddo
+            write(*,'(A,A6,A,F7.2,A,F6.2,A,ES10.3,A,ES10.3,A,F8.5,A,F8.5,A,F8.4)') '  LM_COMPARE ctf_cost4Dcont ', &
+                &SOLVERS(isolver), ' evals/solve ', real(nevals)/8., ' iters/solve ', real(niter)/8., &
+                &' s/solve median ', median(times(1:ntimed)), ' mean ', real(csum,8)/real(crate,8)/real(ntimed,8), &
+                &' mean df err ', sum_df/8., ' max df err ', max_df, ' mean angle err ', sum_ang/8.
         enddo
         call pspec%kill
     end subroutine test_cont_solver_comparison

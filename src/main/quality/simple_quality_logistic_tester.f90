@@ -23,20 +23,27 @@ contains
     end subroutine run_all_quality_logistic_tests
 
     !> labels from the plane x1 - 2 x2 + 0.5 = 0 with every 20th label flipped: the fitted linear part points along
-    !! the plane's normal, and the fit classifies the clean rows, under both solvers; a comparison row per solver
+    !! the plane's normal, and the fit classifies the clean rows, under both solvers; a comparison row per solver with
+    !! the median seconds of NTIME identical fits
     subroutine test_toy_plane_recovered()
+        use simple_stat, only: median
+        integer, parameter :: NTIME = 20
         type(quality_logistic_problem) :: prob
         real(kind=8), allocatable :: sol(:)
         real    :: x(2,NTOY), obj, cosang
         logical :: good(NTOY)
-        integer :: i, ncorrect, nclean, isolver, nevals, niter
+        integer :: i, ncorrect, nclean, isolver, nevals, niter, irep
         integer(kind=8) :: c0, c1, crate
+        real(kind=8)    :: times(NTIME)
         write(*,'(A)') 'test_toy_plane_recovered'
         do isolver = 1, size(SOLVERS)
             call toy_problem(prob, x, good, trim(SOLVERS(isolver)))
-            call system_clock(c0, crate)
-            call prob%fit(sol, obj, nevals, niter)
-            call system_clock(c1)
+            do irep = 1, NTIME
+                call system_clock(c0, crate)
+                call prob%fit(sol, obj, nevals, niter)
+                call system_clock(c1)
+                times(irep) = real(c1 - c0, 8) / real(crate, 8)
+            end do
             cosang = real((sol(2) * 1.d0 - sol(3) * 2.d0) / (sqrt(sol(2)**2 + sol(3)**2) * sqrt(5.d0)))
             call assert_true(cosang > 0.99, trim(SOLVERS(isolver))//': linear coefficients along the plane normal')
             call assert_true(abs(sol(4)) < 0.25 * sqrt(sol(2)**2 + sol(3)**2), &
@@ -52,8 +59,8 @@ contains
             call assert_true(real(ncorrect) / real(nclean) > 0.95, trim(SOLVERS(isolver))//': clean rows classified')
             call assert_true(obj > 0.0, trim(SOLVERS(isolver))//': objective positive')
             write(*,'(A,A6,A,I4,A,I4,A,ES10.3,A,F9.6,A,F9.6,A,ES16.8)') '  LM_COMPARE quality_logistic ', &
-                &SOLVERS(isolver), ' evals ', nevals, ' iters ', niter, ' s ', &
-                &real(c1 - c0, 8) / real(crate, 8), ' cos ', cosang, ' clean ', real(ncorrect) / real(nclean), ' obj ', obj
+                &SOLVERS(isolver), ' evals ', nevals, ' iters ', niter, ' s median ', &
+                &median(times), ' cos ', cosang, ' clean ', real(ncorrect) / real(nclean), ' obj ', obj
             call prob%kill
         end do
     end subroutine test_toy_plane_recovered

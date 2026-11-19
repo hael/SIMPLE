@@ -12,7 +12,7 @@ public :: pftc_shsrch_grad
 public :: fit_quadratic_step, grid_stencil_exists
 public :: shift_ptcl2ref, shift_ref2ptcl
 public :: FIT_EDGE, FIT_CURVATURE, FIT_STEP, FIT_LIMITS, FIT_VALUE, FIT_NREASONS
-public :: shsrch_lm_terms
+public :: shsrch_lm_terms, shsrch_callback_profile
 private
 #include "simple_local_flags.inc"
 
@@ -21,7 +21,9 @@ integer,  parameter :: SHSRCH_SHIFT = 1, SHSRCH_JOINT = 2
 ! reasons the quadratic grid step falls back to the L-BFGS-B alternations
 integer,  parameter :: FIT_EDGE = 1, FIT_CURVATURE = 2, FIT_STEP = 3, FIT_LIMITS = 4, FIT_VALUE = 5, FIT_NREASONS = 5
 real(dp), parameter :: FIT_MIN_CURV_RATIO = 0.01d0 ! smallest accepted ratio of the Hessian's eigenvalues
-character(len=*), parameter :: SHSRCH_SOLVER = 'lbfgsb' !< the searches' optimiser; testers pass 'lm' to the constructors
+! the optimiser of each mode (R6, one per client); testers pass either to the constructors
+character(len=*), parameter :: SHSRCH_SOLVER       = 'lbfgsb' !< the shift mode (alternating and fixed angle)
+character(len=*), parameter :: SHSRCH_JOINT_SOLVER = 'lm'     !< the joint shift and in-plane mode
 
 type :: pftc_shsrch_grad
     private
@@ -41,12 +43,20 @@ type :: pftc_shsrch_grad
     logical                   :: joint_initial_cost_valid = .false.
     logical                   :: joint_cc = .false.      !< joint objective is cc (loss = -cc)
     character(len=8)          :: solver = SHSRCH_SOLVER   !< 'lm' minimises the euclid shift loss L/W + w|d|^2, not -exp(-loss)
+    real(dp)                  :: shift_curv(2,2) = 0.d0   !< 'lm' shift mode: the curvature at grid rotation shift_curv_irot,
+    integer                   :: shift_curv_irot = 0      !< shift-independent, so formed once per rotation of a solve (0: none)
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
     integer(int64)            :: profile_objective_evals = 0_int64
     integer(int64)            :: profile_gradient_evals  = 0_int64
     integer(int64)            :: profile_alternations    = 0_int64 !< L-BFGS-B / discrete in-plane alternations
     integer(int64)            :: profile_grid_points     = 0_int64 !< coarse-grid points scored
     integer(int64)            :: profile_minimize_calls  = 0_int64 !< calls of minimize
+    ! the discrete-angle callback: its calls, the rotation changes, and the 'lm' re-evaluations at a changed rotation
+    integer(int64)            :: profile_callbacks       = 0_int64
+    integer(int64)            :: profile_angle_changes   = 0_int64
+    integer(int64)            :: profile_reevals         = 0_int64
+    logical                   :: reeval_pending          = .false. !< a rotation change awaits its evaluation at reeval_x
+    real(dp)                  :: reeval_x(2)             = 0.d0
     ! quadratic step from the coarse grid (the multi-state probabilistic table)
     logical                   :: grid_fit     = .false. !< quadratic step from the coarse grid before the alternations
     real,         allocatable :: grid_corrs(:,:)        !< objective of every grid point over all rotations (nrots, points)
@@ -121,6 +131,12 @@ interface
         real(dp),                intent(out)   :: f, grad(:), curv(:,:)
         integer, optional,       intent(in)    :: irot
     end subroutine shsrch_lm_terms
+
+    !> the discrete-angle callback's profile: calls, rotation changes and evaluations at a changed rotation's point
+    module subroutine shsrch_callback_profile( srch, callbacks, angle_changes, reevals )
+        class(pftc_shsrch_grad), intent(in)  :: srch
+        integer(int64),          intent(out) :: callbacks, angle_changes, reevals
+    end subroutine shsrch_callback_profile
 end interface
 
 contains
@@ -160,7 +176,7 @@ contains
         logical,           optional, intent(in)    :: coarse_init    !< coarse inital search
         logical,           optional, intent(in)    :: grid_fit       !< quadratic step from the coarse grid
         logical,           optional, intent(in)    :: grid_ptcl      !< particle-frame coarse grid
-        character(len=*),  optional, intent(in)    :: solver         !< 'lbfgsb' (default) or 'lm'
+        character(len=*),  optional, intent(in)    :: solver         !< 'lbfgsb' (default, SHSRCH_SOLVER) or 'lm'
         type(opt_factory) :: opt_fact
         integer :: kfromto(2)
         call self%kill
@@ -214,7 +230,7 @@ contains
         character(len=*),  optional, intent(in)    :: solver     !< testers only: 'lbfgsb' or 'lm'
         type(opt_factory) :: opt_fact
         call self%kill
-        self%solver = SHSRCH_SOLVER
+        self%solver = SHSRCH_JOINT_SOLVER
         if( present(solver) ) self%solver = solver
         self%b_ptr => build
         if( .not. self%b_ptr%pftc%is_joint_grad_objfun() )then
@@ -538,8 +554,19 @@ contains
                         self%joint_initial_cost_valid = .true.
                     endif
                 else
-                    call self%b_ptr%pftc%gen_shift_curv_for_rot_8_aln(self%reference, self%particle, vec(1:2), &
-                        &self%cur_inpl_idx, f, grad, curv)
+                    if( self%reeval_pending )then
+                        if( all(vec(1:2) == self%reeval_x) ) self%profile_reevals = self%profile_reevals + 1_int64
+                        self%reeval_pending = .false.
+                    endif
+                    if( self%shift_curv_irot /= self%cur_inpl_idx )then
+                        call self%b_ptr%pftc%gen_shift_curv_for_rot_8_aln(self%reference, self%particle, vec(1:2), &
+                            &self%cur_inpl_idx, f, grad, self%shift_curv)
+                        self%shift_curv_irot = self%cur_inpl_idx
+                    else
+                        call self%b_ptr%pftc%gen_shift_curv_for_rot_8_aln(self%reference, self%particle, vec(1:2), &
+                            &self%cur_inpl_idx, f, grad)
+                    endif
+                    curv = self%shift_curv
                     if( self%prior_w > 0.d0 )then
                         if( self%b_ptr%pftc%is_cc_objfun() ) THROW_HARD('the lm shift search has no cc shift prior')
                         dprior = vec(1:2) - self%prior_centre_rot(self%cur_inpl_idx)
@@ -566,9 +593,20 @@ contains
 
     subroutine grad_shsrch_update_discrete_angle( self )
         class(pftc_shsrch_grad), intent(inout) :: self
-        real :: corr
+        real    :: corr
+        integer :: prev_idx
+        prev_idx = self%cur_inpl_idx
         call self%select_best_discrete_angle(self%ospec%x(1:2), self%cur_inpl_idx, corr)
         self%cur_inpl_rotind = real(self%cur_inpl_idx)
+        self%profile_callbacks = self%profile_callbacks + 1_int64
+        ! 'lm' evaluates again only when the rotation, hence the objective, changed (L-BFGS-B ignores the flag)
+        if( self%cur_inpl_idx == prev_idx )then
+            self%ospec%callback_changed = .false.
+        else
+            self%profile_angle_changes = self%profile_angle_changes + 1_int64
+            self%reeval_pending        = .true.
+            self%reeval_x              = self%ospec%x_8(1:2)
+        endif
     end subroutine grad_shsrch_update_discrete_angle
 
     !> Apply discrete all-angle selection once at a caller-supplied
@@ -672,6 +710,7 @@ contains
         self%profile_minimize_calls = self%profile_minimize_calls + 1_int64
         ! the objective's double-precision reference, copied once per minimisation
         call self%b_ptr%pftc%load_ref_aln_8(self%reference, self%particle)
+        self%shift_curv_irot = 0
         if( self%opt_angle )then
             self%vals_cache_on    = .true.
             self%vals_cache_valid = .false.
@@ -811,6 +850,8 @@ contains
         call self%set_prior_centre(self%ospec%x_8(1:2), irot_in)
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
+        ! 'lm': the curvature's shift-independent terms of this reference, once per solve
+        if( trim(self%solver) == 'lm' ) call self%b_ptr%pftc%load_ref_joint_curv_8(self%reference, self%particle)
         call self%opt_obj%minimize(self%ospec, self, lowest_cost)
         initial_cost = self%joint_initial_cost
         final_cost = real(lowest_cost,dp)
@@ -1207,6 +1248,10 @@ contains
         self%profile_minimize_calls  = 0_int64
         self%profile_fit             = 0_int64
         self%profile_bank_builds     = 0_int64
+        self%profile_callbacks       = 0_int64
+        self%profile_angle_changes   = 0_int64
+        self%profile_reevals         = 0_int64
+        self%reeval_pending          = .false.
     end subroutine grad_shsrch_reset_profile
 
     subroutine grad_shsrch_get_profile( self, objective_evals, gradient_evals, alternations, grid_points, minimize_calls )
@@ -1239,6 +1284,7 @@ contains
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
         self%joint_cc = .false.
+        self%shift_curv_irot = 0
         self%prior_w  = 0.d0
         self%prior_u0 = 0.d0
         if( allocated(self%rot_cs) ) deallocate(self%rot_cs)

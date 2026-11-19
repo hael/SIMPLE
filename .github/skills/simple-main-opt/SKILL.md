@@ -90,7 +90,11 @@ Silent ones first: nothing reports these.
   takes about 2 s. Clients: `suite=shift_search` (`ftexp_shsrch`), `test=unit_pftc_align2D3D`.
 - PCG engine: `test=pcg_recon`, `test=lib_reconstruction` (its wave reconstruction takes about five
   minutes), `unit_reconstruction`, `unit_heterogeneity`.
-- A change in `lbfgsb` or the spec moves every shift search: run `test=simulated_workflow`, a robustness
+- Each factory client's solver is one private constant (its testers run both): `lm` for the polar joint mode
+  (`SHSRCH_JOINT_SOLVER`) and `quality_logistic` (`LOGISTIC_SOLVER`); `lbfgsb` for the polar shift mode
+  (`SHSRCH_SOLVER`), `ftexp_shsrch` and the continuous CTF fit, which were slower under `lm` on noisy data
+  (`lm_optimizer.md`, Phase 4). A change in `lm`, the engine, `lbfgsb` or the spec moves the shift searches: run
+  `test=simulated_workflow`, a robustness
   profile (1-2 misses in 20 runs is normal), so one run shows breakage, not improvement.
 
 ## See also

@@ -145,9 +145,9 @@ Stage policy includes:
 - staged NU filtering from `NU_FILTER_STAGE`
 - single-state gold-standard matching from stage 6 by default (`gold_std_stage` overrides the start)
 - spherical support throughout, with `automsk=no` and `envfsc=no`
-- a requested PCG backend (`rec_backend=pcg`) from stage 6
-  (`PCG_START_STAGE`), gridding before; changing `gold_std_stage` does
-  not retime this backend switch
+- a requested PCG backend (`rec_backend=pcg`) in the last two stages, 7
+  and 8 (`PCG_START_STAGE`; 6 until 2026-11-18), gridding before; changing
+  `gold_std_stage` does not retime this backend switch
 - an explicitly requested PCG order prior (`pcg_order=yes`) from the same
   stage (`PCG_START_STAGE`), on the NU evidence and labels of the
   previous iteration (section 9)
@@ -940,11 +940,11 @@ On the PCG backend, a final ML-regularized stage uses the ordinary `P_tau`
 replay in `bootstrap_rec3D`; the `Q_NU` prior, its calibration pass and its
 controllers were removed on 2026-09-06.
 When `pcg_order=yes`, the staged controller forwards the order prior to every
-PCG stage from stage 6 and withholds it before; `pcg_order_lambda` is forwarded
+PCG stage, stages 7 and 8, and withholds it before; `pcg_order_lambda` is forwarded
 only when given, so an unset strength is chosen per state and iteration. The
 prior reads the previous iteration's `_nu_evidence` and `_nu_locres` maps of
 the same state and box, and the evidence map is written only under
-`pcg_order=yes`: the first iteration of stage 6, and the first at a new box,
+`pcg_order=yes`: the first iteration of stage 7, and the first at a new box,
 run without it (logged). The
 final reconstruction is prior-free. Design and evidence:
 `doc/implementation_notes/completed/pcg_order_prior.md`.

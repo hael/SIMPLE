@@ -161,6 +161,7 @@ contains
     ! a soft disc of radius 8 in a 32 box, shifted by random sub-pixel amounts within +/-5 in Fourier
     ! space: minimize finds the shift and a correlation of 1, under either solver; a comparison row per solver
     subroutine test_optimiser( solver )
+        use simple_stat, only: median
         character(len=*), intent(in) :: solver
         integer, parameter :: NTST = NTST_OPT
         real,    parameter :: TRS = 5., LP = 6., HP = 100.
@@ -170,6 +171,7 @@ contains
         real    :: cxy(3), x, y, corr_min, sh_err_max
         integer :: i, nevals, niter
         integer(kind=8) :: c0, c1, crate, csum
+        real(kind=8)    :: times(NTST)
         write(*,'(A)') 'test_optimiser '//solver
         call img_ref%new([32,32,1], 2.)
         call img_ptcl%new([32,32,1], 2.)
@@ -200,6 +202,7 @@ contains
             cxy        = srch%minimize()
             call system_clock(c1)
             csum       = csum + (c1 - c0)
+            times(i)   = real(c1 - c0, 8) / real(crate, 8)
             nevals     = nevals + srch%ospec%nevals
             niter      = niter  + srch%ospec%niter
             corr_min   = min(corr_min, cxy(1))
@@ -207,9 +210,10 @@ contains
         end do
         opt_shifts_drawn = .true.
         write(logfhandle,'(A,F8.5,A,ES10.3)') 'optimiser: lowest correlation ', corr_min, ', largest shift error ', sh_err_max
-        write(logfhandle,'(A,A6,A,F7.2,A,F6.2,A,ES10.3,A,F8.5,A,ES10.3)') '  LM_COMPARE ftexp_shsrch ', solver, &
-            &' evals/solve ', real(nevals)/real(NTST), ' iters/solve ', real(niter)/real(NTST), ' s/solve ', &
-            &real(csum, 8)/real(crate, 8)/real(NTST, 8), ' corr_min ', corr_min, ' sh_err_max ', sh_err_max
+        write(logfhandle,'(A,A6,A,F7.2,A,F6.2,A,ES10.3,A,ES10.3,A,F8.5,A,ES10.3)') '  LM_COMPARE ftexp_shsrch ', solver, &
+            &' evals/solve ', real(nevals)/real(NTST), ' iters/solve ', real(niter)/real(NTST), ' s/solve median ', &
+            &median(times), ' mean ', real(csum, 8)/real(crate, 8)/real(NTST, 8), ' corr_min ', corr_min, &
+            &' sh_err_max ', sh_err_max
         call assert_true(corr_min >= 0.999, 'minimize reaches a correlation of 1 (at least 0.999) in every trial')
         call assert_true(sh_err_max < 0.05, 'minimize returns the applied sub-pixel shift (within 0.05 px)')
         call srch%kill

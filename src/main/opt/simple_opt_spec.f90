@@ -54,6 +54,7 @@ type :: opt_spec
     logical                   :: debug     = .false.
     logical                   :: warn      = .false.
     logical                   :: converged = .false.                  !< converged status
+    logical                   :: callback_changed = .true.            !< 'lm': opt_callback clears it when the objective is unchanged
     logical                   :: nostart   = .false.                  !< x is no start: simplex draws one, DE keeps its random population
     logical                   :: exists    = .false.                  !< to indicate existence
   contains

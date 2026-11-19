@@ -181,9 +181,16 @@ contains
             l_refine3D_lpstop_override = .false.
         enddo
         params%filt_mode = 'nonuniform'
+        params%l_pcg_order = .true.
         call set_cline_refine3D(params, 6, 1, .false.)
         call assert_false(cline_refine3D%defined('lp'), 'stage 6 removes scheduled lp with plain NU input')
         call assert_string_eq('nonuniform', cline_refine3D%get_carg('filt_mode'), 'stage 6 keeps plain NU half references')
+        call assert_string_eq('gridding', cline_refine3D%get_carg('rec_backend'), 'PCG starts at stage 7')
+        call assert_false(cline_refine3D%defined('pcg_order'), 'the order prior starts at stage 7')
+        call set_cline_refine3D(params, 7, 1, .false.)
+        call assert_string_eq('pcg', cline_refine3D%get_carg('rec_backend'), 'stage 7 runs the requested PCG backend')
+        call assert_string_eq('yes', cline_refine3D%get_carg('pcg_order'), 'stage 7 forwards the order prior')
+        params%l_pcg_order = .false.
         addon%active = .true.
         addon%l_register = .true.
         addon%frozen_rec = 'frozen_context.txt'

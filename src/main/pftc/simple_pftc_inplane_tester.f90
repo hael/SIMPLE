@@ -13,7 +13,7 @@ use simple_image,                   only: image
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_polarft_calc,            only: polarft_calc, vol_pad2ref_pfts_opt
 use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad, fit_quadratic_step, grid_stencil_exists, FIT_CURVATURE, FIT_STEP, &
-    &shift_ptcl2ref, shift_ref2ptcl, shsrch_lm_terms
+    &shift_ptcl2ref, shift_ref2ptcl, shsrch_lm_terms, shsrch_callback_profile
 use simple_strategy2D_srch,         only: strategy2D_srch, strategy2D_spec
 use simple_eul_prob_tab_utils,      only: posterior_temperature, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
 use simple_oris,                    only: oris
@@ -173,8 +173,11 @@ contains
     end subroutine test_lm_curvature_oracles
 
     !> Both solvers on the recovery fixture (TRUTH_ANGLE, TRUTH_SHIFT): the alternating and the fixed shift search and
-    !! the joint solve from three starts, euclid and cc; one LM_COMPARE row per solver and route (reported, not gated)
+    !! the joint solve from three starts, euclid and cc, each start timed NTIME times; one LM_COMPARE row per solver and
+    !! route with the median seconds per solve (reported, not gated)
     subroutine test_lm_solver_comparison()
+        use simple_stat, only: median
+        integer, parameter :: NTIME = 20
         type(builder),    target :: b
         type(parameters), target :: p
         type(pftc_shsrch_grad)   :: srch
@@ -185,7 +188,9 @@ contains
         real     :: limits(2,2), joint_limits(3,2), cxy(3)
         integer  :: iobj, isolver, iroute, istart, igrid, irot, joint_index, ncases
         integer(int64) :: obj_evals, grad_evals, alternations, grid_points, minimize_calls, gsum
-        integer(int64) :: c0, c1, crate, csum
+        integer(int64) :: c0, c1, crate, csum, ncallbacks, nchanges, nreevals, cbsum, chsum, resum
+        real(dp) :: times(NTIME*size(PROBE_SHIFTS,2))
+        integer  :: irep, ntimed
         logical  :: valid, improved
         write(*,'(A)') 'test_lm_solver_comparison'
         theta    = real(TRUTH_ANGLE,dp) * acos(-1.d0) / 180.d0
@@ -206,6 +211,11 @@ contains
                     sum_ang = 0.d0
                     max_sh = 0.d0
                     ncases = 0
+                    ntimed = 0
+                    cbsum  = 0_int64
+                    chsum  = 0_int64
+                    resum  = 0_int64
+                    do irep = 1, NTIME
                     do istart = 1, size(PROBE_SHIFTS,2)
                         select case(iroute)
                             case(1)
@@ -236,9 +246,19 @@ contains
                                 endif
                         end select
                         call system_clock(c1)
+                        ntimed        = ntimed + 1
+                        times(ntimed) = real(c1 - c0, dp) / real(crate, dp)
+                        csum          = csum + (c1 - c0)
+                        if( irep > 1 )then
+                            call srch%kill
+                            cycle
+                        endif
                         call srch%get_profile(obj_evals, grad_evals, alternations, grid_points, minimize_calls)
+                        call shsrch_callback_profile(srch, ncallbacks, nchanges, nreevals)
+                        cbsum   = cbsum + ncallbacks
+                        chsum   = chsum + nchanges
+                        resum   = resum + nreevals
                         gsum    = gsum + grad_evals
-                        csum    = csum + (c1 - c0)
                         err_sh  = sqrt(sum((real(cxy(2:3),dp) - expected)**2))
                         err_ang = angular_error(angle_of(b%pftc, joint_coord), -real(TRUTH_ANGLE,dp))
                         sum_sh  = sum_sh  + err_sh
@@ -247,10 +267,18 @@ contains
                         ncases  = ncases + 1
                         call srch%kill
                     enddo
-                    write(*,'(A,I0,1X,A11,1X,A6,A,F7.2,A,ES10.3,A,F8.4,A,F8.4,A,F8.3)') '  LM_COMPARE pftc objfun ', iobj, &
-                        &ROUTES(iroute), SOLVERS(isolver), ' evals/solve ', real(gsum)/real(ncases), ' s/solve ', &
-                        &real(csum,dp)/real(crate,dp)/real(ncases,dp), ' mean shift err ', sum_sh/real(ncases), &
-                        &' max shift err ', max_sh, ' mean angle err ', sum_ang/real(ncases)
+                    enddo
+                    write(*,'(A,I0,1X,A11,1X,A6,A,F7.2,A,ES10.3,A,ES10.3,A,F8.4,A,F8.4,A,F8.3)') '  LM_COMPARE pftc objfun ', &
+                        &iobj, ROUTES(iroute), SOLVERS(isolver), ' evals/solve ', real(gsum)/real(ncases), &
+                        &' s/solve median ', median(times(1:ntimed)), ' mean ', real(csum,dp)/real(crate,dp)/real(ntimed,dp), &
+                        &' mean shift err ', sum_sh/real(ncases), ' max shift err ', max_sh, ' mean angle err ', &
+                        &sum_ang/real(ncases)
+                    if( iroute == 1 .and. isolver == 2 )then
+                        ! R10: under 'lm' the alternating search evaluates again once per rotation change, not per accepted step
+                        write(*,'(A,I0,A,I0,A,I0,A,I0)') '  LM_REEVAL pftc objfun ', iobj, ' callbacks ', cbsum, &
+                            &' rotation changes ', chsum, ' re-evaluations ', resum
+                        call assert_true(resum == chsum, 'lm alternating search: one re-evaluation per rotation change')
+                    endif
                 enddo
             enddo
             deallocate(scores)

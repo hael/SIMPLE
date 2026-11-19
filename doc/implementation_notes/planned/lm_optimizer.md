@@ -1,6 +1,7 @@
 # One Levenberg-Marquardt for the library
 
-Status, 2026-11-18: Phases 0-3 done (run `lm_optimizer`; interim report `lm_optimizer_report.md`); Phase 4 open.
+Status, 2026-11-18: Phases 0-4 done (run `lm_optimizer`; report `lm_optimizer_report.md`). The polar joint mode and
+`quality_logistic` default to `'lm'`; the real-data reads (R8: Cyril, Hans) are open, so the note stays in `planned/` (R5).
 Planned 2026-11-17; revised the same day to one engine for every LM, then after the design
 review (section 6). Base: `aae467bc7` (numerical source unchanged from `e94681175`).
 Depends on: nothing for Phases 0-3; the PorF A/B of Phase 4 needs the batch-capacity floor
@@ -138,6 +139,11 @@ five-parameter solve by iteration 8 (9.0 in iteration 1). The factory offers `lb
    - no failure that L-BFGS-B does not have.
 
    Otherwise the client keeps L-BFGS-B, and the negative is recorded with its mechanism.
+   **Replaced by R6 (first applied in Phase 4): "good enough and fast".** A client switches to `'lm'` when its
+   median thread-seconds per solve at one thread, on its tester fixtures, are below L-BFGS-B's by more than the
+   A-A spread (two quiet runs of each solver, load recorded, R9); its existing accuracy floors pass (its tester
+   floors; for the polar shift searches also the `simulated_workflow_6vxx` gate); and it has no failure that
+   L-BFGS-B does not have. Being within L-BFGS-B's accuracy spread is no longer required.
 9. **The Cartesian route on the engine.** `refine_joint` becomes `lm_solve` on a
    `cartft_pose_problem` in `cftc/`:
    - `eval` is `pose_normal_terms`, keeping the trial's residual;
@@ -193,6 +199,32 @@ Rulings (Hans, 2026-11-17; first applied in Phase 0):
   "Null directions" bullet; new test L6. Both are implemented in Phase 2 (the engine and `opt_lm`), and
   Phase 1's Cartesian identity gate is rerun before Phase 2 is done.
 
+- **R5 (2026-11-18; first applied in Phase 4). The run continues with Phase 4** (amends R2). It switches the
+  winners' defaults in this copy (base `aae467bc7` plus Phases 0-3); `review/phase_4.diff` applies on Hans's
+  checkout with Phases 0-3 applied. The real-data tests are left to others (R8); the plan stays in `planned/`
+  until their reads are in.
+- **R6 (2026-11-18; first applied in Phase 4). "Good enough and fast"** replaces decision 8's rule (see there).
+- **R7 (2026-11-18; first applied in Phase 4). The polar joint curvature caches what does not depend on the
+  shift,** per reference, once per solve, so an `'lm'` evaluation needs no FFT batch for it; implemented before
+  the joint mode's verdict, with the joint oracles and comparison rerun, the `'lbfgsb'` path byte-identical
+  (`prob_neigh` and `fills`). Files under `pftc/` it needs join the file table with Phase 4.
+- **R8 (2026-11-18; first applied in Phase 4). Who tests on real data.** Motion correction (`ftexp_shsrch`) and
+  the CTF fit: R6 on the fixtures and the winners switched here; Cyril tests on real data afterwards. Polar
+  shift searches: R6 with the `simulated_workflow_6vxx` gate, winners switched; Hans runs the PorF A/B
+  (`local4_best`) afterwards. `quality_logistic`: R6 with its suites (`unit_numerics`, `cavg quality nano`) as
+  its gate. The report gets one section each for Cyril and Hans: what switched, the constant that switches it
+  back, which outputs should not change beyond the fixture's numbers, and the A/B commands (B the default, A the
+  constant flipped back).
+- **R9 (2026-11-18; first applied in Phase 4). Re-time on the quiet machine:** Phase 3's per-client timings
+  repeated first, one thread, two runs per solver, `uptime` before and after, nothing else of the run running;
+  the verdicts use these numbers.
+- **R10 (2026-11-18; first applied in Phase 4). The factory LM re-evaluates only when the callback changed the
+  objective.** `opt_spec` gains `callback_changed`; `opt_lm` sets it `.true.` before calling `opt_callback` and
+  `accept` returns it, so a callback that sets nothing still forces the re-evaluation (decision 5 as before). The
+  polar discrete-angle callback clears it when `cur_inpl_idx` is unchanged. L4 stays; new L4b (a callback that
+  clears the flag adds no evaluation, same minimum); the polar alternating tester counts the re-evaluations. Then the
+  polar shift mode is re-timed (quiet `prob_neigh` A/B and the fills bench, two runs per build) and judged again by R6.
+
 **Not in this plan:** the DE and simplex clients; the NLCG and PCG engines; the hybrid's view
 refinement (`polar_continuous_view.md`); merging `spd_solve_rel` with `cholesky`, which would move
 the flex and XD-GMM numbers.
@@ -239,7 +271,7 @@ isotropic start (dfx = dfy): the defocus improves and the angle does not move.
 | 1 | identical (the shift-only path aside) | `spd_solve_rel` in `simple_linalg`; the engine extracted from `refine_joint`; the Cartesian route on it; `shift_then_joint` retired; `refine_shift` public on the engine | Cartesian identity byte-identical; the cart suites print identical numbers, and the prior and unobservable tests pass unchanged; the shift-only cases pass at their tolerances; `rg` finds none of the moved helpers in `cftc/` and no `cont_route` in `src/` |
 | 2 | tests-only | `opt_lm` with the `free` hook, the spec callback, the factory entry; R3 and R4 in the engine | L1-L6 pass; `'lm'` has no production caller; the Cartesian identity rerun byte-identical (R3, R4) |
 | 3 | tests-only (factory clients, production identical); result-changing (dose series) | Curvatures and the solver name for the five factory clients, each tester running both solvers; the Guinier fit on the engine | Oracles pass; one comparison table per client; polar identity byte-identical; dose-series suites at their floors |
-| 4 | result-changing | Decision 8 per client. For each winner: the default switched in build B; its workflow gate (`simulated_workflow` profile for the shift searches); a real-data A/B (PorF `local4_best` command, two runs per build, or the named sets); Hans reads, and a default switches only on his ruling. Report `lm_optimizer_report.md` | Verdicts, A/B numbers and rulings in Progress |
+| 4 | result-changing | (As ruled by R5-R9.) Quiet re-timing (R9); the polar joint curvature cache (R7); R6 per client; for each winner the default switched (one private constant) and its gate: `simulated_workflow_6vxx` for the shift searches, `quality_logistic`'s suites, the `ftexp_shsrch` and CTF testers and `mini_stream suite=6vxx`; the real-data A/Bs left to Cyril and Hans (R8). Report `lm_optimizer_report.md` | Verdict table in Progress; R7's oracles, comparison and polar identity before the switch; each switched client's gate; the Cartesian identity, the fast gate (Release, Debug) and `fills` after it; `prob_neigh` against the base reported |
 
 ### File table
 
@@ -249,11 +281,12 @@ isotropic start (dfx = dfy): the defocus improves and the angle does not move.
 | `src/utils/math/simple_linalg.f90`, `simple_linalg_tester.f90` | `spd_solve_rel`, moved from `cftc` and generalised to n | 1 |
 | `cftc/simple_cartft_pose_opt.f90`, `simple_cartft_pose_opt_system.f90`, `simple_cartft_pose_opt_tester.f90` | Cartesian pose and shift problems; helpers moved out; public `refine_shift` | 1 |
 | `params/simple_parameters.f90`, `simple_parameters_parse.f90`, `simple_parameters_phases.f90`, `simple_parameters_tester.f90`, `strategies/search/simple_strategy3D_cont.f90`, `simple_strategy3D_cont_1jyx_tester.f90`, `commanders/test/simple_commanders_test_highlevel_cont.f90`, `ui/simple_ui_visibility_tester.f90` (if needed) | Retire `cont_route` | 1 |
-| `opt/simple_opt_lm.f90` (new), `simple_opt_spec.f90`, `simple_opt_factory.f90`, `simple_opt_tester.f90` | Factory LM, `free` hook, callback, L1-L5 | 2 |
+| `opt/simple_opt_lm.f90` (new), `simple_opt_spec.f90`, `simple_opt_factory.f90`, `simple_opt_tester.f90` | Factory LM, `free` hook, callback, L1-L5; Phase 4: `callback_changed` and L4b (R10) | 2, 4 |
 | `pftc/simple_pftc_shsrch_grad.f90`, `simple_polarft_calc.f90`, `simple_polarft_corr.f90`, `simple_pftc_inplane_tester.f90` | Shift and joint curvature, solver name | 3, 4 |
+| `pftc/simple_polarft_core.f90` (R7) | The per-thread cache of the joint curvature's shift-independent terms (allocation) | 4 |
 | `image/simple_ftexp_shsrch.f90` (and its `_tester`), `simple_ft_expanded.f90` (if needed); `ctf/simple_ctf_estimate_cost.f90`, `simple_ctf_tester.f90`; `quality/simple_quality_logistic.f90` (and its `_tester`) | Curvatures, solver name | 3, 4 |
 | `src/utils/filter/simple_dose_series.f90` (and its `_tester`) | Guinier fit on the engine | 3 |
-| `doc/policies/3D/refine3D_policy.md`; skills `.github/skills/simple-main-opt/SKILL.md`, `.github/skills/simple-main-cftc/SKILL.md`, `.github/skills/simple-refine3d/SKILL.md` (approved with this plan) | Living descriptions | 1, 2 |
+| `doc/policies/3D/refine3D_policy.md`; skills `.github/skills/simple-main-opt/SKILL.md`, `.github/skills/simple-main-cftc/SKILL.md`, `.github/skills/simple-refine3d/SKILL.md` (approved with this plan) | Living descriptions; Phase 4: the switched defaults (R6) | 1, 2, 4 |
 | `doc/implementation_notes/planned/lm_optimizer.md` (this note), `lm_optimizer_report.md` | Progress; the report | 0, 1, 2, 3, 4 |
 
 Paths under `src/main/` unless rooted. A listed `x.f90` covers its `x_tester.f90` (the run's fence
@@ -679,3 +712,107 @@ performed for this design review. The revised contracts and their compiled regre
     in the polar alternating search, slightly worse at the tail in the CTF fit, 0.00201 against 0.00186 µm, and in
     `ftexp_shsrch`, 3e-4 px against 1e-6, far inside its 0.05 floor); production is byte-identical; and the
     dose-series fit runs on the library's engine. Phase 4 judges these by decision 8 on quiet timings and real data.
+- **2026-11-18, Phase 4 (result-changing), arun `lm_optimizer`, under rulings R5-R10.** FWM-S116118, toolchain as in
+  Phase 0; base `aae467bc7` plus Phases 0-3 (R5). Paths below are under `/Users/elmlundho/agent_work/arun/lm_optimizer`.
+  The session was interrupted once (the Mac restarted); R10 came in at the resumption.
+  - **Files changed.**
+    - Polar search: `pftc/simple_polarft_calc.f90` and `simple_polarft_core.f90` (R7, added to the table:
+      `heap_vars%joint_curv_8` and its keys, `load_ref_joint_curv_8`); `simple_polarft_corr.f90` (the loader;
+      `gen_joint_curv_at_angle` on the cache; the shift curvature optional).
+    - `pftc/simple_pftc_shsrch_grad.f90`: the shift curvature formed once per rotation; the joint terms loaded per
+      `'lm'` solve; `SHSRCH_SOLVER = 'lbfgsb'` (shift mode) and `SHSRCH_JOINT_SOLVER = 'lm'`; R10 in the
+      discrete-angle callback; the callback profile. Its tester submodule gains the seam `shsrch_callback_profile`,
+      and `simple_pftc_inplane_tester.f90` gains median timing and the R10 count.
+    - Factory: `opt/simple_opt_spec.f90` (`callback_changed`), `opt/simple_opt_lm.f90` (R10) and
+      `opt/simple_opt_tester.f90` (L4b); Phase 4 was added to their row by R10.
+    - Other clients: `quality/simple_quality_logistic.f90` (`LOGISTIC_SOLVER = 'lm'`, its fit's header) and its
+      tester; the median timing in the `ftexp_shsrch` and CTF-cost testers. `simple_ftexp_shsrch.f90` and
+      `simple_ctf_estimate_cost.f90` are back at their Phase 3 state.
+    - Docs: the `simple-main-opt` skill (the defaults; Phase 4 added to its row), this note (R5-R10 in section 3,
+      decision 8, the Phase 4 row, the file table) and `lm_optimizer_report.md`. `refine3D_policy.md` was edited and
+      then restored to its Phase 3 state.
+  - **Exit 1, the quiet re-time (R9): met.**
+    - Run at 12:12-12:13, load 2.5-2.9, nothing else of the run running (`scratch/runs/p4_time_{1,2}/`; table
+      `scratch/logs/p4_timing_table.md`, by `scratch/p4/summarize_timing.py`).
+    - The testers now report median seconds over repeated solves. The literal re-time of Phase 3's code (means,
+      `scratch/runs/p4_retime_p3code_{1,2}/`) gave Phase 3's counts.
+    - On the comparison fixtures `'lm'` takes 0.29-0.63 of L-BFGS-B's median time per solve in all nine rows. Every
+      gap exceeds the A-A spread (largest spread 2.8e-5 s against gaps of 4e-6 to 2.4e-4 s; timer 1 µs).
+  - **Exit 2, R7: met.**
+    - Oracles: joint euclid 7.70e-6 and joint cc 8.73e-5 relative (`scratch/runs/p4_oracle/inplane.log`). The cache
+      reproduces Phase 3's FFT form to 4 digits (one entry 3.492e-2 against 3.491e-2).
+    - Joint comparison: `'lm'` 1.0e-4 s per solve against 2.1e-4 before R7 (L-BFGS-B about 3e-4).
+    - The polar identity with every client on `'lbfgsb'`: `prob_neigh` 63 byte-identical + 12 normalized
+      (`scratch/logs/cmp_p4pre_rel_prob_neigh.txt`, and after R10 `cmp_r10_rel_prob_neigh.txt`). `fills`: 48 rows,
+      no differing entry (`scratch/runs/p4pre_fills/`, `scratch/runs/r10_fills_lbfgsb/`).
+  - **Exit 3, R10: met.**
+    - Optimisers 104/104 (`scratch/runs/r10_suites/opt.log`): L4 9 evaluations with 4 re-evaluations; L4b 6 with 1,
+      the same path and minimum.
+    - The polar alternating tester under `'lm'`: re-evaluations equal rotation changes (euclid 11 callbacks, 5
+      changes, 5 re-evaluations; cc 12, 6, 6), and evaluations per solve fall from 8.33 to 6.33 (euclid) and 9 to 7
+      (cc).
+    - Gates on the all-`'lbfgsb'` build: Cartesian and polar identity (63 + 12 each, `scratch/logs/cmp_r10_rel_*.txt`)
+      and `fills` (48 rows, none differing).
+    - The shift mode re-timed: below.
+  - **Exit 4, the verdicts (R6): met.**
+
+    | Client | Comparison fixture: evals lbfgsb / lm, time lm / lbfgsb | Production-shaped fixture, A (`'lbfgsb'`) / B (`'lm'`), two runs each | Accuracy floors under `'lm'` | Verdict |
+    | --- | --- | --- | --- | --- |
+    | polar shift mode | 10-44 / 4-9 (6.3-7 with R10), 0.38-0.60 | `prob_neigh` fill refinement thread-s, it. 1-4, with R10: A 12.72/12.49, 4.50/4.50, 4.67/4.53, 4.56/4.46; B 17.03/16.77, 5.53/5.30, 5.36/5.37, 5.07/5.10 (+34/20/17/13 %; before R10 +36/29/26/22 %). Fills bench, one-thread rows: B/A 1.53-4.20, A-A < 1 % | pass | `'lbfgsb'` |
+    | polar joint mode (R7) | 19 / 4, 0.29-0.34 | `prob_neigh` orientation search (holds the joint refinement), A 13.02/11.49 … 6.36/6.16, B 11.44/11.45 … 5.12/5.14: not slower | pass | `'lm'` |
+    | `ftexp_shsrch` | 12.4 / 3.6, 0.63 | `simulated_workflow_6vxx`'s `motion_correct` (16 simulated movies, one thread): A 82.1/96.9 s, B 122.7/114.4 s | pass | `'lbfgsb'` |
+    | `ctf_estimate_cost4Dcont` | 57.4 / 29.9, 0.56 | its `ctf_estimate`: A 42.1/44.2 s, B 60.1/68.9 s | pass | `'lbfgsb'` |
+    | `quality_logistic` | 27 / 7, 0.49 | `cavg quality nano` (84 assertions) user s: A 1.01/1.08, B 1.07/1.04: not slower | pass | `'lm'` |
+
+    - Runs and loads: the `prob_neigh` pairs are `scratch/runs/ab_pn_*` (before R10) and `r10_pn_*`; the fills pairs
+      `r10_fills_*`; motion and CTF `ab_mc_*`; logistic `r10_nano_*`. The loads, recorded beside each run, were 1.9-3.6.
+      Exceptions: a burst of 127 from someone else at 12:46 (`ab_pn_B_1`, `ab_pn_A_2`; the B pair agrees within
+      0.1 s), and 6-20 during `ab_mc_*_2` (that pair still exceeds the A-A spread).
+    - No client has a failure under `'lm'` that L-BFGS-B lacks.
+    - Mechanism of the three negatives: the comparison fixtures are noise-free, so the Gauss-Newton matrix is the
+      Hessian. On noisy data it lacks the residual term, and LM needs more steps to the same `factr` stop. For the
+      shift mode, R10 removed the re-evaluations, but more evaluations remain in iteration 1, plus a per-step cost
+      later (the callback scores every rotation at each accepted step; not measured separately).
+  - **Exit 5, the switched clients' gates, on the final build `scratch/p4b_release`: met.**
+    - The final build has the joint mode and the logistic fit on `'lm'`.
+    - Suites, one thread (`scratch/runs/suites_final/`): `unit_numerics` 2107 assertions (L4b's five added; with
+      `quality logistic`, `cavg quality nano`, `shift search`), `unit_image` 982 (`CTF`), `unit_pftc_align2D3D` 6337
+      (the R10 count added), `unit_cart_align3D` 1176 and `lib_cart_align3D` 52, printing Phase 2's lines.
+    - `simulated_workflow_6vxx` (the joint mode's gate, at its registered profile, one thread): PASS, docking
+      0.9881, whole-volume correlation 0.9067, FSC 0.143 at 4.23 Å (A, all `'lbfgsb'`: 0.9890, 0.9003, 4.30 Å;
+      `scratch/runs/simwf_final/`, `simwf_A_1/`).
+    - `mini_stream suite=6vxx`: 73 PASS, the base's six defocus errors exactly (`scratch/runs/mini6vxx_final/`).
+    - The first B build, with every client on `'lm'` (later reverted), also passed every gate:
+      - suites (`scratch/runs/suites_p4b/`);
+      - `mini_stream` (73 PASS);
+      - `simulated_workflow_6vxx` PASS at 0.9889 / 0.9028 / 4.46 Å against A's 0.9890 / 0.9003 / 4.30 Å;
+      - fast gate R/D 15/15;
+      - Cartesian identity.
+  - **Exit 6, gates no ruling waives, after the switch: met.**
+    - Cartesian identity on the final build: 63 byte-identical + 12 normalized, Phase 3's DIFF set
+      (`scratch/logs/cmp_final_cont.txt`).
+    - Fast gate Release and Debug: 15/15 each (`scratch/logs/fastgate_final_{release,debug}.log`; Debug build without
+      warnings, `build_final_debug.log`).
+    - `fills`: 48 rows, no differing entry (`scratch/runs/suites_final/fills/`). Nothing changed in it, because the fills run only the shift mode, which did not switch.
+    - `prob_neigh` on the final build against the base (result-changing, no gate): FSC 3.17 / 3.53 Å, cFAR 0.91,
+      overlap 0.998 and best-orientation distance 1.9388 deg as at the base; score 0.6396387 against 0.6396391
+      (`scratch/logs/cmp_final_prob_neigh.txt`).
+  - **Decisions under delegation.**
+    1. **R6's "the client's tester fixtures" includes the production-shaped fixtures the tests already have:**
+       - the `prob_neigh` case on `cont_refine3D_1jxy`'s fixture and the fills bench for the polar search;
+       - `simulated_workflow_6vxx`'s motion and CTF steps for `ftexp_shsrch` and the CTF fit;
+       - the `cavg quality nano` suite for the logistic fit.
+
+       A client switches only if it is not slower beyond the spread on them. The reason: the comparison fixtures
+       are noise-free, where Gauss-Newton is exact, and R6's intent is speed in use.
+    2. **The polar constant split per mode (decision 7).** The joint mode is its own client.
+    3. **R7's cache form,** the shift curvature once per rotation (decision 6), and median timing with repeats.
+    4. **R10's tester count** uses private counters read through the existing test-only seam submodule.
+    5. **For Cyril's A/B, B is the `'lm'` build,** because nothing of his switched.
+  - What it means, in short:
+    - The library's one LM engine now also serves the polar joint refinement (about a third of L-BFGS-B's time per
+      solve) and the logistic fit by default.
+    - The polar shift search, motion correction and the CTF fit stay on L-BFGS-B, because on noisy data Gauss-Newton
+      loses to quasi-Newton.
+    - The factory's callback defect is fixed; production results move only where a default switched, and only in
+      the last digits.

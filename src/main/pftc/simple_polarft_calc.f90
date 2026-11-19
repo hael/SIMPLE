@@ -48,6 +48,11 @@ type heap_vars
     complex(dp), pointer :: pft_ref_aln_8(:,:)  => null()  ! the reference of one shift search (load_ref_aln_8)
     integer              :: aln_iref = 0                    ! its index and half, checked by the _aln evaluators
     integer              :: aln_ieo  = 0
+    ! the joint curvature's shift-independent terms of one reference (load_ref_joint_curv_8): |REF|^2,
+    ! Im(conj(REF) REF') and |REF'|^2 on the half ring, REF' the derivative along the ring index
+    real(dp),    pointer :: joint_curv_8(:,:,:) => null()
+    integer              :: jc_iref = 0
+    integer              :: jc_ieo  = 0
     complex(dp), pointer :: shvec(:)            => null()
     complex(dp), pointer :: shmat_8(:,:)        => null()
     ! one reference's row over the rotations (the distances) and the samplers' work array (the draws' weights)
@@ -261,6 +266,7 @@ type :: polarft_calc
     procedure          :: gen_raw_euclid_grad_at_angle
     procedure          :: gen_corr_grad_at_angle
     procedure          :: gen_shift_curv_for_rot_8_aln
+    procedure          :: load_ref_joint_curv_8
     procedure          :: gen_joint_curv_at_angle
     procedure, private :: gen_corr_cc_grad_for_rot_8
     procedure, private :: gen_euclid_grad_for_rot_8
@@ -925,8 +931,14 @@ interface
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl, irot
         real(dp),                    intent(in)    :: shvec(2)
-        real(dp),                    intent(out)   :: f, grad(2), curv(2,2)
+        real(dp),                    intent(out)   :: f, grad(2)
+        real(dp), optional,          intent(out)   :: curv(2,2)
     end subroutine gen_shift_curv_for_rot_8_aln
+
+    module subroutine load_ref_joint_curv_8( self, iref, iptcl )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+    end subroutine load_ref_joint_curv_8
 
     module subroutine gen_joint_curv_at_angle( self, iref, iptcl, shvec, rotind_frac, curv )
         class(polarft_calc), target, intent(inout) :: self

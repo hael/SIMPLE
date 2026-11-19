@@ -2,8 +2,8 @@
 ! Double precision. Starts from spec%x (projected into the box, as L-BFGS-B) and returns the solution in x and
 ! x_8, the counts in nevals, ngevals and niter. Bounds: a coordinate on a bound whose gradient points outward is
 ! not free, and the free step is clipped to the box (lm_optimizer.md, decision 4). opt_callback runs after
-! each accepted step and the objective is then evaluated again (decision 5). The stops take L-BFGS-B's meaning
-! of factr and pgtol (ruling R3).
+! each accepted step and the objective is then evaluated again unless the callback cleared spec%callback_changed
+! (decision 5, ruling R10). The stops take L-BFGS-B's meaning of factr and pgtol (ruling R3).
 module simple_opt_lm
 use simple_core_module_api
 use simple_optimizer, only: optimizer
@@ -150,7 +150,8 @@ contains
         feasible = .true.
     end function spec_problem_propose
 
-    !> adopt the trial point; a callback may change the objective, which is then evaluated again
+    !> adopt the trial point; a callback may change the objective, which is then evaluated again unless the callback
+    !! cleared the spec's callback_changed
     function spec_problem_accept( self, ratio ) result( changed )
         class(spec_problem), intent(inout) :: self
         real(dp),            intent(in)    :: ratio
@@ -160,7 +161,9 @@ contains
         if( .not. changed ) return
         self%spec%x_8 = self%x
         self%spec%x   = real(self%x)
+        self%spec%callback_changed = .true.
         call self%spec%opt_callback(self%fun_self)
+        changed = self%spec%callback_changed
     end function spec_problem_accept
 
 end module simple_opt_lm
