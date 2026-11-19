@@ -56,6 +56,12 @@ Silent ones first: nothing reports these.
   `strategies/search/probabilistic/simple_eul_prob_tab_utils.f90`, used by the classic `*_smpl` and
   `neigh` routes) take distance arrays filled in the thread's buffers and draw from the thread's `ran3`
   stream.
+- `gen_sect_euclid_grad_at_angle` is `gen_raw_euclid_grad_at_angle` against a supplied section and its two
+  view derivatives (`polarft_cont_calc`), with the gradient and the Gauss-Newton matrix in (shift x, shift y,
+  rotation index, tilt x, tilt y); it reuses the thread's FFT buffers and `heap_vars%view_coeffs`.
+  `gen_sigma_contrib_sect` is `gen_sigma_contrib` against a supplied section. `polarft_cont_calc`
+  (`build%pcont`) holds pointers to `pftc` and a `cartft_calc`: renew it with `pftc`, build its calculator on
+  `pftc`'s box, and call `set_view_ref` before a solve, on the solving thread.
 - `gen_many_euclids_gpu` and `gen_many2many_euclids_cufft` compile only with `USE_OPENMP_OFFLOAD`
   (off by default) and run only on a GPU build: say so when a change touches them.
 
@@ -65,6 +71,8 @@ Silent ones first: nothing reports these.
   `_core` (new/kill, setters), `_memo` (memoised transforms, sigma2 weights, shifted-particle bank),
   `_corr` (objectives, gradients, samplers, `_aln` evaluators), `_geom` (shift matrices, rotation,
   mirroring), `_shiftmap` (a pair's shift maps over every rotation), `_access`, `_ctf`, `_ops_io`.
+- `simple_polarft_cont_calc.f90`: B-spline sections and their normal derivative at a tilted view, the per-thread
+  section cache, the tilt chart and the 5-variable cost of the continuous view refinement (`cont_view`).
 - `simple_polar_shiftmap.f90`: one pair's shift-dependent cross term over a disk of shifts
   (Fourier-Bessel tables, driven by `_shiftmap`).
 - `simple_pftc_shsrch_grad.f90`: the L-BFGS-B shift (or joint shift and in-plane) search of one pair;
@@ -77,7 +85,8 @@ Silent ones first: nothing reports these.
 - `build/bin/simple_test_exec test=unit_pftc_align2D3D` (about 12 s; `suite=` runs one of: polar
   correlation, polar shift map (the mechanics), polar shift map kernel (the calculator's
   kernel, a submodule tester of `simple_polarft_calc`), continuous in-plane, refine3D in-plane state, the 2D and 3D
-  probability tables, sigma2 state and bootstrap, ...). The testers are here and in `strategies/search`.
+  probability tables, sigma2 state and bootstrap, ...). The testers are here and in `strategies/search`; the polar
+  continuous view tests run in the continuous in-plane suite.
 - New OpenMP code: repeated runs at many threads, not only the one-thread identity; for the tables'
   draws `test=polar_matching_bench suite=fills` (threads, batches and parts give identical entries).
 - Kernel speed or layout: `test=polar_matching_bench` (timings and identity checks, a dump of the

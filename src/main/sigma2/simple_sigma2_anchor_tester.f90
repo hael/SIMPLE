@@ -31,6 +31,7 @@ contains
         call test_flat_start_scoring('ptcl2D')
         call test_flat_start_scoring('ptcl3D')
         call test_pole_residuals()
+        call test_shift_frame()
         call leave_fixture(saved, root, nfail0)
     end subroutine run_all_sigma2_anchor_tests
 
@@ -460,5 +461,75 @@ contains
         call calc%kill()
         call esig%kill()
     end subroutine test_pole_residuals
+
+    !> A pose's shift is the search's increment in the reference frame: the residual is gen_sigma_contrib's at that
+    !! shift rotated into the particle frame at the pose's rotation, and differs from the unrotated shift's
+    subroutine test_shift_frame()
+        use simple_defs, only: PI
+        use simple_math, only: rotmat2d
+        use simple_type_defs, only: OBJFUN_EUCLID
+        use simple_parameters, only: parameters
+        use simple_polarft_calc, only: polarft_calc
+        use simple_euclid_sigma2, only: euclid_sigma2
+        use simple_ori, only: ori
+        integer, parameter :: NPFT = 12, IROT = 4
+        real,    parameter :: SH_REF(2) = [1.3, -0.7]
+        class(parameters), allocatable, target :: params
+        class(polarft_calc), allocatable :: calc
+        class(euclid_sigma2), allocatable, target :: esig
+        type(ori) :: pose
+        complex :: particle(NPFT,2:NSH), reference(NPFT,2:NSH)
+        real :: spectra(NSH,2), theta, rotmat(2,2), sh_native(2)
+        real :: c_native(2:NSH), c_unrot(2:NSH)
+        real, allocatable :: residual(:)
+        integer :: r, k
+        write(*,'(A)') 'test_shift_frame'
+        allocate(params, calc, esig)
+        params%box = 2*NSH
+        params%box_crop = 2*NSH
+        params%pftsz = NPFT
+        params%ctf = 'no'
+        params%oritype = 'ptcl2D'
+        params%cc_objfun = OBJFUN_EUCLID
+        params%fromp = 1
+        params%top = 1
+        params%kfromto = [2,NSH]
+        spectra = 1.
+        call write_store(spectra, 1_int64, SIGMA2_PROV_PSPEC)
+        call calc%new(params, 1, [1,1], params%kfromto)
+        call esig%new(params, calc, string(STORE), 2*NSH)
+        call esig%read_global()
+        call esig%read_part()
+        do k = 2, NSH
+            do r = 1, NPFT
+                theta = real(r-1) * PI / real(NPFT)
+                reference(r,k) = cmplx(1. + 0.3*cos(theta) + 0.05*k, 0.2*sin(3.*theta))
+                particle(r,k)  = cmplx(0.8 + 0.4*sin(2.*theta), 0.1*cos(theta) - 0.02*k)
+            enddo
+        enddo
+        call calc%set_eo(1, .true.)
+        call calc%set_ptcl_pft(1, particle)
+        call calc%set_ref_pft(1, reference, .true.)
+        call calc%memoize_refs()
+        call calc%memoize_ptcls()
+        call pose%new(is_ptcl=.true.)
+        call pose%set('state', 1)
+        call pose%set('class', 1)
+        ! off the pole, so e3 holds the in-plane angle
+        call pose%set_euler([0., 90., 360. - calc%get_rot(IROT)])
+        call pose%set_shift(SH_REF)
+        call esig%calc_sigma2(calc, 1, pose, 'class')
+        residual = esig%get_sigma2_part(1)
+        call rotmat2d(calc%get_rot(IROT), rotmat)
+        sh_native = matmul(SH_REF, transpose(rotmat))
+        call calc%gen_sigma_contrib(1, 1, sh_native, IROT, c_native)
+        call calc%gen_sigma_contrib(1, 1, SH_REF,    IROT, c_unrot)
+        call assert_true(all(residual == c_native), 'the residual is taken at the particle-frame shift')
+        call assert_true(maxval(abs(c_unrot - c_native)) > 1.e-3 * maxval(abs(c_native)), &
+            &'the fixture discriminates the frames')
+        call pose%kill()
+        call calc%kill()
+        call esig%kill()
+    end subroutine test_shift_frame
 
 end module simple_sigma2_anchor_tester

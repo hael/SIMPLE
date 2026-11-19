@@ -39,6 +39,7 @@ contains
         call test_execution_project_copy()
         call test_mirr_proj_binding()
         call test_sigma2_anneal_defaults()
+        call test_cont_view()
         call leave_fixture(saved, root, nfail0)
         ! The constructor must not leave directory globals pointing into the removed fixture.
         if( allocated(CWD_GLOB) ) deallocate(CWD_GLOB)
@@ -92,6 +93,54 @@ contains
         call child%destroy
         call cline%kill()
     end subroutine test_cont_prior_rejections
+
+    !> cont_view (polar_continuous_view.md): accepted on the refine3D search of one state with refine=prob_neigh,
+    !! objfun=euclid and nspace_sub = nspace; any other value, band of directions, refinement, state count or objective
+    !! stops; another program (the master's children inherit its command line) ignores it
+    subroutine test_cont_view()
+        use simple_parameters, only: parameters
+        type(parameters_child)         :: child
+        class(cmdline),    allocatable :: cline
+        class(parameters), allocatable :: params
+        write(*,'(A)') 'test_cont_view'
+        allocate(cline, params)
+        call base_cline(cline)
+        call cline%set('cont_view', 'lm')
+        call params%new(cline, silent=.true.)
+        call assert_true(.not. params%l_cont_view, 'cont_view is ignored by a program other than the refine3D search')
+        call cline%set('prg',        'refine3D')
+        call cline%set('refine',     'prob_neigh')
+        call cline%set('objfun',     'euclid')
+        call cline%set('nspace',     1000)
+        call cline%set('nspace_sub', 1000)
+        call view_case('PARAMETERS_CONT_VIEW', FORK_STATUS_STOPPED, 'cont_view=lm on refine3D refine=prob_neigh is accepted')
+        call cline%set('cont_view', 'lbfgsb')
+        call view_case('PARAMETERS_CONT_VIEW_LBFGSB', FORK_STATUS_STOPPED, 'cont_view=lbfgsb is accepted')
+        call cline%set('cont_view', 'yes')
+        call view_case('PARAMETERS_CONT_VIEW_VALUE', FORK_STATUS_FAILED, 'cont_view refuses a value other than no|lbfgsb|lm')
+        call cline%set('cont_view', 'lm')
+        call cline%set('nspace_sub', 500)
+        call view_case('PARAMETERS_CONT_VIEW_SUB', FORK_STATUS_FAILED, 'cont_view refuses nspace_sub different from nspace')
+        call cline%set('nspace_sub', 1000)
+        call cline%set('refine', 'cont')
+        call view_case('PARAMETERS_CONT_VIEW_CONT', FORK_STATUS_FAILED, 'cont_view refuses refine=cont')
+        call cline%set('refine', 'prob_neigh')
+        call cline%set('nstates', 2)
+        call view_case('PARAMETERS_CONT_VIEW_STATES', FORK_STATUS_FAILED, 'cont_view refuses two states')
+        call cline%delete('nstates')
+        call cline%set('objfun', 'cc')
+        call view_case('PARAMETERS_CONT_VIEW_CC', FORK_STATUS_FAILED, 'cont_view refuses objfun=cc')
+        call cline%kill
+    contains
+        subroutine view_case( name, expected, label )
+            character(len=*), intent(in) :: name, label
+            integer,          intent(in) :: expected
+            call child%start(name=string(name), cline=cline)
+            call child%await_final_status()
+            call assert_int(expected, child%status(), label)
+            call child%destroy
+        end subroutine view_case
+    end subroutine test_cont_view
 
     !> the command line every test here starts from
     subroutine base_cline( cline )

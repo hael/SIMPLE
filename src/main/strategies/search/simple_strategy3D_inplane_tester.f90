@@ -5,7 +5,7 @@
 ! under refine=cont, never a command-line key) and the stored shift as the search's previous
 ! shift (N10; a small phantom written to the run directory and removed).
 module simple_strategy3D_inplane_tester
-use simple_core_module_api,   only: sp, dp, PI
+use simple_core_module_api,   only: sp, dp, PI, DPI
 use simple_rnd,               only: gasdev
 use simple_cmdline,           only: cmdline
 use simple_parameters,        only: parameters
@@ -32,6 +32,7 @@ use simple_forked_process,    only: forked_process, FORK_STATUS_FAILED
 use simple_defs,              only: nthr_glob
 use simple_test_polar_fixture, only: rotate_half_ring, shift_args
 use simple_test_utils
+use, intrinsic :: iso_fortran_env, only: int64
 !$ use omp_lib,               only: omp_get_max_threads, omp_set_num_threads
 implicit none
 private
@@ -48,6 +49,24 @@ type, extends(forked_process) :: halfless_selection
 contains
     procedure :: execute => select_halfless
 end type halfless_selection
+
+! the continuous view refinement's recovery fixture (polar_continuous_view.md, Phase 2): the 4-blob phantom of
+! simple_pftc_inplane_tester (box 64, 1.3 A), the nearest of 1,000 cells, a particle 3 deg off in view, 17.3 deg in-plane
+! and (1.4, -0.6) px; the floor 0.25 deg in view is the plan's (guessed), the band fixed before the first run
+character(len=*), parameter :: VIEW_PHANTOM   = 'tmp_strategy3D_view_phantom.mrc'
+integer,          parameter :: VIEW_BOX       = 64
+integer,          parameter :: VIEW_NSPACE    = 1000
+integer,          parameter :: VIEW_CELL      = 500
+real,             parameter :: VIEW_LP        = 6.
+real,             parameter :: VIEW_OFF_DEG   = 3.
+real,             parameter :: VIEW_DIR_STEP  = 30.   !< the tilt direction: the first multiple whose truth keeps the cell nearest
+real,             parameter :: VIEW_PSI_DEG   = 17.3
+real,             parameter :: VIEW_SHIFT(2)  = [1.4, -0.6]
+real(dp),         parameter :: VIEW_FLOOR_DEG = 0.25d0
+real(dp),         parameter :: VIEW_OFF_TOL_DEG = 0.1d0  !< "keeps its 3 deg": within 0.1 deg of the offset
+real(dp),         parameter :: VIEW_SIGMA_RTOL  = 1.d-4
+! the pftc keeps a reference to the sigma2 array it is given: module lifetime
+real(sp), allocatable, target :: view_sigma2(:,:)
 
 contains
 
@@ -72,6 +91,7 @@ contains
         call test_pass_team_check()
         call test_pass_state_team_sized()
         call test_rec_state_half_stops_on_eo()
+        call test_view_recovery()
     end subroutine run_all_strategy3D_inplane_tests
 
     !> the reconstruction's state halves (rec_state_half, also the PCG backend's) take the used particles' half
@@ -506,6 +526,260 @@ contains
         call cline%kill
         call del_file(PHANTOM)
     end subroutine test_previous_inplane_at_poles
+
+    !> The committed pose's view refinement (cont_view): a noiseless KB projection of the phantom at R = Rz(psi) T(w) R_cell,
+    !! 3 deg off the nearest of 1,000 cells, 17.3 deg in-plane and (1.4, -0.6) px, refined from the cell, its nearest grid
+    !! rotation and a zero shift through refine_assignment_continuously, assign_ori and commit_view, as the matcher does
+    subroutine test_view_recovery()
+        character(len=6), parameter :: MODES(3) = [character(len=6) :: 'no', 'lbfgsb', 'lm']
+        integer  :: imode
+        real(dp) :: view_err(3), total_err(3), dir_deg
+        integer(int64) :: counts(3)
+        write(*,'(A)') 'test_view_recovery'
+        do imode = 1, 3
+            call recover(MODES(imode), view_err(imode), total_err(imode), counts, dir_deg)
+            write(*,'(A,A6,A,F6.1,A,F8.4,A,F8.4,A,I0,A,I0,A,I0)') '  cont_view=', MODES(imode), ': tilt direction ', &
+                &dir_deg, ' deg, view error ', view_err(imode), ' deg, rotation error ', total_err(imode), &
+                &' deg; solves ', counts(1), ', sections ', counts(2), ', evaluations ', counts(3)
+        enddo
+        call assert_true(abs(view_err(1) - real(VIEW_OFF_DEG,dp)) <= VIEW_OFF_TOL_DEG, &
+            &'cont_view=no keeps the 3 deg view offset of the drawn cell')
+        call assert_true(view_err(2) <= VIEW_FLOOR_DEG, 'cont_view=lbfgsb recovers the view to 0.25 deg')
+        call assert_true(view_err(3) <= VIEW_FLOOR_DEG, 'cont_view=lm recovers the view to 0.25 deg')
+        call del_file(VIEW_PHANTOM)
+
+    contains
+
+        subroutine recover( mode, view_error, total_error, counts, dir_deg )
+            use simple_ori_utils,           only: euler2m, m2euler
+            use simple_oris,                only: oris
+            use simple_ori,                 only: ori
+            use simple_core_module_api,     only: rotmat2d
+            use simple_projector_pft_batch, only: fproject_polar_batch_opt
+            use simple_polarft_calc,        only: vol_pad2ref_pfts_opt
+            character(len=*), intent(in)  :: mode
+            real(dp),         intent(out) :: view_error, total_error
+            integer(int64),   intent(out) :: counts(3)
+            real(dp),         intent(out) :: dir_deg
+            class(builder),    allocatable, target :: b
+            class(parameters), allocatable, target :: p
+            type(cmdline)            :: cline
+            type(strategy3D_srch)    :: srch
+            type(strategy3D_spec)    :: spec
+            type(oris)               :: os_true
+            type(ori)                :: o_tmp
+            complex(sp), allocatable :: sections(:,:,:), pft(:,:), sect(:,:), dnv(:,:), resid(:,:), rot(:,:)
+            real,        allocatable :: rmat(:,:,:)
+            real(sp),    allocatable :: contrib(:)
+            real(dp) :: rcell(3,3), rtrue(3,3), rcomm(3,3), omega(2), x(5), recomp, cosang, xg(5), floss, gloss(5), wsum
+            real(sp),    allocatable :: wk(:,:)
+            real     :: euls(3), corr, sh(2), inpl_coord
+            integer  :: pftsz, kfromto(2), pdim(3), irot, inpl, k, idir
+            logical  :: inpl_valid, committed
+            allocate(b, p)
+            call write_view_phantom()
+            call cline%set('vol1',      VIEW_PHANTOM)
+            call cline%set('mskdiam',   60.)
+            call cline%set('smpd',      1.3)
+            call cline%set('lp',        VIEW_LP)
+            call cline%set('trs',       5.)
+            call cline%set('nptcls',    1.)
+            call cline%set('nspace',    VIEW_NSPACE)
+            call cline%set('ctf',       'no')
+            call cline%set('objfun',    'euclid')
+            call cline%set('refine',    'prob_neigh')
+            call cline%set('mirr_proj', 'no')
+            call cline%check
+            call b%init_params_and_build_strategy3D_tbox(cline, p)
+            call set_bp_range3D(p, b, cline)
+            call b%pftc%new(p, p%nspace, [1,1], p%kfromto)
+            ! the KB bank of the 1,000 directions and the B-spline references, from the same phantom
+            call b%vol%read(p%vols(1))
+            call b%vol_pad%new([p%box_croppd, p%box_croppd, p%box_croppd], p%smpd_crop, wthreads=.false.)
+            call b%vol%pad_fft(b%vol_pad)
+            call b%vol_pad%expand_cmat()
+            call vol_pad2ref_pfts_opt(b%pftc, b%vol_pad, b%eulspace, 1, iseven=.true.)
+            call b%pftc%memoize_refs
+            rmat = b%vol%get_rmat()
+            call b%cftc%new(1, p%box, 1)
+            call b%cftc%set_ref(1, .true.,  rmat)
+            call b%cftc%set_ref(1, .false., rmat)
+            allocate(b%pcont)
+            call b%pcont%new(b%pftc, b%cftc)
+            ! the truth: 3 deg off the cell, tilted about its in-plane axes in the first direction (VIEW_DIR_STEP apart) that
+            ! keeps the cell the truth's nearest direction, turned by psi
+            rcell = real(b%eulspace%get_mat(VIEW_CELL), dp)
+            call os_true%new(1, is_ptcl=.false.)
+            do idir = 0, nint(360./VIEW_DIR_STEP) - 1
+                dir_deg = real(idir,dp) * real(VIEW_DIR_STEP,dp)
+                omega   = real(VIEW_OFF_DEG, dp) * DPI / 180.d0 * [cos(dir_deg*DPI/180.d0), sin(dir_deg*DPI/180.d0)]
+                rtrue   = matmul(real(euler2m([0., 0., VIEW_PSI_DEG]), dp), b%pcont%view_frame(rcell, omega))
+                call os_true%set_euler(1, m2euler(real(rtrue)))
+                call os_true%get_ori(1, o_tmp)
+                if( b%eulspace%find_closest_proj(o_tmp) == VIEW_CELL ) exit
+            enddo
+            call assert_true(b%eulspace%find_closest_proj(o_tmp) == VIEW_CELL, &
+                &'view fixture: the drawn cell is the truth''s nearest direction')
+            ! the noiseless particle: the KB section at the truth, shifted
+            pftsz   = b%pftc%get_pftsz()
+            kfromto = b%pftc%get_kfromto()
+            pdim    = b%pftc%get_pdim_interp()
+            allocate(sections(pftsz,kfromto(1):kfromto(2),1), pft(pdim(1),pdim(2):pdim(3)))
+            call fproject_polar_batch_opt(b%vol_pad, os_true, 1, b%pftc, sections, mirr_proj=.false.)
+            pft = cmplx(0.,0.,kind=sp)
+            pft(:,kfromto(1):kfromto(2)) = sections(:,:,1)
+            call shift_half_ring(pftsz, kfromto, p%box, VIEW_SHIFT, pft(:,kfromto(1):kfromto(2)))
+            call b%pftc%set_ptcl_pft(1, pft)
+            call b%pftc%set_eo(1, .true.)
+            call b%pftc%memoize_ptcls
+            if( allocated(view_sigma2) ) deallocate(view_sigma2)
+            allocate(view_sigma2(p%kfromto(1):p%kfromto(2),2), source=1.0_sp)
+            call b%pftc%assign_sigma2_noise(view_sigma2)
+            call b%pftc%memoize_sqsum_ptcl(1)
+            ! the stored pose is the drawn cell at its nearest grid rotation, no shift
+            euls = b%eulspace%get_euler(VIEW_CELL)
+            irot = b%pftc%get_roind(360. - VIEW_PSI_DEG)
+            euls(3) = 360. - b%pftc%get_rot(irot)
+            call b%spproj_field%set_euler(1, euls)
+            call b%spproj_field%set_shift(1, [0., 0.])
+            call b%spproj_field%set_state(1, 1)
+            ! the switch as parameters derive it on the route (the tester's command line names no program)
+            p%cont_view   = mode
+            p%l_cont_view = trim(mode) /= 'no'
+            call prep_strategy3D(p, b)
+            spec%iptcl     = 1
+            spec%iptcl_map = 1
+            call srch%new(p, spec, b)
+            srch%ithr = 1
+            call srch%prep4prob
+            inpl = irot
+            corr = 0.5
+            sh   = 0.
+            call srch%refine_assignment_continuously(VIEW_CELL, inpl, corr, sh, inpl_coord, inpl_valid)
+            call assign_ori(srch, VIEW_CELL, inpl, corr, sh, inpl_coord, inpl_valid)
+            call srch%commit_view()
+            rcomm  = real(euler2m(b%spproj_field%get_euler(1)), dp)
+            cosang = max(-1.d0, min(1.d0, sum(rcomm(3,:)*rtrue(3,:))))
+            view_error  = acos(cosang) * 180.d0 / DPI
+            cosang = max(-1.d0, min(1.d0, 0.5d0*(sum(rcomm*rtrue) - 1.d0)))
+            total_error = acos(cosang) * 180.d0 / DPI
+            call b%pcont%get_counts(counts(1), counts(2), counts(3))
+            if( .not. p%l_cont_view )then
+                ! the bank residual at the stored increment rotated into the particle frame (calc_sigma2_pftc's
+                ! convention) is the joint cost's residual; the unrotated increment is not
+                block
+                    real     :: rm(2,2), xyn(2)
+                    real(sp) :: c_stored(kfromto(1):kfromto(2)), c_native(kfromto(1):kfromto(2))
+                    real(dp) :: fj, gj(3), w_stored, w_native
+                    call rotmat2d(b%pftc%get_rot(inpl), rm)
+                    xyn = matmul(sh, transpose(rm))
+                    call b%pftc%gen_sigma_contrib(VIEW_CELL, 1, sh,  inpl, c_stored)
+                    call b%pftc%gen_sigma_contrib(VIEW_CELL, 1, xyn, inpl, c_native)
+                    call b%pftc%gen_raw_euclid_grad_at_angle(VIEW_CELL, 1, real(xyn,dp), real(inpl,dp), fj, gj)
+                    call b%pftc%get_sigma2_weights(wk)
+                    w_stored = 0.d0; w_native = 0.d0
+                    do k = kfromto(1), kfromto(2)
+                        w_stored = w_stored + real(wk(k,1),dp) * real(c_stored(k),dp)
+                        w_native = w_native + real(wk(k,1),dp) * real(c_native(k),dp)
+                    enddo
+                    w_stored = real(b%pftc%get_nrots(),dp) * w_stored / b%pftc%wsqsum_ptcl_now(1)
+                    w_native = real(b%pftc%get_nrots(),dp) * w_native / b%pftc%wsqsum_ptcl_now(1)
+                    write(*,'(A,3ES12.4)') '  joint cost at the committed cell; bank residual, unrotated and native shift: ', &
+                        &fj, w_stored, w_native
+                    call assert_true(abs(w_native - fj) <= VIEW_SIGMA_RTOL * abs(fj), &
+                        &'view off: the bank residual at the native shift is the joint cost''s residual (1e-4)')
+                    call assert_true(abs(w_stored - fj) > 0.1d0 * abs(fj), &
+                        &'view off: the unrotated increment misplaces the shift (fixture discriminates)')
+                end block
+            endif
+            if( p%l_cont_view )then
+                ! the committed proj is the grid direction nearest to the committed pose
+                call o_tmp%set_euler(m2euler(real(rcomm)))
+                call assert_true(nint(b%spproj_field%get(1,'proj')) == b%eulspace%find_closest_proj(o_tmp), &
+                    &'cont_view='//trim(mode)//': proj is the grid direction nearest to the committed pose')
+                ! the sigma2 residual of the final evaluation against an independent recomputation
+                call srch%get_view_solution(committed, x)
+                call assert_true(committed, 'cont_view='//trim(mode)//': the view solve improved the drawn pose')
+                allocate(contrib(kfromto(1):kfromto(2)), sect(pftsz,kfromto(1):kfromto(2)), dnv(pftsz,kfromto(1):kfromto(2)), &
+                    &resid(pftsz,kfromto(1):kfromto(2)), rot(pftsz,kfromto(1):kfromto(2)))
+                call b%pcont%sigma_contrib(1, x, contrib)
+                call b%pcont%section(1, .true., b%pcont%view_frame(rcell, x(4:5)), sect, dnv)
+                call shift_half_ring(pftsz, kfromto, p%box, real(x(1:2)), sect)
+                call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, sect, modulo(nint(x(3))-1, b%pftc%get_nrots())+1, rot)
+                resid = rot - pft(:,kfromto(1):kfromto(2))
+                recomp = 0.d0
+                do k = kfromto(1), kfromto(2)
+                    recomp = max(recomp, abs(sum(real(resid(:,k)*conjg(resid(:,k)),dp))/(2.d0*real(pftsz,dp)) - &
+                        &real(contrib(k),dp)))
+                enddo
+                write(*,'(A,ES10.3,A,ES10.3)') '  sigma2 of the final evaluation against its recomputation: max difference ', &
+                    &recomp, ' of max ', maxval(abs(contrib))
+                call assert_true(recomp <= VIEW_SIGMA_RTOL * maxval(abs(contrib)), &
+                    &'cont_view='//trim(mode)//': the sigma2 residual equals its independent recomputation (1e-4)')
+                ! the residual is the evaluator's (its shift and rotation conventions): on a grid rotation the loss is nrots times
+                ! the weighted per-shell residuals over the particle's weighted power; off the solution, where the residual is
+                ! not lost to the single-precision cancellation of a noiseless loss
+                xg      = x
+                xg(1:2) = xg(1:2) + [0.5d0, -0.3d0]
+                xg(3)   = real(modulo(nint(x(3))-1, b%pftc%get_nrots())+1, dp)
+                xg(4:5) = xg(4:5) + [0.01d0, -0.01d0]
+                call b%pcont%eval(1, xg, floss, gloss)
+                call b%pcont%sigma_contrib(1, xg, contrib)
+                call b%pftc%get_sigma2_weights(wk)
+                wsum = 0.d0
+                do k = kfromto(1), kfromto(2)
+                    wsum = wsum + real(wk(k,1),dp) * real(contrib(k),dp)
+                enddo
+                wsum = real(b%pftc%get_nrots(),dp) * wsum / b%pftc%wsqsum_ptcl_now(1)
+                write(*,'(A,ES12.5,A,ES12.5)') '  loss near the solution on a grid rotation ', floss, &
+                    &'; nrots x weighted residual over the weighted power ', wsum
+                call assert_true(abs(floss - wsum) <= VIEW_SIGMA_RTOL * abs(floss), &
+                    &'cont_view='//trim(mode)//': the sigma2 residual is the cost''s residual (1e-4)')
+            endif
+            call srch%kill
+            call clean_strategy3D
+            call b%pcont%kill
+            deallocate(b%pcont)
+            call b%cftc%kill
+            call b%vol_pad%kill_expanded
+            call b%vol_pad%kill
+            call b%pftc%kill
+            call b%kill_strategy3D_tbox
+            call b%kill_general_tbox
+            call os_true%kill
+            call o_tmp%kill
+            call cline%kill
+            if( allocated(view_sigma2) ) deallocate(view_sigma2)
+        end subroutine recover
+
+    end subroutine test_view_recovery
+
+    !> the 4-blob phantom of simple_pftc_inplane_tester (box 64 at 1.3 A, unmasked)
+    subroutine write_view_phantom()
+        integer, parameter :: NB = 4
+        real,    parameter :: CTRS(3,NB) = reshape([-9.,-5.,3., 7.,8.,-5., 0.,-10.,-8., 5.,-3.,10.], [3,NB])
+        real,    parameter :: SIGS(NB) = [3.5, 4.0, 3.0, 3.8], AMPS(NB) = [1.0, 0.8, 0.6, 0.5]
+        type(image)       :: vol
+        real, allocatable :: rmat(:,:,:)
+        real    :: ctr, d(3)
+        integer :: i, j, k, ib
+        allocate(rmat(VIEW_BOX,VIEW_BOX,VIEW_BOX), source=0.)
+        ctr = real(VIEW_BOX)/2. + 1.
+        do k = 1, VIEW_BOX
+            do j = 1, VIEW_BOX
+                do i = 1, VIEW_BOX
+                    do ib = 1, NB
+                        d = real([i,j,k]) - ctr - CTRS(:,ib)
+                        rmat(i,j,k) = rmat(i,j,k) + AMPS(ib) * exp(-sum(d*d) / (2. * SIGS(ib)**2))
+                    enddo
+                enddo
+            enddo
+        enddo
+        call vol%new([VIEW_BOX,VIEW_BOX,VIEW_BOX], 1.3)
+        call vol%set_rmat(rmat, .false.)
+        call vol%write(string(VIEW_PHANTOM), del_if_exists=.true.)
+        call vol%kill
+    end subroutine write_view_phantom
 
     !> a one-particle strategy3D toolbox on a small phantom (two directions), the particle at a stored shift, the
     !! search object prepared for the probabilistic route; trs a shift search's window (none by default)

@@ -63,6 +63,7 @@ real(sp), allocatable, target :: sigma2_fixture(:,:)
 contains
 
     subroutine run_all_pftc_inplane_tests()
+        use simple_polarft_cont_calc_tester, only: run_all_polarft_cont_calc_tests
         write(*,'(A)') '**** running all pftc in-plane tests ****'
         call test_grid_fit_step()
         call test_shift_frames()
@@ -82,7 +83,10 @@ contains
         call test_shift_prior_grid_fit()
         call test_lm_curvature_oracles()
         call test_lm_solver_comparison()
+        call test_sect_evaluator_identity()
         call del_file(PHANTOM_FILE)
+        ! the continuous view refinement on polar sections (T1, T2, T4 of polar_continuous_view.md)
+        call run_all_polarft_cont_calc_tests()
     end subroutine run_all_pftc_inplane_tests
 
     ! ---- Levenberg-Marquardt ('lm', lm_optimizer.md) ------------------------------
@@ -171,6 +175,48 @@ contains
             call kill_fixture(b)
         enddo
     end subroutine test_lm_curvature_oracles
+
+    !> T3 of polar_continuous_view.md: the evaluator on a supplied section (gen_sect_euclid_grad_at_angle), given the bank
+    !! reference and zero view columns, is gen_raw_euclid_grad_at_angle (f, grad(1:3)) within IDENTITY_ATOL and its
+    !! Gauss-Newton block (1:3,1:3) gen_joint_curv_at_angle's, relative, at the probe shifts and grid and fractional angles
+    subroutine test_sect_evaluator_identity()
+        type(builder),    target :: b
+        type(parameters), target :: p
+        complex(sp), allocatable :: sect(:,:), dsect(:,:,:)
+        real(dp) :: f0, g0(3), c0(3,3), f1, g1(5), c1(5,5), ri, worst_f, worst_g, worst_c, view_g
+        integer  :: kfromto(2), pftsz, ishift, irot, ioff
+        write(*,'(A)') 'test_sect_evaluator_identity'
+        call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
+        pftsz   = b%pftc%get_pftsz()
+        kfromto = b%pftc%get_kfromto()
+        allocate(sect(pftsz,kfromto(1):kfromto(2)), dsect(pftsz,kfromto(1):kfromto(2),2))
+        call b%pftc%get_ref_pft(1, .true., sect)
+        dsect = cmplx(0.,0.,kind=sp)
+        call b%pftc%load_ref_joint_curv_8(1, 1)
+        worst_f = 0.d0; worst_g = 0.d0; worst_c = 0.d0; view_g = 0.d0
+        do ishift = 1, size(PROBE_SHIFTS, 2)
+            do irot = 1, b%pftc%get_nrots(), 7
+                do ioff = 0, size(PROBE_ROTOFFS)
+                    ri = real(irot,dp)
+                    if( ioff > 0 ) ri = ri + PROBE_ROTOFFS(ioff)
+                    call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, PROBE_SHIFTS(:,ishift), ri, f0, g0)
+                    call b%pftc%gen_joint_curv_at_angle(1, 1, PROBE_SHIFTS(:,ishift), ri, c0)
+                    call b%pftc%gen_sect_euclid_grad_at_angle(1, sect, dsect, PROBE_SHIFTS(:,ishift), ri, f1, g1, c1)
+                    worst_f = max(worst_f, abs(f1 - f0))
+                    worst_g = max(worst_g, maxval(abs(g1(1:3) - g0)))
+                    worst_c = max(worst_c, maxval(abs(c1(1:3,1:3) - c0))/maxval(abs(c0)))
+                    view_g  = max(view_g, maxval(abs(g1(4:5))), maxval(abs(c1(4:5,:))))
+                enddo
+            enddo
+        enddo
+        write(*,'(A,3ES10.3)') '  supplied section against the bank evaluators: f, grad, curvature (relative) ', &
+            &worst_f, worst_g, worst_c
+        call assert_true(worst_f <= IDENTITY_ATOL .and. worst_g <= IDENTITY_ATOL, &
+            &'T3: the supplied bank section gives gen_raw_euclid_grad_at_angle (1e-4)')
+        call assert_true(worst_c <= IDENTITY_ATOL, 'T3: its Gauss-Newton block is gen_joint_curv_at_angle (1e-4 relative)')
+        call assert_true(view_g == 0.d0, 'T3: zero view columns give zero view gradient and curvature')
+        call kill_fixture(b)
+    end subroutine test_sect_evaluator_identity
 
     !> Both solvers on the recovery fixture (TRUTH_ANGLE, TRUTH_SHIFT): the alternating and the fixed shift search and
     !! the joint solve from three starts, euclid and cc, each start timed NTIME times; one LM_COMPARE row per solver and

@@ -118,6 +118,12 @@ Preserve that split when refactoring.
   FSC resolution when available, with planned stage LP only as fallback.
 - For multi-state `solve3D` with `pgrp_start != pgrp`, keep the symmetry-axis
   search and symmetrization state-local.
+- `cont_view=lbfgsb|lm` (`refine3D_local refine=prob_neigh`, one state) refines
+  the committed pose's view on B-spline sections after the draw: nspace_sub =
+  nspace, the commit by `strategy3D_srch%commit_view` in the matcher after the
+  search, the final section's sigma2 (`calc_sigma2_view`), and the view pass's
+  own `cartft_calc`. Policy: `refine3D_policy.md`, "Continuous view refinement
+  on polar sections".
 
 ## Adjacent Files Worth Reading
 

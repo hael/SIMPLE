@@ -51,6 +51,8 @@ Silent ones first: nothing reports these.
   `set_ptcl` writes only its slot (the batch fills slots in a parallel loop); `new`, `set_ref`,
   `set_sigma2`, `new_ptcls`, `set_ptcl_inds`, `read` and `write` are serial. One `cartft_pose_opt` per
   particle search object; `cartft_pose_work` is summed per thread.
+- `gather_ref(state, iseven, q, val, grad)` is the point query of the polar view refinement: q on the native
+  lattice, the value in a polar section's scale, the gradient per native unit.
 - Failures: a slot without power or with an unusable sigma2 shell is invalid (`ptcl_is_valid`), a
   per-particle outcome; evaluating it, an absent reference or a gather off the wrap table stops. A solve
   that does not lower the objective returns the seed bit for bit with a typed status.

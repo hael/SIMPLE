@@ -1703,6 +1703,182 @@ contains
         endif
     end subroutine gen_joint_curv_at_angle
 
+    !> gen_raw_euclid_grad_at_angle's loss against a supplied section and its two view derivatives (polarft_cont_calc):
+    !! grad and the optional Gauss-Newton matrix in (shift x, shift y, rotation index, tilt 1, tilt 2). The bank reference
+    !! supplied gives gen_raw_euclid_grad_at_angle and gen_joint_curv_at_angle; the view columns extend by +conjg.
+    module subroutine gen_sect_euclid_grad_at_angle( self, iptcl, sect, dsect, shvec, rotind_frac, f, grad, curv )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iptcl
+        complex(sp),                 intent(in)    :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),                 intent(in)    :: dsect(self%pftsz,self%kfromto(1):self%kfromto(2),2)
+        real(dp),                    intent(in)    :: shvec(2), rotind_frac
+        real(dp),                    intent(out)   :: f, grad(5)
+        real(dp), optional,          intent(out)   :: curv(5,5)
+        complex(sp), pointer :: coeffs(:,:), vcoeffs(:,:), shmat(:,:), cjoint(:,:), cmat(:,:)
+        complex(sp) :: cross_term, ref2_term
+        complex(dp) :: u, du, jv(5)
+        real(sp)    :: A_sp, shift(2), shift_mag_sq, wk
+        real(dp)    :: wsq_now, val, dval, tau, w2pi, rx, ry, x0, fr, ctf2, ax, ay, phi, freq, gk(5,5), g(5,5)
+        integer     :: i, ithr, k, k0, kk, p, ih, a, b, m, r, i0, p1, p2
+        logical     :: shifted
+        call self%check_ptcl_memo
+        call self%check_euclid_weights
+        if( .not. self%is_euclid_objfun() ) THROW_HARD('the supplied-section evaluator requires objfun=euclid')
+        ithr         = omp_get_thread_num() + 1
+        i            = self%pinds(iptcl)
+        ih           = merge(1, 2, self%iseven(i))
+        k0           = self%kfromto(1)
+        shift        = real(shvec,sp)
+        shift_mag_sq = sum(shift*shift)
+        shifted      = shift_mag_sq > 0._sp
+        coeffs       => self%heap_vars(ithr)%joint_coeffs
+        vcoeffs      => self%heap_vars(ithr)%view_coeffs
+        coeffs       = cmplx(0._sp,0._sp,kind=sp)
+        vcoeffs      = cmplx(0._sp,0._sp,kind=sp)
+        cjoint       => self%cmat_joint_many(ithr)%c
+        cmat         => self%cmat2_many(ithr)%c
+        if( shifted )then
+            shmat => self%heap_vars(ithr)%shmat
+            call self%gen_shmat4aln(ithr, shift, shmat)
+        endif
+        ! objective, d/dsx, d/dsy: the column sections of gen_raw_euclid_grad_at_angle
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            if( shifted )then
+                cjoint(1:self%pftsz,kk) = shmat(:,k) * sect(:,k)
+            else
+                cjoint(1:self%pftsz,kk) = sect(:,k)
+            endif
+            cjoint(self%pftsz+1:self%nrots,kk) = conjg(cjoint(1:self%pftsz,kk))
+            cjoint(1:self%pftsz,self%nk+kk) = &
+                &real(self%argtransf(1:self%pftsz,k),sp) * cjoint(1:self%pftsz,kk)
+            cjoint(self%pftsz+1:self%nrots,self%nk+kk) = &
+                &-conjg(cjoint(1:self%pftsz,self%nk+kk))
+            cjoint(1:self%pftsz,2*self%nk+kk) = &
+                &real(self%argtransf(self%pftsz+1:self%nrots,k),sp) * cjoint(1:self%pftsz,kk)
+            cjoint(self%pftsz+1:self%nrots,2*self%nk+kk) = &
+                &-conjg(cjoint(1:self%pftsz,2*self%nk+kk))
+        enddo
+        call fftwf_execute_dft(self%plan_fwd3_many, cjoint, cjoint)
+        ! the section's power along the full ring, transformed as memoize_one_ref transforms a bank reference's
+        self%crmat1_many(ithr)%r(1:self%pftsz,:)            = real(sect * conjg(sect))
+        self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots,:) = self%crmat1_many(ithr)%r(1:self%pftsz,:)
+        call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
+        do k = self%kfromto(1), self%kfromto(2)
+            wk = self%sigma2_wk(k,ih)
+            kk = k - k0 + 1
+            do p = 1,self%pftsz+1
+                ref2_term  = self%ft_ctf2(p,k,i) * conjg(self%crmat1_many(ithr)%c(p,kk))
+                cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,kk))
+                coeffs(p,1) = coeffs(p,1) + wk * (ref2_term - 2._sp*cross_term)
+                cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,self%nk+kk))
+                coeffs(p,2) = coeffs(p,2) + wk * cmplx(0._sp,2._sp,kind=sp) * cross_term
+                cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,2*self%nk+kk))
+                coeffs(p,3) = coeffs(p,3) + wk * cmplx(0._sp,2._sp,kind=sp) * cross_term
+            enddo
+        enddo
+        ! the view columns: the cross term of the shifted section derivative and the power term 2 Re(conj(S) dS)
+        do a = 1, 2
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                if( shifted )then
+                    cmat(1:self%pftsz,kk) = shmat(:,k) * dsect(:,k,a)
+                else
+                    cmat(1:self%pftsz,kk) = dsect(:,k,a)
+                endif
+                cmat(self%pftsz+1:self%nrots,kk) = conjg(cmat(1:self%pftsz,kk))
+                self%crmat1_many(ithr)%r(1:self%pftsz,kk) = 2._sp * real(conjg(sect(:,k)) * dsect(:,k,a))
+                self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots,kk) = self%crmat1_many(ithr)%r(1:self%pftsz,kk)
+            enddo
+            call fftwf_execute_dft(self%plan_fwd1_many, cmat, cmat)
+            call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
+            do k = self%kfromto(1), self%kfromto(2)
+                wk = self%sigma2_wk(k,ih)
+                kk = k - k0 + 1
+                do p = 1,self%pftsz+1
+                    ref2_term  = self%ft_ctf2(p,k,i) * conjg(self%crmat1_many(ithr)%c(p,kk))
+                    cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(cmat(p,kk))
+                    vcoeffs(p,a) = vcoeffs(p,a) + wk * (ref2_term - 2._sp*cross_term)
+                enddo
+            enddo
+        enddo
+        ! normalise with the current sigma2, as gen_raw_euclid_grad_at_angle does (the +1 particle self-term)
+        wsq_now = self%wsqsum_ptcl_now(iptcl)
+        A_sp    = real(wsq_now * real(2*self%nrots,dp),sp)
+        coeffs  = coeffs  / A_sp
+        vcoeffs = vcoeffs / A_sp
+        coeffs(1,1) = coeffs(1,1) + cmplx(1._sp,0._sp,kind=sp)
+        call eval_joint_coeffs_at_rotind(self, coeffs, rotind_frac, f, grad(1:3))
+        do a = 1, 2
+            call eval_series_at_rotind(self, vcoeffs(:,a), rotind_frac, val, dval)
+            grad(3+a) = val
+        enddo
+        if( .not. present(curv) ) return
+        ! the Gauss-Newton matrix (1/W) J^T W J by the direct sum of gen_joint_curv_at_angle, the view columns added:
+        ! REF' (the ring derivative of the unshifted section) by one FFT batch and its inverse through the forward plan
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            cmat(1:self%pftsz,kk)            = sect(:,k)
+            cmat(self%pftsz+1:self%nrots,kk) = conjg(sect(:,k))
+        enddo
+        call fftwf_execute_dft(self%plan_fwd1_many, cmat, cmat)
+        w2pi = DTWOPI / real(self%nrots,dp)
+        do m = 1, self%nrots
+            if( m - 1 <= self%nrots/2 )then
+                freq = real(m - 1, dp)
+            else
+                freq = real(m - 1 - self%nrots, dp)
+            endif
+            do kk = 1, self%nk
+                du = cmplx(cmat(m,kk), kind=dp) * cmplx(0.d0, freq*w2pi, kind=dp)
+                cmat(m,kk) = cmplx(conjg(du), kind=sp)
+            enddo
+        enddo
+        call fftwf_execute_dft(self%plan_fwd1_many, cmat, cmat)
+        tau = rotind_frac - 1.d0
+        rx  = w2pi * real(self%ldim(2),dp) / real(self%ldim(1),dp)
+        ry  = w2pi * real(self%ldim(1),dp) / real(self%ldim(2),dp)
+        g   = 0.d0
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            gk = 0.d0
+            do r = 1, self%pftsz
+                ! reference ring position r meets the particle at r + tau (CTF period pftsz), linearly interpolated
+                x0   = modulo(real(r - 1, dp) + tau, real(self%pftsz, dp))
+                i0   = min(int(x0), self%pftsz - 1)
+                fr   = x0 - real(i0, dp)
+                p1   = i0 + 1
+                p2   = modulo(p1, self%pftsz) + 1
+                ctf2 = (1.d0 - fr) * real(self%ctfmats(p1,k,i), dp)**2 + fr * real(self%ctfmats(p2,k,i), dp)**2
+                ax   = self%argtransf(r,k)
+                ay   = self%argtransf(self%pftsz+r,k)
+                phi  = -rx * ay * shvec(1) + ry * ax * shvec(2)
+                u    = cmplx(sect(r,k), kind=dp)
+                du   = conjg(cmplx(cmat(r,kk), kind=dp)) / real(self%nrots,dp)
+                ! the shift phase is common to every column and drops out of the products
+                jv(1) = cmplx(0.d0, ax, kind=dp) * u
+                jv(2) = cmplx(0.d0, ay, kind=dp) * u
+                jv(3) = -(cmplx(0.d0, phi, kind=dp) * u + du)
+                jv(4) = cmplx(dsect(r,k,1), kind=dp)
+                jv(5) = cmplx(dsect(r,k,2), kind=dp)
+                do b = 1, 5
+                    do a = 1, b
+                        gk(a,b) = gk(a,b) + ctf2 * real(conjg(jv(a)) * jv(b), dp)
+                    enddo
+                enddo
+            enddo
+            g = g + real(self%sigma2_wk(k,ih), dp) * gk
+        enddo
+        ! the Friedel half carries the same products: the full ring is twice the half
+        g = 2.d0 * g / self%wsqsum_ptcl_now(iptcl)
+        do b = 1, 5
+            do a = 1, b
+                curv(a,b) = g(a,b)
+                curv(b,a) = g(a,b)
+            enddo
+        enddo
+    end subroutine gen_sect_euclid_grad_at_angle
+
     !> copies reference iref, of the parity of particle iptcl, to the calling thread's buffer of the shift search:
     !! the reference is fixed during one minimisation and the copy to double precision is exact
     module subroutine load_ref_aln_8( self, iref, iptcl )
@@ -1781,17 +1957,49 @@ contains
         real(sp),  optional,         intent(out)   :: ref_pow(self%kfromto(1):self%kfromto(2))
         real(sp),  optional,         intent(out)   :: ptcl_pow(self%kfromto(1):self%kfromto(2))
         real(sp),  optional,         intent(out)   :: v
+        integer :: i, ithr, ieo
+        i    = self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
+        ieo  = merge(REF_EVEN, REF_ODD, self%iseven(i))
+        self%heap_vars(ithr)%pft_ref_8 = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
+        call sigma_contrib_of_loaded_ref(self, iptcl, shvec, irot, sigma_contrib, ref_pow, ptcl_pow, v)
+    end subroutine gen_sigma_contrib
+
+    !> gen_sigma_contrib against a supplied section instead of a bank reference (the continuous view refinement's final
+    !! section, polarft_cont_calc)
+    module subroutine gen_sigma_contrib_sect( self, iptcl, sect, shvec, irot, sigma_contrib )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iptcl
+        complex(sp),                 intent(in)    :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp),                    intent(in)    :: shvec(2)
+        integer,                     intent(in)    :: irot
+        real(sp),                    intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        integer :: ithr
+        ithr = omp_get_thread_num() + 1
+        self%heap_vars(ithr)%pft_ref_8 = sect
+        call sigma_contrib_of_loaded_ref(self, iptcl, shvec, irot, sigma_contrib)
+    end subroutine gen_sigma_contrib_sect
+
+    !> the residual of the reference in the calling thread's pft_ref_8 at (shvec, irot) per shell, with the optional
+    !! scale diagnostics of gen_sigma_contrib
+    subroutine sigma_contrib_of_loaded_ref( self, iptcl, shvec, irot, sigma_contrib, ref_pow, ptcl_pow, v )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iptcl
+        real(sp),                    intent(in)    :: shvec(2)
+        integer,                     intent(in)    :: irot
+        real(sp),                    intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real(sp),  optional,         intent(out)   :: ref_pow(self%kfromto(1):self%kfromto(2))
+        real(sp),  optional,         intent(out)   :: ptcl_pow(self%kfromto(1):self%kfromto(2))
+        real(sp),  optional,         intent(out)   :: v
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
         real(dp)    :: norm_factor, wk, vnum, vden, ppow
-        integer     :: i, ithr, ieo, k, ih
+        integer     :: i, ithr, k, ih
         i    = self%pinds(iptcl)
         ih = merge(1, 2, self%iseven(i))
         ithr = omp_get_thread_num() + 1
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat_8       => self%heap_vars(ithr)%shmat_8
-        ieo       = merge(REF_EVEN, REF_ODD, self%iseven(i))
-        pft_ref_8 = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
         ! shift
         call self%gen_shmat4aln_8(ithr, real(shvec,dp), shmat_8)
         pft_ref_8 = pft_ref_8 * shmat_8(:,:self%kfromto(2))
@@ -1829,7 +2037,7 @@ contains
         ! sigma2 - pre-compute normalization factor
         norm_factor = 2.d0 * real(self%pftsz, dp)
         sigma_contrib = real(sum(real(pft_ref_tmp_8 * conjg(pft_ref_tmp_8), dp), dim=1) / norm_factor)
-    end subroutine gen_sigma_contrib
+    end subroutine sigma_contrib_of_loaded_ref
 
     ! the values are stored in self%crmat_many(ithr)%r( 1:nrots, ind )
     ! ind is not the natural reference index (iref) and is left to the user

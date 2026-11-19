@@ -60,6 +60,7 @@ type heap_vars
     real(sp),    pointer :: rot_cdf(:)          => null()
     ! cache arrays for batched computations
     complex(sp), pointer :: joint_coeffs(:,:)   => null()  ! objective/dsx/dsy angular coefficients
+    complex(sp), pointer :: view_coeffs(:,:)    => null()  ! the two view tilts' angular coefficients (gen_sect_euclid_grad_at_angle)
 end type heap_vars
 
 ! the shift map's per-thread work: gen_shiftmap fills it, shiftmap_objfun_grid and shiftmap_cross read it on the same thread
@@ -268,9 +269,11 @@ type :: polarft_calc
     procedure          :: gen_shift_curv_for_rot_8_aln
     procedure          :: load_ref_joint_curv_8
     procedure          :: gen_joint_curv_at_angle
+    procedure          :: gen_sect_euclid_grad_at_angle
     procedure, private :: gen_corr_cc_grad_for_rot_8
     procedure, private :: gen_euclid_grad_for_rot_8
     procedure          :: gen_sigma_contrib
+    procedure          :: gen_sigma_contrib_sect
     procedure          :: gen_many_objfun_vals
     procedure          :: gen_many_euclids
     procedure          :: gen_many_euclids_gpu
@@ -947,6 +950,16 @@ interface
         real(dp),                    intent(out)   :: curv(3,3)
     end subroutine gen_joint_curv_at_angle
 
+    module subroutine gen_sect_euclid_grad_at_angle( self, iptcl, sect, dsect, shvec, rotind_frac, f, grad, curv )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iptcl
+        complex(sp),                 intent(in)    :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),                 intent(in)    :: dsect(self%pftsz,self%kfromto(1):self%kfromto(2),2)
+        real(dp),                    intent(in)    :: shvec(2), rotind_frac
+        real(dp),                    intent(out)   :: f, grad(5)
+        real(dp), optional,          intent(out)   :: curv(5,5)
+    end subroutine gen_sect_euclid_grad_at_angle
+
     module subroutine gen_corr_cc_grad_for_rot_8( self, pft_ref, i, shvec, irot, f, grad)
         class(polarft_calc), target, intent(inout) :: self
         complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
@@ -990,6 +1003,15 @@ interface
         real(sp), optional,          intent(out)   :: ptcl_pow(self%kfromto(1):self%kfromto(2))
         real(sp), optional,          intent(out)   :: v
     end subroutine gen_sigma_contrib
+
+    module subroutine gen_sigma_contrib_sect( self, iptcl, sect, shvec, irot, sigma_contrib )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iptcl
+        complex(sp),                 intent(in)    :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp),                    intent(in)    :: shvec(2)
+        integer,                     intent(in)    :: irot
+        real(sp),                    intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+    end subroutine gen_sigma_contrib_sect
 
     module subroutine gen_many_objfun_vals( self, nr, irefs, iptcl, shift )
         class(polarft_calc), intent(inout) :: self

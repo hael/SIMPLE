@@ -62,6 +62,7 @@ contains
     !> readout: the probabilistic assignment's readout record (the caller stores the state readout for the statistics
     !! file); empty in the other modes
     subroutine refine3D_exec( params, build, cline, which_iter, converged, l_write_partial_recs, readout )
+        use simple_cartft_calc, only: cartft_calc
         class(parameters), target, intent(inout) :: params
         class(builder),    target, intent(inout) :: build
         class(cmdline),            intent(inout) :: cline
@@ -81,6 +82,11 @@ contains
         type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:), pinds(:)
         real,                      allocatable :: incr_shifts(:,:)
+        ! the committed poses' view solutions (cont_view): the final evaluation's point gives the sigma2 residual
+        real(dp),                  allocatable :: view_x(:,:)
+        logical,                   allocatable :: l_view(:)
+        integer(int64)      :: view_counts(3)  !< view solves, sections cut, cost evaluations (cont_view)
+        type(cartft_calc), allocatable, target :: cftc_view !< the B-spline references of the view refinement (cont_view)
         type(ori)           :: orientation
         type(refine3D_ctrl) :: ctrl
         real                :: frac_greedy
@@ -227,6 +233,9 @@ contains
             call b_ptr%spproj_field%set_all2single('cont_inpl_improved',  0.)
         endif
         allocate(incr_shifts(2,batchsz_max), source=0.0)
+        allocate(view_x(5,batchsz_max), source=0.d0)
+        allocate(l_view(batchsz_max), source=.false.)
+        view_counts = 0_int64
         call reads%new(p_ptr)
         call reads%expect(pinds(1:nptcls2update))
         ! the share read once into the particle buffer, for the batches and the reconstruction below; a cropped
@@ -276,9 +285,14 @@ contains
                 endif
                 call choose_and_run_strategy(iptcl, iptcl_batch, ithr, has_been_searched)
                 if( ctrl%do_emit_sigma .and. .not. p_ptr%l_cart_refine )then
-                    call b_ptr%spproj_field%get_ori(iptcl, orientation)
-                    call orientation%set_shift(incr_shifts(:,iptcl_batch))
-                    call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj', eulspace=b_ptr%eulspace)
+                    if( l_view(iptcl_batch) )then
+                        ! the committed view is off the grid: the residual of the solve's final evaluation
+                        call b_ptr%esig%calc_sigma2(b_ptr%pcont, iptcl, view_x(:,iptcl_batch))
+                    else
+                        call b_ptr%spproj_field%get_ori(iptcl, orientation)
+                        call orientation%set_shift(incr_shifts(:,iptcl_batch))
+                        call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj', eulspace=b_ptr%eulspace)
+                    endif
                 endif
                 ts_thr(ithr) = ts_thr(ithr) + (omp_get_wtime() - t_ptcl)
             enddo
@@ -325,6 +339,15 @@ contains
         call b_ptr%vol%kill
         call orientation%kill
         call clean_batch_particles3D(b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad)
+        if( allocated(b_ptr%pcont) )then
+            call b_ptr%pcont%get_counts(view_counts(1), view_counts(2), view_counts(3))
+            call b_ptr%pcont%kill
+            deallocate(b_ptr%pcont)
+        endif
+        if( allocated(cftc_view) )then
+            call cftc_view%kill
+            deallocate(cftc_view)
+        endif
         call b_ptr%cftc%kill
         ! Registration is complete.  Release the all-state reprojection model,
         ! particle PFTs, memoized correlations, and PFTC thread workspaces
@@ -403,6 +426,16 @@ contains
             call write_ptcl_read_bench_context(fnr, 'match3D reconstruction', reads_rec)
             if( p_ptr%l_cart_refine ) &
                 &write(fnr,'(a,i0)') 'match3D Cartesian reference bytes   : ', cart_ref_bytes
+            if( p_ptr%l_cont_view )then
+                write(fnr,'(a,a)')  'match3D continuous view solver      : ', trim(p_ptr%cont_view)
+                write(fnr,'(a,i0)') 'match3D view solves                 : ', view_counts(1)
+                write(fnr,'(a,i0)') 'match3D view sections cut           : ', view_counts(2)
+                write(fnr,'(a,i0)') 'match3D view cost evaluations       : ', view_counts(3)
+                if( view_counts(1) > 0_int64 )then
+                    write(fnr,'(a,f0.3)') 'match3D view sections per solve     : ', real(view_counts(2),dp)/real(view_counts(1),dp)
+                    write(fnr,'(a,f0.3)') 'match3D view evaluations per solve  : ', real(view_counts(3),dp)/real(view_counts(1),dp)
+                endif
+            endif
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f0.2)') 'match3D startup/setup              :', rt_startup
@@ -553,6 +586,11 @@ contains
                 else
                     call read_reprojection_model(p_ptr, b_ptr, batchsz_max)
                 endif
+                ! the continuous view refinement cuts B-spline sections from the Cartesian references
+                if( p_ptr%l_cont_view )then
+                    allocate(cftc_view)
+                    call read_cart_refvols_view(p_ptr, b_ptr, cftc_view)
+                endif
             endif
             call prep_sigmas_objfun(p_ptr, b_ptr)
             if( ctrl%do_bench ) rt_prep_refs = toc(t_prep_refs)
@@ -666,6 +704,15 @@ contains
                 ! update needs (the shift the polar search object records as its previous shift)
                 shift_before = b_ptr%spproj_field%get_2Dshift(iptcl)
                 call strategy3Dsrch(iptcl_batch)%ptr%srch(b_ptr%spproj_field, ithr)
+                ! the view solve's pose replaces the drawn cell's that assign_ori wrote (cont_view)
+                l_view(iptcl_batch) = .false.
+                if( p_ptr%l_cont_view )then
+                    select type( prob_srch => strategy3Dsrch(iptcl_batch)%ptr )
+                        type is( strategy3D_prob )
+                            call prob_srch%s%commit_view()
+                            call prob_srch%s%get_view_solution(l_view(iptcl_batch), view_x(:,iptcl_batch))
+                    end select
+                endif
                 ! cont_inpl_attempted/_improved are written by the search object that ran the
                 ! continuous in-plane route (strategy3D_srch)
                 if( p_ptr%l_cart_refine )then

@@ -103,6 +103,7 @@ contains
     procedure          :: set_ptcl_inds
     procedure          :: get_ptcl_slot
     ! evaluation
+    procedure          :: gather_ref
     procedure          :: predict
     procedure          :: shift_normal_terms
     procedure          :: pose_normal_terms
@@ -614,6 +615,22 @@ contains
     end function get_box
 
     ! EVALUATION (calculator intent(in); safe to call concurrently on different particles)
+
+    !> The B-spline gather of one reference at one point q of the native (unpadded) Fourier lattice:
+    !! the value, in the native scale of a polar reference section, and its gradient per native lattice
+    !! unit. The point query of the continuous view refinement on polar sections (polarft_cont_calc).
+    subroutine gather_ref( self, state, iseven, q, val, grad )
+        class(cartft_calc), intent(in)  :: self
+        integer,            intent(in)  :: state
+        logical,            intent(in)  :: iseven
+        real(sp),           intent(in)  :: q(3)
+        complex(sp),        intent(out) :: val, grad(3)
+        logical :: inside
+        if( .not. self%ref_exists(state, iseven) ) THROW_HARD('cartft_calc point query of an absent reference')
+        call self%gather(self%refs(self%ref_index(iseven),state)%cmat, real(self%padf, sp)*q, val, grad, inside)
+        if( .not. inside ) THROW_HARD('cartft_calc point query outside the wrap table')
+        grad = real(self%padf, sp)*grad
+    end subroutine gather_ref
 
     !> Unweighted full-disk prediction S(shift) G(rotmat) V of one reference, the forward
     !! model before CTF and whitening, over the pixels of the objectives' membership for shells

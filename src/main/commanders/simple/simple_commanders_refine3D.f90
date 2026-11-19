@@ -131,6 +131,18 @@ contains
                         THROW_HARD('refine3D_local refine=prob_neigh searches about the stored poses: prob_neigh_mode=geom')
                 endif
                 call cline%set('prob_neigh_mode', 'geom')
+                ! the continuous view refinement searches the coarse grid itself: nspace_sub = nspace (decision 8 of
+                ! polar_continuous_view.md), 1,000 directions unless given
+                if( cline%defined('cont_view') )then
+                    if( cline%get_carg('cont_view') /= 'no' )then
+                        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000)
+                        if( cline%defined('nspace_sub') )then
+                            if( cline%get_iarg('nspace_sub') /= cline%get_iarg('nspace') ) &
+                                THROW_HARD('cont_view searches the bank itself: nspace_sub must equal nspace')
+                        endif
+                        call cline%set('nspace_sub', cline%get_iarg('nspace'))
+                    endif
+                endif
                 if( .not. cline%defined('nspace')     ) call cline%set('nspace',     20000)
                 if( .not. cline%defined('nspace_sub') ) call cline%set('nspace_sub', 500)
                 ! the particles come centred (solve3D, a student's registration): a narrow shift prior, so a particle
@@ -140,6 +152,9 @@ contains
                 if( cline%defined('nspace') .or. cline%defined('nspace_sub') ) &
                     THROW_HARD('refine3D_local refine=cont uses no projection grid; remove nspace and nspace_sub')
                 if( cline%defined('prob_neigh_mode') ) THROW_HARD('prob_neigh_mode applies to refine3D_local refine=prob_neigh')
+                if( cline%defined('cont_view') )then
+                    if( cline%get_carg('cont_view') /= 'no' ) THROW_HARD('cont_view requires refine3D_local refine=prob_neigh')
+                endif
             endif
             call require_refine3D_local_value(cline, 'ref_pose_init', 'none')
             call require_refine3D_local_value(cline, 'regpass', 'no')

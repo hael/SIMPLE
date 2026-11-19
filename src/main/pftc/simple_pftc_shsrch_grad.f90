@@ -17,7 +17,7 @@ private
 #include "simple_local_flags.inc"
 
 integer,  parameter :: coarse_num_steps = 5       ! no. of coarse search steps in x AND y (hence real no. is its square)
-integer,  parameter :: SHSRCH_SHIFT = 1, SHSRCH_JOINT = 2
+integer,  parameter :: SHSRCH_SHIFT = 1, SHSRCH_JOINT = 2, SHSRCH_JOINT_VIEW = 3 !< _VIEW: joint + two view tilts
 ! reasons the quadratic grid step falls back to the L-BFGS-B alternations
 integer,  parameter :: FIT_EDGE = 1, FIT_CURVATURE = 2, FIT_STEP = 3, FIT_LIMITS = 4, FIT_VALUE = 5, FIT_NREASONS = 5
 real(dp), parameter :: FIT_MIN_CURV_RATIO = 0.01d0 ! smallest accepted ratio of the Hessian's eigenvalues
@@ -95,6 +95,7 @@ contains
     procedure          :: new_alternating      => grad_shsrch_new_alternating
     procedure          :: new_fixed       => grad_shsrch_new_fixed
     procedure          :: new_joint       => grad_shsrch_new_joint
+    procedure          :: new_joint_view  => grad_shsrch_new_joint_view
     procedure          :: set_indices     => grad_shsrch_set_indices
     procedure          :: minimize        => grad_shsrch_minimize
     procedure          :: minimize_joint  => grad_shsrch_minimize_joint
@@ -251,6 +252,38 @@ contains
         self%ospec%gcostfun_8   => grad_shsrch_gcostfun
         self%ospec%fdfcostfun_8 => grad_shsrch_fdfcostfun
     end subroutine grad_shsrch_new_joint
+
+    !> The joint mode with the drawn pose's view (polar_continuous_view.md): (shift x, shift y, rotation index, tilt x,
+    !! tilt y) on the B-spline sections of build%pcont, raw Euclidean loss with the joint mode's shift prior; solver
+    !! 'lbfgsb' or 'lm' (cont_view). The caller sets the drawn reference (pcont%set_view_ref) before minimize_joint.
+    subroutine grad_shsrch_new_joint_view( self, build, lims, maxits, solver )
+        use simple_opt_factory, only: opt_factory
+        class(pftc_shsrch_grad),     intent(inout) :: self
+        class(builder),      target, intent(in)    :: build
+        real,                        intent(in)    :: lims(5,2)
+        integer,                     intent(in)    :: maxits
+        character(len=*),            intent(in)    :: solver
+        type(opt_factory) :: opt_fact
+        call self%kill
+        self%solver = solver
+        self%b_ptr => build
+        if( .not. allocated(self%b_ptr%pcont) ) THROW_HARD('the view mode requires the polar continuous calculator')
+        if( .not. self%b_ptr%pftc%is_euclid_objfun() ) THROW_HARD('the view mode requires objfun=euclid')
+        self%joint_cc    = .false.
+        self%nrots       = self%b_ptr%pftc%get_nrots()
+        call self%build_rot_table
+        self%maxits      = maxits
+        self%opt_angle   = .false.
+        self%search_mode = SHSRCH_JOINT_VIEW
+        self%coarse_init = .false.
+        call self%ospec%specify(trim(self%solver), 5, ftol=1e-5, gtol=1e-5, factr=1.0d+7, pgtol=1.0d-5, limits=lims, &
+            &max_step=0.01, maxits=self%maxits)
+        self%ospec%fdfcurvfun_8 => grad_shsrch_fdfcurvfun
+        call opt_fact%new(self%ospec, self%opt_obj)
+        self%ospec%costfun_8    => grad_shsrch_costfun
+        self%ospec%gcostfun_8   => grad_shsrch_gcostfun
+        self%ospec%fdfcostfun_8 => grad_shsrch_fdfcostfun
+    end subroutine grad_shsrch_new_joint_view
 
     pure logical function does_opt_angle( self )
         class(pftc_shsrch_grad), intent(in) :: self
@@ -422,6 +455,32 @@ contains
         endif
     end subroutine joint_grad_at_angle
 
+    !> The view mode's cost at vec = (shift x, shift y, rotation index, tilt x, tilt y): build%pcont's raw Euclidean
+    !! loss with the joint mode's shift prior (prior_centre_angle), its gradient and optionally its Gauss-Newton matrix
+    subroutine joint_view_terms( self, vec, cost, grad, curv )
+        class(pftc_shsrch_grad), intent(inout) :: self
+        real(dp),                intent(in)    :: vec(5)
+        real(dp),                intent(out)   :: cost, grad(5)
+        real(dp), optional,      intent(out)   :: curv(5,5)
+        real(dp) :: c0(2), dc0(2), d(2), dang, jprior(2,5)
+        call self%b_ptr%pcont%eval(self%particle, vec, cost, grad, curv)
+        if( self%prior_w > 0.d0 )then
+            dang = real(self%b_ptr%pftc%get_dang(),dp)
+            call self%prior_centre_angle((vec(3) - 1.d0) * dang, dang, c0, dc0)
+            d         = vec(1:2) - c0
+            cost      = cost      + self%prior_w * sum(d**2)
+            grad(1:2) = grad(1:2) + 2.d0 * self%prior_w * d
+            grad(3)   = grad(3)   - 2.d0 * self%prior_w * sum(d * dc0)
+            if( present(curv) )then
+                jprior      = 0.d0
+                jprior(1,1) = 1.d0
+                jprior(2,2) = 1.d0
+                jprior(:,3) = -dc0
+                curv = curv + 2.d0 * self%prior_w * matmul(transpose(jprior), jprior)
+            endif
+        endif
+    end subroutine joint_view_terms
+
     ! Map a joint cost to the matcher score: exp(-loss) in [0,1] for
     ! raw Euclidean, or -cost clamped to [-1,1] for cc (benign series
     ! overshoot must not mint an invalid score).
@@ -443,7 +502,16 @@ contains
         select type(self)
             class is (pftc_shsrch_grad)
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
-                if( self%search_mode == SHSRCH_JOINT )then
+                if( self%search_mode == SHSRCH_JOINT_VIEW )then
+                    block
+                        real(dp) :: view_grad(5)
+                        call joint_view_terms(self, vec(1:5), cost, view_grad)
+                    end block
+                    if( .not. self%joint_initial_cost_valid )then
+                        self%joint_initial_cost = cost
+                        self%joint_initial_cost_valid = .true.
+                    endif
+                else if( self%search_mode == SHSRCH_JOINT )then
                     block
                         real(dp) :: joint_grad(3)
                         call joint_grad_at_angle(self, vec(1:3), cost, joint_grad)
@@ -471,7 +539,9 @@ contains
         select type(self)
             class is (pftc_shsrch_grad)
                 self%profile_gradient_evals = self%profile_gradient_evals + 1_int64
-                if( self%search_mode == SHSRCH_JOINT )then
+                if( self%search_mode == SHSRCH_JOINT_VIEW )then
+                    call joint_view_terms(self, vec(1:5), joint_loss, grad(1:5))
+                else if( self%search_mode == SHSRCH_JOINT )then
                     call joint_grad_at_angle(self, vec(1:3), joint_loss, joint_grad)
                     grad = joint_grad
                 else
@@ -501,7 +571,13 @@ contains
             class is (pftc_shsrch_grad)
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
                 self%profile_gradient_evals  = self%profile_gradient_evals  + 1_int64
-                if( self%search_mode == SHSRCH_JOINT )then
+                if( self%search_mode == SHSRCH_JOINT_VIEW )then
+                    call joint_view_terms(self, vec(1:5), f, grad(1:5))
+                    if( .not. self%joint_initial_cost_valid )then
+                        self%joint_initial_cost = f
+                        self%joint_initial_cost_valid = .true.
+                    endif
+                else if( self%search_mode == SHSRCH_JOINT )then
                     call joint_grad_at_angle(self, vec(1:3), f, joint_grad)
                     grad = joint_grad
                     if( .not. self%joint_initial_cost_valid )then
@@ -537,7 +613,13 @@ contains
             class is (pftc_shsrch_grad)
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
                 self%profile_gradient_evals  = self%profile_gradient_evals  + 1_int64
-                if( self%search_mode == SHSRCH_JOINT )then
+                if( self%search_mode == SHSRCH_JOINT_VIEW )then
+                    call joint_view_terms(self, vec(1:5), f, grad(1:5), curv(1:5,1:5))
+                    if( .not. self%joint_initial_cost_valid )then
+                        self%joint_initial_cost = f
+                        self%joint_initial_cost_valid = .true.
+                    endif
+                else if( self%search_mode == SHSRCH_JOINT )then
                     call joint_grad_at_angle(self, vec(1:3), f, grad)
                     call self%b_ptr%pftc%gen_joint_curv_at_angle(self%reference, self%particle, vec(1:2), vec(3), curv)
                     if( .not. self%joint_cc .and. self%prior_w > 0.d0 )then
@@ -805,7 +887,7 @@ contains
     !! irot_in is authoritative, there is no all-angle rescan. An invalid or non-material solve returns the
     !! seed cell re-scored at xy_in (irot never 0, always committable); evaluation_valid/improved say which.
     function grad_shsrch_minimize_joint( self, irot, xy_in, sh_rot, rotind_frac, &
-            &evaluation_valid, improved, initial_cost_out, irot_in ) result(cxy)
+            &evaluation_valid, improved, initial_cost_out, irot_in, xsol ) result(cxy)
         class(pftc_shsrch_grad), intent(inout) :: self
         integer,                 intent(out)   :: irot
         real,                    intent(in)    :: xy_in(2)
@@ -814,20 +896,22 @@ contains
         logical,       optional, intent(out)   :: evaluation_valid, improved
         real(dp),      optional, intent(out)   :: initial_cost_out
         integer,                 intent(in)    :: irot_in
+        real(dp),      optional, intent(out)   :: xsol(:)  !< the solution (native shift, rotation index[, tilts]) when improved
         ! a final cost this far outside its physical range is a series artifact: invalid solve
         real(dp), parameter :: JOINT_NEG_COST_TOL = 1.d-2
         ! a gain must be material, not solver noise
         real(dp), parameter :: JOINT_IMPROVE_REL_TOL = 1.d-4
         ! bound-pinned solutions never displace the seed
         real(dp), parameter :: JOINT_BOUND_TOL = 1.d-3
-        real :: cxy(3), rotmat(2,2), lowest_cost, seed_corr, joint_lims(3,2)
-        real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(3), brange
-        integer  :: idim
+        real :: cxy(3), rotmat(2,2), lowest_cost, seed_corr, joint_lims(5,2)
+        real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(5), brange
+        integer  :: idim, ndim
         logical :: valid_result, improved_result, valid_coordinates
 
-        if( self%search_mode /= SHSRCH_JOINT )then
+        if( self%search_mode /= SHSRCH_JOINT .and. self%search_mode /= SHSRCH_JOINT_VIEW )then
             THROW_HARD('joint minimization requested from a non-joint search object')
         endif
+        ndim = self%ospec%ndim
         if( .not. self%b_ptr%pftc%is_joint_grad_objfun() )then
             THROW_HARD('joint minimization requires a supported Euclidean or cc objective')
         endif
@@ -840,10 +924,15 @@ contains
         seed_corr = 0.0
         self%cur_inpl_idx    = irot
         self%cur_inpl_rotind = real(irot)
-        joint_lims = self%ospec%limits
+        joint_lims(1:ndim,:) = self%ospec%limits
         joint_lims(3,:) = [real(irot)-2., real(irot)+2.]
-        call self%set_limits(joint_lims)
-        self%ospec%x = [xy_in, real(irot)]
+        call self%set_limits(joint_lims(1:ndim,:))
+        if( self%search_mode == SHSRCH_JOINT_VIEW )then
+            ! the drawn pose: its cell, its shift and the reference's own view
+            self%ospec%x = [xy_in, real(irot), 0., 0.]
+        else
+            self%ospec%x = [xy_in, real(irot)]
+        endif
         self%ospec%x_8 = dble(self%ospec%x)
         ! the prior is centred at the start, the committed shift, kept as the stored shift (xy_in is expressed
         ! at irot_in)
@@ -851,7 +940,8 @@ contains
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
         ! 'lm': the curvature's shift-independent terms of this reference, once per solve
-        if( trim(self%solver) == 'lm' ) call self%b_ptr%pftc%load_ref_joint_curv_8(self%reference, self%particle)
+        if( trim(self%solver) == 'lm' .and. self%search_mode == SHSRCH_JOINT ) &
+            &call self%b_ptr%pftc%load_ref_joint_curv_8(self%reference, self%particle)
         call self%opt_obj%minimize(self%ospec, self, lowest_cost)
         initial_cost = self%joint_initial_cost
         final_cost = real(lowest_cost,dp)
@@ -870,15 +960,15 @@ contains
             improve_tol = max(64.d0 * epsilon(1.d0) * max(1.d0, abs(initial_cost), abs(final_cost)), &
                 &JOINT_IMPROVE_REL_TOL * abs(initial_cost))
         endif
-        coordinate_tol = 64.d0 * real(epsilon(1.0),dp) * &
+        coordinate_tol(1:ndim) = 64.d0 * real(epsilon(1.0),dp) * &
             &max(1.d0, max(abs(real(self%ospec%limits(:,1),dp)), &
             &abs(real(self%ospec%limits(:,2),dp))))
         valid_coordinates = all(ieee_is_finite(self%ospec%x))
         if( valid_coordinates )then
             valid_coordinates = all(real(self%ospec%x,dp) >= &
-                &real(self%ospec%limits(:,1),dp)-coordinate_tol) .and. &
+                &real(self%ospec%limits(:,1),dp)-coordinate_tol(1:ndim)) .and. &
                 &all(real(self%ospec%x,dp) <= &
-                &real(self%ospec%limits(:,2),dp)+coordinate_tol)
+                &real(self%ospec%limits(:,2),dp)+coordinate_tol(1:ndim))
         endif
         valid_result = self%joint_initial_cost_valid .and. ieee_is_finite(initial_cost) .and. &
             &ieee_is_finite(final_cost) .and. valid_coordinates
@@ -900,7 +990,7 @@ contains
         ! demote bound-pinned solutions to the discrete floor: collapsed
         ! dimensions (doshift=no) have zero range and are skipped
         if( improved_result )then
-            do idim = 1, 3
+            do idim = 1, ndim
                 brange = real(self%ospec%limits(idim,2), dp) - real(self%ospec%limits(idim,1), dp)
                 if( brange <= 0.d0 ) cycle
                 if( real(self%ospec%x(idim),dp) - real(self%ospec%limits(idim,1),dp) < JOINT_BOUND_TOL * brange .or. &
@@ -943,6 +1033,7 @@ contains
         cxy(1) = joint_cost_to_score(self, final_cost)
         cxy(2:) = self%ospec%x(1:2)
         rotind_frac = self%cur_inpl_rotind
+        if( present(xsol) ) xsol = self%ospec%x_8(1:size(xsol))
         if( sh_rot )then
             call rotmat2d(grad_shsrch_get_angle(self), rotmat)
             cxy(2:) = matmul(cxy(2:), rotmat)

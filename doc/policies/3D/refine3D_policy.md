@@ -1174,6 +1174,45 @@ The downscaled particle cache is a 2D-only feature: `refine3D` rejects
 `cache=yes` and always reads the original full-size stacks (see
 `doc/policies/2D/particle_cache_policy.md`).
 
+### Continuous view refinement on polar sections (`cont_view`)
+
+`cont_view=no|lbfgsb|lm` (default `no`; `doc/implementation_notes/planned/polar_continuous_view.md`) refines
+the committed pose's projection direction continuously after the probabilistic draw of
+`refine3D_local refine=prob_neigh` (one state, `objfun=euclid`). It is a solver choice for one extra solve,
+not a search mode:
+
+- **Pipeline unchanged.** The fill, keyed draw, temperatures and weighted insertion are those of `prob_neigh`;
+  the draw sees the KB bank's scores only. Only the committed pose takes the view solve; the weighted
+  insertion's extras keep the joint `(sx,sy,rotind_frac)` solve.
+- **Bank = coarse grid.** With the key on, `nspace_sub = nspace` (1,000 unless given); the commander refuses an
+  explicit different `nspace_sub` and the parameters refuse `nspace_sub /= nspace`. The bank holds `nspace`
+  reprojections and nothing finer: the view solve takes the place of the fine neighbourhood step.
+- **The solve.** `pftc_shsrch_grad`'s view mode (`new_joint_view`) minimises the raw Euclidean loss with the
+  joint mode's shift prior over (shift x, shift y, rotation index, tilt x, tilt y), from the drawn cell, its
+  shift and the reference's own view; tilts are the components of `exp([wx,wy,0]x)` about the drawn
+  reference's in-plane axes, bounded by `2 sqrt(4 pi/nspace)` rad. Sections and their exact tilt derivatives
+  are cut by `polarft_cont_calc` (`build%pcont`) from `cartft_calc`'s B-spline references (`gather_ref`), which the
+  master writes beside the polar model (`cart_refs_needed`) and a view pass reads into a calculator of its own
+  (`read_cart_refvols_view`): references in `build%cftc` would make each batch prepare Cartesian particle slots
+  (`build_batch_particles3D`); `polarft_calc` correlates the supplied section
+  (`gen_sect_euclid_grad_at_angle`) and gives the Gauss-Newton matrix the `lm` solver uses. The solve commits only
+  on improvement over its own B-spline re-score of the drawn pose.
+- **The committed pose.** The matcher applies `strategy3D_srch%commit_view` after `assign_ori`: the pose is
+  `Rz(psi) T(w) R_ref` composed from matrices (never a new e3 paired with the cell's e1, e2) and `proj` is the
+  grid direction nearest to it. The convergence distances stay on the discrete cells, as `assign_ori` computes
+  them.
+- **Sigma2.** A committed view's residual is that of the solve's final evaluation (the B-spline section at its
+  tilts, its native shift, the rotation rounded to its grid index: `polarft_cont_calc%sigma_contrib`, through
+  `euclid_sigma2%calc_sigma2`); every other particle's is the bank section's. `calc_sigma2_pftc` takes the pose's
+  shift as the search's increment in the reference frame and rotates it into the particle frame at the evaluated
+  rotation, the joint cost's convention, so both residuals are the cost's (2D and 3D alike).
+- **Off-route.** The key is refused on `refine=cont`, more than one state, `objfun=cc`, `refine3D_auto` and the
+  other programs' parameter construction ignores it (the master's reconstruction children inherit its command
+  line). `refine3D` itself accepts it on `refine=prob_neigh` with the same checks: it is the stage program
+  `refine3D_local` runs, and its workers carry the key.
+- **Counts.** The part's BENCH reports the view solves, sections cut, cost evaluations and their per-solve
+  ratios (`match3D view ...`).
+
 ### Continuous Cartesian pose policy
 
 `refine=cont` is a refinement mode of `refine3D` (contract of the pose_cont

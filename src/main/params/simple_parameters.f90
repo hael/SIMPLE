@@ -139,6 +139,7 @@ type :: parameters
     character(len=3)          :: shift_prior='yes'    !< the probability tables' shift searches carry a Gaussian prior on the stored shift's displacement from the seed (the penalty follows the stored shift at every rotation), width from the previous iteration's shift increments; the window search's, off under the polar shift map (yes|no){yes}
     character(len=5)          :: balance='none'      !< fractional-update sampling units(none|class|cavg){none}
     character(len=16)         :: cont_prior='none' !< prior for continuous local refinement (none|shift|pose){none}
+    character(len=6)          :: cont_view='no'    !< continuous view refinement of the drawn pose on polar sections, solver (refine3D_local refine=prob_neigh, one state)(no|lbfgsb|lm){no}
     real                      :: cont_prior_shift_sigma=0. !< fixed per-axis shift-prior standard deviation in A; zero uses all-active increments
     real                      :: cont_prior_rot_sigma=0. !< fixed per-axis rotation-prior standard deviation in degrees; required for cont_prior=pose
     character(len=3)          :: sigma_commit_deferred='no' !< internal: caller commits the final canonical sigma update(yes|no){no}
@@ -662,6 +663,7 @@ type :: parameters
     logical :: l_prob_inpl       = .false. !< not a command-line key
     logical :: l_prob_align_mode = .false. !< not a command-line key
     logical :: l_cart_refine     = .false. !< a Cartesian (continuous-pose) pass (refine=cont); not a command-line key
+    logical :: l_cont_view       = .false. !< the drawn pose's view refined on polar sections (cont_view); not a command-line key
     logical :: l_cont_followup     = .false. !< the Cartesian followup pass after a discrete one; not a command-line key
     logical :: l_sticky_sampling = .false. !< not a command-line key
     logical :: l_sticky_keep     = .false. !< sticky_sampling=keep; not a command-line key

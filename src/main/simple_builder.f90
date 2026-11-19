@@ -2,16 +2,17 @@
 module simple_builder
 use simple_core_module_api
 use simple_binoris_io
-use simple_cmdline,          only: cmdline
-use simple_image,            only: image
-use simple_sp_project,       only: sp_project
-use simple_projector,        only: projector
-use simple_class_frcs,       only: class_frcs
-use simple_parameters,       only: parameters
-use simple_euclid_sigma2,    only: euclid_sigma2
-use simple_polarft_calc,     only: polarft_calc
-use simple_cartft_calc,      only: cartft_calc
-use simple_srchspace_map,    only: srchspace_map
+use simple_cmdline,            only: cmdline
+use simple_image,              only: image
+use simple_sp_project,         only: sp_project
+use simple_projector,          only: projector
+use simple_class_frcs,         only: class_frcs
+use simple_parameters,         only: parameters
+use simple_euclid_sigma2,      only: euclid_sigma2
+use simple_polarft_calc,       only: polarft_calc
+use simple_cartft_calc,        only: cartft_calc
+use simple_polarft_cont_calc,  only: polarft_cont_calc
+use simple_srchspace_map,      only: srchspace_map
 implicit none
 
 public :: builder
@@ -27,6 +28,7 @@ type :: builder
     type(euclid_sigma2)                 :: esig                   !< sigma2 noise variance
     type(polarft_calc)                  :: pftc                   !< object for polar Fourier transform calculations
     type(cartft_calc)                   :: cftc                   !< Cartesian Fourier calculator of continuous pose refinement
+    type(polarft_cont_calc), allocatable :: pcont                 !< continuous view refinement on polar sections of pftc and cftc (cont_view)
     type(image)                         :: img                    !< individual image/projector objects
     type(image)                         :: img_crop               !< for cropped image
     type(image)                         :: img_pad                !< -"-
@@ -366,6 +368,10 @@ contains
             call self%vol_odd%kill_expanded
             call self%vol_odd_pad%kill_expanded
             call self%vol2%kill
+            if( allocated(self%pcont) )then
+                call self%pcont%kill
+                deallocate(self%pcont)
+            endif
             call self%cftc%kill
             if( allocated(self%subspace_inds)         ) deallocate(self%subspace_inds)
             if( allocated(self%subspace_full2sub_map) ) deallocate(self%subspace_full2sub_map)

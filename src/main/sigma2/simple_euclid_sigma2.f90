@@ -4,6 +4,7 @@ use, intrinsic :: iso_fortran_env, only: int64, real32
 use simple_core_module_api
 use simple_polarft_calc,   only: polarft_calc
 use simple_cartft_calc,    only: cartft_calc
+use simple_polarft_cont_calc, only: polarft_cont_calc
 use simple_fplane_grid,    only: fplane_grid
 use simple_parameters,     only: parameters
 use simple_syslib,         only: simple_atomic_replace
@@ -51,7 +52,8 @@ contains
     procedure, private :: calc_sigma2_pftc
     procedure, private :: calc_sigma2_cart
     procedure, private :: calc_sigma2_cart_residual
-    generic            :: calc_sigma2 => calc_sigma2_pftc, calc_sigma2_cart, calc_sigma2_cart_residual
+    procedure, private :: calc_sigma2_view
+    generic            :: calc_sigma2 => calc_sigma2_pftc, calc_sigma2_cart, calc_sigma2_cart_residual, calc_sigma2_view
     procedure, private :: check_record
     procedure          :: get_sigma2_part
     procedure          :: write_sigma2
@@ -237,7 +239,8 @@ contains
 
     !>  Calculates and updates sigma2 within search resolution range
     !> The sigma2 contribution of particle iptcl at its assigned polar orientation o; with eulspace (refkind 'proj', the
-    !! directions o's proj indexes) o's in-plane angle is read about its direction, since at a pole e3 sits in e1
+    !! directions o's proj indexes) o's in-plane angle is read about its direction, since at a pole e3 sits in e1.
+    !! o's shift is the search's increment in the reference frame (as stored); gen_sigma_contrib takes the particle frame
     subroutine calc_sigma2_pftc( self, pftc, iptcl, o, refkind, eulspace )
         use simple_ori_utils, only: euler_about_ref
         class(euclid_sigma2),  intent(inout) :: self
@@ -247,14 +250,13 @@ contains
         character(len=*),      intent(in)    :: refkind ! 'proj' or 'class'
         class(oris), optional, intent(in)    :: eulspace
         integer :: iref, irot, kfromto(2)
-        real    :: shvec(2), euls(3)
+        real    :: shvec(2), euls(3), rotmat(2,2)
         if( .not.associated(self%p_ptr) )then
             THROW_HARD('euclid_sigma2: params pointer is not set')
         endif
         if ( o%isstatezero() ) return
         call self%check_record(iptcl)
         kfromto = self%p_ptr%kfromto
-        shvec = o%get_2Dshift()
         iref  = nint(o%get(trim(refkind)))
         euls  = o%get_euler()
         if( present(eulspace) ) euls = euler_about_ref(euls, eulspace%get_euler(iref))
@@ -262,9 +264,26 @@ contains
             iref = (o%get_state() - 1) * self%p_ptr%nspace + iref
         endif
         irot  = pftc%get_roind(360. - euls(3))
+        ! reference frame -> particle frame at the evaluated rotation (the joint cost's convention)
+        call rotmat2d(pftc%get_rot(irot), rotmat)
+        shvec = matmul(o%get_2Dshift(), transpose(rotmat))
         ! the residual goes straight into the particle's record over the pass's band
         call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, self%sigma2_part(kfromto(1):kfromto(2),iptcl))
     end subroutine calc_sigma2_pftc
+
+    !> The sigma2 contribution of particle iptcl at the committed pose of a continuous view solve (cont_view): the residual
+    !! of its final evaluation x = (native shift, rotation index, tilts) on the B-spline section of pcont's drawn reference
+    subroutine calc_sigma2_view( self, pcont, iptcl, x )
+        class(euclid_sigma2),     intent(inout) :: self
+        class(polarft_cont_calc), intent(inout) :: pcont
+        integer,                  intent(in)    :: iptcl
+        real(dp),                 intent(in)    :: x(5)
+        if( .not.associated(self%p_ptr) )then
+            THROW_HARD('euclid_sigma2: params pointer is not set')
+        endif
+        call self%check_record(iptcl)
+        call pcont%sigma_contrib(iptcl, x, self%sigma2_part(self%p_ptr%kfromto(1):self%p_ptr%kfromto(2),iptcl))
+    end subroutine calc_sigma2_view
 
     !> The sigma2 contribution of particle iptcl at the committed Cartesian pose, from particle
     !! slot islot of the Cartesian calculator (prepared for objfun=euclid; sigma2 belongs to the

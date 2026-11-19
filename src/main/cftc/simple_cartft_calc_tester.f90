@@ -112,6 +112,8 @@ contains
         call test_polar_sigma_group()
         write(*,'(A)') 'test_canonical_sigma_round_trip'
         call test_canonical_sigma_round_trip()
+        write(*,'(A)') 'test_gather_ref'
+        call test_gather_ref()
     end subroutine run_all_cartft_calc_tests
 
     ! FIXTURES
@@ -226,6 +228,53 @@ contains
     end function identity_rotation
 
     ! TESTS
+
+    !> gather_ref, the point query of the polar continuous view refinement: at the pixels of the Nyquist disk it is the
+    !! unshifted prediction bit for bit, and its gradient per native lattice unit matches central differences of itself
+    subroutine test_gather_ref()
+        type(cartft_calc) :: calc
+        real, allocatable :: volume(:,:,:)
+        complex  :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2), val, grad(3), valp, valm, gtmp(3)
+        real(dp) :: rotation(3,3), err, gmax
+        real(sp) :: q(3), qd(3)
+        real(sp), parameter :: STEP = 1.e-2
+        integer  :: h, k, d
+        logical  :: same
+        call build_test_volume(volume)
+        call new_test_calc(calc, volume)
+        rotation = real(euler2m([17., 31., 23.]), dp)
+        call calc%predict(1, .true., rotation, [0._dp, 0._dp], prediction)
+        same = .true.
+        do k = -TEST_BOX/2, TEST_BOX/2
+            do h = -TEST_BOX/2, TEST_BOX/2
+                if( h*h + k*k > (TEST_BOX/2)**2 ) cycle
+                q = real(matmul(real([h, k, 0], dp), rotation), sp)
+                call calc%gather_ref(1, .true., q, val, grad)
+                same = same .and. val == prediction(h,k)
+            end do
+        end do
+        call assert_true(same, 'gather_ref is the unshifted prediction at every pixel of the Nyquist disk')
+        ! off grid, away from the window switches of the taps (offsets 0.1-0.3 of a padded voxel)
+        err  = 0._dp
+        gmax = 0._dp
+        do k = -8, 8, 4
+            do h = -8, 8, 4
+                q = [real(h) + 0.07, real(k) - 0.11, 0.13]
+                call calc%gather_ref(1, .true., q, val, grad)
+                do d = 1, 3
+                    qd = q; qd(d) = qd(d) + STEP
+                    call calc%gather_ref(1, .true., qd, valp, gtmp)
+                    qd = q; qd(d) = qd(d) - STEP
+                    call calc%gather_ref(1, .true., qd, valm, gtmp)
+                    err  = max(err, real(abs((valp - valm)/(2.*STEP) - grad(d)), dp))
+                    gmax = max(gmax, real(abs(grad(d)), dp))
+                end do
+            end do
+        end do
+        write(*,'(A,ES10.3,A,ES10.3)') '  gather_ref gradient: max central-difference error ', err, ' of max |grad| ', gmax
+        call assert_true(gmax > 0._dp .and. err <= GRADIENT_TOL*gmax, 'gather_ref gradient matches central differences')
+        call calc%kill
+    end subroutine test_gather_ref
 
     ! E4
     subroutine test_particle_preparation_contract()

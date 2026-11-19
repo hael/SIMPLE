@@ -1100,6 +1100,26 @@ contains
             if( trim(self%prg%to_char()) == 'refine3D' .and. trim(self%refine) /= 'cont' ) &
                 &THROW_HARD('Cartesian prior requires refine=cont')
         endif
+        ! the continuous view refinement on polar sections (polar_continuous_view.md): the drawn pose of the local polar search,
+        ! one state, a bank that is the coarse grid itself (nspace_sub = nspace, decision 8)
+        select case(trim(self%cont_view))
+            case('no','lbfgsb','lm')
+            case DEFAULT
+                THROW_HARD('cont_view must be no, lbfgsb or lm')
+        end select
+        self%l_cont_view = trim(self%cont_view) /= 'no'
+        if( self%l_cont_view )then
+            select case(trim(self%prg%to_char()))
+                case('refine3D_local','refine3D')
+                    if( trim(self%refine) /= 'prob_neigh' ) THROW_HARD('cont_view requires refine3D_local refine=prob_neigh')
+                    if( self%nstates /= 1 ) THROW_HARD('cont_view refines one state')
+                    if( self%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('cont_view requires objfun=euclid')
+                    if( trim(self%oritype) /= 'ptcl3D' ) THROW_HARD('cont_view refines 3D particle poses')
+                case DEFAULT
+                    ! the master's reconstruction and assembly children inherit its command line and ignore the key
+                    self%l_cont_view = .false.
+            end select
+        endif
         self%l_cart_refine = trim(self%refine) == 'cont'
         if( self%prg == 'refine3D' .and. self%sigma2_anneal == 'yes' )then
             if( self%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('sigma2_anneal requires objfun=euclid')
@@ -1161,6 +1181,7 @@ contains
             self%nspace     = round2even(real(self%nspace))
             self%l_neigh    = .true.
         endif
+        if( self%l_cont_view .and. self%nspace_sub /= self%nspace ) THROW_HARD('cont_view requires nspace_sub = nspace')
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
                 case('snhc','snhc_smpl','snhc_smpl_many')
@@ -1180,6 +1201,7 @@ contains
             self%trs = 0.
             self%l_doshift = .false.
         endif
+        if( self%l_cont_view .and. .not. self%l_doshift ) THROW_HARD('cont_view refines the drawn pose with its shift: trs > 0')
         ! the polar shift map: a positive prior width is the key (the default), under the Euclidean objective, whose
         ! posterior the map draws (an explicit key under cc is refused); a run centres with it when its mode searches
         ! shifts on the polar grid, a probability table or a classic mode (ruling 20), and a workflow's master carries

@@ -16,7 +16,7 @@ public :: any_volume_source_defined, complete_volume_source_defined
 public :: complete_volume_source_available
 public :: reprojection_model_available, adopt_reprojection_model_range
 public :: read_reprojection_model, materialize_reprojection_model_from_volumes
-public :: read_cart_refvols
+public :: read_cart_refvols, read_cart_refvols_view
 public :: remove_ref_section_files
 private
 #include "simple_local_flags.inc"
@@ -201,10 +201,33 @@ contains
         call refs_odd%kill
     end subroutine read_cart_refvols
 
-    !> A Cartesian pass of the iteration reads the prepared reference volumes.
+    !> The B-spline references of a polar pass with the continuous view refinement (cont_view), read into the pass's own
+    !! calculator cftc_view, not build%cftc, whose references make a batch prepare Cartesian particle slots
+    !! (build_batch_particles3D); their band must be the polar model's (adopted at entry). build%pcont on pftc and them.
+    subroutine read_cart_refvols_view( params, build, cftc_view )
+        use simple_cartft_calc, only: cartft_calc
+        class(parameters),          intent(inout) :: params
+        class(builder),     target, intent(inout) :: build
+        class(cartft_calc), target, intent(inout) :: cftc_view
+        type(string) :: refs_even, refs_odd
+        integer      :: kfromto(2)
+        refs_even = refine3D_cart_refvols_fname('even')
+        refs_odd  = refine3D_cart_refvols_fname('odd')
+        ! the view refinement prepares no Cartesian particle: one slot, the reader's minimum
+        call cftc_view%read(refs_even, refs_odd, params%nstates, params%box_crop, 1, params%smpd_crop, kfromto)
+        if( any(kfromto /= params%kfromto) ) THROW_HARD('Cartesian and polar references of different bands; cont_view')
+        if( allocated(build%pcont) ) deallocate(build%pcont)
+        allocate(build%pcont)
+        call build%pcont%new(build%pftc, cftc_view)
+        call refs_even%kill
+        call refs_odd%kill
+    end subroutine read_cart_refvols_view
+
+    !> A Cartesian pass of the iteration, or the continuous view refinement of a polar one, reads the prepared reference
+    !! volumes.
     logical function cart_refs_needed( params )
         class(parameters), intent(in) :: params
-        cart_refs_needed = params%l_cart_refine .or. trim(params%pose_cont) == 'yes'
+        cart_refs_needed = params%l_cart_refine .or. trim(params%pose_cont) == 'yes' .or. params%l_cont_view
     end function cart_refs_needed
 
     !> Prepare the references of an iteration once, for every matcher of it, and replace the

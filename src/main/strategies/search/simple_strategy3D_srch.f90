@@ -10,7 +10,7 @@ use simple_eul_prob_tab_utils, only: posterior_temperature, prob_insert_poses, r
 use simple_parameters,       only: parameters
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_shiftmap_srch,    only: shiftmap_srch
-use simple_ori_utils,        only: euler_about_ref
+use simple_ori_utils,        only: euler_about_ref, euler2m, m2euler
 implicit none
 
 integer, parameter :: CONT_ROUTE_NOT_ATTEMPTED = 0
@@ -34,6 +34,7 @@ type strategy3D_srch
     type(pftc_shsrch_grad)     :: grad_shsrch_obj2            !<
     type(pftc_shsrch_grad)     :: grad_shsrch_first_obj       !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
     type(pftc_shsrch_grad)     :: joint_inpl_optimizer        !< selected-reference joint (sx,sy,rotind_frac) refinement
+    type(pftc_shsrch_grad)     :: view_optimizer              !< the committed pose's joint solve with its view (cont_view)
     type(shiftmap_srch), allocatable :: smap                  !< the polar shift map under the key (l_map)
     type(ori)                  :: o_prev                      !< previous orientation
     type(oris)                 :: opeaks                      !< peak orientations to consider for refinement
@@ -70,6 +71,10 @@ type strategy3D_srch
     logical                    :: l_map           = .false.   !< the classic search centres with the polar shift map (shift_sigma)
     logical                    :: continuous_active = .false. !< selected candidates receive continuous in-plane refinement
     integer                    :: continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED !< final selected-reference route outcome
+    logical                    :: view_active     = .false.   !< the committed pose's view is refined (cont_view)
+    logical                    :: view_committed  = .false.   !< the view solve improved the committed pose: commit_view applies it
+    real(dp)                   :: view_x(5)       = 0.d0      !< its solution: native shift, rotation index, tilts (rad)
+    real(dp)                   :: view_rref(3,3)  = 0.d0      !< the drawn reference's rotation
     logical                    :: doshift         = .true.    !< 2 indicate whether 2 serch shifts
     logical                    :: exists          = .false.   !< 2 indicate existence
   contains
@@ -86,6 +91,9 @@ type strategy3D_srch
     procedure :: refine_extra_pose_continuously
     procedure, private :: refine_selected_continuously_impl
     procedure, private :: refine_assignment_continuously_impl
+    procedure, private :: refine_assignment_view
+    procedure :: commit_view
+    procedure :: get_view_solution
     procedure, private :: write_continuous_route_status
     procedure :: store_solution
     procedure :: store_continuous_solution
@@ -103,7 +111,7 @@ contains
         class(parameters), target, intent(in)    :: params
         class(strategy3D_spec),    intent(in)    :: spec
         class(builder),    target, intent(in)    :: build
-        real :: lims(2,2), lims_init(2,2), joint_lims(3,2)
+        real :: lims(2,2), lims_init(2,2), joint_lims(3,2), view_lims(5,2), tilt_bound
         ! set pointers
         self%p_ptr         => params
         self%b_ptr         => build
@@ -170,6 +178,18 @@ contains
             joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
             call self%joint_inpl_optimizer%new_joint(self%b_ptr, joint_lims, self%p_ptr%maxits_sh)
         endif
+        ! the continuous view refinement of the committed pose: tilts within two grid spacings, 2 sqrt(4 pi/nspace)
+        ! (decision 3 of polar_continuous_view.md); the extras keep the joint solve above
+        self%view_active    = self%p_ptr%l_cont_view .and. self%continuous_active .and. str_has_substr(self%refine, 'prob')
+        self%view_committed = .false.
+        if( self%view_active )then
+            tilt_bound          = 2. * sqrt(4. * PI / real(self%nprojs))
+            view_lims(1:2,:)    = lims
+            view_lims(3,:)      = [1.-2., real(self%nrots)+2.]
+            view_lims(4:5,1)    = -tilt_bound
+            view_lims(4:5,2)    =  tilt_bound
+            call self%view_optimizer%new_joint_view(self%b_ptr, view_lims, self%p_ptr%maxits_sh, trim(self%p_ptr%cont_view))
+        endif
         self%exists = .true.
     end subroutine new
 
@@ -191,9 +211,12 @@ contains
         self%ntrs_eval  = 0
         self%prev_corr  = 0.
         ! the shift prior on the refinement of the committed pose, at the particle's temperature, as in the tables
-        if( self%p_ptr%l_shift_prior .and. self%continuous_active .and. s3D%shift_prior_sigma2 > 0. ) &
-            &call self%joint_inpl_optimizer%set_shift_prior(s3D%shift_prior_sigma2, &
-            &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(self%iptcl), self%b_ptr%pftc%get_pftsz()))
+        if( self%p_ptr%l_shift_prior .and. self%continuous_active .and. s3D%shift_prior_sigma2 > 0. )then
+            call self%joint_inpl_optimizer%set_shift_prior(s3D%shift_prior_sigma2, &
+                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(self%iptcl), self%b_ptr%pftc%get_pftsz()))
+            if( self%view_active ) call self%view_optimizer%set_shift_prior(s3D%shift_prior_sigma2, &
+                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(self%iptcl), self%b_ptr%pftc%get_pftsz()))
+        endif
         if( self%prev_state > 0 )then
             if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4prob')
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4prob')
@@ -510,7 +533,11 @@ contains
         real,                   intent(inout) :: corr, sh(2)
         real,                   intent(out)   :: inpl_coord
         logical,                intent(out)   :: inpl_valid
-        call self%refine_assignment_continuously_impl(ref, inpl, corr, sh, inpl_coord, inpl_valid)
+        if( self%view_active )then
+            call self%refine_assignment_view(ref, inpl, corr, sh, inpl_coord, inpl_valid)
+        else
+            call self%refine_assignment_continuously_impl(ref, inpl, corr, sh, inpl_coord, inpl_valid)
+        endif
         call self%write_continuous_route_status
     end subroutine refine_assignment_continuously
 
@@ -609,6 +636,111 @@ contains
         self%continuous_route_outcome = CONT_ROUTE_IMPROVED
     end subroutine refine_assignment_continuously_impl
 
+    !> The committed pose's solve with its view (cont_view): refine_assignment_continuously_impl's local solve on the
+    !! B-spline sections of build%pcont with the two tilts of the drawn reference added; an improving solution is kept
+    !! (view_x) for commit_view, which applies it after assign_ori has written the drawn cell's pose
+    subroutine refine_assignment_view( self, ref, inpl, corr, sh, inpl_coord, inpl_valid )
+        class(strategy3D_srch), intent(inout) :: self
+        integer,                intent(in)    :: ref
+        integer,                intent(inout) :: inpl
+        real,                   intent(inout) :: corr, sh(2)
+        real,                   intent(out)   :: inpl_coord
+        logical,                intent(out)   :: inpl_valid
+        real     :: cxy(3), view_lims(5,2), rotmat(2,2), xy_native(2), rbox, tilt_bound
+        real(dp) :: rotind_frac, xsol(5)
+        integer  :: refined_inpl, iproj, state
+        logical  :: evaluation_valid, improved
+        inpl_coord          = real(inpl)
+        inpl_valid          = .false.
+        self%view_committed = .false.
+        if( ref < 1 .or. ref > self%nrefs .or. inpl < 1 .or. inpl > self%nrots )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
+        if( .not. all(ieee_is_finite(sh)) .or. .not. ieee_is_finite(corr) )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
+        ! the shift domain and seed of the joint solve (refine_assignment_continuously_impl); tilts within decision 3's bound
+        call rotmat2d(self%b_ptr%pftc%get_rot(inpl), rotmat)
+        xy_native = matmul(sh, transpose(rotmat))
+        rbox = self%p_ptr%trs
+        if( self%p_ptr%l_centring ) rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
+            &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%p_ptr%trs)
+        rbox = max(rbox, maxval(abs(xy_native)))
+        view_lims(1,:) = [-rbox, rbox]
+        view_lims(2,:) = [-rbox, rbox]
+        if( .not. self%doshift )then
+            view_lims(1,:) = xy_native(1)
+            view_lims(2,:) = xy_native(2)
+        endif
+        view_lims(3,:)   = [1.-2., real(self%nrots)+2.]
+        tilt_bound       = 2. * sqrt(4. * PI / real(self%nprojs))
+        view_lims(4:5,1) = -tilt_bound
+        view_lims(4:5,2) =  tilt_bound
+        ! the drawn reference: its bank direction and the particle's half, as the polar search scored it
+        state          = (ref - 1) / self%nprojs + 1
+        iproj          = ref - (state - 1) * self%nprojs
+        self%view_rref = real(self%b_ptr%eulspace%get_mat(iproj), dp)
+        call self%b_ptr%pcont%set_view_ref(state, self%b_ptr%pftc%ptcl_iseven(self%iptcl), self%view_rref)
+        call self%view_optimizer%set_indices(ref, self%iptcl)
+        call self%view_optimizer%set_limits(view_lims)
+        cxy = self%view_optimizer%minimize_joint(refined_inpl, xy_native, sh_rot=.true., rotind_frac=rotind_frac, &
+            &evaluation_valid=evaluation_valid, improved=improved, irot_in=inpl, xsol=xsol)
+        if( .not. evaluation_valid )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
+        if( .not. improved )then
+            ! the drawn pose, re-scored on its B-spline section
+            inpl       = refined_inpl
+            corr       = cxy(1)
+            sh         = cxy(2:3)
+            inpl_coord = real(refined_inpl)
+            self%continuous_route_outcome = CONT_ROUTE_NO_IMPROVEMENT
+            return
+        endif
+        if( refined_inpl < 1 .or. refined_inpl > self%nrots )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
+        inpl                = refined_inpl
+        corr                = cxy(1)
+        sh                  = cxy(2:3)
+        inpl_coord          = real(rotind_frac)
+        inpl_valid          = .true.
+        self%view_x         = xsol
+        self%view_committed = .true.
+        self%continuous_route_outcome = CONT_ROUTE_IMPROVED
+    end subroutine refine_assignment_view
+
+    !> After assign_ori wrote the drawn cell's pose: an improving view solve's pose R = Rz(psi) T(w) R_ref from matrices,
+    !! Rz(psi) the assigned pose's turn about the drawn direction (section 2 of polar_continuous_view.md), and proj the
+    !! grid direction nearest to it. Nothing without an improving view solve.
+    subroutine commit_view( self )
+        class(strategy3D_srch), intent(inout) :: self
+        type(ori) :: o
+        real(dp)  :: rassigned(3,3), rturn(3,3), rnew(3,3)
+        if( .not. self%view_committed ) return
+        call self%b_ptr%spproj_field%get_ori(self%iptcl, o)
+        rassigned = real(euler2m(o%get_euler()), dp)
+        rturn     = matmul(rassigned, transpose(self%view_rref))
+        rnew      = matmul(rturn, self%b_ptr%pcont%view_frame(self%view_rref, self%view_x(4:5)))
+        call o%set_euler(m2euler(real(rnew)))
+        call self%b_ptr%spproj_field%set_euler(self%iptcl, o%get_euler())
+        call self%b_ptr%spproj_field%set(self%iptcl, 'proj', real(self%b_ptr%eulspace%find_closest_proj(o)))
+        call o%kill
+    end subroutine commit_view
+
+    !> the committed pose's view solve: whether it improved and its solution (native shift, rotation index, tilts)
+    subroutine get_view_solution( self, committed, x )
+        class(strategy3D_srch), intent(in)  :: self
+        logical,                intent(out) :: committed
+        real(dp),               intent(out) :: x(5)
+        committed = self%view_committed
+        x         = self%view_x
+    end subroutine get_view_solution
+
     !> Commit an already accepted joint result without changing its selected
     !! state or projection reference.
     subroutine store_continuous_solution( self, ref, inpl_ind, inpl_coord, corr, sh )
@@ -677,6 +809,9 @@ contains
         call self%grad_shsrch_obj2%kill
         call self%grad_shsrch_first_obj%kill
         call self%joint_inpl_optimizer%kill
+        call self%view_optimizer%kill
+        self%view_active    = .false.
+        self%view_committed = .false.
         if( allocated(self%smap) )then
             call self%smap%kill
             deallocate(self%smap)

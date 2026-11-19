@@ -223,6 +223,7 @@ contains
         call reg%add_yesno('prob_post_diag', self%prob_post_diag)
         call reg%add_yesno('shift_prior', self%shift_prior)
         call reg%add_char('cont_prior', self%cont_prior)
+        call reg%add_char('cont_view', self%cont_view)
         call reg%add_real('cont_prior_rot_sigma', self%cont_prior_rot_sigma)
         call reg%add_real('cont_prior_shift_sigma', self%cont_prior_shift_sigma)
         call reg%add_yesno('sigma_commit_deferred', self%sigma_commit_deferred)

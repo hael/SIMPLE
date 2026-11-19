@@ -263,6 +263,11 @@ contains
         call refine3D_local%add_input(UI_SRCH, 'cont_prior', 'multi', 'Continuous local refinement prior', &
         &'Regularize shift or pose updates around each particle seed(none|shift|pose){none}', '', .false., 'none', &
         &group='search', choices=ui_choices([character(len=5) :: 'none', 'shift', 'pose']), visibility=UI_VIS_ADVANCED)
+        call refine3D_local%add_input(UI_SRCH, 'cont_view', 'multi', 'Continuous view refinement', &
+        &'refine=prob_neigh: refine the drawn pose''s view continuously on polar sections with this solver; the polar '//&
+        &'search then scores a bank of nspace directions itself (nspace_sub = nspace, 1000 unless given)(no|lbfgsb|lm){no}', &
+        &'', .false., 'no', group='search', choices=ui_choices([character(len=6) :: 'no', 'lbfgsb', 'lm']), &
+        &visibility=UI_VIS_ADVANCED)
         call refine3D_local%add_input(UI_SRCH, 'cont_prior_shift_sigma', 'num', 'Fixed shift prior standard deviation', &
         &'Per-axis standard deviation in A; zero estimates the width from all active stored shift increments', '', .false., 0., &
         &group='search', visibility=UI_VIS_ADVANCED)
