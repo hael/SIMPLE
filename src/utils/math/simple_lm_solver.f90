@@ -20,7 +20,7 @@ integer, parameter :: LM_ACCEPTED           = 1 !< an objective-reducing point w
 integer, parameter :: LM_NO_IMPROVEMENT     = 2 !< finite, no reduction; start kept
 integer, parameter :: LM_NO_RELIABLE_UPDATE = 3 !< the client's observability test vetoed the solve
 integer, parameter :: LM_BOUND_REJECTED     = 4 !< every proposal was capped or infeasible; start kept
-integer, parameter :: LM_INVALID_NUMERICS   = 5 !< non-finite terms or step
+integer, parameter :: LM_INVALID_NUMERICS   = 5 !< non-finite seed, current point or proposal, with no accepted step
 integer, parameter :: LM_ITERATION_LIMIT    = 6 !< maxits reached without a decision
 
 ! step control
@@ -242,7 +242,7 @@ contains
             step = options%scale*scaled_step
             call problem%limit_step(step, bounded_step)
             if( any(.not. ieee_is_finite(step)) )then
-                outcome%status = LM_INVALID_NUMERICS
+                outcome%status = proposal_status()
                 exit
             endif
             bounded_trial = bounded_trial .or. bounded_step
@@ -250,7 +250,7 @@ contains
             ! reduction predicted by the local quadratic model: -g^T d - 1/2 d^T C d
             predicted = -dot_product(total_g, step) - 0.5_dp*dot_product(step, matmul(total_curv, step))
             if( .not. ieee_is_finite(predicted) )then
-                outcome%status = LM_INVALID_NUMERICS
+                outcome%status = proposal_status()
                 exit
             else if( predicted <= 0._dp )then
                 call reject
@@ -279,7 +279,7 @@ contains
                 &any(.not. ieee_is_finite(trial_curv)) )then
                 consecutive_rejections = consecutive_rejections + 1
                 call increase_lm_damping(mu, rejection_multiplier)
-                outcome%status = LM_INVALID_NUMERICS
+                outcome%status = proposal_status()
                 if( consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS ) exit
                 cycle
             endif
@@ -318,6 +318,12 @@ contains
         outcome%f = f
 
     contains
+
+        !> a non-finite proposal (trial terms, step or prediction) is a rejection: the status describes the
+        !! returned point, accepted when a step was
+        pure integer function proposal_status()
+            proposal_status = merge(LM_ACCEPTED, LM_INVALID_NUMERICS, outcome%naccepted > 0)
+        end function proposal_status
 
         !> one more consecutive rejection: more damping; at the limit, the terminal status
         subroutine reject

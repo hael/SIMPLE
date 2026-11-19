@@ -98,7 +98,8 @@ five-parameter solve by iteration 8 (9.0 in iteration 1). The factory offers `lb
      reduction below 1e-6; masked scaled |g| below 1e-8; `maxits` iterations. (Amended by R3: the three
      tolerances are `lm_options`, these values by default; the factory passes its spec's.)
    - **Outcomes.** Its six outcomes (accepted, no improvement, no reliable update, bound rejected,
-     invalid numerics, iteration limit), to which `CARTFT_*` map one-to-one.
+     invalid numerics, iteration limit), to which `CARTFT_*` map one-to-one. (2026-11-19: a non-finite
+     proposal is a rejection, and the status describes the returned point: accepted when a step was.)
 4. **Bounds (factory): a solve on the free coordinates** (revised after review 1). Componentwise
    clipping of a coupled step can point uphill: the review's counterexample stalls at the start.
    - **Free coordinates.** Each iteration, the adapter's `free` freezes a coordinate that sits on a
@@ -816,3 +817,13 @@ performed for this design review. The revised contracts and their compiled regre
       loses to quasi-Newton.
     - The factory's callback defect is fixed; production results move only where a default switched, and only in
       the last digits.
+
+- **2026-11-19, the status after a non-finite proposal (Hans's ruling, in session; base `f0211f929`).** A non-finite
+  trial counted as a rejection but left `LM_INVALID_NUMERICS` as the status, which stood when the solve then ended at
+  the rejection limit or at `maxits`, after accepted steps included; a non-finite step or prediction ended the solve
+  with it outright. The Cartesian transaction commits only `CARTFT_ACCEPTED`, so an accepted pose would have been
+  discarded. The status now describes the returned point (`proposal_status`): `LM_ACCEPTED` when a step was accepted,
+  `LM_INVALID_NUMERICS` otherwise; a non-finite seed, penalty or re-evaluation at the current point still ends the
+  solve with `LM_INVALID_NUMERICS`. No step or point changes, so the identity gates hold by construction (no counted
+  solve on the fixtures took this path). L7 in `simple_opt_tester.f90` pins the three exits (the rejection limit and
+  `maxits` after an accepted step, and none) through the factory and the engine. Decision 3's outcomes amended.

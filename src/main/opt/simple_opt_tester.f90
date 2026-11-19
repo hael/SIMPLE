@@ -11,7 +11,8 @@ use simple_optimizer,      only: optimizer
 use simple_opt_factory,    only: opt_factory
 use simple_opt_spec,       only: opt_spec
 use simple_pcg_solver,     only: pcg_operator, pcg_solver_options, pcg_solver_outcome, pcg_solve
-use simple_lm_solver,      only: lm_problem, lm_options, lm_outcome, lm_solve, LM_ACCEPTED
+use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+use simple_lm_solver,      only: lm_problem, lm_options, lm_outcome, lm_solve, LM_ACCEPTED, LM_INVALID_NUMERICS
 implicit none
 private
 public :: run_all_opt_tests
@@ -45,10 +46,13 @@ type :: lm_recorder
 end type lm_recorder
 
 ! the engine on a tester cost with an optional box clip and no free hook: L2's plain-clipping control
-! (the L2 cost, clipped) and L6's status (the null-coordinate cost)
+! (the L2 cost, clipped), L6's status (the null-coordinate cost) and L7's (the over-estimated curvature,
+! non-finite from evaluation nan_after + 1)
 type, extends(lm_problem) :: clip_only_problem
     real(dp) :: x(2) = 0._dp, trial(2) = 0._dp, lower(2) = -huge(1._dp), upper(2) = huge(1._dp)
     logical  :: null_cost = .false.
+    logical  :: over_curv = .false.
+    integer  :: nan_after = 0, nev = 0
   contains
     procedure :: eval       => clip_only_eval
     procedure :: limit_step => clip_only_limit_step
@@ -78,6 +82,7 @@ contains
         call test_lm_callback_unchanged()
         call test_lm_rank_deficient()
         call test_lm_null_coordinate()
+        call test_lm_nonfinite_trial()
         call test_de_quadratic()
         call test_simplex_quadratic()
         call test_start_at_origin()
@@ -218,6 +223,38 @@ contains
     end subroutine rank1_fdfcurv
 
     ! L6: r = x - 1 does not depend on y
+    ! L7: (x - 2)^2 + y^2 with the curvature over-estimated at 4I, so the first step is accepted short of the minimum
+    subroutine quad_over_fdfcurv( fun_self, x, f, grad, curv, d )
+        class(*),     intent(inout) :: fun_self
+        integer,      intent(in)    :: d
+        real(kind=8), intent(inout) :: x(d)
+        real(kind=8), intent(out)   :: f, grad(d), curv(d,d)
+        f    = (x(1) - 2._dp)**2 + x(2)**2
+        grad = [2._dp*(x(1) - 2._dp), 2._dp*x(2)]
+        curv = 0._dp
+        curv(1,1) = 4._dp
+        curv(2,2) = 4._dp
+    end subroutine quad_over_fdfcurv
+
+    ! L7 through the factory: the same cost, non-finite from the third evaluation on
+    subroutine nan_fdfcurv( fun_self, x, f, grad, curv, d )
+        class(*),     intent(inout) :: fun_self
+        integer,      intent(in)    :: d
+        real(kind=8), intent(inout) :: x(d)
+        real(kind=8), intent(out)   :: f, grad(d), curv(d,d)
+        select type(fun_self)
+            class is (lm_recorder)
+                fun_self%nev = fun_self%nev + 1
+                if( fun_self%nev > 2 )then
+                    f    = ieee_value(1._dp, ieee_quiet_nan)
+                    grad = f
+                    curv = 0._dp
+                    return
+                endif
+        end select
+        call quad_over_fdfcurv(fun_self, x, f, grad, curv, d)
+    end subroutine nan_fdfcurv
+
     subroutine null_fdfcurv( fun_self, x, f, grad, curv, d )
         class(*),     intent(inout) :: fun_self
         integer,      intent(in)    :: d
@@ -656,10 +693,69 @@ contains
         call assert_true(null_problem%x(2) == -0.5_dp, 'L6: the engine leaves the null coordinate')
     end subroutine test_lm_null_coordinate
 
+    ! L7: a non-finite proposal is a rejection, and the status describes the returned point: accepted after an
+    ! accepted step (at the rejection limit and at maxits), invalid numerics with none. The relative stops are off
+    ! so that the non-finite trials, not the prediction, end the solve.
+    subroutine test_lm_nonfinite_trial()
+        class(optimizer), pointer :: opt => null()
+        type(opt_factory)       :: ofac
+        type(opt_spec), target  :: spec
+        type(lm_recorder)       :: rec
+        type(clip_only_problem) :: problem
+        type(lm_options)        :: options
+        type(lm_outcome)        :: outcome
+        real :: lowest_cost
+        ! the damped first step from the origin: 4/(4 (1 + mu0)) along x
+        real(dp), parameter :: X_ACCEPTED = 1._dp/(1._dp + 1.e-3_dp)
+        write(*,'(A)') 'test_lm_nonfinite_trial'
+        call spec%specify('lm', 2, factr=0.d0, pgtol=1.d-8)
+        call spec%set_fdfcurvfun_8(nan_fdfcurv)
+        call ofac%new(spec, opt)
+        spec%x = [0., 0.]
+        call opt%minimize(spec, rec, lowest_cost)
+        write(*,'(A,2ES24.16,A,I0,A,L1)') '  L7 solution ', spec%x_8, ', evaluations ', spec%nevals, ', converged ', spec%converged
+        call assert_true(spec%converged, 'L7: the factory reports the accepted point as converged after non-finite trials')
+        call assert_true(abs(spec%x_8(1) - X_ACCEPTED) < 1.e-9_dp .and. spec%x_8(2) == 0._dp, 'L7: the solution is the accepted point')
+        call assert_int(10, spec%nevals, 'L7: the start, the accepted trial and the eight rejected ones')
+        call assert_real(real((X_ACCEPTED - 2._dp)**2), lowest_cost, 1.e-6, 'L7: lowest_cost is the accepted point''s')
+        call opt%kill
+        deallocate(opt)
+        call spec%kill
+        ! the engine: the rejection limit after an accepted step
+        options%predicted_tol = 0._dp
+        options%accepted_tol  = 0._dp
+        options%scale  = [1._dp, 1._dp]
+        options%active = [.true., .true.]
+        problem%over_curv = .true.
+        problem%nan_after = 2
+        call lm_solve(problem, options, outcome)
+        call assert_int(LM_ACCEPTED, outcome%status, 'L7: the rejection limit after an accepted step keeps LM_ACCEPTED')
+        call assert_int(1, outcome%naccepted, 'L7: one accepted step')
+        call assert_true(abs(problem%x(1) - X_ACCEPTED) < 1.e-9_dp, 'L7: the engine returns the accepted point')
+        ! maxits after an accepted step
+        problem = clip_only_problem(over_curv=.true., nan_after=2)
+        options%maxits = 2
+        call lm_solve(problem, options, outcome)
+        call assert_int(LM_ACCEPTED, outcome%status, 'L7: maxits after an accepted step keeps LM_ACCEPTED')
+        ! no accepted step: the start is returned as invalid numerics
+        problem = clip_only_problem(over_curv=.true., nan_after=1)
+        options%maxits = 40
+        call lm_solve(problem, options, outcome)
+        call assert_int(LM_INVALID_NUMERICS, outcome%status, 'L7: non-finite trials with no accepted step report invalid numerics')
+        call assert_true(all(problem%x == 0._dp), 'L7: the start is returned')
+    end subroutine test_lm_nonfinite_trial
+
     subroutine clip_only_eval( self, f, g, curv )
         class(clip_only_problem), intent(inout) :: self
         real(dp),                 intent(out)   :: f, g(:), curv(:,:)
-        if( self%null_cost )then
+        self%nev = self%nev + 1
+        if( self%nan_after > 0 .and. self%nev > self%nan_after )then
+            f    = ieee_value(1._dp, ieee_quiet_nan)
+            g    = f
+            curv = 0._dp
+        else if( self%over_curv )then
+            call quad_over_fdfcurv(self, self%trial, f, g, curv, 2)
+        else if( self%null_cost )then
             call null_fdfcurv(self, self%trial, f, g, curv, 2)
         else
             call coupled_fdfcurv(self, self%trial, f, g, curv, 2)
