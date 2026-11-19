@@ -7,7 +7,8 @@ use simple_string,             only: string
 use simple_cmdline,            only: cmdline
 use simple_parameters,         only: parameters
 use simple_polarft_calc,       only: polarft_calc
-use simple_polar_feats,        only: polar_feats, polar_feat, polar_feats_cache, polar_feats_contract, POLAR_FEATS_NHEAD, &
+use simple_polar_feats,        only: polar_feats, polar_feat, polar_feat_work, polar_feats_cache, polar_feats_contract, &
+    &POLAR_FEATS_NHEAD, &
     &polar_feats_net_pftsz
 use simple_rnd,                only: gasdev
 use simple_syslib,             only: file_exists
@@ -277,6 +278,7 @@ contains
         type(polarft_calc)  :: pftc
         type(polar_feats)   :: feats
         type(polar_feat)    :: fa, fb
+        type(polar_feat_work) :: fwk
         real(sp),    allocatable, target :: sigma2(:,:)
         complex(sp), allocatable :: ptcls(:,:,:)
         real(sp),    allocatable :: wk(:,:), ctfa(:,:)
@@ -307,12 +309,18 @@ contains
         ! from the calculator (no CTF: ones) against the arrays
         ctfa = 1.
         call feats%build_from_pft(ptcls(:,:,3), ctfa, .true., fa)
-        call feats%build(pftc, 3, fb)
+        call feats%build(pftc, 3, fb, fwk)
         call assert_true(all(fa%x == fb%x) .and. all(fa%ctf2 == fb%ctf2) .and. fa%wsq == fb%wsq .and. fa%logpow == fb%logpow, &
             &'the tensor from the calculator equals the tensor from its arrays, bit for bit')
         call assert_true(fb%iseven, 'the calculator''s half travels with the feature')
+        ! a particle loop's reuse: the same feature and buffers for the next particle equal a fresh build
+        call feats%build_from_pft(ptcls(:,:,2), ctfa, pftc%ptcl_iseven(2), fa)
+        call feats%build(pftc, 2, fb, fwk)
+        call assert_true(all(fa%x == fb%x) .and. all(fa%ctf2 == fb%ctf2) .and. fa%wsq == fb%wsq .and. fa%logpow == fb%logpow, &
+            &'a reused feature and work buffer give the fresh tensor, bit for bit')
         call fa%kill
         call fb%kill
+        call fwk%kill
         call feats%kill
         call pftc%kill
         deallocate(ptcls, wk, sigma2, ctfa)

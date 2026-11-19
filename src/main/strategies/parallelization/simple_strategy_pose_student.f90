@@ -23,7 +23,7 @@ use simple_matcher_ptcl_io,         only: ptcl_read_session
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D, adopt_run_seed
 use simple_sigma2_bootstrap,        only: ensure_sigma2_for_iteration
 use simple_qsys_funs,               only: qsys_declare_part_finished
-use simple_polar_feats,             only: polar_feats, polar_feat, polar_feats_cache, polar_feats_contract, &
+use simple_polar_feats,             only: polar_feats, polar_feat, polar_feat_work, polar_feats_cache, polar_feats_contract, &
     &polar_feats_hash_ints, POLAR_FEATS_NHEAD
 use simple_pose_student,  only: pose_student, student_pred, physical_row_audit
 use simple_pose_student_align, only: pose_student_align, pose_align_result
@@ -87,6 +87,7 @@ contains
         type(image), allocatable :: ptcl_imgs(:), ptcl_imgs_pad(:)
         type(polar_feats)        :: feats
         type(polar_feat)         :: feat
+        type(polar_feat_work)    :: feat_wk
         type(polar_feats_cache)  :: cache
         type(prob_row_file)      :: rows
         type(prob_row_record)    :: rec
@@ -253,7 +254,7 @@ contains
                 call tab%get_posterior_row(i, params%prob_beta, STUDENT_KMAX_ROW, rec, dists)
                 call rows%put(rec, dists)
                 if( .not. l_mode )then
-                    call feats%build(build%pftc, iptcl, feat)
+                    call feats%build(build%pftc, iptcl, feat, feat_wk)
                     if( l_cache ) call cache%put(iptcl, feat)
                     x_all(:,:,:,i)  = feat%x
                     ctf2_all(:,i)   = feat%ctf2
@@ -276,6 +277,7 @@ contains
         if( l_cache ) call cache%seal(key)
         call reads%kill
         call feat%kill
+        call feat_wk%kill
         call rec%kill
         call rec_phys%kill
         call clean_batch_particles3D(build, ptcl_imgs, ptcl_imgs_pad)
@@ -923,6 +925,9 @@ contains
         integer,  allocatable    :: th_n(:)
         type(pose_student_align), allocatable :: aln(:)
         type(pose_align_result),  allocatable :: res_sk(:)
+        type(polar_feat),         allocatable :: feat_t(:)
+        type(polar_feat_work),    allocatable :: feat_wk_t(:)
+        type(ori),                allocatable :: o_t(:)
         real,    allocatable     :: sh_in(:,:), euls_sk(:,:), euls_out(:,:), sh_out(:,:)
         integer, allocatable     :: mirr_map(:)
         real(timer_int_kind)     :: rt_sk
@@ -1039,6 +1044,10 @@ contains
                 &disk_radius_px(params%shift_sigma, params%smpd, params%box) * params%smpd, ' A of the stored shift'
         endif
         call student%prepare_predict(nthr)
+        allocate(feat_t(nthr), feat_wk_t(nthr), o_t(nthr))
+        do i = 1,nthr
+            call o_t(i)%new(is_ptcl=.true.)
+        enddo
         allocate(th_s(TH_NSTEPS, nthr), source=0.d0)
         allocate(th_n(nthr), source=0)
         call system_clock(count_rate=clock_rate)
@@ -1087,6 +1096,12 @@ contains
             if( any(res_sk%iref < 1) ) THROW_HARD('the alignment found no reference; predict_poses')
         endif
         call reads%kill
+        do i = 1,nthr
+            call feat_t(i)%kill
+            call feat_wk_t(i)%kill
+            call o_t(i)%kill
+        enddo
+        deallocate(feat_t, feat_wk_t, o_t)
         call clean_batch_particles3D(build, ptcl_imgs, ptcl_imgs_pad)
         call build%pftc%kill
         ! the table and its summary
@@ -1286,29 +1301,30 @@ contains
         !! angle), on the calling thread; the shift check on the first particles
         subroutine predict_one( i_here, iptcl_here, islot )
             integer, intent(in) :: i_here, iptcl_here, islot
-            type(polar_feat) :: feat_here
-            type(ori)        :: o_here
             real    :: euls_ref(3), d
             integer :: ithr_here, j, ip_ref, ip_pose
             integer(int64) :: c0
             ithr_here = 1
             !$ ithr_here = omp_get_thread_num() + 1
             call system_clock(count=c0)
-            call feats%build(build%pftc, iptcl_here, feat_here)
+            call feats%build(build%pftc, iptcl_here, feat_t(ithr_here), feat_wk_t(ithr_here))
             call lap(1, ithr_here, c0)
-            call student%predict_feat(ithr_here, feat_here, prob(:,islot))
+            call student%predict_feat(ithr_here, feat_t(ithr_here), prob(:,islot))
             call lap(2, ithr_here, c0)
             call student%cone_of(prob(:,islot), preds(i_here))
             call student%pose_of(ithr_here, preds(i_here)%mode, euls_pose(:,i_here), ip_pose)   ! before the shift check reuses the readout
             call lap(3, ithr_here, c0)
             sh_in(:,i_here) = build%spproj_field%get_2Dshift(iptcl_here)
             if( i_here <= nchk )then
-                call shift_check(i_here, ithr_here, islot, feat_here)
+                call shift_check(i_here, ithr_here, islot, feat_t(ithr_here))
                 call lap(5, ithr_here, c0)
             endif
-            call build%spproj_field%get_ori(iptcl_here, o_here)
-            euls_ref          = o_here%get_euler()
-            iproj_ref(i_here) = student%grid_closest(o_here)
+            ! the stored angles set on the thread's record, not a copy of the particle's record (no allocation)
+            euls_ref = build%spproj_field%get_euler(iptcl_here)
+            call o_t(ithr_here)%e1set(euls_ref(1))
+            call o_t(ithr_here)%e2set(euls_ref(2))
+            call o_t(ithr_here)%e3set(euls_ref(3))
+            iproj_ref(i_here) = student%grid_closest(o_t(ithr_here))
             ip_ref            = student%fold_index(iproj_ref(i_here))
             dist_mode(i_here) = min(student%angle_between(preds(i_here)%mode, euls_ref), &
                 &student%angle_between(student%mirror_of(preds(i_here)%mode), euls_ref))
@@ -1321,8 +1337,6 @@ contains
                     &student%angle_between(student%mirror_of(preds(i_here)%cone(j)), euls_ref))
                 dist_cone(i_here) = min(dist_cone(i_here), d)
             enddo
-            call feat_here%kill
-            call o_here%kill
             call lap(4, ithr_here, c0)
             th_n(ithr_here) = th_n(ithr_here) + 1
         end subroutine predict_one

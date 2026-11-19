@@ -39,7 +39,8 @@ contains
         type(ori)                :: o
         type(sym)                :: c1sym
         type(ctfparams)          :: ctfparms
-        type(fplane_type)        :: fpl1, fpl2, fpl12, fpl0
+        ! on the heap: gfortran 15.2.0 at -O3 falsely warns that stack planes are used uninitialized
+        type(fplane_type), allocatable :: fpl1, fpl2, fpl12, fpl0
         type(fplane_grid)        :: grid
         type(image)              :: obs, obs_pad
         complex, allocatable     :: ca(:,:,:), cb(:,:,:)
@@ -73,6 +74,7 @@ contains
         call obs%set_rmat(img, .false.)
         call obs%pad(obs_pad, backgr=0., antialiasing=.false.)
         call obs_pad%fft()
+        allocate(fpl1, fpl2, fpl12, fpl0)
         call obs_pad%gen_fplane4rec(SMPD, ctfparms, S1, fpl1, grid)
         call obs_pad%gen_fplane4rec(SMPD, ctfparms, S2, fpl2, grid)
         call fplane_shift(fpl1, S2 - S1, OSMPL_PAD_FAC, fpl12)

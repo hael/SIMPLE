@@ -1,9 +1,7 @@
 # The center student: a real-space network that centres raw picks before the class student
 
-Status, 2026-11-18: planned, revised the same day after the review in section 9 (the response is in section 10).
-Hans's rulings R1 to R5 are in (section 3). The margins of decision 14 are new and await Hans's acceptance. The data
-sets are named at launch (R6). The plan is not launchable before both. The pose student is left out for now (Hans,
-2026-11-18; section 4). Base: `8a690cc19` (clean master; the review read this commit). Supersedes: none. Depends on:
+Status, 2026-11-18: **rejected by Hans** before launch, on the measured ceiling (section "Rejected" at the end;
+the measurement: `rejected/center_student_ceiling.md`). Not to be revisited for the class student. Base: `8a690cc19` (clean master; the review read this commit). Supersedes: none. Depends on:
 solve2D's class-average centring (validated: yes, the production default); `center_ptcls` (validated: yes,
 `doc/algorithms/center_ptcls.md`); the class student on raw picks with the alignment after prediction (validated:
 yes, `completed/class_student_raw_picks.md`, adopted 2026-11-16); the students' shared strategy helpers (validated:
@@ -525,7 +523,7 @@ Defaults taken without a question:
 | `doc/policies/test_environment_policy.md` | suites, the `class_student` entry's checks | 2, 3, 4, 5 |
 | `doc/algorithms/class_student.md`, `doc/algorithms/center_student.md` (new) | the route | 5 |
 | `doc/implementation_notes/README.md`, `doc/implementation_notes/planned/polar_student_future_directions.md` | record | 0 to 5 |
-| `doc/implementation_notes/planned/center_student.md`, `center_student_report.md` (new) | this plan, the report | 0 to 5 |
+| `doc/implementation_notes/rejected/center_student.md`, `center_student_report.md` (new) | this plan, the report | 0 to 5 |
 
 ## 9. Review, 2026-11-18
 
@@ -693,3 +691,28 @@ The receptive field, the two-mode width and the operation counts are hand calcul
 ## Progress
 
 (one entry per phase, written by the run)
+
+## Rejected, 2026-11-18
+
+Hans: "Based on these results I think we should move the real-space convolutional network to the rejected folder and
+start testing more difficult data." The results are the first seed of a short measurement of the ceiling
+(`rejected/center_student_ceiling.md`): the class student given the full search's own shifts, exact or blurred,
+then aligned over the disk as today, against today's route on raw picks.
+
+| class averages, FRC 0.5 (Å) | raw picks (today) | perfect centres | centres ± 2 Å |
+| --- | --- | --- | --- |
+| streptavidin | 12.63 | 12.52 | 12.64 |
+| bgal | 13.15 | 13.00 | 13.02 |
+| trpv1 | 18.60 | 21.02 | 19.91 |
+
+- Even perfect centring buys at most 0.15 Å of class-average resolution (half this plan's own 0.3 Å margin) and
+  costs 2.4 Å on trpv1; a realistic network (σ = 2 Å, better than any measured centring) buys nothing.
+- The reason: the class student's alignment over its candidate list already finds the shift a centring step would
+  supply. A centred start lifts the network's most likely class (bgal 36 → 57%) but not the class committed after
+  the alignment (54 → 56%), and the class averages of every arm already match or beat the full search's.
+- The class_raw run had found the route through `center_ptcls` worse than raw picks by 0.75 to 4.80 Å at FRC 0.5.
+
+What stays open, outside this rejection: whether the class student's aligned shifts serve the pose student as well
+as solve2D's (the measurement's M2, not run), which matters for the stream (ruling R7 of
+`planned/pose_student_physical_raw_picks.md`).
+

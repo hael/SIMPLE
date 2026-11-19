@@ -14,7 +14,7 @@ use simple_string_utils, only: int2str
 use simple_polarft_calc, only: polarft_calc
 implicit none
 
-public :: polar_feats, polar_feat, polar_feats_cache
+public :: polar_feats, polar_feat, polar_feat_work, polar_feats_cache
 public :: polar_feats_contract, polar_feats_hash_ints, polar_feats_net_pftsz, POLAR_FEATS_NHEAD
 private
 #include "simple_local_flags.inc"
@@ -43,6 +43,16 @@ type :: polar_feat
   contains
     procedure :: kill => feat_kill
 end type polar_feat
+
+!> build's read buffers for the calculator's half ring and CTF matrix: one per thread, sized on first use, so that a
+!! particle loop allocates nothing per particle
+type :: polar_feat_work
+    private
+    complex(sp), allocatable :: pft(:,:)
+    real(sp),    allocatable :: ctfmat(:,:)
+  contains
+    procedure :: kill => work_kill
+end type polar_feat_work
 
 !> the geometry and the shell weights the tensors are built with: the calculator's half ring (pftsz_in) and band,
 !! the network's half ring (pftsz, at most the band's cap), the weights k/sigma2(k) per half frozen in the model, and
@@ -215,26 +225,43 @@ contains
         kfromto = self%kfromto
     end function get_kfromto
 
-    !> a feature of this geometry, zeroed
+    !> a feature of this geometry, zeroed; an allocation of this geometry is reused
     subroutine alloc_feat( self, feat )
         class(polar_feats), intent(in)    :: self
         type(polar_feat),   intent(inout) :: feat
-        call feat%kill
-        allocate(feat%x(self%pftsz,self%kfromto(1):self%kfromto(2),2), source=0.)
-        allocate(feat%ctf2(self%kfromto(1):self%kfromto(2)), source=0.)
+        integer :: nk
+        logical :: l_fits
+        nk     = self%kfromto(2) - self%kfromto(1) + 1
+        l_fits = .false.
+        if( allocated(feat%x) .and. allocated(feat%ctf2) )then
+            l_fits = all(shape(feat%x) == [self%pftsz, nk, 2]) .and. lbound(feat%x, 2) == self%kfromto(1) .and. &
+                &size(feat%ctf2) == nk .and. lbound(feat%ctf2, 1) == self%kfromto(1)
+        endif
+        if( l_fits )then
+            feat%x      = 0.
+            feat%ctf2   = 0.
+            feat%tazim  = 0.
+            feat%logpow = 0.
+            feat%wsq    = 0.d0
+            feat%iseven = .true.
+        else
+            call feat%kill
+            allocate(feat%x(self%pftsz,self%kfromto(1):self%kfromto(2),2), source=0.)
+            allocate(feat%ctf2(self%kfromto(1):self%kfromto(2)), source=0.)
+        endif
     end subroutine alloc_feat
 
     !> the particle's tensor from the calculator: its half ring over the band, its CTF matrix and its half, read
-    !! through the calculator's getters; the one routine training and prediction build their input with
-    subroutine build( self, pftc, iptcl, feat, normalise )
-        class(polar_feats),  intent(in)    :: self
-        class(polarft_calc), intent(in)    :: pftc
-        integer,             intent(in)    :: iptcl
-        type(polar_feat),    intent(inout) :: feat
-        logical, optional,   intent(in)    :: normalise
-        complex(sp), allocatable :: pft(:,:)
-        real(sp),    allocatable :: ctfmat(:,:)
-        integer :: kfromto(2)
+    !! through the calculator's getters into work; the one routine training and prediction build their input with
+    subroutine build( self, pftc, iptcl, feat, work, normalise )
+        class(polar_feats),    intent(in)    :: self
+        class(polarft_calc),   intent(in)    :: pftc
+        integer,               intent(in)    :: iptcl
+        type(polar_feat),      intent(inout) :: feat
+        type(polar_feat_work), intent(inout) :: work
+        logical, optional,     intent(in)    :: normalise
+        integer :: kfromto(2), nk
+        logical :: l_fits
         if( .not. self%exists ) THROW_HARD('polar_feats not constructed; build')
         kfromto = pftc%get_kfromto()
         if( pftc%get_pftsz() /= self%pftsz_in .or. any(kfromto /= self%kfromto) )then
@@ -242,11 +269,20 @@ contains
             write(logfhandle,*) 'features   pftsz, kfromto: ', self%pftsz_in, self%kfromto
             THROW_HARD('the calculator does not match the features'' geometry; polar_feats%build')
         endif
-        allocate(pft(self%pftsz_in,self%kfromto(1):self%kfromto(2)), ctfmat(self%pftsz_in,self%kfromto(1):self%kfromto(2)))
-        call pftc%get_ptcl_pft(iptcl, pft)
-        call pftc%get_ptcl_ctfmat(iptcl, ctfmat)
-        call self%build_from_pft(pft, ctfmat, pftc%ptcl_iseven(iptcl), feat, normalise)
-        deallocate(pft, ctfmat)
+        nk     = self%kfromto(2) - self%kfromto(1) + 1
+        l_fits = .false.
+        if( allocated(work%pft) .and. allocated(work%ctfmat) )then
+            l_fits = all(shape(work%pft) == [self%pftsz_in, nk]) .and. lbound(work%pft, 2) == self%kfromto(1) .and. &
+                &all(shape(work%ctfmat) == [self%pftsz_in, nk]) .and. lbound(work%ctfmat, 2) == self%kfromto(1)
+        endif
+        if( .not. l_fits )then
+            call work%kill
+            allocate(work%pft(self%pftsz_in,self%kfromto(1):self%kfromto(2)), &
+                &work%ctfmat(self%pftsz_in,self%kfromto(1):self%kfromto(2)))
+        endif
+        call pftc%get_ptcl_pft(iptcl, work%pft)
+        call pftc%get_ptcl_ctfmat(iptcl, work%ctfmat)
+        call self%build_from_pft(work%pft, work%ctfmat, pftc%ptcl_iseven(iptcl), feat, normalise)
     end subroutine build
 
     !> The tensor from a calculator's half ring and its CTF matrix: the CTF-multiplied ring's real and imaginary
@@ -414,6 +450,12 @@ contains
         self%wsq    = 0.d0
         self%iseven = .true.
     end subroutine feat_kill
+
+    subroutine work_kill( self )
+        class(polar_feat_work), intent(inout) :: self
+        if( allocated(self%pft)    ) deallocate(self%pft)
+        if( allocated(self%ctfmat) ) deallocate(self%ctfmat)
+    end subroutine work_kill
 
     ! ===== THE CONTRACT AND ITS HASHES =====
 

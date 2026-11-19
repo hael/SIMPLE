@@ -21,7 +21,7 @@ use simple_sigma2_bootstrap,        only: ensure_sigma2_for_iteration
 use simple_qsys_funs,               only: qsys_declare_part_finished
 use simple_class_student_align,     only: class_student_align
 use simple_shiftmap_srch,           only: setup_shiftmap_srch
-use simple_polar_feats,             only: polar_feats, polar_feat, polar_feats_hash_ints
+use simple_polar_feats,             only: polar_feats, polar_feat, polar_feat_work, polar_feats_hash_ints
 use simple_class_student,           only: class_student, class_pred
 use simple_polar_student,           only: polar_student_targets
 use simple_strategy_student_common, only: report_teacher_audit, report_mapping_audit, report_class_mass_audit, student_holdout_split, student_conf_threshold, student_geometry_mismatch, &
@@ -87,6 +87,7 @@ contains
         type(image), allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_imgs(:)
         type(polar_feats)        :: feats
         type(polar_feat)         :: feat
+        type(polar_feat_work)    :: feat_wk
         type(prob_row_file)      :: rows
         type(prob_row_record)    :: rec
         type(prob_row_marginal)  :: marg
@@ -260,7 +261,7 @@ contains
                     inpl_cls(j,i)    = marg%refs(j)
                     inpl_rows(:,j,i) = marg%rows(:,j)
                 enddo
-                call feats%build(build%pftc, iptcl, feat)
+                call feats%build(build%pftc, iptcl, feat, feat_wk)
                 x_all(:,:,:,i) = feat%x
                 ctf2_all(:,i)  = feat%ctf2
                 side_all(i)    = feat%logpow
@@ -284,6 +285,7 @@ contains
         call fclose(stat_unit)
         call reads%kill
         call feat%kill
+        call feat_wk%kill
         call rec%kill
         call marg%kill
         call clean_batch_particles2D(build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
@@ -739,6 +741,8 @@ contains
         type(string)             :: base, fname_pred, fname_times
         type(class_pred), allocatable :: preds(:)
         type(class_student_align), allocatable :: aln(:)
+        type(polar_feat),          allocatable :: feat_t(:)
+        type(polar_feat_work),     allocatable :: feat_wk_t(:)
         real,    allocatable     :: wk(:,:), prob(:,:), e3_pred(:), sh_in(:,:), e3_aln(:), sh_aln(:,:)
         real,    allocatable     :: sdev_aln(:)
         integer, allocatable     :: pinds(:), batches(:,:), class_stored(:), routes(:), ncands(:), cands_all(:,:)
@@ -833,6 +837,7 @@ contains
                 &disk_radius_px(params%shift_sigma, params%smpd, params%box) * params%smpd, ' A of the picked position'
         endif
         call student%prepare_predict(nthr)
+        allocate(feat_t(nthr), feat_wk_t(nthr))
         allocate(preds(nptcls), prob(student%get_ncls(), batchsz_max))
         allocate(e3_pred(nptcls), e3_aln(nptcls), sdev_aln(nptcls), source=0.)
         allocate(sh_in(2,nptcls), sh_aln(2,nptcls), source=0.)
@@ -869,6 +874,11 @@ contains
             rt_aln = rt_aln + toc(t0)
         enddo
         call reads%kill
+        do i = 1,nthr
+            call feat_t(i)%kill
+            call feat_wk_t(i)%kill
+        enddo
+        deallocate(feat_t, feat_wk_t)
         call clean_batch_particles2D(build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
         call build%pftc%kill
         call build%esig%kill
@@ -986,19 +996,17 @@ contains
         !! averages its committed pose is the mode at that angle and the stored shift
         subroutine predict_one( i_here, iptcl_here, islot )
             integer, intent(in) :: i_here, iptcl_here, islot
-            type(polar_feat) :: feat_here
             integer :: ithr_here
             ithr_here = 1
             !$ ithr_here = omp_get_thread_num() + 1
-            call feats%build(build%pftc, iptcl_here, feat_here)
-            call student%predict_feat(ithr_here, feat_here, prob(:,islot))
+            call feats%build(build%pftc, iptcl_here, feat_t(ithr_here), feat_wk_t(ithr_here))
+            call student%predict_feat(ithr_here, feat_t(ithr_here), prob(:,islot))
             call student%cands_of(prob(:,islot), preds(i_here))
             e3_pred(i_here)      = student%rotation_of(ithr_here, preds(i_here)%mode)
             class_stored(i_here) = build%spproj_field%get_class(iptcl_here)
             sh_in(:,i_here)      = build%spproj_field%get_2Dshift(iptcl_here)
             cls_aln(i_here)      = preds(i_here)%mode
             e3_aln(i_here)       = e3_pred(i_here)
-            call feat_here%kill
         end subroutine predict_one
 
         !> the particle aligned against every class of its candidate list, the best alignment kept
