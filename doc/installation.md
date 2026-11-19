@@ -9,23 +9,32 @@ README.
 - macOS 10.10 or newer
 - CMake 3.5 or newer
 - GNU `gcc` and `gfortran` 14.2 or newer
-- BLAS and LAPACK; on Linux an OpenMP build of OpenBLAS (see below)
-- ARPACK or ARPACK-NG
+- GNU make or make, used to build SIMPLE's pinned OpenBLAS
 - FFTW 3.3 or newer, with double, single, and threaded builds
 - libcurl 7 or newer
 - libTIFF 4 or newer
 - jbigkit 2 or newer, optional
 - Python 3.10 or newer
 
-If BLAS, LAPACK, or ARPACK are not available, they will be downloaded and compiled.
+SIMPLE always uses its pinned OpenBLAS and ARPACK-NG releases. Their build scratch lives in the build folder;
+their verified source archives and installed libraries persist outside it. OpenBLAS provides both BLAS and
+LAPACK, and ARPACK-NG is built against that same library. System BLAS, LAPACK and ARPACK libraries, including
+macOS Accelerate, are not selected. Each download is verified by its pinned SHA-256 checksum and retained under
+the gitignored `.deps/downloads/` directory.
 
-SIMPLE calls BLAS from serial code, where the library should use the OpenMP threads, and inside its OpenMP
-teams, where it should stay on the calling thread. An OpenMP build of OpenBLAS does both, so on Linux with GNU
-compilers CMake links one: Debian/Ubuntu `libopenblas-openmp-dev`, Fedora/RHEL/Rocky `openblas-devel` (its
-`libopenblaso`). When the system BLAS is a serial or pthreads OpenBLAS (or one whose threading CMake cannot
-probe), CMake builds the OpenMP OpenBLAS, and ARPACK against it, in the build folder instead. MKL and FlexiBLAS
-with an OpenMP backend are kept as found; `-DSIMPLE_BLAS_OPENMP=OFF`, an explicit `BLA_VENDOR` or
-`BLAS_LIBRARIES` keep any system BLAS. macOS uses Accelerate. No `OPENBLAS_NUM_THREADS` is needed.
+With GNU C and Fortran compilers and OpenMP enabled, SIMPLE builds the OpenMP flavour of OpenBLAS. Other
+toolchains build its pthreads flavour. The dependency summary printed by CMake reports the exact versions and
+flavour selected. The installed static OpenBLAS and ARPACK-NG libraries live under `.deps/numerics/`, outside
+the disposable `build/` directory. The cache key includes the platform, architecture, compiler versions and
+threading flavour; its recipe record additionally includes the compiler paths and build flags. Consequently
+`compile_clean.sh`, `compile_debug.sh` and other clean rebuilds reuse compatible libraries without compiling or
+installing them again. A changed recipe rebuilds the affected cache; remove `.deps/numerics/` only when you
+deliberately want to force every cached numerical configuration to rebuild.
+
+The OpenMP build permits four OpenBLAS calculation calls to execute concurrently (`NUM_PARALLEL=4`), covering
+the four-caller CI contract. OpenBLAS 0.3.34 safely waits when a larger SIMPLE OpenMP team reaches that limit;
+the fixed cap avoids the large buffer footprint that would result from sizing the library for every possible
+runtime thread count.
 
 ## Obtain The Source
 
@@ -202,14 +211,12 @@ make distclean
 
     Add brew to your path
 
-2. Install the dependencies git, gcc, OpenBLAS, LAPACK, ARPACK, libtiff, jbigkit and cmake – make sure you have a python version higher than 3.10
+2. Install git, gcc, make, libtiff, jbigkit and cmake. Make sure you have a Python version higher than 3.10. SIMPLE builds its pinned OpenBLAS and ARPACK-NG itself.
 
         brew install git
         brew install cmake
         brew install gcc
-        brew install openblas
-        brew install lapack
-        brew install arpack
+        brew install make
         brew install libtiff
         brew install jbigkit
         brew install python@3.10

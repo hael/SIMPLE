@@ -100,292 +100,99 @@ endif()
 # CMake at an ILP64 vendor build, integer sizes will not match the current code.
 
 set(SIMPLE_OPENBLAS_VERSION "0.3.34")
+set(SIMPLE_OPENBLAS_SHA256 "cd7e129868320cc2d033afa920e31202dfe0b8066a5b66661900ccc0f197dfed")
 set(SIMPLE_ARPACK_NG_VERSION "3.9.1")
-set(SIMPLE_NUMERICS_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/_deps/numerics/install")
+set(SIMPLE_ARPACK_NG_SHA256 "f6641deb07fa69165b7815de9008af3ea47eb39b2bb97521fbf74c97aba6e844")
+set(SIMPLE_OPENBLAS_NUM_PARALLEL 4)
 
-set(SIMPLE_BLAS_STATUS "system")
-set(SIMPLE_LAPACK_STATUS "system")
-set(SIMPLE_ARPACK_STATUS "system")
-set(SIMPLE_NUMERICS_MISSING "")
-set(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS OFF)
-set(SIMPLE_NUMERICS_BUILD_ARPACK OFF)
-set(SIMPLE_NUMERICS_BUNDLED_LINK_DIRS "")
-
-# Threads. SIMPLE calls BLAS both from serial code (the picker's products: the BLAS should thread them) and inside
-# its OpenMP teams (per-thread products: the BLAS should stay on the calling thread). An OpenMP build of OpenBLAS
-# does both; a serial build leaves the serial-code products on one core and a pthreads build oversubscribes the
-# cores inside the teams. So on Linux with GNU compilers SIMPLE links a BLAS that threads with OpenMP: a system
-# OpenMP OpenBLAS when there is one, a system BLAS that already does (OpenBLAS OpenMP build, FlexiBLAS with an
-# OpenMP backend, MKL), else the bundled OpenMP OpenBLAS. An explicit BLA_VENDOR or BLAS_LIBRARIES, macOS
-# (Accelerate), other compilers, cross-compiling and -DSIMPLE_BLAS_OPENMP=OFF keep the system BLAS as found.
-option(SIMPLE_BLAS_OPENMP
-    "Linux/GNU: link a BLAS that threads with OpenMP (a system OpenMP OpenBLAS, else the bundled build)" ON)
-option(SIMPLE_FORCE_BUNDLED_NUMERICS
-    "Download and build bundled BLAS/LAPACK/ARPACK even when system libraries are available (validation)" OFF)
-set(SIMPLE_BLAS_POLICY OFF)
-if(SIMPLE_BLAS_OPENMP AND USE_OPENMP AND NOT APPLE AND NOT CMAKE_CROSSCOMPILING
-   AND CMAKE_C_COMPILER_ID STREQUAL "GNU" AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU"
-   AND NOT BLA_VENDOR AND "$ENV{BLA_VENDOR}" STREQUAL "" AND NOT BLAS_LIBRARIES)
-    set(SIMPLE_BLAS_POLICY ON)
-endif()
-set(SIMPLE_BLAS_POLICY_BUNDLED OFF)
-set(SIMPLE_BLAS_POLICY_OK OFF)
-set(SIMPLE_BLAS_SYSTEM_OPENMP "")
-set(SIMPLE_BLAS_THREADING "")
-
-# How the BLAS/LAPACK in `libs` threads, from a small program linked to it: "openblas:0|1|2" (OpenBLAS serial,
-# pthreads, OpenMP build), "flexiblas:<backend>", "mkl", "other", or "" when it does not link (BLAS and LAPACK
-# both needed) or run
-function(simple_probe_blas_threading libs out)
-    set(_dir "${CMAKE_BINARY_DIR}/CMakeFiles/simple_blas_probe")
-    file(MAKE_DIRECTORY "${_dir}")
-    file(WRITE "${_dir}/simple_blas_probe.c"
-"#include <stdio.h>
-#include <stddef.h>
-extern void sgemm_(void);
-extern void ssyev_(void);
-int openblas_get_parallel(void) __attribute__((weak));
-int flexiblas_current_backend(char *name, size_t len) __attribute__((weak));
-int mkl_get_max_threads(void) __attribute__((weak));
-int main(int argc, char **argv) {
-    char name[256] = \"\";
-    (void)argv;
-    if (argc > 1000) { sgemm_(); ssyev_(); }
-    if (openblas_get_parallel) { printf(\"openblas:%d\", openblas_get_parallel()); return 0; }
-    if (flexiblas_current_backend) { flexiblas_current_backend(name, sizeof(name)); printf(\"flexiblas:%s\", name); return 0; }
-    if (mkl_get_max_threads) { printf(\"mkl\"); return 0; }
-    printf(\"other\");
-    return 0;
-}
-")
-    unset(SIMPLE_BLAS_PROBE_RUN CACHE)
-    unset(SIMPLE_BLAS_PROBE_RUN)
-    try_run(SIMPLE_BLAS_PROBE_RUN _compiled "${_dir}/build" "${_dir}/simple_blas_probe.c"
-        LINK_LIBRARIES ${libs}
-        COMPILE_OUTPUT_VARIABLE _compile_out
-        RUN_OUTPUT_VARIABLE _run_out)
-    if(_compiled AND "${SIMPLE_BLAS_PROBE_RUN}" STREQUAL "0")
-        string(STRIP "${_run_out}" _run_out)
-        set(${out} "${_run_out}" PARENT_SCOPE)
-    else()
-        set(${out} "" PARENT_SCOPE)
-    endif()
-    unset(SIMPLE_BLAS_PROBE_RUN CACHE)
-endfunction()
-
-if(SIMPLE_BLAS_POLICY)
-    # a system OpenMP OpenBLAS first: Fedora/RHEL libopenblaso (openblas-devel), Debian/Ubuntu's openblas-openmp
-    # folder (libopenblas-openmp-dev)
-    find_library(SIMPLE_OPENBLAS_OPENMP_LIBRARY NAMES openblaso openblas_openmp)
-    if(NOT SIMPLE_OPENBLAS_OPENMP_LIBRARY AND CMAKE_LIBRARY_ARCHITECTURE)
-        find_library(SIMPLE_OPENBLAS_OPENMP_LIBRARY NAMES openblas
-            PATHS "/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/openblas-openmp" NO_DEFAULT_PATH)
-    endif()
-    if(SIMPLE_OPENBLAS_OPENMP_LIBRARY)
-        simple_probe_blas_threading("${SIMPLE_OPENBLAS_OPENMP_LIBRARY}" _blas_probe)
-        if(_blas_probe STREQUAL "openblas:2")
-            set(SIMPLE_BLAS_SYSTEM_OPENMP "${SIMPLE_OPENBLAS_OPENMP_LIBRARY}")
-            set(SIMPLE_BLAS_THREADING "${_blas_probe}")
-        endif()
-    endif()
-endif()
-
-if(SIMPLE_BLAS_SYSTEM_OPENMP)
-    # one library for BLAS and LAPACK (OpenBLAS carries LAPACK; the probe linked both)
-    set(BLAS_FOUND TRUE)
-    set(LAPACK_FOUND TRUE)
-    set(BLAS_LIBRARIES "${SIMPLE_BLAS_SYSTEM_OPENMP}")
-    set(LAPACK_LIBRARIES "${SIMPLE_BLAS_SYSTEM_OPENMP}")
-    set(SIMPLE_BLAS_STATUS "system OpenBLAS, OpenMP build: ${SIMPLE_BLAS_SYSTEM_OPENMP}")
-    set(SIMPLE_LAPACK_STATUS "system OpenBLAS, OpenMP build")
-    message(STATUS "BLAS/LAPACK libraries: ${SIMPLE_BLAS_SYSTEM_OPENMP} (OpenBLAS, OpenMP build)")
+# The OpenMP build of OpenBLAS threads serial-region products and stays on the
+# calling thread inside SIMPLE's OpenMP teams. Toolchains that cannot share the
+# same OpenMP runtime use the pthreads flavour and SIMPLE's internal team path.
+if(USE_OPENMP AND CMAKE_C_COMPILER_ID STREQUAL "GNU" AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    set(SIMPLE_OPENBLAS_USE_OPENMP 1)
+    set(SIMPLE_OPENBLAS_FLAVOUR "OpenMP")
 else()
-    find_package(BLAS)
-    if(BLAS_FOUND)
-        message(STATUS "BLAS libraries: ${BLAS_LIBRARIES}")
-        set(SIMPLE_BLAS_STATUS "system")
-    else()
-        message(STATUS "BLAS libraries: NOT FOUND")
-        list(APPEND SIMPLE_NUMERICS_MISSING "BLAS")
-    endif()
-
-    find_package(LAPACK)
-    if(LAPACK_FOUND)
-        message(STATUS "LAPACK libraries: ${LAPACK_LIBRARIES}")
-        set(SIMPLE_LAPACK_STATUS "system")
-    else()
-        message(STATUS "LAPACK libraries: NOT FOUND")
-        list(APPEND SIMPLE_NUMERICS_MISSING "LAPACK")
-    endif()
-
-    if(SIMPLE_BLAS_POLICY AND BLAS_FOUND AND LAPACK_FOUND)
-        simple_probe_blas_threading("${LAPACK_LIBRARIES};${BLAS_LIBRARIES}" _blas_probe)
-        set(SIMPLE_BLAS_THREADING "${_blas_probe}")
-        string(TOUPPER "${_blas_probe}" _blas_probe_uc)
-        if(_blas_probe STREQUAL "openblas:2" OR _blas_probe STREQUAL "mkl" OR
-           (_blas_probe_uc MATCHES "^FLEXIBLAS:" AND _blas_probe_uc MATCHES "OPENMP"))
-            set(SIMPLE_BLAS_POLICY_OK ON)
-            set(SIMPLE_BLAS_STATUS "system (${_blas_probe})")
-            set(SIMPLE_LAPACK_STATUS "system (${_blas_probe})")
-        else()
-            if(_blas_probe STREQUAL "openblas:0")
-                set(_blas_why "a serial OpenBLAS: the products SIMPLE calls from serial code would run on one core")
-            elseif(_blas_probe STREQUAL "openblas:1")
-                set(_blas_why "a pthreads OpenBLAS: it would oversubscribe the cores inside SIMPLE's OpenMP teams")
-            elseif(_blas_probe STREQUAL "")
-                set(_blas_why "a BLAS whose threading could not be probed")
-            else()
-                set(_blas_why "${_blas_probe}, not known to thread with OpenMP")
-            endif()
-            set(SIMPLE_BLAS_POLICY_BUNDLED ON)
-        endif()
-    endif()
+    set(SIMPLE_OPENBLAS_USE_OPENMP 0)
+    set(SIMPLE_OPENBLAS_FLAVOUR "pthreads")
 endif()
 
-find_library(ARPACK_LIBRARY
-    NAMES arpack arpack-ng libarpack
-    HINTS
-        ${ARPACK_ROOT}
-        $ENV{ARPACK_ROOT}
-        $ENV{ARPACK_DIR}
-        $ENV{ARPACKDIR}
-    PATH_SUFFIXES lib lib64
-    PATHS
-        /opt/homebrew/opt/arpack
-        /usr/local/opt/arpack
-        /usr/local
-        /usr
-        /opt/local
-        /opt/homebrew
-        /opt
+set(SIMPLE_OPENBLAS_BUILD_FLAGS
+    "USE_THREAD=1"
+    "USE_OPENMP=${SIMPLE_OPENBLAS_USE_OPENMP}"
+    # Four simultaneous calculation calls cover the decisive GitHub team. In
+    # OpenBLAS 0.3.34 callers above this cap wait for a buffer set; keeping the
+    # cap finite avoids the NUM_PARALLEL x runtime-thread buffer footprint.
+    "NUM_PARALLEL=${SIMPLE_OPENBLAS_NUM_PARALLEL}"
+    "NO_SHARED=1"
+    "NO_LAPACK=0"
+    "NO_LAPACKE=1"
+    "INTERFACE64=0"
 )
-if(ARPACK_LIBRARY)
-    message(STATUS "ARPACK library found: ${ARPACK_LIBRARY}")
-    set(SIMPLE_ARPACK_STATUS "system")
+string(JOIN " " SIMPLE_OPENBLAS_RECIPE
+    "OpenBLAS=${SIMPLE_OPENBLAS_VERSION}"
+    "system=${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
+    "C=${CMAKE_C_COMPILER_ID}-${CMAKE_C_COMPILER_VERSION}-${CMAKE_C_COMPILER}"
+    "Fortran=${CMAKE_Fortran_COMPILER_ID}-${CMAKE_Fortran_COMPILER_VERSION}-${CMAKE_Fortran_COMPILER}"
+    ${SIMPLE_OPENBLAS_BUILD_FLAGS}
+    "ARPACK-NG=${SIMPLE_ARPACK_NG_VERSION}"
+    "ARPACK_BUILD_TYPE=Release"
+    "ARPACK_MPI=OFF"
+    "ARPACK_INTERFACE64=OFF"
+)
+string(MAKE_C_IDENTIFIER
+    "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_C_COMPILER_ID}-${CMAKE_C_COMPILER_VERSION}-${CMAKE_Fortran_COMPILER_ID}-${CMAKE_Fortran_COMPILER_VERSION}-${SIMPLE_OPENBLAS_FLAVOUR}"
+    SIMPLE_NUMERICS_CACHE_KEY
+)
+set(SIMPLE_NUMERICS_CACHE_ROOT "${CMAKE_SOURCE_DIR}/.deps/numerics" CACHE PATH
+    "Persistent cache for SIMPLE's pinned OpenBLAS and ARPACK-NG builds")
+set(SIMPLE_NUMERICS_INSTALL_PREFIX
+    "${SIMPLE_NUMERICS_CACHE_ROOT}/${SIMPLE_NUMERICS_CACHE_KEY}/openblas-${SIMPLE_OPENBLAS_VERSION}-arpack-${SIMPLE_ARPACK_NG_VERSION}"
+)
+set(SIMPLE_NUMERICS_RECIPE_STAMP "${SIMPLE_NUMERICS_INSTALL_PREFIX}/simple-numerics-recipe.txt")
+set(SIMPLE_OPENBLAS_LIBRARY
+    "${SIMPLE_NUMERICS_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}openblas${CMAKE_STATIC_LIBRARY_SUFFIX}"
+)
+set(SIMPLE_ARPACK_LIBRARY
+    "${SIMPLE_NUMERICS_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}arpack${CMAKE_STATIC_LIBRARY_SUFFIX}"
+)
+set(SIMPLE_OPENBLAS_EP_PREFIX "${CMAKE_BINARY_DIR}/_deps/openblas-bundle")
+set(SIMPLE_ARPACK_EP_PREFIX "${CMAKE_BINARY_DIR}/_deps/arpack-ng-bundle")
+
+set(SIMPLE_BLAS_STATUS "bundled OpenBLAS ${SIMPLE_OPENBLAS_VERSION} (${SIMPLE_OPENBLAS_FLAVOUR})")
+set(SIMPLE_LAPACK_STATUS "bundled OpenBLAS ${SIMPLE_OPENBLAS_VERSION} (${SIMPLE_OPENBLAS_FLAVOUR})")
+set(SIMPLE_ARPACK_STATUS "bundled ARPACK-NG ${SIMPLE_ARPACK_NG_VERSION}")
+
+# SIMPLE's numerical provider is deliberately invariant across platforms. The
+# build never probes or links a system BLAS, LAPACK, or ARPACK: ARPACK-NG is
+# built against this same OpenBLAS so it cannot pull another BLAS into the
+# process through a system dependency.
+
+message(STATUS
+    "SIMPLE numerical provider: bundled OpenBLAS ${SIMPLE_OPENBLAS_VERSION} "
+    "and ARPACK-NG ${SIMPLE_ARPACK_NG_VERSION} (persistent cache: ${SIMPLE_NUMERICS_INSTALL_PREFIX})"
+)
+
+set(SIMPLE_NUMERICS_CACHE_CURRENT FALSE)
+if(EXISTS "${SIMPLE_OPENBLAS_LIBRARY}" AND EXISTS "${SIMPLE_ARPACK_LIBRARY}" AND
+   EXISTS "${SIMPLE_NUMERICS_RECIPE_STAMP}")
+    file(READ "${SIMPLE_NUMERICS_RECIPE_STAMP}" SIMPLE_NUMERICS_CACHED_RECIPE)
+    string(STRIP "${SIMPLE_NUMERICS_CACHED_RECIPE}" SIMPLE_NUMERICS_CACHED_RECIPE)
+    if(SIMPLE_NUMERICS_CACHED_RECIPE STREQUAL SIMPLE_OPENBLAS_RECIPE)
+        set(SIMPLE_NUMERICS_CACHE_CURRENT TRUE)
+    endif()
+endif()
+
+if(SIMPLE_NUMERICS_CACHE_CURRENT)
+    message(STATUS "Reusing cached SIMPLE numerical libraries; no OpenBLAS or ARPACK-NG build is scheduled")
 else()
-    message(STATUS "ARPACK library: NOT FOUND")
-    list(APPEND SIMPLE_NUMERICS_MISSING "ARPACK")
-endif()
-
-if(SIMPLE_FORCE_BUNDLED_NUMERICS OR NOT BLAS_FOUND OR NOT LAPACK_FOUND)
-    set(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS ON)
-endif()
-if(SIMPLE_FORCE_BUNDLED_NUMERICS OR NOT ARPACK_LIBRARY)
-    set(SIMPLE_NUMERICS_BUILD_ARPACK ON)
-endif()
-if(SIMPLE_BLAS_POLICY_BUNDLED)
-    # the bundled OpenMP OpenBLAS, and ARPACK built against it (a system ARPACK would load the system BLAS as well)
-    set(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS ON)
-    set(SIMPLE_NUMERICS_BUILD_ARPACK ON)
-endif()
-
-if(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS OR SIMPLE_NUMERICS_BUILD_ARPACK)
-    include(ExternalProject)
-    file(MAKE_DIRECTORY
-        "${SIMPLE_NUMERICS_INSTALL_PREFIX}/lib"
-        "${SIMPLE_NUMERICS_INSTALL_PREFIX}/lib64"
-        "${SIMPLE_NUMERICS_INSTALL_PREFIX}/include"
-    )
-    list(APPEND SIMPLE_NUMERICS_BUNDLED_LINK_DIRS
-        "-L${SIMPLE_NUMERICS_INSTALL_PREFIX}/lib"
-        "-L${SIMPLE_NUMERICS_INSTALL_PREFIX}/lib64"
-    )
-    set(SIMPLE_NUMERICS_BUNDLED_PROJECTS "")
-    if(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS)
-        list(APPEND SIMPLE_NUMERICS_BUNDLED_PROJECTS
-            "OpenBLAS ${SIMPLE_OPENBLAS_VERSION} (BLAS/LAPACK)"
-        )
+    if(EXISTS "${SIMPLE_NUMERICS_INSTALL_PREFIX}")
+        message(STATUS "Cached SIMPLE numerical recipe changed or is incomplete; rebuilding ${SIMPLE_NUMERICS_INSTALL_PREFIX}")
+        file(REMOVE_RECURSE "${SIMPLE_NUMERICS_INSTALL_PREFIX}")
     endif()
-    if(SIMPLE_NUMERICS_BUILD_ARPACK)
-        list(APPEND SIMPLE_NUMERICS_BUNDLED_PROJECTS
-            "ARPACK-NG ${SIMPLE_ARPACK_NG_VERSION}"
-        )
-    endif()
-    list(JOIN SIMPLE_NUMERICS_BUNDLED_PROJECTS ", " SIMPLE_NUMERICS_BUNDLED_TEXT)
-    list(JOIN SIMPLE_NUMERICS_MISSING ", " SIMPLE_NUMERICS_MISSING_TEXT)
-    set(SIMPLE_NUMERICS_REASON
-        "  The following required numerical libraries were NOT FOUND: ${SIMPLE_NUMERICS_MISSING_TEXT}\n"
-    )
-    if(SIMPLE_BLAS_POLICY_BUNDLED)
-        string(APPEND SIMPLE_NUMERICS_REASON
-            "  The system BLAS (${BLAS_LIBRARIES}) is ${_blas_why}:\n"
-            "  SIMPLE builds the OpenMP OpenBLAS (-DSIMPLE_BLAS_OPENMP=OFF keeps the system BLAS).\n"
-        )
-    endif()
-    if(SIMPLE_FORCE_BUNDLED_NUMERICS)
-        message(WARNING
-            "================================================================================\n"
-            "  Bundled BLAS / LAPACK / ARPACK explicitly requested\n"
-            "================================================================================\n"
-            "  SIMPLE downloads and compiles during the build step, once per build folder:\n"
-            "    ${SIMPLE_NUMERICS_BUNDLED_TEXT}\n"
-            "  Build/download location:\n"
-            "    ${CMAKE_BINARY_DIR}/_deps\n"
-            "  Bundled install prefix:\n"
-            "    ${SIMPLE_NUMERICS_INSTALL_PREFIX}\n"
-            "================================================================================\n"
-        )
-    elseif(NOT SIMPLE_NUMERICS_MISSING AND SIMPLE_BLAS_POLICY_BUNDLED)
-        message(WARNING
-            "================================================================================\n"
-            "  BLAS: building the OpenMP OpenBLAS\n"
-            "================================================================================\n"
-            "  The system BLAS (${BLAS_LIBRARIES}) is ${_blas_why}.\n"
-            "  SIMPLE downloads and compiles during the build step, once per build folder:\n"
-            "    ${SIMPLE_NUMERICS_BUNDLED_TEXT}\n"
-            "\n"
-            "  To link a system OpenMP OpenBLAS instead, install it and reconfigure:\n"
-            "    Debian/Ubuntu:      sudo apt-get install libopenblas-openmp-dev\n"
-            "    Fedora/RHEL/Rocky:  sudo dnf install openblas-devel   (provides libopenblaso)\n"
-            "  To keep the system BLAS as it is: -DSIMPLE_BLAS_OPENMP=OFF\n"
-            "================================================================================\n"
-        )
-    else()
-        message(WARNING
-            "================================================================================\n"
-            "  BLAS / LAPACK / ARPACK REQUIRED but NOT FOUND\n"
-            "================================================================================\n"
-            "${SIMPLE_NUMERICS_REASON}"
-            "  SIMPLE requires BLAS, LAPACK and ARPACK development libraries for numerical\n"
-            "  routines, dense solvers, and sparse eigenvalue routines.\n"
-            "\n"
-            "  Install them via your system package manager:\n"
-            "  Linux (Debian/Ubuntu):\n"
-            "    sudo apt-get update\n"
-            "    sudo apt-get install libopenblas-openmp-dev libarpack2-dev\n"
-            "  Linux (Fedora/RHEL/CentOS/Rocky):\n"
-            "    sudo yum install openblas-devel lapack-devel arpack-devel\n"
-            "    or: sudo dnf install openblas-devel lapack-devel arpack-devel\n"
-            "  Linux (Arch):\n"
-            "    sudo pacman -S openblas lapack arpack\n"
-            "  macOS (Homebrew):\n"
-            "    brew install openblas lapack arpack\n"
-            "  macOS (MacPorts):\n"
-            "    sudo port install OpenBLAS lapack arpack-ng\n"
-            "\n"
-            "  If installed in a non-standard prefix, pass it to CMake:\n"
-            "    cmake -B build -DCMAKE_PREFIX_PATH=<dependency_prefix>\n"
-            "\n"
-            "  SIMPLE expects the LP64 ABI, where Fortran integer arguments are 32-bit.\n"
-            "  Avoid ILP64 BLAS/LAPACK/ARPACK builds unless SIMPLE is changed consistently.\n"
-            "\n"
-            "  WARNING: SIMPLE will continue by downloading and compiling bundled libraries\n"
-            "  inside the CMake build folder during the build step:\n"
-            "    ${SIMPLE_NUMERICS_BUNDLED_TEXT}\n"
-            "  Build/download location:\n"
-            "    ${CMAKE_BINARY_DIR}/_deps\n"
-            "  Bundled install prefix:\n"
-            "    ${SIMPLE_NUMERICS_INSTALL_PREFIX}\n"
-            "\n"
-            "  To use system libraries instead, install the missing libraries and reconfigure:\n"
-            "    rm -rf build/\n"
-            "    cmake -B build\n"
-            "================================================================================\n"
-        )
-    endif()
-endif()
-
-if(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS)
+    # A recipe change can occur inside an existing build tree. Discard only
+    # the generated dependency scratch so stale ExternalProject completion
+    # stamps cannot suppress the required rebuild.
+    file(REMOVE_RECURSE "${SIMPLE_OPENBLAS_EP_PREFIX}" "${SIMPLE_ARPACK_EP_PREFIX}")
     find_program(SIMPLE_MAKE_PROGRAM NAMES gmake make)
     if(NOT SIMPLE_MAKE_PROGRAM)
         message(FATAL_ERROR
@@ -393,39 +200,66 @@ if(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS)
         )
     endif()
 
-    # The OpenMP build of OpenBLAS: called from serial code it runs on the OpenMP thread count (SIMPLE's nthr),
-    # called inside an OpenMP team it runs on the calling thread. SIMPLE does both (the picker's products from serial
-    # code, per-thread products inside teams), so neither needs OPENBLAS_NUM_THREADS. It must share the Fortran
-    # OpenMP runtime (libgomp: GNU C with GNU Fortran); otherwise the pthreads build as before.
-    if(USE_OPENMP AND CMAKE_C_COMPILER_ID STREQUAL "GNU" AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-        set(SIMPLE_OPENBLAS_USE_OPENMP 1)
-        set(SIMPLE_OPENBLAS_FLAVOUR "OpenMP")
-        set(SIMPLE_OPENBLAS_PREFIX "${CMAKE_BINARY_DIR}/_deps/openblas-omp")
-    else()
-        set(SIMPLE_OPENBLAS_USE_OPENMP 0)
-        set(SIMPLE_OPENBLAS_FLAVOUR "pthreads")
-        set(SIMPLE_OPENBLAS_PREFIX "${CMAKE_BINARY_DIR}/_deps/openblas")
-    endif()
-    set(SIMPLE_OPENBLAS_LIBRARY
-        "${SIMPLE_NUMERICS_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}openblas${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    set(SIMPLE_NUMERICS_DOWNLOAD_DIR "${CMAKE_SOURCE_DIR}/.deps/downloads")
+    set(SIMPLE_OPENBLAS_ARCHIVE "${SIMPLE_NUMERICS_DOWNLOAD_DIR}/OpenBLAS-${SIMPLE_OPENBLAS_VERSION}.tar.gz")
+    set(SIMPLE_ARPACK_ARCHIVE "${SIMPLE_NUMERICS_DOWNLOAD_DIR}/arpack-ng-${SIMPLE_ARPACK_NG_VERSION}.tar.gz")
+    file(MAKE_DIRECTORY
+        "${SIMPLE_NUMERICS_DOWNLOAD_DIR}"
+        "${SIMPLE_NUMERICS_INSTALL_PREFIX}/lib"
+        "${SIMPLE_NUMERICS_INSTALL_PREFIX}/include"
     )
+
+    function(simple_fetch_pinned_archive label url archive sha256)
+        if(NOT EXISTS "${archive}")
+            message(STATUS "Fetching ${label}: ${url}")
+            file(DOWNLOAD "${url}" "${archive}"
+                EXPECTED_HASH "SHA256=${sha256}"
+                STATUS _download_status
+                SHOW_PROGRESS
+                TLS_VERIFY ON
+            )
+            list(GET _download_status 0 _download_error)
+            if(NOT _download_error EQUAL 0)
+                file(REMOVE "${archive}")
+                message(FATAL_ERROR "Could not download ${label}: ${_download_status}")
+            endif()
+        else()
+            file(SHA256 "${archive}" _archive_hash)
+            if(NOT _archive_hash STREQUAL sha256)
+                message(FATAL_ERROR
+                    "Cached ${label} archive has SHA-256 ${_archive_hash}; expected ${sha256}: ${archive}"
+                )
+            endif()
+        endif()
+    endfunction()
+
+    simple_fetch_pinned_archive(
+        "OpenBLAS ${SIMPLE_OPENBLAS_VERSION}"
+        "https://github.com/OpenMathLib/OpenBLAS/releases/download/v${SIMPLE_OPENBLAS_VERSION}/OpenBLAS-${SIMPLE_OPENBLAS_VERSION}.tar.gz"
+        "${SIMPLE_OPENBLAS_ARCHIVE}"
+        "${SIMPLE_OPENBLAS_SHA256}"
+    )
+    simple_fetch_pinned_archive(
+        "ARPACK-NG ${SIMPLE_ARPACK_NG_VERSION}"
+        "https://github.com/opencollab/arpack-ng/archive/refs/tags/${SIMPLE_ARPACK_NG_VERSION}.tar.gz"
+        "${SIMPLE_ARPACK_ARCHIVE}"
+        "${SIMPLE_ARPACK_NG_SHA256}"
+    )
+    file(WRITE "${SIMPLE_NUMERICS_RECIPE_STAMP}" "${SIMPLE_OPENBLAS_RECIPE}\n")
+    include(ExternalProject)
+
     set(SIMPLE_OPENBLAS_MAKE_ARGS
         "CC=${CMAKE_C_COMPILER}"
         "FC=${CMAKE_Fortran_COMPILER}"
-        "USE_THREAD=1"
-        "USE_OPENMP=${SIMPLE_OPENBLAS_USE_OPENMP}"
-        "NO_SHARED=1"
-        "NO_LAPACK=0"
-        "NO_LAPACKE=1"
-        "INTERFACE64=0"
+        ${SIMPLE_OPENBLAS_BUILD_FLAGS}
     )
 
-    # its own build folder per flavour, so a build tree configured before rebuilds the library
+    # Scratch is disposable; the installed library and verified archive persist
+    # outside build/ and are reused by clean Debug and Release builds.
     ExternalProject_Add(simple_openblas_ep
-        URL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v${SIMPLE_OPENBLAS_VERSION}/OpenBLAS-${SIMPLE_OPENBLAS_VERSION}.tar.gz"
-        URL_HASH "SHA256=cd7e129868320cc2d033afa920e31202dfe0b8066a5b66661900ccc0f197dfed"
-        PREFIX "${SIMPLE_OPENBLAS_PREFIX}"
-        DOWNLOAD_DIR "${CMAKE_BINARY_DIR}/_deps/downloads"
+        URL "${SIMPLE_OPENBLAS_ARCHIVE}"
+        URL_HASH "SHA256=${SIMPLE_OPENBLAS_SHA256}"
+        PREFIX "${SIMPLE_OPENBLAS_EP_PREFIX}"
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         CONFIGURE_COMMAND ""
         BUILD_IN_SOURCE TRUE
@@ -433,52 +267,26 @@ if(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS)
         INSTALL_COMMAND "${SIMPLE_MAKE_PROGRAM}" ${SIMPLE_OPENBLAS_MAKE_ARGS}
             "PREFIX=${SIMPLE_NUMERICS_INSTALL_PREFIX}" install
         BUILD_BYPRODUCTS "${SIMPLE_OPENBLAS_LIBRARY}"
-        USES_TERMINAL_DOWNLOAD TRUE
-        USES_TERMINAL_BUILD TRUE
-        USES_TERMINAL_INSTALL TRUE
+        LOG_DOWNLOAD TRUE
+        LOG_BUILD TRUE
+        LOG_INSTALL TRUE
+        LOG_OUTPUT_ON_FAILURE TRUE
     )
     list(APPEND SIMPLE_DEPENDENCY_TARGETS simple_openblas_ep)
 
     set(SIMPLE_BLAS_STATUS "bundled OpenBLAS ${SIMPLE_OPENBLAS_VERSION} (${SIMPLE_OPENBLAS_FLAVOUR})")
     set(SIMPLE_LAPACK_STATUS "bundled OpenBLAS ${SIMPLE_OPENBLAS_VERSION} (${SIMPLE_OPENBLAS_FLAVOUR})")
-    # by full path: the binaries relink when the library is rebuilt
-    set(SIMPLE_NUMERICS_PROVIDER_LIBRARIES "${SIMPLE_OPENBLAS_LIBRARY}")
-elseif(SIMPLE_BLAS_SYSTEM_OPENMP)
-    set(SIMPLE_NUMERICS_PROVIDER_LIBRARIES "${SIMPLE_BLAS_SYSTEM_OPENMP}")
-else()
-    set(SIMPLE_NUMERICS_PROVIDER_LIBRARIES LAPACK::LAPACK BLAS::BLAS)
-endif()
-
-# the linked BLAS stays on the calling thread inside OpenMP teams (an OpenMP OpenBLAS, MKL, FlexiBLAS with an OpenMP
-# backend): code may call it there without falling back to its own products
-if(SIMPLE_BLAS_SYSTEM_OPENMP OR SIMPLE_BLAS_POLICY_OK OR
-   (SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS AND SIMPLE_OPENBLAS_USE_OPENMP))
-    add_compile_definitions(SIMPLE_BLAS_TEAM_SAFE)
-    set(SIMPLE_BLAS_TEAM_SAFE ON)
-else()
-    set(SIMPLE_BLAS_TEAM_SAFE OFF)
-endif()
-
-if(SIMPLE_NUMERICS_BUILD_ARPACK)
-    set(SIMPLE_ARPACK_LIBRARY
-        "${SIMPLE_NUMERICS_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}arpack${CMAKE_STATIC_LIBRARY_SUFFIX}"
-    )
-    if(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS)
-        set(SIMPLE_ARPACK_BLAS_LIBRARIES "${SIMPLE_OPENBLAS_LIBRARY}")
-        set(SIMPLE_ARPACK_LAPACK_LIBRARIES "${SIMPLE_OPENBLAS_LIBRARY}")
-        if(SIMPLE_OPENBLAS_USE_OPENMP)
-            # the static OpenMP OpenBLAS needs the OpenMP runtime wherever it is linked
-            if(OpenMP_Fortran_LIBRARIES)
-                list(APPEND SIMPLE_ARPACK_BLAS_LIBRARIES ${OpenMP_Fortran_LIBRARIES})
-                list(APPEND SIMPLE_ARPACK_LAPACK_LIBRARIES ${OpenMP_Fortran_LIBRARIES})
-            else()
-                list(APPEND SIMPLE_ARPACK_BLAS_LIBRARIES "-fopenmp")
-                list(APPEND SIMPLE_ARPACK_LAPACK_LIBRARIES "-fopenmp")
-            endif()
+    set(SIMPLE_ARPACK_BLAS_LIBRARIES "${SIMPLE_OPENBLAS_LIBRARY}")
+    set(SIMPLE_ARPACK_LAPACK_LIBRARIES "${SIMPLE_OPENBLAS_LIBRARY}")
+    if(SIMPLE_OPENBLAS_USE_OPENMP)
+        # the static OpenMP OpenBLAS needs the OpenMP runtime wherever it is linked
+        if(OpenMP_Fortran_LIBRARIES)
+            list(APPEND SIMPLE_ARPACK_BLAS_LIBRARIES ${OpenMP_Fortran_LIBRARIES})
+            list(APPEND SIMPLE_ARPACK_LAPACK_LIBRARIES ${OpenMP_Fortran_LIBRARIES})
+        else()
+            list(APPEND SIMPLE_ARPACK_BLAS_LIBRARIES "-fopenmp")
+            list(APPEND SIMPLE_ARPACK_LAPACK_LIBRARIES "-fopenmp")
         endif()
-    else()
-        set(SIMPLE_ARPACK_BLAS_LIBRARIES "${BLAS_LIBRARIES}")
-        set(SIMPLE_ARPACK_LAPACK_LIBRARIES "${LAPACK_LIBRARIES}")
     endif()
     string(REPLACE ";" "|" SIMPLE_ARPACK_BLAS_LIBRARIES_ARG "${SIMPLE_ARPACK_BLAS_LIBRARIES}")
     string(REPLACE ";" "|" SIMPLE_ARPACK_LAPACK_LIBRARIES_ARG "${SIMPLE_ARPACK_LAPACK_LIBRARIES}")
@@ -497,42 +305,52 @@ if(SIMPLE_NUMERICS_BUILD_ARPACK)
         "-DLAPACK_LIBRARIES:STRING=${SIMPLE_ARPACK_LAPACK_LIBRARIES_ARG}"
         "-DCMAKE_Fortran_COMPILER:FILEPATH=${CMAKE_Fortran_COMPILER}"
         "-DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}"
+        "-DCMAKE_BUILD_TYPE:STRING=Release"
     )
-    if(CMAKE_BUILD_TYPE)
-        list(APPEND SIMPLE_ARPACK_CMAKE_ARGS
-            "-DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}"
-        )
-    endif()
 
     ExternalProject_Add(simple_arpack_ep
-        URL "https://github.com/opencollab/arpack-ng/archive/refs/tags/${SIMPLE_ARPACK_NG_VERSION}.tar.gz"
-        URL_HASH "SHA256=f6641deb07fa69165b7815de9008af3ea47eb39b2bb97521fbf74c97aba6e844"
-        PREFIX "${CMAKE_BINARY_DIR}/_deps/arpack-ng"
-        DOWNLOAD_DIR "${CMAKE_BINARY_DIR}/_deps/downloads"
+        URL "${SIMPLE_ARPACK_ARCHIVE}"
+        URL_HASH "SHA256=${SIMPLE_ARPACK_NG_SHA256}"
+        PREFIX "${SIMPLE_ARPACK_EP_PREFIX}"
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         LIST_SEPARATOR "|"
         CMAKE_ARGS ${SIMPLE_ARPACK_CMAKE_ARGS}
         BUILD_BYPRODUCTS "${SIMPLE_ARPACK_LIBRARY}"
-        USES_TERMINAL_DOWNLOAD TRUE
-        USES_TERMINAL_CONFIGURE TRUE
-        USES_TERMINAL_BUILD TRUE
-        USES_TERMINAL_INSTALL TRUE
+        LOG_DOWNLOAD TRUE
+        LOG_CONFIGURE TRUE
+        LOG_BUILD TRUE
+        LOG_INSTALL TRUE
+        LOG_OUTPUT_ON_FAILURE TRUE
     )
-    if(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS)
-        add_dependencies(simple_arpack_ep simple_openblas_ep)
-    endif()
+    add_dependencies(simple_arpack_ep simple_openblas_ep)
     list(APPEND SIMPLE_DEPENDENCY_TARGETS simple_arpack_ep)
 
-    set(SIMPLE_ARPACK_STATUS "bundled ARPACK-NG ${SIMPLE_ARPACK_NG_VERSION}")
-    set(SIMPLE_ARPACK_LINK_LIBRARY arpack)
+    # Use the archive by full path so an installed libarpack cannot win the
+    # linker's name search and reintroduce a system BLAS transitively.
+    set(SIMPLE_ARPACK_LINK_LIBRARY "${SIMPLE_ARPACK_LIBRARY}")
+endif()
+
+# Use both archives by full path. This prevents an installed library with the
+# same name from winning the linker's search and reintroducing a system BLAS.
+set(SIMPLE_NUMERICS_PROVIDER_LIBRARIES "${SIMPLE_OPENBLAS_LIBRARY}")
+set(SIMPLE_ARPACK_LINK_LIBRARY "${SIMPLE_ARPACK_LIBRARY}")
+
+# The bundled OpenMP flavour stays on the calling thread inside OpenMP teams;
+# the pthreads flavour does not carry that contract.
+if(SIMPLE_OPENBLAS_USE_OPENMP)
+    add_compile_definitions(SIMPLE_BLAS_TEAM_SAFE)
+    set(SIMPLE_BLAS_TEAM_SAFE ON)
+    set(SIMPLE_BLAS_TEAM_STATUS
+        "ON (OpenMP OpenBLAS stays on the calling thread; NUM_PARALLEL=${SIMPLE_OPENBLAS_NUM_PARALLEL})"
+    )
 else()
-    set(SIMPLE_ARPACK_LINK_LIBRARY ${ARPACK_LIBRARY})
+    set(SIMPLE_BLAS_TEAM_SAFE OFF)
+    set(SIMPLE_BLAS_TEAM_STATUS
+        "OFF (pthreads OpenBLAS; SIMPLE uses its internal team products)"
+    )
 endif()
 
 # Link ARPACK before its numerical providers; this matters for static builds.
-if(SIMPLE_NUMERICS_BUNDLED_LINK_DIRS)
-    list(APPEND SIMPLE_LIBRARIES ${SIMPLE_NUMERICS_BUNDLED_LINK_DIRS})
-endif()
 list(APPEND SIMPLE_LIBRARIES
     ${SIMPLE_ARPACK_LINK_LIBRARY}
     ${SIMPLE_NUMERICS_PROVIDER_LIBRARIES}
@@ -785,7 +603,7 @@ message(STATUS "=== SIMPLE Dependency Summary ===")
 
 message(STATUS " ARPACK:              YES (${SIMPLE_ARPACK_STATUS})")
 message(STATUS " BLAS:                YES (${SIMPLE_BLAS_STATUS})")
-message(STATUS " BLAS in OMP teams:   ${SIMPLE_BLAS_TEAM_SAFE} (stays on the calling thread)")
+message(STATUS " BLAS in OMP teams:   ${SIMPLE_BLAS_TEAM_STATUS}")
 message(STATUS " FFTW3:               YES")
 message(STATUS " JPEG_LIBRARY:        YES")
 message(STATUS " LAPACK:              YES (${SIMPLE_LAPACK_STATUS})")

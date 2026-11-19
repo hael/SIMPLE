@@ -48,6 +48,7 @@ __pycache__
 /doc/code_overview/fortran-indexes/modules.md
 /doc/code_overview/fortran-indexes/symbol_index.csv
 /.vscode
+/.deps/
 # Codex agent notes are local by default; force-add only deliberately shared files.
 /.codex
 /codex_logs

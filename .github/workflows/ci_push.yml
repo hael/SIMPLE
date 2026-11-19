@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: |
              sudo apt-get update
-             sudo apt-get -y install gcc gfortran cmake liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 libcurl4-openssl-dev libopenblas-openmp-dev libarpack2-dev
+             sudo apt-get -y install gcc gfortran cmake make liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 libcurl4-openssl-dev
 
       - name: Build SIMPLE and run the fast gate
         run: |

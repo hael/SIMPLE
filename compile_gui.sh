@@ -18,7 +18,7 @@ done
 JOBS=$(simple_build_jobs) || exit $?
 export TMPDIR=$HOME/tmp
 mkdir $TMPDIR 
-chmod u+rwx -R $TMPDIR 
+chmod -R u+rwx $TMPDIR 
 rm -rf build
 mkdir build
 cd build

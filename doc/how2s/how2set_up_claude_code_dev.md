@@ -51,8 +51,9 @@ To work in VS Code, install the Claude Code extension. It uses the same
 
 - GNU `gcc`, `g++` and `gfortran` 14.2 or newer
 - CMake
-- an OpenMP build of OpenBLAS (CMake builds one in the build tree when the
-  system has none)
+- GNU make or make (CMake always downloads and builds SIMPLE's pinned OpenBLAS
+  and ARPACK-NG once, then reuses the compatible `.deps/numerics/` cache across
+  clean build trees)
 - FFTW 3.3 with its double, single and threaded builds
 - libcurl and libTIFF
 - Python 3.7 or newer for the build scripts and the fast gate
@@ -67,21 +68,21 @@ Linux 8, for example, the system GCC is 8.5, and GCC 15 comes from
 
 ```bash
 sudo dnf install -y gcc-toolset-15 gcc-toolset-15-gcc-gfortran gcc-toolset-15-gcc-c++ \
-    cmake fftw-devel libcurl-devel libtiff-devel openblas-devel git
+    cmake make fftw-devel libcurl-devel libtiff-devel git
 sudo dnf install -y ripgrep     # from EPEL on enterprise Linux
 ```
 
 On macOS, follow the "New Mac Installation" section of
-[doc/installation.md](../installation.md) (Homebrew GCC and FFTW; BLAS comes
-from Accelerate).
+[doc/installation.md](../installation.md) (Homebrew GCC, make and FFTW;
+SIMPLE builds its own numerical libraries).
 
 ## Step 3. Make the toolchain visible to every shell (the session proposes, you approve)
 
 Claude Code runs commands in a non-interactive bash that it initializes from
 your profile. Most `~/.bashrc` files return early for non-interactive shells
 (`[[ $- != *i* ]] && return` or a `case $- in` block). Anything the build
-needs must therefore come **before** that check. That covers the compiler, the
-OpenBLAS override, `TMPDIR`, `~/.local/bin` and SIMPLE's own variables.
+needs must therefore come **before** that check. That covers the compiler,
+`TMPDIR`, `~/.local/bin` and SIMPLE's own variables.
 Otherwise the agent compiles with the wrong compiler while your own terminal
 works.
 
@@ -92,8 +93,6 @@ An example from an Oracle Linux 8 box:
 export PATH="$HOME/.local/bin:$PATH"
 # GCC 15 from gcc-toolset-15
 [ -f /opt/rh/gcc-toolset-15/enable ] && source /opt/rh/gcc-toolset-15/enable
-# OpenBLAS 0.3.15 misdetects recent Intel CPUs; use its AVX2 kernels
-export OPENBLAS_CORETYPE=Haswell
 # a temp dir on a disk that allows exec and has room
 export TMPDIR=$HOME/tmp
 # SIMPLE (the build installs into build/)
@@ -103,9 +102,8 @@ export SIMPLE_PATH=$HOME/src/SIMPLE/build
 export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
 ```
 
-Keep only the lines this machine needs. `OPENBLAS_CORETYPE` is for a system
-OpenBLAS that misdetects the CPU. `TMPDIR` is for a `/tmp` that is `noexec` or
-small. The SIMPLE lines are what `add2.bashrc` adds (see
+Keep only the lines this machine needs. `TMPDIR` is for a `/tmp` that is
+`noexec` or small. The SIMPLE lines are what `add2.bashrc` adds (see
 [doc/installation.md](../installation.md)). Shell changes take effect in a new
 Claude Code session.
 
@@ -182,7 +180,6 @@ Machine-specific notes for every project on this box. Repo instructions
 ## Toolchain (set up in ~/.bashrc, before its interactive-shell check)
 - <compiler and where it comes from; the system compiler not to use>
 - <CMake version; the Python CMake should use if the default is too old>
-- <BLAS quirks, e.g. OPENBLAS_CORETYPE>
 
 ## Filesystem
 - <TMPDIR and why>

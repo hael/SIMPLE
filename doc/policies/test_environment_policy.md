@@ -946,10 +946,10 @@ minutes after the push. A newer push cancels the build of an older one.
 
 - `ci_build.yml` checks that the build configurations stay viable: on Linux and
   macOS a Debug build with `./compile_debug.sh` and the NICE GUI with
-  `./compile_gui.sh`; on Linux a Debug build against the bundled
-  BLAS/LAPACK/ARPACK (`SIMPLE_FORCE_BUNDLED_NUMERICS=ON`) with its fast gate;
-  and the coarray configuration with `./compile_coarrays.sh` where the platform
-  has it. Each compile script runs the fast gate before installing.
+  `./compile_gui.sh`, plus the coarray configuration with
+  `./compile_coarrays.sh` where the platform has it. Every configuration uses
+  SIMPLE's bundled OpenBLAS and ARPACK-NG. Each compile script runs the fast
+  gate before installing.
 - `ci_test.yml` runs the longer labels as a matrix of groups, each a job of its
   own on Linux and macOS with its own clean Release build (`./compile_clean.sh`,
   fast gate included; a failed build runs no tests) and its own time limit:

@@ -27,7 +27,7 @@ jobs:
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
-             sudo apt-get -y install gcc gfortran cmake liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc mpich libmpich-dev libcurl4-openssl-dev libopenblas-openmp-dev libarpack2-dev
+             sudo apt-get -y install gcc gfortran cmake make liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc mpich libmpich-dev libcurl4-openssl-dev
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
@@ -40,9 +40,6 @@ jobs:
              brew install python@3.10
              brew install fftw
              brew install curl 
-             brew install openblas 
-             brew install lapack
-             brew install arpack 
              
       - name: Build SIMPLE in debug mode (Linux/MacOS)
         run: |
@@ -51,38 +48,6 @@ jobs:
       - name: Build SIMPLE GUI  (Linux/MacOS)
         run: |
              ./compile_gui.sh
-
-  Build_bundled_numerics:
-    name: Build SIMPLE with bundled BLAS/LAPACK/ARPACK
-    runs-on: ubuntu-26.04
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies except BLAS/LAPACK/ARPACK
-        run: |
-             sudo apt-get update
-             sudo apt-get -y install gcc gfortran cmake liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 libcurl4-openssl-dev
-
-      - name: Configure SIMPLE with bundled numerical libraries and tests
-        run: |
-             cmake -S . -B build-bundled-numerics -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DSIMPLE_FORCE_BUNDLED_NUMERICS=ON
-
-      - name: Build bundled BLAS/LAPACK/ARPACK
-        run: |
-             cmake --build build-bundled-numerics --target simple_arpack_ep --parallel 4
-
-      - name: Build SIMPLE library, executables, and tests against bundled numerics
-        run: |
-             cmake --build build-bundled-numerics --target all --parallel 4
-
-      - name: Run SIMPLE fast gate with bundled numerics
-        run: |
-             scripts/run_fast_gate.sh build-bundled-numerics
-
-      - name: Install SIMPLE
-        run: |
-             cmake --install build-bundled-numerics
 
   Build_coarray:
     name: Build SIMPLE with coarrays
@@ -100,7 +65,7 @@ jobs:
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
-             sudo apt-get install -y gcc gfortran cmake liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 openmpi-bin libopenmpi-dev libcoarrays-openmpi-dev libcurl4-openssl-dev libopenblas-openmp-dev libarpack2-dev
+             sudo apt-get install -y gcc gfortran cmake make liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 openmpi-bin libopenmpi-dev libcoarrays-openmpi-dev libcurl4-openssl-dev
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
@@ -114,9 +79,6 @@ jobs:
              brew install python@3.10
              brew install fftw
              brew install curl
-             brew install openblas
-             brew install lapack
-             brew install arpack
 
       - name: Build SIMPLE with coarrays (Linux/MacOS)
         run: |

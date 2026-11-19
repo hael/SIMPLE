@@ -55,7 +55,7 @@ jobs:
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
-             sudo apt-get -y install gcc gfortran cmake liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc mpich libmpich-dev libcurl4-openssl-dev libopenblas-openmp-dev libarpack2-dev
+             sudo apt-get -y install gcc gfortran cmake make liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc mpich libmpich-dev libcurl4-openssl-dev
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
@@ -68,9 +68,6 @@ jobs:
              brew install python@3.10
              brew install fftw
              brew install curl
-             brew install openblas
-             brew install lapack
-             brew install arpack
 
       - name: Install SIMPLE (Linux/MacOS)
         id: build
