@@ -251,7 +251,10 @@ else()
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         CONFIGURE_COMMAND ""
         BUILD_IN_SOURCE TRUE
-        BUILD_COMMAND "${SIMPLE_MAKE_PROGRAM}" ${SIMPLE_OPENBLAS_MAKE_ARGS} libs netlib
+        # Targets run sequentially as they update the same static archive,
+        # parallel make invocation may corrupt it.
+        BUILD_COMMAND "${SIMPLE_MAKE_PROGRAM}" ${SIMPLE_OPENBLAS_MAKE_ARGS} libs
+            COMMAND "${SIMPLE_MAKE_PROGRAM}" ${SIMPLE_OPENBLAS_MAKE_ARGS} netlib
         INSTALL_COMMAND "${SIMPLE_MAKE_PROGRAM}" ${SIMPLE_OPENBLAS_MAKE_ARGS}
             "PREFIX=${SIMPLE_NUMERICS_INSTALL_PREFIX}" install
         BUILD_BYPRODUCTS "${SIMPLE_OPENBLAS_LIBRARY}"
