@@ -99,7 +99,9 @@ five-parameter solve by iteration 8 (9.0 in iteration 1). The factory offers `lb
      tolerances are `lm_options`, these values by default; the factory passes its spec's.)
    - **Outcomes.** Its six outcomes (accepted, no improvement, no reliable update, bound rejected,
      invalid numerics, iteration limit), to which `CARTFT_*` map one-to-one. (2026-11-19: a non-finite
-     proposal is a rejection, and the status describes the returned point: accepted when a step was.)
+     proposal is a rejection, and the status describes the returned point: accepted when a step was.
+     2026-11-20: the outcome also says whether a stopping test ended the solve, `converged`, which the
+     factory reports.)
 4. **Bounds (factory): a solve on the free coordinates** (revised after review 1). Componentwise
    clipping of a coupled step can point uphill: the review's counterexample stalls at the start.
    - **Free coordinates.** Each iteration, the adapter's `free` freezes a coordinate that sits on a
@@ -827,3 +829,14 @@ performed for this design review. The revised contracts and their compiled regre
   solve with `LM_INVALID_NUMERICS`. No step or point changes, so the identity gates hold by construction (no counted
   solve on the fixtures took this path). L7 in `simple_opt_tester.f90` pins the three exits (the rejection limit and
   `maxits` after an accepted step, and none) through the factory and the engine. Decision 3's outcomes amended.
+
+- **2026-11-20, convergence is a stopping test, not an accepted point (Hans's ruling; Mazharul Hossain's review;
+  base `4ac019e30`).** The factory set `opt_spec%converged` from the status (accepted or no improvement). An
+  accepted step keeps `LM_ACCEPTED` when the solve then ends at `maxits` or at the rejection limit, so the factory
+  reported convergence where no stopping test had passed. L-BFGS-B reports it only for its `CONV` task. The
+  outcome now carries `converged`: true when the gradient test, the predicted-reduction test (unless every
+  proposal was capped and the start kept) or the negligible accepted step or reduction ended the solve; false at
+  `maxits`, at the rejection limit, at the observability veto and at a non-finite stop. The status is unchanged, so
+  the Cartesian commit and every point are unchanged. No production code reads `opt_spec%converged`. L7 now pins
+  `converged` false at the three exits and adds a finite solve that the gradient test ends (converged) and the same
+  solve cut at one iteration (accepted, not converged).

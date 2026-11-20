@@ -751,7 +751,7 @@ contains
         real,                   allocatable :: shifts(:,:,:), seeds(:,:)
         logical,                allocatable :: refined(:,:), incand(:,:)
         integer,                allocatable :: pinds(:), argmin_state(:)
-        integer :: i, k, ri, nrefs, nwrong_state, nwrong_refined, nwrong_committed, nwrong_weight, nextra_tot
+        integer :: i, k, ri, nrefs, nwrong_state, nwrong_refined, nwrong_committed, nwrong_weight, nwrong_sdev, nextra_tot
         integer :: iref_committed, istate, nnot_argmin, nextra_not_argmin, nthr_max, nthr_saved, rep_team
         real    :: wsum, dbest
         real, allocatable :: ext1(:,:,:), extn(:,:,:)
@@ -787,7 +787,7 @@ contains
             do ri = 1,nrefs
                 if( .not. incand(ri,i) ) cycle
                 call tab%candidate_buffers(1)%append(i, prob_candidate(ri, rows(ri,i)%inpl, entry_dist(ri, i), &
-                    &shifts(1,ri,i), shifts(2,ri,i), refined(ri,i)))
+                    &shifts(1,ri,i), shifts(2,ri,i), refined(ri,i), entry_sdev(ri, i)))
             enddo
         enddo
         tab%temps = 1.
@@ -798,7 +798,7 @@ contains
         ! the weights and extras the search reads
         call poses%setup_range(tab%insert_tab, pinds, 1, NP_NB)
         nextra_tot = 0; nwrong_state = 0; nwrong_refined = 0; nwrong_committed = 0; nwrong_weight = 0
-        nnot_argmin = 0; nextra_not_argmin = 0
+        nwrong_sdev = 0; nnot_argmin = 0; nextra_not_argmin = 0
         do i = 1,NP_NB
             istate         = tab%assgn_map(i)%istate
             iref_committed = (istate - 1) * NSPACE_NB + tab%assgn_map(i)%iproj
@@ -814,6 +814,7 @@ contains
                 if( (pose%iref - 1) / NSPACE_NB + 1 /= istate ) nwrong_state     = nwrong_state + 1
                 if( .not. refined(pose%iref, i) )                nwrong_refined   = nwrong_refined + 1
                 if( pose%iref == iref_committed )                nwrong_committed = nwrong_committed + 1
+                if( abs(pose%sdev - entry_sdev(pose%iref, i)) > 1.e-6 ) nwrong_sdev = nwrong_sdev + 1
             enddo
             if( abs(wsum - 1.) > 1.e-5 ) nwrong_weight = nwrong_weight + 1
         enddo
@@ -822,6 +823,8 @@ contains
         call assert_int(0, nwrong_refined,   'pooled neighbourhood extras ('//mode//'): every extra a refined candidate')
         call assert_int(0, nwrong_committed, 'pooled neighbourhood extras ('//mode//'): no extra is the committed candidate')
         call assert_int(0, nwrong_weight,    'pooled neighbourhood extras ('//mode//'): weights sum to 1')
+        call assert_int(0, nwrong_sdev,      'pooled neighbourhood extras ('//mode//'): every extra carries its candidate''s '//&
+            &'shift posterior width (the dynamic centring''s, when it replaces the committed pose)')
         call assert_true(nnot_argmin > 0, 'pooled neighbourhood draw ('//mode//'): some particles leave the argmin''s state')
         call assert_true(nextra_not_argmin > 0, 'pooled neighbourhood draw ('//mode//'): such particles get extras')
         rec = tab%get_readout()
@@ -895,6 +898,12 @@ contains
             entry_dist = rows(ri_loc,i_loc)%dist
             if( refined(ri_loc,i_loc) ) entry_dist = entry_dist - 50.
         end function entry_dist
+
+        !> the entry's shift posterior width, distinct per reference and particle
+        real function entry_sdev( ri_loc, i_loc )
+            integer, intent(in) :: ri_loc, i_loc
+            entry_sdev = 0.1 * real(ri_loc) + 0.001 * real(i_loc)
+        end function entry_sdev
 
     end subroutine test_neigh_pooled_extras
 

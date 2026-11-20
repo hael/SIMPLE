@@ -537,3 +537,11 @@ it is applied to.
     reason alone. Tests: `sigma2_anchor` `test_shift_frame` (the residual is taken at the particle-frame shift;
     the fixture discriminates) and the recovery's view-off branch, whose diagnostic is now an assertion (bank
     residual at the native shift = joint cost within 1e-4; the unrotated increment differs).
+- 2026-11-20, session (on `4ac019e30`; Mazharul Hossain's review, Hans's ruling: the complete fix). When a refined
+  extra in the committed pose's basin beats it, `resolve_extra_poses_view` replaces the committed pose, but the
+  dynamic centring (`record_shift_state`) still took the original candidate's shift increment and its cell's
+  posterior width. A move of the replacing extra that reached the search bound then failed to widen the next
+  search. The insertion table's extras now carry their candidate's posterior width (`prob_insert_pose%sdev`, from
+  `prob_candidate%sdev` in `insert_table_add`), and the replacement hands its refined increment and that width to
+  `record_shift_state`. Only `cont_view` with `topk > 1` and dynamic centring changes. Test:
+  `test_neigh_pooled_extras` checks every extra's width against its candidate's.

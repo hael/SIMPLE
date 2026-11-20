@@ -89,8 +89,8 @@ contains
         real,                      allocatable :: view_wc(:)
         logical,                   allocatable :: view_counted(:)
         integer(int64)      :: view_counts(6)  !< view solves, sections cut, cost evaluations, extras solved, inserted, merged
-        integer             :: view_nptcls_ins = 0
-        real(dp)            :: view_wc_sum = 0.d0
+        integer             :: view_nptcls_ins
+        real(dp)            :: view_wc_sum
         type(cartft_calc), allocatable, target :: cftc_view !< the B-spline references of the view refinement (cont_view)
         type(ori)           :: orientation
         type(refine3D_ctrl) :: ctrl
@@ -242,7 +242,9 @@ contains
         allocate(view_nsolved(batchsz_max), view_nins(batchsz_max), view_nmerged(batchsz_max), source=0)
         allocate(view_wc(batchsz_max), source=1.)
         allocate(view_counted(batchsz_max), source=.false.)
-        view_counts = 0_int64
+        view_counts     = 0_int64
+        view_nptcls_ins = 0
+        view_wc_sum     = 0.d0
         call reads%new(p_ptr)
         call reads%expect(pinds(1:nptcls2update))
         ! the share read once into the particle buffer, for the batches and the reconstruction below; a cropped

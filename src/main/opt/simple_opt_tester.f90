@@ -714,7 +714,7 @@ contains
         spec%x = [0., 0.]
         call opt%minimize(spec, rec, lowest_cost)
         write(*,'(A,2ES24.16,A,I0,A,L1)') '  L7 solution ', spec%x_8, ', evaluations ', spec%nevals, ', converged ', spec%converged
-        call assert_true(spec%converged, 'L7: the factory reports the accepted point as converged after non-finite trials')
+        call assert_false(spec%converged, 'L7: the factory does not report the rejection limit as convergence')
         call assert_true(abs(spec%x_8(1) - X_ACCEPTED) < 1.e-9_dp .and. spec%x_8(2) == 0._dp, 'L7: the solution is the accepted point')
         call assert_int(10, spec%nevals, 'L7: the start, the accepted trial and the eight rejected ones')
         call assert_real(real((X_ACCEPTED - 2._dp)**2), lowest_cost, 1.e-6, 'L7: lowest_cost is the accepted point''s')
@@ -730,6 +730,7 @@ contains
         problem%nan_after = 2
         call lm_solve(problem, options, outcome)
         call assert_int(LM_ACCEPTED, outcome%status, 'L7: the rejection limit after an accepted step keeps LM_ACCEPTED')
+        call assert_false(outcome%converged, 'L7: the rejection limit is not convergence')
         call assert_int(1, outcome%naccepted, 'L7: one accepted step')
         call assert_true(abs(problem%x(1) - X_ACCEPTED) < 1.e-9_dp, 'L7: the engine returns the accepted point')
         ! maxits after an accepted step
@@ -737,12 +738,26 @@ contains
         options%maxits = 2
         call lm_solve(problem, options, outcome)
         call assert_int(LM_ACCEPTED, outcome%status, 'L7: maxits after an accepted step keeps LM_ACCEPTED')
+        call assert_false(outcome%converged, 'L7: maxits after an accepted step is not convergence')
         ! no accepted step: the start is returned as invalid numerics
         problem = clip_only_problem(over_curv=.true., nan_after=1)
         options%maxits = 40
         call lm_solve(problem, options, outcome)
         call assert_int(LM_INVALID_NUMERICS, outcome%status, 'L7: non-finite trials with no accepted step report invalid numerics')
+        call assert_false(outcome%converged, 'L7: a non-finite stop is not convergence')
         call assert_true(all(problem%x == 0._dp), 'L7: the start is returned')
+        ! finite throughout: each step halves the distance to x = 2 (curvature 4 over the true 2), so only the
+        ! gradient test (stationary_tol 1e-8, about 30 iterations) ends the solve; one iteration ends it at maxits
+        problem = clip_only_problem(over_curv=.true.)
+        call lm_solve(problem, options, outcome)
+        call assert_int(LM_ACCEPTED, outcome%status, 'L7: the finite solve accepts')
+        call assert_true(outcome%converged, 'L7: the gradient test ending the solve is convergence')
+        call assert_true(outcome%niter < options%maxits, 'L7: the gradient test ends it before maxits')
+        problem = clip_only_problem(over_curv=.true.)
+        options%maxits = 1
+        call lm_solve(problem, options, outcome)
+        call assert_int(LM_ACCEPTED, outcome%status, 'L7: one accepted step at maxits keeps LM_ACCEPTED')
+        call assert_false(outcome%converged, 'L7: one accepted step at maxits is not convergence')
     end subroutine test_lm_nonfinite_trial
 
     subroutine clip_only_eval( self, f, g, curv )

@@ -166,6 +166,7 @@ end type prob_readout
 type :: prob_insert_pose
     integer :: iref = 0, inpl = 0
     real    :: x = 0., y = 0., w = 0.
+    real    :: sdev = -1. !< the shift's posterior width at the entry (px; below zero: none), for the dynamic centring
 end type prob_insert_pose
 
 !> The weighted insertion's table of one iteration: per particle (the table's order) the committed pose's weight
@@ -1238,6 +1239,7 @@ contains
             self%poses(self%npose)%x    = cands(k)%x
             self%poses(self%npose)%y    = cands(k)%y
             self%poses(self%npose)%w    = w(k)
+            self%poses(self%npose)%sdev = cands(k)%sdev
         enddo
     end subroutine insert_table_add
 

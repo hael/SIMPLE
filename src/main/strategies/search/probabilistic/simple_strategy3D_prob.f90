@@ -47,7 +47,7 @@ contains
         class(oris),            intent(inout) :: os
         integer,                intent(in)    :: ithr
         integer :: iproj, iptcl_map, irot, istate, iref
-        real    :: corr, frac, sh(2), inpl_coord
+        real    :: corr, frac, sh(2), inpl_coord, sh_rec(2), sdev_rec
         logical :: inpl_valid, l_view_extras
         self%assignment_valid = .false.
         if( os%get_state(self%s%iptcl) > 0 )then
@@ -97,11 +97,14 @@ contains
             else
                 call assign_ori(self%s, iref, irot, corr, sh)
             endif
-            if( l_view_extras ) call self%resolve_extra_poses_view(iptcl_map)
+            ! the committed pose's shift increment and posterior width; an extra that replaces the pose replaces them
+            sh_rec   = sh
+            sdev_rec = self%spec%eulprob_obj_part%assgn_map(iptcl_map)%sdev
+            if( l_view_extras ) call self%resolve_extra_poses_view(iptcl_map, sh_rec, sdev_rec)
             ! the dynamic centring's state (shift_sigma > 0): this iteration's move and the particle's prior width for
-            ! its next search
-            if( self%s%p_ptr%l_centring ) call record_shift_state(self%s%b_ptr%spproj_field, self%s%iptcl, norm2(sh),&
-                &self%spec%eulprob_obj_part%assgn_map(iptcl_map)%sdev, self%s%p_ptr%shift_sigma, self%s%p_ptr%smpd,&
+            ! its next search, from the pose the particle keeps
+            if( self%s%p_ptr%l_centring ) call record_shift_state(self%s%b_ptr%spproj_field, self%s%iptcl, norm2(sh_rec),&
+                &sdev_rec, self%s%p_ptr%shift_sigma, self%s%p_ptr%smpd,&
                 &self%s%p_ptr%box, self%s%p_ptr%trs, self%s%b_ptr%pftc%get_kfromto())
             call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'frac', frac)
             self%assignment_valid = .true.
@@ -149,16 +152,18 @@ contains
     !! candidates takes the view solve from its own cell and shift; the committed pose (the project's, after commit_view)
     !! and the valid refined extras are merged into basins within the insertion cone of one another (merge_view_basins);
     !! each basin enters at its best pose with its members' posterior weights added, and the committed pose becomes
-    !! its basin's best when a refined extra beats it (the same hypothesis at its better optimum). A committed pose
-    !! whose view solve was invalid enters alone
-    subroutine resolve_extra_poses_view( self, iptcl_map )
+    !! its basin's best when a refined extra beats it (the same hypothesis at its better optimum); the dynamic
+    !! centring's move sh_rec and width sdev_rec then become that extra's (its refined shift increment, its table
+    !! entry's posterior width). A committed pose whose view solve was invalid enters alone
+    subroutine resolve_extra_poses_view( self, iptcl_map, sh_rec, sdev_rec )
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: iptcl_map
+        real,                   intent(inout) :: sh_rec(2), sdev_rec
         type(prob_insert_pose)        :: pose
         type(view_solve), allocatable :: vs(:)
         type(view_solve)              :: vs_c
         type(ori)                     :: o
-        real,    allocatable :: rmats(:,:,:), eulers(:,:), shifts(:,:), scores(:), w(:)
+        real,    allocatable :: rmats(:,:,:), eulers(:,:), shifts(:,:), scores(:), w(:), shincs(:,:), sdevs(:)
         integer, allocatable :: basin(:)
         logical, allocatable :: valid(:), best(:)
         real    :: euler(3), shvec(2), sh(2), corr, inpl_coord, wc
@@ -167,7 +172,7 @@ contains
         iloc   = self%spec%extra_poses%loc(self%s%iptcl)
         nextra = self%spec%extra_poses%nextra(iloc)
         allocate(vs(nextra), rmats(3,3,0:nextra), eulers(3,0:nextra), shifts(2,0:nextra), scores(0:nextra), w(0:nextra), &
-            &basin(0:nextra), valid(0:nextra), best(0:nextra))
+            &basin(0:nextra), valid(0:nextra), best(0:nextra), shincs(2,nextra), sdevs(nextra))
         do k = 1,nextra
             self%spec%extra_poses%w(self%spec%extra_poses%first(iloc) + k - 1) = 0.
         enddo
@@ -192,6 +197,10 @@ contains
             eulers(:,k)  = euler
             rmats(:,:,k) = euler2m(euler)
             shifts(:,k)  = shvec
+            ! the increment the stored shift took (candidate_pose: none without a shift search)
+            shincs(:,k)  = 0.
+            if( self%s%doshift ) shincs(:,k) = sh
+            sdevs(k)     = pose%sdev
             scores(k)    = vs(k)%score
             valid(k)     = vs(k)%evaluated
         enddo
@@ -215,6 +224,8 @@ contains
                 call o%set_euler(eulers(:,kbest))
                 call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'proj', real(self%s%b_ptr%eulspace%find_closest_proj(o)))
                 call self%s%set_view(vs(kbest))
+                sh_rec   = shincs(:,kbest)
+                sdev_rec = sdevs(kbest)
             else
                 wc = w(0)
             endif

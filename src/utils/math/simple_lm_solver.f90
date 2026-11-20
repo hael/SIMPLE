@@ -59,9 +59,13 @@ type :: lm_options
     logical,  allocatable :: active(:)
 end type lm_options
 
-!> The status (LM_*), the counters and the objective at the returned current point (prior excluded)
+!> The status (LM_*), the counters and the objective at the returned current point (prior excluded). The status
+!! describes the returned point; converged says whether a stopping test ended the solve: the gradient below
+!! stationary_tol, the predicted reduction below predicted_tol, or an accepted step or reduction negligible. maxits,
+!! the rejection limit, the observability veto and a non-finite stop are not convergence, whatever the status
 type :: lm_outcome
     integer  :: status      = LM_ITERATION_LIMIT
+    logical  :: converged   = .false.
     integer  :: niter       = 0 !< iterations begun
     integer  :: nevals      = 0 !< evaluations by eval (seed terms not counted)
     integer  :: nattempted  = 0 !< trial points proposed, infeasible ones included
@@ -215,7 +219,8 @@ contains
             endif
             ! keep any improvement already accepted when the solve stops
             if( sqrt(dot_product(scaled_g, scaled_g)) < options%stationary_tol )then
-                outcome%status = merge(LM_ACCEPTED, LM_NO_IMPROVEMENT, outcome%naccepted > 0)
+                outcome%status    = merge(LM_ACCEPTED, LM_NO_IMPROVEMENT, outcome%naccepted > 0)
+                outcome%converged = .true.
                 exit
             endif
             ! a coordinate the cost does not depend on (zero gradient and curvature) takes a zero step
@@ -258,9 +263,10 @@ contains
                 cycle
             endif
             ! stop unevaluated below what the objective resolves; the undamped step predicts more,
-            ! so this also ends a converged solve
+            ! so this also ends a converged solve (a start kept with every proposal capped is not one)
             if( predicted < options%predicted_tol*max(abs(total_f), LM_NUMERIC_FLOOR) )then
-                outcome%status = rejection_terminal_status(outcome%naccepted, bounded_trial)
+                outcome%status    = rejection_terminal_status(outcome%naccepted, bounded_trial)
+                outcome%converged = outcome%status /= LM_BOUND_REJECTED
                 exit
             endif
             outcome%nattempted = outcome%nattempted + 1
@@ -307,7 +313,10 @@ contains
                 rejection_multiplier = LM_INITIAL_REJECTION_MULT
                 outcome%status = LM_ACCEPTED
                 ! stop after an accepted but negligible step or reduction
-                if( problem%negligible_step(step) .or. relative_reduction < options%accepted_tol ) exit
+                if( problem%negligible_step(step) .or. relative_reduction < options%accepted_tol )then
+                    outcome%converged = .true.
+                    exit
+                endif
             else
                 call reject
                 if( consecutive_rejections >= LM_MAX_CONSECUTIVE_REJECTIONS ) exit

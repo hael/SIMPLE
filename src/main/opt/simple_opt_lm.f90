@@ -3,12 +3,13 @@
 ! x_8, the counts in nevals, ngevals and niter. Bounds: a coordinate on a bound whose gradient points outward is
 ! not free, and the free step is clipped to the box (lm_optimizer.md, decision 4). opt_callback runs after
 ! each accepted step and the objective is then evaluated again unless the callback cleared spec%callback_changed
-! (decision 5, ruling R10). The stops take L-BFGS-B's meaning of factr and pgtol (ruling R3).
+! (decision 5, ruling R10). The stops take L-BFGS-B's meaning of factr and pgtol (ruling R3), and converged its
+! meaning too: a stopping test ended the solve, not maxits or the rejection limit (ruling 2026-11-20).
 module simple_opt_lm
 use simple_core_module_api
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
-use simple_lm_solver, only: lm_problem, lm_options, lm_outcome, lm_solve, LM_ACCEPTED, LM_NO_IMPROVEMENT
+use simple_lm_solver, only: lm_problem, lm_options, lm_outcome, lm_solve
 implicit none
 
 public :: opt_lm
@@ -92,7 +93,8 @@ contains
         spec%x_8      = problem%x
         spec%x        = real(problem%x)
         spec%niter    = outcome%niter
-        spec%converged = outcome%status == LM_ACCEPTED .or. outcome%status == LM_NO_IMPROVEMENT
+        ! a stopping test ended the solve; the status (an accepted point at maxits included) is not convergence
+        spec%converged = outcome%converged
         lowest_cost   = real(outcome%f)
         problem%spec     => null()
         problem%fun_self => null()
