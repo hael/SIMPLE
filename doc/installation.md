@@ -16,25 +16,28 @@ README.
 - jbigkit 2 or newer, optional
 - Python 3.7 or newer for the core build; NICE currently requires Python 3.10-3.13
 
-SIMPLE always uses its pinned OpenBLAS and ARPACK-NG releases. Their build scratch lives in the build folder;
-their verified source archives and installed libraries persist outside it. OpenBLAS provides both BLAS and
-LAPACK, and ARPACK-NG is built against that same library. System BLAS, LAPACK and ARPACK libraries, including
-macOS Accelerate, are not selected. Each download is verified by its pinned SHA-256 checksum and retained under
-the gitignored `.deps/downloads/` directory.
+SIMPLE always uses its pinned OpenBLAS release, which provides both BLAS and LAPACK. Its build scratch lives
+in the build folder; the verified source archive and the installed static library persist outside it, the
+archive under the gitignored `.deps/downloads/` (checked against its pinned SHA-256), the library under
+`.deps/numerics/`. System BLAS and LAPACK libraries, including macOS Accelerate, are not selected.
 
-With GNU C and Fortran compilers and OpenMP enabled, SIMPLE builds the OpenMP flavour of OpenBLAS. Other
-toolchains build its pthreads flavour. The dependency summary printed by CMake reports the exact versions and
-flavour selected. The installed static OpenBLAS and ARPACK-NG libraries live under `.deps/numerics/`, outside
-the disposable `build/` directory. The cache key includes the platform, architecture, compiler versions and
-threading flavour; its recipe record additionally includes the compiler paths and build flags. Consequently
-`compile_clean.sh`, `compile_debug.sh` and other clean rebuilds reuse compatible libraries without compiling or
-installing them again. A changed recipe rebuilds the affected cache; remove `.deps/numerics/` only when you
-deliberately want to force every cached numerical configuration to rebuild.
+With GNU C and Fortran compilers and OpenMP enabled, SIMPLE builds the OpenMP flavour of OpenBLAS: a product
+called from serial code runs on SIMPLE's OpenMP threads, a product called inside one of SIMPLE's OpenMP teams
+stays on the calling thread. CMake picks the GNU C compiler that sits beside the chosen gfortran
+(`cmake/AutoDetectGCC.cmake`), so Homebrew GCC on macOS takes this path too. Only a C compiler set by hand that
+cannot share the Fortran OpenMP runtime (AppleClang) gets the sequential flavour with its locked allocator:
+every product runs on the calling thread. The dependency summary printed by CMake reports the version and
+flavour. The cache key includes the platform,
+architecture, compiler versions and flavour; the recipe record beside the library additionally includes the
+compiler paths and build flags. Consequently `compile_clean.sh`, `compile_debug.sh` and other clean rebuilds
+reuse a compatible library without compiling it again, and a changed recipe rebuilds it. Remove
+`.deps/numerics/` only to force every cached configuration to rebuild.
 
-The OpenMP build permits four OpenBLAS calculation calls to execute concurrently (`NUM_PARALLEL=4`), covering
-the four-caller CI contract. OpenBLAS 0.3.34 safely waits when a larger SIMPLE OpenMP team reaches that limit;
-the fixed cap avoids the large buffer footprint that would result from sizing the library for every possible
-runtime thread count.
+The library is built with `NUM_THREADS=128`, independent of the machine that builds it. That caps a
+serial-region product at 128 threads and sizes the library's buffer table, which every thread inside a BLAS
+call holds a slot of: SIMPLE's teams stay within the core count, so any node with up to 128 cores is covered.
+OpenBLAS does not wait at that limit: it warns on stderr ("precompiled NUM_THREADS exceeded"), then corrupts
+its table and crashes. A larger node needs a larger pin in `cmake/Dependencies.cmake`.
 
 ## Obtain The Source
 
@@ -216,7 +219,7 @@ make distclean
 
     Add brew to your path
 
-2. Install git, gcc, make, libtiff, jbigkit and cmake. Install Python 3.12 for NICE. SIMPLE builds its pinned OpenBLAS and ARPACK-NG itself.
+2. Install git, gcc, make, libtiff, jbigkit and cmake. Install Python 3.12 for NICE. SIMPLE builds its pinned OpenBLAS itself.
 
         brew install git
         brew install cmake

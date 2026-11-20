@@ -84,7 +84,7 @@ https://zenodo.org/records/18789533
 -   macOS 10.10+
 -   CMake ≥ 3.5
 -   GNU gcc & gfortran ≥ 14.2
--   GNU make or make (SIMPLE downloads and builds its pinned OpenBLAS and ARPACK-NG)
+-   GNU make or make (SIMPLE downloads and builds its pinned OpenBLAS)
 -   FFTW ≥ 3.3 (double + single + threaded builds)
 -   libcurl ≥ 7 
 -   libTIFF ≥ 4 
@@ -123,11 +123,12 @@ cmake ..
 make -j install
 ```
 
-The first build downloads and compiles SIMPLE's pinned OpenBLAS and ARPACK-NG.
-They are cached under `.deps/numerics/`, outside `build/`, so clean Debug and
-Release recompiles reuse the same compatible libraries instead of rebuilding
-them. The OpenMP build supports four simultaneous OpenBLAS calculation calls;
-larger caller teams wait safely at that bounded concurrency limit.
+The first build downloads and compiles SIMPLE's pinned OpenBLAS, which provides
+BLAS and LAPACK. It is cached under `.deps/numerics/`, outside `build/`, so clean
+Debug and Release recompiles reuse the same library instead of rebuilding it.
+Inside SIMPLE's OpenMP teams the library stays on the calling thread; from serial
+code it uses SIMPLE's threads. It is sized for nodes of up to 128 cores
+(`NUM_THREADS` in `cmake/Dependencies.cmake`).
 
 ------------------------------------------------------------------------
 

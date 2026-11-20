@@ -237,11 +237,11 @@ if(BUILD_TESTS)
     simple_add_test(unit_${_area} fast 600 1
       COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=unit_${_area})
     # Thread-consistency tests override the default team size. Bound their teams
-    # and BLAS workers so parallel suites fit shared-host thread quotas.
+    # so parallel suites fit shared-host thread quotas; the BLAS follows the
+    # OpenMP thread count and needs no variable of its own.
     set_property(TEST unit_${_area} APPEND PROPERTY ENVIRONMENT
       "OMP_WAIT_POLICY=PASSIVE"
       "OMP_THREAD_LIMIT=4"
-      "OPENBLAS_NUM_THREADS=1"
     )
   endforeach()
 

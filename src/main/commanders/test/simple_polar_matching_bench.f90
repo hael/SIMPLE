@@ -69,7 +69,7 @@ type :: pmb_fill_result
     integer :: projs_ns = 0                         !< the dense 3D fill's refined-reference budget (the iteration's model)
 end type pmb_fill_result
 
-! the BLAS of the build, called inside the OpenMP team: run with a single-threaded BLAS (OPENBLAS_NUM_THREADS=1)
+! the BLAS of the build, called inside the OpenMP team, where it stays on the calling thread (SIMPLE_BLAS_TEAM_SAFE)
 interface
     subroutine cgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
         import :: sp

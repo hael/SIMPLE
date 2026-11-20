@@ -51,9 +51,8 @@ To work in VS Code, install the Claude Code extension. It uses the same
 
 - GNU `gcc`, `g++` and `gfortran` 14.2 or newer
 - CMake
-- GNU make or make (CMake always downloads and builds SIMPLE's pinned OpenBLAS
-  and ARPACK-NG once, then reuses the compatible `.deps/numerics/` cache across
-  clean build trees)
+- GNU make or make (CMake downloads and builds SIMPLE's pinned OpenBLAS once,
+  then reuses the compatible `.deps/numerics/` cache across clean build trees)
 - FFTW 3.3 with its double, single and threaded builds
 - libcurl and libTIFF
 - Python 3.7 or newer for the build scripts and the fast gate
@@ -74,7 +73,7 @@ sudo dnf install -y ripgrep     # from EPEL on enterprise Linux
 
 On macOS, follow the "New Mac Installation" section of
 [doc/installation.md](../installation.md) (Homebrew GCC, make and FFTW;
-SIMPLE builds its own numerical libraries).
+SIMPLE builds its own OpenBLAS).
 
 ## Step 3. Make the toolchain visible to every shell (the session proposes, you approve)
 

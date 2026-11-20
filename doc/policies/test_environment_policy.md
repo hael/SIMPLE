@@ -67,12 +67,11 @@ of consuming a shared host's CPU quota. Thread-consistency checks can request
 larger teams than the default `OMP_NUM_THREADS=1`; active waiting in those
 teams can starve the other suites on CPU-limited login nodes.
 
-The fast-suite environment also sets `OMP_THREAD_LIMIT=4` and
-`OPENBLAS_NUM_THREADS=1`. The OpenMP limit bounds actual
-teams even when a tester calls `omp_set_num_threads(omp_get_num_procs())`;
-the BLAS limit prevents independent numerical-library worker pools from
-multiplying across concurrent suites. Thread-consistency checks still run
-with multiple workers. Full-machine thread stress can be run directly through
+The fast-suite environment also sets `OMP_THREAD_LIMIT=4`, which bounds
+actual teams even when a tester calls `omp_set_num_threads(omp_get_num_procs())`.
+The BLAS needs no limit of its own: SIMPLE's OpenBLAS threads a serial-region
+product on the OpenMP threads and stays on the calling thread inside a team.
+Thread-consistency checks still run with multiple workers. Full-machine thread stress can be run directly through
 `simple_test_exec` without these CTest limits.
 
 `compile_coarrays.sh` runs the same fast gate as the other build scripts and
@@ -948,8 +947,8 @@ minutes after the push. A newer push cancels the build of an older one.
   macOS a Debug build with `./compile_debug.sh` and the NICE GUI with
   `./compile_gui.sh`, plus the coarray configuration with
   `./compile_coarrays.sh` where the platform has it. Every configuration uses
-  SIMPLE's bundled OpenBLAS and ARPACK-NG. Each compile script runs the fast
-  gate before installing.
+  SIMPLE's bundled OpenBLAS. Each compile script runs the fast gate before
+  installing.
 - `ci_test.yml` runs the longer labels as a matrix of groups, each a job of its
   own on Linux and macOS with its own clean Release build (`./compile_clean.sh`,
   fast gate included; a failed build runs no tests) and its own time limit:

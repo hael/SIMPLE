@@ -158,8 +158,8 @@ endif()
 # toolset compiler (e.g. gcc-toolset-15 on Oracle/RHEL 8) otherwise loads the
 # system's older libgfortran.so.5 (GCC 8.5 there), whose internal WRITE frees
 # its unit number without the unit lock: internal I/O on several OpenMP threads
-# at once corrupted the heap (2026-11-17). System libraries built against the
-# shared runtime (ARPACK, OpenBLAS) keep loading it for their own calls.
+# at once corrupted the heap (2026-11-17). The bundled OpenBLAS is compiled by
+# the same gfortran and linked statically, so no shared Fortran runtime loads.
 if(NOT APPLE)
     string(APPEND CMAKE_EXE_LINKER_FLAGS " -static-libgfortran")
 endif()
