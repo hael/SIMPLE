@@ -23,6 +23,7 @@ contains
         nfail0 = tests_failed
         call enter_fixture('sigma2_anchor', saved, root)
         call test_smoothing_and_persistence()
+        call test_current_anchor()
         call test_invalid_companions()
         call test_band_readout()
         call test_log_blend()
@@ -206,6 +207,34 @@ contains
         call read_sigma2_anchor(STORE, again, status, message)
         call assert_true(all(abs(again-10.*anchor)<2.e-5), 'rebuilt bootstrap supplies the new anchor spectra')
     end subroutine test_smoothing_and_persistence
+
+    !> A refinement controller's start smooths the committed spectra of any provenance and replaces the companion.
+    subroutine test_current_anchor()
+        real(real32) :: input(NSH,2)
+        real(real32), allocatable :: anchor(:,:)
+        integer :: k, status
+        character(len=512) :: message
+        write(*,'(A)') 'test_current_anchor'
+        input(:,1) = [(exp(-1.+0.05*k-0.001*k*k), k=1,NSH)]
+        input(:,2) = [(exp(-2.+0.1*k+0.002*k*k), k=1,NSH)]
+        call write_store(input, 5_int64, SIGMA2_PROV_RESIDUAL, 789_int64)
+        call prepare_sigma2_anchor(STORE, status, message)
+        call assert_true(status /= 0, 'a residual store without companion still stops a continuation')
+        call prepare_sigma2_anchor(STORE, status, message, from_current=.true.)
+        call assert_int(0, status, 'the starting residual spectra make the anchor: '//trim(message))
+        call read_sigma2_anchor(STORE, anchor, status, message)
+        call assert_int(0, status, 'read the starting-spectra anchor: '//trim(message))
+        if( status /= 0 ) return
+        call assert_true(all(abs(anchor-input)<2.e-6), 'the anchor is the smoothed starting spectra')
+        call prepare_sigma2_anchor(STORE, status, message)
+        call assert_int(0, status, 'a later stage verifies the starting-spectra companion')
+        input = 4.*input
+        call write_store(input, 6_int64, SIGMA2_PROV_RESIDUAL, 789_int64)
+        call prepare_sigma2_anchor(STORE, status, message, from_current=.true.)
+        call assert_int(0, status, 'a new start replaces the companion')
+        call read_sigma2_anchor(STORE, anchor, status, message)
+        call assert_true(all(abs(anchor-input)<8.e-6), 'the replaced anchor smooths the new starting spectra')
+    end subroutine test_current_anchor
 
     subroutine test_invalid_companions()
         real(real32) :: input(NSH,2)

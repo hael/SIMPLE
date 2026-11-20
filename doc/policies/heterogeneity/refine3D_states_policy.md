@@ -171,6 +171,11 @@ competitive evidence state-dependent.
 Every planned frequency block is executed so the workflow reaches `lpstop`;
 state-overlap diagnostics do not terminate the march at an earlier bandwidth.
 
+With `sigma2_anneal=yes` (the default) the march scores against the
+log-smoothed spectra it starts from and ramps to model-based noise over its
+last three planned iterations, whose blocks run their whole budgets; the
+missing-update pass scores with measured noise (`doc/policies/3D/refine3D_policy.md`, section 5.1).
+
 ## 5. Relation to `solve3D`
 
 `solve3D` does not hand off to `refine3D_states`. Its multi-state runs

@@ -110,6 +110,7 @@ contains
     !! that defines the scoring (limits, crop, mask, source, filtering) and
     !! drops only what samples, assembles, trails or seeds.
     subroutine prepare_residual_sigma2_pass_cline( template_cline, iter, nstates, vols, cline_sigma )
+        use simple_default_clines, only: strip_sigma2_anneal_args
         class(cmdline), intent(in)    :: template_cline
         integer,        intent(in)    :: iter, nstates
         class(string),  intent(in)    :: vols(:)
@@ -141,10 +142,7 @@ contains
         call cline_sigma%delete('frozen_carry')
         call cline_sigma%delete('ufrac_trec')
         call cline_sigma%delete('sticky_sampling')
-        call cline_sigma%delete('sigma2_anneal')
-        call cline_sigma%delete('sigma2_weight_start')
-        call cline_sigma%delete('sigma2_weight_end')
-        call cline_sigma%delete('sigma2_weight')
+        call strip_sigma2_anneal_args(cline_sigma)
         call cline_sigma%delete('postprocess')
         call cline_sigma%delete('combine_eo')
         call cline_sigma%delete('outfile')

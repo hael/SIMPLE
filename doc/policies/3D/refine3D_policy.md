@@ -280,21 +280,38 @@ subsequent reconstruction uses the newly recorded labels without reassigning the
 
 ### 5.1 Sigma2 bootstrap contract
 
-Polar particle matching can opt into `sigma2_anneal=yes` (default `no`; the key
-is on solve3D's interface and is internal to refine3D). The refinement owner saves or verifies the smoothed bootstrap anchor, interpolates
-`sigma2_weight_start` to `sigma2_weight_end` over the iteration budget, and
-passes the current `sigma2_weight` to workers. A standalone enabled refinement
-defaults to -1 through 1; solve3D supplies its stage bounds (see the solve3D
-policy). Negative weights blend the white ceiling into the smoothed bootstrap;
-nonnegative weights blend the bootstrap into current residual spectra. The
-last iteration reaches the endpoint exactly, including a one-iteration run.
-A standalone ramp is the run's whole schedule, so convergence cannot end it
-short of its endpoint; a solve3D stage, whose bounds the controller supplies,
-exits on convergence like any stage. Each iteration logs the weight and the
-mean log ratio of measured to bootstrap noise over the matching band. Reconstruction and residual
-estimation use measured spectra throughout, and residual-only and assembly
-child commands discard scoring-annealing arguments. Cartesian refinement and
-continuous follow-up do not support this option.
+Euclidean particle matching can opt into `sigma2_anneal=yes` (default `yes` in
+solve3D, refine3D_auto, refine3D_local and refine3D_states; `no` in refine3D, where
+the key is internal). The refinement owner saves or verifies the smoothed anchor,
+interpolates `sigma2_weight_start` to `sigma2_weight_end`, and passes the current
+`sigma2_weight` to workers. Negative weights blend the white ceiling into the
+anchor; nonnegative weights blend the anchor into current residual spectra. The
+last iteration of a ramp reaches its endpoint exactly, including a one-iteration
+run.
+
+- A solve3D stage gets its bounds from the controller, ramps over its budget and
+  exits on convergence like any stage (see the solve3D policy).
+- A standalone ramp (no `sigma2_weight_end` on the command line) starts at -1
+  unless given and reaches 1 at `minits` (the budget's end without `minits`);
+  convergence cannot end it before then.
+- refine3D_auto and refine3D_local smooth the committed spectra the run starts
+  from into the anchor (the fresh bootstrap of auto; the staged model noise of
+  local, or the bootstrap when none is staged) and run a standalone ramp from
+  0: model noise by `minits` (3, or `maxits` when given). The registration pass
+  scores with measured noise.
+- refine3D_states makes the anchor the same way before its frequency march,
+  scores at the anchor (weight 0), and ramps to 1 over the march's last three
+  planned iterations, which reach into the block before a short last block. A
+  block in the ramp gets its bounds and runs its whole budget. The
+  missing-update pass scores with measured noise.
+
+The anchor of a fresh run is the log-Savitzky–Golay smoothed bootstrap; only a
+refinement controller's start smooths spectra of another provenance
+(`prepare_start_sigma_anchor`). Each iteration logs the weight and the mean log
+ratio of measured to anchor noise over the matching band. Polar and Cartesian
+scoring (`refine=cont`, the `pose_cont` follow-up) see the blend; reconstruction
+and residual estimation use measured spectra throughout, and residual-only and
+assembly child commands discard scoring-annealing arguments.
 
 Work that has alignments, or nothing at all, but no noise-power estimate is
 one problem: a fresh solve3D start, the ini3D routes, external starting

@@ -76,6 +76,7 @@ contains
         use simple_commanders_euclid,            only: commander_calc_pspec
         use simple_gui_communicator,             only: gui_communicator
         use simple_refine3D_strategy,            only: strip_refine3D_search_only_args
+        use simple_strategy_sigma2,              only: prepare_start_sigma_anchor
         use simple_strategy3D_cont,              only: check_cont_seeds
         use simple_refine3D_fnames,              only: refine3D_state_vol_fname
         use simple_defs,                         only: logfhandle
@@ -219,6 +220,7 @@ contains
         if( .not. cline%defined('nsample')     ) call cline%set('nsample',          25000)
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform')
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! automatic density-envelope masking
+        if( .not. cline%defined('sigma2_anneal')) call cline%set('sigma2_anneal',    'yes')
 
         ! Explicit maxits also sets minits; otherwise allow at least three
         ! iterations for the startup model to be superseded.
@@ -320,6 +322,11 @@ contains
             if( l_followup ) call cline%set('pose_cont', 'yes')
         endif
         call cline%set('maxits',             params%maxits)
+        ! scoring-noise annealing: from the smoothed spectra the run starts from to model noise by minits
+        if( params%sigma2_anneal == 'yes' )then
+            call prepare_start_sigma_anchor(params%projfile)
+            call cline%set('sigma2_weight_start', 0.)
+        endif
         call xrefine3D%execute(cline)
 
         ! Reconstruct all eligible particles at native sampling. The shared helper
@@ -664,6 +671,7 @@ contains
         use simple_commander_base,  only: commander_base
         use simple_defs,            only: TINY, logfhandle
         use simple_error,           only: simple_exception
+        use simple_default_clines,  only: strip_sigma2_anneal_args
         class(parameters), intent(in)        :: params
         class(cmdline), intent(inout)        :: cline
         class(commander_base), intent(inout) :: xrefine3D
@@ -737,6 +745,7 @@ contains
         ! Use every particle, regardless of the main run's sampling policy.
         call cline_pass%delete('update_frac')
         call cline_pass%delete('nsample')
+        call strip_sigma2_anneal_args(cline_pass)
         call xrefine3D%execute(cline_pass)
         call cline_pass%kill
         ! Reassignment is measured against the basin width at the pass band.
@@ -835,6 +844,7 @@ contains
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',               'no')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap', STATE_OVERLAP_NEIGH_REFINE3D_STATES)
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol',               'no')
+        if( .not. cline%defined('sigma2_anneal')) call cline%set('sigma2_anneal',        'yes')
         call states_ctrl%read_maxits(cline)
         call params%new(cline)
         l_gui_comm_active = params%niceserver .ne. "" .and. params%niceprocid > 0
@@ -1715,7 +1725,7 @@ contains
         type(string)     :: filt_mode_arg, refine_arg
         character(len=STDLEN) :: errmsg
         logical          :: converged, l_anneal
-        integer          :: niters, it_tail
+        integer          :: niters, it_tail, nits_sigma2_ramp
         real             :: beta_start
         ! the modes the 3D matcher implements, refused here so that a distributed master never
         ! waits for workers that stop on an unknown mode
@@ -1776,12 +1786,16 @@ contains
         endif
         beta_start = params%prob_beta
         l_anneal   = params%l_prob_align_mode .and. abs(params%prob_beta_end - beta_start) > TINY
+        ! a stage (bounds from solve3D) ramps over its budget; a standalone ramp reaches its end at minits
+        nits_sigma2_ramp = params%maxits
+        if( .not. cline%defined('sigma2_weight_end') .and. params%minits > 0 ) &
+            &nits_sigma2_ramp = min(params%minits, params%maxits)
         do
             niters            = niters + 1
             params%which_iter = params%which_iter + 1
             params%extr_iter  = params%extr_iter  + 1
             if( params%sigma2_anneal == 'yes' )then
-                params%sigma2_weight = sigma2_stage_weight(niters, params%maxits, &
+                params%sigma2_weight = sigma2_stage_weight(niters, nits_sigma2_ramp, &
                     &params%sigma2_weight_start, params%sigma2_weight_end)
                 call cline%set('sigma2_weight', params%sigma2_weight)
                 write(logfhandle,'(A)') log_item('SIGMA2 ANNEAL', 'weight '//fmt_dec(params%sigma2_weight, 3))

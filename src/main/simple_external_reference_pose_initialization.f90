@@ -21,6 +21,7 @@ contains
     !! 5 deg with the shift search, 97 % without); the stages that follow refine the shifts
     subroutine initialize_poses_against_external_references( params, parent_cline, xrefine3D, xrec3D, &
         &nactive, reference_vols, checkpoint_vols, pose_init_iter, lp_init, l_all_rows, l_poseless )
+        use simple_default_clines, only: strip_sigma2_anneal_args
         class(parameters),     intent(in)    :: params
         class(cmdline),        intent(inout) :: parent_cline
         class(commander_base), intent(inout) :: xrefine3D, xrec3D
@@ -65,10 +66,7 @@ contains
         call cline_pose_init%set('trail_rec',       'no')
         ! one pass over its own sample: the stage's sticky subset is not this pass's
         call cline_pose_init%delete('sticky_sampling')
-        call cline_pose_init%delete('sigma2_anneal')
-        call cline_pose_init%delete('sigma2_weight_start')
-        call cline_pose_init%delete('sigma2_weight_end')
-        call cline_pose_init%delete('sigma2_weight')
+        call strip_sigma2_anneal_args(cline_pose_init)
         call cline_pose_init%set('volrec',          'no')
         call cline_pose_init%set('cc_emit_sigma',   'yes')
         call cline_pose_init%set('update_frac',     ufrac_pose_init)

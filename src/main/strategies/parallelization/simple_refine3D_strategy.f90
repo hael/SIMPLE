@@ -589,15 +589,13 @@ contains
     !> Remove refine3D matcher-only options before invoking child workflows.
     !! The parent and distributed matcher workers retain these options.
     subroutine strip_refine3D_search_only_args( cline )
+        use simple_default_clines, only: strip_sigma2_anneal_args
         type(cmdline), intent(inout) :: cline
         call cline%delete('pose_cont')
         call cline%delete('cont_prior')
         call cline%delete('cont_prior_rot_sigma')
         call cline%delete('cont_prior_shift_sigma')
-        call cline%delete('sigma2_anneal')
-        call cline%delete('sigma2_weight_start')
-        call cline%delete('sigma2_weight_end')
-        call cline%delete('sigma2_weight')
+        call strip_sigma2_anneal_args(cline)
     end subroutine strip_refine3D_search_only_args
 
     !> Strategy selection based on command-line shape.
@@ -1325,6 +1323,7 @@ contains
             self%params_followup%update_frac   = params%update_frac
             self%params_followup%l_update_frac = params%l_update_frac
             self%params_followup%l_trail_rec   = params%l_trail_rec
+            self%params_followup%sigma2_weight = params%sigma2_weight
             call build%build_strategy3D_tbox(self%params_followup)
             ! no new sigma2 transaction: the continuous pass rewrites the discrete pass's ranges from them
             call refine3D_exec(self%params_followup, build, cline_followup, iter, converged, l_write_partial_recs)

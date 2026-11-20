@@ -102,6 +102,11 @@ sigmas from the particle power spectra (`calc_pspec`), and uses its
 `vol_state01.mrc` as the initial reference. A starting volume, when available,
 enters that pass only as its `vol1` (the lag-one reference).
 
+With `sigma2_anneal=yes` (the default) refine3D_auto and refine3D_local score
+against the log-smoothed spectra the refinement starts from and reach
+model-based noise by `minits`; convergence cannot end the run earlier
+(`doc/policies/3D/refine3D_policy.md`, section 5.1).
+
 For an explicit external `vol1`, `ref_pose_init=cc` selects the shared
 external-reference transition. Before its fixed-reference CC pass, the service
 runs the normal native-grid particle-image sigma2 bootstrap. In the initialized

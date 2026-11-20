@@ -24,7 +24,7 @@ type euclid_sigma2
     class(parameters),    pointer :: p_ptr => null()
     real,    allocatable, public  :: sigma2_noise(:,:)      !< the two global spectra (shell, half): column sigma2_half(eo)
     real,    allocatable          :: sigma2_part(:,:)       !< the residual records of this part (matchers only)
-    real,    allocatable          :: sigma2_scoring(:,:)    !< anchor/measured log blend, attached only by the 2D matcher
+    real,    allocatable          :: sigma2_scoring(:,:)    !< anchor/measured log blend of scoring-noise annealing
     integer                       :: fromp
     integer                       :: top
     integer                       :: kfromto(2) = 0
@@ -48,6 +48,8 @@ contains
     procedure          :: read_pending_range
     procedure          :: read_global
     procedure          :: anneal_for_scoring
+    procedure          :: form_scoring_sigma2
+    procedure          :: set_cart_sigma2
     procedure          :: prep_fplane_grid
     procedure, private :: calc_sigma2_pftc
     procedure, private :: calc_sigma2_cart
@@ -182,14 +184,27 @@ contains
         call self%fplane%kill
     end subroutine read_global
 
-    !> Attach the bootstrap/measured log blend to matching; reconstruction and residuals retain measured spectra.
-    !! A weight in [-1,0) blends the flat ceiling of the anchor over the matching band (-1) into the anchor (0).
+    !> Attach the scoring spectra of weight (form_scoring_sigma2) to the polar calculator.
     subroutine anneal_for_scoring( self, pftc, weight )
+        class(euclid_sigma2), target, intent(inout) :: self
+        class(polarft_calc),          intent(inout) :: pftc
+        real,                         intent(in)    :: weight
+        call self%form_scoring_sigma2(weight)
+        self%spectra_gen = self%spectra_gen + 1_int64
+        if( allocated(self%sigma2_scoring) )then
+            call pftc%assign_sigma2_noise(self%sigma2_scoring, self%spectra_gen)
+        else
+            call pftc%assign_sigma2_noise(self%sigma2_noise, self%spectra_gen)
+        endif
+    end subroutine anneal_for_scoring
+
+    !> The anchor/measured log blend of scoring; none at weight 1 (measured). Reconstruction and residuals retain
+    !! measured spectra. A weight in [-1,0) blends the flat ceiling of the anchor over the matching band (-1) into the anchor (0).
+    subroutine form_scoring_sigma2( self, weight )
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
         use simple_sigma2_anchor, only: read_sigma2_anchor, blend_sigma2, sigma2_flat_ceiling
-        class(euclid_sigma2), target, intent(inout) :: self
-        class(polarft_calc), intent(inout) :: pftc
-        real, intent(in) :: weight
+        class(euclid_sigma2), intent(inout) :: self
+        real,                 intent(in)    :: weight
         real(real32), allocatable :: spectra(:,:), flat(:,:)
         integer :: status, band(2)
         character(len=STDLEN) :: message
@@ -198,21 +213,17 @@ contains
         if( weight < -1. .or. weight > 1. ) THROW_HARD('sigma2 scoring weight must be in [-1,1]')
         if( self%p_ptr%oritype /= 'ptcl2D' .and. self%p_ptr%oritype /= 'ptcl3D' ) &
             &THROW_HARD('sigma2_anneal requires particle matching')
-        if( weight == 1. )then
-            self%spectra_gen = self%spectra_gen + 1_int64
-            call pftc%assign_sigma2_noise(self%sigma2_noise, self%spectra_gen)
-            return
-        endif
+        if( allocated(self%sigma2_scoring) ) deallocate(self%sigma2_scoring)
+        if( weight == 1. ) return
         call read_sigma2_anchor(self%binfname%to_char(), spectra, status, message)
         if( status /= 0 ) THROW_HARD(trim(message))
         if( size(spectra,1) /= self%kfromto(2)-self%kfromto(1)+1 ) &
             &THROW_HARD('sigma2 anchor has incompatible shell bounds')
-        if( allocated(self%sigma2_scoring) ) deallocate(self%sigma2_scoring)
         allocate(self%sigma2_scoring(self%kfromto(1):self%kfromto(2),2))
         if( weight < 0. )then
             band = self%p_ptr%kfromto
             if( band(1) < self%kfromto(1) .or. band(2) > self%kfromto(2) .or. band(2) < band(1) ) &
-                &THROW_HARD('matching band outside the sigma2 anchor; anneal_for_scoring')
+                &THROW_HARD('matching band outside the sigma2 anchor; form_scoring_sigma2')
             band = band + lbound(spectra,1) - self%kfromto(1)
             allocate(flat, mold=spectra)
             call sigma2_flat_ceiling(spectra(band(1):band(2),:), flat, status)
@@ -222,9 +233,19 @@ contains
             call blend_sigma2(spectra, self%sigma2_noise, weight, self%sigma2_scoring, status)
         endif
         if( status /= 0 ) THROW_HARD('invalid sigma2 scoring blend')
-        self%spectra_gen = self%spectra_gen + 1_int64
-        call pftc%assign_sigma2_noise(self%sigma2_scoring, self%spectra_gen)
-    end subroutine anneal_for_scoring
+    end subroutine form_scoring_sigma2
+
+    !> A Cartesian batch's spectra: the scoring blend while annealing, otherwise the measured spectra.
+    subroutine set_cart_sigma2( self, cftc )
+        class(euclid_sigma2), intent(in)    :: self
+        class(cartft_calc),   intent(inout) :: cftc
+        if( allocated(self%sigma2_scoring) )then
+            call cftc%set_sigma2(lbound(self%sigma2_scoring,1), self%sigma2_scoring)
+        else
+            if( .not. allocated(self%sigma2_noise) ) THROW_HARD('a Euclidean Cartesian batch requires sigma2')
+            call cftc%set_sigma2(lbound(self%sigma2_noise,1), self%sigma2_noise)
+        endif
+    end subroutine set_cart_sigma2
 
     !> The reconstruction-plane grid of a padded box box_croppd with the two spectra attached from shell
     !! kfrom (fplane): built once and kept while the box, the shell and the spectra stay the same

@@ -214,7 +214,7 @@ stage. `refine3D` then treats `maxits` as the run length for that stage.
 
 ### Scoring-noise annealing
 
-Particle `solve3D` accepts `sigma2_anneal=yes|no`, default `no`. With `yes`,
+Particle `solve3D` accepts `sigma2_anneal=yes|no`, default `yes`. With `yes`,
 matching starts from a white spectrum, reaches the saved smoothed bootstrap
 over stages 1–4 (the sticky sampling window), then reaches the current
 model-residual spectra over stages 5–6. Stages 7–8 use model-residual spectra

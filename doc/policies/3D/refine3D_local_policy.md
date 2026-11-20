@@ -74,6 +74,8 @@ source paths before run-directory creation, stages the saved map pair, reuses a
 committed sigma file only after validation against the selected work-project
 rows and its producer record, and delegates a missing or incompatible sigma state to the existing
 bootstrap owner. It skips the startup particle-power and reconstruction passes.
+Under `sigma2_anneal=yes` (the default) the staged spectra, log-smoothed, are the
+scoring anchor (`refine3D_policy.md`, section 5.1).
 A missing FSC is calculated from the saved half maps. The matcher prepares its
 Cartesian references from those maps. A compatible recorded NU bundle carries
 its filtered maps, local-resolution map, recorded masks and matching LP into the

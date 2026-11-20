@@ -98,27 +98,39 @@ contains
     end subroutine sigma2_anchor_band_stats
 
     !> The owner saves a bootstrap once; later stages and restarts verify the same companion.
-    subroutine prepare_sigma2_anchor( committed, status, message )
-        character(len=*), intent(in) :: committed
-        integer, intent(out) :: status
-        character(len=*), intent(out) :: message
+    !! from_current (a refinement controller's start): smooth the committed spectra of any provenance, replacing a companion.
+    subroutine prepare_sigma2_anchor( committed, status, message, from_current )
+        character(len=*),  intent(in)  :: committed
+        integer,           intent(out) :: status
+        character(len=*),  intent(out) :: message
+        logical, optional, intent(in)  :: from_current
         type(sigma2_state_header) :: header
         real(real32), allocatable :: spectra(:,:), smoothed(:,:)
         character(len=:), allocatable :: fname, candidate
         integer :: unit, half
-        logical :: exists
+        logical :: exists, l_current
+        l_current = .false.
+        if( present(from_current) ) l_current = from_current
         call sigma2_state_read_header(committed, header, status, message)
         if( status /= 0 ) return
         fname = trim(committed)//'.anchor'
-        inquire(file=fname, exist=exists)
-        if( exists .and. header%provenance /= SIGMA2_PROV_PSPEC )then
-            call read_sigma2_anchor(committed, spectra, status, message)
-            return
-        endif
-        if( header%provenance /= SIGMA2_PROV_PSPEC .or. header%state /= SIGMA2_STATE_COMMITTED )then
-            status = 1
-            message = 'sigma2_anneal needs its saved bootstrap; start a fresh run to create it'
-            return
+        if( l_current )then
+            if( header%state /= SIGMA2_STATE_COMMITTED )then
+                status = 1
+                message = 'the sigma2 anchor needs committed spectra'
+                return
+            endif
+        else
+            inquire(file=fname, exist=exists)
+            if( exists .and. header%provenance /= SIGMA2_PROV_PSPEC )then
+                call read_sigma2_anchor(committed, spectra, status, message)
+                return
+            endif
+            if( header%provenance /= SIGMA2_PROV_PSPEC .or. header%state /= SIGMA2_STATE_COMMITTED )then
+                status = 1
+                message = 'sigma2_anneal needs its saved bootstrap; start a fresh run to create it'
+                return
+            endif
         endif
         call sigma2_state_read_global(committed, spectra, status, message)
         if( status /= 0 ) return

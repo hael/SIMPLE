@@ -969,6 +969,7 @@ contains
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode',         'nonuniform')
         call cline%set('automsk', 'no') ! spherical support throughout solve3D
         if( .not. cline%defined('gauref')      ) call cline%set('gauref',                   'yes')
+        if( .not. cline%defined('sigma2_anneal')) call cline%set('sigma2_anneal',           'yes')
         ! balance defaults once the project is read (set_balance_default):
         ! class with a 2D solution (input volumes bring random classes), none without one
         call cline%set('envfsc', 'no')
@@ -2297,16 +2298,14 @@ contains
         end function next_refine3D_iteration
 
         subroutine ini3D_from_cavgs( cline )
+            use simple_default_clines, only: strip_sigma2_anneal_args
             class(cmdline),    intent(inout) :: cline
             type(commander_solve3D_cavgs) :: xini3D
             type(cmdline)                    :: cline_ini3D
             type(string),    allocatable     :: files_that_stay(:)
             character(len=*), parameter      :: INI3D_DIR='solve3D_cavgs/'
             cline_ini3D = cline
-            call cline_ini3D%delete('sigma2_anneal')
-            call cline_ini3D%delete('sigma2_weight_start')
-            call cline_ini3D%delete('sigma2_weight_end')
-            call cline_ini3D%delete('sigma2_weight')
+            call strip_sigma2_anneal_args(cline_ini3D)
             ! Particle-stage PCG policy belongs to the outer solve3D run;
             ! class-average initialization retains its gridding workflow
             call strip_pcg_backend_keys(cline_ini3D)

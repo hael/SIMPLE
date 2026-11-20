@@ -265,6 +265,7 @@ contains
 
     !> iters_done: refinement iterations the caller already ran, so the march numbers its own after them
     subroutine run_march( self, params, cline, xrefine3D, gui_comm, iters_done )
+        use simple_strategy_sigma2, only: prepare_start_sigma_anchor
         class(refine3D_states_controller), intent(inout) :: self
         class(parameters),                 intent(in)    :: params
         class(cmdline),                    intent(inout) :: cline
@@ -279,6 +280,7 @@ contains
         ! plain copies: the march updates self, so none of its components is passed as an argument
         nspace_sub = self%local_nspace_sub
         stage_cap  = self%stage_cap
+        if( params%sigma2_anneal == 'yes' ) call prepare_start_sigma_anchor(params%projfile)
         call self%run_frequency_march(params, cline, xrefine3D, gui_comm, 'prob_neigh', STAGE2_NSPACE, &
             &nspace_sub, STAGE2_MINITS, stage2_niters, stage_cap, params%overlap)
         write(logfhandle,'(A,I0,A,I0)') '>>> '//self%label()//' STAGE ITERATIONS PROB_NEIGH/TOTAL: ', &
@@ -714,6 +716,7 @@ contains
     subroutine run_frequency_march( self, params, cline, xrefine3D, gui_comm, refine_mode, nspace_stage, &
         &nspace_sub_stage, min_total_iters, niters, max_total_iters, overlap_target )
         use simple_refine3D_stage_plan, only: refine3D_stage_plan_entry, plan_refine3D_frequency_stages
+        use simple_default_clines,      only: strip_sigma2_anneal_args
         class(refine3D_states_controller), intent(inout) :: self
         class(parameters),                 intent(in)    :: params
         class(cmdline),                    intent(inout) :: cline
@@ -724,7 +727,8 @@ contains
         integer,                           intent(out)   :: niters
         real,                              intent(in)    :: overlap_target
         type(refine3D_stage_plan_entry), allocatable :: stages(:)
-        integer :: block, block_niters, block_minits
+        integer :: block, block_niters, block_minits, ramp_first, ramp_last
+        real    :: w_first, w_last
         niters = 0
         if( max_total_iters < min_total_iters )then
             THROW_HARD(self%label()//' frequency-stage cap is below its required minimum')
@@ -734,6 +738,10 @@ contains
         write(logfhandle,'(A,I0,A,F7.2,A,F7.2)') &
             &'>>> '//self%label()//' FREQUENCY MARCHING NSTAGES/LPSTART/LPSTOP: ', &
             &size(stages), '/', params%lpstart, '/', params%lpstop
+        ! scoring-noise annealing: the smoothed anchor, then model noise over the last block's worth of planned
+        ! iterations, which may reach into the block before a short last block
+        ramp_last  = stages(size(stages))%last_iter
+        ramp_first = max(stages(1)%first_iter, ramp_last - FREQUENCY_BLOCK_NITS + 1)
         do block = 1,size(stages)
             call cline%set('trs',    stages(block)%lpinfo%trslim)
             if( self%local_shift_bound >= 0. .and. trim(params%pose_policy).eq.'local' )then
@@ -751,12 +759,34 @@ contains
             ! a block may stop early on the state-overlap target once the march-wide minimum is met;
             ! every block is still visited, so the low-pass schedule completes
             block_minits = max(1, min(stages(block)%nits, min_total_iters - niters))
+            if( params%sigma2_anneal == 'yes' )then
+                w_first = ramp_weight(stages(block)%first_iter)
+                w_last  = ramp_weight(stages(block)%last_iter)
+                call cline%set('sigma2_weight_start', w_first)
+                call cline%set('sigma2_weight_end',   w_last)
+                ! a block in the ramp runs its budget, so the march reaches model noise
+                if( w_last > w_first ) block_minits = stages(block)%nits
+            endif
             call self%run_stage(params, cline, xrefine3D, gui_comm, block, refine_mode, nspace_stage, &
                 &nspace_sub_stage, block_minits, block_niters, stages(block)%nits, overlap_target)
             niters = niters + block_niters
         enddo
         call cline%delete('sticky_sampling')
+        call strip_sigma2_anneal_args(cline)
         deallocate(stages)
+
+    contains
+
+        !> the log-blend weight at a planned iteration: 0 before the ramp, 1 at the march's last iteration
+        real function ramp_weight( iter )
+            integer, intent(in) :: iter
+            if( ramp_last == ramp_first )then
+                ramp_weight = merge(1., 0., iter >= ramp_last)
+            else
+                ramp_weight = min(1., max(0., real(iter - ramp_first) / real(ramp_last - ramp_first)))
+            endif
+        end function ramp_weight
+
     end subroutine run_frequency_march
 
     subroutine run_stage( self, params, cline, xrefine3D, gui_comm, stage, refine_mode, nspace_stage, &

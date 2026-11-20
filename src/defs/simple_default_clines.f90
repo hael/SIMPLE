@@ -48,4 +48,13 @@ contains
         call set_automask2D_defaults( cline )
     end subroutine set_refine2D_defaults
 
+    !> A pass that scores with the measured noise: no scoring-noise annealing keys.
+    subroutine strip_sigma2_anneal_args( cline )
+        class(cmdline), intent(inout) :: cline
+        call cline%delete('sigma2_anneal')
+        call cline%delete('sigma2_weight_start')
+        call cline%delete('sigma2_weight_end')
+        call cline%delete('sigma2_weight')
+    end subroutine strip_sigma2_anneal_args
+
 end module simple_default_clines

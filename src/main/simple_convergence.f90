@@ -750,9 +750,9 @@ contains
             endif
         endif
         call self%record_res(params, res05_now, res143_now, res05_state_avg, res_state_avg)
-        ! a standalone ramp (no stage bounds from the solve3D controller) is the run's whole schedule: convergence
-        ! cannot end it short of its endpoint. A solve3D stage exits as any stage does; the next stage starts at its
-        ! own planned weight
+        ! a standalone ramp (no stage bounds from the solve3D controller) reaches its endpoint, at minits or at the
+        ! budget's end, before convergence can end the run. A solve3D stage exits as any stage does; the next stage
+        ! starts at its own planned weight
         if( params%sigma2_anneal == 'yes' .and. .not. cline%defined('sigma2_weight_end') )then
             if( params%sigma2_weight < params%sigma2_weight_end - TINY ) converged = .false.
         endif

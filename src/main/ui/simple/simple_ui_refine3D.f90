@@ -326,6 +326,11 @@ contains
         call prg%add_input(UI_SRCH, 'minits', 'num', 'Minimum automatic iterations', &
         &'Minimum number of iterations used when automatic refinement calculates its iteration budget', &
         &'minimum iterations', .false., 10., group="search", visibility=UI_VIS_DEVELOPER)
+        call prg%add_input(UI_SRCH, 'sigma2_anneal', 'binary', 'Anneal smoothed noise for matching', &
+        &'Score against the starting noise spectra, log-smoothed, and reach model-based noise by minits '//&
+        &'(3 unless given; maxits when maxits is given). Reconstruction retains measured spectra(yes|no){yes}', &
+        &'', .false., 'yes', group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, 'nsample', 'num', 'Particle samples', &
         &'Number of particles sampled per refinement iteration', 'number of samples', .false., 25000., &
         &group="search", visibility=UI_VIS_DEVELOPER)

@@ -1123,8 +1123,6 @@ contains
         self%l_cart_refine = trim(self%refine) == 'cont'
         if( self%prg == 'refine3D' .and. self%sigma2_anneal == 'yes' )then
             if( self%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('sigma2_anneal requires objfun=euclid')
-            if( self%l_cart_refine .or. self%pose_cont == 'yes' ) &
-                &THROW_HARD('sigma2_anneal requires polar matching without pose_cont')
         endif
         self%l_cont_followup = .false.
         if( self%l_cart_refine )then

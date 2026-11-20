@@ -66,8 +66,12 @@ contains
             endif
             call build%esig%read_global
             if( trim(params%sigma2_anneal) /= 'no' )then
-                if( params%l_cart_refine ) THROW_HARD('sigma2_anneal requires polar matching')
-                call build%esig%anneal_for_scoring(build%pftc, params%sigma2_weight)
+                ! a Cartesian pass takes the blend per batch (prep_cart_batch_of_build)
+                if( params%l_cart_refine )then
+                    call build%esig%form_scoring_sigma2(params%sigma2_weight)
+                else
+                    call build%esig%anneal_for_scoring(build%pftc, params%sigma2_weight)
+                endif
             else if( .not. params%l_cart_refine )then
                 ! anneal_for_scoring refreshes these weights when attaching its array.
                 call build%pftc%memoize_sigma2_weights
@@ -205,8 +209,7 @@ contains
             ctfparms(i)      = build%spproj%get_ctfparams(params%oritype, iptcl)
         end do
         if( params%cc_objfun == OBJFUN_EUCLID )then
-            if( .not. allocated(build%esig%sigma2_noise) ) THROW_HARD('a Euclidean Cartesian batch requires sigma2')
-            call build%cftc%set_sigma2(lbound(build%esig%sigma2_noise,1), build%esig%sigma2_noise)
+            call build%esig%set_cart_sigma2(build%cftc)
             allocate(halves(nptcls_here))
             do i = 1, nptcls_here
                 halves(i) = sigma2_half(build%spproj_field%get_eo(pinds_here(i)))

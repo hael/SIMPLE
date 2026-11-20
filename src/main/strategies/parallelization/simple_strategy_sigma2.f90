@@ -11,7 +11,7 @@ use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_heade
 implicit none
 
 public :: prepare_canonical_sigma_update, read_sigma2_bench_counts, run_commit_sigma2, commit_sigma2_exec
-public :: prepare_canonical_sigma_anchor, report_sigma2_anchor
+public :: prepare_canonical_sigma_anchor, prepare_start_sigma_anchor, report_sigma2_anchor
 private
 #include "simple_local_flags.inc"
 
@@ -61,6 +61,38 @@ contains
         if( status /= 0 ) THROW_HARD(trim(message))
         call state_path%kill
     end subroutine prepare_canonical_sigma_anchor
+
+    !> A refinement controller's annealed start: the anchor smooths the committed spectra the run starts from;
+    !! without them the refinement bootstraps and anchors its own store.
+    subroutine prepare_start_sigma_anchor( projfile )
+        use simple_sigma2_anchor,     only: prepare_sigma2_anchor
+        use simple_sigma2_state_file, only: SIGMA2_STATE_COMMITTED
+        use simple_sp_project,        only: sp_project
+        use simple_syslib,            only: file_exists
+        class(string), intent(in) :: projfile
+        class(sp_project), allocatable :: spproj
+        type(sigma2_state_header) :: header
+        type(string) :: state_path
+        integer :: status
+        logical :: found
+        character(len=STDLEN) :: message
+        allocate(spproj)
+        call spproj%read_segment('projinfo', projfile)
+        call spproj%get_sigma2_state_path(state_path, found)
+        call spproj%kill
+        if( found ) found = file_exists(state_path)
+        if( found )then
+            call sigma2_state_read_header(state_path%to_char(), header, status, message)
+            found = status == 0
+            if( found ) found = header%state == SIGMA2_STATE_COMMITTED
+        endif
+        if( found )then
+            call prepare_sigma2_anchor(state_path%to_char(), status, message, from_current=.true.)
+            if( status /= 0 ) THROW_HARD(trim(message))
+            write(logfhandle,'(A)') '>>> SIGMA2 ANNEAL: anchor smoothed from the starting spectra'
+        endif
+        call state_path%kill
+    end subroutine prepare_start_sigma_anchor
 
     !> before the parts write the next generation: the committed store validated, nothing left by another
     !! transaction of that generation
