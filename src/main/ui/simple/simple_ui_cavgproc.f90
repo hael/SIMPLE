@@ -6,6 +6,7 @@ implicit none
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('cavgproc', 'Class Average Processing', 40)
 type(ui_program), target :: cluster_cavgs
 type(ui_program), target :: model_cavgs_rejection
+type(ui_program), target :: cavg_cnn_predict
 type(ui_program), target :: cluster_cavgs_selection
 type(ui_program), target :: cluster_stack
 type(ui_program), target :: match_cavgs
@@ -18,6 +19,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_cluster_cavgs(prgtab)
         call new_model_cavgs_rejection(prgtab)
+        call new_cavg_cnn_predict(prgtab)
         call new_cluster_cavgs_selection(prgtab)
         call new_cluster_stack(prgtab)
         call new_match_cavgs(prgtab)
@@ -131,6 +133,31 @@ subroutine new_cluster_cavgs( prgtab )
         ! add to ui_hash
         call add_ui_program('model_cavgs_rejection', model_cavgs_rejection, prgtab, UI_CATEGORY)
     end subroutine new_model_cavgs_rejection
+
+    subroutine new_cavg_cnn_predict( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call cavg_cnn_predict%new(&
+        &'cavg_cnn_predict',&                                                    ! name
+        &'Class-average CNN: junk, secondary structure or likely protein per class',& ! summary
+        &'is a program that runs the class-average CNN of scripts/sscnn on the class averages of a project and &
+        &their even and odd halves, and writes each class''s probabilities and group to cavg_cnn_predictions.txt. &
+        &It reads the project and changes nothing in it',&                       ! help
+        &'simple_exec',&                                                         ! executable
+        &.true., &
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Classify Class Averages with the CNN')
+        ! INPUT PARAMETER SPECIFICATIONS
+        call cavg_cnn_predict%add_input(UI_FILE, 'infile', 'file', 'Class-average CNN weights', &
+        &'Weights file of the class-average CNN, exported by scripts/sscnn/export_fortran.py', &
+        &'e.g. cavg_cnn_weights.bin', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        ! computer controls
+        call cavg_cnn_predict%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('cavg_cnn_predict', cavg_cnn_predict, prgtab, UI_CATEGORY)
+    end subroutine new_cavg_cnn_predict
 
     subroutine new_cluster_cavgs_selection( prgtab )    
         class(ui_hash), intent(inout) :: prgtab

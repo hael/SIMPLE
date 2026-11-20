@@ -145,6 +145,8 @@ use simple_class_student,                    only: run_all_class_student_tests
 use simple_class_student_align_tester,       only: run_all_class_student_align_tests
 use simple_pose_student_align_tester,        only: run_all_pose_student_align_tests
 use simple_hhcnn,                            only: run_all_hhcnn_tests, run_hhcnn_thread_identity_tests
+use simple_cavg_cnn,                         only: run_all_cavg_cnn_tests
+use simple_cavg_cnn_input,                   only: run_all_cavg_cnn_input_tests
 use simple_pose_student,                     only: run_all_pose_student_tests
 use simple_strategy_student_common,          only: run_all_student_strategy_tests
 use simple_aff_prop_tester,                  only: run_all_aff_prop_tests
@@ -428,6 +430,9 @@ contains
         call add_suite(s, n, 'pose student',            run_all_pose_student_tests)
         call add_suite(s, n, 'pose student alignment',  run_all_pose_student_align_tests)
         call add_suite(s, n, 'student strategy',        run_all_student_strategy_tests)
+        ! the class-average CNN of scripts/sscnn (junk, secondary structure, likely protein)
+        call add_suite(s, n, 'cavg CNN',                run_all_cavg_cnn_tests)
+        call add_suite(s, n, 'cavg CNN input',          run_all_cavg_cnn_input_tests)
     end subroutine suites_numerics
 
     subroutine suites_project( s, n )

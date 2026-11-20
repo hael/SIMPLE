@@ -1,0 +1,6 @@
+# cnn_ss.Net, width 8, 3 channels, seeds 1 (weights) and 2 (inputs), torch 2.15.0+cpu; export_fortran.py --fixture
+# input, plain logits 1 and 2, logits 1 and 2 averaged over the 8 symmetries (float32)
+# float32 against float64: largest |difference| 3.361e-07; T1 = 3.361e-06
+1 -1.271544248e-01 9.320435524e-01 4.381140321e-02 1.037678957e+00
+2 1.674570143e-02 1.222294450e+00 3.204583749e-02 1.102770567e+00
+3 1.102145314e-01 1.018099785e+00 5.106644332e-02 9.325897098e-01

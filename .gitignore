@@ -36,6 +36,8 @@ add2.tcshrc
 *.toc
 *.orig
 .eman2log.txt
+# The class-average CNN's trained weights (scripts/sscnn): kept out of git for now; doc/how2s/how2train_cavg_cnn.md
+/scripts/sscnn/weights/*.bin
 # Nice derived
 venv
 db.sqlite3

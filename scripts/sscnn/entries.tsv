@@ -1,0 +1,49 @@
+# emdb_id	pdb_id	group	label
+EMD-8118	5irz	alpha, membrane (nanodisc)	TRPV1
+EMD-48407	9mmy	mixed, soluble	GroEL with ATP
+EMD-70078	9o3f	mixed, soluble	20S proteasome (P. falciparum)
+EMD-47552	9e67	mixed, membrane (nanodisc)	YnaI, MscS family
+EMD-44496	9bfh	mixed, membrane	AcrB
+EMD-19181	8ri6	beta-rich, soluble	beta-galactosidase
+EMD-64080	9ueb	beta-rich, soluble	coronavirus spike, prefusion
+EMD-75871	11nu	mixed, soluble	aldolase
+EMD-54955	9sjv	alpha, soluble	apoferritin (human)
+EMD-70501	9ohn	mixed, soluble	p97/VCP
+EMD-74582	9zqu	mixed, soluble	glutamate dehydrogenase
+EMD-54442	9s15	beta, membrane (nanodisc)	MspA beta-barrel
+EMD-43044	8v8s	alpha, membrane (nanodisc)	AQP4
+EMD-31911	7vd9	mixed, soluble	catalase (human)
+EMD-62941	9lbd	mixed, membrane (nanodisc)	GLIC
+EMD-73503	9yuc	alpha, soluble	14-3-3 heterodimer with pyrin linkers (53 kDa)
+EMD-66268	9wur	alpha, soluble	P450 GpeC with SGpeA1 (85 kDa)
+EMD-55011	9slp	mixed, soluble	nucleoside diphosphate kinase hexamer (90 kDa)
+EMD-73971	9zaw	mixed, soluble	HMG-CoA synthase 1 (101 kDa)
+EMD-64903	9vap	mixed, soluble	formate dehydrogenase SoFdhAB (117 kDa)
+EMD-52761	9i9k	mixed, soluble	CAK-CDK2 (101 kDa)
+EMD-73041	9yk0	mixed, soluble	acetolactate synthase (127 kDa)
+EMD-72279	9q6n	mixed, soluble	serum albumin with four nanobodies (118 kDa)
+EMD-76948	13bs	beta-rich, soluble	IL36RA with Fab (64 kDa)
+EMD-66494	9x35	beta-rich, soluble	IgG1 Fc with Fc gamma receptor IIIA (65 kDa)
+EMD-46602	9d74	beta-rich, soluble	HLA-B44 with Fab (88 kDa)
+EMD-61181	9j6s	alpha, membrane	dopamine transporter (60 kDa)
+EMD-65253	9vpg	alpha, membrane	GLUT9 urate transporter (51 kDa)
+EMD-70828	9ota	alpha, membrane (nanodisc)	TWIK-2 K2P channel (59 kDa)
+EMD-75586	11ai	alpha, membrane	CLC-K chloride channel (133 kDa)
+EMD-64495	9uto	alpha, membrane	oxytocin receptor with nanobody (44 kDa)
+EMD-62241	9kc4	mixed, membrane	succinate dehydrogenase (120 kDa)
+EMD-64740	9v2u	beta-rich, membrane	claudin 18.2 with Fab (63 kDa)
+EMD-72659	9y7m	beta-rich, soluble	HCMV protease with Fab (64 kDa)
+EMD-76938	13bf	beta-rich, soluble	COL6A3 domain with Fab (54 kDa)
+EMD-73821	9z5q	mixed, soluble	NEDD4-2 HECT domain with nanobody (59 kDa)
+EMD-77011	13du	alpha, soluble	BRAF-CRAF-14-3-3 (113 kDa)
+EMD-63266	9lp1	beta-rich, soluble	SARS-CoV-2 RBD with Fab (45 kDa)
+EMD-74142	9zfl	alpha, membrane	sodium/iodide symporter (56 kDa)
+EMD-67037	9xn3	mixed, membrane	GIP receptor-Gs complex (117 kDa)
+EMD-71970	9pxi	beta-rich, membrane	BAM complex with pyocin L1 (180 kDa)
+EMD-54010	9rjb	mixed, membrane	signal peptidase complex (65 kDa)
+EMD-67959	21sd	alpha, membrane	AMT1;1 ammonium transporter trimer (145 kDa)
+EMD-66567	9x4x	mixed, soluble	HSP90-CDC37-PINK1 (190 kDa)
+EMD-65437	9vxp	mixed, soluble	pyruvate kinase R (223 kDa)
+EMD-82349	43wq	mixed, soluble	GTP cyclohydrolase I decamer (239 kDa)
+EMD-66648	9x7x	beta-rich, soluble	nitrous oxide reductase NosZ with NosPQ (176 kDa)
+EMD-80337	25sb	beta-rich, soluble	Shiga toxin Stx1a B with Fab (282 kDa)

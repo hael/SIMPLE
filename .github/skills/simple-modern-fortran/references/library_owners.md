@@ -21,6 +21,8 @@ over one of these (an empty-input guard, a fixed-length buffer), not a re-implem
 | file size by name (-1 absent); by open unit | `fname_size`, `funit_size` | `simple_fileio` |
 | delete a file; remove a directory tree (links not followed) | `del_file`, `simple_rmdir` | `simple_syslib` |
 | allocate / destroy an image array | `alloc_imgarr`, `dealloc_imgarr` | `simple_imgarr_utils` |
+| the class-average CNN (scripts/sscnn): weights file, forward pass, group probabilities | `cavg_cnn` | `simple_cavg_cnn` |
+| a class average and its halves as that CNN's input (numpy's Fourier resampling exactly, any size, then its scaling) | `cavg_cnn_input` | `simple_cavg_cnn_input` |
 | does a window (corner coord, box) fit in the image | `window_inside` | `simple_image` |
 | stop on a stack header with no images or a zero dimension | `check_stack_dims` | `simple_imghead` |
 | elapsed seconds without touching the shared timer (threads) | `clock_count`, `clock_seconds_since` | `simple_timer` |

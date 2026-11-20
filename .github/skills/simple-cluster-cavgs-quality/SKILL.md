@@ -69,6 +69,9 @@ without modifying the project (`quality_mode=analyze`, `evaluate`).
   `LAT_PEAK_MIN_RAW` (0.52, class averages of raw frames) and the model gate (`model_gate_states`, `K_MODEL`) of
   `trajectory_solve3D`. `doc/implementation_notes/planned/trajectory_cavgs_rejection.md` plans to move the `nano`
   context out of `model_cavgs_rejection` into its own program.
+- `src/main/cavg_quality/simple_cavg_cnn_input.f90`, `simple_cavg_cnn_predict.f90`: not part of `model_cavgs_rejection` but the
+  read-only program `cavg_cnn_predict` (the class-average CNN of `scripts/sscnn`; network `src/main/learn/simple_cavg_cnn.f90`,
+  guide `doc/how2s/how2train_cavg_cnn.md`). Its tests: `unit_numerics suite=cavg_cnn`, `cavg_cnn_input`.
 - `doc/policies/sieving_and_rejection/model_cavgs_rejection.md`: current modes, contexts, hard gates, feature bank, built-ins, learning and promotion.
 - `doc/policies/sieving_and_rejection/ptcl_sieve_policy.md`: how the stream particle sieve calls this backend.
 

@@ -12,6 +12,7 @@ use simple_cavg_quality_types,    only: CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATI
     CAVG_RELATIONAL_DEFAULT_CORR_LP, CAVG_RELATIONAL_DEFAULT_CORR_TRS, CAVG_RELATIONAL_NANO_CORR_HP, &
     CAVG_RELATIONAL_NANO_CORR_LP, CAVG_RELATIONAL_NANO_CORR_TRS, CAVG_QUALITY_CONTEXT_NANO, cavg_quality_result
 use simple_cavg_quality_lattice,  only: LAT_SPOT_DIAM, LAT_LATTICE_PEAK
+use simple_cavg_cnn_predict,      only: cavg_cnn_predict_exec
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr,&
                                &rank_cavgs_stk
@@ -32,6 +33,11 @@ type, extends(commander_base) :: commander_model_cavgs_rejection
     contains
         procedure :: execute      => exec_model_cavgs_rejection
 end type commander_model_cavgs_rejection
+
+type, extends(commander_base) :: commander_cavg_cnn_predict
+    contains
+        procedure :: execute      => exec_cavg_cnn_predict
+end type commander_cavg_cnn_predict
 
 type, extends(commander_base) :: commander_cluster_cavgs_selection
     contains
@@ -850,6 +856,17 @@ contains
         end subroutine log_quality_model_selection
 
     end subroutine exec_model_cavgs_rejection
+
+    !> the class-average CNN's groups of a project's class averages: reads the project, writes a table
+    subroutine exec_cavg_cnn_predict( self, cline )
+        class(commander_cavg_cnn_predict), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(parameters) :: params
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        call cavg_cnn_predict_exec(params)
+        call simple_end('**** SIMPLE_CAVG_CNN_PREDICT NORMAL STOP ****')
+    end subroutine exec_cavg_cnn_predict
 
     ! to create medoid representatives of good/bad selection in cls2D field for fast matching later
     subroutine exec_cluster_cavgs_selection( self, cline )

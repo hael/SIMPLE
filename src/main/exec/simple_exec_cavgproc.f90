@@ -2,7 +2,7 @@
 module simple_exec_cavgproc
 use simple_cmdline,           only: cmdline
 use simple_commanders_cavgs,  only: commander_cluster_cavgs, commander_model_cavgs_rejection, &
-commander_cluster_cavgs_selection, commander_select_clusters, commander_match_cavgs
+commander_cluster_cavgs_selection, commander_select_clusters, commander_match_cavgs, commander_cavg_cnn_predict
 use simple_commanders_stkops, only: commander_cluster_stack, commander_match_stacks
 implicit none
 
@@ -11,6 +11,7 @@ private
 
 type(commander_cluster_cavgs)           :: xcluster_cavgs
 type(commander_model_cavgs_rejection)   :: xmodel_cavgs_rejection
+type(commander_cavg_cnn_predict)        :: xcavg_cnn_predict
 type(commander_cluster_cavgs_selection) :: xcluster_cavgs_selection
 type(commander_cluster_stack)           :: xcluster_stack
 type(commander_match_cavgs)             :: xmatch_cavgs
@@ -32,6 +33,8 @@ contains
                 call xcluster_cavgs%execute(cline)
             case( 'model_cavgs_rejection' )
                 call xmodel_cavgs_rejection%execute(cline)
+            case( 'cavg_cnn_predict' )
+                call xcavg_cnn_predict%execute(cline)
             case( 'cluster_cavgs_selection' )
                 call xcluster_cavgs_selection%execute(cline)
             case( 'cluster_stack' )
