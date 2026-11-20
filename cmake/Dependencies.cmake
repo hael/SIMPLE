@@ -140,6 +140,7 @@ set(SIMPLE_OPENBLAS_BUILD_FLAGS
 )
 string(JOIN " " SIMPLE_OPENBLAS_RECIPE
     "OpenBLAS=${SIMPLE_OPENBLAS_VERSION}"
+    "scratch=build-local-v1"
     "system=${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
     "C=${CMAKE_C_COMPILER_ID}-${CMAKE_C_COMPILER_VERSION}-${CMAKE_C_COMPILER}"
     "Fortran=${CMAKE_Fortran_COMPILER_ID}-${CMAKE_Fortran_COMPILER_VERSION}-${CMAKE_Fortran_COMPILER}"
@@ -241,6 +242,17 @@ else()
         "FC=${CMAKE_Fortran_COMPILER}"
         ${SIMPLE_OPENBLAS_BUILD_FLAGS}
     )
+    # OpenBLAS's compiler probes use mktemp and silently lose HAVE_C11 when
+    # an inherited TMPDIR is missing or unwritable. Own the scratch directory
+    # inside this build tree and override temp paths only in the child processes.
+    set(SIMPLE_OPENBLAS_TMP_DIR "${SIMPLE_OPENBLAS_EP_PREFIX}/scratch")
+    set(SIMPLE_OPENBLAS_MAKE_COMMAND
+        "${CMAKE_COMMAND}" -E env
+        "TMPDIR=${SIMPLE_OPENBLAS_TMP_DIR}"
+        "TMP=${SIMPLE_OPENBLAS_TMP_DIR}"
+        "TEMP=${SIMPLE_OPENBLAS_TMP_DIR}"
+        "${SIMPLE_MAKE_PROGRAM}" ${SIMPLE_OPENBLAS_MAKE_ARGS}
+    )
 
     # Scratch is disposable; the installed library and verified archive persist
     # outside build/ and are reused by clean Debug and Release builds.
@@ -253,10 +265,11 @@ else()
         BUILD_IN_SOURCE TRUE
         # Targets run sequentially as they update the same static archive,
         # parallel make invocation may corrupt it.
-        BUILD_COMMAND "${SIMPLE_MAKE_PROGRAM}" ${SIMPLE_OPENBLAS_MAKE_ARGS} libs
-            COMMAND "${SIMPLE_MAKE_PROGRAM}" ${SIMPLE_OPENBLAS_MAKE_ARGS} netlib
-        INSTALL_COMMAND "${SIMPLE_MAKE_PROGRAM}" ${SIMPLE_OPENBLAS_MAKE_ARGS}
-            "PREFIX=${SIMPLE_NUMERICS_INSTALL_PREFIX}" install
+        BUILD_COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMPLE_OPENBLAS_TMP_DIR}"
+            COMMAND ${SIMPLE_OPENBLAS_MAKE_COMMAND} libs
+            COMMAND ${SIMPLE_OPENBLAS_MAKE_COMMAND} netlib
+        INSTALL_COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMPLE_OPENBLAS_TMP_DIR}"
+            COMMAND ${SIMPLE_OPENBLAS_MAKE_COMMAND} "PREFIX=${SIMPLE_NUMERICS_INSTALL_PREFIX}" install
         BUILD_BYPRODUCTS "${SIMPLE_OPENBLAS_LIBRARY}"
         LOG_DOWNLOAD TRUE
         LOG_BUILD TRUE
