@@ -1181,9 +1181,17 @@ the committed pose's projection direction continuously after the probabilistic d
 `refine3D_local refine=prob_neigh` (one state, `objfun=euclid`). It is a solver choice for one extra solve,
 not a search mode:
 
-- **Pipeline unchanged.** The fill, keyed draw, temperatures and weighted insertion are those of `prob_neigh`;
-  the draw sees the KB bank's scores only. Only the committed pose takes the view solve; the weighted
-  insertion's extras keep the joint `(sx,sy,rotind_frac)` solve.
+- **Pipeline unchanged.** The fill, keyed draw and temperatures are those of `prob_neigh`; the draw sees the KB
+  bank's scores only.
+- **The extras (topk > 1).** On the coarse bank no other cell lies within the insertion cone, so the extras are
+  not the cone's occupants but the row's `topk - 1` entries of highest posterior (the tables skip the cone test
+  under the key). After the committed pose, each takes the view solve from its own cell and shift
+  (`refine_extra_pose_continuously`); the committed pose and the valid refined extras are merged into basins
+  within the cone of one another (`merge_view_basins`: single linkage on the refined poses, `within_poses`), each
+  basin enters the reconstruction at its best pose with its members' posterior weights at the particle's
+  temperature added, a basin below `PROB_INSERT_WMIN` is dropped, and the committed pose becomes its basin's best
+  when a refined extra beats it (`strategy3D_prob%resolve_extra_poses_view`). The effective topk is the number of
+  basins. The readout's `view_*` fields and the part's bench report the outcome.
 - **Bank = coarse grid.** With the key on, `nspace_sub = nspace` (1,000 unless given); the commander refuses an
   explicit different `nspace_sub` and the parameters refuse `nspace_sub /= nspace`. The bank holds `nspace`
   reprojections and nothing finer: the view solve takes the place of the fine neighbourhood step.
@@ -1197,15 +1205,19 @@ not a search mode:
   (`build_batch_particles3D`); `polarft_calc` correlates the supplied section
   (`gen_sect_euclid_grad_at_angle`) and gives the Gauss-Newton matrix the `lm` solver uses. The solve commits only
   on improvement over its own B-spline re-score of the drawn pose.
-- **The committed pose.** The matcher applies `strategy3D_srch%commit_view` after `assign_ori`: the pose is
-  `Rz(psi) T(w) R_ref` composed from matrices (never a new e3 paired with the cell's e1, e2) and `proj` is the
-  grid direction nearest to it. The convergence distances stay on the discrete cells, as `assign_ori` computes
-  them.
-- **Sigma2.** A committed view's residual is that of the solve's final evaluation (the B-spline section at its
-  tilts, its native shift, the rotation rounded to its grid index: `polarft_cont_calc%sigma_contrib`, through
-  `euclid_sigma2%calc_sigma2`); every other particle's is the bank section's. `calc_sigma2_pftc` takes the pose's
-  shift as the search's increment in the reference frame and rotates it into the particle frame at the evaluated
-  rotation, the joint cost's convention, so both residuals are the cost's (2D and 3D alike).
+- **The committed pose.** The prob strategy applies `strategy3D_srch%commit_view` after `assign_ori`: the pose is
+  `Rz(psi) T(w) R_ref` composed from matrices (`view_pose`; never a new e3 paired with the cell's e1, e2) and
+  `proj` is the grid direction nearest to it. A stored off-grid pose is read back about its nearest cell by
+  `euler_about_cell` (`prep4prob`, the tables' shift seeds, `assign_ori`'s distances, the sigma2 residual): the
+  cell's direction with the in-plane angle closest to the pose, exact near the poles; on the cell the stored e3
+  as it is, so the no-change case is untouched.
+- **Sigma2.** A valid view solve's residual is taken at its point on its own section (the B-spline section at its
+  tilts, its shift, the rotation rounded to its grid index; the seed when the solve did not improve, so the stored
+  `corr` and the residual come from one model: `polarft_cont_calc%sigma_contrib` through
+  `euclid_sigma2%calc_sigma2`); an invalid solve's and every other particle's is the bank section's.
+  `calc_sigma2_pftc` takes the pose's shift as stored (the particle frame) and converts it to the shift of the
+  reference at the evaluated rotation (`shift_ptcl2ref`), the evaluators' frame, so both residuals are the cost's
+  (2D and 3D alike).
 - **Off-route.** The key is refused on `refine=cont`, more than one state, `objfun=cc`, `refine3D_auto` and the
   other programs' parameter construction ignores it (the master's reconstruction children inherit its command
   line). `refine3D` itself accepts it on `refine=prob_neigh` with the same checks: it is the stage program

@@ -4,8 +4,8 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
-use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
-use simple_polarft_calc, only: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
+use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
+use simple_polarft_calc, only: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS, shift_ptcl2ref, shift_ref2ptcl
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_srch_sort_loc,      only: minnloc
 use simple_decay_funs,         only: extremal_decay2D

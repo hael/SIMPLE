@@ -8,8 +8,7 @@ module simple_polarft_corr_tester
 use simple_core_module_api
 use simple_cmdline,      only: cmdline
 use simple_parameters,   only: parameters
-use simple_polarft_calc, only: polarft_calc
-use simple_pftc_shsrch_grad, only: shift_ptcl2ref
+use simple_polarft_calc, only: polarft_calc, shift_ptcl2ref
 use simple_image,        only: image
 use simple_rnd,          only: rnd_scope_key, RND_PROG_REFINE3D, RND_PASS_ALIGN
 use, intrinsic :: iso_fortran_env, only: int64

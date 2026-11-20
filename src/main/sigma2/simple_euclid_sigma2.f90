@@ -2,7 +2,7 @@
 module simple_euclid_sigma2
 use, intrinsic :: iso_fortran_env, only: int64, real32
 use simple_core_module_api
-use simple_polarft_calc,   only: polarft_calc
+use simple_polarft_calc,   only: polarft_calc, shift_ptcl2ref
 use simple_cartft_calc,    only: cartft_calc
 use simple_polarft_cont_calc, only: polarft_cont_calc
 use simple_fplane_grid,    only: fplane_grid
@@ -240,9 +240,10 @@ contains
     !>  Calculates and updates sigma2 within search resolution range
     !> The sigma2 contribution of particle iptcl at its assigned polar orientation o; with eulspace (refkind 'proj', the
     !! directions o's proj indexes) o's in-plane angle is read about its direction, since at a pole e3 sits in e1.
-    !! o's shift is the search's increment in the reference frame (as stored); gen_sigma_contrib takes the particle frame
+    !! o's shift is the search's increment as stored (the particle frame); gen_sigma_contrib takes the shift of the
+    !! reference at the evaluated rotation (shift_ptcl2ref)
     subroutine calc_sigma2_pftc( self, pftc, iptcl, o, refkind, eulspace )
-        use simple_ori_utils, only: euler_about_ref
+        use simple_ori_utils, only: euler_about_cell
         class(euclid_sigma2),  intent(inout) :: self
         class(polarft_calc),   intent(inout) :: pftc
         integer,               intent(in)    :: iptcl
@@ -250,7 +251,7 @@ contains
         character(len=*),      intent(in)    :: refkind ! 'proj' or 'class'
         class(oris), optional, intent(in)    :: eulspace
         integer :: iref, irot, kfromto(2)
-        real    :: shvec(2), euls(3), rotmat(2,2)
+        real    :: shvec(2), euls(3)
         if( .not.associated(self%p_ptr) )then
             THROW_HARD('euclid_sigma2: params pointer is not set')
         endif
@@ -259,30 +260,30 @@ contains
         kfromto = self%p_ptr%kfromto
         iref  = nint(o%get(trim(refkind)))
         euls  = o%get_euler()
-        if( present(eulspace) ) euls = euler_about_ref(euls, eulspace%get_euler(iref))
+        if( present(eulspace) ) euls = euler_about_cell(euls, eulspace%get_euler(iref))
         if( trim(refkind) == 'proj' .and. self%p_ptr%nstates > 1 )then
             iref = (o%get_state() - 1) * self%p_ptr%nspace + iref
         endif
         irot  = pftc%get_roind(360. - euls(3))
-        ! reference frame -> particle frame at the evaluated rotation (the joint cost's convention)
-        call rotmat2d(pftc%get_rot(irot), rotmat)
-        shvec = matmul(o%get_2Dshift(), transpose(rotmat))
+        ! the stored shift as the shift of the reference at the evaluated rotation, the evaluators' frame
+        shvec = shift_ptcl2ref(o%get_2Dshift(), pftc%get_rot(irot))
         ! the residual goes straight into the particle's record over the pass's band
         call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, self%sigma2_part(kfromto(1):kfromto(2),iptcl))
     end subroutine calc_sigma2_pftc
 
-    !> The sigma2 contribution of particle iptcl at the committed pose of a continuous view solve (cont_view): the residual
-    !! of its final evaluation x = (native shift, rotation index, tilts) on the B-spline section of pcont's drawn reference
-    subroutine calc_sigma2_view( self, pcont, iptcl, x )
+    !> The sigma2 contribution of particle iptcl at the point x = (shift in the reference frame, rotation index, tilts)
+    !! of a valid view solve (cont_view) on the B-spline section of its reference (state, the particle's half, rotation rref)
+    subroutine calc_sigma2_view( self, pcont, iptcl, state, iseven, rref, x )
         class(euclid_sigma2),     intent(inout) :: self
         class(polarft_cont_calc), intent(inout) :: pcont
-        integer,                  intent(in)    :: iptcl
-        real(dp),                 intent(in)    :: x(5)
+        integer,                  intent(in)    :: iptcl, state
+        logical,                  intent(in)    :: iseven
+        real(dp),                 intent(in)    :: rref(3,3), x(5)
         if( .not.associated(self%p_ptr) )then
             THROW_HARD('euclid_sigma2: params pointer is not set')
         endif
         call self%check_record(iptcl)
-        call pcont%sigma_contrib(iptcl, x, self%sigma2_part(self%p_ptr%kfromto(1):self%p_ptr%kfromto(2),iptcl))
+        call pcont%sigma_contrib(iptcl, state, iseven, rref, x, self%sigma2_part(self%p_ptr%kfromto(1):self%p_ptr%kfromto(2),iptcl))
     end subroutine calc_sigma2_view
 
     !> The sigma2 contribution of particle iptcl at the committed Cartesian pose, from particle

@@ -14,13 +14,13 @@ use simple_eul_prob_tab_utils, only: update_screen_best, eulprob_dist_switch, eu
     &write_prob_readout, report_prob_readout, PROB_READOUT_3D_NEIGH
 use simple_rnd,                only: rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use simple_decay_funs,         only: extremal_decay
-use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
+use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_eul_prob_tab_utils, only: shift_needs_disk, disk_radius_px, screen_pool_size, map_prior_weight, insert_pose_loss, &
     &shift_prior_sigma2, cone_view_dist, cone_cell_radii, cone_reachable_cells
 use simple_defs,               only: PROB_INSERT_WMIN
-use simple_polarft_calc, only: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW
+use simple_polarft_calc, only: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, shift_ptcl2ref, shift_ref2ptcl
 use simple_ori,                only: ori
-use simple_ori_utils,          only: euler_mirror, euler_about_ref
+use simple_ori_utils,          only: euler_mirror, euler_about_cell
 implicit none
 
 public :: eul_prob_tab_neigh
@@ -879,6 +879,10 @@ contains
         rec%nkept         = self%nkept
         rec%kmax          = self%kmax
         rec%l_extras      = self%l_extras
+        rec%view_nptcls   = self%view_nptcls
+        rec%view_npose    = self%view_npose
+        rec%view_nmerged  = self%view_nmerged
+        rec%view_wc_sum   = self%view_wc_sum
         if( .not. self%l_extras .and. self%insert_cone%is_open() ) rec%kmax = 1
         if( self%l_extras ) call self%insert_tab%counts(rec%ins_nptcls, rec%ins_npose, rec%ins_wc_sum, rec%ins_nelig, &
             &rec%ins_ncapped, rec%kmax)
@@ -894,6 +898,10 @@ contains
             call report_prob_readout(rec, self%p_ptr%prob_beta)
         endif
         self%rec_last      = rec
+        self%view_nptcls   = 0
+        self%view_npose    = 0
+        self%view_nmerged  = 0
+        self%view_wc_sum   = 0.d0
         self%l_assign_open = .false.
     end subroutine close_assignment_neigh
 
@@ -1039,6 +1047,8 @@ contains
                     if( l_prior_ins ) dists_c(r_loc,ithr) = insert_pose_loss(dists_c(r_loc,ithr),&
                         &real([self%candidate_store%candidates(pos_c(r_loc,ithr))%x,&
                         &self%candidate_store%candidates(pos_c(r_loc,ithr))%y], dp), prior_w_ins, self%temps(i_loc))
+                    ! under cont_view the view solves decide the basins afterwards (strategy3D_prob): every candidate stays
+                    if( self%p_ptr%l_cont_view ) cycle
                     proj_r = modulo(self%candidate_store%candidates(pos_c(r_loc,ithr))%iref - 1, self%p_ptr%nspace) + 1
                     eligible(r_loc,ithr) = self%insert_cone%within(istate_com, self%assgn_map(i_loc)%iproj, &
                         &self%assgn_map(i_loc)%inpl, [self%assgn_map(i_loc)%x, self%assgn_map(i_loc)%y], proj_r, &
@@ -1316,7 +1326,7 @@ contains
             &prev_proj >= 1 .and. prev_proj <= self%p_ptr%nspace )then
             if( self%state_exists(prev_state) )then
                 ! the previous in-plane rotation about the previous direction (the angle sits in e1 at a pole)
-                euls_prev = euler_about_ref(o_prev%get_euler(), self%b_ptr%eulspace%get_euler(prev_proj))
+                euls_prev = euler_about_cell(o_prev%get_euler(), self%b_ptr%eulspace%get_euler(prev_proj))
                 irot = self%b_ptr%pftc%get_roind(360. - euls_prev(3))
                 iref = (prev_state-1)*self%p_ptr%nspace + prev_proj
                 call grad_obj(ithr)%set_indices(iref, iptcl)

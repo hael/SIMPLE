@@ -3,7 +3,7 @@ module simple_strategy3D_utils
 use simple_core_module_api
 use simple_strategy3D_alloc, only: s3D, ref_state_from_index, ref_proj_from_index
 use simple_strategy3D_srch, only: strategy3D_srch
-use simple_pftc_shsrch_grad, only: shift_ref2ptcl
+use simple_polarft_calc,     only: shift_ref2ptcl
 implicit none
 
 public :: extract_peak_ori, extract_peak_oris, assign_ori, resolve_inplane_e3, candidate_pose
@@ -51,7 +51,7 @@ contains
 
 
     subroutine assign_ori( s, ref, inpl, corr, sh, continuous_coord, continuous_valid )
-        use simple_ori_utils, only: euler_about_ref
+        use simple_ori_utils, only: euler_about_cell
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: ref, inpl  ! ref here is multi-state ref index
         real,                   intent(in)    :: corr
@@ -111,12 +111,13 @@ contains
         ! calibration
         call s%b_ptr%spproj_field%get_ori(s%iptcl, o_new)
         ! the new discrete cell about its direction: the stored triplet is normalised, with e3 in e1 at a pole
-        euls_new = euler_about_ref(o_new%get_euler(), euler)
+        euls_new = euler_about_cell(o_new%get_euler(), euler)
         call o_new%e1set(euls_new(1))
         call o_new%e3set(360. - s%b_ptr%pftc%get_rot(inpl))
-        ! the previous discrete cell about the previous direction (prep4prob, prep4srch), for the same reason
-        euls_prev = euler_about_ref(o_prev%get_euler(), s%b_ptr%eulspace%get_euler(s%prev_proj))
+        ! the previous pose on its nearest cell (prep4prob, prep4srch; an off-grid pose, cont_view, snapped to it)
+        euls_prev = euler_about_cell(o_prev%get_euler(), s%b_ptr%eulspace%get_euler(s%prev_proj))
         call o_prev%e1set(euls_prev(1))
+        call o_prev%e2set(euls_prev(2))
         call o_prev%e3set(360. - s%b_ptr%pftc%get_rot(s%b_ptr%pftc%get_roind(360. - euls_prev(3))))
         call s%b_ptr%pgrpsyms%sym_dists(o_prev, o_new, osym, euldist, dist_inpl)
         if( s%b_ptr%spproj_field%isthere(s%iptcl,'dist') )then

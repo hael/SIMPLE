@@ -7,6 +7,7 @@ implicit none
 
 public :: polarft_calc
 public :: vol_pad2ref_pfts_opt
+public :: shift_ptcl2ref, shift_ref2ptcl
 public :: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
 public :: run_all_polarft_shiftmap_tests, run_all_polarft_mirr_tests
 private
@@ -415,6 +416,16 @@ interface
         logical,             intent(in)    :: iseven
     end subroutine vol_pad2ref_pfts_opt
 
+    pure module function shift_ptcl2ref( u, rot ) result( s )
+        real, intent(in) :: u(2), rot
+        real :: s(2)
+    end function shift_ptcl2ref
+
+    pure module function shift_ref2ptcl( s, rot ) result( u )
+        real, intent(in) :: s(2), rot
+        real :: u(2)
+    end function shift_ref2ptcl
+
     ! ===== GETTERS + POINTER ACCESSORS =====
 
     module pure function get_nrots(self) result(nrots)
@@ -483,7 +494,7 @@ interface
     module subroutine get_polar_coords(self, dim, coords)
         class(polarft_calc), intent(in)  :: self
         integer,             intent(in)  :: dim
-        real(sp),            intent(out) :: coords(self%kfromto(1):self%interpklim,self%pftsz)
+        real(sp),            intent(out) :: coords(self%kfromto(1):self%kfromto(2),self%pftsz)
     end subroutine get_polar_coords
 
     module subroutine get_ref_pft(self, iref, iseven, pft)

@@ -4,7 +4,7 @@ use simple_test_utils ! assertions etc.
 use simple_defs       ! dp, STDLEN, etc.
 use simple_ori,       only: ori
 use simple_ori_utils, only: euler2m, m2euler, euler_compose, geodesic_frobdev, genfire2euler, euler2genfire, &
-    &euler_inplrotdist, euler_about_ref, euler_inpl_closest
+    &euler_inplrotdist, euler_about_ref, euler_inpl_closest, euler_about_cell
 use simple_linalg,    only: rad2deg
 use simple_string,    only: string
 use simple_type_defs, only: ctfparams, CTFFLAG_YES, CTFFLAG_FLIP
@@ -47,6 +47,7 @@ contains
         call test_geodesic_metrics()
         call test_inplrotdist_poles()
         call test_euler_about_ref()
+        call test_euler_about_cell()
         call test_euler_inpl_closest()
         call test_euler_compose_vs_compeuler()
         call test_ori2str_and_str2ori_roundtrip()
@@ -656,6 +657,46 @@ contains
         call assert_real(130., e(3), DEG_TOL, 'a triplet beside the pole read about the pole takes e1 + e3')
         call a%kill
     end subroutine test_euler_about_ref
+
+    !> A stored pose read about its cell (euler_about_cell): on the cell as stored, a fractional e3 included, and at a
+    !! pole as euler_about_ref; off the cell (a view-refined pose) the cell's direction with the in-plane angle that
+    !! brings it closest to the pose: only the tilt away from it, while the stored e3 read as is lies far off near the pole
+    subroutine test_euler_about_cell()
+        type(ori) :: a
+        real      :: e(3), cell(3), pose(3), r_pose(3,3), tilt(3,3), c3, s3, ang_cell, ang_naive
+        write(*,'(A)') 'test_euler_about_cell'
+        call a%new_ori(.false.)
+        e = euler_about_cell([40., 60., 123.4567], [40., 60., 0.])
+        call assert_true(all(e == [40., 60., 123.4567]), 'on the cell a pose is read as stored, its fractional e3 included')
+        call a%set_euler([37., 0., 112.5])
+        e = euler_about_cell(a%get_euler(), [37., 0., 0.])
+        call assert_real(112.5, e(3), DEG_TOL, 'at the pole the in-plane angle about the cell comes back')
+        ! off the cell beside the pole: the cell's frame tilted by 3 degrees about its in-plane x axis, then turned by 20
+        cell   = [40., 5., 0.]
+        c3     = cos(3. * acos(-1.) / 180.)
+        s3     = sin(3. * acos(-1.) / 180.)
+        tilt   = reshape([1., 0., 0., 0., c3, s3, 0., -s3, c3], [3,3])
+        r_pose = matmul(euler2m([0., 0., 20.]), matmul(tilt, euler2m(cell)))
+        pose   = m2euler(r_pose)
+        e      = euler_about_cell(pose, cell)
+        call assert_true(all(e(1:2) == cell(1:2)), 'off the cell the cell''s direction is taken')
+        ang_cell  = rot_angle(euler2m(e), r_pose)
+        ang_naive = rot_angle(euler2m([cell(1), cell(2), pose(3)]), r_pose)
+        call assert_true(ang_cell <= 3. + DEG_TOL, 'the closest in-plane angle leaves only the tilt (3 degrees)')
+        call assert_true(ang_naive > ang_cell + 1., 'the stored e3 read as is lies farther from the pose')
+        call a%kill
+
+    contains
+
+        !> the angle (degrees) of the rotation between two matrices
+        real function rot_angle( r1, r2 )
+            real, intent(in) :: r1(3,3), r2(3,3)
+            real :: tr
+            tr = sum(r1 * r2)
+            rot_angle = rad2deg(acos(max(-1., min(1., 0.5 * (tr - 1.)))))
+        end function rot_angle
+
+    end subroutine test_euler_about_cell
 
     !> euler_inpl_closest against a brute-force scan of trace(R(e1_dir, e2_dir, e3) R^T) over e3: off the poles, at
     !! both poles (a normalised triplet holds the in-plane angle in e1), beside them, and for the same direction

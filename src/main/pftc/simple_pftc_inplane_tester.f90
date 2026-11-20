@@ -11,9 +11,9 @@ use simple_syslib,                  only: del_file
 use simple_builder,                 only: builder
 use simple_image,                   only: image
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-use simple_polarft_calc,            only: polarft_calc, vol_pad2ref_pfts_opt
+use simple_polarft_calc,            only: polarft_calc, vol_pad2ref_pfts_opt, shift_ptcl2ref, shift_ref2ptcl
 use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad, fit_quadratic_step, grid_stencil_exists, FIT_CURVATURE, FIT_STEP, &
-    &shift_ptcl2ref, shift_ref2ptcl, shsrch_lm_terms, shsrch_callback_profile
+    &shsrch_lm_terms, shsrch_callback_profile
 use simple_strategy2D_srch,         only: strategy2D_srch, strategy2D_spec
 use simple_eul_prob_tab_utils,      only: posterior_temperature, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
 use simple_oris,                    only: oris
@@ -63,7 +63,7 @@ real(sp), allocatable, target :: sigma2_fixture(:,:)
 contains
 
     subroutine run_all_pftc_inplane_tests()
-        use simple_polarft_cont_calc_tester, only: run_all_polarft_cont_calc_tests
+        use simple_polarft_cont_calc, only: run_all_polarft_cont_calc_tests
         write(*,'(A)') '**** running all pftc in-plane tests ****'
         call test_grid_fit_step()
         call test_shift_frames()

@@ -43,6 +43,7 @@ public :: inpl_view_weights, marginal_dist
 public :: screen_pool_size, SCREEN_QUANTILE
 public :: shift_needs_disk, disk_radius_px, shift_box_radius, next_shift_width, record_shift_state, start_shift_state
 public :: map_prior_weight, insert_pose_loss, update_screen_best, print_disk_set, insert_cone_from_fsc
+public :: merge_view_basins
 private
 #include "simple_local_flags.inc"
 
@@ -145,6 +146,8 @@ type :: prob_readout
     integer        :: ins_nptcls = 0, ins_npose = 0, ins_ncapped = 0
     integer(int64) :: ins_nelig = 0_int64
     real(dp)       :: ins_wc_sum = 0.d0    !< the committed weights' sum
+    integer        :: view_nptcls = 0, view_npose = 0, view_nmerged = 0 !< cont_view's extras: particles, basins inserted, extras merged
+    real(dp)       :: view_wc_sum = 0.d0   !< the committed basins' weights' sum
     integer        :: neff_nrows = 0
     real(dp)       :: neff_sum_draw = 0.d0 !< sum over the kept rows of exp(entropy) at the draw's factor
     real(dp)       :: neff_sum_phys = 0.d0 !< the same at factor 1
@@ -262,6 +265,7 @@ contains
     procedure :: has_space => insert_cone_has_space
     procedure :: get_angle => insert_cone_get_angle
     procedure :: within    => insert_cone_within
+    procedure :: within_poses => insert_cone_within_poses
     procedure :: kill      => insert_cone_kill
 end type prob_insert_cone
 
@@ -1375,6 +1379,22 @@ contains
         call flush(logfhandle)
     end subroutine insert_report_counts
 
+    !> the insertion report under cont_view: the basins inserted per particle after the view solves, the share of the
+    !! refined extras merged into another basin, and the committed basin's mean weight
+    subroutine view_insert_report_counts( nptcls, npose, nmerged, wc_sum, kmax )
+        integer,  intent(in) :: nptcls, npose, nmerged, kmax
+        real(dp), intent(in) :: wc_sum
+        character(len=32) :: ninsert, wcommit, pct_merged
+        if( nptcls < 1 ) return
+        write(ninsert,'(F32.2)') 1. + real(npose) / real(nptcls)
+        wcommit    = fmt_dec(100. * real(wc_sum) / real(nptcls), 0)
+        pct_merged = fmt_dec(100. * real(nmerged) / real(max(1, npose + nmerged)), 0)
+        write(logfhandle,'(A)') log_item('POSES INSERTED', trim(adjustl(ninsert))//' per particle after the view solves (topk '//&
+            &int2str(kmax)//'), '//trim(adjustl(pct_merged))//'% of the refined extras merged within the cone; '//&
+            &trim(adjustl(wcommit))//'% of the weight on the assigned basin')
+        call flush(logfhandle)
+    end subroutine view_insert_report_counts
+
     !> the readout record of part ipart: prob_readout_part<NN>.txt
     function prob_readout_fname( ipart, numlen ) result( fname )
         integer, intent(in) :: ipart, numlen
@@ -1404,6 +1424,10 @@ contains
         write(funit,'(a,1x,i0)')      'ins_ncapped',   rec%ins_ncapped
         write(funit,'(a,1x,i0)')      'ins_nelig',     rec%ins_nelig
         write(funit,'(a,1x,es24.16)') 'ins_wc_sum',    rec%ins_wc_sum
+        write(funit,'(a,1x,i0)')      'view_nptcls',   rec%view_nptcls
+        write(funit,'(a,1x,i0)')      'view_npose',    rec%view_npose
+        write(funit,'(a,1x,i0)')      'view_nmerged',  rec%view_nmerged
+        write(funit,'(a,1x,es24.16)') 'view_wc_sum',   rec%view_wc_sum
         write(funit,'(a,1x,i0)')      'neff_nrows',    rec%neff_nrows
         write(funit,'(a,1x,es24.16)') 'neff_sum_draw', rec%neff_sum_draw
         write(funit,'(a,1x,es24.16)') 'neff_sum_phys', rec%neff_sum_phys
@@ -1452,6 +1476,10 @@ contains
         call read_int('ins_ncapped',   rec%ins_ncapped)
         call read_i8 ('ins_nelig',     rec%ins_nelig)
         call read_dp ('ins_wc_sum',    rec%ins_wc_sum)
+        call read_int('view_nptcls',   rec%view_nptcls)
+        call read_int('view_npose',    rec%view_npose)
+        call read_int('view_nmerged',  rec%view_nmerged)
+        call read_dp ('view_wc_sum',   rec%view_wc_sum)
         call read_int('neff_nrows',    rec%neff_nrows)
         call read_dp ('neff_sum_draw', rec%neff_sum_draw)
         call read_dp ('neff_sum_phys', rec%neff_sum_phys)
@@ -1538,6 +1566,10 @@ contains
         acc%ins_ncapped   = acc%ins_ncapped   + rec%ins_ncapped
         acc%ins_nelig     = acc%ins_nelig     + rec%ins_nelig
         acc%ins_wc_sum    = acc%ins_wc_sum    + rec%ins_wc_sum
+        acc%view_nptcls   = acc%view_nptcls   + rec%view_nptcls
+        acc%view_npose    = acc%view_npose    + rec%view_npose
+        acc%view_nmerged  = acc%view_nmerged  + rec%view_nmerged
+        acc%view_wc_sum   = acc%view_wc_sum   + rec%view_wc_sum
         acc%neff_nrows    = acc%neff_nrows    + rec%neff_nrows
         acc%neff_sum_draw = acc%neff_sum_draw + rec%neff_sum_draw
         acc%neff_sum_phys = acc%neff_sum_phys + rec%neff_sum_phys
@@ -1597,7 +1629,9 @@ contains
                 ! the share of drawn poses that are the particle's most probable one (the row mode)
                 write(logfhandle,'(A)') log_item('POSE ASSIGNMENT', trim(adjustl(mode_pct))//&
                     &'% of particles at their best pose'//neff_clause(rec%neff_nrows, rec%neff_sum_draw, 'poses')//note)
-                if( rec%l_extras )then
+                if( rec%view_nptcls > 0 )then
+                    call view_insert_report_counts(rec%view_nptcls, rec%view_npose, rec%view_nmerged, rec%view_wc_sum, rec%kmax)
+                else if( rec%l_extras )then
                     call insert_report_counts(rec%ins_nptcls, rec%ins_npose, rec%ins_wc_sum, rec%ins_ncapped, rec%kmax)
                 else if( rec%kmax > 1 )then
                     write(logfhandle,'(A)') log_item('POSES INSERTED', '1 per particle, the assigned pose only '//&
@@ -2135,18 +2169,32 @@ contains
         class(prob_insert_cone), intent(in) :: self
         integer,                 intent(in) :: istate, proj_c, inpl_c, proj_r, inpl_r
         real,                    intent(in) :: sh_c(2), sh_r(2)
-        real    :: rc(3,3), rr(3,3), m(3,3), ds, trmax, tr, alpha
-        integer :: g
+        real :: rc(3,3), rr(3,3)
         l_in = .false.
         if( .not. self%has_space() ) return
         if( istate < 1 .or. istate > size(self%res) ) return
         if( .not. (self%res(istate) > 0.) ) return
         if( proj_c < 1 .or. proj_c > self%nspace .or. proj_r < 1 .or. proj_r > self%nspace ) return
         if( inpl_c < 1 .or. inpl_c > self%nrots  .or. inpl_r < 1 .or. inpl_r > self%nrots  ) return
+        rc   = matmul(self%rz(:,:,inpl_c), self%dmat(:,:,proj_c))
+        rr   = matmul(self%rz(:,:,inpl_r), self%dmat(:,:,proj_r))
+        l_in = self%within_poses(istate, rc, sh_c, rr, sh_r)
+    end function insert_cone_within
+
+    !> insert_cone_within for two poses as rotation matrices (the view solves' poses, off the grid) and stored shifts:
+    !! whether pose r lies within state istate's cone of pose c
+    logical function insert_cone_within_poses( self, istate, rc, sh_c, rr, sh_r ) result( l_in )
+        class(prob_insert_cone), intent(in) :: self
+        integer,                 intent(in) :: istate
+        real,                    intent(in) :: rc(3,3), sh_c(2), rr(3,3), sh_r(2)
+        real    :: m(3,3), ds, trmax, tr, alpha
+        integer :: g
+        l_in = .false.
+        if( .not. self%has_space() ) return
+        if( istate < 1 .or. istate > size(self%res) ) return
+        if( .not. (self%res(istate) > 0.) ) return
         ds = self%smpd * hypot(sh_r(1) - sh_c(1), sh_r(2) - sh_c(2))
         if( ds > self%res(istate) ) return
-        rc    = matmul(self%rz(:,:,inpl_c), self%dmat(:,:,proj_c))
-        rr    = matmul(self%rz(:,:,inpl_r), self%dmat(:,:,proj_r))
         m     = matmul(transpose(rc), rr)
         trmax = -huge(trmax)
         do g = 1,self%nsym
@@ -2156,7 +2204,7 @@ contains
         enddo
         alpha = acos(max(-1., min(1., 0.5 * (trmax - 1.))))
         l_in  = 0.5 * self%diam * alpha + ds <= self%res(istate)
-    end function insert_cone_within
+    end function insert_cone_within_poses
 
     subroutine insert_cone_kill( self )
         class(prob_insert_cone), intent(inout) :: self
@@ -2170,6 +2218,123 @@ contains
         self%nrots  = 0
         self%nsym   = 0
     end subroutine insert_cone_kill
+
+    !> The basins of one particle's view-refined poses (cont_view, topk > 1; section 6 of polar_continuous_view.md):
+    !! pose 0 the committed one, poses 1..n its refined extras (rotation matrices, stored shifts, scores exp(-loss),
+    !! validity), linked when within state istate's cone of one another (single linkage: the map resolves them alike),
+    !! each basin weighted by the posterior at temperature temp over the losses with its members' weights added; a basin
+    !! other than the committed pose's below the share wmin is dropped and the rest renormalised. On return basin(0:n)
+    !! each pose's basin (0: invalid or dropped), nbasins, best(0:n) whether the pose is its basin's best (the highest
+    !! score; the committed basin's best may be an extra) and w(0:n) the basin's weight on its best, 0 elsewhere. An
+    !! invalid committed pose gives no basin
+    subroutine merge_view_basins( cone, istate, temp, n, rmats, shifts, scores, valid, wmin, basin, nbasins, w, best )
+        class(prob_insert_cone), intent(in)  :: cone
+        integer,                 intent(in)  :: istate, n
+        real,                    intent(in)  :: temp, rmats(3,3,0:n), shifts(2,0:n), scores(0:n), wmin
+        logical,                 intent(in)  :: valid(0:n)
+        integer,                 intent(out) :: basin(0:n), nbasins
+        real,                    intent(out) :: w(0:n)
+        logical,                 intent(out) :: best(0:n)
+        real(dp) :: u(0:n), wb(0:n), tot, arg
+        real     :: loss(0:n), lmin
+        integer  :: label(0:n), i, j, k, li, lj, m, b
+        logical  :: changed
+        basin   = 0
+        nbasins = 0
+        w       = 0.
+        best    = .false.
+        if( .not. valid(0) ) return
+        ! single linkage: a pose takes the lowest label of any pose within the cone of it, until nothing moves
+        label = -1
+        do i = 0,n
+            if( valid(i) ) label(i) = i
+        enddo
+        changed = .true.
+        do while( changed )
+            changed = .false.
+            do i = 0,n
+                if( label(i) < 0 ) cycle
+                do j = 0,n
+                    if( label(j) < 0 ) cycle
+                    if( label(j) == label(i) ) cycle
+                    if( .not. cone%within_poses(istate, rmats(:,:,j), shifts(:,j), rmats(:,:,i), shifts(:,i)) ) cycle
+                    li = label(i)
+                    lj = label(j)
+                    m  = min(li, lj)
+                    do k = 0,n
+                        if( label(k) == li .or. label(k) == lj ) label(k) = m
+                    enddo
+                    changed = .true.
+                enddo
+            enddo
+        enddo
+        ! the basins in order of their lowest member: the committed pose's is 1
+        do i = 0,n
+            if( label(i) < 0 ) cycle
+            if( basin(i) > 0 ) cycle
+            nbasins = nbasins + 1
+            do k = i,n
+                if( label(k) == label(i) ) basin(k) = nbasins
+            enddo
+        enddo
+        ! the posterior over the losses at the particle's temperature, the members' weights added per basin
+        lmin = huge(lmin)
+        do i = 0,n
+            if( basin(i) == 0 ) cycle
+            loss(i) = -log(max(scores(i), 1.e-30))
+            lmin    = min(lmin, loss(i))
+        enddo
+        u  = 0.d0
+        wb = 0.d0
+        do i = 0,n
+            if( basin(i) == 0 ) cycle
+            arg = real(max(0.,temp),dp) * real(loss(i) - lmin,dp)
+            if( arg < 80.d0 ) u(i) = exp(-arg)
+            wb(basin(i)) = wb(basin(i)) + u(i)
+        enddo
+        tot = sum(wb(1:nbasins))
+        if( .not. (tot > 0.d0) )then
+            ! no mass but the committed pose's basin: it alone
+            do i = 0,n
+                if( basin(i) /= 1 ) basin(i) = 0
+            enddo
+            nbasins = 1
+            wb      = 0.d0
+            wb(1)   = 1.d0
+        else
+            wb(1:nbasins) = wb(1:nbasins) / tot
+            ! basins below the minimum share dropped (never the committed pose's), the rest renormalised
+            do b = 2,nbasins
+                if( wb(b) < real(wmin,dp) )then
+                    do i = 0,n
+                        if( basin(i) == b ) basin(i) = 0
+                    enddo
+                    wb(b) = 0.d0
+                endif
+            enddo
+            tot = sum(wb(1:nbasins))
+            wb(1:nbasins) = wb(1:nbasins) / tot
+        endif
+        ! each surviving basin's best member carries its weight; dropped basins are renumbered away
+        k = 0
+        do b = 1,nbasins
+            if( .not. any(basin == b) ) cycle
+            k = k + 1
+            m = -1
+            do i = 0,n
+                if( basin(i) /= b ) cycle
+                basin(i) = k
+                if( m < 0 )then
+                    m = i
+                else if( scores(i) > scores(m) )then
+                    m = i
+                endif
+            enddo
+            best(m) = .true.
+            w(m)    = real(wb(b))
+        enddo
+        nbasins = k
+    end subroutine merge_view_basins
 
     !> The extra poses of the weighted insertion (topk > 1): the kmax - 1 eligible entries of a row (mask: the refined
     !! ones within the cone) of highest posterior p_r proportional to exp(-temp (dist_r - dist_min)), other than the

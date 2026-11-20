@@ -3,14 +3,14 @@ module simple_pftc_shsrch_grad
 use iso_fortran_env, only: int64
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
-use simple_opt_spec,  only: opt_spec
-use simple_optimizer, only: optimizer
-use simple_builder,   only: builder
+use simple_opt_spec,     only: opt_spec
+use simple_optimizer,    only: optimizer
+use simple_builder,      only: builder
+use simple_polarft_calc, only: shift_ptcl2ref, shift_ref2ptcl
 implicit none
 
 public :: pftc_shsrch_grad
 public :: fit_quadratic_step, grid_stencil_exists
-public :: shift_ptcl2ref, shift_ref2ptcl
 public :: FIT_EDGE, FIT_CURVATURE, FIT_STEP, FIT_LIMITS, FIT_VALUE, FIT_NREASONS
 public :: shsrch_lm_terms, shsrch_callback_profile
 private
@@ -896,7 +896,7 @@ contains
         logical,       optional, intent(out)   :: evaluation_valid, improved
         real(dp),      optional, intent(out)   :: initial_cost_out
         integer,                 intent(in)    :: irot_in
-        real(dp),      optional, intent(out)   :: xsol(:)  !< the solution (native shift, rotation index[, tilts]) when improved
+        real(dp),      optional, intent(out)   :: xsol(:)  !< the result's point: the solution when improved, else the seed (shift in the reference frame, rotation index[, tilts])
         ! a final cost this far outside its physical range is a series artifact: invalid solve
         real(dp), parameter :: JOINT_NEG_COST_TOL = 1.d-2
         ! a gain must be material, not solver noise
@@ -934,6 +934,8 @@ contains
             self%ospec%x = [xy_in, real(irot)]
         endif
         self%ospec%x_8 = dble(self%ospec%x)
+        ! the seed, replaced by the solution when the solve improves
+        if( present(xsol) ) xsol = self%ospec%x_8(1:size(xsol))
         ! the prior is centred at the start, the committed shift, kept as the stored shift (xy_in is expressed
         ! at irot_in)
         call self%set_prior_centre(self%ospec%x_8(1:2), irot_in)
@@ -1141,25 +1143,6 @@ contains
         self%profile_bank_builds = self%profile_bank_builds + int(coarse_num_steps*coarse_num_steps, int64)
         self%grid_bank_ptcl      = self%particle
     end subroutine build_grid_bank
-
-    !> a shift of the particle frame as the shift of the reference at in-plane angle rot (degrees);
-    !! inverse of shift_ref2ptcl, the conversion minimize applies with sh_rot
-    pure function shift_ptcl2ref( u, rot ) result( s )
-        real, intent(in) :: u(2), rot
-        real :: s(2), rotmat(2,2)
-        call rotmat2d(rot, rotmat)
-        s(1) = u(1) * rotmat(1,1) + u(2) * rotmat(1,2)
-        s(2) = u(1) * rotmat(2,1) + u(2) * rotmat(2,2)
-    end function shift_ptcl2ref
-
-    !> a shift of the reference at in-plane angle rot (degrees) as the shift of the particle frame
-    pure function shift_ref2ptcl( s, rot ) result( u )
-        real, intent(in) :: s(2), rot
-        real :: u(2), rotmat(2,2)
-        call rotmat2d(rot, rotmat)
-        u(1) = s(1) * rotmat(1,1) + s(2) * rotmat(2,1)
-        u(2) = s(1) * rotmat(1,2) + s(2) * rotmat(2,2)
-    end function shift_ref2ptcl
 
     !> a grid point has the full 3x3 stencil of the quadratic step unless it lies on the edge of the lattice
     pure logical function grid_stencil_exists( ix, iy )

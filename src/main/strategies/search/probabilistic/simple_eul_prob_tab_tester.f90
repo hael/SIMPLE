@@ -13,7 +13,7 @@ use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
 use simple_eul_prob_tab_utils, only: record_seed_shift, cone_view_dist, cone_cell_radii, cone_reachable_cells, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
     &posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras, prob_beta_at, prob_neff_readout, &
-    &prob_insert_table, prob_insert_poses, prob_insert_pose, prob_insert_cone, &
+    &prob_insert_table, prob_insert_poses, prob_insert_pose, prob_insert_cone, merge_view_basins, &
     &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss, update_screen_best, start_shift_state, &
     &prob_readout, write_prob_readout, read_prob_readout, add_prob_readout, inpl_quadrature, inpl_view_weights, &
     &PROB_READOUT_3D_DENSE, PROB_READOUT_2D_DENSE, report_prob_readout, prob_row_marginal, prob_row_record, prob_row_file, &
@@ -65,6 +65,7 @@ contains
         call test_start_shift_state()
         write(*,'(A)') 'test_insert_cone'
         call test_insert_cone()
+        call test_merge_view_basins()
         write(*,'(A)') 'test_insert_table'
         call test_insert_table()
         write(*,'(A)') 'test_insert_extras_multistate'
@@ -1598,6 +1599,56 @@ contains
     !! in psi, yet half a turn apart as rotations, so not within; with the second's in-plane angle a half-turn away
     !! they are 2 degrees apart as rotations, so within. Modulo C4, equatorial azimuths 1 and 89 degrees are 2
     !! degrees apart and pass a 3-degree cone that C1 rejects
+    subroutine test_merge_view_basins()
+        type(prob_insert_cone) :: cone
+        type(oris)             :: eul
+        type(sym)              :: se
+        real    :: rmats(3,3,0:3), shifts(2,0:3), scores(0:3), w(0:3), temp, wexp
+        integer :: basin(0:3), nbasins
+        logical :: valid(0:3), best(0:3)
+        write(*,'(A)') 'test_merge_view_basins'
+        call se%new('c1')
+        call eul%new(2, is_ptcl=.false.)
+        call eul%set_euler(1, [10., 60., 0.])
+        call eul%set_euler(2, [10., 90., 0.])
+        ! 11.46 degrees at equal shifts
+        call cone%new([10.], 100., 1.)
+        call cone%set_space(eul, se, 36)
+        ! pose 0 the committed one; 1 and 2 eight degrees apart in a chain (2 is 16 from 0: single linkage); 3 far
+        rmats(:,:,0) = euler2m([10., 60., 20.])
+        rmats(:,:,1) = euler2m([10., 68., 20.])
+        rmats(:,:,2) = euler2m([10., 76., 20.])
+        rmats(:,:,3) = euler2m([10., 90., 20.])
+        shifts = 0.
+        temp   = 1.
+        scores = exp(-[1.0, 0.5, 2.0, 1.5])
+        valid  = .true.
+        call merge_view_basins(cone, 1, temp, 3, rmats, shifts, scores, valid, 0.01, basin, nbasins, w, best)
+        call assert_int(2, nbasins, 'merge: the chained poses are one basin, the far one another')
+        call assert_true(basin(0) == 1 .and. basin(1) == 1 .and. basin(2) == 1 .and. basin(3) == 2, 'merge: the basins, the committed first')
+        call assert_true(best(1) .and. .not. best(0) .and. .not. best(2) .and. best(3), 'merge: each basin''s best member, an extra beating the committed pose')
+        call assert_real(1., w(1) + w(3), 1.e-5, 'merge: the basin weights sum to one')
+        call assert_true(w(0) == 0. .and. w(2) == 0., 'merge: only the best member carries its basin''s weight')
+        wexp = real((exp(-1.d0) + exp(-0.5d0) + exp(-2.d0)) / (exp(-1.d0) + exp(-0.5d0) + exp(-2.d0) + exp(-1.5d0)))
+        call assert_real(wexp, w(1), 1.e-5, 'merge: the members'' posterior weights add')
+        ! a far basin below the minimum share is dropped and the committed basin takes all the weight
+        scores(3) = exp(-8.)
+        call merge_view_basins(cone, 1, temp, 3, rmats, shifts, scores, valid, 0.01, basin, nbasins, w, best)
+        call assert_int(1, nbasins, 'merge: a basin below the minimum share is dropped')
+        call assert_true(basin(3) == 0 .and. w(1) == 1., 'merge: the committed basin takes all the weight')
+        ! an invalid extra is left out, which breaks the chain
+        scores(3) = exp(-1.5)
+        valid(1)  = .false.
+        call merge_view_basins(cone, 1, temp, 3, rmats, shifts, scores, valid, 0.01, basin, nbasins, w, best)
+        call assert_true(basin(1) == 0 .and. nbasins == 3 .and. best(0) .and. best(2) .and. best(3), 'merge: an invalid extra is left out')
+        ! without a valid committed pose there is no basin
+        valid(0) = .false.
+        call merge_view_basins(cone, 1, temp, 3, rmats, shifts, scores, valid, 0.01, basin, nbasins, w, best)
+        call assert_int(0, nbasins, 'merge: without a valid committed pose there is no basin')
+        call cone%kill
+        call eul%kill
+    end subroutine test_merge_view_basins
+
     subroutine test_insert_cone()
         type(prob_insert_cone) :: cone
         type(oris)             :: eul, eul2

@@ -30,7 +30,7 @@ use simple_strategy3D_prob,            only: strategy3D_prob
 use simple_strategy3D_cont,            only: strategy3D_cont
 use simple_cartft_pose_opt,            only: cartft_pose_work
 use simple_strategy3D_shc,             only: strategy3D_shc
-use simple_strategy3D_srch,            only: strategy3D_spec
+use simple_strategy3D_srch,            only: strategy3D_spec, view_solve
 use simple_shiftmap_srch,              only: setup_shiftmap_srch
 use simple_matcher_2Dprep,             only: ptcl_on_disk
 use simple_strategy3D,                 only: strategy3D
@@ -82,10 +82,15 @@ contains
         type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:), pinds(:)
         real,                      allocatable :: incr_shifts(:,:)
-        ! the committed poses' view solutions (cont_view): the final evaluation's point gives the sigma2 residual
-        real(dp),                  allocatable :: view_x(:,:)
-        logical,                   allocatable :: l_view(:)
-        integer(int64)      :: view_counts(3)  !< view solves, sections cut, cost evaluations (cont_view)
+        ! the committed poses' view solves (cont_view): a valid solve's point gives the sigma2 residual on its own section;
+        ! the extras' outcome per particle (topk > 1) for the bench and the readout
+        type(view_solve),          allocatable :: view_sol(:)
+        integer,                   allocatable :: view_nsolved(:), view_nins(:), view_nmerged(:)
+        real,                      allocatable :: view_wc(:)
+        logical,                   allocatable :: view_counted(:)
+        integer(int64)      :: view_counts(6)  !< view solves, sections cut, cost evaluations, extras solved, inserted, merged
+        integer             :: view_nptcls_ins = 0
+        real(dp)            :: view_wc_sum = 0.d0
         type(cartft_calc), allocatable, target :: cftc_view !< the B-spline references of the view refinement (cont_view)
         type(ori)           :: orientation
         type(refine3D_ctrl) :: ctrl
@@ -233,8 +238,10 @@ contains
             call b_ptr%spproj_field%set_all2single('cont_inpl_improved',  0.)
         endif
         allocate(incr_shifts(2,batchsz_max), source=0.0)
-        allocate(view_x(5,batchsz_max), source=0.d0)
-        allocate(l_view(batchsz_max), source=.false.)
+        allocate(view_sol(batchsz_max))
+        allocate(view_nsolved(batchsz_max), view_nins(batchsz_max), view_nmerged(batchsz_max), source=0)
+        allocate(view_wc(batchsz_max), source=1.)
+        allocate(view_counted(batchsz_max), source=.false.)
         view_counts = 0_int64
         call reads%new(p_ptr)
         call reads%expect(pinds(1:nptcls2update))
@@ -285,9 +292,10 @@ contains
                 endif
                 call choose_and_run_strategy(iptcl, iptcl_batch, ithr, has_been_searched)
                 if( ctrl%do_emit_sigma .and. .not. p_ptr%l_cart_refine )then
-                    if( l_view(iptcl_batch) )then
-                        ! the committed view is off the grid: the residual of the solve's final evaluation
-                        call b_ptr%esig%calc_sigma2(b_ptr%pcont, iptcl, view_x(:,iptcl_batch))
+                    if( view_sol(iptcl_batch)%evaluated )then
+                        ! a valid view solve: the residual at its point on its own section (the seed when it did not improve)
+                        call b_ptr%esig%calc_sigma2(b_ptr%pcont, iptcl, view_sol(iptcl_batch)%state, &
+                            &b_ptr%pftc%ptcl_iseven(iptcl), view_sol(iptcl_batch)%rref, view_sol(iptcl_batch)%x)
                     else
                         call b_ptr%spproj_field%get_ori(iptcl, orientation)
                         call orientation%set_shift(incr_shifts(:,iptcl_batch))
@@ -297,6 +305,15 @@ contains
                 ts_thr(ithr) = ts_thr(ithr) + (omp_get_wtime() - t_ptcl)
             enddo
             !$omp end parallel do
+            ! the extras' outcome under cont_view, summed over the batch for the bench and the readout
+            do iptcl_batch = 1,batchsz
+                if( .not. view_counted(iptcl_batch) ) cycle
+                view_nptcls_ins = view_nptcls_ins + 1
+                view_counts(4)  = view_counts(4) + int(view_nsolved(iptcl_batch),int64)
+                view_counts(5)  = view_counts(5) + int(view_nins(iptcl_batch),int64)
+                view_counts(6)  = view_counts(6) + int(view_nmerged(iptcl_batch),int64)
+                view_wc_sum     = view_wc_sum + real(view_wc(iptcl_batch),dp)
+            enddo
             wall_search = wall_search + (omp_get_wtime() - t_region)
             if( ctrl%do_bench ) rt_align = rt_align + toc(t_align)
         enddo
@@ -305,6 +322,9 @@ contains
             call cont_work_sum%add(cont_work(ithr))
         enddo
         if( ctrl%do_pipeline )then
+            ! the extras' outcome after the view solves (cont_view) goes into the record the table writes or reports
+            if( p_ptr%l_cont_view ) call eulprob_obj_part%set_view_readout(view_nptcls_ins, int(view_counts(5)), &
+                &int(view_counts(6)), view_wc_sum)
             call eulprob_obj_part%close_assignment
             if( present(readout) ) readout = eulprob_obj_part%get_readout()
             if( ctrl%do_bench ) fill_prof = eulprob_obj_part%get_fill_profile()
@@ -434,6 +454,11 @@ contains
                 if( view_counts(1) > 0_int64 )then
                     write(fnr,'(a,f0.3)') 'match3D view sections per solve     : ', real(view_counts(2),dp)/real(view_counts(1),dp)
                     write(fnr,'(a,f0.3)') 'match3D view evaluations per solve  : ', real(view_counts(3),dp)/real(view_counts(1),dp)
+                endif
+                if( p_ptr%topk > 1 )then
+                    write(fnr,'(a,i0)') 'match3D view extras solved          : ', view_counts(4)
+                    write(fnr,'(a,i0)') 'match3D view extra basins inserted  : ', view_counts(5)
+                    write(fnr,'(a,i0)') 'match3D view extras merged          : ', view_counts(6)
                 endif
             endif
             write(fnr,'(a)') ''
@@ -704,13 +729,15 @@ contains
                 ! update needs (the shift the polar search object records as its previous shift)
                 shift_before = b_ptr%spproj_field%get_2Dshift(iptcl)
                 call strategy3Dsrch(iptcl_batch)%ptr%srch(b_ptr%spproj_field, ithr)
-                ! the view solve's pose replaces the drawn cell's that assign_ori wrote (cont_view)
-                l_view(iptcl_batch) = .false.
+                ! the committed pose's view solve (cont_view): its point for the sigma2 residual; the extras' outcome
+                view_sol(iptcl_batch)     = view_solve()
+                view_counted(iptcl_batch) = .false.
                 if( p_ptr%l_cont_view )then
                     select type( prob_srch => strategy3Dsrch(iptcl_batch)%ptr )
                         type is( strategy3D_prob )
-                            call prob_srch%s%commit_view()
-                            call prob_srch%s%get_view_solution(l_view(iptcl_batch), view_x(:,iptcl_batch))
+                            call prob_srch%s%get_view_solution(view_sol(iptcl_batch))
+                            call prob_srch%s%get_view_extras_counts(view_counted(iptcl_batch), view_nsolved(iptcl_batch), &
+                                &view_nins(iptcl_batch), view_nmerged(iptcl_batch), view_wc(iptcl_batch))
                     end select
                 endif
                 ! cont_inpl_attempted/_improved are written by the search object that ran the

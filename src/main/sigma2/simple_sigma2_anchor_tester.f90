@@ -462,25 +462,25 @@ contains
         call esig%kill()
     end subroutine test_pole_residuals
 
-    !> A pose's shift is the search's increment in the reference frame: the residual is gen_sigma_contrib's at that
-    !! shift rotated into the particle frame at the pose's rotation, and differs from the unrotated shift's
+    !> A pose's shift is the search's increment as stored (the particle frame): the residual is gen_sigma_contrib's at
+    !! that shift converted to the reference frame at the pose's rotation (shift_ptcl2ref), and differs from the
+    !! unconverted shift's
     subroutine test_shift_frame()
         use simple_defs, only: PI
-        use simple_math, only: rotmat2d
         use simple_type_defs, only: OBJFUN_EUCLID
         use simple_parameters, only: parameters
-        use simple_polarft_calc, only: polarft_calc
+        use simple_polarft_calc, only: polarft_calc, shift_ptcl2ref
         use simple_euclid_sigma2, only: euclid_sigma2
         use simple_ori, only: ori
         integer, parameter :: NPFT = 12, IROT = 4
-        real,    parameter :: SH_REF(2) = [1.3, -0.7]
+        real,    parameter :: SH_STORED(2) = [1.3, -0.7]
         class(parameters), allocatable, target :: params
         class(polarft_calc), allocatable :: calc
         class(euclid_sigma2), allocatable, target :: esig
         type(ori) :: pose
         complex :: particle(NPFT,2:NSH), reference(NPFT,2:NSH)
-        real :: spectra(NSH,2), theta, rotmat(2,2), sh_native(2)
-        real :: c_native(2:NSH), c_unrot(2:NSH)
+        real :: spectra(NSH,2), theta, sh_ref(2)
+        real :: c_ref(2:NSH), c_unrot(2:NSH)
         real, allocatable :: residual(:)
         integer :: r, k
         write(*,'(A)') 'test_shift_frame'
@@ -517,15 +517,14 @@ contains
         call pose%set('class', 1)
         ! off the pole, so e3 holds the in-plane angle
         call pose%set_euler([0., 90., 360. - calc%get_rot(IROT)])
-        call pose%set_shift(SH_REF)
+        call pose%set_shift(SH_STORED)
         call esig%calc_sigma2(calc, 1, pose, 'class')
         residual = esig%get_sigma2_part(1)
-        call rotmat2d(calc%get_rot(IROT), rotmat)
-        sh_native = matmul(SH_REF, transpose(rotmat))
-        call calc%gen_sigma_contrib(1, 1, sh_native, IROT, c_native)
-        call calc%gen_sigma_contrib(1, 1, SH_REF,    IROT, c_unrot)
-        call assert_true(all(residual == c_native), 'the residual is taken at the particle-frame shift')
-        call assert_true(maxval(abs(c_unrot - c_native)) > 1.e-3 * maxval(abs(c_native)), &
+        sh_ref = shift_ptcl2ref(SH_STORED, calc%get_rot(IROT))
+        call calc%gen_sigma_contrib(1, 1, sh_ref,    IROT, c_ref)
+        call calc%gen_sigma_contrib(1, 1, SH_STORED, IROT, c_unrot)
+        call assert_true(all(residual == c_ref), 'the residual is taken at the stored shift converted to the reference frame')
+        call assert_true(maxval(abs(c_unrot - c_ref)) > 1.e-3 * maxval(abs(c_ref)), &
             &'the fixture discriminates the frames')
         call pose%kill()
         call calc%kill()

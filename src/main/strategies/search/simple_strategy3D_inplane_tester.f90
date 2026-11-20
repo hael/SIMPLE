@@ -15,14 +15,14 @@ use simple_ui,                only: make_ui, get_prg_ptr
 use simple_ui_program,        only: ui_program, ui_program_input
 use simple_refine3D_strategy, only: strip_refine3D_search_only_args
 use simple_strategy3D_alloc,  only: clean_strategy3D, prep_strategy3D, s3D, seed_continuous_inplane_candidate
-use simple_strategy3D_srch,   only: strategy3D_srch, strategy3D_spec
-use simple_polarft_calc,      only: SHIFTMAP_WINDOW
+use simple_strategy3D_srch,   only: strategy3D_srch, strategy3D_spec, view_solve
+use simple_polarft_calc,      only: SHIFTMAP_WINDOW, shift_ref2ptcl, shift_ptcl2ref
 use simple_builder,           only: builder
 use simple_image,             only: image
 use simple_syslib,            only: del_file
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_strategy3D_utils,  only: resolve_inplane_e3, candidate_pose, assign_ori
-use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad, shift_ref2ptcl, shift_ptcl2ref
+use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad
 use simple_matcher_2Dprep,    only: prepimg4align
 use simple_matcher_ptcl_io,   only: prep_rec_observation, prep_rec_observation_ptcl, pass_team, killimgbatch, &
                                     &rec_state_half
@@ -554,7 +554,6 @@ contains
             use simple_ori_utils,           only: euler2m, m2euler
             use simple_oris,                only: oris
             use simple_ori,                 only: ori
-            use simple_core_module_api,     only: rotmat2d
             use simple_projector_pft_batch, only: fproject_polar_batch_opt
             use simple_polarft_calc,        only: vol_pad2ref_pfts_opt
             character(len=*), intent(in)  :: mode
@@ -568,14 +567,18 @@ contains
             type(strategy3D_spec)    :: spec
             type(oris)               :: os_true
             type(ori)                :: o_tmp
-            complex(sp), allocatable :: sections(:,:,:), pft(:,:), sect(:,:), dnv(:,:), resid(:,:), rot(:,:)
+            complex(sp), allocatable :: sections(:,:,:), pft(:,:), sect(:,:), resid(:,:), rot(:,:)
+            complex(sp) :: gq(3)
+            real(sp)    :: frame_sp(3,3), loc(3)
+            real(sp),    allocatable :: hc(:,:), kc(:,:)
             real,        allocatable :: rmat(:,:,:)
             real(sp),    allocatable :: contrib(:)
             real(dp) :: rcell(3,3), rtrue(3,3), rcomm(3,3), omega(2), x(5), recomp, cosang, xg(5), floss, gloss(5), wsum
             real(sp),    allocatable :: wk(:,:)
             real     :: euls(3), corr, sh(2), inpl_coord
             integer  :: pftsz, kfromto(2), pdim(3), irot, inpl, k, idir
-            logical  :: inpl_valid, committed
+            logical  :: inpl_valid, evaluated
+            type(view_solve) :: vs
             allocate(b, p)
             call write_view_phantom()
             call cline%set('vol1',      VIEW_PHANTOM)
@@ -665,31 +668,30 @@ contains
             total_error = acos(cosang) * 180.d0 / DPI
             call b%pcont%get_counts(counts(1), counts(2), counts(3))
             if( .not. p%l_cont_view )then
-                ! the bank residual at the stored increment rotated into the particle frame (calc_sigma2_pftc's
-                ! convention) is the joint cost's residual; the unrotated increment is not
+                ! the bank residual at the stored increment converted to the reference frame at the rotation
+                ! (shift_ptcl2ref, calc_sigma2_pftc's convention) is the joint cost's residual; the unconverted one's is not
                 block
-                    real     :: rm(2,2), xyn(2)
-                    real(sp) :: c_stored(kfromto(1):kfromto(2)), c_native(kfromto(1):kfromto(2))
-                    real(dp) :: fj, gj(3), w_stored, w_native
-                    call rotmat2d(b%pftc%get_rot(inpl), rm)
-                    xyn = matmul(sh, transpose(rm))
+                    real     :: xyn(2)
+                    real(sp) :: c_stored(kfromto(1):kfromto(2)), c_ref(kfromto(1):kfromto(2))
+                    real(dp) :: fj, gj(3), w_stored, w_ref
+                    xyn = shift_ptcl2ref(sh, b%pftc%get_rot(inpl))
                     call b%pftc%gen_sigma_contrib(VIEW_CELL, 1, sh,  inpl, c_stored)
-                    call b%pftc%gen_sigma_contrib(VIEW_CELL, 1, xyn, inpl, c_native)
+                    call b%pftc%gen_sigma_contrib(VIEW_CELL, 1, xyn, inpl, c_ref)
                     call b%pftc%gen_raw_euclid_grad_at_angle(VIEW_CELL, 1, real(xyn,dp), real(inpl,dp), fj, gj)
                     call b%pftc%get_sigma2_weights(wk)
-                    w_stored = 0.d0; w_native = 0.d0
+                    w_stored = 0.d0; w_ref = 0.d0
                     do k = kfromto(1), kfromto(2)
                         w_stored = w_stored + real(wk(k,1),dp) * real(c_stored(k),dp)
-                        w_native = w_native + real(wk(k,1),dp) * real(c_native(k),dp)
+                        w_ref    = w_ref    + real(wk(k,1),dp) * real(c_ref(k),dp)
                     enddo
                     w_stored = real(b%pftc%get_nrots(),dp) * w_stored / b%pftc%wsqsum_ptcl_now(1)
-                    w_native = real(b%pftc%get_nrots(),dp) * w_native / b%pftc%wsqsum_ptcl_now(1)
-                    write(*,'(A,3ES12.4)') '  joint cost at the committed cell; bank residual, unrotated and native shift: ', &
-                        &fj, w_stored, w_native
-                    call assert_true(abs(w_native - fj) <= VIEW_SIGMA_RTOL * abs(fj), &
-                        &'view off: the bank residual at the native shift is the joint cost''s residual (1e-4)')
+                    w_ref    = real(b%pftc%get_nrots(),dp) * w_ref    / b%pftc%wsqsum_ptcl_now(1)
+                    write(*,'(A,3ES12.4)') '  joint cost at the committed cell; bank residual at the stored and at the converted shift: ', &
+                        &fj, w_stored, w_ref
+                    call assert_true(abs(w_ref - fj) <= VIEW_SIGMA_RTOL * abs(fj), &
+                        &'view off: the bank residual at the converted shift is the joint cost''s residual (1e-4)')
                     call assert_true(abs(w_stored - fj) > 0.1d0 * abs(fj), &
-                        &'view off: the unrotated increment misplaces the shift (fixture discriminates)')
+                        &'view off: the unconverted increment misplaces the shift (fixture discriminates)')
                 end block
             endif
             if( p%l_cont_view )then
@@ -697,13 +699,27 @@ contains
                 call o_tmp%set_euler(m2euler(real(rcomm)))
                 call assert_true(nint(b%spproj_field%get(1,'proj')) == b%eulspace%find_closest_proj(o_tmp), &
                     &'cont_view='//trim(mode)//': proj is the grid direction nearest to the committed pose')
-                ! the sigma2 residual of the final evaluation against an independent recomputation
-                call srch%get_view_solution(committed, x)
-                call assert_true(committed, 'cont_view='//trim(mode)//': the view solve improved the drawn pose')
-                allocate(contrib(kfromto(1):kfromto(2)), sect(pftsz,kfromto(1):kfromto(2)), dnv(pftsz,kfromto(1):kfromto(2)), &
+                ! the sigma2 residual at the solve's point against an independent recomputation: the section at its
+                ! view gathered point by point from the B-spline references, shifted and rotated by hand
+                call srch%get_view_solution(vs)
+                evaluated = vs%evaluated
+                x         = vs%x
+                call assert_true(evaluated, 'cont_view='//trim(mode)//': the view solve is valid')
+                call assert_true(b%spproj_field%get(1,'cont_inpl_improved') > 0.5, &
+                    &'cont_view='//trim(mode)//': the view solve improved the drawn pose')
+                allocate(contrib(kfromto(1):kfromto(2)), sect(pftsz,kfromto(1):kfromto(2)), &
                     &resid(pftsz,kfromto(1):kfromto(2)), rot(pftsz,kfromto(1):kfromto(2)))
-                call b%pcont%sigma_contrib(1, x, contrib)
-                call b%pcont%section(1, .true., b%pcont%view_frame(rcell, x(4:5)), sect, dnv)
+                call b%pcont%sigma_contrib(1, 1, .true., rcell, x, contrib)
+                frame_sp = real(b%pcont%view_frame(rcell, x(4:5)), sp)
+                allocate(hc(kfromto(1):kfromto(2),pftsz), kc(kfromto(1):kfromto(2),pftsz))
+                call b%pftc%get_polar_coords(1, hc)
+                call b%pftc%get_polar_coords(2, kc)
+                do k = kfromto(1), kfromto(2)
+                    do irot = 1, pftsz
+                        loc = hc(k,irot)*frame_sp(1,:) + kc(k,irot)*frame_sp(2,:)
+                        call b%cftc%gather_ref(1, .true., loc, sect(irot,k), gq)
+                    enddo
+                enddo
                 call shift_half_ring(pftsz, kfromto, p%box, real(x(1:2)), sect)
                 call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, sect, modulo(nint(x(3))-1, b%pftc%get_nrots())+1, rot)
                 resid = rot - pft(:,kfromto(1):kfromto(2))
@@ -724,7 +740,7 @@ contains
                 xg(3)   = real(modulo(nint(x(3))-1, b%pftc%get_nrots())+1, dp)
                 xg(4:5) = xg(4:5) + [0.01d0, -0.01d0]
                 call b%pcont%eval(1, xg, floss, gloss)
-                call b%pcont%sigma_contrib(1, xg, contrib)
+                call b%pcont%sigma_contrib(1, 1, .true., rcell, xg, contrib)
                 call b%pftc%get_sigma2_weights(wk)
                 wsum = 0.d0
                 do k = kfromto(1), kfromto(2)
@@ -1076,6 +1092,7 @@ contains
         type(strategy3D_srch)    :: srch
         type(strategy3D_spec)    :: spec
         type(pftc_shsrch_grad)   :: grad
+        type(view_solve)         :: vs
         complex(sp), allocatable :: ref(:,:), ptcl(:,:), bank(:,:)
         real,        allocatable, target :: sigma2(:,:)
         real,        allocatable :: row(:), rowref(:), rowx(:)
@@ -1124,7 +1141,7 @@ contains
                 if( iroute == 1 )then
                     call srch%refine_assignment_continuously(1, irot, corr, sh, inpl_coord, inpl_valid)
                 else
-                    call srch%refine_extra_pose_continuously(1, irot, corr, sh, inpl_coord, inpl_valid)
+                    call srch%refine_extra_pose_continuously(1, irot, corr, sh, inpl_coord, inpl_valid, vs)
                 endif
                 rot = b%pftc%get_rot(irot)
                 ! the frames are told apart only away from the half turns and for a sizeable increment

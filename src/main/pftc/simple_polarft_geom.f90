@@ -5,6 +5,28 @@ implicit none
 
 contains
 
+    !> A stored shift (the particle frame) as the shift of the reference at in-plane angle rot (degrees): the frame
+    !! of the shift searches and the Euclidean evaluators, s = R(rot) u; the inverse of shift_ref2ptcl, the
+    !! conversion the shift search applies with sh_rot
+    pure module function shift_ptcl2ref( u, rot ) result( s )
+        use simple_math, only: rotmat2d
+        real, intent(in) :: u(2), rot
+        real :: s(2), rotmat(2,2)
+        call rotmat2d(rot, rotmat)
+        s(1) = u(1) * rotmat(1,1) + u(2) * rotmat(1,2)
+        s(2) = u(1) * rotmat(2,1) + u(2) * rotmat(2,2)
+    end function shift_ptcl2ref
+
+    !> the shift of the reference at in-plane angle rot (degrees) as a stored shift (the particle frame), u = R(rot)^T s
+    pure module function shift_ref2ptcl( s, rot ) result( u )
+        use simple_math, only: rotmat2d
+        real, intent(in) :: s(2), rot
+        real :: u(2), rotmat(2,2)
+        call rotmat2d(rot, rotmat)
+        u(1) = s(1) * rotmat(1,1) + s(2) * rotmat(2,1)
+        u(2) = s(1) * rotmat(1,2) + s(2) * rotmat(2,2)
+    end function shift_ref2ptcl
+
     !> Mirror one bank into its canonical frames; general angles use trigonometric interpolation.
     module subroutine mirror_ref_bank(self, refs, partners, frame_angles)
         use simple_ori_utils, only: canonical_mirror_frame_angle

@@ -1,11 +1,11 @@
-!@descr: unit tests of the continuous view refinement on polar sections (simple_polarft_cont_calc): T1, T2 and T4 of polar_continuous_view.md
+!@descr: unit tests of the continuous view refinement on polar sections, a submodule of simple_polarft_cont_calc: T1, T2 and T4 of polar_continuous_view.md
 ! The 4-blob phantom of simple_pftc_inplane_tester, unmasked (its transform is analytic only without the mask). T1/T2:
 ! the B-spline section and its normal derivative at the 20 directions of the nspace=20 spiral against the analytic
 ! transform, per shell, within twice the KB bank's errors frozen in Phase 0 (the plan's Progress). T4: the five-variable
 ! gradient against central differences, the Gauss-Newton matrix against the central-difference Hessian at zero residual,
 ! each with a negative control; thread consistency of the per-thread cache; ns per section, B-spline against KB.
-module simple_polarft_cont_calc_tester
-use simple_core_module_api,         only: dp, sp, DTWOPI, DPI, OSMPL_PAD_FAC, del_file
+submodule (simple_polarft_cont_calc) simple_polarft_cont_calc_tester
+use simple_core_module_api,         only: DTWOPI, DPI, OSMPL_PAD_FAC, del_file
 use simple_string,                  only: string
 use simple_cmdline,                 only: cmdline
 use simple_parameters,              only: parameters
@@ -13,16 +13,12 @@ use simple_builder,                 only: builder
 use simple_image,                   only: image
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_polarft_calc,            only: vol_pad2ref_pfts_opt
-use simple_polarft_cont_calc,       only: polarft_cont_calc
 use simple_ori_utils,               only: euler2m
 use simple_test_polar_fixture,      only: shift_args, rotate_half_ring
 use simple_test_utils
 use, intrinsic :: ieee_arithmetic,  only: ieee_is_finite
-use, intrinsic :: iso_fortran_env,  only: int64
-!$ use omp_lib,                     only: omp_get_max_threads, omp_set_num_threads, omp_get_num_threads
+!$ use omp_lib,                     only: omp_set_num_threads, omp_get_num_threads
 implicit none
-private
-public :: run_all_polarft_cont_calc_tests
 
 ! the phantom of simple_pftc_inplane_tester: box 64 at 1.3 A, four Gaussian blobs
 integer,          parameter :: BOX     = 64
@@ -74,7 +70,7 @@ real(sp), allocatable, target :: sigma2_fixture(:,:)
 
 contains
 
-    subroutine run_all_polarft_cont_calc_tests()
+    module subroutine run_all_polarft_cont_calc_tests()
         write(*,'(A)') '**** running all polar continuous view tests ****'
         call write_phantom()
         call test_section_accuracy()
@@ -349,6 +345,7 @@ contains
         real(dp) :: rref(3,3), xt(5), x(5), f, g(5), gflip(5), c(5,5), h(5,5), cbad(5,5), l(5,5), eye(5,5)
         real(dp) :: err, tol, worst, err_flip, err_c, err_bad, err_blk, flip_ratio
         integer  :: ishift, ioff, i
+        integer(int64) :: nsolves, nsections, nevals
         logical  :: all_ok, any_flip_fail, finite, ok
         write(*,'(A,L1)') 'test_view_gradient_and_curvature (T4), odd half with rising sigma2: ', l_odd
         allocate(b, p)
@@ -413,7 +410,8 @@ contains
         err_bad = maxval(abs(cbad(4:5,:) - h(4:5,:)))/maxval(abs(h(4:5,:)))
         write(*,'(A,ES10.3)') '  flipped view coupling against the Hessian: view rows ', err_bad
         call assert_true(err_bad > GRAD_FD_RTOL, 'T4 negative control: a flipped view coupling fails the Hessian check')
-        write(*,'(A,I0)') '  sections cut: ', pcont%get_nsections()
+        call pcont%get_counts(nsolves, nsections, nevals)
+        write(*,'(A,I0)') '  sections cut: ', nsections
         call kill_fixture(b, pcont)
         deallocate(b, p)
     end subroutine test_view_gradient_and_curvature
@@ -430,7 +428,7 @@ contains
         real(dp) :: rref(3,3), x(5,NPROBE), fs(NPROBE), gs(5,NPROBE), cs(5,5,NPROBE), ft(NPROBE), gt(5,NPROBE), &
             &ct(5,5,NPROBE)
         integer  :: i, nthr_prev
-        integer(int64) :: nsect_serial
+        integer(int64) :: nsolves, nsect_serial, nsect_team, nevals
         integer  :: team_size
         write(*,'(A)') 'test_threads'
         nthr_prev = 1
@@ -447,7 +445,7 @@ contains
         do i = 1, NPROBE
             call pcont%eval(1, x(:,i), fs(i), gs(:,i), cs(:,:,i))
         enddo
-        nsect_serial = pcont%get_nsections()
+        call pcont%get_counts(nsolves, nsect_serial, nevals)
         !$omp parallel num_threads(NTEAM) default(shared) proc_bind(close)
         call pcont%set_view_ref(1, .true., rref)
         !$omp single
@@ -460,12 +458,13 @@ contains
         enddo
         !$omp end do
         !$omp end parallel
-        write(*,'(A,I0,A,I0)') '  sections cut: serial ', nsect_serial, ', team ', pcont%get_nsections() - nsect_serial
+        call pcont%get_counts(nsolves, nsect_team, nevals)
+        write(*,'(A,I0,A,I0)') '  sections cut: serial ', nsect_serial, ', team ', nsect_team - nsect_serial
         call assert_true(all(fs == ft) .and. all(gs == gt) .and. all(cs == ct), &
             &'a team of four evaluates the cost bit for bit as one thread')
         ! with a full team each thread's probes share one tilt (a thread limit below four mixes them)
         if( team_size == NTEAM )then
-            call assert_true(pcont%get_nsections() - nsect_serial == int(NTEAM,int64), &
+            call assert_true(nsect_team - nsect_serial == int(NTEAM,int64), &
                 &'each thread of the team cuts its one tilt once and reuses the section')
         endif
         call kill_fixture(b, pcont)
@@ -473,4 +472,4 @@ contains
         !$ call omp_set_num_threads(nthr_prev)
     end subroutine test_threads
 
-end module simple_polarft_cont_calc_tester
+end submodule simple_polarft_cont_calc_tester

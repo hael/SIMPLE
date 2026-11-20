@@ -16,9 +16,9 @@ use simple_eul_prob_tab_utils, only: update_screen_best, &
 use simple_rnd,                only: rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_defs,               only: PROB_INSERT_WMIN
-use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
-use simple_polarft_calc,       only: polarft_calc, SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
-use simple_ori_utils,          only: euler_about_ref
+use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
+use simple_polarft_calc,       only: polarft_calc, SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS, shift_ptcl2ref, shift_ref2ptcl
+use simple_ori_utils,          only: euler_about_cell
 implicit none
 
 public :: eul_prob_tab, seeded_window_refine
@@ -61,6 +61,8 @@ type :: eul_prob_tab
     type(prob_neff_readout)     :: neff
     type(prob_state_readout)    :: state_rd                 !< the state readout of the joint draw (more than one active state)
     type(prob_readout)          :: rec_last                 !< the last closed assignment's readout record (get_readout)
+    integer                     :: view_nptcls = 0, view_npose = 0, view_nmerged = 0 !< the extras after the view solves (set_view_readout)
+    real(dp)                    :: view_wc_sum = 0.d0
     logical                     :: l_assign_open = .false.
     logical                     :: l_extras      = .false.  !< the weighted insertion's extras are selected (topk > 1, a cone)
     integer                     :: kmax = 1                 !< poses per particle of the weighted insertion
@@ -87,6 +89,7 @@ type :: eul_prob_tab
     procedure          :: get_readout
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
     procedure          :: set_insert_cone
+    procedure          :: set_view_readout
     ! REFERENCE INDEX MAPPING
     procedure          :: ref_state
     procedure          :: ref_proj
@@ -746,7 +749,7 @@ contains
                     nrots_loc = self%b_ptr%pftc%get_nrots()
                     iref_prev = (prev_state-1)*self%p_ptr%nspace + prev_proj + self%post_ref_offset
                     ! the previous in-plane rotation about the previous direction (the angle sits in e1 at a pole)
-                    euls_prev = euler_about_ref(o_prev_loc%get_euler(), self%b_ptr%eulspace%get_euler(prev_proj))
+                    euls_prev = euler_about_cell(o_prev_loc%get_euler(), self%b_ptr%eulspace%get_euler(prev_proj))
                     irot_prev = self%b_ptr%pftc%get_roind(360. - euls_prev(3))
                     if( irot_prev >= 1 .and. irot_prev <= nrots_loc )then
                         irot_ctrl = irot_prev + nrots_loc/2
@@ -841,7 +844,7 @@ contains
             if( .not. self%state_exists(prev_state) ) return
             iref = (prev_state-1)*self%p_ptr%nspace + prev_proj
             ! the previous in-plane rotation about the previous direction (the angle sits in e1 at a pole)
-            euls_prev = euler_about_ref(o_prev_loc%get_euler(), self%b_ptr%eulspace%get_euler(prev_proj))
+            euls_prev = euler_about_cell(o_prev_loc%get_euler(), self%b_ptr%eulspace%get_euler(prev_proj))
             irot      = self%b_ptr%pftc%get_roind(360. - euls_prev(3))
             call grad_shsrch_obj(ithr_loc)%set_indices(iref, iptcl_loc)
             shift_seed = grad_shsrch_obj(ithr_loc)%minimize(irot=irot, sh_rot=.false.)
@@ -1174,6 +1177,10 @@ contains
         rec%l_extras      = self%l_extras
         rec%nbad  = self%nbad
         rec%nflat = self%nflat
+        rec%view_nptcls  = self%view_nptcls
+        rec%view_npose   = self%view_npose
+        rec%view_nmerged = self%view_nmerged
+        rec%view_wc_sum  = self%view_wc_sum
         if( self%l_extras ) call self%insert_tab%counts(rec%ins_nptcls, rec%ins_npose, rec%ins_wc_sum, rec%ins_nelig, &
             &rec%ins_ncapped, rec%kmax)
         rec%neff_nrows    = self%neff%nkept()
@@ -1189,6 +1196,10 @@ contains
         endif
         self%rec_last      = rec
         self%l_assign_open = .false.
+        self%view_nptcls   = 0
+        self%view_npose    = 0
+        self%view_nmerged  = 0
+        self%view_wc_sum   = 0.d0
     end subroutine close_assignment
 
     !> the selection over the rows i_first..i_last of the batch: per particle one draw from the tempered posterior
@@ -1340,9 +1351,14 @@ contains
                     if( refinedt(j,ithr)%ri < ifirst_loc .or. refinedt(j,ithr)%ri > ilast_loc ) cycle
                     k = refinedt(j,ithr)%ri - ifirst_loc + 1
                     pose_loss(k,ithr) = refinedt(j,ithr)%loss
-                    eligible(k,ithr)  = self%insert_cone%within(istate_loc, self%assgn_map(i_loc)%iproj, &
-                        &self%assgn_map(i_loc)%inpl, [self%assgn_map(i_loc)%x, self%assgn_map(i_loc)%y], &
-                        &k, rowt(refinedt(j,ithr)%ri,ithr)%inpl, [refinedt(j,ithr)%x, refinedt(j,ithr)%y])
+                    if( self%p_ptr%l_cont_view )then
+                        ! the view solves decide the basins afterwards (strategy3D_prob): every refined entry is a candidate
+                        eligible(k,ithr) = .true.
+                    else
+                        eligible(k,ithr) = self%insert_cone%within(istate_loc, self%assgn_map(i_loc)%iproj, &
+                            &self%assgn_map(i_loc)%inpl, [self%assgn_map(i_loc)%x, self%assgn_map(i_loc)%y], &
+                            &k, rowt(refinedt(j,ithr)%ri,ithr)%inpl, [refinedt(j,ithr)%x, refinedt(j,ithr)%y])
+                    endif
                 enddo
                 call top_posterior_extras(self%p_ptr%nspace, pose_loss(:,ithr), &
                     &temperature_or_argmin(self%temps(i_loc)), eligible(:,ithr), self%assgn_map(i_loc)%iproj, self%kmax, &
@@ -1434,6 +1450,18 @@ contains
         self%insert_cone = cone
     end subroutine set_insert_cone
 
+    !> the extras' outcome after the view solves (cont_view; the matcher, before close_assignment): the particles whose
+    !! extras were resolved, the basins inserted, the extras merged and the committed basins' weights' sum
+    subroutine set_view_readout( self, nptcls, npose, nmerged, wc_sum )
+        class(eul_prob_tab), intent(inout) :: self
+        integer,             intent(in)    :: nptcls, npose, nmerged
+        real(dp),            intent(in)    :: wc_sum
+        self%view_nptcls  = nptcls
+        self%view_npose   = npose
+        self%view_nmerged = nmerged
+        self%view_wc_sum  = wc_sum
+    end subroutine set_view_readout
+
     ! read from the global assignment map to local partition for shift search and further refinement
 
     !> A seeded window refinement of a table entry (the single-state seed, both tables): the particle-frame seed as the
@@ -1473,6 +1501,10 @@ contains
         self%l_assign_open = .false.
         self%l_extras      = .false.
         self%kmax          = 1
+        self%view_nptcls   = 0
+        self%view_npose    = 0
+        self%view_nmerged  = 0
+        self%view_wc_sum   = 0.d0
         self%nmode         = 0
         self%ntemp_missing = 0
         self%nbad          = 0

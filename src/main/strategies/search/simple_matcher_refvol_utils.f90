@@ -216,7 +216,10 @@ contains
         ! the view refinement prepares no Cartesian particle: one slot, the reader's minimum
         call cftc_view%read(refs_even, refs_odd, params%nstates, params%box_crop, 1, params%smpd_crop, kfromto)
         if( any(kfromto /= params%kfromto) ) THROW_HARD('Cartesian and polar references of different bands; cont_view')
-        if( allocated(build%pcont) ) deallocate(build%pcont)
+        if( allocated(build%pcont) )then
+            call build%pcont%kill
+            deallocate(build%pcont)
+        endif
         allocate(build%pcont)
         call build%pcont%new(build%pftc, cftc_view)
         call refs_even%kill

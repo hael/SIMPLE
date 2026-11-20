@@ -7,7 +7,7 @@ use simple_rnd,    only: ran3
 implicit none
 
 public :: euler2m, m2euler, dm2euler, euler_dist, euler_inplrotdist, euler_compose, euler_mirror, euler_about_ref
-public :: euler_inpl_closest
+public :: euler_inpl_closest, euler_about_cell
 public :: make_transfmat, rnd_romat, geodesic_frobdev, rotmat2d
 public :: genfire2euler, euler2genfire
 public :: canonical_mirror_frame_angle
@@ -15,6 +15,7 @@ private
 
 real, parameter :: zvec(3) = [0.,0.,1.]
 real, parameter :: POLE_COS = 0.9999999 !< |cos e2| from which m2euler holds the whole in-plane angle in e1
+real, parameter :: EULER_DIR_TOL = 1.e-3 !< degrees: a pose within this of a cell's e1 and e2 has the cell's direction
 
 contains
 
@@ -303,6 +304,35 @@ contains
         e(1) = euls_ref(1)
         e(3) = modulo(euls(3) + real(pole) * (euls(1) - euls_ref(1)), 360.)
     end function euler_about_ref
+
+    !> The stored pose euls read about the cell euls_dir (a grid direction, e3 zero): on the cell, its pole included,
+    !! euler_about_ref (e3 as stored, so an in-plane angle off the rotation grid stays exact); off it (cont_view, the
+    !! Cartesian follow-up) the cell's direction with the in-plane angle that brings it closest to the pose
+    !! (euler_inpl_closest), exact near the poles too, where a small tilt swings e1 and e3 by a large azimuth
+    pure function euler_about_cell( euls, euls_dir ) result( e )
+        real, intent(in) :: euls(3), euls_dir(3)
+        real :: e(3)
+        if( euler_on_direction(euls, euls_dir) )then
+            e = euler_about_ref(euls, euls_dir)
+        else
+            e = [euls_dir(1), euls_dir(2), euler_inpl_closest(euls, euls_dir)]
+        endif
+    end function euler_about_cell
+
+    !> whether the pose euls has the direction euls_dir: the same e2 and, off the poles, the same e1 (at a pole every
+    !! e1 is the one direction, the in-plane angle)
+    pure logical function euler_on_direction( euls, euls_dir )
+        real, intent(in) :: euls(3), euls_dir(3)
+        real :: d1
+        euler_on_direction = .false.
+        if( abs(euls(2) - euls_dir(2)) > EULER_DIR_TOL ) return
+        if( euler_pole(euls) /= 0 .or. euler_pole(euls_dir) /= 0 )then
+            euler_on_direction = .true.
+            return
+        endif
+        d1 = modulo(euls(1) - euls_dir(1), 360.)
+        euler_on_direction = d1 <= EULER_DIR_TOL .or. d1 >= 360. - EULER_DIR_TOL
+    end function euler_on_direction
 
     !> The in-plane angle e3 (degrees, [0,360)) that brings the direction (e1, e2) of euls_dir closest to the rotation
     !! of euls: the e3 maximising trace(R(e1_dir, e2_dir, e3) R(euls)^T), i.e. minimising their geodesic distance. The

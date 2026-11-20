@@ -13,6 +13,7 @@ use simple_cartft_calc,     only: cartft_calc
 implicit none
 private
 public :: polarft_cont_calc
+public :: run_all_polarft_cont_calc_tests
 
 #include "simple_local_flags.inc"
 
@@ -44,15 +45,21 @@ contains
     procedure          :: new
     procedure          :: kill
     procedure          :: set_view_ref
-    procedure          :: section
+    procedure, private :: section
     procedure          :: eval
     procedure          :: sigma_contrib
-    procedure          :: get_nsections
     procedure          :: get_counts
     procedure, nopass  :: view_frame
     procedure, private :: thread_cache
     procedure, private :: ensure_section
+    procedure, private :: ensure_ref
 end type polarft_cont_calc
+
+interface
+    !> white-box tests (submodule simple_polarft_cont_calc_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_polarft_cont_calc_tests()
+    end subroutine run_all_polarft_cont_calc_tests
+end interface
 
 contains
 
@@ -117,8 +124,8 @@ contains
         self%cache(ithr)%nsolves = self%cache(ithr)%nsolves + 1_int64
     end subroutine set_view_ref
 
-    !> The section and its normal derivative dV/dn = grad V . n, n = F^T z, at the frame F (the point query of T1 and
-    !! T2), in the native scale of a polar reference section and per native lattice unit
+    !> The section and its normal derivative dV/dn = grad V . n, n = F^T z, at the frame F (the tester's point query,
+    !! T1 and T2), in the native scale of a polar reference section and per native lattice unit
     subroutine section( self, state, iseven, frame, sect, dnv )
         class(polarft_cont_calc), intent(in)  :: self
         integer,                  intent(in)  :: state
@@ -150,15 +157,18 @@ contains
             &f, grad, curv)
     end subroutine eval
 
-    !> The per-shell residual of the calling thread's drawn reference at x (the sigma2 contribution of the final
-    !! evaluation): the section at the tilts x(4:5), shifted by x(1:2), at the rotation x(3) rounded to its grid index
-    subroutine sigma_contrib( self, iptcl, x, contrib )
+    !> The per-shell residual of the reference (state, half, rotation rref) at x (the sigma2 contribution of a view
+    !! solve's point): the section at the tilts x(4:5), shifted by x(1:2), at the rotation x(3) rounded to its grid
+    !! index; the calling thread's cache takes the reference when another solve ran on the thread since
+    subroutine sigma_contrib( self, iptcl, state, iseven, rref, x, contrib )
         class(polarft_cont_calc), intent(inout) :: self
-        integer,                  intent(in)    :: iptcl
-        real(dp),                 intent(in)    :: x(5)
+        integer,                  intent(in)    :: iptcl, state
+        logical,                  intent(in)    :: iseven
+        real(dp),                 intent(in)    :: rref(3,3), x(5)
         real(sp),                 intent(out)   :: contrib(self%kfromto(1):self%kfromto(2))
         integer :: ithr, irot, nrots
         ithr  = self%thread_cache()
+        call self%ensure_ref(ithr, state, iseven, rref)
         call self%ensure_section(ithr, iptcl, x(4:5))
         nrots = self%pftc%get_nrots()
         irot  = modulo(nint(x(3)) - 1, nrots) + 1
@@ -175,13 +185,6 @@ contains
         nsections = sum(self%cache(:)%nsections)
         nevals    = sum(self%cache(:)%nevals)
     end subroutine get_counts
-
-    !> sections cut since new, over every thread
-    integer(int64) function get_nsections( self )
-        class(polarft_cont_calc), intent(in) :: self
-        get_nsections = 0_int64
-        if( allocated(self%cache) ) get_nsections = sum(self%cache(:)%nsections)
-    end function get_nsections
 
     !> the frame F = T(omega) R_ref at which the section of tilts omega is cut
     function view_frame( rref, omega ) result( frame )
@@ -213,6 +216,24 @@ contains
             endif
         end associate
     end subroutine ensure_section
+
+    !> the calling thread's cache on the reference (state, half, rotation) unless it holds it already; no solve counted
+    subroutine ensure_ref( self, ithr, state, iseven, rref )
+        class(polarft_cont_calc), intent(inout) :: self
+        integer,                  intent(in)    :: ithr, state
+        logical,                  intent(in)    :: iseven
+        real(dp),                 intent(in)    :: rref(3,3)
+        associate( c => self%cache(ithr) )
+            if( c%l_ref .and. c%state == state .and. (c%iseven .eqv. iseven) )then
+                if( all(c%rref == rref) ) return
+            endif
+            c%state  = state
+            c%iseven = iseven
+            c%rref   = rref
+            c%l_ref  = .true.
+            c%l_sect = .false.
+        end associate
+    end subroutine ensure_ref
 
     integer function thread_cache( self ) result( ithr )
         class(polarft_cont_calc), intent(in) :: self
