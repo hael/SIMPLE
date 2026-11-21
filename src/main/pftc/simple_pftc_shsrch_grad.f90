@@ -23,7 +23,7 @@ integer,  parameter :: FIT_EDGE = 1, FIT_CURVATURE = 2, FIT_STEP = 3, FIT_LIMITS
 real(dp), parameter :: FIT_MIN_CURV_RATIO = 0.01d0 ! smallest accepted ratio of the Hessian's eigenvalues
 ! the optimiser of each mode (R6, one per client); testers pass either to the constructors
 character(len=*), parameter :: SHSRCH_SOLVER       = 'lbfgsb' !< the shift mode (alternating and fixed angle)
-character(len=*), parameter :: SHSRCH_JOINT_SOLVER = 'lm'     !< the joint shift and in-plane mode
+character(len=*), parameter :: SHSRCH_JOINT_SOLVER = 'lbfgsb' !< the joint shift and in-plane mode
 
 type :: pftc_shsrch_grad
     private

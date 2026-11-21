@@ -31,6 +31,7 @@ integer,          parameter :: TRAILREC_STAGE_SINGLE   = STICKY_LAST_STAGE + 1 !
 integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
 integer,          parameter :: GOLD_STD_STAGE          = 6           ! first eligible single-state gold-standard stage
 integer,          parameter :: PCG_START_STAGE         = 7           ! requested PCG backend and order prior, the last two stages (6 until 2026-11-18); independent of gold_std_stage
+integer,          parameter :: AUTOMSK_START_STAGE     = PCG_START_STAGE ! automsk=yes: density envelope in the last two stages, spherical before
 integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8, single and multi-state
 integer,          parameter :: NSTAGES_INDEPENDENT     = 5           ! default last stage of independent multi-state solve3D
 real,             parameter :: FRACSRCH_SCAN_EXIT      = 95.         ! multi-state shc stage 2 also ends above this mean % scanned
@@ -161,6 +162,12 @@ contains
         integer :: istage
         istage = VOL_SUPPLIED_STAGE
     end function solve3D_vol_supplied_stage
+
+    !> first stage of the density envelope under automsk=yes
+    module pure function solve3D_automsk_stage() result(istage)
+        integer :: istage
+        istage = AUTOMSK_START_STAGE
+    end function solve3D_automsk_stage
 
     module pure function solve3D_uses_delayed_input_lp( l_vol_supplied, nstates ) result( l_delayed )
         logical, intent(in) :: l_vol_supplied
@@ -315,8 +322,6 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         logical,                  intent(in)    :: l_cavgs
-        cfg%automsk = 'no'
-        cfg%envfsc  = 'no'
         call init_refine3D_iteration( cfg )
         call set_refine3D_update_policy( cfg, params )
         call set_refine3D_symmetry_policy( cfg, params, istage )
@@ -327,6 +332,7 @@ contains
         call set_refine3D_trailrec_policy( cfg, params, istage )
         call set_refine3D_gold_standard_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
+        call set_refine3D_mask_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_stage_controls( cfg, params, istage, l_cavgs )
         call apply_refine3D_search_overrides( cfg, params, istage )
     end subroutine build_refine3D_stage_cfg
@@ -479,6 +485,21 @@ contains
             endif
         endif
     end subroutine set_refine3D_filtering_policy
+
+    !> spherical support, except the density envelope and its FSC envelope from AUTOMSK_START_STAGE under automsk=yes
+    subroutine set_refine3D_mask_policy( cfg, params, istage, l_cavgs )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
+        cfg%automsk = 'no'
+        cfg%envfsc  = 'no'
+        if( l_cavgs ) return
+        if( trim(params%automsk) == 'yes' .and. istage >= AUTOMSK_START_STAGE )then
+            cfg%automsk = 'yes'
+            cfg%envfsc  = 'yes'
+        endif
+    end subroutine set_refine3D_mask_policy
 
     subroutine set_refine3D_gold_standard_policy( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg

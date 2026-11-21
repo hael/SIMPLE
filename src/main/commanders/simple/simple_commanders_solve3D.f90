@@ -903,6 +903,7 @@ contains
         logical :: l_virgin2D !< ptcl2D never searched: no 2D shifts to transfer
         type(string) :: frcs_probe
         integer :: nthr_view
+        integer :: automsk_last_stage
         character(len=5) :: smpl_units
         real    :: sampled_active_frac
         ! run manifest: the command line as given and the emitted stage ladder
@@ -967,7 +968,6 @@ contains
         if( .not. cline%defined('pgrp')        ) call cline%set('pgrp',                      'c1')
         if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',                'c1')
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode',         'nonuniform')
-        call cline%set('automsk', 'no') ! spherical support throughout solve3D
         if( .not. cline%defined('gauref')      ) call cline%set('gauref',                   'yes')
         if( .not. cline%defined('sigma2_anneal')) call cline%set('sigma2_anneal',           'yes')
         ! balance defaults once the project is read (set_balance_default):
@@ -987,6 +987,20 @@ contains
             ! Stop independent multi-state starts after the first prob_neigh stage, before NU, by default.
             if( .not. l_user_nstages ) call cline%set('nstages', solve3D_independent_nstages_default())
             if( .not. l_user_lpstop  ) call cline%set('lpstop',  solve3D_independent_lpstop_default())
+        endif
+        ! spherical support, except the density envelope from solve3D_automsk_stage() under automsk=yes
+        if( cline%defined('automsk') )then
+            if( cline%get_carg('automsk') .eq. 'yes' )then
+                automsk_last_stage = solve3D_nstages()
+                if( cline%defined('nstages') ) automsk_last_stage = min(automsk_last_stage, cline%get_iarg('nstages'))
+                if( automsk_last_stage < solve3D_automsk_stage() )then
+                    THROW_WARN('automsk=yes acts from stage '//int2str(solve3D_automsk_stage())//'; this run ends at stage '//int2str(automsk_last_stage)//', so automsk=no')
+                    call cline%set('automsk', 'no')
+                    call cline_entry%set('automsk', 'no') ! the manifest records what the run did
+                endif
+            else if( cline%get_carg('automsk') .ne. 'no' )then
+                THROW_HARD('solve3D takes automsk=yes or no')
+            endif
         endif
         if( cline%defined('gold_std_stage') )then
             if( cline%get_iarg('gold_std_stage') > 0 .and. nstates_on_cline /= 1 ) &

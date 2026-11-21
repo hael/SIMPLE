@@ -127,6 +127,10 @@ interface
         integer :: istage
     end function solve3D_vol_supplied_stage
 
+    module pure function solve3D_automsk_stage() result(istage)
+        integer :: istage
+    end function solve3D_automsk_stage
+
     module pure function solve3D_uses_delayed_input_lp( l_vol_supplied, nstates ) result( l_delayed )
         logical, intent(in) :: l_vol_supplied
         integer, intent(in) :: nstates

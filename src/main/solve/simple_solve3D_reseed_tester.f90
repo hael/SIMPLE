@@ -171,13 +171,20 @@ contains
             call assert_real(0.25, cline_refine3D%get_rarg('update_frac'), 1.e-6, 'the transition keeps fractional updates')
             call assert_string_eq('yes', cline_refine3D%get_carg('trail_rec'), 'the transition keeps trailing reconstruction')
             call assert_string_eq(params%rec_backend, cline_refine3D%get_carg('rec_backend'), 'backend selection is preserved')
+            call assert_string_eq('yes', cline_refine3D%get_carg('automsk'), 'automsk=yes: stage 7 masks by the density envelope')
+            call assert_string_eq('yes', cline_refine3D%get_carg('envfsc'), 'automsk=yes: stage 7 FSC uses the envelope')
             l_refine3D_lpstop_override = .true.
             params%lpstop = 7.5
             call set_cline_refine3D(params, 8, 1, .false.)
             call assert_false(cline_refine3D%defined('lp'), 'stage 8 still selects its matching band adaptively')
             call assert_real(7.5, cline_refine3D%get_rarg('lpstop'), 1.e-6, 'explicit user ceiling survives')
-            call assert_string_eq('no', cline_refine3D%get_carg('automsk'), 'every stage keeps spherical support')
-            call assert_string_eq('no', cline_refine3D%get_carg('envfsc'), 'FSC uses no generated envelope')
+            call assert_string_eq('yes', cline_refine3D%get_carg('automsk'), 'automsk=yes: stage 8 masks by the density envelope')
+            call assert_string_eq('yes', cline_refine3D%get_carg('envfsc'), 'automsk=yes: stage 8 FSC uses the envelope')
+            params%automsk = 'no'
+            call set_cline_refine3D(params, 8, 1, .false.)
+            call assert_string_eq('no', cline_refine3D%get_carg('automsk'), 'automsk=no: stage 8 keeps spherical support')
+            call assert_string_eq('no', cline_refine3D%get_carg('envfsc'), 'automsk=no: FSC uses no generated envelope')
+            params%automsk = 'yes'
             l_refine3D_lpstop_override = .false.
         enddo
         params%filt_mode = 'nonuniform'
@@ -187,6 +194,8 @@ contains
         call assert_string_eq('nonuniform', cline_refine3D%get_carg('filt_mode'), 'stage 6 keeps plain NU half references')
         call assert_string_eq('gridding', cline_refine3D%get_carg('rec_backend'), 'PCG starts at stage 7')
         call assert_false(cline_refine3D%defined('pcg_order'), 'the order prior starts at stage 7')
+        call assert_string_eq('no', cline_refine3D%get_carg('automsk'), 'automsk=yes: stage 6 keeps spherical support')
+        call assert_string_eq('no', cline_refine3D%get_carg('envfsc'), 'automsk=yes: stage 6 FSC uses no envelope')
         call set_cline_refine3D(params, 7, 1, .false.)
         call assert_string_eq('pcg', cline_refine3D%get_carg('rec_backend'), 'stage 7 runs the requested PCG backend')
         call assert_string_eq('yes', cline_refine3D%get_carg('pcg_order'), 'stage 7 forwards the order prior')
@@ -197,10 +206,12 @@ contains
         call set_cline_refine3D(params, 7, 1, .false., addon)
         call assert_true(cline_refine3D%defined('lp'), 'add-on registration keeps its fixed matching band')
         call assert_string_eq('none', cline_refine3D%get_carg('filt_mode'), 'add-on registration remains unfiltered')
+        call assert_string_eq('no', cline_refine3D%get_carg('automsk'), 'add-on registration keeps spherical support')
         addon%l_register = .false.
         call set_cline_refine3D(params, 7, 1, .false., addon)
         call assert_false(cline_refine3D%defined('lp'), 'the add-on stage proper restores half-specific matching')
         call assert_string_eq('nonuniform', cline_refine3D%get_carg('filt_mode'), 'the add-on stage uses plain NU')
+        call assert_string_eq('yes', cline_refine3D%get_carg('automsk'), 'the add-on stage replays automsk=yes')
         call addon%frozen_rec%kill
         params%gold_std_stage = 9
         call set_cline_refine3D(params, 7, 1, .false.)

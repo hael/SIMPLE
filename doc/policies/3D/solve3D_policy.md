@@ -144,7 +144,10 @@ Stage policy includes:
 - optional trailing reconstruction by stage and state count
 - staged NU filtering from `NU_FILTER_STAGE`
 - single-state gold-standard matching from stage 6 by default (`gold_std_stage` overrides the start)
-- spherical support throughout, with `automsk=no` and `envfsc=no`
+- spherical support (`automsk=no`, `envfsc=no`), except that a user-given
+  `automsk=yes` turns on the density envelope and the envelope-corrected FSC
+  in the last two stages, 7 and 8 (`AUTOMSK_START_STAGE`, tied to
+  `PCG_START_STAGE`; spherical throughout until 2026-11-20), on either backend
 - a requested PCG backend (`rec_backend=pcg`) in the last two stages, 7
   and 8 (`PCG_START_STAGE`; 6 until 2026-11-18), gridding before; changing
   `gold_std_stage` does not retime this backend switch
@@ -863,9 +866,14 @@ After symmetry handling, the selected maps are injected back into the staged
 
 Staged `solve3D` uses the same static-ladder NU competition as
 `refine3D_auto`. Its objective and reconstruction support remain spherical
-(`mskdiam`). The workflow forces `automsk=no` and `envfsc=no` in every stage
-and in the final reconstruction; it generates no density or NU-evidence
-envelope for masking. The UI offers no envelope controls for this workflow.
+(`mskdiam`) by default: every stage runs `automsk=no` and `envfsc=no`.
+`automsk=yes` (the only other value solve3D takes) adds the conservative
+density envelope in stages 7 and 8: the PCG solve support from the previous
+iteration's prior-free pair, so it composes with `pcg_order=yes`
+(`reconstruct3D_pcg_policy.md`, section 3), the post-filter mask of the
+matching references and `envfsc=yes`. Add-on registration stays spherical.
+A run that ends before stage 7 warns and runs `automsk=no`, which the
+manifest records. `automsk=nu` and `tight` are refused.
 
 Before gold-standard refinement starts, NU-enabled stages use
 `nonuniform_lpset`, a merged registration reference and the scheduled `lp`.
@@ -959,8 +967,9 @@ updated. For multi-state runs it replaced the greedy missing-update pass. On the
 labels.
 
 The final reconstruction inherits only the scientific reconstruction policy it
-needs. It keeps `envfsc=no` and `automsk=no`, so the original-sampling
-half maps retain spherical support. It does not inherit staged search or
+needs. It takes `automsk` from the last stage and `envfsc` from the run
+(`automsk=yes` implies `envfsc=yes`), so the original-sampling half maps
+retain spherical support unless `automsk=yes` was given. It does not inherit staged search or
 reference-filter controls such as `refine`, `lp` or `gauref`. The final
 reconstruction runs with `filt_mode=none` on both backends.
 
