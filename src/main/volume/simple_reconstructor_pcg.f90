@@ -55,7 +55,6 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     real             :: lambda_rel = 0.0 !< coefficient relative to the weighted data-operator scale
     real             :: data_scale = 0.0 !< deterministic scale derived from raw data-only D
     real             :: realspace_diag = 0.0 !< real-space diagonal of the data operator: mean of D over all native shells (x padsc^2)
-    real, allocatable :: shell_diag(:)       !< mean of D per native shell 0:Rnat (x padsc^2): the order prior's banded shrink
     logical          :: l_lambda_relative = .false.
     ! ---- per-particle inputs, cached once by prep_particles ----
     integer                       :: nptcls = 0
@@ -107,15 +106,7 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     real              :: ml_hp  = 100.0               !< low-frequency no-prior limit in Angstrom
     logical           :: l_ml_prior_requested = .false.
     logical           :: l_ml_prior = .false.
-    ! ---- optional real-space order prior: position-dependent ridge ----
-    ! (H + P_tau + lambda I + Lambda_o) x = b with Lambda_o = lambda_o (1-w(r)),
-    ! w the order weight in [0,1] and lambda_o = order_lambda_rel * realspace_diag (the data precision per voxel).
-    ! A Gaussian prior with position-dependent variance, the real-space twin of
-    ! P_tau; nothing is zeroed, the data term wins wherever it is strong
-    real, allocatable :: order_pen(:,:,:)            !< 1 - w(r) on the solve box
-    real              :: order_lambda_rel = 0.0
-    logical           :: l_order_prior = .false.
-    real              :: precond_ridge = 0.0 !< mean real-space ridges folded into the preconditioner (its units), see fold_ridges_into_precond
+    real              :: precond_ridge = 0.0 !< atomicity ridge folded into the preconditioner
     ! ---- optional atomicity prior: lambda_A (I - P_G), P_G the projector onto atom kernels ----
     ! the prior object is shared by the two half operators and owned by the caller
     class(pcg_atomic_prior), pointer :: atm => null()
@@ -160,8 +151,6 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     procedure, private :: finalize_khat
     procedure :: set_lambda_relative
     procedure :: set_ml_prior
-    procedure :: set_order_prior
-    procedure :: get_order_lambda
     procedure :: set_atomic_prior
     procedure :: get_atomic_lambda
     procedure :: fit_atom_amplitudes
@@ -191,7 +180,6 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     procedure :: get_ml_prior_stats
     procedure :: get_data_scale
     procedure :: get_realspace_diagonal
-    procedure :: get_shell_diagonal
     procedure :: get_effective_lambda
     ! SOLVER
     procedure :: solve
@@ -391,7 +379,6 @@ contains
         self%lambda_rel = lambda_rel
         self%data_scale = 0.0
         self%realspace_diag = 0.0
-        if( allocated(self%shell_diag) ) deallocate(self%shell_diag)
         self%lambda     = 0.0
         self%l_lambda_relative = .true.
     end subroutine set_lambda_relative
@@ -412,30 +399,6 @@ contains
         self%l_ml_prior_requested = .true.
         self%l_ml_prior = .false.
     end subroutine set_ml_prior
-
-    !> real-space order prior from a weight volume w in [0,1] (1 = ordered
-    !! density, 0 = solvent or disordered density) and a coefficient relative to the data precision per voxel
-    !! (the real-space diagonal, set at the end of accumulation): the same shrink 1/(1+c) of a fully penalized
-    !! voxel for every dataset. Acts through the coupled iterations only: the
-    !! closed-form start is a Fourier diagonal and cannot see a real-space term.
-    !! The ridge's mean over the solve domain goes into the preconditioner
-    !! (fold_ridges_into_precond) so the ridge system keeps CG's conditioning
-    subroutine set_order_prior( self, weight, lambda_rel )
-        class(reconstructor_pcg), intent(inout) :: self
-        class(image),             intent(in)    :: weight
-        real,                     intent(in)    :: lambda_rel
-        integer :: wdim(3)
-        wdim = weight%get_ldim()
-        if( any(wdim /= self%box) ) THROW_HARD('order weight volume dimensions differ from the solve box; set_order_prior')
-        if( weight%is_ft() ) THROW_HARD('order weight volume must be in real space; set_order_prior')
-        if( .not. ieee_is_finite(lambda_rel) .or. lambda_rel < 0.0 ) THROW_HARD('relative order lambda must be finite and non-negative')
-        if( self%realspace_diag <= 0.0 ) THROW_HARD('order prior requires the data precision; call after end_accum; set_order_prior')
-        if( allocated(self%order_pen) ) deallocate(self%order_pen)
-        self%order_pen = 1.0 - min(1.0, max(0.0, weight%get_rmat()))
-        self%order_lambda_rel = lambda_rel
-        self%l_order_prior    = lambda_rel > 0.0
-        call self%fold_ridges_into_precond
-    end subroutine set_order_prior
 
     !> Atomicity prior lambda_A (I - P) with lambda_A = lambda_rel * realspace_diag (the data precision per voxel).
     !! P spans free atom amplitudes or the global scale of a fitted B/occupancy/intensity model.
@@ -508,26 +471,15 @@ contains
         endif
     end subroutine get_solve_support
 
-    !> Jacobi term of the real-space ridges, the order ridge lambda_o (1-w(r)) and the atomicity prior lambda_A:
-    !! neither is Fourier-diagonal, so the order ridge's mean over the solve domain and lambda_A enter the measured
+    !> Jacobi term of the atomicity prior lambda_A:
+    !! it is not Fourier-diagonal, so lambda_A enters the measured
     !! voxels as c/padsc^2 like the ML prior. Idempotent: the last folded constant is replaced
     subroutine fold_ridges_into_precond( self )
         class(reconstructor_pcg), intent(inout) :: self
-        real(dp) :: psum
         real     :: c, denom
-        integer  :: n, i, j, k
+        integer  :: i, j, k
         if( .not. self%l_precond ) return
         c = 0.0
-        if( self%l_order_prior )then
-            if( self%l_mask )then
-                psum = sum(real(self%order_pen,dp), mask=self%mask > 0.0)
-                n    = count(self%mask > 0.0)
-            else
-                psum = sum(real(self%order_pen,dp))
-                n    = size(self%order_pen)
-            endif
-            if( n > 0 ) c = self%order_lambda_rel * self%realspace_diag * real(psum / real(n,dp)) / self%padsc**2
-        endif
         if( self%l_atm_prior ) c = c + self%atm_lambda / self%padsc**2
         if( c == self%precond_ridge ) return
         !$omp parallel do collapse(3) default(shared) private(i,j,k,denom) schedule(static)
@@ -545,35 +497,12 @@ contains
         self%precond_ridge = c
     end subroutine fold_ridges_into_precond
 
-    !> the absolute order ridge coefficient (0 when the prior is off)
-    pure real function get_order_lambda( self )
-        class(reconstructor_pcg), intent(in) :: self
-        get_order_lambda = 0.0
-        if( self%l_order_prior ) get_order_lambda = self%order_lambda_rel * self%realspace_diag
-    end function get_order_lambda
-
-    !> the ridge terms of the normal operator: the band precision lambda I and, when set, the position-dependent
-    !! order ridge lambda_o (1-w) and the atomicity prior lambda_A (I - P); both operator modes come here
+    !> the band precision lambda I and, when set, the atomicity prior lambda_A (I - P)
     subroutine add_ridge( self, p, hp )
         class(reconstructor_pcg), intent(in)    :: self
         real,                     intent(in)    :: p(self%box,self%box,self%box)
         real,                     intent(inout) :: hp(self%box,self%box,self%box)
-        real    :: lam_s
-        integer :: i, j, k
-        if( self%l_order_prior )then
-            lam_s = self%order_lambda_rel * self%realspace_diag
-            !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static) proc_bind(close)
-            do k = 1, self%box
-                do j = 1, self%box
-                    do i = 1, self%box
-                        hp(i,j,k) = hp(i,j,k) + (self%lambda + lam_s * self%order_pen(i,j,k)) * p(i,j,k)
-                    end do
-                end do
-            end do
-            !$omp end parallel do
-        else
-            hp = hp + self%lambda * p
-        endif
+        hp = hp + self%lambda * p
         if( self%l_atm_prior ) call self%atm%apply(self%atm_lambda, p, hp)
     end subroutine add_ridge
 
@@ -698,7 +627,6 @@ contains
         if( allocated(self%Khat)     ) deallocate(self%Khat)
         if( allocated(self%ml_fsc)   ) deallocate(self%ml_fsc)
         if( allocated(self%ml_prior) ) deallocate(self%ml_prior)
-        if( allocated(self%order_pen) ) deallocate(self%order_pen)
         if( allocated(self%acc_work) ) deallocate(self%acc_work)
         if( allocated(self%b_work)   ) deallocate(self%b_work)
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
@@ -710,7 +638,6 @@ contains
         self%lambda_rel = 0.0
         self%data_scale = 0.0
         self%realspace_diag = 0.0
-        if( allocated(self%shell_diag) ) deallocate(self%shell_diag)
         self%l_lambda_relative = .false.
         self%nptcls = 0
         self%nsym   = 1
@@ -721,8 +648,6 @@ contains
         self%ml_hp       = 100.0
         self%l_ml_prior_requested = .false.
         self%l_ml_prior  = .false.
-        self%order_lambda_rel = 0.0
-        self%l_order_prior    = .false.
         self%precond_ridge      = 0.0
         nullify(self%atm)
         self%atm_lambda     = 0.0
@@ -1048,7 +973,7 @@ contains
         allocate(hp(self%box,self%box,self%box))
         call self%ifft_crop(hp)
         if( self%l_profile ) self%t_fold = self%t_fold + clock_seconds_since(tp)
-        ! band precision on the deapodized domain (+ the order ridge when set);
+        ! band precision on the deapodized domain;
         ! attachment mode enforced upstream
         call self%add_ridge(p, hp)
     end function apply_normal_kernel
@@ -1735,9 +1660,6 @@ contains
             &THROW_HARD('raw PCG density lattice mismatch; regularize_finalized')
         call self%reset_finalize_profile
         call self%reset_profile(.false.)
-        if( allocated(self%order_pen) ) deallocate(self%order_pen)
-        self%order_lambda_rel = 0.0
-        self%l_order_prior    = .false.
         nullify(self%atm)
         self%atm_lambda_rel = 0.0
         self%atm_lambda     = 0.0
@@ -1827,16 +1749,12 @@ contains
             THROW_HARD('invalid PCG data scale derived from D')
         endif
         ! the real-space diagonal of the circulant data operator is one number,
-        ! the mean of D over ALL native shells (the order prior's closed-form
-        ! strength estimate compares its real-space ridge with it)
+        ! the mean of D over ALL native shells (used by the atomicity prior)
         if( sum(shell_count) > 0 )then
             self%realspace_diag = real(sum(shell_sum) / real(sum(shell_count),dp)) * self%padsc**2
         else
             self%realspace_diag = self%data_scale
         endif
-        if( allocated(self%shell_diag) ) deallocate(self%shell_diag)
-        allocate(self%shell_diag(0:self%Rnat))
-        self%shell_diag = real(shell_sum / real(max(shell_count,1),dp)) * self%padsc**2
         deallocate(shell_sum, shell_count)
         if( self%l_lambda_relative ) self%lambda = self%lambda_rel * self%data_scale
     end subroutine update_lambda_from_density
@@ -2319,20 +2237,11 @@ contains
     end function get_data_scale
 
     !> real-space diagonal of the data operator (mean of D over all native
-    !! shells, x padsc^2): h in the order prior's closed-form shrink
-    !! h / (h + lambda_s (1-w))
+    !! shells, x padsc^2), used by the atomicity prior
     pure real function get_realspace_diagonal( self )
         class(reconstructor_pcg), intent(in) :: self
         get_realspace_diagonal = self%realspace_diag
     end function get_realspace_diagonal
-
-    !> mean of D per native shell 0:Rnat (x padsc^2), set with the data scale: the order prior's banded shrink
-    function get_shell_diagonal( self ) result( dsh )
-        class(reconstructor_pcg), intent(in) :: self
-        real, allocatable :: dsh(:)
-        if( .not. allocated(self%shell_diag) ) THROW_HARD('no shell diagonal before the data scale; get_shell_diagonal')
-        allocate(dsh(0:ubound(self%shell_diag,1)), source=self%shell_diag)
-    end function get_shell_diagonal
 
     pure real function get_effective_lambda( self )
         class(reconstructor_pcg), intent(in) :: self
@@ -2632,8 +2541,7 @@ contains
     !! maxits_ml coupled PCG iterations from it (rtol=0, exactly that many; an
     !! indefinite stop falls back to the closed form; maxits_ml=0 ships the
     !! closed form). x_cf receives the closed form when iterations ran.
-    subroutine solve_regularized( pcgop, x, maxits_ml, rel_res_hist, niters, outcome, x_cf, &
-            &order_weight, order_lambda_rel )
+    subroutine solve_regularized( pcgop, x, maxits_ml, rel_res_hist, niters, outcome, x_cf )
         class(reconstructor_pcg), intent(inout) :: pcgop
         real,                     intent(inout) :: x(:,:,:)
         integer,                  intent(in)    :: maxits_ml
@@ -2641,17 +2549,9 @@ contains
         integer,                  intent(out)   :: niters
         type(pcg_solver_outcome), intent(out)   :: outcome
         real, allocatable,        intent(out)   :: x_cf(:,:,:)
-        class(image),   optional, intent(in)    :: order_weight     !< pcg_order=yes: order weight w(r)
-        real,           optional, intent(in)    :: order_lambda_rel !< ridge coefficient relative to the data precision per voxel
         real    :: rel_l2, rel_m
         integer :: maxits_here
         maxits_here = maxits_ml
-        if( present(order_weight) )then
-            ! the order ridge, so coupled iterations solve the same ridged
-            ! system as the base re-solve
-            if( .not. present(order_lambda_rel) ) THROW_HARD('order prior requires its relative coefficient; solve_regularized')
-            call pcgop%set_order_prior(order_weight, order_lambda_rel)
-        endif
         call pcgop%shrink_by_ml_prior(x, rel_l2, rel_m)
         if( maxits_here < 1 )then
             niters = 0
@@ -2673,8 +2573,6 @@ contains
                 niters = 0
                 if( allocated(rel_res_hist) ) deallocate(rel_res_hist)
                 allocate(rel_res_hist(0))
-                if( present(order_weight) ) write(logfhandle,'(A)') &
-                    &'>>> PCG ORDER PRIOR: indefinite stop, half shipped as the closed form WITHOUT the order prior'
                 outcome%stop_reason          = 'closed_form_fallback'
                 outcome%iteration_count      = 0
                 outcome%final_rel_residual   = rel_l2

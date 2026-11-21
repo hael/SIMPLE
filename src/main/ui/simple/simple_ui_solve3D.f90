@@ -45,10 +45,12 @@ contains
             &'measured spectra. Requires Euclidean matching(yes|no){yes}', &
             &'', .false., 'yes', group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
             &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_MASK, 'automsk', 'binary', 'Density envelope in the last two stages', &
-            &'Density envelope mask (and envelope-corrected FSC) in stages 7 and 8, on either backend; '//&
-            &'spherical support before(yes|no){no}', '', .false., 'no', group='mask', &
-            &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call solve3D%add_input(UI_MASK, 'automsk', 'multi', 'Reference envelope in the last two stages', &
+            &'Stages 7 and 8 and their final reconstruction, on either backend: density envelope, NU-evidence '//&
+            &'envelope with density fallback, or order attenuation, with the envelope-corrected FSC; spherical '//&
+            &'support before, and throughout a run that ends before stage 7(density|nu|order|no){no}', '', .false., 'no', &
+            &group='mask', choices=ui_choices([character(len=7) :: 'density', 'nu', 'order', 'no']), &
+            &visibility=UI_VIS_ADVANCED)
         ! add to ui_hash
         call add_ui_program('solve3D', solve3D, prgtab, UI_CATEGORY)
     end subroutine new_solve3D
@@ -110,19 +112,6 @@ contains
             &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
             &.false., 0., group="search", visibility=UI_VIS_ADVANCED, &
             &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-            call prg%add_input(UI_PARM, 'pcg_order', 'binary', 'PCG order prior', &
-            &'Order prior on the PCG base solve: a real-space ridge on what lacks NU evidence of order (solvent, and '//&
-            &'disordered density such as detergent); the ordered fraction and the strength are chosen each iteration '//&
-            &'so the protein core keeps its signal, from the previous iteration''s NU evidence; then the same cold solve again. '//&
-            &'For the references only: the prior-free pair keeps the FSC; active in solve3D in stages 7 and 8'//&
-            &'(yes|no){no}', '', .false., 'no', group="search", &
-            &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-            &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-            call prg%add_input(UI_PARM, 'pcg_order_lambda', 'num', 'PCG order prior strength', &
-            &'Ridge coefficient of the order prior relative to the data precision per voxel (1 halves a fully penalized voxel); '//&
-            &'not given = chosen per state and iteration; given = applied every iteration, the ordered fraction still chosen', 'coefficient{auto}', &
-            &.false., 1.0, group="search", visibility=UI_VIS_ADVANCED, &
-            &activation=ui_activation_equals_any('pcg_order', [character(len=3) :: 'yes']))
         endif
         if( .not. l_stream_compatible )then
             call prg%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &

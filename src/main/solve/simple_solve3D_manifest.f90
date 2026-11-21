@@ -30,9 +30,9 @@ integer,          parameter :: KLEN = 24
 !> Keys of the base run's command line, as given at entry (before any default
 !! is injected), that the manifest records: the solution, reconstruction and
 !! search policy plus the entry routes (provenance)
-character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(36) = [character(len=KLEN) :: &
+character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(34) = [character(len=KLEN) :: &
     &'pgrp', 'mskdiam', 'nstates', 'nstages', 'rec_backend', 'maxits_pcg', &
-    &'maxits_ml', 'pcg_order', 'pcg_order_lambda', 'filt_mode', 'nu_stage', 'automsk', 'envfsc', 'envmsklp', &
+    &'maxits_ml', 'filt_mode', 'nu_stage', 'automsk', 'envfsc', 'envmsklp', &
     &'objfun', 'hp', 'lp', 'lpstart', 'lpstop', 'force_lp_range', 'gold_std_stage', 'sigma2_anneal', &
     &'prob_athres', 'shift_prior', 'bfac', 'gauref', 'balance', 'nclust', &
     &'lpstart_ini3D', 'lpstop_ini3D', 'center', 'cenlp', 'cavg_ini', 'cavg_ini_ext', 'pgrp_start', 'vol1']

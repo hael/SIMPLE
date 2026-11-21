@@ -1236,7 +1236,7 @@ contains
         subroutine run_state_nonuniform_filter()
             ! the shared assembly-owned NU competition (both backends)
             call nonuniform_filter_state(params, state, vol_nu_base_even, vol_nu_base_odd, &
-                &vol_nu_aux_even, vol_nu_aux_odd, use_static_nu_aux_replacement(), res0143s(state), &
+                &vol_nu_aux_even, vol_nu_aux_odd, use_static_nu_aux_replacement(), res0143s(state), res05s(state), &
                 &volname, eonames, nu_align_lps(state), nu_timings)
         end subroutine run_state_nonuniform_filter
 

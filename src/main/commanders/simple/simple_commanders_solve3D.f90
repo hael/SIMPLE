@@ -712,7 +712,7 @@ contains
             end select
             if( ui_addon%accepts(key) ) cycle
             select case(key)
-                case('rec_backend', 'maxits_pcg', 'maxits_ml', 'pcg_order', 'pcg_order_lambda')
+                case('rec_backend', 'maxits_pcg', 'maxits_ml')
                     msg = key//': solve3D_addon reconstructs by gridding only and takes no backend or PCG control'
                     THROW_HARD(trim(msg))
             end select
@@ -904,6 +904,7 @@ contains
         type(string) :: frcs_probe
         integer :: nthr_view
         integer :: automsk_last_stage
+        type(string) :: automsk_req
         character(len=5) :: smpl_units
         real    :: sampled_active_frac
         ! run manifest: the command line as given and the emitted stage ladder
@@ -988,19 +989,27 @@ contains
             if( .not. l_user_nstages ) call cline%set('nstages', solve3D_independent_nstages_default())
             if( .not. l_user_lpstop  ) call cline%set('lpstop',  solve3D_independent_lpstop_default())
         endif
-        ! spherical support, except the density envelope from solve3D_automsk_stage() under automsk=yes
+        ! spherical support, except a requested automsk (density|nu|order) from solve3D_automsk_stage()
         if( cline%defined('automsk') )then
-            if( cline%get_carg('automsk') .eq. 'yes' )then
-                automsk_last_stage = solve3D_nstages()
-                if( cline%defined('nstages') ) automsk_last_stage = min(automsk_last_stage, cline%get_iarg('nstages'))
-                if( automsk_last_stage < solve3D_automsk_stage() )then
-                    THROW_WARN('automsk=yes acts from stage '//int2str(solve3D_automsk_stage())//'; this run ends at stage '//int2str(automsk_last_stage)//', so automsk=no')
-                    call cline%set('automsk', 'no')
-                    call cline_entry%set('automsk', 'no') ! the manifest records what the run did
-                endif
-            else if( cline%get_carg('automsk') .ne. 'no' )then
-                THROW_HARD('solve3D takes automsk=yes or no')
-            endif
+            automsk_req = cline%get_carg('automsk')
+            select case(automsk_req%to_char())
+                case('no')
+                case('density', 'nu', 'order')
+                    if( automsk_req%to_char() /= 'density' .and. cline%defined('nu_stage') )then
+                        if( cline%get_iarg('nu_stage') > solve3D_automsk_stage() ) &
+                            &THROW_HARD('automsk=nu|order needs NU filtering by the first masked stage; lower nu_stage')
+                    endif
+                    automsk_last_stage = solve3D_nstages()
+                    if( cline%defined('nstages') ) automsk_last_stage = min(automsk_last_stage, cline%get_iarg('nstages'))
+                    if( automsk_last_stage < solve3D_automsk_stage() )then
+                        THROW_WARN('automsk='//automsk_req%to_char()//' acts from stage '//int2str(solve3D_automsk_stage())//'; this run ends at stage '//int2str(automsk_last_stage)//', so automsk=no')
+                        call cline%set('automsk', 'no')
+                        call cline_entry%set('automsk', 'no') ! the manifest records what the run did
+                    endif
+                case DEFAULT
+                    THROW_HARD('solve3D takes automsk=no, density, nu or order')
+            end select
+            call automsk_req%kill
         endif
         if( cline%defined('gold_std_stage') )then
             if( cline%get_iarg('gold_std_stage') > 0 .and. nstates_on_cline /= 1 ) &

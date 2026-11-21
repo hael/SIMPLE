@@ -72,15 +72,17 @@ contains
         use simple_sp_project, only: sp_project
         use simple_string,     only: string
         use simple_defs_conv,  only: OVERLAP_3D, OVERLAP_3D_STAGE
+        use simple_final_rec,  only: final_rec_mask_settings
         class(parameters), allocatable :: params
         class(cmdline), allocatable    :: saved_cline
         class(sp_project), allocatable :: proj
         type(lp_crop_inf), allocatable :: saved_lpinfo(:)
         type(solve3D_addon_ctx) :: addon
-        type(string) :: cwd, root
-        logical :: saved_flags(9)
+        type(string) :: cwd, root, final_automsk
+        logical :: saved_flags(9), l_final_envfsc, l_final_nu_mask
         real    :: saved_update_frac
-        integer :: saved_nptcls_eff, saved_nstages, nfail0, backend, istage
+        integer :: saved_nptcls_eff, saved_nstages, nfail0, backend, istage, imode
+        character(len=7), parameter :: mask_modes(4) = [character(len=7) :: 'no', 'density', 'nu', 'order']
         write(*,'(A)') 'test_gold_standard_stages'
         nfail0 = tests_failed
         call enter_fixture('solve3D_gold_standard', cwd, root)
@@ -114,7 +116,7 @@ contains
         params%box = 64
         params%smpd = 2.
         params%gold_std_stage = 0
-        params%automsk = 'yes'
+        params%automsk = 'density'
         params%envfsc = 'yes'
         params%projfile = 'stages.simple'
         call proj%os_ptcl3D%new(2, is_ptcl=.true.)
@@ -171,35 +173,66 @@ contains
             call assert_real(0.25, cline_refine3D%get_rarg('update_frac'), 1.e-6, 'the transition keeps fractional updates')
             call assert_string_eq('yes', cline_refine3D%get_carg('trail_rec'), 'the transition keeps trailing reconstruction')
             call assert_string_eq(params%rec_backend, cline_refine3D%get_carg('rec_backend'), 'backend selection is preserved')
-            call assert_string_eq('yes', cline_refine3D%get_carg('automsk'), 'automsk=yes: stage 7 masks by the density envelope')
-            call assert_string_eq('yes', cline_refine3D%get_carg('envfsc'), 'automsk=yes: stage 7 FSC uses the envelope')
+            call assert_string_eq('density', cline_refine3D%get_carg('automsk'), 'automsk=density: stage 7 masks by the density envelope')
+            call assert_string_eq('yes', cline_refine3D%get_carg('envfsc'), 'automsk=density: stage 7 FSC uses the envelope')
             l_refine3D_lpstop_override = .true.
             params%lpstop = 7.5
             call set_cline_refine3D(params, 8, 1, .false.)
             call assert_false(cline_refine3D%defined('lp'), 'stage 8 still selects its matching band adaptively')
             call assert_real(7.5, cline_refine3D%get_rarg('lpstop'), 1.e-6, 'explicit user ceiling survives')
-            call assert_string_eq('yes', cline_refine3D%get_carg('automsk'), 'automsk=yes: stage 8 masks by the density envelope')
-            call assert_string_eq('yes', cline_refine3D%get_carg('envfsc'), 'automsk=yes: stage 8 FSC uses the envelope')
+            call assert_string_eq('density', cline_refine3D%get_carg('automsk'), 'automsk=density: stage 8 masks by the density envelope')
+            call assert_string_eq('yes', cline_refine3D%get_carg('envfsc'), 'automsk=density: stage 8 FSC uses the envelope')
             params%automsk = 'no'
             call set_cline_refine3D(params, 8, 1, .false.)
             call assert_string_eq('no', cline_refine3D%get_carg('automsk'), 'automsk=no: stage 8 keeps spherical support')
             call assert_string_eq('no', cline_refine3D%get_carg('envfsc'), 'automsk=no: FSC uses no generated envelope')
-            params%automsk = 'yes'
+            params%automsk = 'density'
             l_refine3D_lpstop_override = .false.
         enddo
+        do imode = 1, size(mask_modes)
+            params%automsk = mask_modes(imode)
+            do istage = 1, 8
+                call set_cline_refine3D(params, istage, 1, .false.)
+                if( istage < 7 .or. trim(mask_modes(imode)) == 'no' )then
+                    call assert_string_eq('no', cline_refine3D%get_carg('automsk'), 'early or default stage has no mask')
+                    call assert_string_eq('no', cline_refine3D%get_carg('envfsc'), 'early or default stage has no envelope FSC')
+                else
+                    call assert_string_eq(trim(mask_modes(imode)), cline_refine3D%get_carg('automsk'), &
+                        &'late stage forwards the requested mask')
+                    call assert_string_eq('yes', cline_refine3D%get_carg('envfsc'), 'late stage enables envelope FSC')
+                endif
+            enddo
+        enddo
+        ! the final reconstruction takes its mask settings from the last stage's command line only: a run
+        ! that ends before stage 7 ships unmasked although automsk was requested, one that reaches it masked
+        params%automsk   = 'order'
         params%filt_mode = 'nonuniform'
-        params%l_pcg_order = .true.
+        call set_cline_refine3D(params, 5, 1, .false.)
+        call final_rec_mask_settings(cline_refine3D, final_automsk, l_final_envfsc, l_final_nu_mask)
+        call assert_string_eq('no', final_automsk, 'a run ending at stage 5 ships without the requested mask')
+        call assert_false(l_final_envfsc,  'a run ending at stage 5 ships without envelope FSC')
+        call assert_false(l_final_nu_mask, 'a run ending at stage 5 ships without the NU mask filter mode')
+        call set_cline_refine3D(params, 8, 1, .false.)
+        call final_rec_mask_settings(cline_refine3D, final_automsk, l_final_envfsc, l_final_nu_mask)
+        call assert_string_eq('order', final_automsk, 'a run ending at stage 8 ships with the order mask')
+        call assert_true(l_final_envfsc,  'a run ending at stage 8 ships with envelope FSC')
+        call assert_true(l_final_nu_mask, 'a run ending at stage 8 keeps the NU filter mode for the order mask')
+        params%automsk = 'density'
+        call set_cline_refine3D(params, 8, 1, .false.)
+        call final_rec_mask_settings(cline_refine3D, final_automsk, l_final_envfsc, l_final_nu_mask)
+        call assert_string_eq('density', final_automsk, 'a run ending at stage 8 ships with the density mask')
+        call assert_true(l_final_envfsc,  'the density mask implies envelope FSC')
+        call assert_false(l_final_nu_mask, 'the density mask ships a classical map')
+        params%automsk = 'density'
+        params%filt_mode = 'nonuniform'
         call set_cline_refine3D(params, 6, 1, .false.)
         call assert_false(cline_refine3D%defined('lp'), 'stage 6 removes scheduled lp with plain NU input')
         call assert_string_eq('nonuniform', cline_refine3D%get_carg('filt_mode'), 'stage 6 keeps plain NU half references')
         call assert_string_eq('gridding', cline_refine3D%get_carg('rec_backend'), 'PCG starts at stage 7')
-        call assert_false(cline_refine3D%defined('pcg_order'), 'the order prior starts at stage 7')
-        call assert_string_eq('no', cline_refine3D%get_carg('automsk'), 'automsk=yes: stage 6 keeps spherical support')
-        call assert_string_eq('no', cline_refine3D%get_carg('envfsc'), 'automsk=yes: stage 6 FSC uses no envelope')
+        call assert_string_eq('no', cline_refine3D%get_carg('automsk'), 'automsk=density: stage 6 keeps spherical support')
+        call assert_string_eq('no', cline_refine3D%get_carg('envfsc'), 'automsk=density: stage 6 FSC uses no envelope')
         call set_cline_refine3D(params, 7, 1, .false.)
         call assert_string_eq('pcg', cline_refine3D%get_carg('rec_backend'), 'stage 7 runs the requested PCG backend')
-        call assert_string_eq('yes', cline_refine3D%get_carg('pcg_order'), 'stage 7 forwards the order prior')
-        params%l_pcg_order = .false.
         addon%active = .true.
         addon%l_register = .true.
         addon%frozen_rec = 'frozen_context.txt'
@@ -211,7 +244,7 @@ contains
         call set_cline_refine3D(params, 7, 1, .false., addon)
         call assert_false(cline_refine3D%defined('lp'), 'the add-on stage proper restores half-specific matching')
         call assert_string_eq('nonuniform', cline_refine3D%get_carg('filt_mode'), 'the add-on stage uses plain NU')
-        call assert_string_eq('yes', cline_refine3D%get_carg('automsk'), 'the add-on stage replays automsk=yes')
+        call assert_string_eq('density', cline_refine3D%get_carg('automsk'), 'the add-on stage replays automsk=density')
         call addon%frozen_rec%kill
         params%gold_std_stage = 9
         call set_cline_refine3D(params, 7, 1, .false.)

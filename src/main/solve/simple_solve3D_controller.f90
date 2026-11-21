@@ -30,8 +30,8 @@ integer,          parameter :: STICKY_LAST_STAGE       = 4           ! single st
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = STICKY_LAST_STAGE + 1 ! single state trails from the first freely sampled stage
 integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
 integer,          parameter :: GOLD_STD_STAGE          = 6           ! first eligible single-state gold-standard stage
-integer,          parameter :: PCG_START_STAGE         = 7           ! requested PCG backend and order prior, the last two stages (6 until 2026-11-18); independent of gold_std_stage
-integer,          parameter :: AUTOMSK_START_STAGE     = PCG_START_STAGE ! automsk=yes: density envelope in the last two stages, spherical before
+integer,          parameter :: PCG_START_STAGE         = 7           ! requested PCG backend, the last two stages (6 until 2026-11-18); independent of gold_std_stage
+integer,          parameter :: AUTOMSK_START_STAGE     = PCG_START_STAGE ! a requested automsk acts in the last two stages, spherical before
 integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8, single and multi-state
 integer,          parameter :: NSTAGES_INDEPENDENT     = 5           ! default last stage of independent multi-state solve3D
 real,             parameter :: FRACSRCH_SCAN_EXIT      = 95.         ! multi-state shc stage 2 also ends above this mean % scanned
@@ -163,7 +163,7 @@ contains
         istage = VOL_SUPPLIED_STAGE
     end function solve3D_vol_supplied_stage
 
-    !> first stage of the density envelope under automsk=yes
+    !> first stage of a requested automsk (density|nu|order)
     module pure function solve3D_automsk_stage() result(istage)
         integer :: istage
         istage = AUTOMSK_START_STAGE
@@ -486,7 +486,8 @@ contains
         endif
     end subroutine set_refine3D_filtering_policy
 
-    !> spherical support, except the density envelope and its FSC envelope from AUTOMSK_START_STAGE under automsk=yes
+    !> spherical support, except a requested automsk (density|nu|order) and its envelope FSC from
+    !! AUTOMSK_START_STAGE; the class-average route stays spherical
     subroutine set_refine3D_mask_policy( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
@@ -495,8 +496,8 @@ contains
         cfg%automsk = 'no'
         cfg%envfsc  = 'no'
         if( l_cavgs ) return
-        if( trim(params%automsk) == 'yes' .and. istage >= AUTOMSK_START_STAGE )then
-            cfg%automsk = 'yes'
+        if( trim(params%automsk) /= 'no' .and. istage >= AUTOMSK_START_STAGE )then
+            cfg%automsk = trim(params%automsk)
             cfg%envfsc  = 'yes'
         endif
     end subroutine set_refine3D_mask_policy
@@ -653,20 +654,6 @@ contains
         call cline_refine3D%set('pgrp',                   cfg%pgrp)
         call cline_refine3D%set('refine',                 cfg%refine)
         call cline_refine3D%set('rec_backend',            cfg%rec_backend)
-        ! The order prior starts at its own late-stage boundary, on the NU evidence of the previous iteration.
-        ! The strength is forwarded only when given; an unset pcg_order_lambda keeps the per-iteration choice.
-        if( params%l_pcg_order .and. istage >= PCG_START_STAGE .and. &
-            &trim(cfg%rec_backend%to_char()) == 'pcg' )then
-            call cline_refine3D%set('pcg_order', 'yes')
-            if( params%l_pcg_order_lambda_auto )then
-                call cline_refine3D%delete('pcg_order_lambda')
-            else
-                call cline_refine3D%set('pcg_order_lambda', params%pcg_order_lambda)
-            endif
-        else
-            call cline_refine3D%delete('pcg_order')
-            call cline_refine3D%delete('pcg_order_lambda')
-        endif
         if( cfg%refine.eq.'prob_neigh' )then
             call cline_refine3D%set('prob_neigh_mode',    cfg%prob_neigh_mode)
         else

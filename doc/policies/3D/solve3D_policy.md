@@ -145,15 +145,13 @@ Stage policy includes:
 - staged NU filtering from `NU_FILTER_STAGE`
 - single-state gold-standard matching from stage 6 by default (`gold_std_stage` overrides the start)
 - spherical support (`automsk=no`, `envfsc=no`), except that a user-given
-  `automsk=yes` turns on the density envelope and the envelope-corrected FSC
-  in the last two stages, 7 and 8 (`AUTOMSK_START_STAGE`, tied to
-  `PCG_START_STAGE`; spherical throughout until 2026-11-20), on either backend
+  `automsk=density|nu|order` turns on that reference mask and the
+  envelope-corrected FSC in the last two stages, 7 and 8 (`AUTOMSK_START_STAGE`,
+  tied to `PCG_START_STAGE`; spherical throughout until 2026-11-20), on either
+  backend
 - a requested PCG backend (`rec_backend=pcg`) in the last two stages, 7
   and 8 (`PCG_START_STAGE`; 6 until 2026-11-18), gridding before; changing
   `gold_std_stage` does not retime this backend switch
-- an explicitly requested PCG order prior (`pcg_order=yes`) from the same
-  stage (`PCG_START_STAGE`), on the NU evidence and labels of the
-  previous iteration (section 9)
 - no in-plane posterior insertion: removed from 3D on 2026-11-17 by the maintainer (refine3D policy,
   "In-plane posterior insertion: removed from 3D"); every stage inserts each pose at its own angle with
   the table's pose weights, on gridding and on the PCG backend alike
@@ -292,7 +290,7 @@ Its bootstrap map is a gridding assembly that carries the last stage's
 `filt_mode` and `automsk` (the residual sigmas depend on the
 regularization of the reference they are scored against, so that reference is
 regularized like the last stage's matching references); the shipped map is
-classical (`filt_mode=none`, except that `automsk=nu` keeps the caller's NU
+classical (`filt_mode=none`, except that `automsk=nu|order` keeps the caller's NU
 `filt_mode`) and runs on the workflow's backend with the PCG cold-solve budget
 applied inside `bootstrap_rec3D` (2026-09-07).
 Whether the final reconstruction refreshes its sigmas at native sampling is
@@ -865,15 +863,16 @@ After symmetry handling, the selected maps are injected back into the staged
 ## 8. Filtering and Gold-Standard Matching
 
 Staged `solve3D` uses the same static-ladder NU competition as
-`refine3D_auto`. Its objective and reconstruction support remain spherical
-(`mskdiam`) by default: every stage runs `automsk=no` and `envfsc=no`.
-`automsk=yes` (the only other value solve3D takes) adds the conservative
-density envelope in stages 7 and 8: the PCG solve support from the previous
-iteration's prior-free pair, so it composes with `pcg_order=yes`
-(`reconstruct3D_pcg_policy.md`, section 3), the post-filter mask of the
-matching references and `envfsc=yes`. Add-on registration stays spherical.
-A run that ends before stage 7 warns and runs `automsk=no`, which the
-manifest records. `automsk=nu` and `tight` are refused.
+`refine3D_auto`. Its NU objective and reconstruction support remain spherical
+(`mskdiam`) by default: every stage runs `automsk=no` and `envfsc=no`. A
+user-given `automsk=density|nu|order` acts in stages 7 and 8 with
+`envfsc=yes`: the PCG solve support is the density envelope of the previous
+iteration's prior-free pair (`reconstruct3D_pcg_policy.md`, section 3), and
+the matching references carry the selected mask (`automasking_policy.md`).
+Add-on registration stays spherical. A run that ends before stage 7 warns and
+runs `automsk=no`, which the manifest records. `automsk=nu|order` also requires
+NU filtering to start by stage 7 (`nu_stage <= 7`, or the built-in default);
+`tight` is refused.
 
 Before gold-standard refinement starts, NU-enabled stages use
 `nonuniform_lpset`, a merged registration reference and the scheduled `lp`.
@@ -967,11 +966,14 @@ updated. For multi-state runs it replaced the greedy missing-update pass. On the
 labels.
 
 The final reconstruction inherits only the scientific reconstruction policy it
-needs. It takes `automsk` from the last stage and `envfsc` from the run
-(`automsk=yes` implies `envfsc=yes`), so the original-sampling half maps
-retain spherical support unless `automsk=yes` was given. It does not inherit staged search or
-reference-filter controls such as `refine`, `lp` or `gauref`. The final
-reconstruction runs with `filt_mode=none` on both backends.
+needs. It takes all of its mask settings (`automsk`, `envfsc`, the NU
+`filt_mode`, `nu_msk_sig`, `amsklp`) from the last stage's command line alone,
+never from solve3D's own parameters (`final_rec_mask_settings`), so it ships the
+mask the last stage ran: none, with `envfsc=no`, unless `automsk` was given and
+the run reached stage 7.
+It does not inherit staged search controls such as `refine`, `lp` or `gauref`.
+The final reconstruction keeps NU filtering for `automsk=nu|order` and uses
+`filt_mode=none` otherwise.
 
 If the final stage used `objfun=euclid` and `ml_reg=yes`, final reconstruction
 uses the committed sigma2 store of the workflow's particles: one noise spectrum
@@ -981,16 +983,6 @@ rebuild entry before the regularized map is produced.
 On the PCG backend, a final ML-regularized stage uses the ordinary `P_tau`
 replay in `bootstrap_rec3D`; the `Q_NU` prior, its calibration pass and its
 controllers were removed on 2026-09-06.
-When `pcg_order=yes`, the staged controller forwards the order prior to every
-PCG stage, stages 7 and 8, and withholds it before; `pcg_order_lambda` is forwarded
-only when given, so an unset strength is chosen per state and iteration. The
-prior reads the previous iteration's `_nu_evidence` and `_nu_locres` maps of
-the same state and box, and the evidence map is written only under
-`pcg_order=yes`: the first iteration of stage 7, and the first at a new box,
-run without it (logged). The
-final reconstruction is prior-free. Design and evidence:
-`doc/implementation_notes/completed/pcg_order_prior.md`.
-
 The final reconstruction does not apply fractional-update sampling or trailing
 average blending. Final-map postprocessing is classical, even when staged
 refinement used NU-filtered references.

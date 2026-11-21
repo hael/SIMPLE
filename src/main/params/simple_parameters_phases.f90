@@ -801,10 +801,14 @@ contains
             THROW_HARD('msk (mask radius in pixels) is deprecated! Use mskdiam (mask diameter in A)')
         endif
         select case(trim(self%automsk))
-            case('yes','nu','tight','no')
+            case('density','nu','order','tight','no')
             case DEFAULT
                 THROW_HARD('Unsupported automsk mode: '//trim(self%automsk))
         end select
+        if( trim(self%prg%to_char()) == 'mask' .or. trim(self%prg%to_char()) == 'automask' )then
+            if( trim(self%automsk) == 'nu' .or. trim(self%automsk) == 'order' ) &
+                &THROW_HARD('standalone masking accepts automsk=no, density or tight')
+        endif
         select case(trim(self%nu_envmsk))
             case('yes','no')
             case DEFAULT
@@ -858,7 +862,7 @@ contains
             case DEFAULT
                 THROW_HARD('rec_states must be yes or no')
         end select
-        ! automsk=yes|nu implies envfsc=yes on both backends.
+        ! automsk=density|nu implies envfsc=yes on both backends.
         ! On PCG the density envelope is the solve support of BOTH the base
         ! and the ML-regularized solve, so the FSC pair is envelope-constrained
         ! in the estimator; on gridding the same envelope (automask3D at
@@ -867,7 +871,7 @@ contains
         ! counterpart of the constrained estimate and keeps the two backends'
         ! FSCs, and therefore their ML regularization, on the same footing;
         ! it is derived here rather than requested separately.
-        if( trim(self%automsk) == 'yes' .or. trim(self%automsk) == 'nu' )then
+        if( trim(self%automsk) == 'density' .or. trim(self%automsk) == 'nu' .or. trim(self%automsk) == 'order' )then
             if( .not. self%l_envfsc ) write(logfhandle,'(A)') '>>> automsk='//trim(self%automsk)//&
                 &' implies envfsc=yes (rec_backend='//trim(self%rec_backend)//'); envfsc promoted'
             self%envfsc   = 'yes'
@@ -949,18 +953,18 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported filt_mode flag')
         end select
-        if( trim(self%automsk) == 'nu' )then
+        if( trim(self%automsk) == 'nu' .or. trim(self%automsk) == 'order' )then
             if( .not. self%l_nonuniform ) &
-                &THROW_HARD('automsk=nu requires filt_mode=nonuniform or nonuniform_lpset')
+                &THROW_HARD('automsk=nu or order requires filt_mode=nonuniform or nonuniform_lpset')
         endif
         if( self%l_envfsc .and. self%envmsklp <= 0. ) &
             &THROW_HARD('envmsklp must be positive when envfsc=yes')
         ! automsk=tight only ever meant Otsu tightness in the standalone density
-        ! masker. In 3D refinement yes and nu select explicit envelope policies;
+        ! masker. In 3D refinement density and nu select explicit envelope policies;
         ! their tightness controls are envmsklp/binwidth and nu_msk_sig.
         if( trim(self%automsk).eq.'tight' )then
             if( self%l_nonuniform )then
-                THROW_HARD('automsk=tight is incompatible with nonuniform filtering; use automsk=yes or nu')
+                THROW_HARD('automsk=tight is incompatible with nonuniform filtering; use automsk=density or nu')
             endif
         endif
         if( trim(self%nu_envmsk).eq.'yes' .or. &
@@ -992,19 +996,6 @@ contains
             if( .not. file_exists(self%pcg_mskfile) ) &
                 &THROW_HARD('pcg_mskfile does not exist: '//self%pcg_mskfile%to_char())
         endif
-        ! opt-in order prior of the PCG base solve (simple_pcg_order_prior)
-        select case(trim(self%pcg_order))
-            case('yes')
-                self%l_pcg_order = .true.
-            case('no')
-                self%l_pcg_order = .false.
-            case DEFAULT
-                THROW_HARD('pcg_order must be yes or no')
-        end select
-        if( self%l_pcg_order .and. trim(self%rec_backend) /= 'pcg' ) &
-            &THROW_HARD('pcg_order=yes requires rec_backend=pcg')
-        if( self%pcg_order_lambda <= 0. ) THROW_HARD('pcg_order_lambda must be positive')
-        self%l_pcg_order_lambda_auto = .not. cline%defined('pcg_order_lambda')
         ! opt-in atomicity prior of the PCG reconstruction (simple_pcg_atomic_prior)
         select case(trim(self%atm_prior))
             case('yes')
@@ -1023,7 +1014,6 @@ contains
                     &THROW_HARD('atm_prior=yes requires the atom model pdbfile; program is '//trim(self%prg%to_char()))
             endif
             if( self%l_ml_reg )    THROW_HARD('atm_prior=yes requires ml_reg=no')
-            if( self%l_pcg_order ) THROW_HARD('atm_prior=yes and pcg_order=yes are exclusive')
             if( self%l_nonuniform ) THROW_HARD('atm_prior=yes takes no nonuniform filtering')
         endif
         if( self%lambda_atm < 0. ) THROW_HARD('lambda_atm must be non-negative (0 = estimated)')

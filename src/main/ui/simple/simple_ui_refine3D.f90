@@ -161,18 +161,6 @@ contains
         &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
         &.false., 0., group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call refine3D%add_input(UI_FILT, 'pcg_order', 'binary', 'PCG order prior', &
-        &'Order prior on the PCG base solve: a real-space ridge on what lacks NU evidence of order (solvent, and '//&
-        &'disordered density such as detergent); the ordered fraction and the strength are chosen each iteration '//&
-        &'so the protein core keeps its signal, from the previous iteration''s NU evidence; then the same cold solve again. '//&
-        &'For the references only: the prior-free pair keeps the FSC(yes|no){no}', '', .false., 'no', group="filter", &
-        &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call refine3D%add_input(UI_FILT, 'pcg_order_lambda', 'num', 'PCG order prior strength', &
-        &'Ridge coefficient of the order prior relative to the data precision per voxel (1 halves a fully penalized voxel); '//&
-        &'not given = chosen per state and iteration; given = applied every iteration, the ordered fraction still chosen', 'coefficient{auto}', &
-        &.false., 1.0, group="filter", visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('pcg_order', [character(len=3) :: 'yes']))
         call refine3D%add_input(UI_FILT, 'pcg_mskfile', 'file', 'PCG support-constraint mask volume', &
         &'Real-space [0,1] mask volume installed as the hard support constraint of every PCG solve (the projected '//&
         &'system P H P; experimental focused/support mode); spherical mskdiam support when absent', &
@@ -357,18 +345,6 @@ contains
         &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
         &.false., 0., group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call prg%add_input(UI_FILT, 'pcg_order', 'binary', 'PCG order prior', &
-        &'Order prior on the PCG base solve: a real-space ridge on what lacks NU evidence of order (solvent, and '//&
-        &'disordered density such as detergent); the ordered fraction and the strength are chosen each iteration '//&
-        &'so the protein core keeps its signal, from the previous iteration''s NU evidence; then the same cold solve again. '//&
-        &'For the references only: the prior-free pair keeps the FSC(yes|no){no}', '', .false., 'no', group="filter", &
-        &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call prg%add_input(UI_FILT, 'pcg_order_lambda', 'num', 'PCG order prior strength', &
-        &'Ridge coefficient of the order prior relative to the data precision per voxel (1 halves a fully penalized voxel); '//&
-        &'not given = chosen per state and iteration; given = applied every iteration, the ordered fraction still chosen', 'coefficient{auto}', &
-        &.false., 1.0, group="filter", visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('pcg_order', [character(len=3) :: 'yes']))
         call prg%add_input(UI_FILT, envfsc, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_FILT, envmsklp, group="filter", &

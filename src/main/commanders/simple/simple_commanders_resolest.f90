@@ -651,28 +651,54 @@ contains
     end subroutine exec_uniform_filter3D
 
     subroutine exec_nu_filt3D(self, cline)
+        use simple_defs_automask, only: ORDER_ENVMASK_SUFFIX
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, &
             &print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, write_nu_local_resolution_map, NU_DEV_OUTPUT,&
             &nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, write_nu_evidence_map, print_nu_envmask_stats,&
-            &NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A
+            &NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A, NU_ENVMASK_RELATIVE, &
+            &set_nu_solvent_envelope, nu_order_stats, make_nu_order_mask, report_nu_order_mask
+        use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair
         class(commander_nu_filt3D), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)     :: params
-        type(image)          :: even, odd, even_nu, odd_nu
-        type(image_msk)      :: nu_envelope
+        type(image)          :: even, odd, even_nu, odd_nu, average, density_core, order_mask
+        type(image_msk)      :: nu_envelope, density_envelope
+        type(halfmap_diagnostics_result) :: diagnostics
+        type(nu_order_stats) :: order_stats
         type(nu_envmask_params) :: envp
         type(nu_envmask_stats)  :: envstats
-        type(string)         :: even_out, odd_out, avg_out, locres_out, evid_out, envmsk_out
+        type(string)         :: even_out, odd_out, avg_out, locres_out, evid_out, envmsk_out, order_out
         logical, allocatable :: l_env(:,:,:)
         integer              :: n_ccs, n_ccs_kept, grow_px, edge_px
-        logical              :: l_envmask
+        logical              :: l_envmask, l_order
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        l_order = .false.
+        if( cline%defined('automsk') )then
+            if( cline%get_carg('automsk') == 'order' )then
+                l_order = .true.
+                call cline%set('filt_mode', 'nonuniform')
+            else if( cline%get_carg('automsk') /= 'no' )then
+                THROW_HARD('nu_filt3D accepts automsk=no or order')
+            endif
+        endif
         call params%new(cline)
         call odd%new([params%box,params%box,params%box], params%smpd)
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd%read(params%vols(1))
         call even%read(params%vols(2))
-        call setup_nu_dmats(even, odd, params%mskdiam, [real ::])
+        if( l_order )then
+            call average%copy(even)
+            call average%add(odd)
+            call average%mul(0.5)
+            call evaluate_halfmap_pair(params, 1, even, odd, average, diagnostics, 'gridding', mask_kind='density')
+            call density_envelope%automask3D(params, average, .false., lp_override=params%envmsklp, &
+                &l_report=.false., core=density_core)
+            call setup_nu_dmats(even, odd, params%mskdiam, [real ::], fsc_res=diagnostics%res_fsc0143)
+            call set_nu_solvent_envelope(density_envelope, source='density_envelope')
+            call average%kill
+        else
+            call setup_nu_dmats(even, odd, params%mskdiam, [real ::])
+        endif
         call optimize_nu_cutoff_finds()
         odd_out  = add2fbody(params%vols(1), params%ext, NUFILT_SUFFIX)
         even_out = add2fbody(params%vols(2), params%ext, NUFILT_SUFFIX)
@@ -711,7 +737,35 @@ contains
                 call wait_for_closure(envmsk_out)
             endif
         endif
+        if( l_order .and. .not. l_envmask )then
+            evid_out = add2fbody(avg_out, params%ext, NUEVIDENCE_SUFFIX)
+            call write_nu_evidence_map(evid_out, params%amsklp, NU_ENVMASK_RELATIVE)
+        endif
         call nu_filter_vols(even_nu, odd_nu, even, odd)
+        if( l_order )then
+            call even_nu%zero_env_background(density_envelope)
+            call odd_nu%zero_env_background(density_envelope)
+            call make_nu_order_mask(density_core, even_nu, odd_nu, diagnostics%res_fsc05, params%amsklp, &
+                &order_mask, order_stats)
+            order_out = add2fbody(avg_out, params%ext, ORDER_ENVMASK_SUFFIX)
+            if( order_stats%l_off )then
+                if( file_exists(order_out) ) call del_file(order_out)
+                call even_nu%mul(density_envelope)
+                call odd_nu%mul(density_envelope)
+            else
+                call order_mask%mul(density_envelope)
+                call order_mask%write(order_out, del_if_exists=.true.)
+                call wait_for_closure(order_out)
+                call even_nu%mul(order_mask)
+                call odd_nu%mul(order_mask)
+            endif
+            call report_nu_order_mask(1, order_stats)
+            call order_mask%kill
+            call density_core%kill
+            call density_envelope%kill_bimg
+            call diagnostics%kill
+            call order_out%kill
+        endif
         call print_nu_filtmap_lowpass_stats()
         if( NU_DEV_OUTPUT ) call analyze_filtmap_neighbor_continuity()
         call odd_nu%write(odd_out, del_if_exists=.true.)

@@ -1,5 +1,12 @@
 # Nonuniform Filtering Policy
 
+Under `automsk=order`, the same NU competition and density background as
+`automsk=density` produce the label field. The shared state filter computes a
+guarded order attenuation from current evidence and applies it only to the
+composed matching references, after subtracting the density envelope's skirt
+median. The density envelope remains the FSC mask and PCG solve support;
+the NU evidence envelope is diagnostic. See `3D/automasking_policy.md`.
+
 This document records the current nonuniform-filtering contract. It focuses on
 active code paths and should stay aligned with what the implementation does
 today.
@@ -71,7 +78,7 @@ NU-evidence envelope generation, but is valid only while NU filtering is active.
 competition.
 
 Refinement automasking is independent of the filter mode (2026-09-14):
-`automsk=yes` multiplies the matching references by the conservative density
+`automsk=density` multiplies the matching references by the conservative density
 envelope in every `filt_mode` -- at assembly on the `_nu_filt` products in NU
 modes, in the matcher after its own filter otherwise
 (`automasking_policy.md`). `automsk=tight` is rejected with nonuniform
@@ -94,7 +101,7 @@ resolution, the NU bank cap, the auxiliary member's admission, and hence the
 matching handoff (sections 8, 12). `envfsc` is independent
 of `automsk` and can operate without NU filtering.
 
-With `automsk=yes` the conservative density envelope is the
+With `automsk=density` the conservative density envelope is the
 support of the signal model (policy 2026-09-13): outside it there is no signal
 to filter -- unreconstructed under the PCG support projection, solvent on
 gridding -- so the filter field takes the coarsest bank candidate there, and
@@ -289,9 +296,9 @@ Mask ownership is strict:
   mask when valid
 - density-derived `automask3D_stateNN.mrc` is generated during volume assembly
   when `envfsc=yes`; the same generated mask feeds phase-randomized FSC and
-  cFAR, is applied to the `_nu_filt` references under `automsk=yes`
+  cFAR, is applied to the `_nu_filt` references under `automsk=density`
   (2026-09-13), and may be reused by non-PCG final postprocessing
-- PCG uses density support for `automsk=yes`; `automsk=nu` prefers the lagged
+- PCG uses density support for `automsk=density`; `automsk=nu` prefers the lagged
   NU artifact and falls back through density to a spherical bootstrap
 - neither automatic envelope replaces the spherical NU objective support
 
@@ -344,18 +351,6 @@ the composition costs two inverse transforms per candidate, which was
 measured not slower than the reads (`nu_filt3D` on a box-300 pair, 9.9 s
 against 10.5 s, 2026-10-17); the caller keeps the source pair alive until the
 composition (`nonuniform_filter_state` releases the base pair after it).
-
-With `pcg_order=yes` (PCG) the label field is estimated on the
-prior-free base pair and APPLIED to the order-prior pair when the
-`_nu_filt` references are composed (`nu_filter_vols` source pair,
-2026-09-21 for the solvent prior it replaced): per-label Butterworth of the
-prior'd halves scattered by the field, the auxiliary label from the ML pair
-as always. The competition, its noise level, the evidence null, the handoff
-and the `_nu_locres` map never see the prior'd pair; the references do, in
-every voxel. Log: `>>> NU REFERENCES: STATE n, LABEL FIELD OF THE BASE PAIR
-APPLIED TO THE ORDER-PRIOR PAIR`. Under `pcg_order=yes` the state filter also
-writes `<vol>_nu_evidence.mrc` (the evidence margin at `amsklp`, relative),
-which the next iteration's order prior reads with `_nu_locres`.
 
 The bank is the static ladder `[20, 15, 12, 10, 8, 6, 5, 4]` A (the
 NU machinery of the ed36eb4c build used by solve3D, the only NU mechanism since
@@ -422,7 +417,7 @@ is derived from the raw unaries, not from it. The in-solve `Q_NU` consumer was
 removed on 2026-09-06 (`doc/implementation_notes/completed/pcg_priors_history.md`).
 With `automsk` enabled the NU-evidence envelope is regenerated from the static
 candidate bank while the raw per-voxel evidence margins are live. It remains a
-diagnostic under `automsk=yes`; under `automsk=nu` it is the current
+diagnostic under `automsk=density`; under `automsk=nu` it is the current
 coarsest-bank boundary and reference envelope when valid, with density
 fallback.
 `write_nu_evidence_envmask` remains the single producer, called from the
@@ -540,7 +535,7 @@ Reference preparation treats NU filtering, like ML regularization, as filtering
 already done during assembly.
 
 Reference preparation applies ordinary spherical soft support first. Assembly
-then applies density under `automsk=yes` or valid NU evidence under
+then applies density under `automsk=density` or valid NU evidence under
 `automsk=nu`, with density fallback, before projection.
 
 ## 12. FSC Correction and Matching-Bandwidth Handoff
@@ -647,11 +642,11 @@ matching.
 `refine3D_auto` defaults to:
 
 - `filt_mode=nonuniform`
-- `automsk=yes`
+- `automsk=density`
 - `ml_reg=yes`
 - `envfsc=yes`
 
-With `automsk=yes`, density fixes background voxels of the local filter field.
+With `automsk=density`, density fixes background voxels of the local filter field.
 With `automsk=nu`, valid NU evidence replaces it and also masks references;
 density is the fallback.
 

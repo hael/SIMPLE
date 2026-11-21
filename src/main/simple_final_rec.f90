@@ -2,6 +2,7 @@
 module simple_final_rec
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_commanders_api
+use simple_defs_automask,     only: ORDER_ENVMASK_FBODY
 use simple_parameters,        only: parameters
 use simple_solve3D_utils,     only: configure_final_pcg_solve_budget, write_final_rec_outputs, &
     &gen_ortho_reprojs4viz
@@ -13,7 +14,7 @@ use simple_reconstructor_pcg, only: PCG_WEIGHT_THRESHOLD
 implicit none
 #include "simple_local_flags.inc"
 
-public :: calc_final_rec, calc_final_rec_addon
+public :: calc_final_rec, calc_final_rec_addon, final_rec_mask_settings
 private
 
 abstract interface
@@ -143,7 +144,7 @@ contains
                     cycle
                 endif
             endif
-            call register_state_map(params, spproj, state, smpd, ldim(1), pop, params%l_m_estimator_flex, mass, ess)
+            call register_state_map(spproj, cline_refine, state, smpd, ldim(1), pop, params%l_m_estimator_flex, mass, ess)
         enddo
         call spproj%write_segment_inside('out', projfile)
         call wset%kill
@@ -270,7 +271,7 @@ contains
                 call spproj%remove_state_artifacts_from_osout(state)
                 cycle
             endif
-            call register_state_map(params, spproj, state, smpd, ldim(1), pop, .false., 0., 0.)
+            call register_state_map(spproj, cline_refine, state, smpd, ldim(1), pop, .false., 0., 0.)
         enddo
         call spproj%write_segment_inside('out', projfile)
         call write_final_rec_outputs(params, spproj, lp_snapshot)
@@ -308,16 +309,17 @@ contains
     end subroutine calc_final_rec_addon
 
     !> one state's final map, FSC and (envfsc) mask into the out segment; under a state weight set
-    !! with its hard population, applied mass and effective sample size
-    subroutine register_state_map( params, spproj, state, smpd, box, pop, l_weighted, mass, ess )
-        class(parameters), intent(in)    :: params
-        type(sp_project),  intent(inout) :: spproj
-        integer,           intent(in)    :: state, box, pop
-        real,              intent(in)    :: smpd, mass, ess
-        logical,           intent(in)    :: l_weighted
-        type(string) :: str_state, vol_name, vol_envmsk
+    !! with its hard population, applied mass and effective sample size. The mask follows the mask
+    !! settings of the refinement command line (final_rec_mask_settings), as the reconstruction did.
+    subroutine register_state_map( spproj, cline_refine, state, smpd, box, pop, l_weighted, mass, ess )
+        type(sp_project), intent(inout) :: spproj
+        class(cmdline),   intent(in)    :: cline_refine
+        integer,          intent(in)    :: state, box, pop
+        real,             intent(in)    :: smpd, mass, ess
+        logical,          intent(in)    :: l_weighted
+        type(string) :: str_state, vol_name, vol_envmsk, automsk
         integer :: ldim(3)
-        logical :: l_mask_exists, l_mask_compatible
+        logical :: l_mask_exists, l_mask_compatible, l_envfsc, l_nu_mask
         ldim = box
         str_state = int2str_pad(state,2)
         vol_name  = refine3D_state_vol_fname(state)
@@ -330,13 +332,18 @@ contains
             call spproj%add_vol2os_out(vol_name, smpd, state, 'vol', pop=pop)
         endif
         call spproj%add_fsc2os_out(refine3D_fsc_fname(state), state, ldim(1))
-        if( params%l_envfsc )then
-            if( trim(params%automsk) == 'nu' )then
+        call final_rec_mask_settings(cline_refine, automsk, l_envfsc, l_nu_mask)
+        if( l_envfsc )then
+            if( automsk%to_char() == 'nu' )then
                 vol_envmsk = NU_ENVMASK_FBODY//trim(str_state%to_char())//MRC_EXT
                 call state_mask_is_compatible(vol_envmsk, ldim(1), smpd, l_mask_exists, l_mask_compatible)
                 if( .not. l_mask_compatible )then
                     vol_envmsk = AUTOMASK_FBODY//trim(str_state%to_char())//MRC_EXT
                 endif
+            else if( automsk%to_char() == 'order' )then
+                vol_envmsk = ORDER_ENVMASK_FBODY//trim(str_state%to_char())//MRC_EXT
+                call state_mask_is_compatible(vol_envmsk, ldim(1), smpd, l_mask_exists, l_mask_compatible)
+                if( .not. l_mask_compatible ) vol_envmsk = AUTOMASK_FBODY//trim(str_state%to_char())//MRC_EXT
             else
                 vol_envmsk = AUTOMASK_FBODY//trim(str_state%to_char())//MRC_EXT
             endif
@@ -353,7 +360,8 @@ contains
 
     !> The child command line is built from scratch: only the controls
     !! that define the final reconstruction are copied from params and
-    !! from the refinement command line.
+    !! from the refinement command line. The mask settings come from the
+    !! refinement command line alone (final_rec_mask_settings).
     subroutine prep_final_rec_cline( params, projfile, cline_refine, l_postprocess, child_cline, prg )
         class(parameters), intent(in)    :: params
         class(string),     intent(in)    :: projfile
@@ -361,7 +369,10 @@ contains
         logical,           intent(in)    :: l_postprocess
         class(cmdline),    intent(inout) :: child_cline
         character(len=*),  intent(in)    :: prg
-        integer :: istate
+        type(string) :: automsk
+        integer      :: istate
+        logical      :: l_envfsc, l_nu_mask
+        call final_rec_mask_settings(cline_refine, automsk, l_envfsc, l_nu_mask)
         call child_cline%kill
         call child_cline%set('prg',      prg)
         call child_cline%set('mkdir',    'no')
@@ -370,7 +381,11 @@ contains
         ! resolution document next to rec_final_stateNN.mrc.
         call child_cline%set('outfile', 'RESOLUTION_FINAL.txt')
         call child_cline%set('pgrp',    params%pgrp)
-        call child_cline%set('envfsc',   params%envfsc)
+        if( l_envfsc )then
+            call child_cline%set('envfsc', 'yes')
+        else
+            call child_cline%set('envfsc', 'no')
+        endif
         call child_cline%set('envmsklp', params%envmsklp)
         call child_cline%set('binwidth', params%binwidth)
         ! distributed workers are separate processes, which require nthr on their command line
@@ -383,13 +398,12 @@ contains
             &call child_cline%set('m_estimator', cline_refine%get_carg('m_estimator'))
         if( cline_refine%defined('state') ) call child_cline%set('state', cline_refine%get_iarg('state'))
         ! automsk is inherited on BOTH routes: the shipped PCG map is estimated on the same
-        ! density/NU support, with the same estimator-constrained FSC, as every refinement iteration.
-        if( cline_refine%defined('automsk') ) &
-            &call child_cline%set('automsk',   cline_refine%get_carg('automsk'))
-        if( trim(params%automsk) == 'nu' )then
-            ! automsk=nu is valid only in an NU filter mode, including
+        ! density/NU support, with the same estimator-constrained FSC, as the last refinement iteration.
+        if( cline_refine%defined('automsk') ) call child_cline%set('automsk', automsk)
+        if( l_nu_mask )then
+            ! automsk=nu|order is valid only in an NU filter mode, including
             ! internal final reconstruction and assembly commands.
-            call child_cline%set('filt_mode', params%filt_mode)
+            call child_cline%set('filt_mode', cline_refine%get_carg('filt_mode'))
             if( cline_refine%defined('nu_msk_sig') ) &
                 &call child_cline%set('nu_msk_sig', cline_refine%get_rarg('nu_msk_sig'))
             if( cline_refine%defined('amsklp') ) &
@@ -403,14 +417,14 @@ contains
             ! bootstrap_rec3D itself
             if( cline_refine%defined('filt_mode') ) &
                 &call child_cline%set('filt_mode', cline_refine%get_carg('filt_mode'))
-            if( trim(params%automsk) /= 'nu' .and. cline_refine%defined('nu_msk_sig') ) &
+            if( .not. l_nu_mask .and. cline_refine%defined('nu_msk_sig') ) &
                 &call child_cline%set('nu_msk_sig', cline_refine%get_rarg('nu_msk_sig'))
         else
             ! the direct route ships a classical map (no nonuniform
             ! filtering, a matching-reference feature); on PCG the
             ! last refinement volume at this box is the lag-one
             ! reference the solve support derives from
-            if( trim(params%automsk) /= 'nu' ) call child_cline%set('filt_mode', 'none')
+            if( .not. l_nu_mask ) call child_cline%set('filt_mode', 'none')
             if( trim(params%rec_backend) == 'pcg' )then
                 do istate = 1, params%nstates
                     if( file_exists(refine3D_state_vol_fname(istate)) ) &
@@ -432,9 +446,32 @@ contains
             call configure_final_pcg_solve_budget(cline_refine, child_cline)
             if( cline_refine%defined('rtol') )&
                 &call child_cline%set('rtol', cline_refine%get_rarg('rtol'))
-            ! no pcg_order: the order prior shapes the refinement's references, never the final map
         endif
     end subroutine prep_final_rec_cline
+
+    !> The final reconstruction's mask settings, from the command line of the refinement it continues
+    !! from alone (under solve3D the last stage's), never from the caller's parameters: automsk (no when
+    !! absent), envfsc (given, or implied by an active automsk as parameters derives it) and whether the
+    !! mode needs the refinement's NU filter mode (automsk=nu|order)
+    subroutine final_rec_mask_settings( cline_refine, automsk, l_envfsc, l_nu_mask )
+        class(cmdline), intent(in)  :: cline_refine
+        type(string),   intent(out) :: automsk
+        logical,        intent(out) :: l_envfsc, l_nu_mask
+        automsk   = 'no'
+        l_envfsc  = .false.
+        l_nu_mask = .false.
+        if( cline_refine%defined('automsk') ) automsk = cline_refine%get_carg('automsk')
+        if( cline_refine%defined('envfsc')  ) l_envfsc = cline_refine%get_carg('envfsc') == 'yes'
+        select case(automsk%to_char())
+            case('density')
+                l_envfsc  = .true.
+            case('nu', 'order')
+                l_envfsc  = .true.
+                l_nu_mask = .true.
+                if( .not. cline_refine%defined('filt_mode') ) &
+                    &THROW_HARD('automsk=nu|order needs the refinement filt_mode on its command line; final_rec_mask_settings')
+        end select
+    end subroutine final_rec_mask_settings
 
     logical function final_stage_uses_ml_reg( cline_refine ) result( l_ml_reg )
         class(cmdline), intent(in) :: cline_refine

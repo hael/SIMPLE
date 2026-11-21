@@ -34,6 +34,7 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
           assert_nu_evidence_replay_ready,&
           nu_evidence_sharpen_vol,&
           NU_EVIDENCE_BAND_LIMITS, NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
+public :: nu_order_stats, select_nu_order_mask, make_nu_order_mask, report_nu_order_mask, run_all_nu_order_mask_tests
 public :: run_all_nu_filter_tests
 private
 #include "simple_local_flags.inc"
@@ -96,6 +97,12 @@ real,             parameter   :: NU_ENVMASK_EXCLUDED_SCORE    = -1.0e3
 !! fraction of the label domain, for its median/MAD to be trusted
 integer,          parameter   :: NU_ENVMASK_MIN_NULL_VOX      = 1000
 real,             parameter   :: NU_ENVMASK_MIN_NULL_FRAC     = 0.02
+! Order attenuation (automsk=order): fixed depth and a conservative guard on ordered core signal.
+real,             parameter   :: NU_ORDER_LAMBDA              = 1.0
+real,             parameter   :: NU_ORDER_CORE_RES_FAC        = 1.5
+real,             parameter   :: NU_ORDER_CORE_KEEP           = 0.95
+integer,          parameter   :: NU_ORDER_CORE_MIN_VOX        = 1000
+real,             parameter   :: NU_ORDER_FRAC_STEP           = 0.01
 ! Sentinel floor above which a mask-packed unary entry is treated as unpopulated.
 ! Columns are allocated with huge() and compaction can leave stale members behind,
 ! so evidence comparisons must ignore anything at that magnitude.
@@ -153,6 +160,15 @@ type :: nu_envmask_params
     logical :: l_relative  = NU_ENVMASK_RELATIVE
     integer :: maxits      = 6     ! ICM sweeps
 end type nu_envmask_params
+
+type :: nu_order_stats
+    logical :: l_off = .true.
+    logical :: l_peri_signal = .false., l_fine_signal = .false.
+    integer :: n_dense = 0, n_core = 0, n_unobserved = 0
+    real :: fraction = 0., threshold = 0., width = 0., kept_core = 0.
+    real :: removed_peri = -1., kept_fine_peri = -1., core_share = 0.
+    character(len=80) :: reason = ''
+end type nu_order_stats
 
 type :: nu_envmask_stats
     real    :: null_med    = 0.
@@ -471,8 +487,8 @@ interface
 
 
     ! In submodule: simple_nu_filter_apply.f90
-    !> Filtered even/odd references from the current label field: the source pair (the competition pair, or
-    !! with pcg_order=yes the order-prior pair) filtered per label; the auxiliary label from the auxiliary pair.
+    !> Filtered even/odd references from the competition pair and current label field;
+    !! the auxiliary label comes from the auxiliary pair.
     module subroutine nu_filter_vols( vol_even, vol_odd, vol_src_even, vol_src_odd )
         class(image), intent(out) :: vol_even, vol_odd
         class(image), intent(in)  :: vol_src_even, vol_src_odd
@@ -568,6 +584,32 @@ interface
         class(image), optional, target, intent(in) :: vol_dens
     end subroutine nu_evidence_envelope
 
+    ! In submodule: simple_nu_filter_ordermask.f90
+    !> automsk=order on arrays: the order factor M over the box and the ordered fraction of the dense set,
+    !! the smallest that keeps NU_ORDER_CORE_KEEP of the core's cross-half signal (factor 1 when off)
+    module subroutine select_nu_order_mask( margin, locres, dense, even, odd, res05, factor, st, coarsest_lp )
+        real,                 intent(in)  :: margin(:,:,:), locres(:,:,:), even(:,:,:), odd(:,:,:), res05
+        logical,              intent(in)  :: dense(:,:,:)
+        real,                 intent(out) :: factor(:,:,:)
+        type(nu_order_stats), intent(out) :: st
+        real, optional,       intent(in)  :: coarsest_lp
+    end subroutine select_nu_order_mask
+
+    !> automsk=order on the live NU state: the evidence margin and label resolution of the current
+    !! competition, the dense set (envelope core within the observed NU domain), then select_nu_order_mask
+    module subroutine make_nu_order_mask( core_image, even, odd, res05, lp_smooth, factor, st )
+        class(image),         intent(in)    :: core_image, even, odd
+        real,                 intent(in)    :: res05, lp_smooth
+        type(image),          intent(inout) :: factor
+        type(nu_order_stats), intent(out)   :: st
+    end subroutine make_nu_order_mask
+
+    !> the per-state NU ORDER MASK log line
+    module subroutine report_nu_order_mask( state, st )
+        integer,              intent(in) :: state
+        type(nu_order_stats), intent(in) :: st
+    end subroutine report_nu_order_mask
+
     !> the smoothed evidence margin of the live bank as a volume, zero outside the NU sphere
     module subroutine get_nu_evidence_map( evmap, lp_smooth, l_relative )
         class(image), intent(inout) :: evmap
@@ -597,6 +639,9 @@ end interface
 
 interface
     !> white-box tests (submodule simple_nu_filter_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_nu_order_mask_tests()
+    end subroutine run_all_nu_order_mask_tests
+
     module subroutine run_all_nu_filter_tests()
     end subroutine run_all_nu_filter_tests
 end interface

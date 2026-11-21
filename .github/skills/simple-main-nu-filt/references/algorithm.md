@@ -41,18 +41,20 @@ the ML coupling are skill `simple-nonuniform-regularization`.
 
 Each half of the source pair is tapered, transformed and filtered per label; the coarsest filter
 seeds the whole grid, support voxels take their own label's filter, auxiliary voxels are copied from
-the stashed pair. An apply pair other than the setup pair (`pcg_order=yes`) receives the setup
-pair's label field.
+the stashed pair. The source pair is the setup pair.
 
 ## Masks
 
 - The sphere of `mskdiam` is the only NU domain; callers never pass a density mask or a logical
   envelope as support.
 - The density envelope (`automask3D_stateNN.mrc`, `automask3D` at `envmsklp`) is independent of NU
-  support: it feeds `envfsc` and, under `automsk=yes` or as the `automsk=nu` fallback, is the
+  support: it feeds `envfsc` and, under `automsk=density` or as the `automsk=nu` fallback, is the
   background clamp and multiplies the `_nu_filt` references.
+- `automsk=order` keeps the density clamp and derives `E/(2-w)` from current evidence, with `w`'s
+  quantile over the observed density core and a cross-half core-signal guard. Subtract the density
+  skirt median before applying it. The order artifact is a reference mask, never an FSC or PCG support.
 - The NU-evidence envelope (`nu_envmask3D_stateNN.mrc`, `write_nu_evidence_envmask`) is a
-  diagnostic under `automsk=yes`; under `automsk=nu`, when valid, it is the clamp and reference mask
+  diagnostic under `automsk=density`; under `automsk=nu`, when valid, it is the clamp and reference mask
   and its lag-one file the gridding `envfsc` mask (density fallback). It is never NU support and never
   the PCG solve support. Which mask plays which role is decided in `nonuniform_filter_state`.
 - An envelope-constrained base pair (PCG density support) gets a Euclidean null shell

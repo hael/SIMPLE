@@ -1,11 +1,10 @@
 !@descr: assembly-owned nonuniform (NU) filtering of one state's half-map pair
 ! Shared by gridding volassemble and the PCG master: bank from the base pair with the ML pair as optional
 ! auxiliary member (setup_nu_dmats), the automsk background (density, or valid NU evidence for automsk=nu),
-! _nu_filt references (composed from the apply pair when given, pcg_order=yes), _nu_locres (and the evidence map
-! the next iteration's order prior reads, pcg_order=yes), and the
-! handoff (finest bank member). Contract: doc/policies/NU/nonuniform_filtering_policy.md.
+! _nu_filt references, _nu_locres, and the handoff (finest bank member). Contract: doc/policies/NU/nonuniform_filtering_policy.md.
 module simple_nu_state_filter
 use simple_core_module_api
+use simple_defs_automask,     only: ORDER_ENVMASK_FBODY
 use simple_image,            only: image
 use simple_image_msk,        only: image_msk
 use simple_parameters,       only: parameters
@@ -14,8 +13,9 @@ use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_
     &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
     &NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, NU_ALIGN_LP_MIN_SIGNAL_PCT, &
     &get_nu_filter_bank_finest_lp, &
-    &write_nu_local_resolution_map, write_nu_evidence_envmask, write_nu_evidence_map, NU_ENVMASK_RELATIVE, &
-    &set_nu_evidence_null_shell, set_nu_solvent_envelope, get_nu_filter_timings
+    &write_nu_local_resolution_map, write_nu_evidence_envmask, &
+    &set_nu_evidence_null_shell, set_nu_solvent_envelope, get_nu_filter_timings, &
+    &nu_order_stats, make_nu_order_mask, report_nu_order_mask
 implicit none
 
 public :: nonuniform_filter_state, nu_state_filter_timings, nu_aux_member
@@ -45,29 +45,29 @@ contains
 
     !> NU competition for one state on the base pair; the base and ML pairs are both killed here, the ML pair
     !! offered to the bank only when l_use_aux. res0143 caps the bank and is the auxiliary's resolution;
-    !! align_lp = finest bank member. An optional apply pair (kept) receives the label field instead.
+    !! align_lp = finest bank member.
     subroutine nonuniform_filter_state( params, state, vol_base_even, vol_base_odd, &
-            &vol_aux_even, vol_aux_odd, l_use_aux, res0143, volname, eonames, align_lp, timings, &
-            &base_support, l_base_constrained, vol_apply_even, vol_apply_odd )
+            &vol_aux_even, vol_aux_odd, l_use_aux, res0143, res05, volname, eonames, align_lp, timings, &
+            &base_support, l_base_constrained )
         class(parameters),            intent(in)    :: params
         integer,                      intent(in)    :: state
         type(image),                  intent(inout) :: vol_base_even, vol_base_odd
         type(image),                  intent(inout) :: vol_aux_even, vol_aux_odd
         logical,                      intent(in)    :: l_use_aux
-        real,                         intent(in)    :: res0143
+        real,                         intent(in)    :: res0143, res05
         class(string),                intent(in)    :: volname, eonames(2)
         real,                         intent(out)   :: align_lp
         type(nu_state_filter_timings), optional, intent(inout) :: timings
         class(image),     optional, intent(in)    :: base_support       !< the support that constrained the base pair (PCG)
         logical,          optional, intent(in)    :: l_base_constrained !< the base pair was solved on base_support, not the sphere
-        class(image),     optional, intent(in)    :: vol_apply_even, vol_apply_odd !< the pair the label field is applied to
         type(image), allocatable :: nu_aux_even(:), nu_aux_odd(:)
-        type(image)              :: vol_even_nu, vol_odd_nu, vol_base_avg, envelope_core, envelope_dilated
+        type(image)              :: vol_even_nu, vol_odd_nu, vol_base_avg, envelope_core, envelope_dilated, order_mask
         type(image_msk)          :: density_envelope, active_envelope
-        type(string)             :: nu_envmask_file
+        type(string)             :: nu_envmask_file, order_mask_file
+        type(nu_order_stats)     :: order_stats
         integer(timer_int_kind)  :: t_filter, t_envmask
         real    :: aux_resolution, bank_cap_res
-        logical :: l_constrained, l_nu_envelope_valid, l_apply
+        logical :: l_constrained, l_nu_envelope_valid
         align_lp = 0.
         if( L_BENCH_GLOB ) t_filter = tic()
         l_constrained = .false.
@@ -80,7 +80,7 @@ contains
             call vol_base_avg%copy(vol_base_even)
             call vol_base_avg%add(vol_base_odd)
             call vol_base_avg%mul(0.5)
-            if( l_constrained )then
+            if( l_constrained .or. trim(params%automsk) == 'order' )then
                 call density_envelope%automask3D(params, vol_base_avg, .false., lp_override=params%envmsklp, &
                     &l_report=.false., core=envelope_core, dilated=envelope_dilated)
             else
@@ -109,7 +109,7 @@ contains
         endif
         if( trim(params%automsk).ne.'no' )then
             ! evidence envelope from the live unaries: background and reference mask under automsk=nu when
-            ! valid (density fallback), a diagnostic under automsk=yes; null regime per set_nu_evidence_null_shell
+            ! valid (density fallback), a diagnostic under automsk=density; null regime per set_nu_evidence_null_shell
             if( L_BENCH_GLOB ) t_envmask = tic()
             if( l_constrained ) call set_nu_evidence_null_shell(density_envelope, envelope_core, envelope_dilated, base_support)
             nu_envmask_file = string(NU_ENVMASK_FBODY)//int2str_pad(state,2)//string(MRC_EXT)
@@ -132,7 +132,7 @@ contains
                     &'>>> NU BACKGROUND: COARSEST CANDIDATE OUTSIDE THE DENSITY ENVELOPE, STATE ', state
             endif
             call nu_envmask_file%kill
-            if( l_constrained )then
+            if( l_constrained .and. trim(params%automsk) /= 'order' )then
                 call envelope_core%kill
                 call envelope_dilated%kill
             endif
@@ -143,29 +143,48 @@ contains
         call vol_aux_even%kill
         call vol_aux_odd%kill
         call optimize_nu_cutoff_finds()
-        l_apply = present(vol_apply_even) .and. present(vol_apply_odd)
-        if( present(vol_apply_even) .neqv. present(vol_apply_odd) ) &
-            &THROW_HARD('an apply pair needs both halves; nonuniform_filter_state')
-        if( l_apply )then
-            call nu_filter_vols(vol_even_nu, vol_odd_nu, vol_apply_even, vol_apply_odd)
-            if( params%part == 1 ) write(logfhandle,'(A,I0,A)') '>>> NU REFERENCES: STATE ', state, &
-                &', LABEL FIELD OF THE BASE PAIR APPLIED TO THE ORDER-PRIOR PAIR'
-        else
-            call nu_filter_vols(vol_even_nu, vol_odd_nu, vol_base_even, vol_base_odd)
-        endif
+        call nu_filter_vols(vol_even_nu, vol_odd_nu, vol_base_even, vol_base_odd)
         ! the base pair is filtered again by the composition: released only now
         call vol_base_even%kill
         call vol_base_odd%kill
         if( trim(params%automsk).ne.'no' )then
             ! The _nu_filt matching references carry the active envelope. In
             ! nu mode this is the current evidence mask, with density fallback.
-            call active_envelope%apply_3Dmask(vol_even_nu)
-            call active_envelope%apply_3Dmask(vol_odd_nu)
+            if( trim(params%automsk) == 'order' )then
+                ! The skirt median comes from density, before the order factor is applied.
+                call vol_even_nu%zero_env_background(density_envelope)
+                call vol_odd_nu%zero_env_background(density_envelope)
+                call make_nu_order_mask(envelope_core, vol_even_nu, vol_odd_nu, res05, params%amsklp, &
+                    &order_mask, order_stats)
+                order_mask_file = string(ORDER_ENVMASK_FBODY)//int2str_pad(state,2)//string(MRC_EXT)
+                if( order_stats%l_off )then
+                    if( file_exists(order_mask_file) ) call del_file(order_mask_file)
+                    call vol_even_nu%mul(density_envelope)
+                    call vol_odd_nu%mul(density_envelope)
+                else
+                    call order_mask%mul(density_envelope)
+                    call order_mask%write(order_mask_file, del_if_exists=.true.)
+                    ! distributed workers read it through the matcher fallback
+                    call wait_for_closure(order_mask_file)
+                    call vol_even_nu%mul(order_mask)
+                    call vol_odd_nu%mul(order_mask)
+                endif
+                call report_nu_order_mask(state, order_stats)
+                call order_mask_file%kill
+                call order_mask%kill
+                call envelope_core%kill
+                call envelope_dilated%kill
+            else
+                call active_envelope%apply_3Dmask(vol_even_nu)
+                call active_envelope%apply_3Dmask(vol_odd_nu)
+            endif
             call active_envelope%kill_bimg
             call density_envelope%kill_bimg
-            write(logfhandle,'(A,I0,A,A)') '>>> NU REFERENCES: STATE ', state, ', MULTIPLIED BY THE ', &
-                &merge('NU EVIDENCE ENVELOPE', 'DENSITY ENVELOPE    ', &
-                    &trim(params%automsk) == 'nu' .and. l_nu_envelope_valid)
+            if( trim(params%automsk) /= 'order' )then
+                write(logfhandle,'(A,I0,A,A)') '>>> NU REFERENCES: STATE ', state, ', MULTIPLIED BY THE ', &
+                    &merge('NU EVIDENCE ENVELOPE', 'DENSITY ENVELOPE    ', &
+                        &trim(params%automsk) == 'nu' .and. l_nu_envelope_valid)
+            endif
         endif
         call print_nu_filtmap_lowpass_stats()
         if( NU_DEV_OUTPUT .and. params%part == 1 ) call analyze_filtmap_neighbor_continuity()
@@ -202,9 +221,6 @@ contains
             call vol_even_nu%mul(0.5)
             call vol_even_nu%write(volname_nu, del_if_exists=.true.)
             call write_nu_local_resolution_map(locres_name)
-            ! the order prior of the next iteration reads this evidence and the local resolution (lag one)
-            if( params%l_pcg_order ) call write_nu_evidence_map(add2fbody(volname, MRC_EXT, NUEVIDENCE_SUFFIX), &
-                &params%amsklp, NU_ENVMASK_RELATIVE)
             call wait_for_closure(volname_nu)
             call wait_for_closure(locres_name)
             call eonames_nu(1)%kill

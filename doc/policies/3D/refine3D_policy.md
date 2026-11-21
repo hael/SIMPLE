@@ -413,20 +413,20 @@ memoisation applies the same pairing separately within every state's
 an even `nspace`; its projection differences are bounded by interpolation
 error. Cartesian-only local refinement does not expose this setting.
 
-With `automsk=yes` or `nu`, the matching references carry the selected envelope
+With `automsk=density` or `nu`, the matching references carry the selected envelope
 after filtering (`automasking_policy.md`, "Reconstruction and reference use").
 NU assembly multiplies the `_nu_filt` references by it: the density envelope
 under `yes`; under `nu` the NU-evidence envelope when valid, otherwise the
 density envelope. Outside it the NU filter field takes the coarsest bank
 candidate. The matcher multiplies references that are not NU products by the
 density envelope under `yes`, and under `nu` while no `_nu_filt` references
-exist by the lagged NU envelope with density fallback. `automsk=yes` also
+exist by the lagged NU envelope with density fallback. `automsk=density` also
 implies `envfsc=yes` (policy 2026-09-09), so FSC evaluation follows the density
 envelope (post hoc with solvent correction on gridding; inside the estimator on
 PCG, reported as `>>> FSC MODE`). Particles and matching-bandwidth selection
 are unchanged.
 
-`automsk=nu` requires `filt_mode=nonuniform|nonuniform_lpset`; `automsk=yes` is
+`automsk=nu` requires `filt_mode=nonuniform|nonuniform_lpset`; `automsk=density` is
 accepted with any `filt_mode`. `automsk=tight` is rejected together with NU
 filtering because the NU-evidence envelope has no Otsu tightness mode.
 
@@ -1731,7 +1731,7 @@ records only the refine3D-side integration contract:
   (voxelwise, `shrink_by_ml_prior`, 2026-09-14; the replay solve is retired);
   NU filtering is applied afterwards by the shared competition, never inside
   the solve (policy 2026-09-06).
-- **Solve support.** `automsk=yes` uses the conservative density envelope;
+- **Solve support.** `automsk=density` uses the conservative density envelope;
   `automsk=nu` prefers the lagged NU-evidence envelope and falls back to
   density; an explicit `pcg_mskfile` remains an override. The selected mask
   constrains both base and replay and `envfsc=yes` is implied. PCG reports FSC
@@ -1945,10 +1945,8 @@ places kept on purpose: it fits B on the FSC-weighted map out to where
 the FSC reaches zero (steeper) and applies no low-pass by default; SIMPLE
 fits the unweighted unfiltered pair up to the FSC=0.143 cutoff (a
 conservative B) and closes with the Butterworth there. No
-density-windowed pair estimate. With
-`pcg_order=yes` the `_unfil` pair is the prior-free base pair and the
-sharpened map is the shipped (prior'd, replayed) map; `imgkind=unfil`
-postprocesses the base pair average with the same cutoff.
+density-windowed pair estimate. `imgkind=unfil` postprocesses the base pair
+average with the same cutoff.
 
 The transaction files of the sigma2 store (the candidate and the workers' range
 files) are run-local. They are written and consumed inside a running

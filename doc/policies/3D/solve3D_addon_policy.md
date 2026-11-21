@@ -89,8 +89,7 @@ particles that the frozen accumulators never receive.
 speed, not the precision of the kernel preconditioned conjugate-gradient (PCG)
 reconstruction, so they reconstruct by gridding only (ruled 2026-10-13): the
 UI entry offers no PCG controls, the backend is not replayed from the
-manifest, and `rec_backend` or a PCG control (`maxits_pcg`, `maxits_ml`,
-`pcg_order`, `pcg_order_lambda`) on the command line
+manifest, and `rec_backend` or a PCG control (`maxits_pcg`, `maxits_ml`) on the command line
 is refused by name.
 
 ## 3. The Frozen Input

@@ -43,9 +43,9 @@ real,             allocatable :: nu_smooth_norm(:,:,:)
 logical,          allocatable :: nu_solvent_lmask(:,:,:) !< .true. = outside the envelope (solvent)
 logical :: nu_l_solvent_clamp = .false.
 ! Which envelope defines the filter-field background: the conservative
-! density automask (automsk=no solvent constraint) or the NU evidence
-! envelope (automsk=yes background policy, derived in the same evidence
-! pass). Part of the frozen-evidence identity via the provenance string.
+! density envelope (automsk=density|order, and automsk=nu without a valid
+! evidence envelope) or the NU evidence envelope (automsk=nu, derived in the
+! same evidence pass). Part of the frozen-evidence identity via the provenance string.
 character(len=32) :: nu_solvent_clamp_source = 'density_envelope'
 ! Evidence-envelope null. Spherical base pair: margin median/MAD over the observed support (no shell).
 ! Envelope-constrained pair (set_nu_evidence_null_shell): null on the density envelope's dilation

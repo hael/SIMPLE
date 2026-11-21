@@ -292,8 +292,6 @@ contains
         call child_cline%delete('maxits_pcg')
         call child_cline%delete('maxits_ml')
         call child_cline%delete('rtol')
-        call child_cline%delete('pcg_order')
-        call child_cline%delete('pcg_order_lambda')
     end subroutine strip_pcg_backend_keys
 
     ! Copy only controls that genuinely define the reconstruction performed at
@@ -301,7 +299,6 @@ contains
     ! and is deliberately not part of this interface.
     subroutine apply_refine3D_reconstruction_controls( child_cline )
         class(cmdline), intent(inout) :: child_cline
-        logical :: l_pcg_stage
         if( cline_refine3D%defined('rec_backend') )then
             call child_cline%set('rec_backend', cline_refine3D%get_carg('rec_backend'))
         endif
@@ -313,19 +310,6 @@ contains
         endif
         if( cline_refine3D%defined('rtol') )then
             call child_cline%set('rtol', cline_refine3D%get_rarg('rtol'))
-        endif
-        ! The stage controller decides whether the order prior is active.
-        ! Forward it only when that stage is PCG; otherwise remove the user's
-        ! top-level pcg_order=yes inherited by copied child command lines.
-        l_pcg_stage = cline_refine3D%defined('rec_backend')
-        if( l_pcg_stage ) l_pcg_stage = cline_refine3D%get_carg('rec_backend') .eq. 'pcg'
-        if( l_pcg_stage .and. cline_refine3D%defined('pcg_order') )then
-            call child_cline%set('pcg_order', cline_refine3D%get_carg('pcg_order'))
-            if( cline_refine3D%defined('pcg_order_lambda') ) &
-                &call child_cline%set('pcg_order_lambda', cline_refine3D%get_rarg('pcg_order_lambda'))
-        else
-            call child_cline%delete('pcg_order')
-            call child_cline%delete('pcg_order_lambda')
         endif
         if( cline_refine3D%defined('ml_reg') )then
             call child_cline%set('ml_reg', cline_refine3D%get_carg('ml_reg'))

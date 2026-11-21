@@ -1,6 +1,7 @@
 !@descr: shared helpers for reading, masking, filtering and reprojecting reference volumes
 module simple_matcher_refvol_utils
 use simple_core_module_api
+use simple_defs_automask,   only: ORDER_ENVMASK_FBODY
 use simple_builder,         only: builder
 use simple_parameters,      only: parameters
 use simple_cmdline,         only: cmdline
@@ -493,26 +494,32 @@ contains
         endif
         ! ENVELOPE: assembled NU products already carry the active envelope.
         ! Non-NU density mode applies it here after filtering. If NU products
-        ! are not assembled yet, nu mode uses the lagged NU artifact with the
-        ! density artifact as fallback.
-        if( trim(params%automsk) == 'yes' .and. .not. l_nonuniform_mode ) call apply_automatic_envelope_to_refs()
+        ! are not assembled yet, nu and order modes use their lagged artifact
+        ! with the density artifact as fallback.
+        if( trim(params%automsk) == 'density' .and. .not. l_nonuniform_mode ) call apply_automatic_envelope_to_refs()
         if( trim(params%automsk) == 'nu' .and. l_nu_refs_missing ) &
             &call apply_automatic_envelope_to_refs(prefer_nu=.true.)
+        if( trim(params%automsk) == 'order' .and. l_nu_refs_missing ) &
+            &call apply_automatic_envelope_to_refs(prefer_order=.true.)
 
     contains
 
         !> Multiply matcher-owned filtered references by the selected lagged
-        !! envelope. automsk=yes selects the conservative density artifact;
-        !! automsk=nu prefers the NU-evidence artifact and falls back to the
-        !! density artifact while the evidence mask is unavailable. Before the
-        !! first assembly neither artifact need exist, so the references retain
-        !! the spherical mask and that bootstrap is logged.
-        subroutine apply_automatic_envelope_to_refs( prefer_nu )
+        !! envelope. automsk=density selects the conservative density artifact;
+        !! automsk=nu prefers the NU-evidence artifact and automsk=order the order
+        !! artifact, each falling back to the density artifact while its own is
+        !! unavailable. All three follow one rule: an artifact is used when it
+        !! exists, rescaled to the current box by read_and_crop. The order mask
+        !! only multiplies; its background level comes from the density
+        !! artifact's skirt. Before the first assembly neither artifact need
+        !! exist, so the references retain the spherical mask and that
+        !! bootstrap is logged.
+        subroutine apply_automatic_envelope_to_refs( prefer_nu, prefer_order )
             use simple_refine3D_provenance, only: local_import_marker
-            logical, optional, intent(in) :: prefer_nu
-            type(string) :: fname_envmsk
-            type(image)  :: envmsk
-            logical      :: l_prefer_nu
+            logical, optional, intent(in) :: prefer_nu, prefer_order
+            type(string) :: fname_envmsk, fname_density
+            type(image)  :: envmsk, density_msk
+            logical      :: l_prefer_nu, l_prefer_order
             ! An imported base pair has no lagged envelope produced in this run.
             if( file_exists(local_import_marker(params%vols(s))) )then
                 write(logfhandle,'(A)') '>>> LOCAL IMPORT: reference envelopes await the first assembly; using spherical support'
@@ -520,7 +527,16 @@ contains
             endif
             l_prefer_nu = .false.
             if( present(prefer_nu) ) l_prefer_nu = prefer_nu
-            if( l_prefer_nu )then
+            l_prefer_order = .false.
+            if( present(prefer_order) ) l_prefer_order = prefer_order
+            if( l_prefer_order )then
+                fname_density = string(AUTOMASK_FBODY//int2str_pad(s,2)//MRC_EXT)
+                fname_envmsk  = string(ORDER_ENVMASK_FBODY//int2str_pad(s,2)//MRC_EXT)
+                if( .not. file_exists(fname_envmsk) .or. .not. file_exists(fname_density) )then
+                    fname_envmsk   = fname_density
+                    l_prefer_order = .false.
+                endif
+            else if( l_prefer_nu )then
                 fname_envmsk = string(NU_ENVMASK_FBODY//int2str_pad(s,2)//MRC_EXT)
                 if( .not. file_exists(fname_envmsk) ) &
                     &fname_envmsk = string(AUTOMASK_FBODY//int2str_pad(s,2)//MRC_EXT)
@@ -536,15 +552,25 @@ contains
             call envmsk%read_and_crop(fname_envmsk, params%smpd, params%box_crop, params%smpd_crop)
             call build%vol%ifft
             call build%vol_odd%ifft
-            call build%vol%zero_env_background(envmsk)
-            call build%vol%mul(envmsk)
-            call build%vol_odd%zero_env_background(envmsk)
-            call build%vol_odd%mul(envmsk)
+            if( l_prefer_order )then
+                call density_msk%read_and_crop(fname_density, params%smpd, params%box_crop, params%smpd_crop)
+                call build%vol%zero_env_background(density_msk)
+                call build%vol%mul(envmsk)
+                call build%vol_odd%zero_env_background(density_msk)
+                call build%vol_odd%mul(envmsk)
+                call density_msk%kill
+            else
+                call build%vol%zero_env_background(envmsk)
+                call build%vol%mul(envmsk)
+                call build%vol_odd%zero_env_background(envmsk)
+                call build%vol_odd%mul(envmsk)
+            endif
             call build%vol%fft
             call build%vol_odd%fft
             call envmsk%kill
             write(logfhandle,'(A,I0,A,A)') '>>> REFERENCES: STATE ', s, ', MULTIPLIED BY ', fname_envmsk%to_char()
             call fname_envmsk%kill
+            call fname_density%kill
         end subroutine apply_automatic_envelope_to_refs
 
         !> Matching references take the spherical soft mask here; the automatic envelope follows after filtering

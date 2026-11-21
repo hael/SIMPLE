@@ -219,7 +219,7 @@ contains
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',        'yes')
         if( .not. cline%defined('nsample')     ) call cline%set('nsample',          25000)
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform')
-        if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! automatic density-envelope masking
+        if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'density') ! automatic density-envelope masking
         if( .not. cline%defined('sigma2_anneal')) call cline%set('sigma2_anneal',    'yes')
 
         ! Explicit maxits also sets minits; otherwise allow at least three
@@ -1018,7 +1018,6 @@ contains
             call require_value('envfsc',      'no')
             call require_value('combine_eo',  'no')
             call require_value('trail_rec',   'no')
-            call require_value('pcg_order',   'no')
             call require_value('objfun',      'euclid')
             if( cline%defined('rec_backend') )then
                 val = cline%get_carg('rec_backend')
@@ -1952,7 +1951,8 @@ contains
             integer :: istate
             logical :: l_automsk_nu
             l_automsk_nu = .false.
-            if( cline_rec%defined('automsk') ) l_automsk_nu = cline_rec%get_carg('automsk') == 'nu'
+            if( cline_rec%defined('automsk') ) &
+                &l_automsk_nu = cline_rec%get_carg('automsk') == 'nu' .or. cline_rec%get_carg('automsk') == 'order'
             if( l_final )then
                 ! the shipped map is classical (no nonuniform filtering, a
                 ! matching-reference feature) except under automsk=nu, which

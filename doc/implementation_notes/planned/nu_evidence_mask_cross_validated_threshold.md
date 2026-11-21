@@ -2,12 +2,11 @@
 
 ## Status
 
-**Planning only (2026-10-01). No code is proposed for immediate implementation.**
+**Planning only; the order prior is retired and its weight now informs `automsk=order` (2026-11-21).**
 
 2026-11-07: the evidence mask with a chosen threshold is now the order weight of
-the PCG order prior (`pcg_order`, in the loop since 2026-11-08), scored through
-the prior rather than the background clamp ([the order prior](../completed/pcg_order_prior.md),
-offline program `order_prior`). Its tables replace the first step of section 6.
+the historical PCG order prior, then scored through the prior rather than the background clamp ([the order prior](../rejected/pcg_order_prior.md),
+historical offline program `order_prior`). Its tables replace the first step of section 6.
 
 The idea is supported by a synthetic check in numpy (section 4). Nothing has
 been run in SIMPLE or on real half-map pairs. The first step, when wanted, is

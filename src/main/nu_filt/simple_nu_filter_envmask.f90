@@ -409,7 +409,7 @@ contains
     !! every cycle it runs the competition under active automasking.
     !! An empty evidence field warns and writes nothing; every envelope
     !! consumer handles absence. The caller decides whether this is a
-    !! diagnostic (automsk=yes) or the active envelope (automsk=nu).
+    !! diagnostic (automsk=density) or the active envelope (automsk=nu).
     module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname, mask_out, l_valid )
         use simple_image_msk, only: image_msk
         real,              intent(in)  :: nsigma, lp_smooth, smpd

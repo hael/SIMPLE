@@ -52,7 +52,6 @@ type :: parameters
     character(len=3)          :: dynreslim='no'       !< Whether the alignement resolution limit should be dynamic in streaming(yes|no){no}
     character(len=3)          :: exit_collapse='no'   !< early exit on state collapse(yes|no){no}
     character(len=3)          :: envfsc='no'          !< envelope solvent correction for FSC calculation(yes|no){no}
-    character(len=3)          :: pcg_order='no'       !< PCG order prior on the base solve: real-space ridge on what lacks NU evidence of order (solvent, detergent), then the same cold solve again(yes|no){no}
     character(len=3)          :: atm_prior='no'       !< PCG atomicity prior: penalize the map outside the span of the atom kernels of pdbfile, after a prior-free base solve(yes|no){no}
     character(len=3)          :: eo_stage='yes'       !< Whether the last stage of solve2D uses a resolution limit determined with e/o pairs(yes|no){yes}
     character(len=3)          :: eo_rebalance='yes'   !< reassign selected particle halves by direction and score(yes|no){yes}
@@ -270,7 +269,7 @@ type :: parameters
     character(len=STDLEN)     :: algorithm=''         !< algorithm to be used
     character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=STDLEN)     :: angconv='simple'     !< convention of the angtab angles (simple|tilt|genfire){simple}
-    character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|nu|tight|no){no}
+    character(len=32)         :: automsk='no'         !< automatic envelope masking (density|nu|order|tight|no){no}
     character(len=STDLEN)     :: center_type='mass'   !< Centering scheme used(mass|seg|params)
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand|prev){ptcl}; prev: solve2D seeded restart from the previous 2D clustering
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
@@ -602,7 +601,6 @@ type :: parameters
     real    :: lambda_atm=0.       !< atomicity prior strength relative to the data precision per voxel; 0 = the moment estimate{0}
     real    :: bfac_data=0.        !< atomicity prior: B (A^2) added to the narrowest kernel; fitted on the base map when not given
     real    :: rtol_atm=0.         !< atomicity-prior solve: stop at this true L2 relative residual; <=0 runs exactly maxits_atm{0}
-    real    :: pcg_order_lambda=1.0 !< PCG order prior ridge coefficient relative to the data precision per voxel; chosen each iteration when not given (pcg_order=yes){auto}
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale_movies=1.     !< movie scale factor; not a command-line key
     real    :: sherr=0.            !< shift error(in pixels){2}
@@ -637,8 +635,6 @@ type :: parameters
     logical :: l_doshift         = .false. !< not a command-line key
     logical :: l_eer_fraction    = .false. !< not a command-line key
     logical :: l_envfsc          = .false. !< not a command-line key
-    logical :: l_pcg_order     = .false. !< not a command-line key
-    logical :: l_pcg_order_lambda_auto = .true. !< pcg_order_lambda not given: chosen per state and iteration; not a command-line key
     logical :: l_atm_prior       = .false. !< not a command-line key
     logical :: l_bfac_data_fit   = .true.  !< bfac_data not given: fitted on the base map; not a command-line key
     logical :: l_assign_all      = .false. !< assign_all=yes under fractional updates: refine2D converges only when every active particle has a class; not a command-line key

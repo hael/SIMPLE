@@ -706,7 +706,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
             if( l_nu_producer )then
                 call cl%set('filt_mode', 'nonuniform')
                 call cl%set('ml_reg',    'yes')
-                call cl%set('automsk',   'yes')
+                call cl%set('automsk',   'density')
                 call cl%set('envfsc',    'yes')
             endif
         endif

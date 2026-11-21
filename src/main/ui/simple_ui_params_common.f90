@@ -206,14 +206,14 @@ subroutine set_ui_params
                                    'in microns{0.05}', .false., 0.05)
 
     call automsk%set_param(        'automsk',         'multi',  'Density envelope masking', &
-                                   'Density envelope from the low-passed map (amsklp, binwidth, edge): yes = Otsu, '//&
-                                   &'tight = tight Otsu, no = spherical mask(yes|tight|no){no}','', .false., 'no', &
-    &choices=ui_choices([character(len=5) :: 'yes', 'tight', 'no']))
+                                   'Density envelope from the low-passed map (amsklp, binwidth, edge): density = Otsu, '//&
+                                   &'tight = tight Otsu, no = spherical mask(density|tight|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=7) :: 'density', 'tight', 'no']))
 
     call automsk_refine3D%set_param('automsk',        'multi',  'Refinement envelope mode', &
                                    'Envelope policy: density mask, lag-one NU-evidence mask with density fallback, '//&
-                                   &'or none(yes|nu|no){no}', &
-                                   '', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'nu', 'no']))
+                                   &'order attenuation, or none(density|nu|order|no){no}', &
+                                   '', .false., 'no', choices=ui_choices([character(len=7) :: 'density', 'nu', 'order', 'no']))
 
     call backgr_subtr%set_param(   'backgr_subtr',    'binary', 'Perform micrograph background subtraction(new picker only)', &
                                    'Perform micrograph background subtraction before picking/extraction(yes|no){no}','', .false., 'no', &
@@ -334,7 +334,7 @@ subroutine set_ui_params
 
     call envfsc%set_param(         'envfsc',          'binary', 'Envelope solvent correction for FSC', &
                                    'yes activates on-the-fly density-mask generation smoothed at envmsklp; '//&
-                                   &'no keeps the broad spherical FSC; implied yes under automsk=yes'//&
+                                   &'no keeps the broad spherical FSC; implied yes under automsk=density'//&
                                    &'(yes|no){no}', '', .false., 'no', &
     &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 

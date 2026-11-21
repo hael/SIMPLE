@@ -4,6 +4,7 @@ use, intrinsic :: iso_fortran_env, only: int64
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_defs,                   only: STDLEN
 use simple_defs_fname,             only: MRC_EXT, NUFILT_SUFFIX, NULOCRES_SUFFIX, NU_ENVMASK_FBODY, AUTOMASK_FBODY
+use simple_defs_automask,          only: ORDER_ENVMASK_FBODY
 use simple_error,                  only: simple_exception
 use simple_string,                 only: string
 use simple_string_utils,           only: int2str_pad
@@ -176,6 +177,10 @@ contains
             call append(name)
             name = NU_ENVMASK_FBODY//int2str_pad(state,2)//MRC_EXT
             if( file_exists(name) ) call append(name)
+            if( trim(params%automsk) == 'order' )then
+                name = ORDER_ENVMASK_FBODY//int2str_pad(state,2)//MRC_EXT
+                if( file_exists(name) ) call append(name)
+            endif
         endif
         call write_record(params, project, particles, 'reference', volume, files(:n), state, align_lp)
     contains

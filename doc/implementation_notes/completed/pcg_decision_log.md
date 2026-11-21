@@ -1049,3 +1049,7 @@ The offline program `order_prior` checks the closed-form choice against full sol
 of a Fourier surrogate of the operator, with the same rule (`choose_order_setting`).
 Untested in the loop; first runs: `solve3D rec_backend=pcg gold_standard=yes`,
 `pcg_order` no against yes (auto), on PfCRT, PorF and streptavidin.
+
+## 2026-11-21 — retire the order prior
+
+Hans retired the PCG order prior after it failed in the loop. Its order weight and core guard carry into the backend-neutral `automsk=order` reference mask; the negative result is recorded in [the order-prior note](../rejected/pcg_order_prior.md).

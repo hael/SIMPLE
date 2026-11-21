@@ -45,7 +45,7 @@ It also supplies overridable defaults when the user has not provided them:
 - `nsample=25000`
 - `autoscale=yes`
 - `filt_mode=nonuniform`
-- `automsk=yes`
+- `automsk=density`
 - `envfsc=yes`
 - `keepvol=no`
 - `regpass=yes`, `regpass_fsc=0.143` (section 5), with an external `vol1`
@@ -60,11 +60,11 @@ restores the global registration pass of section 5.
 
 The default `envfsc=yes` is guarded, so an explicit user value remains
 authoritative -- except that active automasking (`yes` or `nu`) implies
-`envfsc=yes`, so with the default `automsk=yes` envfsc cannot be switched off.
+`envfsc=yes`, so with the default `automsk=density` envfsc cannot be switched off.
 It generates a density/Otsu envelope from the current merged half maps,
 low-pass filtered at `envmsklp` and dilated by at least `ENVMSKWIDTH_A_MIN`
 (7.5 A). Gridding applies phase-randomized FSC correction with density for
-`automsk=yes`; `automsk=nu` prefers the lagged NU mask and falls back to
+`automsk=density`; `automsk=nu` prefers the lagged NU mask and falls back to
 density. On PCG the selected mask supports both the base and regularized
 solves, and FSC is reported without post-hoc correction or phase randomization
 (the `>>> FSC MODE` line says which). `envmsklp`
@@ -72,7 +72,7 @@ defaults to `ENVMSKLP_DEFAULT` (20 A), while `amsklp` remains the separate
 NU-evidence smoothing scale. On PCG its null is designated on the density
 envelope's dilation ring rather than estimated from the constrained pair.
 
-With `automsk=yes`, the conservative density envelope is the support of the
+With `automsk=density`, the conservative density envelope is the support of the
 signal model (policy 2026-09-13). Outside it there is no signal to filter --
 unreconstructed under the PCG support projection, solvent on gridding -- so
 the filter field takes the coarsest bank candidate there, fixed before
@@ -84,7 +84,7 @@ filter-field/reference envelope and the next iteration's lagged PCG/FSC mask;
 density is the fallback while it is unavailable or invalid. There is no
 separate `envref` control.
 
-`filt_mode` may be overridden to a non-NU mode with `automsk=yes` kept
+`filt_mode` may be overridden to a non-NU mode with `automsk=density` kept
 (2026-09-14): the density envelope then reaches the references through the
 matcher instead of the `_nu_filt` products, and the matching low-pass comes
 from the FSC at `lplim_crit` instead of the NU handoff. Note that with

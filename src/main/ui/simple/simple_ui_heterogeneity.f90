@@ -261,8 +261,8 @@ call flex_pca%add_input(UI_FILT, 'min_state_frac', 'num', &
         call refine3D_states%add_input(UI_FILT, envmsklp, group='filter', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_MASK, mskdiam, group='mask', visibility=UI_VIS_STANDARD)
         call refine3D_states%add_input(UI_MASK, 'automsk', 'multi', 'Refinement envelope mode', &
-        &'Use the density envelope, or prefer the lag-one NU-evidence envelope with density fallback(yes|nu|no){no}', &
-        &'', .false., 'no', group='mask', choices=ui_choices([character(len=3) :: 'yes', 'nu', 'no']), &
+        &'Use the density envelope, NU evidence with density fallback, or order attenuation(density|nu|order|no){no}', &
+        &'', .false., 'no', group='mask', choices=ui_choices([character(len=7) :: 'density', 'nu', 'order', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_MASK, nu_msk_sig, group='mask', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_COMP, nparts, group='compute', visibility=UI_VIS_STANDARD)
@@ -348,8 +348,8 @@ call flex_pca%add_input(UI_FILT, 'min_state_frac', 'num', &
         call classify3D_refs%add_input(UI_FILT, envmsklp, group='filter', visibility=UI_VIS_ADVANCED)
         call classify3D_refs%add_input(UI_MASK, mskdiam, group='mask', visibility=UI_VIS_STANDARD)
         call classify3D_refs%add_input(UI_MASK, 'automsk', 'multi', 'Refinement envelope mode', &
-        &'Use the density envelope, or prefer the lag-one NU-evidence envelope with density fallback(yes|nu|no){no}', &
-        &'', .false., 'no', group='mask', choices=ui_choices([character(len=3) :: 'yes', 'nu', 'no']), &
+        &'Use the density envelope, NU evidence with density fallback, or order attenuation(density|nu|order|no){no}', &
+        &'', .false., 'no', group='mask', choices=ui_choices([character(len=7) :: 'density', 'nu', 'order', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call classify3D_refs%add_input(UI_MASK, nu_msk_sig, group='mask', visibility=UI_VIS_ADVANCED)
         call classify3D_refs%add_input(UI_COMP, nparts, group='compute', visibility=UI_VIS_STANDARD)

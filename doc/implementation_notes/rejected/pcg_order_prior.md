@@ -1,7 +1,10 @@
 # The PCG order prior: one solvent and detergent prior for soluble and membrane proteins
 
-Archived in `completed/` on 2026-11-17 by maintainer decision. The status and open items below are as
-last written.
+**Negative result:** in the loop it did not do its job (Hans, 2026-11-21); its order weight and core guard carry into `automsk=order`. The historical status and open items below are as last written.
+
+**Superseded 2026-11-21** by [automsk=order](../planned/automsk_order.md): Hans retired the order prior
+(in the loop it did not do its job); its order weight and core guard become a reference mask on both
+backends.
 
 ## Status
 

@@ -3,18 +3,10 @@
 Contract of the code that runs today: the opt-in CTF- and sigma-weighted
 preconditioned-conjugate-gradient (PCG) reconstruction path. Unless asked, the
 PCG backend carries no regularization of its own beyond the ordinary FSC/SSNR
-`P_tau` replay. The two opt-in priors are the order prior (`pcg_order`,
-`simple_pcg_order_prior`; `doc/implementation_notes/completed/pcg_order_prior.md`),
-which replaced the soft solvent prior `pcg_solvent` on 2026-11-08
-(`pcg_decision_log.md`), and the atomicity prior (`atm_prior`,
-`simple_pcg_atomic_prior`; `single_pcg_integration_completed.md`). The order
-prior re-solves the base pair with a ridge `lambda h (1 - w_ord)` on what lacks
-NU evidence of order (`h` the data precision per voxel), its ordered fraction and
-strength chosen in closed form on the previous iteration's NU evidence (none when
-no setting keeps the protein core); the prior-free pair keeps the FSC, the
-NU competition and the `_unfil` files; the prior'd pair (`_order`), its ML
-replay and the NU references composed from it are the iteration's references;
-the final reconstruction is prior-free.
+`P_tau` replay. The opt-in atomicity prior (`atm_prior`, `simple_pcg_atomic_prior`)
+is available on its documented path. The former PCG order prior was retired on
+2026-11-21 after failing in the loop; its weight and core guard now inform the
+backend-neutral `automsk=order` reference mask.
 Nonuniform filtering is the same assembly-owned competition as on the
 gridding backend (`simple_nu_state_filter`, policy 2026-09-06). The record of
 the removed prior experiments -- the binary-envelope solvent prior (2026-08-27)
@@ -132,7 +124,7 @@ shifts, state assignments, half assignments, CTF parameters, phase shifts and
 The Euclidean objective uses the noise spectrum of the particle's even/odd half
 (section 8); correlation is unweighted.
 `mskdiam` supplies the spherical fallback support and `pgrp` is applied by
-coordinate replication. `automsk=yes` and `automsk=nu` replace it with density
+coordinate replication. `automsk=density` and `automsk=nu` replace it with density
 support; the NU-evidence envelope is never a solve support.
 
 Under `m_estimator=flex` the project's state weight set replaces the hard state
@@ -357,7 +349,7 @@ sections 8 and 12).
 Solve support is an `automsk` feature (policy 2026-09-06). With `automsk=no`,
 the default in `solve3D`, every PCG solve, base and regularized replay, runs
 on the spherical `mskdiam` support and no density envelope is built. With
-`automsk=yes` the conservative density envelope is the support of BOTH the
+`automsk=density` the conservative density envelope is the support of BOTH the
 base solve and the regularized replay (policy 2026-09-09; the former
 `envfsc=no` split with a spherical base is retired). The envelope is made
 from the previous iteration's prior-free pair (the `_unfil` halves under
@@ -365,14 +357,14 @@ from the previous iteration's prior-free pair (the `_unfil` halves under
 volume only when that pair is missing, and the log says which), never from the
 published reference (2026-11-13). A prior'd reference turned the order
 prior's removals into support: what fell below the envelope threshold was
-solved as zero and never came back (PorF cut in half, `pcg_order=yes`).
+solved as zero and never came back (PorF cut in half with the retired prior).
 refine3D_local stages the pair with the halves. `envfsc=yes` is
 implied: the FSC pair is envelope-constrained inside the estimator, so no
 post-hoc mask and no phase-randomized correction are applied to it, and the
 `>>> FSC MODE` line in the log and the resolution text says so. This is a
 deliberate, reported choice, not a claim that a constrained estimate is free
 of masked-FSC bias.
-With `automsk=nu` the same contract holds: the density envelope is the
+With `automsk=nu|order` the same contract holds: the density envelope is the
 support of both solves, and the NU-evidence envelope is never installed as a
 solve support (review 2026-09-17). The evidence null of a constrained base pair
 lies on the density envelope's dilation ring, outside an evidence envelope, so
