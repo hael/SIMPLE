@@ -1,15 +1,20 @@
 !@descr: polar matching layout benchmark of simple_commanders_test_highlevel (measure only, no CTest entry)
 submodule (simple_commanders_test_highlevel) simple_commanders_test_highlevel_matchbench
 use simple_polar_matching_bench, only: polar_matching_bench, PMB_PER_PAIR, PMB_REPLICA, PMB_BLOCKED, PMB_STATES_INNER,&
-    &PMB_MATRIX, PMB_MATRIX_T, PMB_PER_PAIR_CC, PMB_NKINDS, pmb_fill_result, PMB_NROUTES, PMB_NDIFF, PMB_DIFF_NAMES,&
-    &pmb_route_name, kill_fill_result, compare_fill_results, PMB_ROUTE_3D_DENSE
+    &PMB_MATRIX, PMB_MATRIX_T, PMB_PER_PAIR_CC, PMB_BLOCK_PROD, PMB_NKINDS, pmb_fill_result, PMB_NROUTES, PMB_NDIFF,&
+    &PMB_DIFF_NAMES,&
+    &pmb_route_name, kill_fill_result, compare_fill_results, PMB_ROUTE_3D_DENSE, PMB_ROUTE_3D_SEEDED,&
+    &polar_neigh_bench, pnb_pass, PNB_PATH_REPS, PNB_PATH_MEMBERS, PNB_PATH_CONE, PNB_NPATHS
 implicit none
 #include "simple_local_flags.inc"
 
 character(len=*), parameter :: MATCHBENCH_TSV   = 'polar_matching_bench.tsv'
 character(len=*), parameter :: MATCHCHECK_TSV   = 'polar_matching_check.tsv'
+character(len=*), parameter :: BLOCKCHECK_TSV   = 'polar_block_check.tsv'
 character(len=*), parameter :: IDENTITY_TSV     = 'polar_kernel_identity.tsv'
 character(len=*), parameter :: FILLS_TSV        = 'polar_fill_identity.tsv'
+character(len=*), parameter :: NEIGH_TSV        = 'polar_neigh_bench.tsv'
+character(len=*), parameter :: NEIGHCHECK_TSV   = 'polar_neigh_check.tsv'
 integer,          parameter :: NSPACE_FILLS     = 200    !< directions of suite fills unless nspace is given
 integer,          parameter :: NSTATES_FILLS(2) = [1, 2] !< its states unless nstates is given
 integer,          parameter :: NPTCLS_FILLS     = 64     !< its particles unless nptcls is given
@@ -21,6 +26,17 @@ integer,          parameter :: BLOCKED_BSZ(4)   = [4, 8, 16, 32]
 integer,          parameter :: BLOCKED_RSZ      = 8      !< 8 references of one half: 1.4 MB, within a performance core's share of L2
 integer,          parameter :: MATRIX_RSZ(3)    = [32, 64, 128]
 integer,          parameter :: MATRIX_BSZ(4)    = [4, 8, 16, 32]
+integer,          parameter :: BLOCK_BSZ(3)     = [4, 8, 16]  !< the block kernel's blocks (at most PFTC_BLOCK_NB)
+integer,          parameter :: BLOCK_RSZ        = 32          !< its tile (PFTC_BLOCK_NR, fixed in the kernel)
+real,             parameter :: BLOCK_FLIP_RATE  = 2.e-5       !< its drawn rotations may differ in max(1, this share) of pairs
+real,             parameter :: BLOCK_RTOL       = 1.e-6       !< its drawn losses within this relative difference
+real,             parameter :: BLOCK_TSCALES(2) = [1.e25, 0.1] !< the draws' temperature scales of the sensitivity check
+integer,          parameter :: BLOCK_BSZ_SENS = 16       !< the block of the sensitivity check
+integer,          parameter :: NSPACE_NEIGH     = 5000        !< suite neigh: the late stages' directions unless nspace is given
+integer,          parameter :: NSTATES_NEIGH(2) = [1, 2]      !< its states unless nstates is given
+character(len=2), parameter :: NEIGH_PGRPS(2)   = ['c1', 'd2']
+integer,          parameter :: NEIGH_NREPS      = 2           !< timed repeats per team
+integer,          parameter :: NEIGH_TEAM_ID    = 4           !< the team of the identity pass
 
 contains
 
@@ -32,7 +48,8 @@ module subroutine exec_test_polar_matching_bench( self, cline )
     integer, allocatable :: nspaces(:), nstates_list(:), nthrs(:), layouts(:)
     type(string) :: suite
     integer      :: nptcls, nthr_max, ispace, istate
-    logical      :: l_check, l_identity, l_fills
+    logical      :: l_check, l_identity, l_fills, l_neigh
+    integer      :: ipg
     suite    = ''
     nptcls   = 2000
     nthr_max = 1
@@ -47,13 +64,14 @@ module subroutine exec_test_polar_matching_bench( self, cline )
     l_check    = .false.
     l_identity = .false.
     l_fills    = .false.
+    l_neigh    = .false.
     select case(suite%to_char())
         case('list')
             write(logfhandle,'(a)') 'Available suites for polar_matching_bench: per_pair, replica, blocked, states_inner,&
-                & matrix, matrix_t, per_pair_cc, check, identity, fills'
+                & matrix, matrix_t, block_prod, per_pair_cc, check, identity, fills, neigh'
             return
         case('')
-            layouts = [PMB_PER_PAIR, PMB_REPLICA, PMB_BLOCKED, PMB_STATES_INNER, PMB_MATRIX, PMB_MATRIX_T]
+            layouts = [PMB_PER_PAIR, PMB_REPLICA, PMB_BLOCKED, PMB_STATES_INNER, PMB_MATRIX, PMB_MATRIX_T, PMB_BLOCK_PROD]
         case('per_pair')
             layouts = [PMB_PER_PAIR]
         case('replica')
@@ -66,6 +84,8 @@ module subroutine exec_test_polar_matching_bench( self, cline )
             layouts = [PMB_MATRIX]
         case('matrix_t')
             layouts = [PMB_MATRIX_T]
+        case('block_prod')
+            layouts = [PMB_BLOCK_PROD]
         case('per_pair_cc')
             layouts = [PMB_PER_PAIR_CC]
         case('check')
@@ -77,6 +97,12 @@ module subroutine exec_test_polar_matching_bench( self, cline )
             if( .not. cline%defined('nspace')  ) nspaces      = [NSPACE_FILLS]
             if( .not. cline%defined('nstates') ) nstates_list = NSTATES_FILLS
             if( .not. cline%defined('nptcls')  ) nptcls       = NPTCLS_FILLS
+        case('neigh')
+            ! the matcher's batch at the full team (BATCHTHRSZ particles per thread)
+            l_neigh = .true.
+            if( .not. cline%defined('nspace')  ) nspaces      = [NSPACE_NEIGH]
+            if( .not. cline%defined('nstates') ) nstates_list = NSTATES_NEIGH
+            if( .not. cline%defined('nptcls')  ) nptcls       = nthr_max * BATCHTHRSZ
         case default
             THROW_HARD('no suite '//suite%to_char()//' in polar_matching_bench; use suite=list')
     end select
@@ -92,6 +118,10 @@ module subroutine exec_test_polar_matching_bench( self, cline )
         do istate = 1,size(nstates_list)
             if( l_check )then
                 call check_case(nspaces(ispace), nstates_list(istate), nthr_max)
+            else if( l_neigh )then
+                do ipg = 1,size(NEIGH_PGRPS)
+                    call neigh_case(nspaces(ispace), nstates_list(istate), NEIGH_PGRPS(ipg), nptcls, nthr_max)
+                enddo
             else if( l_fills )then
                 call fills_case(nspaces(ispace), nstates_list(istate), nptcls, nthr_max)
             else if( l_identity )then
@@ -117,7 +147,7 @@ subroutine time_case( nspace, nstates, nptcls, nthrs, layouts )
     real(dp) :: wall, wall_best
     integer  :: ilay, it, nt, best_b, best_r, ib, ir
     logical  :: l_prod, l_memo, l_gmat, l_cc
-    l_prod = any(layouts == PMB_PER_PAIR) .or. any(layouts == PMB_PER_PAIR_CC)
+    l_prod = any(layouts == PMB_PER_PAIR) .or. any(layouts == PMB_PER_PAIR_CC) .or. any(layouts == PMB_BLOCK_PROD)
     l_cc   = any(layouts == PMB_PER_PAIR_CC)
     if( l_cc .and. size(layouts) > 1 ) THROW_HARD('per_pair_cc is timed on its own')
     l_memo = any(layouts == PMB_REPLICA) .or. any(layouts == PMB_BLOCKED) .or. any(layouts == PMB_STATES_INNER)
@@ -137,6 +167,9 @@ subroutine time_case( nspace, nstates, nptcls, nthrs, layouts )
             case(PMB_MATRIX, PMB_MATRIX_T)
                 bszs = MATRIX_BSZ
                 rszs = MATRIX_RSZ
+            case(PMB_BLOCK_PROD)
+                bszs = BLOCK_BSZ
+                rszs = [BLOCK_RSZ]
             case DEFAULT
                 bszs = [1]
                 rszs = [1]
@@ -202,7 +235,7 @@ function time_one( bench, layout, nspace, nstates, nptcls, nthr, bsz, rsz ) resu
         &achar(9), nspace, achar(9), nstates, achar(9), nrefs, achar(9), nptcls_use, achar(9), nthr, achar(9), bsz,&
         &achar(9), rsz, achar(9), pftsz, achar(9), nrots, achar(9), kfromto(1), achar(9), kfromto(2),&
         &achar(9), load1, achar(9), wall_best, achar(9), walls(1), achar(9), walls(2), achar(9), walls(3), achar(9),&
-        &us_pair, achar(9), pairs_per_s, achar(9), ref_gbps, achar(9), bench%memo_gbytes(layout), achar(9), '-',&
+        &us_pair, achar(9), pairs_per_s, achar(9), ref_gbps, achar(9), bench%memo_gbytes(), achar(9), '-',&
         &achar(9), parts(1), achar(9), parts(2), achar(9), parts(3)
     close(funit)
     write(logfhandle,'(4x,a,a,i0,a,i0,a,i0,a,i0,a,f6.2,a,f9.3,a,f8.2,a,f8.2,a)') layout_name(layout), ' nthr=', nthr,&
@@ -213,11 +246,14 @@ end function time_one
 !> The identity checks of one case on nkeep particles, on the full rows over the rotations (the losses the posterior
 !! draws run over): production (layout 1) at one thread is the reference every layout is held to byte for byte, the
 !! replica at one thread a second reference for layouts 2-4, and each layout's own one-thread run its thread identity.
+!! Production's block kernel is held to production's per-pair draws (rows of polar_block_check.tsv).
 subroutine check_case( nspace, nstates, nthr_max )
     integer, intent(in) :: nspace, nstates, nthr_max
     class(polar_matching_bench), allocatable, target :: bench
-    real(sp), allocatable :: vecs_prod(:,:,:), vecs_ref(:,:,:), vecs_one(:,:,:)
-    integer :: nkeep, irep, ib
+    real(sp), allocatable :: vecs_prod(:,:,:), vecs_ref(:,:,:), vecs_one(:,:,:), dists_pp(:,:), dists_first(:,:), temps(:)
+    integer,  allocatable :: irots_pp(:,:), irots_first(:,:)
+    real(dp) :: wall_pp
+    integer  :: nkeep, irep, ib, itemp
     nkeep = 64
     if( nspace * nstates > 5000 ) nkeep = 32
     allocate(bench)
@@ -228,6 +264,29 @@ subroutine check_case( nspace, nstates, nthr_max )
     do irep = 1,NREPS_CHECK
         call check_run(PMB_PER_PAIR, nthr_max, irep, 1, 1, .false.)
     enddo
+    ! production's block kernel against production's per-pair draws (the same keyed variates), its thread identity
+    ! and its independence of the block size, on the same calculator
+    wall_pp = bench%score(PMB_PER_PAIR, 1, nkeep, 1, 1)
+    call bench%get_entries(dists_pp, irots_pp)
+    temps = bench%get_temps()
+    write(logfhandle,'(a,3es11.3)') '    posterior temperatures min/median/max: ', minval(temps), median_nocopy(temps),&
+        &maxval(temps)
+    do ib = 1,size(BLOCK_BSZ)
+        call block_run(1, 0, BLOCK_BSZ(ib), 1.)
+        do irep = 1,NREPS_CHECK
+            call block_run(nthr_max, irep, BLOCK_BSZ(ib), 1.)
+        enddo
+    enddo
+    ! the draws' sensitivity to the last bits of the losses: the argmin (a huge temperature) and a ten times cooler draw
+    do itemp = 1,size(BLOCK_TSCALES)
+        call bench%scale_temps(BLOCK_TSCALES(itemp))
+        wall_pp = bench%score(PMB_PER_PAIR, 1, nkeep, 1, 1)
+        call bench%get_entries(dists_pp, irots_pp)
+        deallocate(dists_first, irots_first)
+        call block_run(1, 0, BLOCK_BSZ_SENS, BLOCK_TSCALES(itemp))
+        call block_run(nthr_max, 1, BLOCK_BSZ_SENS, BLOCK_TSCALES(itemp))
+    enddo
+    call bench%scale_temps(1.)
     call bench%kill
     ! the same data in the benchmark memo
     call bench%new(nspace, nstates, nkeep, nthr_max, .false., .true., .true., nkeep)
@@ -347,6 +406,62 @@ subroutine check_case( nspace, nstates, nthr_max )
             &' argmin_diff=', n_argmin_diff, ' max_rel=', max_rel
     end subroutine check_run
 
+    ! one scoring of the kept particles by production's block kernel against the per-pair draws: rotations differing,
+    ! the largest relative difference of the drawn loss where the rotation agrees, and the entries against the first
+    ! one-thread block run (thread identity; independence of the block size)
+    subroutine block_run( nthr, irep, bsz, tscale )
+        integer, intent(in) :: nthr, irep, bsz
+        real,    intent(in) :: tscale
+        real(sp), allocatable :: dists(:,:)
+        integer,  allocatable :: irots(:,:)
+        real(dp) :: wall, max_rel, d
+        integer  :: nrefs, iref, i, nrot_diff, ninvalid, ndiff_first, nallowed, funit
+        logical  :: l_new, l_ok
+        wall = bench%score(PMB_BLOCK_PROD, nthr, nkeep, bsz, BLOCK_RSZ)
+        call bench%get_entries(dists, irots)
+        nrefs     = size(dists,1)
+        nrot_diff = 0
+        ninvalid  = 0
+        max_rel   = 0._dp
+        do i = 1,nkeep
+            do iref = 1,nrefs
+                if( irots(iref,i) /= irots_pp(iref,i) )then
+                    nrot_diff = nrot_diff + 1
+                else if( dists_pp(iref,i) > 0.5 * huge(1.) )then
+                    if( .not. (dists(iref,i) > 0.5 * huge(1.)) ) ninvalid = ninvalid + 1
+                else
+                    d       = abs(real(dists(iref,i),dp) - real(dists_pp(iref,i),dp))
+                    max_rel = max(max_rel, d / max(abs(real(dists_pp(iref,i),dp)), 1.e-30_dp))
+                endif
+            enddo
+        enddo
+        ndiff_first = 0
+        if( .not. allocated(dists_first) )then
+            dists_first = dists
+            irots_first = irots
+        else
+            ndiff_first = count(dists /= dists_first) + count(irots /= irots_first)
+        endif
+        nallowed = max(1, int(BLOCK_FLIP_RATE * real(nrefs*nkeep)))
+        l_ok     = nrot_diff <= nallowed .and. max_rel <= real(BLOCK_RTOL,dp) .and. ninvalid == 0 .and. ndiff_first == 0
+        inquire(file=BLOCKCHECK_TSV, exist=l_new)
+        l_new = .not. l_new
+        open(newunit=funit, file=BLOCKCHECK_TSV, position='append', action='write', status='unknown')
+        if( l_new ) write(funit,'(a)') 'layout'//achar(9)//'nspace'//achar(9)//'nstates'//achar(9)//'nrefs'//achar(9)//&
+            &'nptcls'//achar(9)//'nthr'//achar(9)//'rep'//achar(9)//'B'//achar(9)//'pairs'//achar(9)//&
+            &'rot_diff_vs_per_pair'//achar(9)//'rot_diff_allowed'//achar(9)//'max_rel_diff_vs_per_pair'//achar(9)//&
+            &'invalid_mismatch'//achar(9)//'entries_diff_vs_first_1thr'//achar(9)//'wall_s'//achar(9)//'within_tolerance'//&
+            &achar(9)//'temp_scale'
+        write(funit,'(a,10(a,i0),a,es12.5,2(a,i0),a,f10.4,a,a,a,es10.3)') layout_name(PMB_BLOCK_PROD), achar(9), nspace,&
+            &achar(9), nstates, achar(9), nrefs, achar(9), nkeep, achar(9), nthr, achar(9), irep, achar(9), bsz, achar(9),&
+            &nrefs*nkeep, achar(9), nrot_diff, achar(9), nallowed, achar(9), max_rel, achar(9), ninvalid, achar(9),&
+            &ndiff_first, achar(9), wall, achar(9), trim(merge('yes','no ',l_ok)), achar(9), tscale
+        close(funit)
+        write(logfhandle,'(4x,a,a,i0,a,i0,a,i0,a,i0,a,i0,a,es10.3,a,i0,a,es10.3)') layout_name(PMB_BLOCK_PROD), ' nthr=', nthr,&
+            &' rep=', irep, ' B=', bsz, ' rot_diff_vs_per_pair=', nrot_diff, ' of ', nrefs*nkeep, ' max_rel=', max_rel,&
+            &' entries_diff_vs_first_1thr=', ndiff_first, ' temp_scale=', tscale
+    end subroutine block_run
+
 end subroutine check_case
 
 !> The production kernels of one case on nkeep particles, euclid and cc (prod_kernels): the one-thread result is
@@ -449,7 +564,7 @@ subroutine fills_case( nspace, nstates, nptcls, nthr_max )
         call report_case(bench, nspace, nstates)
         write(logfhandle,'(4x,a)') 'route '//route//': the reference fill at one thread, one batch, one part'
         call bench%run_fill(1, nptcls, 1, ref)
-        if( iroute == PMB_ROUTE_3D_DENSE ) call check_dense_refinement(ref, nspace, nstates)
+        if( iroute == PMB_ROUTE_3D_DENSE .or. iroute == PMB_ROUTE_3D_SEEDED ) call check_dense_refinement(ref, nspace, nstates)
         do iconf = 1,NCONF
             wall = 0._dp
             !$ wall = omp_get_wtime()
@@ -525,6 +640,167 @@ subroutine check_dense_refinement( res, nspace, nstates )
     if( nover > 0 ) THROW_HARD('the dense fill refines more than a state''s share or the budget')
 end subroutine check_dense_refinement
 
+!> The neighbourhood route of one case (decision 19 of prob_table_matrix_scoring.md): per path and team (the full one,
+!! then one thread), NEIGH_NREPS repeats of the per-pair routine and of the block path at the particles' temperatures
+!! (timed; their entries against the first repeat at the full team), and the per-pair routine over the blocks of
+!! decision 18's order (reported: how a fill in blocks would score a path left per pair); the block path once at a
+!! team of NEIGH_TEAM_ID (identity); then the check (rulings R7): at the temperature scale that makes the draw the best
+!! rotation, the best rotations differ in at most max(1, BLOCK_FLIP_RATE of the pairs) and the distances lie
+!! within BLOCK_RTOL where they agree; the drawn rotations' differences at the particles' temperatures are reported
+subroutine neigh_case( nspace, nstates, pgrp, nptcls, nthr_max )
+    use, intrinsic :: iso_fortran_env, only: int64
+    integer,          intent(in) :: nspace, nstates, nptcls, nthr_max
+    character(len=*), intent(in) :: pgrp
+    class(polar_neigh_bench), allocatable :: bench
+    type(pnb_pass), allocatable :: pp, bk, po, pp_first, bk_first, bk_team, pp_best, bk_best
+    integer, allocatable :: teams(:)
+    real(dp) :: best_rel, drawn_rel
+    real     :: cone, load
+    integer  :: nsubs, path, it, irep, pftsz, nrots, kfromto(2), ncap, maxcell, ndiff_pp, ndiff_bk, ndiff_team
+    integer  :: best_rot, drawn_rot, nallowed, npooled_diff, funit, npairs
+    logical  :: l_new, l_ok, l_ident
+    ! solve3D's subspace: 126 representatives per 2,500 directions, even
+    nsubs = max(2, round2even(real(nint(126. * real(nspace) / 2500.))))
+    allocate(bench, pp, bk, po, pp_first, bk_first, bk_team, pp_best, bk_best)
+    call bench%new(nspace, nstates, nsubs, pgrp, nptcls, nthr_max)
+    call bench%get_neigh_sizes(pftsz, nrots, kfromto, nsubs, ncap, maxcell, cone)
+    write(logfhandle,'(a,a,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,f5.1,a,3(1x,f7.1))') '>>> POLAR_NEIGH_BENCH case pgrp=',&
+        &trim(pgrp), ' nspace=', nspace, ' nstates=', nstates, ' nsubs=', nsubs, ' nptcls=', nptcls, ' pftsz=', pftsz,&
+        &' k=', kfromto(1), '..', kfromto(2), ' pool<=', ncap, ' cell<=', maxcell, ' cone=', cone,&
+        &' pairs/particle (reps, members, cone):', real(bench%npairs(PNB_PATH_REPS)) / real(nptcls),&
+        &real(bench%npairs(PNB_PATH_MEMBERS)) / real(nptcls), real(bench%npairs(PNB_PATH_CONE)) / real(nptcls)
+    teams = [nthr_max]
+    if( nthr_max > 1 ) teams = [teams, 1]
+    do path = 1,PNB_NPATHS
+        npairs  = bench%npairs(path)
+        l_ident = .true.
+        do it = 1,size(teams)
+            do irep = 1,NEIGH_NREPS
+                load = load_average()
+                call bench%score_path(path, .false., teams(it), 1., pp)
+                call bench%score_path(path, .true.,  teams(it), 1., bk)
+                call bench%score_path(path, .false., teams(it), 1., po, l_cellorder=.true.)
+                ndiff_pp = 0
+                ndiff_bk = 0
+                if( it == 1 .and. irep == 1 )then
+                    pp_first = pp
+                    bk_first = bk
+                else
+                    ndiff_pp = ndiff_pass(pp, pp_first)
+                    ndiff_bk = ndiff_pass(bk, bk_first)
+                endif
+                ndiff_pp = ndiff_pp + ndiff_pass(po, pp_first)
+                l_ident = l_ident .and. ndiff_pp == 0 .and. ndiff_bk == 0
+                inquire(file=NEIGH_TSV, exist=l_new)
+                l_new = .not. l_new
+                open(newunit=funit, file=NEIGH_TSV, position='append', action='write', status='unknown')
+                if( l_new ) write(funit,'(a)') 'path'//achar(9)//'pgrp'//achar(9)//'nspace'//achar(9)//'nstates'//&
+                    &achar(9)//'nsubs'//achar(9)//'nptcls'//achar(9)//'nthr'//achar(9)//'rep'//achar(9)//'B_even'//&
+                    &achar(9)//'B_odd'//achar(9)//'needed_pairs'//achar(9)//'scored_pairs'//achar(9)//'wasted_pairs'//&
+                    &achar(9)//'calls'//achar(9)//'rows_per_call'//achar(9)//'refs_per_call'//achar(9)//'slot_fill'//&
+                    &achar(9)//'per_pair_tsec'//achar(9)//'per_pair_wall'//achar(9)//'block_tsec'//achar(9)//&
+                    &'block_wall'//achar(9)//'ratio_tsec'//achar(9)//'ratio_wall'//achar(9)//'per_pair_us'//achar(9)//&
+                    &'block_us'//achar(9)//'load'//achar(9)//'per_pair_diff_vs_first'//achar(9)//'block_diff_vs_first'//&
+                    &achar(9)//'per_pair_cellorder_tsec'//achar(9)//'ratio_cellorder'
+                write(funit,'(a,a,a,9(a,i0),3(a,i0),3(a,f10.4),4(a,es12.5),4(a,f10.4),a,f6.2,2(a,i0),a,es12.5,a,f10.4)')&
+                    &path_name(path),&
+                    &achar(9), trim(pgrp), achar(9), nspace, achar(9), nstates, achar(9), nsubs, achar(9), nptcls,&
+                    &achar(9), teams(it), achar(9), irep, achar(9), bk%bsz(1), achar(9), bk%bsz(2), achar(9), npairs,&
+                    &achar(9), bk%nscored, achar(9), bk%nwasted, achar(9), bk%ncalls,&
+                    &achar(9), real(bk%nrows) / real(max(1_int64,bk%ncalls)),&
+                    &achar(9), real(bk%ncols) / real(max(1_int64,bk%ncalls)),&
+                    &achar(9), real(bk%nscored) / real(max(1_int64,bk%nslots)),&
+                    &achar(9), pp%tsec, achar(9), pp%wall, achar(9), bk%tsec, achar(9), bk%wall,&
+                    &achar(9), bk%tsec / max(pp%tsec, 1.e-12_dp), achar(9), bk%wall / max(pp%wall, 1.e-12_dp),&
+                    &achar(9), 1.e6_dp * pp%tsec / real(npairs,dp), achar(9), 1.e6_dp * bk%tsec / real(npairs,dp),&
+                    &achar(9), load, achar(9), ndiff_pp, achar(9), ndiff_bk, achar(9), po%tsec,&
+                    &achar(9), po%tsec / max(pp%tsec, 1.e-12_dp)
+                close(funit)
+                write(logfhandle,'(4x,a,a,i0,a,i0,a,f8.3,a,f8.3,a,f6.3,a,i0,a,i0)') path_name(path), ' nthr=', teams(it),&
+                    &' rep=', irep, ' per_pair_tsec=', pp%tsec, ' block_tsec=', bk%tsec, ' ratio=',&
+                    &bk%tsec / max(pp%tsec, 1.e-12_dp), ' diff_vs_first=', ndiff_pp, '/', ndiff_bk
+            enddo
+        enddo
+        ndiff_team = -1
+        if( nthr_max > NEIGH_TEAM_ID )then
+            call bench%score_path(path, .true., NEIGH_TEAM_ID, 1., bk_team)
+            ndiff_team = ndiff_pass(bk_team, bk_first)
+            l_ident    = l_ident .and. ndiff_team == 0
+        endif
+        ! the check: the best rotations and their distances, then the drawn rotations at the particles' temperatures
+        call bench%score_path(path, .false., nthr_max, BLOCK_TSCALES(1), pp_best)
+        call bench%score_path(path, .true.,  nthr_max, BLOCK_TSCALES(1), bk_best)
+        call compare_pass(bk_best,  pp_best,  best_rot,  best_rel)
+        call compare_pass(bk_first, pp_first, drawn_rot, drawn_rel)
+        npooled_diff = -1
+        if( path == PNB_PATH_REPS ) npooled_diff = bench%pooled_changes(bk_first%dists)
+        nallowed = max(1, int(BLOCK_FLIP_RATE * real(npairs)))
+        l_ok     = best_rot <= nallowed .and. best_rel <= real(BLOCK_RTOL,dp)
+        inquire(file=NEIGHCHECK_TSV, exist=l_new)
+        l_new = .not. l_new
+        open(newunit=funit, file=NEIGHCHECK_TSV, position='append', action='write', status='unknown')
+        if( l_new ) write(funit,'(a)') 'path'//achar(9)//'pgrp'//achar(9)//'nspace'//achar(9)//'nstates'//achar(9)//&
+            &'nptcls'//achar(9)//'nthr'//achar(9)//'pairs'//achar(9)//'best_rot_diff'//achar(9)//'allowed'//achar(9)//&
+            &'best_max_rel'//achar(9)//'drawn_rot_diff'//achar(9)//'drawn_max_rel'//achar(9)//'team4_diff_vs_first'//&
+            &achar(9)//'pooled_changes'//achar(9)//'within_tolerance'//achar(9)//'identical'
+        write(funit,'(a,a,a,7(a,i0),a,es12.5,a,i0,a,es12.5,2(a,i0),2(a,a))') path_name(path), achar(9), trim(pgrp),&
+            &achar(9), nspace, achar(9), nstates, achar(9), nptcls, achar(9), nthr_max, achar(9), npairs, achar(9),&
+            &best_rot, achar(9), nallowed, achar(9), best_rel, achar(9), drawn_rot, achar(9), drawn_rel, achar(9),&
+            &ndiff_team, achar(9), npooled_diff, achar(9), trim(merge('yes','no ',l_ok)), achar(9),&
+            &trim(merge('yes','no ',l_ident))
+        close(funit)
+        write(logfhandle,'(4x,a,a,i0,a,i0,a,es10.3,a,i0,a,es10.3,a,i0,a,i0,a,a,a,a)') path_name(path), ' best_rot_diff=',&
+            &best_rot, ' of ', npairs, ' best_max_rel=', best_rel, ' drawn_rot_diff=', drawn_rot, ' drawn_max_rel=',&
+            &drawn_rel, ' team4_diff=', ndiff_team, ' pooled_changes=', npooled_diff, ' within_tolerance=',&
+            &trim(merge('yes','no ',l_ok)), ' identical=', trim(merge('yes','no ',l_ident))
+    enddo
+    call bench%kill
+    deallocate(bench, pp, bk, po, pp_first, bk_first, bk_team, pp_best, bk_best)
+
+contains
+
+    ! entries differing bit for bit
+    integer function ndiff_pass( a, b )
+        type(pnb_pass), intent(in) :: a, b
+        ndiff_pass = count(a%dists /= b%dists) + count(a%irots /= b%irots)
+    end function ndiff_pass
+
+    ! the block path against the per-pair routine: rotations differing; the largest relative difference of the
+    ! distance where they agree
+    subroutine compare_pass( a, ref, nrot, max_rel )
+        type(pnb_pass), intent(in)  :: a, ref
+        integer,        intent(out) :: nrot
+        real(dp),       intent(out) :: max_rel
+        integer :: j
+        nrot    = 0
+        max_rel = 0._dp
+        do j = 1,size(ref%dists)
+            if( a%irots(j) /= ref%irots(j) )then
+                nrot = nrot + 1
+            else
+                max_rel = max(max_rel, abs(real(a%dists(j),dp) - real(ref%dists(j),dp)) /&
+                    &max(abs(real(ref%dists(j),dp)), 1.e-30_dp))
+            endif
+        enddo
+    end subroutine compare_pass
+
+    function path_name( path_here ) result( name )
+        integer, intent(in) :: path_here
+        character(len=:), allocatable :: name
+        select case(path_here)
+            case(PNB_PATH_REPS)
+                name = 'a_reps'
+            case(PNB_PATH_MEMBERS)
+                name = 'b_members'
+            case(PNB_PATH_CONE)
+                name = 'c_cone'
+            case DEFAULT
+                name = 'unknown'
+        end select
+    end function path_name
+
+end subroutine neigh_case
+
 subroutine report_case( bench, nspace, nstates )
     class(polar_matching_bench), intent(in) :: bench
     integer,                     intent(in) :: nspace, nstates
@@ -551,6 +827,8 @@ function layout_name( layout ) result( name )
             name = 'states_inner'
         case(PMB_MATRIX)
             name = 'matrix'
+        case(PMB_BLOCK_PROD)
+            name = 'block_prod'
         case(PMB_MATRIX_T)
             name = 'matrix_t'
         case DEFAULT

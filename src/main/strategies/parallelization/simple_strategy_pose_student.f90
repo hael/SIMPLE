@@ -210,9 +210,10 @@ contains
             l_cache = status == 0
         endif
         vol_hash  = file_hash(params%vols(1))
-        ! the table of the pass: the iteration's model from the complete field, the assignment opened
+        ! the table of the pass: the iteration's model from the complete field, the assignment opened; the references
+        ! are memoized, so the table asks for the block kernel's memo its fill scores with
         allocate(eul_prob_tab :: tab)
-        call tab%new_pipeline(params, build, pinds)
+        call tab%new_pipeline(params, build, pinds, block_memo=.true.)
         call tab%set_model_from_field
         call tab%open_assignment
         call rows%open_write(fname_rows, nptcls, params%nspace)

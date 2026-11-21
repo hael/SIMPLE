@@ -21,6 +21,8 @@ integer,  parameter :: SHSRCH_SHIFT = 1, SHSRCH_JOINT = 2, SHSRCH_JOINT_VIEW = 3
 ! reasons the quadratic grid step falls back to the L-BFGS-B alternations
 integer,  parameter :: FIT_EDGE = 1, FIT_CURVATURE = 2, FIT_STEP = 3, FIT_LIMITS = 4, FIT_VALUE = 5, FIT_NREASONS = 5
 real(dp), parameter :: FIT_MIN_CURV_RATIO = 0.01d0 ! smallest accepted ratio of the Hessian's eigenvalues
+! the joint route's 'lm' stops (euclid): a step gaining less than this in the draw's log-probability (loss x prob_beta x T)
+real(dp), parameter :: SHSRCH_JOINT_LOGP_TOL = 0.01d0
 ! the optimiser of each mode (R6, one per client); testers pass either to the constructors
 character(len=*), parameter :: SHSRCH_SOLVER       = 'lbfgsb' !< the shift mode (alternating and fixed angle)
 character(len=*), parameter :: SHSRCH_JOINT_SOLVER = 'lbfgsb' !< the joint shift and in-plane mode
@@ -43,6 +45,7 @@ type :: pftc_shsrch_grad
     logical                   :: joint_initial_cost_valid = .false.
     logical                   :: joint_cc = .false.      !< joint objective is cc (loss = -cc)
     character(len=8)          :: solver = SHSRCH_SOLVER   !< 'lm' minimises the euclid shift loss L/W + w|d|^2, not -exp(-loss)
+    real(dp)                  :: factr0 = 0.d0            !< the joint mode's factr as specified (the 'lm' stop resets to it)
     real(dp)                  :: shift_curv(2,2) = 0.d0   !< 'lm' shift mode: the curvature at grid rotation shift_curv_irot,
     integer                   :: shift_curv_irot = 0      !< shift-independent, so formed once per rotation of a solve (0: none)
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
@@ -248,6 +251,7 @@ contains
             &max_step=0.01, maxits=self%maxits)
         self%ospec%fdfcurvfun_8 => grad_shsrch_fdfcurvfun
         call opt_fact%new(self%ospec, self%opt_obj)
+        self%factr0 = self%ospec%factr
         self%ospec%costfun_8    => grad_shsrch_costfun
         self%ospec%gcostfun_8   => grad_shsrch_gcostfun
         self%ospec%fdfcostfun_8 => grad_shsrch_fdfcostfun
@@ -280,6 +284,7 @@ contains
             &max_step=0.01, maxits=self%maxits)
         self%ospec%fdfcurvfun_8 => grad_shsrch_fdfcurvfun
         call opt_fact%new(self%ospec, self%opt_obj)
+        self%factr0 = self%ospec%factr
         self%ospec%costfun_8    => grad_shsrch_costfun
         self%ospec%gcostfun_8   => grad_shsrch_gcostfun
         self%ospec%fdfcostfun_8 => grad_shsrch_fdfcostfun
@@ -904,7 +909,7 @@ contains
         ! bound-pinned solutions never displace the seed
         real(dp), parameter :: JOINT_BOUND_TOL = 1.d-3
         real :: cxy(3), rotmat(2,2), lowest_cost, seed_corr, joint_lims(5,2)
-        real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(5), brange
+        real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(5), brange, beta_temp, rel_tol
         integer  :: idim, ndim
         logical :: valid_result, improved_result, valid_coordinates
 
@@ -944,6 +949,15 @@ contains
         ! 'lm': the curvature's shift-independent terms of this reference, once per solve
         if( trim(self%solver) == 'lm' .and. self%search_mode == SHSRCH_JOINT ) &
             &call self%b_ptr%pftc%load_ref_joint_curv_8(self%reference, self%particle)
+        ! 'lm', euclid: both relative stops (factr machine epsilons of |f|, the loss about 1) at the draw's resolution,
+        ! SHSRCH_JOINT_LOGP_TOL over prob_beta x T, at most a tenth of a material gain; GN's slow tail gains below it
+        self%ospec%factr = self%factr0
+        if( trim(self%solver) == 'lm' .and. self%search_mode == SHSRCH_JOINT .and. .not. self%joint_cc )then
+            rel_tol   = 0.1d0 * JOINT_IMPROVE_REL_TOL
+            beta_temp = real(self%b_ptr%pftc%ptcl_posterior_temp(self%particle), dp)
+            if( beta_temp > 0.d0 ) rel_tol = min(rel_tol, SHSRCH_JOINT_LOGP_TOL / beta_temp)
+            self%ospec%factr = max(self%factr0, rel_tol / epsilon(1.d0))
+        endif
         call self%opt_obj%minimize(self%ospec, self, lowest_cost)
         initial_cost = self%joint_initial_cost
         final_cost = real(lowest_cost,dp)
@@ -1359,6 +1373,7 @@ contains
         self%joint_initial_cost_valid = .false.
         self%joint_cc = .false.
         self%shift_curv_irot = 0
+        self%factr0   = 0.d0
         self%prior_w  = 0.d0
         self%prior_u0 = 0.d0
         if( allocated(self%rot_cs) ) deallocate(self%rot_cs)

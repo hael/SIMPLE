@@ -329,7 +329,7 @@ contains
 
     !> The euclid distances of the n rotations from the inverse FFT r of gen_euclid_crvec, huge above -log(TINY).
     !! Converting every element (vc clamps a huge v) and overwriting those above, not if/else, lets the loop vectorize
-    subroutine euclid_dists_from_crvec( n, r, norm, dists )
+    module subroutine euclid_dists_from_crvec( n, r, norm, dists )
         integer,  intent(in)  :: n
         real(sp), intent(in)  :: r(n)
         real(dp), intent(in)  :: norm
@@ -692,8 +692,7 @@ contains
     end subroutine gen_posterior_val_bank
 
     !> the posterior draw over the Euclidean distances of the calling thread's crvec1 (gen_euclid_crvec or its bank
-    !! form) with the variate u, rot_cdf the work array; a row without a valid rotation (every loss above
-    !! -log(TINY)) returns rotation 1 at the invalid marker
+    !! form) with the variate u
     subroutine draw_posterior_crvec( self, ithr, norm, temp, u, dist, irot )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: ithr
@@ -701,13 +700,27 @@ contains
         real(sp),            intent(in)    :: temp
         real(sp),            intent(out)   :: dist
         integer,             intent(out)   :: irot
-        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, self%heap_vars(ithr)%rot_dists)
+        call draw_posterior_rvec(self, ithr, self%crvec1(ithr)%r, norm, temp, u, dist, irot)
+    end subroutine draw_posterior_crvec
+
+    !> the posterior draw over the Euclidean distances of the inverse FFT r of one pair's sums (draw_posterior_crvec,
+    !! the block kernel) with the variate u, rot_cdf the work array; a row without a valid rotation (every loss above
+    !! -log(TINY)) returns rotation 1 at the invalid marker
+    module subroutine draw_posterior_rvec( self, ithr, r, norm, temp, u, dist, irot )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: ithr
+        real(sp),            intent(in)    :: r(self%nrots)
+        real(dp),            intent(in)    :: norm, u
+        real(sp),            intent(in)    :: temp
+        real(sp),            intent(out)   :: dist
+        integer,             intent(out)   :: irot
+        call euclid_dists_from_crvec(self%nrots, r, norm, self%heap_vars(ithr)%rot_dists)
         call draw_posterior_row(self%nrots, self%heap_vars(ithr)%rot_dists, temp, self%heap_vars(ithr)%rot_cdf, u, irot, dist)
         if( irot < 1 )then
             irot = 1
             dist = huge(dist)
         endif
-    end subroutine draw_posterior_crvec
+    end subroutine draw_posterior_rvec
 
     module real(dp) function gen_corr_for_rot_8_noshift( self, iref, iptcl, irot )
         class(polarft_calc), target, intent(inout) :: self

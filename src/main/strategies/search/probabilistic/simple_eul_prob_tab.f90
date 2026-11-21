@@ -17,7 +17,8 @@ use simple_rnd,                only: rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_A
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_defs,               only: PROB_INSERT_WMIN
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
-use simple_polarft_calc,       only: polarft_calc, SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS, shift_ptcl2ref, shift_ref2ptcl
+use simple_polarft_calc,       only: polarft_calc, SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS, shift_ptcl2ref, shift_ref2ptcl,&
+    &PFTC_BLOCK_NB
 use simple_ori_utils,          only: euler_about_cell
 implicit none
 
@@ -170,16 +171,21 @@ contains
     end subroutine initialize_storage
 
     !> the table of a part (the matcher's, in shared memory and in a distributed part alike): the assignment map and,
-    !! batch by batch, the rows the fill keeps for the batch's own selection (fill_tab_range, assign_batch)
-    subroutine new_pipeline( self, params, build, pinds )
+    !! batch by batch, the rows the fill keeps for the batch's own selection (fill_tab_range, assign_batch); with
+    !! block_memo the calculator's bin-major reference memo the dense fill's block kernel reads (after memoize_refs)
+    subroutine new_pipeline( self, params, build, pinds, block_memo )
         class(eul_prob_tab),       intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
+        logical, optional,         intent(in)    :: block_memo
         call self%new_common(params,build,pinds)
         allocate(self%assgn_map(self%nptcls))
         call self%initialize_storage
         self%seed_nrots = build%pftc%get_nrots()
+        if( present(block_memo) )then
+            if( block_memo ) call self%b_ptr%pftc%memoize_ref_bins
+        endif
     end subroutine new_pipeline
 
     !> the iteration's model from the complete incoming field (section 3.2 of the pipeline note): the refined-reference
@@ -234,13 +240,15 @@ contains
         real,                      allocatable :: post_wx(:,:)       !< per thread: its posterior, sorted
         integer,                   allocatable :: post_indsx(:,:)    !< per thread: its reference order
         logical :: l_post
-        integer :: i, iptcl, projs_ns, ithr, nper, ncap
-        integer :: inpl_refs(self%nrefs,nthr_glob)
+        integer :: i, projs_ns, ithr, nper, ncap, nteam, nblocks, ib
         real    :: lims(2,2), lims_init(2,2)
-        real    :: dists_refs(self%nrefs,nthr_glob)
         logical :: l_sh_first, l_grid
         real    :: sigma2_prior  !< the shift prior's variance per axis (shift_prior=yes)
-        complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo (single state)
+        complex(sp), allocatable :: seed_bank(:,:,:,:) !< per thread: the block's seed-shifted particle memos (single state)
+        real(sp),    allocatable :: dists_blk(:,:)     !< per thread: the block kernel's drawn distances (references x block)
+        integer,     allocatable :: irots_blk(:,:)     !< per thread: its drawn in-plane indices
+        integer,     allocatable :: irefs_tab(:)       !< the calculator's reference of every table reference
+        integer,     allocatable :: porder(:), blocks(:,:) !< the batch's particles by half, and its blocks in porder
         integer(int64) :: seed_builds, bank_ithr
         integer :: kfromto_loc(2)
         integer(int64) :: fit_ithr(0:5)
@@ -293,6 +301,15 @@ contains
         allocate(locn(ncap,nthr_glob), source=0)
         allocate(rows_batch(self%nrefs,i_first:i_last), refined_batch(max(1,ncap),i_first:i_last))
         allocate(nrefined_batch(i_first:i_last), source=0)
+        ! the block kernel's frame: the batch in blocks of one half, the calculator's index of every table reference,
+        ! the kernel's per-thread outputs
+        nteam = omp_get_max_threads()
+        call cut_blocks
+        allocate(irefs_tab(self%nrefs))
+        do i = 1,self%nrefs
+            irefs_tab(i) = self%ref_full(i)
+        enddo
+        allocate(dists_blk(self%nrefs*PFTC_BLOCK_NB,nteam), irots_blk(self%nrefs*PFTC_BLOCK_NB,nteam))
         ! the pose posterior is defined by the Euclidean objective only
         l_post = self%p_ptr%l_prob_post_diag .and. self%p_ptr%cc_objfun == OBJFUN_EUCLID
         if( l_post )then
@@ -323,7 +340,7 @@ contains
             if( self%p_ptr%l_shift_prior ) sigma2_prior = self%sigma2_prior_model
             if( l_sh_first )then
                 kfromto_loc = self%b_ptr%pftc%get_kfromto()
-                allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto_loc(2)-kfromto_loc(1)+1, nthr_glob))
+                allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto_loc(2)-kfromto_loc(1)+1, PFTC_BLOCK_NB, nteam))
             endif
             ! the polar shift map (shift_sigma > 0): the coarse map over a particle's box at its likely references, the
             ! refinement at full resolution from its optimum. The box is the disk of three sigma under the prior for a
@@ -348,31 +365,18 @@ contains
                         &maxits=self%p_ptr%maxits_sh, coarse_init=.true., grid_fit=l_grid, grid_ptcl=l_grid)
                 end do
             endif
-            ! fill the table
-            t_region = omp_get_wtime()
-            ! A particle's cost depends on its shift searches, so the schedule is dynamic. Each thread owns
-            ! its search object and a particle is processed whole, writing only its own row; its draws are
-            ! keyed on the particle, so the thread it meets changes nothing.
-            !$omp parallel do default(shared) private(i,iptcl,ithr) proc_bind(close) schedule(dynamic)
-            do i = i_first, i_last
-                iptcl = self%pinds(i)
-                ithr  = omp_get_thread_num() + 1
-                call process_particle_with_shift(i, iptcl, ithr)
-            enddo
-            !$omp end parallel do
-            self%fill_profile%wall_region = self%fill_profile%wall_region + (omp_get_wtime() - t_region)
-        else
-            ! fill the table
-            t_region = omp_get_wtime()
-            !$omp parallel do default(shared) private(i,iptcl,ithr) proc_bind(close) schedule(static)
-            do i = i_first, i_last
-                iptcl = self%pinds(i)
-                ithr  = omp_get_thread_num() + 1
-                call process_particle_without_shift(i, iptcl, ithr)
-            enddo
-            !$omp end parallel do
-            self%fill_profile%wall_region = self%fill_profile%wall_region + (omp_get_wtime() - t_region)
         endif
+        ! fill the table. A block's cost depends on its particles' shift searches, so the schedule is dynamic. A
+        ! block is processed whole by one thread with its own search objects, writing only its particles' rows;
+        ! every draw is keyed on the particle and the reference, so the thread and the block it meets change nothing
+        t_region = omp_get_wtime()
+        !$omp parallel do default(shared) private(ib,ithr) proc_bind(close) schedule(dynamic)
+        do ib = 1,nblocks
+            ithr = omp_get_thread_num() + 1
+            call process_block(blocks(1,ib), blocks(2,ib), ithr)
+        enddo
+        !$omp end parallel do
+        self%fill_profile%wall_region = self%fill_profile%wall_region + (omp_get_wtime() - t_region)
         ! cost record; the search objects' counters are read before kill resets them
         self%fill_profile%ts_seed   = self%fill_profile%ts_seed   + sum(ts_seed)
         self%fill_profile%ts_score  = self%fill_profile%ts_score  + sum(ts_score)
@@ -397,6 +401,7 @@ contains
             if( l_map ) call grad_shsrch_disk(ithr)%kill
         end do
         if( allocated(seed_bank) ) deallocate(seed_bank)
+        deallocate(dists_blk, irots_blk, irefs_tab, porder, blocks)
         call self%keep_batch_rows(rows_batch, refined_batch, nrefined_batch)
         if( l_post )then
             call self%write_posterior_diag(i_first, i_last, post_batch)
@@ -421,21 +426,100 @@ contains
             self%fill_profile%fit_counts  = self%fill_profile%fit_counts  + fit_ithr
         end subroutine add_counters
 
-        subroutine process_particle_with_shift( i_loc, iptcl_loc, ithr_loc )
-            integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
-            type(ori) :: o_prev_loc
-            integer   :: prev_state, prev_proj, ri_loc, irot_loc, irot_seed
-            real      :: shift_seed(3), dist_loc, shsig_loc
-            real(dp)  :: t0
-            logical   :: l_bank_seed, l_disk
-            if( l_map )then
-                ! the disk for a particle not yet centred in this workflow (under the map's prior) or whose prior width
-                ! exceeds a third of the window (the data's alone); the window for the others
-                shsig_loc = self%b_ptr%spproj_field%get(iptcl_loc, 'shsig')
-                l_disk    = shift_needs_disk(shsig_loc, self%p_ptr%trs)
-                call process_particle_with_map(i_loc, iptcl_loc, ithr_loc, l_disk, shsig_loc < 0.)
-                return
+        !> the batch's particles by half (porder) and its blocks of one half (blocks: first and last position in porder),
+        !! each half in blocks of min(PFTC_BLOCK_NB, max(4, n_half / (2 nteam))) so that the team gets two or more each
+        subroutine cut_blocks
+            integer :: ih_loc, n_loc, j0_loc, j_loc, bsz_loc, i_loc
+            logical :: l_even
+            allocate(porder(i_last-i_first+1), blocks(2,i_last-i_first+1))
+            n_loc = 0
+            nblocks = 0
+            do ih_loc = 1,2
+                l_even = ih_loc == 1
+                j0_loc = n_loc + 1
+                do i_loc = i_first,i_last
+                    if( self%b_ptr%pftc%ptcl_iseven(self%pinds(i_loc)) .eqv. l_even )then
+                        n_loc = n_loc + 1
+                        porder(n_loc) = i_loc
+                    endif
+                enddo
+                if( n_loc < j0_loc ) cycle
+                bsz_loc = min(PFTC_BLOCK_NB, max(4, (n_loc - j0_loc + 1) / (2 * nteam)))
+                do j_loc = j0_loc,n_loc,bsz_loc
+                    nblocks = nblocks + 1
+                    blocks(:,nblocks) = [j_loc, min(j_loc + bsz_loc - 1, n_loc)]
+                enddo
+            enddo
+        end subroutine cut_blocks
+
+        !> one block, porder(j0:j1): each particle's seed, the block's rows scored at once (score_block_posterior, the
+        !! keyed in-plane draw of every reference over every grid rotation, through the particle's seed bank where it
+        !! has one), then each particle's remaining steps in the order of its path
+        subroutine process_block( j0, j1, ithr_loc )
+            integer, intent(in) :: j0, j1, ithr_loc
+            real     :: shift_seed_b(3,PFTC_BLOCK_NB), temps_b(PFTC_BLOCK_NB)
+            integer  :: iptcls_b(PFTC_BLOCK_NB), nb_loc, b, i_loc, ri_loc, k_loc
+            logical  :: l_bank_b(PFTC_BLOCK_NB), l_disk_b(PFTC_BLOCK_NB), l_prior_b(PFTC_BLOCK_NB)
+            real(dp) :: t0
+            nb_loc       = j1 - j0 + 1
+            shift_seed_b = 0.
+            l_bank_b     = .false.
+            l_disk_b     = .false.
+            l_prior_b    = .false.
+            do b = 1,nb_loc
+                i_loc       = porder(j0+b-1)
+                iptcls_b(b) = self%pinds(i_loc)
+                temps_b(b)  = self%b_ptr%pftc%ptcl_posterior_temp(iptcls_b(b))
+                if( self%p_ptr%l_doshift )then
+                    if( l_map )then
+                        call seed_particle_map(i_loc, iptcls_b(b), ithr_loc, l_disk_b(b), l_prior_b(b))
+                    else
+                        call seed_particle(b, i_loc, iptcls_b(b), ithr_loc, shift_seed_b(:,b), l_bank_b(b))
+                    endif
+                endif
+            enddo
+            t0 = omp_get_wtime()
+            if( any(l_bank_b(1:nb_loc)) )then
+                call self%b_ptr%pftc%score_block_posterior(nb_loc, iptcls_b(1:nb_loc), self%nrefs, irefs_tab,&
+                    &temps_b(1:nb_loc), dists_blk(:,ithr_loc), irots_blk(:,ithr_loc), banks=seed_bank(:,:,1:nb_loc,ithr_loc),&
+                    &l_bank=l_bank_b(1:nb_loc))
+            else
+                call self%b_ptr%pftc%score_block_posterior(nb_loc, iptcls_b(1:nb_loc), self%nrefs, irefs_tab,&
+                    &temps_b(1:nb_loc), dists_blk(:,ithr_loc), irots_blk(:,ithr_loc))
             endif
+            do b = 1,nb_loc
+                i_loc = porder(j0+b-1)
+                do ri_loc = 1,self%nrefs
+                    k_loc = (b - 1) * self%nrefs + ri_loc
+                    rows_batch(ri_loc,i_loc) = prob_dense_entry(dists_blk(k_loc,ithr_loc), irots_blk(k_loc,ithr_loc))
+                enddo
+            enddo
+            ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
+            do b = 1,nb_loc
+                i_loc = porder(j0+b-1)
+                if( self%p_ptr%l_doshift )then
+                    if( l_map )then
+                        call finish_particle_map(i_loc, iptcls_b(b), ithr_loc, l_disk_b(b), l_prior_b(b))
+                    else
+                        call finish_particle(b, i_loc, iptcls_b(b), ithr_loc, shift_seed_b(:,b), l_bank_b(b))
+                    endif
+                else
+                    self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcls_b(b)),&
+                        &self%b_ptr%pftc%get_pftsz())
+                    if( l_post ) call posterior_diag(b, i_loc, iptcls_b(b), ithr_loc, [0.,0.], .false.)
+                endif
+            enddo
+        end subroutine process_block
+
+        !> the seeded path's seed (shift_sigma = 0): the shift seed from the previous pose and, when it moves the
+        !! particle, its seed bank in the block's slot ib_loc (the particle-frame seed in the single-state table)
+        subroutine seed_particle( ib_loc, i_loc, iptcl_loc, ithr_loc, shift_seed, l_bank_seed )
+            integer, intent(in)  :: ib_loc, i_loc, iptcl_loc, ithr_loc
+            real,    intent(out) :: shift_seed(3)
+            logical, intent(out) :: l_bank_seed
+            type(ori) :: o_prev_loc
+            integer   :: prev_state, prev_proj, irot_seed
+            real(dp)  :: t0
             call get_particle_context(iptcl_loc, o_prev_loc, prev_state, prev_proj)
             t0 = omp_get_wtime()
             ! the shift prior at the particle's own temperature: the seed estimate and every refinement of the particle
@@ -447,42 +531,56 @@ contains
             if( irot_seed > 0 ) shift_seed(2:3) = shift_ref2ptcl(shift_seed(2:3), self%b_ptr%pftc%get_rot(irot_seed))
             l_bank_seed = sum(shift_seed(2:3)**2) > SHERRSQ
             if( l_bank_seed )then
-                call self%b_ptr%pftc%memoize_shifted_ptcl(iptcl_loc, shift_seed(2:3), seed_bank(:,:,ithr_loc))
+                call self%b_ptr%pftc%memoize_shifted_ptcl(iptcl_loc, shift_seed(2:3), seed_bank(:,:,ib_loc,ithr_loc))
                 !$omp atomic
                 seed_builds = seed_builds + 1_int64
             endif
             ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
             self%seed_shifts(:,i_loc) = shift_seed(2:3)
             self%seed_has_sh(i_loc)   = l_sh_first
+            call o_prev_loc%kill
+        end subroutine seed_particle
+
+        !> the seeded path after the block's scores: the refinement of the row's best, the temperature, the diagnostic
+        subroutine finish_particle( ib_loc, i_loc, iptcl_loc, ithr_loc, shift_seed, l_bank_seed )
+            integer, intent(in) :: ib_loc, i_loc, iptcl_loc, ithr_loc
+            real,    intent(in) :: shift_seed(3)
+            logical, intent(in) :: l_bank_seed
+            real(dp) :: t0
             t0 = omp_get_wtime()
-            do ri_loc = 1,self%nrefs
-                if( l_bank_seed )then
-                    call score_ref_bank(ri_loc, iptcl_loc, ithr_loc, dist_loc, irot_loc)
-                else
-                    call score_ref(ri_loc, iptcl_loc, shift_seed(2:3), dist_loc, irot_loc)
-                endif
-                rows_batch(ri_loc,i_loc) = prob_dense_entry(dist_loc, irot_loc)
-                dists_refs(ri_loc,ithr_loc) = dist_loc
-                inpl_refs(ri_loc,ithr_loc)  = irot_loc
-            enddo
-            ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
-            t0 = omp_get_wtime()
+            ! the particle's own shift prior again (the block's later seeds set theirs on the thread's search object)
+            if( self%p_ptr%l_shift_prior ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
+                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
             call refine_best_refs(i_loc, iptcl_loc, ithr_loc, shift_seed)
             ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
             self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
-            if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, shift_seed(2:3), l_bank_seed)
-            call o_prev_loc%kill
-        end subroutine process_particle_with_shift
+            if( l_post ) call posterior_diag(ib_loc, i_loc, iptcl_loc, ithr_loc, shift_seed(2:3), l_bank_seed)
+        end subroutine finish_particle
 
-        !> The map's path (shift_sigma > 0): every reference scored at the stored shift (the sections carry it); the
-        !! coarse map over the box at the references holding SCREEN_QUANTILE of the particle's posterior at the origin
-        !! (a pick far off leaves it flat and keeps every reference), at least twice the refined count, each keeping
-        !! its coarse optimum; the projs_ns best of the screen refined at full resolution in a box of one coarse step
-        !! about that optimum (minimize_in_cell). The box is the disk (l_disk), under the map's prior at the particle's
-        !! first centring (l_prior) and without it after, or the window without it. Rows the refined losses, as the
-        !! window path's; the refined entries carry the posterior loss for the insertion. With several active states
-        !! the screen's pool and the refinement are split over the states' blocks, each block its share of both
-        subroutine process_particle_with_map( i_loc, iptcl_loc, ithr_loc, l_disk, l_prior )
+        !> the map's path before the block's scores: the disk for a particle not yet centred in this workflow (under
+        !! the map's prior) or whose prior width exceeds a third of the window (the data's alone), the window for the
+        !! others; the temperature; no seed (the map initialises every refinement)
+        subroutine seed_particle_map( i_loc, iptcl_loc, ithr_loc, l_disk, l_prior )
+            integer, intent(in)  :: i_loc, iptcl_loc, ithr_loc
+            logical, intent(out) :: l_disk, l_prior
+            real     :: shsig_loc
+            real(dp) :: t0
+            shsig_loc = self%b_ptr%spproj_field%get(iptcl_loc, 'shsig')
+            l_disk    = shift_needs_disk(shsig_loc, self%p_ptr%trs)
+            l_prior   = shsig_loc < 0.
+            t0 = omp_get_wtime()
+            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
+            self%seed_shifts(:,i_loc) = 0.
+            self%seed_has_sh(i_loc)   = .true.
+            ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
+        end subroutine seed_particle_map
+
+        !> The map's path (shift_sigma > 0) after the block's scores (every reference at the stored shift, which the
+        !! sections carry): the coarse map over the box at the references holding SCREEN_QUANTILE of the particle's
+        !! posterior at the origin, at least twice the refined count; the projs_ns best of the screen refined at full
+        !! resolution about their coarse optima (minimize_in_cell) in the disk (l_disk, under the map's prior at the
+        !! particle's first centring, l_prior) or the window; with several active states split over the states' blocks
+        subroutine finish_particle_map( i_loc, iptcl_loc, ithr_loc, l_disk, l_prior )
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
             logical, intent(in) :: l_disk, l_prior
             type(pftc_shsrch_grad), pointer :: gso
@@ -500,34 +598,21 @@ contains
                 gso         => grad_shsrch_disk(ithr_loc)
                 ndisk_thr(ithr_loc) = ndisk_thr(ithr_loc) + 1_int64
             endif
-            t0 = omp_get_wtime()
-            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             temp_i = real(self%p_ptr%prob_beta, dp) * real(self%temps(i_loc), dp)
             temp_s = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
                 &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl_loc, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
-            self%seed_shifts(:,i_loc) = 0.
-            self%seed_has_sh(i_loc)   = .true.
-            ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
-            t0 = omp_get_wtime()
-            do ri_loc = 1,self%nrefs
-                call score_ref(ri_loc, iptcl_loc, [0.,0.], dist_loc, irot_loc)
-                rows_batch(ri_loc,i_loc)    = prob_dense_entry(dist_loc, irot_loc)
-                dists_refs(ri_loc,ithr_loc) = dist_loc
-                inpl_refs(ri_loc,ithr_loc)  = irot_loc
-            enddo
-            ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
             t0 = omp_get_wtime()
             ! the screen: the coarse map at the origin's best references, each keeping its coarse optimum
-            pool  = minnloc(dists_refs(:,ithr_loc), self%nrefs)
-            npool = min(self%nrefs, max(2 * projs_ns, screen_pool_size(dists_refs(pool,ithr_loc), self%nrefs, temp_i)))
+            pool  = minnloc(rows_batch(:,i_loc)%dist, self%nrefs)
+            npool = min(self%nrefs, max(2 * projs_ns, screen_pool_size(rows_batch(pool,i_loc)%dist, self%nrefs, temp_i)))
             if( self%nstates > 1 )then
                 ! the pool's size divided over the blocks, each block's best at the origin
                 nblk = min(self%p_ptr%nspace, (npool + self%nstates - 1) / self%nstates)
                 deallocate(pool)
                 allocate(pool(nblk * self%nstates))
                 do si_loc = 1, self%nstates
-                    pool((si_loc-1)*nblk+1:si_loc*nblk) = minnloc(dists_refs((si_loc-1)*self%p_ptr%nspace+1:&
-                        &si_loc*self%p_ptr%nspace,ithr_loc), nblk) + (si_loc - 1) * self%p_ptr%nspace
+                    pool((si_loc-1)*nblk+1:si_loc*nblk) = minnloc(rows_batch((si_loc-1)*self%p_ptr%nspace+1:&
+                        &si_loc*self%p_ptr%nspace,i_loc)%dist, nblk) + (si_loc - 1) * self%p_ptr%nspace
                 enddo
                 npool = nblk * self%nstates
             endif
@@ -584,22 +669,7 @@ contains
                     &scr_sdev(ri_loc,ithr_loc))
             enddo
             ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
-        end subroutine process_particle_with_map
-
-        subroutine process_particle_without_shift( i_loc, iptcl_loc, ithr_loc )
-            integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
-            integer  :: ri_loc, irot_loc
-            real     :: dist_loc
-            real(dp) :: t0
-            t0 = omp_get_wtime()
-            do ri_loc = 1,self%nrefs
-                call score_ref(ri_loc, iptcl_loc, [0.,0.], dist_loc, irot_loc)
-                rows_batch(ri_loc,i_loc) = prob_dense_entry(dist_loc, irot_loc)
-            enddo
-            ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
-            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
-            if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, [0.,0.], .false.)
-        end subroutine process_particle_without_shift
+        end subroutine finish_particle_map
 
         !> The pose posterior over the particle's finished production row (posterior-drawn in-plane,
         !! the best projs_ns shift-refined) at the temperature of its weighted power, with the angular
@@ -612,8 +682,8 @@ contains
         !! search test; and, when the real halves are loaded beside the references, the same deterministic
         !! row on the particle's own real half and on the other one, the reference test, with the
         !! self-reinforcement test at the pose the particle went into its half with.
-        subroutine posterior_diag( i_loc, iptcl_loc, ithr_loc, shift_xy, l_bank )
-            integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
+        subroutine posterior_diag( ib_loc, i_loc, iptcl_loc, ithr_loc, shift_xy, l_bank )
+            integer, intent(in) :: ib_loc, i_loc, iptcl_loc, ithr_loc
             real,    intent(in) :: shift_xy(2)
             logical, intent(in) :: l_bank
             type(ori) :: o_prev_loc
@@ -667,7 +737,8 @@ contains
                     post_batch(i_loc)%null_b = temp * (dist_at - rows_batch(imin,i_loc)%dist)
                 else if( l_bank )then
                     post_batch(i_loc)%mode_src = 2
-                    call self%b_ptr%pftc%gen_euclid_val_at_bank(self%ref_full(imin), iptcl_loc, seed_bank(:,:,ithr_loc), irot_min, dist_at)
+                    call self%b_ptr%pftc%gen_euclid_val_at_bank(self%ref_full(imin), iptcl_loc, seed_bank(:,:,ib_loc,ithr_loc), irot_min,&
+                        &dist_at)
                     post_batch(i_loc)%null_a = temp * (dist_at - rows_batch(imin,i_loc)%dist)
                     sh_kernel = shift_ptcl2ref(shift_xy, self%b_ptr%pftc%get_rot(irot_min))
                     call self%b_ptr%pftc%gen_euclid_val_at(self%ref_full(imin), iptcl_loc, sh_kernel, irot_min, dist_at)
@@ -684,7 +755,7 @@ contains
             ! rotation, so the seed cannot be fed to the shifted-reference kernel); without a bank the seed is
             ! below the shift tolerance and the unshifted kernel is the production's
             do ri_loc = 1,self%nrefs
-                call deterministic_best(self%ref_full(ri_loc), iptcl_loc, ithr_loc, l_bank, .false., dist_loc, irot_loc)
+                call deterministic_best(self%ref_full(ri_loc), iptcl_loc, ib_loc, ithr_loc, l_bank, .false., dist_loc, irot_loc)
                 post_d(ri_loc,ithr_loc) = dist_loc
             end do
             call posterior_row_stats(self%nrefs, post_d(:,ithr_loc), temp, post_wd(:,ithr_loc), &
@@ -705,7 +776,8 @@ contains
             ! the deterministic row on the particle's own real half: the references of the diagnostic model
             ! follow the matcher's, direction for direction
             do ri_loc = 1,self%nrefs
-                call deterministic_best(self%ref_full(ri_loc) + self%post_ref_offset, iptcl_loc, ithr_loc, l_bank, .false., dist_loc, irot_loc)
+                call deterministic_best(self%ref_full(ri_loc) + self%post_ref_offset, iptcl_loc, ib_loc, ithr_loc, l_bank, .false.,&
+                    &dist_loc, irot_loc)
                 post_h(ri_loc,ithr_loc) = dist_loc
             end do
             call posterior_row_stats(self%nrefs, post_h(:,ithr_loc), temp, post_wh(:,ithr_loc), &
@@ -723,7 +795,8 @@ contains
             post_batch(i_loc)%rank_h = rank_in_row(post_h(:,ithr_loc), imin_d)
             ! the same row on the other real half: the reference test
             do ri_loc = 1,self%nrefs
-                call deterministic_best(self%ref_full(ri_loc) + self%post_ref_offset, iptcl_loc, ithr_loc, l_bank, .true., dist_loc, irot_loc)
+                call deterministic_best(self%ref_full(ri_loc) + self%post_ref_offset, iptcl_loc, ib_loc, ithr_loc, l_bank, .true.,&
+                    &dist_loc, irot_loc)
                 post_x(ri_loc,ithr_loc) = dist_loc
             end do
             call posterior_row_stats(self%nrefs, post_x(:,ithr_loc), temp, post_wx(:,ithr_loc), &
@@ -770,13 +843,14 @@ contains
         !> the Euclidean loss of reference iref (the calculator's index) at its best grid rotation, at the
         !! particle-frame seed through the bank when the particle has one, unshifted otherwise; own slot or,
         !! with cross, the other half's
-        subroutine deterministic_best( iref, iptcl_loc, ithr_loc, l_bank_loc, cross, dist_loc, irot_loc )
-            integer, intent(in)  :: iref, iptcl_loc, ithr_loc
+        subroutine deterministic_best( iref, iptcl_loc, ib_loc, ithr_loc, l_bank_loc, cross, dist_loc, irot_loc )
+            integer, intent(in)  :: iref, iptcl_loc, ib_loc, ithr_loc
             logical, intent(in)  :: l_bank_loc, cross
             real,    intent(out) :: dist_loc
             integer, intent(out) :: irot_loc
             if( l_bank_loc )then
-                call self%b_ptr%pftc%gen_best_euclid_val_bank(iref, iptcl_loc, seed_bank(:,:,ithr_loc), dist_loc, irot_loc, cross=cross)
+                call self%b_ptr%pftc%gen_best_euclid_val_bank(iref, iptcl_loc, seed_bank(:,:,ib_loc,ithr_loc), dist_loc, irot_loc,&
+                    &cross=cross)
             else if( cross )then
                 call self%b_ptr%pftc%gen_best_euclid_val_cross(iref, iptcl_loc, [0.,0.], dist_loc, irot_loc)
             else
@@ -852,26 +926,6 @@ contains
             irot_seed = irot
         end subroutine estimate_shift_seed
 
-        !> one reference's row entry: the in-plane rotation drawn from the row posterior at the particle's
-        !! temperature over every grid rotation (gen_posterior_val; the uniform draw within an angular window it
-        !! replaced was the search's exploration, now the tempered posterior's)
-        subroutine score_ref( ri_loc, iptcl_loc, shift_xy, dist_loc, irot_loc )
-            integer, intent(in)  :: ri_loc, iptcl_loc
-            real,    intent(in)  :: shift_xy(2)
-            real,    intent(out) :: dist_loc
-            integer, intent(out) :: irot_loc
-            call self%b_ptr%pftc%gen_posterior_val(self%ref_full(ri_loc), iptcl_loc, shift_xy,&
-                &self%b_ptr%pftc%ptcl_posterior_temp(iptcl_loc), dist_loc, irot_loc)
-        end subroutine score_ref
-
-        subroutine score_ref_bank( ri_loc, iptcl_loc, ithr_loc, dist_loc, irot_loc )
-            integer, intent(in)  :: ri_loc, iptcl_loc, ithr_loc
-            real,    intent(out) :: dist_loc
-            integer, intent(out) :: irot_loc
-            call self%b_ptr%pftc%gen_posterior_val_bank(self%ref_full(ri_loc), iptcl_loc, seed_bank(:,:,ithr_loc),&
-                &self%b_ptr%pftc%ptcl_posterior_temp(iptcl_loc), dist_loc, irot_loc)
-        end subroutine score_ref_bank
-
         !> the projs_ns best references of the row refined; with several active states each state's block its nper
         !! best (locn holds the blocks' lists one after the other, each ascending)
         subroutine refine_best_refs( i_loc, iptcl_loc, ithr_loc, shift_seed )
@@ -881,18 +935,19 @@ contains
             real    :: refined_shift(3), dbest
             if( self%nstates > 1 )then
                 do si_loc = 1, self%nstates
-                    locn((si_loc-1)*nper+1:si_loc*nper,ithr_loc) = minnloc(dists_refs((si_loc-1)*self%p_ptr%nspace+1:&
-                        &si_loc*self%p_ptr%nspace,ithr_loc), nper) + (si_loc - 1) * self%p_ptr%nspace
+                    locn((si_loc-1)*nper+1:si_loc*nper,ithr_loc) = minnloc(rows_batch((si_loc-1)*self%p_ptr%nspace+1:&
+                        &si_loc*self%p_ptr%nspace,i_loc)%dist, nper) + (si_loc - 1) * self%p_ptr%nspace
                 enddo
             else
-                locn(:,ithr_loc) = minnloc(dists_refs(:,ithr_loc), projs_ns) ! ascending: j is the unrefined rank
+                locn(:,ithr_loc) = minnloc(rows_batch(:,i_loc)%dist, projs_ns) ! ascending: j is the unrefined rank
             endif
             do j_loc = 1,ncap
                 ri_loc     = locn(j_loc,ithr_loc)
                 istate_loc = self%ref_state(ri_loc)
                 iproj_loc  = self%ref_proj(ri_loc)
                 call grad_shsrch_obj(ithr_loc)%set_indices(self%ref_full(ri_loc), iptcl_loc)
-                irot_loc = inpl_refs(ri_loc,ithr_loc)
+                ! the drawn rotation of the unrefined row (the loop refines each reference of locn once)
+                irot_loc = rows_batch(ri_loc,i_loc)%inpl
                 if( l_sh_first )then
                     refined_shift = seeded_window_refine(grad_shsrch_obj(ithr_loc), self%b_ptr%pftc, shift_seed(2:3), &
                         &irot_loc, self%p_ptr%trs)

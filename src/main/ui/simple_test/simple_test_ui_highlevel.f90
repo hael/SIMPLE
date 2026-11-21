@@ -299,12 +299,16 @@ contains
         &'simple_test_exec',&                       ! executable
         &.false., display_name='Polar Matching Benchmark')                                       ! requires sp_project
         call polar_matching_bench%add_input(UI_PARM, 'suite', 'str', 'Layout', &
-            &'Run one layout (per_pair, replica, blocked, states_inner, matrix, matrix_t, per_pair_cc), the identity '//&
+            &'Run one layout (per_pair, replica, blocked, states_inner, matrix, matrix_t, block_prod: production''s '//&
+            &'block kernel, per_pair_cc), the identity '//&
             &'checks of the layouts (check) or of the production kernels (identity, 32 particles unless nptcls is '//&
             &'given, one-thread results written to ./polar_kernel_identity_*.bin), or the frozen-input harness of '//&
             &'the probabilistic routes (fills: each route''s batch pipeline, the fill, selection and extras, in parts at '//&
             &'one thread against the full team, batches of a third and three parts, 200 directions, 1 and 2 states '//&
-            &'and 64 particles unless given; rows to ./polar_fill_identity.tsv); list prints them. '//&
+            &'and 64 particles unless given; rows to ./polar_fill_identity.tsv), or the neighbourhood route (neigh: '//&
+            &'the state and geom candidates at 5000 directions, C1 and D2, 1 and 2 states unless given, nthr x 50 '//&
+            &'particles unless given, scored per pair and by the block kernel''s paths at nthr and one thread; rows to '//&
+            &'./polar_neigh_bench.tsv and ./polar_neigh_check.tsv); list prints them. '//&
             &'Default times all euclid layouts', '', .false., '')
         call polar_matching_bench%add_input(UI_PARM, 'nspace', 'num', 'Directions', &
             &'Run one number of projection directions. Default runs 1000 and 2500', '', .false., 0.)

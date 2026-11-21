@@ -2,22 +2,30 @@
 ! Synthetic references and CTF-weighted particles at production polar sizes. Layout 1 is the production per-pair
 ! routine as fill_tab_range calls it; the replica and layouts 2-4 score the same data from a memo rebuilt here
 ! with FFTW plans of production's geometry. See doc/implementation_notes/planned/polar_matching_layout_bench.md.
+! The neighbourhood route (polar_neigh_bench) scores the neighbourhood table's candidates by the per-pair routine
+! and by the block kernel's paths (doc/implementation_notes/planned/prob_table_matrix_scoring.md, decision 19).
 module simple_polar_matching_bench
 use, intrinsic :: iso_c_binding, only: c_ptr, c_null_ptr, c_associated, c_float, c_float_complex
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_defs,         only: sp, dp
 use simple_error,        only: simple_exception
 use simple_parameters,   only: parameters
-use simple_polarft_calc, only: polarft_calc
+use simple_polarft_calc, only: polarft_calc, PFTC_BLOCK_NB, PFTC_BLOCK_NR
+use simple_linalg,       only: cgemm
 use simple_builder,      only: builder
+use simple_oris,         only: oris
+use simple_sym,          only: sym
 !$ use omp_lib,          only: omp_get_wtime, omp_get_thread_num, omp_get_max_threads, omp_set_num_threads
 implicit none
 #include "simple_local_flags.inc"
 
 public :: polar_matching_bench
-public :: PMB_PER_PAIR, PMB_REPLICA, PMB_BLOCKED, PMB_STATES_INNER, PMB_MATRIX, PMB_MATRIX_T, PMB_PER_PAIR_CC
+public :: PMB_PER_PAIR, PMB_REPLICA, PMB_BLOCKED, PMB_STATES_INNER, PMB_MATRIX, PMB_MATRIX_T, PMB_PER_PAIR_CC, PMB_BLOCK_PROD
 public :: PMB_NKINDS
 public :: pmb_fill_result, PMB_ROUTE_3D_DENSE, PMB_ROUTE_3D_NEIGH, PMB_ROUTE_2D_DENSE, PMB_ROUTE_2D_SPARSE, PMB_NROUTES
+public :: PMB_ROUTE_3D_SEEDED, PMB_ROUTE_3D_NOSHIFT, PMB_ROUTE_3D_STATE, PMB_ROUTE_3D_GEOM
 public :: PMB_NDIFF, PMB_DIFF_NAMES, pmb_route_name, kill_fill_result, compare_fill_results
+public :: polar_neigh_bench, pnb_pass, PNB_PATH_REPS, PNB_PATH_MEMBERS, PNB_PATH_CONE, PNB_NPATHS
 private
 
 integer, parameter :: PMB_PER_PAIR     = 1   !< layout 1: production gen_posterior_val, particle against every reference
@@ -27,6 +35,7 @@ integer, parameter :: PMB_STATES_INNER = 4   !< layout 3: every state of a direc
 integer, parameter :: PMB_MATRIX       = 5   !< layout 4: cgemm per angular bin over a tile, batched inverse FFT
 integer, parameter :: PMB_MATRIX_T     = 6   !< layout 4 with the products transposed to contiguous FFT input
 integer, parameter :: PMB_PER_PAIR_CC  = 7   !< layout 1 with objfun=cc (gen_corrs)
+integer, parameter :: PMB_BLOCK_PROD   = 8   !< production's block kernel (score_block_posterior) on blocks of B particles
 integer, parameter :: PMB_NKINDS       = 4   !< production kernels of prod_kernels: unshifted, shifted, bank row, bank values
 real(sp), parameter :: PMB_SHIFT(2)    = [1.3, -0.7]  !< the shift of the shifted and bank kernels (pixels)
 integer, parameter :: PMB_BOX      = 180           !< native box (pixels)
@@ -45,10 +54,28 @@ integer, parameter :: PMB_ROUTE_3D_DENSE  = 1   !< refine=prob on ptcl3D: the de
 integer, parameter :: PMB_ROUTE_3D_NEIGH  = 2   !< refine=prob_neigh prob_neigh_mode=snhc on ptcl3D (eul_prob_tab_neigh)
 integer, parameter :: PMB_ROUTE_2D_DENSE  = 3   !< refine=prob on ptcl2D: the dense rows (eul_prob_tab2D)
 integer, parameter :: PMB_ROUTE_2D_SPARSE = 4   !< refine=prob_neigh on ptcl2D: the candidate stream (eul_prob_tab2D)
-integer, parameter :: PMB_NROUTES         = 4
+integer, parameter :: PMB_ROUTE_3D_SEEDED  = 5   !< the dense table without the polar shift map (shift_sigma=0): the seed and its bank
+integer, parameter :: PMB_ROUTE_3D_NOSHIFT = 6   !< the dense table without shifts (trs=0)
+integer, parameter :: PMB_ROUTE_3D_STATE   = 7   !< refine=prob_neigh prob_neigh_mode=state: the representatives, the peaks, the pooled cells
+integer, parameter :: PMB_ROUTE_3D_GEOM    = 8   !< refine=prob_neigh prob_neigh_mode=geom: the cones about the previous direction
+integer, parameter :: PMB_NROUTES         = 8
 real,    parameter :: PMB_TRS   = 3.            !< the fills' shift window (pixels); the polar shift map is on, as in production
 real,    parameter :: PMB_RES05 = 300.          !< the insertion cone's FSC=0.5 resolution of every state (A): above the mask diameter, so that every refined entry is an eligible extra on random rows (the extras path is exercised)
 integer, parameter :: PMB_NDIFF = 7             !< the categories compare_fill_results counts
+! the neighbourhood route (decision 19): bgal's late stages (stage 8 of solve3D: box 256 at 1.275 A cropped to 162,
+! mask 180 A, lp 4.03 A, shells 2-81)
+integer, parameter :: PNB_PATH_REPS    = 1     !< (a) state's coarse pass: a block against every state's representatives
+integer, parameter :: PNB_PATH_MEMBERS = 2     !< (b) state's member pass: a pooled cell's members against its sub-block
+integer, parameter :: PNB_PATH_CONE    = 3     !< (c) geom's cones: a reachable cell's members against its sub-block
+integer, parameter :: PNB_NPATHS       = 3
+integer, parameter :: PNB_BOX      = 256
+integer, parameter :: PNB_BOX_CROP = 162
+real,    parameter :: PNB_SMPD     = 1.275
+real,    parameter :: PNB_MSKDIAM  = 180.
+real,    parameter :: PNB_LP       = 4.03
+real,    parameter :: PNB_SMOOTH_CUT  = 2.5    !< the references' smoothing reaches this many cell spacings
+real,    parameter :: PNB_STATE_CORR  = 0.9    !< a second state's anchors: this share of the first's
+real,    parameter :: PNB_NOISE       = 1.     !< the particles' noise amplitude relative to the references' (per shell)
 character(len=*), parameter :: PMB_DIFF_NAMES(PMB_NDIFF) = [character(len=10) :: 'dists', 'inpls', 'shifts', 'temps',&
     &'seeds', 'assignment', 'extras']
 
@@ -69,18 +96,6 @@ type :: pmb_fill_result
     integer :: projs_ns = 0                         !< the dense 3D fill's refined-reference budget (the iteration's model)
 end type pmb_fill_result
 
-! the BLAS of the build, called inside the OpenMP team, where it stays on the calling thread (SIMPLE_BLAS_TEAM_SAFE)
-interface
-    subroutine cgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
-        import :: sp
-        character(len=1), intent(in)    :: transa, transb
-        integer,          intent(in)    :: m, n, k, lda, ldb, ldc
-        complex(sp),      intent(in)    :: alpha, beta
-        complex(sp),      intent(in)    :: a(lda,*), b(ldb,*)
-        complex(sp),      intent(inout) :: c(ldc,*)
-    end subroutine cgemm
-end interface
-
 !> one thread's FFT buffers and draw work arrays
 type :: pmb_buf
     type(c_ptr) :: p_vec = c_null_ptr, p_bat = c_null_ptr, p_bins = c_null_ptr, p_out = c_null_ptr, p_ct = c_null_ptr
@@ -91,7 +106,7 @@ type :: pmb_buf
     complex(c_float_complex), pointer :: cbins(:,:,:) => null()  !< (R, B, pftsz+1) cgemm output
     real(c_float),            pointer :: rout(:,:)   => null()   !< (nrots, R*B)
     complex(c_float_complex), pointer :: ct(:,:)     => null()   !< (pftsz+1, R*B) transposed products
-    complex(sp), allocatable :: q(:,:,:)                         !< (2nk, B, pftsz) weighted particle block
+    complex(sp), allocatable :: q(:,:,:)                         !< (2nk, B, pftsz+1) weighted particle block
     real(sp),    allocatable :: dists(:), w(:)                   !< one row over the rotations, the draw's weights
     real(dp) :: t_parts(3) = 0._dp                               !< thread seconds: sums, inverse FFTs, distances and draw
 end type pmb_buf
@@ -106,7 +121,7 @@ type :: polar_matching_bench
     ! the benchmark memo: production's arrays rebuilt (first index the angular bin, shells kfromto(1):kfromto(2))
     complex(sp),         allocatable :: ft_ref(:,:,:,:), ft_ref2(:,:,:,:)   !< (pftsz+1, k, nrefs, half)
     complex(sp),         allocatable :: ft_ptcl_ctf(:,:,:), ft_ctf2(:,:,:)  !< (pftsz+1, k, nptcls)
-    complex(sp),         allocatable :: gmat(:,:,:,:)        !< layout 4 bin-major (2nk, nrefs, pftsz, half)
+    complex(sp),         allocatable :: gmat(:,:,:,:)        !< layout 4 bin-major (2nk, nrefs, pftsz+1, half)
     real(dp),            allocatable :: wk8(:,:)             !< k/sigma2 (shell, half)
     real(dp),            allocatable :: norms(:)             !< wsqsum * 2 nrots per particle
     real(sp),            allocatable :: temps(:)             !< the temperature of every draw (ptcl_posterior_temp)
@@ -120,6 +135,7 @@ type :: polar_matching_bench
     real(dp) :: t_gmat = 0._dp                                !< seconds spent building gmat
     real(dp) :: t_parts(3) = 0._dp                            !< last score's thread seconds per part (replica, matrix)
     logical :: with_prod_refs = .false., with_memo = .false., with_gmat = .false., l_cc = .false.
+    logical :: with_ref_bins = .false.   !< the calculator's bin-major memo is made (layout PMB_BLOCK_PROD)
     logical :: exists = .false.
     class(builder), allocatable :: build  !< the fill harness's toolbox (fill_route > 0): the same references and particles in build%pftc, the particle field of previous poses, the direction space
     integer :: fill_route = 0            !< the harness's route (PMB_ROUTE_*; 0: no harness)
@@ -130,12 +146,70 @@ contains
     procedure :: score
     procedure :: get_sizes
     procedure :: get_vecs
+    procedure :: get_entries
+    procedure :: get_temps
+    procedure :: scale_temps
     procedure :: get_gmat_build_time
     procedure :: get_parts
     procedure :: ref_bytes_per_pair
     procedure :: memo_gbytes
     procedure :: prod_kernels
 end type polar_matching_bench
+
+!> one pass of the neighbourhood route: the entries of the path's pairs (npairs, in the order of production's fill)
+!! and their cost
+type :: pnb_pass
+    real(sp), allocatable :: dists(:)
+    integer,  allocatable :: irots(:)
+    real(dp) :: wall = 0._dp, tsec = 0._dp   !< the region's wall time; the threads' time in the scoring, summed
+    integer(int64) :: nscored = 0_int64      !< pairs scored (the path's needed pairs and its wasted ones)
+    integer(int64) :: nwasted = 0_int64      !< pairs scored outside the particle's cone (path c)
+    integer(int64) :: ncalls  = 0_int64      !< block kernel calls
+    integer(int64) :: nrows   = 0_int64      !< their particles, summed
+    integer(int64) :: ncols   = 0_int64      !< their references, summed
+    integer(int64) :: nslots  = 0_int64      !< the pairs their products computed (16 x 32 per tile)
+    integer :: bsz(2) = 0                    !< the blocks of the halves (decision 3)
+end type pnb_pass
+
+!> The neighbourhood route (decision 19 of prob_table_matrix_scoring.md): the candidates of fill_tab_subspace_range's
+!! state and geom modes on a direction space with its subspace map, scored by the per-pair routine and by the block
+!! kernel over the same pairs: (a) a block's particles against every state's representatives; (b) each pooled cell's
+!! members (every state's) against the particles of the block that pooled it; (c) each reachable cell's members
+!! against the particles of the block whose cone reaches it, the entries inside a particle's cone recorded and the
+!! others wasted. A cell's members are the list of one call, so that each reference keeps its column (decision 2's
+!! revision) whatever the block. The references are smooth over the directions and every particle is its previous
+!! direction's reference, in-plane rotated, under its CTF and noise, so that the peaks lie about that direction
+type :: polar_neigh_bench
+    private
+    class(parameters),   allocatable :: params
+    class(polarft_calc), allocatable :: pftc
+    type(oris) :: eulspace                              !< the direction space (the point group's spiral)
+    type(sym)  :: pgrpsyms
+    real,     allocatable :: sigma2(:,:)
+    real(sp), allocatable :: temps(:)                   !< the particles' posterior temperatures
+    logical,  allocatable :: iseven(:)
+    integer,  allocatable :: prev_proj(:)               !< the particles' previous directions
+    integer,  allocatable :: sub_inds(:), full2sub(:)   !< the representatives' directions; every direction's cell
+    integer,  allocatable :: cell_off(:), cell_proj(:)  !< the cells' member directions, ascending (CSR over cells)
+    real,     allocatable :: cell_radius(:)             !< geom's cell radii (degrees)
+    integer,  allocatable :: rep_refs(:)                !< (a) every state's representatives, state-major in subspace order
+    integer,  allocatable :: npooled(:), pooled(:,:)    !< state mode: the particles' pooled cells (ncap, nptcls)
+    integer,  allocatable :: mem_off(:), mem_ref(:)     !< (b) the members each particle scores (CSR, production's order)
+    integer,  allocatable :: mem_cell(:,:,:)            !< (b) where a pooled cell's members of a state start (ncap, nstates, nptcls)
+    logical,  allocatable :: reach(:,:)                 !< geom: the cells each particle's cone reaches (nsubs, nptcls)
+    integer,  allocatable :: cone_off(:), cone_ref(:)   !< (c) the references inside each particle's cone (CSR, ascending)
+    integer :: nspace = 0, nstates = 0, nrefs = 0, nptcls = 0, nsubs = 0, npeak = 0, ncap = 0, nthr_max = 0
+    integer :: pftsz = 0, nrots = 0, kfromto(2) = 0, maxcell = 0
+    real    :: cone = 0.
+    logical :: exists = .false.
+contains
+    procedure :: new  => new_neigh
+    procedure :: kill => kill_neigh
+    procedure :: score_path
+    procedure :: npairs
+    procedure :: get_neigh_sizes
+    procedure :: pooled_changes
+end type polar_neigh_bench
 
 contains
 
@@ -150,7 +224,6 @@ contains
         use simple_math_ft,    only: calc_fourier_index
         use simple_rnd,        only: ran3, rnd_scope_key, RND_PROG_REFINE3D, RND_PASS_ALIGN
         use simple_test_utils, only: set_fixed_seed
-        use, intrinsic :: iso_fortran_env, only: int64
         use simple_fftw3,      only: fftwf_alloc_complex, fftwf_free, fftwf_plan_many_dft, fftwf_plan_many_dft_r2c,&
             &fftwf_execute_dft, fftwf_execute_dft_r2c, fftwf_destroy_plan, FFTW_FORWARD, FFTW_ESTIMATE
         use, intrinsic :: iso_c_binding, only: c_f_pointer, c_int, c_size_t
@@ -212,10 +285,28 @@ contains
                 case(PMB_ROUTE_3D_DENSE)
                     call cline%set('oritype', 'ptcl3D')
                     call cline%set('refine',  'prob')
+                case(PMB_ROUTE_3D_SEEDED)
+                    call cline%set('oritype',     'ptcl3D')
+                    call cline%set('refine',      'prob')
+                    call cline%set('shift_sigma', 0.)
+                case(PMB_ROUTE_3D_NOSHIFT)
+                    call cline%set('oritype', 'ptcl3D')
+                    call cline%set('refine',  'prob')
+                    call cline%set('trs',     0.)
                 case(PMB_ROUTE_3D_NEIGH)
                     call cline%set('oritype', 'ptcl3D')
                     call cline%set('refine',  'prob_neigh')
                     call cline%set('prob_neigh_mode', 'snhc')
+                case(PMB_ROUTE_3D_STATE, PMB_ROUTE_3D_GEOM)
+                    ! a subspace of a tenth of the directions (cells of about ten)
+                    call cline%set('oritype', 'ptcl3D')
+                    call cline%set('refine',  'prob_neigh')
+                    call cline%set('nspace_sub', real(max(2, nspace / 10)))
+                    if( self%fill_route == PMB_ROUTE_3D_STATE )then
+                        call cline%set('prob_neigh_mode', 'state')
+                    else
+                        call cline%set('prob_neigh_mode', 'geom')
+                    endif
                 case(PMB_ROUTE_2D_DENSE)
                     call cline%set('oritype', 'ptcl2D')
                     call cline%set('refine',  'prob')
@@ -263,7 +354,7 @@ contains
             &int(self%pftsz+1,c_int), FFTW_ESTIMATE)
         if( memo ) allocate(self%ft_ref( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs,2),&
                            &self%ft_ref2(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs,2))
-        if( gmat ) allocate(self%gmat(2*self%nk,self%nrefs,self%pftsz,2))
+        if( gmat ) allocate(self%gmat(2*self%nk,self%nrefs,self%pftsz+1,2))
         self%t_gmat = 0._dp
         ! references: random complex values of unit scale with a smooth radial falloff in the matched band
         allocate(pft(self%pftsz,self%kfromto(1):self%interpklim))
@@ -384,7 +475,7 @@ contains
                 t0 = 0._dp
                 !$ t0 = omp_get_wtime()
                 ! conjugated FT(REF2) so that cgemm's 'C' restores it; FT(REF) is conjugated by 'C' as the cross term needs
-                do j = 1,self%pftsz
+                do j = 1,self%pftsz+1
                     do kk = 1,self%nk
                         self%gmat(kk,iref_here,j,ieo_here)         = crc(j,kk)
                         self%gmat(self%nk+kk,iref_here,j,ieo_here) = cmat(j,kk)
@@ -467,7 +558,26 @@ contains
             call self%build%spproj%os_ptcl2D%copy(self%build%spproj%os_ptcl3D, is_ptcl=.true.)
             call self%build%pgrpsyms%new('c1')
             call self%build%build_eulspace(self%params)
+            if( any(self%fill_route == [PMB_ROUTE_3D_STATE, PMB_ROUTE_3D_GEOM]) ) call build_fill_subspaces
         end subroutine build_fill_toolbox
+
+        ! the subspace map of the state and geom routes, as the builder makes it for them
+        subroutine build_fill_subspaces
+            use simple_srchspace_map, only: srchspace_map
+            type(oris)          :: eulspace_sub
+            type(srchspace_map) :: sub_mapper
+            real, allocatable   :: sub_distmat(:,:)
+            call eulspace_sub%new(self%params%nspace_sub, is_ptcl=.false.)
+            call self%build%pgrpsyms%build_refspiral(eulspace_sub)
+            allocate(sub_distmat(self%params%nspace_sub, self%params%nspace))
+            call self%build%pgrpsyms%sym_dist_table(eulspace_sub, self%build%eulspace, sub_distmat)
+            call sub_mapper%new(self%params%nspace, self%params%nspace_sub, sub_distmat)
+            self%build%subspace_inds         = sub_mapper%get_sub2full_map()
+            self%build%subspace_full2sub_map = sub_mapper%get_full2sub_map()
+            call sub_mapper%kill
+            call eulspace_sub%kill
+            deallocate(sub_distmat)
+        end subroutine build_fill_subspaces
 
     end subroutine new
 
@@ -506,6 +616,7 @@ contains
         self%plan_bat  = c_null_ptr
         self%plan_bins = c_null_ptr
         self%plan_bins_shape = 0
+        self%with_ref_bins   = .false.
         self%exists = .false.
     end subroutine kill
 
@@ -529,13 +640,21 @@ contains
                 if( .not. self%with_memo ) THROW_HARD('polar_matching_bench: layout needs the benchmark memo')
             case(PMB_MATRIX, PMB_MATRIX_T)
                 if( .not. self%with_gmat ) THROW_HARD('polar_matching_bench: layout 4 needs the bin-major copy')
+            case(PMB_BLOCK_PROD)
+                if( .not. self%with_prod_refs .or. self%l_cc ) THROW_HARD('polar_matching_bench: the block kernel needs production references and euclid')
+                if( bsz > PFTC_BLOCK_NB ) THROW_HARD('polar_matching_bench: the block kernel takes at most PFTC_BLOCK_NB particles')
+                ! the kernel's memo, made once outside the timed region as a table's new_pipeline makes it
+                if( .not. self%with_ref_bins ) call self%pftc%memoize_ref_bins
+                self%with_ref_bins = .true.
             case DEFAULT
                 THROW_HARD('polar_matching_bench: unknown layout')
         end select
         !$ call omp_set_num_threads(nthr)
         nteam = 1
         !$ nteam = omp_get_max_threads()
-        if( layout /= PMB_PER_PAIR .and. layout /= PMB_PER_PAIR_CC ) call make_bufs(self, layout, nteam, bsz, rsz, bufs)
+        if( layout /= PMB_PER_PAIR .and. layout /= PMB_PER_PAIR_CC .and. layout /= PMB_BLOCK_PROD )then
+            call make_bufs(self, layout, nteam, bsz, rsz, bufs)
+        endif
         select case(layout)
             case(PMB_PER_PAIR, PMB_PER_PAIR_CC)
                 wall = score_per_pair(self, nptcls_use)
@@ -549,6 +668,8 @@ contains
                 wall = score_matrix(self, nptcls_use, bsz, rsz, bufs, .false.)
             case(PMB_MATRIX_T)
                 wall = score_matrix(self, nptcls_use, bsz, rsz, bufs, .true.)
+            case(PMB_BLOCK_PROD)
+                wall = score_block_prod(self, nptcls_use, bsz, nteam)
         end select
         self%t_parts = 0._dp
         if( allocated(bufs) )then
@@ -590,7 +711,7 @@ contains
                 bufs(ithr)%p_out  = fftwf_alloc_complex(int((self%nrots * rsz * bsz + 1) / 2, c_size_t))
                 call c_f_pointer(bufs(ithr)%p_out, bufs(ithr)%rout, [self%nrots, rsz * bsz])
                 bufs(ithr)%cbins = cmplx(0.,0.,kind=c_float_complex)
-                allocate(bufs(ithr)%q(2*self%nk, bsz, self%pftsz), source=cmplx(0.,0.,kind=sp))
+                allocate(bufs(ithr)%q(2*self%nk, bsz, self%pftsz+1), source=cmplx(0.,0.,kind=sp))
             endif
             if( layout == PMB_MATRIX_T )then
                 bufs(ithr)%p_ct = fftwf_alloc_complex(int(n1 * rsz * bsz, c_size_t))
@@ -803,7 +924,7 @@ contains
             ! the block's weighted particle terms: shells 1..nk the CTF2 term, nk+1..2nk the cross term
             do b = 1,nb
                 i = porder(blocks(1,ib) + b - 1)
-                do j = 1,self%pftsz
+                do j = 1,self%pftsz+1
                     do kh = self%kfromto(1),self%kfromto(2)
                         kk = kh - self%kfromto(1) + 1
                         wk = real(self%wk8(kh,ih), sp)
@@ -817,23 +938,20 @@ contains
             do r0 = 1,self%nrefs,rsz
                 !$ t0 = omp_get_wtime()
                 nr = min(rsz, self%nrefs - r0 + 1)
-                do j = 1,self%pftsz
+                do j = 1,self%pftsz+1
                     call cgemm('C', 'N', nr, nb, n2k, ONE, self%gmat(:,r0:r0+nr-1,j,ih), n2k, bufs(ithr)%q(:,:,j), n2k,&
                         &ZERO, bufs(ithr)%cbins(:,:,j), rsz)
                 enddo
                 !$ t1 = omp_get_wtime()
                 if( l_transpose )then
-                    ! each pair's bins contiguous; the angular Nyquist bin stays zero as in the per-pair sums
+                    ! each pair's bins contiguous, the angular Nyquist bin included as in the per-pair sums
                     do b = 1,nb
                         do ir = 1,nr
-                            bufs(ithr)%ct(1:self%pftsz,(b-1)*rsz+ir) = bufs(ithr)%cbins(ir,b,1:self%pftsz)
-                            bufs(ithr)%ct(self%pftsz+1,(b-1)*rsz+ir) = ZERO
+                            bufs(ithr)%ct(1:self%pftsz+1,(b-1)*rsz+ir) = bufs(ithr)%cbins(ir,b,1:self%pftsz+1)
                         enddo
                     enddo
                     call fftwf_execute_dft_c2r(self%plan_bins, bufs(ithr)%ct, bufs(ithr)%rout)
                 else
-                    ! the angular Nyquist bin is dropped as in the per-pair sums; the c2r may have overwritten it
-                    bufs(ithr)%cbins(:,:,self%pftsz+1) = ZERO
                     call fftwf_execute_dft_c2r(self%plan_bins, bufs(ithr)%cbins, bufs(ithr)%rout)
                 endif
                 !$ t2 = omp_get_wtime()
@@ -851,6 +969,43 @@ contains
         !$ wall = omp_get_wtime() - wall
         deallocate(porder, blocks)
     end function score_matrix
+
+    !> Production's block kernel as the dense fill calls it: a thread takes a block of B same-half particles and scores
+    !! it against every reference (score_block_posterior: one cgemm per angular bin per tile of PFTC_BLOCK_NR
+    !! references, the per-pair kernels' distances and keyed draws)
+    function score_block_prod( self, nptcls_use, bsz, nteam ) result( wall )
+        class(polar_matching_bench), intent(inout) :: self
+        integer,                     intent(in)    :: nptcls_use, bsz, nteam
+        real(dp) :: wall
+        integer,  allocatable :: porder(:), blocks(:,:), irefs(:), irots_t(:,:)
+        real(sp), allocatable :: temps_po(:), dists_t(:,:)
+        integer  :: ib, ithr, nb, b, ir, i, j0, j
+        call make_blocks(self, nptcls_use, bsz, porder, blocks)
+        irefs    = [(j, j=1,self%nrefs)]
+        temps_po = self%temps(porder)
+        allocate(dists_t(self%nrefs*PFTC_BLOCK_NB,nteam), irots_t(self%nrefs*PFTC_BLOCK_NB,nteam))
+        wall = 0._dp
+        !$ wall = omp_get_wtime()
+        !$omp parallel do default(shared) private(ib,ithr,nb,b,ir,i,j0) proc_bind(close) schedule(dynamic)
+        do ib = 1,size(blocks,2)
+            ithr = 1
+            !$ ithr = omp_get_thread_num() + 1
+            j0 = blocks(1,ib)
+            nb = blocks(2,ib) - j0 + 1
+            call self%pftc%score_block_posterior(nb, porder(j0:blocks(2,ib)), self%nrefs, irefs, temps_po(j0:blocks(2,ib)),&
+                &dists_t(:,ithr), irots_t(:,ithr))
+            do b = 1,nb
+                i = porder(j0+b-1)
+                do ir = 1,self%nrefs
+                    self%dists(ir,i) = dists_t((b-1)*self%nrefs+ir,ithr)
+                    self%irots(ir,i) = irots_t((b-1)*self%nrefs+ir,ithr)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        !$ wall = omp_get_wtime() - wall
+        deallocate(porder, blocks, irefs, temps_po, dists_t, irots_t)
+    end function score_block_prod
 
     !> particles 1..nptcls_use ordered even half first, cut into blocks of at most bsz that never mix halves
     subroutine make_blocks( self, nptcls_use, bsz, porder, blocks )
@@ -886,7 +1041,7 @@ contains
         enddo
     end subroutine make_blocks
 
-    !> gen_euclid_crvec's sums (unshifted branch, angular bins 1..pftsz) and inverse FFT into cvec/rvec
+    !> gen_euclid_crvec's sums (unshifted branch, angular bins 1..pftsz+1) and inverse FFT into cvec/rvec
     subroutine pair_crvec( self, i, iref, buf )
         use simple_fftw3, only: fftwf_execute_dft_c2r
         class(polar_matching_bench), intent(in)    :: self
@@ -909,7 +1064,7 @@ contains
         do k = self%kfromto(1), self%kfromto(2)
             ! single precision, as production's sigma2_wk
             wk = real(k,sp) / self%sigma2(k,ih)
-            do p = 1,self%pftsz
+            do p = 1,self%pftsz+1
                 c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
                 c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo))
                 cvec(p) = cvec(p) + wk * c
@@ -1015,6 +1170,32 @@ contains
         vecs = self%vecs
     end subroutine get_vecs
 
+    !> the table entries of the last score: the drawn distance and in-plane index of every reference and particle
+    subroutine get_entries( self, dists, irots )
+        class(polar_matching_bench), intent(in)    :: self
+        real(sp), allocatable,       intent(inout) :: dists(:,:)
+        integer,  allocatable,       intent(inout) :: irots(:,:)
+        dists = self%dists
+        irots = self%irots
+    end subroutine get_entries
+
+    !> the temperatures of the posterior draws (ptcl_posterior_temp, times the last scale_temps factor)
+    function get_temps( self ) result( temps )
+        class(polar_matching_bench), intent(in) :: self
+        real(sp), allocatable :: temps(:)
+        temps = self%temps
+    end function get_temps
+
+    !> the draws' temperatures at factor times the particles' own (a huge factor draws the argmin rotation)
+    subroutine scale_temps( self, factor )
+        class(polar_matching_bench), intent(inout) :: self
+        real,                        intent(in)    :: factor
+        integer :: i
+        do i = 1,self%nptcls
+            self%temps(i) = factor * self%pftc%ptcl_posterior_temp(i)
+        enddo
+    end subroutine scale_temps
+
     !> thread seconds of the last score (replica, matrix): sums or cgemm, inverse FFTs, distances and draw
     function get_parts( self ) result( parts )
         class(polar_matching_bench), intent(in) :: self
@@ -1034,16 +1215,11 @@ contains
     end function ref_bytes_per_pair
 
     !> GB of the reference and particle spectra a layout scores from
-    real(dp) function memo_gbytes( self, layout )
+    real(dp) function memo_gbytes( self )
         class(polar_matching_bench), intent(in) :: self
-        integer,                     intent(in) :: layout
         real(dp) :: refs, ptcls
         refs  = 2._dp * self%ref_bytes_per_pair() * real(self%nrefs,dp)
         ptcls = self%ref_bytes_per_pair() * real(self%nptcls,dp)
-        if( layout == PMB_MATRIX .or. layout == PMB_MATRIX_T )then
-            ! the bin-major copy keeps bins 1..pftsz
-            refs = refs * real(self%pftsz,dp) / real(self%pftsz+1,dp)
-        endif
         memo_gbytes = (refs + ptcls) / 1.e9_dp
     end function memo_gbytes
 
@@ -1088,7 +1264,8 @@ contains
         if( batchsz < 1 .or. nparts < 1 .or. nparts > self%nptcls ) THROW_HARD('polar_matching_bench: invalid batch size or part count')
         call kill_fill_result(res)
         select case(self%fill_route)
-            case(PMB_ROUTE_3D_DENSE, PMB_ROUTE_3D_NEIGH)
+            case(PMB_ROUTE_3D_DENSE, PMB_ROUTE_3D_NEIGH, PMB_ROUTE_3D_SEEDED, PMB_ROUTE_3D_NOSHIFT, PMB_ROUTE_3D_STATE,&
+                &PMB_ROUTE_3D_GEOM)
                 self%build%spproj_field => self%build%spproj%os_ptcl3D
             case DEFAULT
                 self%build%spproj_field => self%build%spproj%os_ptcl2D
@@ -1101,7 +1278,7 @@ contains
         ! the master wrote (the perturbation of the earlier parts' rows must not enter it)
         sigma2_model   = iteration_shift_prior()
         projs_ns_model = 0
-        if( self%fill_route == PMB_ROUTE_3D_DENSE )then
+        if( any(self%fill_route == [PMB_ROUTE_3D_DENSE, PMB_ROUTE_3D_SEEDED, PMB_ROUTE_3D_NOSHIFT]) )then
             allocate(tab3D)
             call tab3D%new_pipeline(self%params, self%build, [(i, i=1,self%nptcls)])
             projs_ns_model = dense_projs_ns(tab3D)
@@ -1116,9 +1293,9 @@ contains
             nloc  = size(pinds)
             ioff  = parts(ipart,1) - 1
             select case(self%fill_route)
-                case(PMB_ROUTE_3D_DENSE)
+                case(PMB_ROUTE_3D_DENSE, PMB_ROUTE_3D_SEEDED, PMB_ROUTE_3D_NOSHIFT)
                     allocate(tab3D)
-                    call tab3D%new_pipeline(self%params, self%build, pinds)
+                    call tab3D%new_pipeline(self%params, self%build, pinds, block_memo=.true.)
                     call tab3D%set_iteration_model(projs_ns_model, sigma2_model)
                     call tab3D%set_insert_cone(cone)
                     call tab3D%open_assignment(nglob=self%nptcls, rank0=ioff)
@@ -1134,9 +1311,9 @@ contains
                     call gather_tab3D(tab3D)
                     call tab3D%kill
                     deallocate(tab3D)
-                case(PMB_ROUTE_3D_NEIGH)
+                case(PMB_ROUTE_3D_NEIGH, PMB_ROUTE_3D_STATE, PMB_ROUTE_3D_GEOM)
                     allocate(tabnb)
-                    call tabnb%new_neigh_pipeline(self%params, self%build, pinds)
+                    call tabnb%new_neigh_pipeline(self%params, self%build, pinds, block_memo=.true.)
                     call tabnb%set_iteration_model(0, sigma2_model)
                     call tabnb%set_insert_cone(cone)
                     call tabnb%open_assignment(nglob=self%nptcls, rank0=ioff)
@@ -1354,8 +1531,16 @@ contains
         select case(route)
             case(PMB_ROUTE_3D_DENSE)
                 name = '3D_dense'
+            case(PMB_ROUTE_3D_SEEDED)
+                name = '3D_dense_seeded'
+            case(PMB_ROUTE_3D_NOSHIFT)
+                name = '3D_dense_noshift'
             case(PMB_ROUTE_3D_NEIGH)
                 name = '3D_neigh'
+            case(PMB_ROUTE_3D_STATE)
+                name = '3D_neigh_state'
+            case(PMB_ROUTE_3D_GEOM)
+                name = '3D_neigh_geom'
             case(PMB_ROUTE_2D_DENSE)
                 name = '2D_dense'
             case(PMB_ROUTE_2D_SPARSE)
@@ -1364,5 +1549,755 @@ contains
                 name = 'unknown'
         end select
     end function pmb_route_name
+
+    ! ---- the neighbourhood route (decision 19) ----
+
+    !> The route's case: nspace directions of point group pgrp with nsubs representatives (solve3D's subspace map), nstates
+    !! states, nptcls particles for teams of up to nthr_max threads; the candidates of the state mode (the per-pair
+    !! routine's entries of the representatives at the particles' temperatures, the peaks and the pool of
+    !! fill_tab_subspace_range) and of the geom mode (the cone of athres_cont about the previous direction)
+    subroutine new_neigh( self, nspace, nstates, nsubs, pgrp, nptcls, nthr_max )
+        use simple_cmdline,            only: cmdline
+        use simple_sp_project,         only: sp_project
+        use simple_math_ft,            only: calc_fourier_index
+        use simple_defs,               only: PI
+        use simple_rnd,                only: ran3, rnd_scope_key, RND_PROG_REFINE3D, RND_PASS_ALIGN
+        use simple_test_utils,         only: set_fixed_seed
+        use simple_srchspace_map,      only: srchspace_map
+        use simple_eul_prob_tab_utils, only: cone_cell_radii, cone_reachable_cells, cone_view_dist
+        class(polar_neigh_bench), intent(inout) :: self
+        integer,                  intent(in)    :: nspace, nstates, nsubs, nptcls, nthr_max
+        character(len=*),         intent(in)    :: pgrp
+        class(cmdline),    allocatable :: cline
+        class(sp_project), allocatable :: spproj
+        type(oris)          :: eulspace_sub
+        type(srchspace_map) :: sub_mapper
+        type(pnb_pass)      :: reps
+        complex(sp), allocatable :: anchors(:,:,:,:), band(:,:,:), refb(:,:), ptclb(:,:), ring(:)
+        real,        allocatable :: sub_distmat(:,:), ctfmat(:,:)
+        logical,     allocatable :: cone_in(:,:)
+        integer,     allocatable :: nfill(:)
+        real    :: sigma_deg, euls(3), dfx
+        integer :: pdim(3), interpklim, i, k, p, s, c, a, ithr, nteam, istate, irot0, q, n, isub
+        call self%kill
+        if( nspace < 1 .or. nstates < 1 .or. nsubs < 1 .or. nsubs > nspace .or. nptcls < 1 .or. nthr_max < 1 )&
+            &THROW_HARD('invalid neighbourhood case')
+        self%nspace   = nspace
+        self%nstates  = nstates
+        self%nrefs    = nspace * nstates
+        self%nsubs    = nsubs
+        self%nptcls   = nptcls
+        self%nthr_max = nthr_max
+        allocate(cline, self%params, self%pftc, spproj)
+        call cline%set('box',      real(PNB_BOX))
+        call cline%set('box_crop', real(PNB_BOX_CROP))
+        call cline%set('smpd',     PNB_SMPD)
+        call cline%set('mskdiam',  PNB_MSKDIAM)
+        call cline%set('lp',       PNB_LP)
+        call cline%set('nspace',   real(nspace))
+        call cline%set('nstates',  real(nstates))
+        call cline%set('nptcls',   real(nptcls))
+        call cline%set('nthr',     real(nthr_max))
+        call cline%set('ctf',      'yes')
+        call cline%set('objfun',   'euclid')
+        call cline%set('pgrp',     trim(pgrp))
+        call self%params%new(cline, silent=.true.)
+        self%kfromto(1) = max(2, calc_fourier_index(self%params%hp, self%params%box, self%params%smpd))
+        self%kfromto(2) = calc_fourier_index(self%params%lp, self%params%box, self%params%smpd)
+        ! the production defaults of the candidate rules: npeaks peaks per state, the cone of athres_cont
+        self%npeak = min(max(1, self%params%npeaks), nsubs)
+        self%ncap  = min(nsubs, max(1, self%npeak * max(1, nstates)))
+        self%cone  = self%params%athres_cont
+        call set_fixed_seed(PMB_SEED)
+        call self%pftc%new(self%params, self%nrefs, [1,nptcls], self%kfromto)
+        self%pftsz = self%pftc%get_pftsz()
+        self%nrots = self%pftc%get_nrots()
+        pdim       = self%pftc%get_pdim_interp()
+        interpklim = pdim(3)
+        ! the direction space and its subspace map, as the builder makes them for prob_neigh's state and geom modes
+        call self%pgrpsyms%new(trim(pgrp))
+        call self%eulspace%new(nspace, is_ptcl=.false.)
+        call self%pgrpsyms%build_refspiral(self%eulspace)
+        call eulspace_sub%new(nsubs, is_ptcl=.false.)
+        call self%pgrpsyms%build_refspiral(eulspace_sub)
+        allocate(sub_distmat(nsubs,nspace))
+        call self%pgrpsyms%sym_dist_table(eulspace_sub, self%eulspace, sub_distmat)
+        call sub_mapper%new(nspace, nsubs, sub_distmat)
+        self%sub_inds = sub_mapper%get_sub2full_map()
+        self%full2sub = sub_mapper%get_full2sub_map()
+        call sub_mapper%kill
+        call eulspace_sub%kill
+        ! the cells' members, ascending (sub_ref_list of the neighbourhood table's workspace)
+        allocate(self%cell_off(nsubs+1), source=0)
+        do p = 1,nspace
+            self%cell_off(self%full2sub(p)+1) = self%cell_off(self%full2sub(p)+1) + 1
+        enddo
+        self%maxcell = maxval(self%cell_off(2:nsubs+1))
+        self%cell_off(1) = 1
+        do c = 1,nsubs
+            self%cell_off(c+1) = self%cell_off(c) + self%cell_off(c+1)
+        enddo
+        allocate(self%cell_proj(nspace), nfill(nsubs))
+        nfill = 0
+        do p = 1,nspace
+            c = self%full2sub(p)
+            self%cell_proj(self%cell_off(c) + nfill(c)) = p
+            nfill(c) = nfill(c) + 1
+        enddo
+        call cone_cell_radii(self%eulspace, self%pgrpsyms, self%sub_inds, self%full2sub, self%cell_radius)
+        ! references smooth over the directions: per state, random anchors at the subspace spiral's directions blended
+        ! with a Gaussian of the point group's view distance at the cells' spacing (both halves alike)
+        sigma_deg = (180. / PI) * sqrt(4. * PI / real(self%pgrpsyms%get_nsym() * nsubs))
+        allocate(anchors(self%pftsz,self%kfromto(1):self%kfromto(2),nsubs,nstates))
+        allocate(band(self%pftsz,self%kfromto(1):interpklim,nthr_max), source=cmplx(0.,0.,kind=sp))
+        do s = 1,nstates
+            do a = 1,nsubs
+                call fill_anchor(anchors(:,:,a,s))
+                if( s > 1 ) anchors(:,:,a,s) = PNB_STATE_CORR * anchors(:,:,a,1) +&
+                    &sqrt(1. - PNB_STATE_CORR**2) * anchors(:,:,a,s)
+            enddo
+        enddo
+        nteam = 1
+        !$ nteam = omp_get_max_threads()
+        if( nteam > nthr_max ) THROW_HARD('the team exceeds the case''s threads; polar_neigh_bench%new')
+        !$omp parallel do default(shared) private(p,s,ithr) proc_bind(close) schedule(static)
+        do p = 1,nspace
+            ithr = 1
+            !$ ithr = omp_get_thread_num() + 1
+            do s = 1,nstates
+                call smooth_band(p, s, band(:,:,ithr))
+                call self%pftc%set_ref_pft((s-1)*nspace + p, band(:,:,ithr), iseven=.true.)
+                call self%pftc%set_ref_pft((s-1)*nspace + p, band(:,:,ithr), iseven=.false.)
+            enddo
+        enddo
+        !$omp end parallel do
+        ! the CTFs through the production path (a one-stack project), then the particles: the previous direction's
+        ! reference of the particle's state (round robin), rotated in plane, under the |CTF|, with noise
+        call spproj%os_stk%new(1, is_ptcl=.false.)
+        call spproj%os_stk%set(1, 'fromp', 1)
+        call spproj%os_stk%set(1, 'top',   nptcls)
+        call spproj%os_stk%set(1, 'nptcls_stk', nptcls)
+        call spproj%os_stk%set(1, 'box',   PNB_BOX)
+        call spproj%os_stk%set(1, 'smpd',  PNB_SMPD)
+        call spproj%os_stk%set(1, 'ctf',   'yes')
+        call spproj%os_stk%set(1, 'kv',    PMB_KV)
+        call spproj%os_stk%set(1, 'cs',    PMB_CS)
+        call spproj%os_stk%set(1, 'fraca', PMB_FRACA)
+        call spproj%os_ptcl3D%new(nptcls, is_ptcl=.true.)
+        do i = 1,nptcls
+            call spproj%os_ptcl3D%set(i, 'stkind', 1)
+            call spproj%os_ptcl3D%set(i, 'indstk', i)
+            dfx = 0.8 + 1.7 * ran3()
+            call spproj%os_ptcl3D%set(i, 'dfx',    dfx)
+            call spproj%os_ptcl3D%set(i, 'dfy',    dfx + 0.05 + 0.1 * ran3())
+            call spproj%os_ptcl3D%set(i, 'angast', 180. * ran3())
+            call spproj%os_ptcl3D%set_state(i, 1)
+        enddo
+        call self%pftc%create_polar_absctfmats(spproj, 'ptcl3D')
+        allocate(self%prev_proj(nptcls), self%iseven(nptcls), ctfmat(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+            &ring(self%nrots))
+        allocate(refb(self%pftsz,self%kfromto(1):interpklim), ptclb(self%pftsz,self%kfromto(1):interpklim),&
+            &source=cmplx(0.,0.,kind=sp))
+        do i = 1,nptcls
+            istate = mod(i-1, nstates) + 1
+            self%prev_proj(i) = min(nspace, 1 + int(real(nspace) * ran3()))
+            self%iseven(i)    = mod(i,2) == 1
+            irot0 = min(self%nrots-1, int(real(self%nrots) * ran3()))
+            call smooth_band(self%prev_proj(i), istate, refb)
+            call self%pftc%get_ptcl_ctfmat(i, ctfmat)
+            do k = self%kfromto(1),self%kfromto(2)
+                ring(1:self%pftsz)            = refb(:,k)
+                ring(self%pftsz+1:self%nrots) = conjg(refb(:,k))
+                do p = 1,self%pftsz
+                    q = mod(p - 1 + irot0, self%nrots) + 1
+                    ptclb(p,k) = ctfmat(p,k) * ring(q) + PNB_NOISE * exp(-real(k) / PMB_FALLOFF) *&
+                        &cmplx(2. * ran3() - 1., 2. * ran3() - 1., kind=sp)
+                enddo
+            enddo
+            call self%pftc%set_ptcl_pft(i, ptclb)
+            call self%pftc%set_eo(i, self%iseven(i))
+        enddo
+        ! the noise power of the dense benchmark
+        allocate(self%sigma2(self%kfromto(1):self%kfromto(2),2))
+        do k = self%kfromto(1),self%kfromto(2)
+            self%sigma2(k,1) = 0.05 + exp(-real(k) / 20.)
+            self%sigma2(k,2) = 1.02 * self%sigma2(k,1)
+        enddo
+        call self%pftc%assign_sigma2_noise(self%sigma2)
+        call self%pftc%memoize_refs
+        call self%pftc%memoize_ptcls
+        call self%pftc%memoize_ref_bins
+        call self%pftc%set_rnd_scope(rnd_scope_key(int(PMB_SEED, int64), RND_PROG_REFINE3D, RND_PASS_ALIGN, 1))
+        allocate(self%temps(nptcls))
+        do i = 1,nptcls
+            self%temps(i) = self%pftc%ptcl_posterior_temp(i)
+        enddo
+        ! (a) every state's representatives, state-major in subspace order (find_peak_subspaces)
+        allocate(self%rep_refs(nsubs*nstates))
+        do s = 1,nstates
+            do a = 1,nsubs
+                self%rep_refs((s-1)*nsubs + a) = (s-1)*nspace + self%sub_inds(a)
+            enddo
+        enddo
+        ! state mode: the pool of every particle from the per-pair routine's entries of the representatives
+        self%exists = .true.
+        call self%score_path(PNB_PATH_REPS, .false., nthr_max, 1., reps)
+        allocate(self%npooled(nptcls), self%pooled(self%ncap,nptcls))
+        call pool_particles(self, reps%dists, self%npooled, self%pooled)
+        ! (b) the members of the pooled cells, per state then per pooled cell (evaluate_neighborhood's order)
+        allocate(self%mem_off(nptcls+1), self%mem_cell(self%ncap,nstates,nptcls), source=0)
+        n = 0
+        do i = 1,nptcls
+            do s = 1,nstates
+                do k = 1,self%npooled(i)
+                    c = self%pooled(k,i)
+                    n = n + self%cell_off(c+1) - self%cell_off(c)
+                enddo
+            enddo
+        enddo
+        allocate(self%mem_ref(n))
+        n = 0
+        do i = 1,nptcls
+            self%mem_off(i) = n + 1
+            do s = 1,nstates
+                do k = 1,self%npooled(i)
+                    c = self%pooled(k,i)
+                    self%mem_cell(k,s,i) = n + 1
+                    do a = self%cell_off(c),self%cell_off(c+1)-1
+                        n = n + 1
+                        self%mem_ref(n) = (s-1)*nspace + self%cell_proj(a)
+                    enddo
+                enddo
+            enddo
+        enddo
+        self%mem_off(nptcls+1) = n + 1
+        ! geom mode: the cells the cone reaches and the directions inside it (evaluate_cone: the previous direction,
+        ! no mirror view; the reach filter, then the view distance)
+        allocate(self%reach(nsubs,nptcls), cone_in(nspace,nptcls))
+        !$omp parallel do default(shared) private(i,euls,p,isub) proc_bind(close) schedule(static)
+        do i = 1,nptcls
+            euls = self%eulspace%get_euler(self%prev_proj(i))
+            call cone_reachable_cells(self%eulspace, self%pgrpsyms, self%sub_inds, self%cell_radius, euls, euls,&
+                &.false., self%cone, self%reach(:,i))
+            do p = 1,nspace
+                cone_in(p,i) = .false.
+                isub = self%full2sub(p)
+                if( isub >= 1 .and. isub <= nsubs )then
+                    if( .not. self%reach(isub,i) ) cycle
+                endif
+                cone_in(p,i) = cone_view_dist(self%pgrpsyms, euls, euls, .false., self%eulspace%get_euler(p)) <= self%cone
+            enddo
+        enddo
+        !$omp end parallel do
+        n = count(cone_in) * nstates
+        allocate(self%cone_off(nptcls+1), self%cone_ref(n))
+        n = 0
+        do i = 1,nptcls
+            self%cone_off(i) = n + 1
+            do s = 1,nstates
+                do p = 1,nspace
+                    if( .not. cone_in(p,i) ) cycle
+                    n = n + 1
+                    self%cone_ref(n) = (s-1)*nspace + p
+                enddo
+            enddo
+        enddo
+        self%cone_off(nptcls+1) = n + 1
+        call kill_pass(reps)
+        call spproj%kill
+        call cline%kill
+        deallocate(spproj, cline, anchors, band, refb, ptclb, ring, sub_distmat, ctfmat, cone_in, nfill)
+
+      contains
+
+        subroutine fill_anchor( pft_band )
+            complex(sp), intent(inout) :: pft_band(:,self%kfromto(1):)
+            integer :: kk, pp
+            do kk = self%kfromto(1),self%kfromto(2)
+                do pp = 1,self%pftsz
+                    pft_band(pp,kk) = exp(-real(kk) / PMB_FALLOFF) * cmplx(2. * ran3() - 1., 2. * ran3() - 1., kind=sp)
+                enddo
+            enddo
+        end subroutine fill_anchor
+
+        ! direction p's band of state s: the anchors within PNB_SMOOTH_CUT spacings, Gaussian weights normalized in
+        ! power (the shells past kfromto(2) zero)
+        subroutine smooth_band( p_here, s_here, pft_band )
+            integer,     intent(in)    :: p_here, s_here
+            complex(sp), intent(inout) :: pft_band(:,self%kfromto(1):)
+            real    :: w, wsq
+            integer :: a_here
+            pft_band = cmplx(0.,0.,kind=sp)
+            wsq = 0.
+            do a_here = 1,self%nsubs
+                if( sub_distmat(a_here,p_here) > PNB_SMOOTH_CUT * sigma_deg ) cycle
+                w   = exp(-0.5 * (sub_distmat(a_here,p_here) / sigma_deg)**2)
+                wsq = wsq + w * w
+                pft_band(:,self%kfromto(1):self%kfromto(2)) = pft_band(:,self%kfromto(1):self%kfromto(2)) +&
+                    &w * anchors(:,:,a_here,s_here)
+            enddo
+            if( wsq > 0. )then
+                pft_band = pft_band / sqrt(wsq)
+            else
+                pft_band(:,self%kfromto(1):self%kfromto(2)) = anchors(:,:,self%full2sub(p_here),s_here)
+            endif
+        end subroutine smooth_band
+
+    end subroutine new_neigh
+
+    subroutine kill_neigh( self )
+        class(polar_neigh_bench), intent(inout) :: self
+        if( allocated(self%pftc) )then
+            call self%pftc%kill
+            deallocate(self%pftc)
+        endif
+        if( allocated(self%params) ) deallocate(self%params)
+        call self%eulspace%kill
+        call self%pgrpsyms%kill
+        if( allocated(self%sigma2)      ) deallocate(self%sigma2)
+        if( allocated(self%temps)       ) deallocate(self%temps)
+        if( allocated(self%iseven)      ) deallocate(self%iseven)
+        if( allocated(self%prev_proj)   ) deallocate(self%prev_proj)
+        if( allocated(self%sub_inds)    ) deallocate(self%sub_inds)
+        if( allocated(self%full2sub)    ) deallocate(self%full2sub)
+        if( allocated(self%cell_off)    ) deallocate(self%cell_off)
+        if( allocated(self%cell_proj)   ) deallocate(self%cell_proj)
+        if( allocated(self%cell_radius) ) deallocate(self%cell_radius)
+        if( allocated(self%rep_refs)    ) deallocate(self%rep_refs)
+        if( allocated(self%npooled)     ) deallocate(self%npooled)
+        if( allocated(self%pooled)      ) deallocate(self%pooled)
+        if( allocated(self%mem_off)     ) deallocate(self%mem_off)
+        if( allocated(self%mem_ref)     ) deallocate(self%mem_ref)
+        if( allocated(self%mem_cell)    ) deallocate(self%mem_cell)
+        if( allocated(self%reach)       ) deallocate(self%reach)
+        if( allocated(self%cone_off)    ) deallocate(self%cone_off)
+        if( allocated(self%cone_ref)    ) deallocate(self%cone_ref)
+        self%nspace = 0
+        self%nptcls = 0
+        self%exists = .false.
+    end subroutine kill_neigh
+
+    subroutine kill_pass( res )
+        type(pnb_pass), intent(inout) :: res
+        if( allocated(res%dists) ) deallocate(res%dists)
+        if( allocated(res%irots) ) deallocate(res%irots)
+        res%wall    = 0._dp
+        res%tsec    = 0._dp
+        res%nscored = 0_int64
+        res%nwasted = 0_int64
+        res%ncalls  = 0_int64
+        res%nrows   = 0_int64
+        res%ncols   = 0_int64
+        res%nslots  = 0_int64
+        res%bsz     = 0
+    end subroutine kill_pass
+
+    !> the pairs a path's particles need: (a) every state's representatives, (b) their pooled cells' members, (c) the
+    !! references inside their cones
+    integer function npairs( self, path )
+        class(polar_neigh_bench), intent(in) :: self
+        integer,                  intent(in) :: path
+        select case(path)
+            case(PNB_PATH_REPS)
+                npairs = self%nptcls * size(self%rep_refs)
+            case(PNB_PATH_MEMBERS)
+                npairs = self%mem_off(self%nptcls+1) - 1
+            case(PNB_PATH_CONE)
+                npairs = self%cone_off(self%nptcls+1) - 1
+            case DEFAULT
+                npairs = 0
+                THROW_HARD('unknown path; polar_neigh_bench%npairs')
+        end select
+    end function npairs
+
+    subroutine get_neigh_sizes( self, pftsz, nrots, kfromto, nsubs, ncap, maxcell, cone )
+        class(polar_neigh_bench), intent(in)  :: self
+        integer,                  intent(out) :: pftsz, nrots, kfromto(2), nsubs, ncap, maxcell
+        real,                     intent(out) :: cone
+        pftsz   = self%pftsz
+        nrots   = self%nrots
+        kfromto = self%kfromto
+        nsubs   = self%nsubs
+        ncap    = self%ncap
+        maxcell = self%maxcell
+        cone    = self%cone
+    end subroutine get_neigh_sizes
+
+    !> the particles whose pool differs when it is formed from the given entries of the representatives (path a's
+    !! layout) instead of the per-pair routine's
+    integer function pooled_changes( self, rep_dists )
+        class(polar_neigh_bench), intent(in) :: self
+        real(sp),                 intent(in) :: rep_dists(:)
+        integer, allocatable :: npooled(:), pooled(:,:)
+        integer :: i
+        allocate(npooled(self%nptcls), pooled(self%ncap,self%nptcls))
+        call pool_particles(self, rep_dists, npooled, pooled)
+        pooled_changes = 0
+        do i = 1,self%nptcls
+            if( npooled(i) /= self%npooled(i) )then
+                pooled_changes = pooled_changes + 1
+            else if( any(pooled(1:npooled(i),i) /= self%pooled(1:npooled(i),i)) )then
+                pooled_changes = pooled_changes + 1
+            endif
+        enddo
+        deallocate(npooled, pooled)
+    end function pooled_changes
+
+    !> state mode's pool per particle from the entries of the representatives (rep_dists in path a's layout):
+    !! consider_peak_subspace's sorted top npeak per state, then build_pooled_neighborhood's merge with the cell of
+    !! the previous direction (fill_tab_subspace_range, replicated)
+    subroutine pool_particles( self, rep_dists, npooled, pooled )
+        class(polar_neigh_bench), intent(in)    :: self
+        real(sp),                 intent(in)    :: rep_dists(:)
+        integer,                  intent(inout) :: npooled(:), pooled(:,:)
+        real    :: pk_dists(self%npeak,self%nstates)
+        integer :: pk_inds(self%npeak,self%nstates), pk_count(self%nstates)
+        integer :: i, s, isub, nrep, nfound, insert, k, prev_isub, ncopy, cnt
+        logical :: has_prev
+        real    :: dist
+        nrep = size(self%rep_refs)
+        if( size(rep_dists) /= nrep * self%nptcls ) THROW_HARD('wrong entries of the representatives; pool_particles')
+        do i = 1,self%nptcls
+            pk_dists = huge(1.0)
+            pk_inds  = 0
+            pk_count = 0
+            do s = 1,self%nstates
+                do isub = 1,self%nsubs
+                    dist   = rep_dists((i-1)*nrep + (s-1)*self%nsubs + isub)
+                    nfound = pk_count(s)
+                    if( nfound >= self%npeak )then
+                        if( dist >= pk_dists(self%npeak,s) ) cycle
+                        insert = self%npeak
+                    else
+                        nfound      = nfound + 1
+                        pk_count(s) = nfound
+                        insert      = nfound
+                    endif
+                    do k = 1,nfound
+                        if( dist < pk_dists(k,s) )then
+                            insert = k
+                            exit
+                        endif
+                    enddo
+                    do k = nfound,insert+1,-1
+                        pk_dists(k,s) = pk_dists(k-1,s)
+                        pk_inds(k,s)  = pk_inds(k-1,s)
+                    enddo
+                    pk_dists(insert,s) = dist
+                    pk_inds(insert,s)  = isub
+                enddo
+            enddo
+            cnt = 0
+            prev_isub = self%full2sub(max(1, min(self%nspace, self%prev_proj(i))))
+            if( prev_isub < 1 .or. prev_isub > self%nsubs ) prev_isub = 1
+            do s = 1,self%nstates
+                has_prev = any(pk_inds(1:pk_count(s),s) == prev_isub)
+                ncopy    = pk_count(s)
+                if( (.not. has_prev) .and. pk_count(s) >= self%npeak ) ncopy = max(0, self%npeak - 1)
+                do k = 1,ncopy
+                    call add_pooled(pk_inds(k,s))
+                enddo
+                if( .not. has_prev ) call add_pooled(prev_isub)
+            enddo
+            npooled(i) = cnt
+        enddo
+
+      contains
+
+        subroutine add_pooled( isub_here )
+            integer, intent(in) :: isub_here
+            if( isub_here < 1 .or. isub_here > self%nsubs ) return
+            if( any(pooled(1:cnt,i) == isub_here) ) return
+            if( cnt >= self%ncap ) return
+            cnt = cnt + 1
+            pooled(cnt,i) = isub_here
+        end subroutine add_pooled
+
+    end subroutine pool_particles
+
+    !> decision 18's order (by half, even first, then by the cell of the previous direction, then by index) cut into
+    !! decision 3's blocks per half, B = min(PFTC_BLOCK_NB, max(4, n_half / (2 nteam)))
+    subroutine neigh_blocks( self, nteam, porder, blocks, bsz )
+        class(polar_neigh_bench), intent(in)    :: self
+        integer,                  intent(in)    :: nteam
+        integer, allocatable,     intent(inout) :: porder(:), blocks(:,:)
+        integer,                  intent(out)   :: bsz(2)
+        integer :: nhalf(2), ih, c, i, n, nblk, j0, jstart
+        allocate(porder(self%nptcls))
+        n = 0
+        do ih = 1,2
+            jstart = n
+            do c = 1,self%nsubs
+                do i = 1,self%nptcls
+                    if( self%iseven(i) .neqv. (ih == 1) ) cycle
+                    if( self%full2sub(self%prev_proj(i)) /= c ) cycle
+                    n = n + 1
+                    porder(n) = i
+                enddo
+            enddo
+            nhalf(ih) = n - jstart
+            bsz(ih)   = min(PFTC_BLOCK_NB, max(4, nhalf(ih) / (2 * nteam)))
+        enddo
+        if( n /= self%nptcls ) THROW_HARD('a particle without a cell; neigh_blocks')
+        nblk = (nhalf(1) + bsz(1) - 1) / bsz(1) + (nhalf(2) + bsz(2) - 1) / bsz(2)
+        allocate(blocks(2,nblk))
+        nblk = 0
+        do j0 = 1,nhalf(1),bsz(1)
+            nblk = nblk + 1
+            blocks(:,nblk) = [j0, min(j0+bsz(1)-1, nhalf(1))]
+        enddo
+        do j0 = nhalf(1)+1,self%nptcls,bsz(2)
+            nblk = nblk + 1
+            blocks(:,nblk) = [j0, min(j0+bsz(2)-1, self%nptcls)]
+        enddo
+    end subroutine neigh_blocks
+
+    !> One pass of a path on a team of nthr threads at the particles' temperatures times tscale: the per-pair routine
+    !! (a thread takes a particle and scores its pairs in production's order, gen_posterior_val) or the block kernel
+    !! (a thread takes a block of decision 18's order and scores it as the path does); the entries in res (npairs).
+    !! With l_cellorder the per-pair routine takes the blocks of decision 18's order instead of single particles, as a
+    !! fill in blocks would score a path left on it (reported, not judged)
+    subroutine score_path( self, path, l_block, nthr, tscale, res, l_cellorder )
+        class(polar_neigh_bench), intent(inout) :: self
+        integer,                  intent(in)    :: path, nthr
+        logical,                  intent(in)    :: l_block
+        real,                     intent(in)    :: tscale
+        type(pnb_pass),           intent(out)   :: res
+        logical, optional,        intent(in)    :: l_cellorder
+        integer,        allocatable :: porder(:), blocks(:,:), wlist(:,:), wsub(:,:), wslot(:,:), wirot(:,:)
+        real(sp),       allocatable :: temps(:), wdist(:,:), wtemp(:,:)
+        real(dp),       allocatable :: tthr(:)
+        integer(int64), allocatable :: cnt(:,:)
+        real(dp) :: t0
+        integer  :: nteam, ib, i, ithr, nwork, j
+        logical  :: l_order
+        if( .not. self%exists ) THROW_HARD('polar_neigh_bench: score_path before new')
+        if( nthr < 1 .or. nthr > self%nthr_max ) THROW_HARD('polar_neigh_bench: team larger than the calculator')
+        if( path < 1 .or. path > PNB_NPATHS ) THROW_HARD('polar_neigh_bench: unknown path')
+        allocate(res%dists(self%npairs(path)), source=huge(1._sp))
+        allocate(res%irots(self%npairs(path)), source=0)
+        l_order = .false.
+        if( present(l_cellorder) ) l_order = l_cellorder .and. .not. l_block
+        temps = self%temps * tscale
+        !$ call omp_set_num_threads(nthr)
+        nteam = 1
+        !$ nteam = omp_get_max_threads()
+        allocate(tthr(nteam), source=0._dp)
+        allocate(cnt(6,nteam), source=0_int64)
+        t0 = 0._dp
+        if( l_block )then
+            call neigh_blocks(self, nteam, porder, blocks, res%bsz)
+            nwork = max(size(self%rep_refs), self%maxcell * self%nstates)
+            allocate(wlist(nwork,nteam), wsub(PFTC_BLOCK_NB,nteam), wslot(PFTC_BLOCK_NB,nteam),&
+                &wtemp(PFTC_BLOCK_NB,nteam), wdist(nwork*PFTC_BLOCK_NB,nteam), wirot(nwork*PFTC_BLOCK_NB,nteam))
+            !$ res%wall = omp_get_wtime()
+            ! dynamic over the blocks; a block is processed whole by one thread in its work columns
+            !$omp parallel do default(shared) private(ib,ithr,t0) proc_bind(close) schedule(dynamic)
+            do ib = 1,size(blocks,2)
+                ithr = 1
+                !$ ithr = omp_get_thread_num() + 1
+                !$ t0 = omp_get_wtime()
+                select case(path)
+                    case(PNB_PATH_REPS)
+                        call block_reps(blocks(1,ib), blocks(2,ib), ithr)
+                    case(PNB_PATH_MEMBERS)
+                        call block_cells(blocks(1,ib), blocks(2,ib), ithr, .false.)
+                    case(PNB_PATH_CONE)
+                        call block_cells(blocks(1,ib), blocks(2,ib), ithr, .true.)
+                end select
+                !$ tthr(ithr) = tthr(ithr) + (omp_get_wtime() - t0)
+            enddo
+            !$omp end parallel do
+            !$ res%wall = omp_get_wtime() - res%wall
+            deallocate(porder, blocks, wlist, wsub, wslot, wtemp, wdist, wirot)
+        else if( l_order )then
+            call neigh_blocks(self, nteam, porder, blocks, res%bsz)
+            !$ res%wall = omp_get_wtime()
+            !$omp parallel do default(shared) private(ib,j,ithr,t0) proc_bind(close) schedule(dynamic)
+            do ib = 1,size(blocks,2)
+                ithr = 1
+                !$ ithr = omp_get_thread_num() + 1
+                !$ t0 = omp_get_wtime()
+                do j = blocks(1,ib),blocks(2,ib)
+                    call particle_pairs(porder(j), ithr)
+                enddo
+                !$ tthr(ithr) = tthr(ithr) + (omp_get_wtime() - t0)
+            enddo
+            !$omp end parallel do
+            !$ res%wall = omp_get_wtime() - res%wall
+            deallocate(porder, blocks)
+        else
+            !$ res%wall = omp_get_wtime()
+            ! dynamic over the particles, as the neighbourhood fill takes them
+            !$omp parallel do default(shared) private(i,ithr,t0) proc_bind(close) schedule(dynamic)
+            do i = 1,self%nptcls
+                ithr = 1
+                !$ ithr = omp_get_thread_num() + 1
+                !$ t0 = omp_get_wtime()
+                call particle_pairs(i, ithr)
+                !$ tthr(ithr) = tthr(ithr) + (omp_get_wtime() - t0)
+            enddo
+            !$omp end parallel do
+            !$ res%wall = omp_get_wtime() - res%wall
+        endif
+        res%tsec    = sum(tthr)
+        res%nscored = sum(cnt(1,:))
+        res%nwasted = sum(cnt(2,:))
+        res%ncalls  = sum(cnt(3,:))
+        res%nrows   = sum(cnt(4,:))
+        res%ncols   = sum(cnt(5,:))
+        res%nslots  = sum(cnt(6,:))
+        deallocate(temps, tthr, cnt)
+        !$ call omp_set_num_threads(self%nthr_max)
+
+      contains
+
+        ! the per-pair routine over particle i's pairs of the path, in production's order
+        subroutine particle_pairs( i_here, ithr_here )
+            integer, intent(in) :: i_here, ithr_here
+            integer :: j, nrep, jfrom, jto
+            select case(path)
+                case(PNB_PATH_REPS)
+                    nrep = size(self%rep_refs)
+                    do j = 1,nrep
+                        call self%pftc%gen_posterior_val(self%rep_refs(j), i_here, [0._sp,0._sp], temps(i_here),&
+                            &res%dists((i_here-1)*nrep + j), res%irots((i_here-1)*nrep + j))
+                    enddo
+                    cnt(1,ithr_here) = cnt(1,ithr_here) + int(nrep, int64)
+                case(PNB_PATH_MEMBERS)
+                    jfrom = self%mem_off(i_here)
+                    jto   = self%mem_off(i_here+1) - 1
+                    do j = jfrom,jto
+                        call self%pftc%gen_posterior_val(self%mem_ref(j), i_here, [0._sp,0._sp], temps(i_here),&
+                            &res%dists(j), res%irots(j))
+                    enddo
+                    cnt(1,ithr_here) = cnt(1,ithr_here) + int(jto - jfrom + 1, int64)
+                case(PNB_PATH_CONE)
+                    jfrom = self%cone_off(i_here)
+                    jto   = self%cone_off(i_here+1) - 1
+                    do j = jfrom,jto
+                        call self%pftc%gen_posterior_val(self%cone_ref(j), i_here, [0._sp,0._sp], temps(i_here),&
+                            &res%dists(j), res%irots(j))
+                    enddo
+                    cnt(1,ithr_here) = cnt(1,ithr_here) + int(jto - jfrom + 1, int64)
+            end select
+        end subroutine particle_pairs
+
+        ! (a) the block's particles against every state's representatives, one listed tile
+        subroutine block_reps( j0, j1, ithr_here )
+            integer, intent(in) :: j0, j1, ithr_here
+            integer :: nb, nrep, b, r, i_here
+            nb   = j1 - j0 + 1
+            nrep = size(self%rep_refs)
+            do b = 1,nb
+                wtemp(b,ithr_here) = temps(porder(j0+b-1))
+            enddo
+            call self%pftc%score_block_posterior(nb, porder(j0:j1), nrep, self%rep_refs, wtemp(1:nb,ithr_here),&
+                &wdist(:,ithr_here), wirot(:,ithr_here))
+            do b = 1,nb
+                i_here = porder(j0+b-1)
+                do r = 1,nrep
+                    res%dists((i_here-1)*nrep + r) = wdist((b-1)*nrep + r,ithr_here)
+                    res%irots((i_here-1)*nrep + r) = wirot((b-1)*nrep + r,ithr_here)
+                enddo
+            enddo
+            call count_call(ithr_here, nb, nrep, 0)
+        end subroutine block_reps
+
+        ! (b) per cell, every state's members against the block's particles that pooled it; (c) against those whose
+        ! cone reaches it, the entries inside a particle's cone recorded, the others wasted
+        subroutine block_cells( j0, j1, ithr_here, l_cone )
+            integer, intent(in) :: j0, j1, ithr_here
+            logical, intent(in) :: l_cone
+            integer :: c, b, k, nsb, ncm, nr, s, m, i_here, slot, iref, nwaste
+            do c = 1,self%nsubs
+                ncm = self%cell_off(c+1) - self%cell_off(c)
+                if( ncm < 1 ) cycle
+                nsb = 0
+                do b = j0,j1
+                    i_here = porder(b)
+                    if( l_cone )then
+                        if( .not. self%reach(c,i_here) ) cycle
+                        nsb = nsb + 1
+                        wsub(nsb,ithr_here) = i_here
+                    else
+                        do k = 1,self%npooled(i_here)
+                            if( self%pooled(k,i_here) == c )then
+                                nsb = nsb + 1
+                                wsub(nsb,ithr_here)  = i_here
+                                wslot(nsb,ithr_here) = k
+                                exit
+                            endif
+                        enddo
+                    endif
+                enddo
+                if( nsb == 0 ) cycle
+                nr = ncm * self%nstates
+                do s = 1,self%nstates
+                    do m = 1,ncm
+                        wlist((s-1)*ncm + m,ithr_here) = (s-1)*self%nspace + self%cell_proj(self%cell_off(c) + m - 1)
+                    enddo
+                enddo
+                do b = 1,nsb
+                    wtemp(b,ithr_here) = temps(wsub(b,ithr_here))
+                enddo
+                call self%pftc%score_block_posterior(nsb, wsub(1:nsb,ithr_here), nr, wlist(1:nr,ithr_here),&
+                    &wtemp(1:nsb,ithr_here), wdist(:,ithr_here), wirot(:,ithr_here))
+                nwaste = 0
+                do b = 1,nsb
+                    i_here = wsub(b,ithr_here)
+                    do s = 1,self%nstates
+                        do m = 1,ncm
+                            if( l_cone )then
+                                iref = wlist((s-1)*ncm + m,ithr_here)
+                                slot = cone_slot(i_here, iref)
+                                if( slot < 1 )then
+                                    nwaste = nwaste + 1
+                                    cycle
+                                endif
+                            else
+                                slot = self%mem_cell(wslot(b,ithr_here),s,i_here) + m - 1
+                            endif
+                            res%dists(slot) = wdist((b-1)*nr + (s-1)*ncm + m,ithr_here)
+                            res%irots(slot) = wirot((b-1)*nr + (s-1)*ncm + m,ithr_here)
+                        enddo
+                    enddo
+                enddo
+                call count_call(ithr_here, nsb, nr, nwaste)
+            enddo
+        end subroutine block_cells
+
+        ! where reference iref lies in particle i's cone entries (ascending), 0 outside the cone
+        integer function cone_slot( i_here, iref )
+            integer, intent(in) :: i_here, iref
+            integer :: lo, hi, mid
+            cone_slot = 0
+            lo = self%cone_off(i_here)
+            hi = self%cone_off(i_here+1) - 1
+            do while( lo <= hi )
+                mid = (lo + hi) / 2
+                if( self%cone_ref(mid) == iref )then
+                    cone_slot = mid
+                    return
+                else if( self%cone_ref(mid) < iref )then
+                    lo = mid + 1
+                else
+                    hi = mid - 1
+                endif
+            enddo
+        end function cone_slot
+
+        subroutine count_call( ithr_here, nb, nr, nwaste )
+            integer, intent(in) :: ithr_here, nb, nr, nwaste
+            cnt(1,ithr_here) = cnt(1,ithr_here) + int(nb, int64) * int(nr, int64)
+            cnt(2,ithr_here) = cnt(2,ithr_here) + int(nwaste, int64)
+            cnt(3,ithr_here) = cnt(3,ithr_here) + 1_int64
+            cnt(4,ithr_here) = cnt(4,ithr_here) + int(nb, int64)
+            cnt(5,ithr_here) = cnt(5,ithr_here) + int(nr, int64)
+            cnt(6,ithr_here) = cnt(6,ithr_here) + int(PFTC_BLOCK_NB * PFTC_BLOCK_NR, int64) *&
+                &int((nr + PFTC_BLOCK_NR - 1) / PFTC_BLOCK_NR, int64)
+        end subroutine count_call
+
+    end subroutine score_path
 
 end module simple_polar_matching_bench

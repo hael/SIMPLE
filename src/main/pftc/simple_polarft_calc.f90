@@ -9,6 +9,7 @@ public :: polarft_calc
 public :: vol_pad2ref_pfts_opt
 public :: shift_ptcl2ref, shift_ref2ptcl
 public :: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
+public :: PFTC_BLOCK_NB, PFTC_BLOCK_NR
 public :: run_all_polarft_shiftmap_tests, run_all_polarft_mirr_tests
 private
 #include "simple_local_flags.inc"
@@ -19,6 +20,8 @@ integer, parameter :: N_REF_PARITIES = 2
 real,    parameter :: SHERRSQ = 0.00001 !< squared shift below which the memoised unshifted terms are used
 ! the calculator's shift maps: the full band's, and the screen's over a coarser band and grid (the candidates' choice)
 integer, parameter :: SHIFTMAP_FULL = 1, SHIFTMAP_SCREEN = 2, SHIFTMAP_WINDOW = 3, NSHIFTMAPS = 3
+! the block kernel's product shape (score_block_posterior): at most NB particles of a block, NR references per tile
+integer, parameter :: PFTC_BLOCK_NB = 16, PFTC_BLOCK_NR = 32
 
 type fftw_drvec
     type(c_ptr)                  :: p
@@ -86,6 +89,19 @@ type shiftmap_cache
     integer :: plan_flags = 0
 end type shiftmap_cache
 
+! the block kernel's per-thread work (simple_polarft_block.f90): the block's particle terms, a gathered tile, the
+! products of every angular bin, each pair's bins made contiguous and their inverse transforms
+type block_work
+    complex(sp), allocatable :: pterms(:,:,:)  !< (2nk, PFTC_BLOCK_NB, pftsz+1) the weighted particle terms per bin
+    complex(sp), allocatable :: tile(:,:)      !< (2nk, PFTC_BLOCK_NR) one bin of a gathered or partial tile
+    complex(sp), allocatable :: prods(:,:,:)   !< (PFTC_BLOCK_NB, PFTC_BLOCK_NR, pftsz+1) the conjugated sums per bin
+    real(dp),    allocatable :: norms(:)       !< (PFTC_BLOCK_NB) the particles' loss normalisation
+    type(c_ptr)              :: pct  = c_null_ptr
+    type(c_ptr)              :: pout = c_null_ptr
+    complex(kind=c_float_complex), pointer, contiguous :: ct(:,:)  => null() !< (pftsz+1, NR*NB) each pair's bins
+    real(kind=c_float),            pointer, contiguous :: out(:,:) => null() !< (nrots, NR*NB) each pair's inverse transform
+end type block_work
+
 type :: polarft_calc
     private
     class(parameters), pointer :: p_ptr => null()        !< pointer to parameters object (for access to runtime parameters)
@@ -125,6 +141,14 @@ type :: polarft_calc
     complex(kind=c_float_complex), allocatable :: ft_ref(:,:,:,:)  !< Fourier transforms of references, final dimension is parity
     ! Fourier transforms of squared reference moduli; final dimension is parity
     complex(kind=c_float_complex), allocatable :: ft_ref2(:,:,:,:)
+    ! the block kernel's bin-major copy of the two (memoize_ref_bins): conj(FT(REF2)) on rows 1..nk and FT(REF) on
+    ! rows nk+1..2nk of every angular bin, (2nk, nrefs, pftsz+1, parity)
+    complex(sp),                   allocatable :: ft_ref_bins(:,:,:,:)
+    integer(int64)                             :: ref_gen      = 0_int64   !< bumped by memoize_refs
+    integer(int64)                             :: ref_gen_bins = -1_int64  !< ref_gen when ft_ref_bins was derived
+    ! the block kernel's per-thread work and its c2r plan of PFTC_BLOCK_NR transforms (one particle's tile)
+    type(block_work),              allocatable :: bwork(:)
+    type(c_ptr)                                :: plan_block = c_null_ptr
     ! buffer: (nrots,nk) holding cvec2 for all k
     type(fftw_cmat),               allocatable :: cmat2_many(:)  ! per thread
     ! buffer: (nrots,3*nk) for the joint continuous evaluator; column sections
@@ -230,6 +254,7 @@ type :: polarft_calc
     procedure          :: memoize_sigma2_weights
     procedure          :: wsqsum_ptcl_now
     procedure          :: memoize_ptcls, memoize_refs
+    procedure          :: memoize_ref_bins
     procedure, private :: check_ptcl_memo, check_euclid_weights, bump_ptcl_gen
     procedure          :: memoize_shifted_ptcl
     procedure, private :: kill_memo_ptcls, kill_memo_refs
@@ -279,6 +304,9 @@ type :: polarft_calc
     procedure          :: gen_many_euclids
     procedure          :: gen_many_euclids_gpu
     procedure          :: gen_many2many_euclids_cufft
+    ! ===== BLOCK: simple_polarft_block.f90
+    procedure          :: score_block_posterior
+    procedure, private :: new_block_work, kill_block_work
     ! ===== SHIFT MAP: simple_polarft_shiftmap.f90
     procedure, private :: new_shiftmap
     procedure          :: setup_shiftmaps
@@ -670,6 +698,10 @@ interface
         class(oris),         optional, intent(in)    :: eulspace
     end subroutine memoize_refs
 
+    module subroutine memoize_ref_bins( self )
+        class(polarft_calc), intent(inout) :: self
+    end subroutine memoize_ref_bins
+
     module subroutine memoize_shifted_ptcl(self, iptcl, shift, bank)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl
@@ -755,6 +787,25 @@ interface
         real(sp),            intent(out)   :: dist
         integer,             intent(out)   :: irot
     end subroutine gen_posterior_val_bank
+
+    ! the tail the per-pair Euclidean kernels and the block kernel share: the distances from a pair's inverse
+    ! transform and the posterior draw over them (simple_polarft_corr.f90)
+    module subroutine euclid_dists_from_crvec( n, r, norm, dists )
+        integer,  intent(in)  :: n
+        real(sp), intent(in)  :: r(n)
+        real(dp), intent(in)  :: norm
+        real(sp), intent(out) :: dists(n)
+    end subroutine euclid_dists_from_crvec
+
+    module subroutine draw_posterior_rvec( self, ithr, r, norm, temp, u, dist, irot )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: ithr
+        real(sp),            intent(in)    :: r(self%nrots)
+        real(dp),            intent(in)    :: norm, u
+        real(sp),            intent(in)    :: temp
+        real(sp),            intent(out)   :: dist
+        integer,             intent(out)   :: irot
+    end subroutine draw_posterior_rvec
 
     module subroutine gen_best_objfun_val(self, iref, iptcl, shift, dist, irot)
         class(polarft_calc), intent(inout) :: self
@@ -1049,6 +1100,29 @@ interface
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: pfromto(2)
     end subroutine gen_many2many_euclids_cufft
+
+    ! ===== BLOCK: simple_polarft_block.f90
+
+    module subroutine new_block_work( self, nthr_team, plan_flags )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: nthr_team
+        integer(c_int),      intent(in)    :: plan_flags
+    end subroutine new_block_work
+
+    module subroutine kill_block_work( self )
+        class(polarft_calc), intent(inout) :: self
+    end subroutine kill_block_work
+
+    module subroutine score_block_posterior( self, nb, iptcls, nr, irefs, temps, dists, irots, banks, l_bank )
+        class(polarft_calc),   intent(inout) :: self
+        integer,               intent(in)    :: nb, nr
+        integer,               intent(in)    :: iptcls(nb), irefs(nr)
+        real(sp),              intent(in)    :: temps(nb)
+        real(sp),              intent(out)   :: dists(nr,nb)
+        integer,               intent(out)   :: irots(nr,nb)
+        complex(sp), optional, intent(in)    :: banks(:,:,:)
+        logical,     optional, intent(in)    :: l_bank(nb)
+    end subroutine score_block_posterior
 
     ! ===== SHIFT MAP: simple_polarft_shiftmap.f90
 

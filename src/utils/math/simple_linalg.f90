@@ -13,7 +13,7 @@ public :: qr_solve
 public :: solve_real_spd_complex
 public :: cholesky, chol_forward, chol_backward, spd_inverse, spd_logdet, spd_solve_rel
 public :: trace, vabs, vector_angle_norm, vox2ang, ang2vox
-public :: gemm_tn
+public :: gemm_tn, cgemm
 
 interface eigsrt
     module procedure eigsrt_sp, eigsrt_dp
@@ -87,6 +87,15 @@ interface
         real(kind=4), intent(in) :: a(lda,*), b(ldb,*)
         real(kind=4), intent(inout) :: c(ldc,*)
     end subroutine sgemm
+
+    ! the build's BLAS stays on the calling thread inside an OpenMP team (SIMPLE_BLAS_TEAM_SAFE)
+    subroutine cgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
+        character(len=1), intent(in) :: transa, transb
+        integer(kind=4), intent(in) :: m, n, k, lda, ldb, ldc
+        complex(kind=4), intent(in) :: alpha, beta
+        complex(kind=4), intent(in) :: a(lda,*), b(ldb,*)
+        complex(kind=4), intent(inout) :: c(ldc,*)
+    end subroutine cgemm
 
     function dnrm2(n, x, incx) result(res)
         integer(kind=4), intent(in) :: n, incx

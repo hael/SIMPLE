@@ -161,6 +161,15 @@ about 2.3 µs per pair at one thread.
 
 ## What it would take in production
 
+Built on 2026-11-21 by [the probability-table scoring plan](../planned/prob_table_matrix_scoring.md) (its report
+beside it). The kernel lives in its own submodule, `simple_polarft_block.f90`, on a memo derived after
+`memoize_refs` rather than built inside it, and runs a product of fixed shape (16 particles by 32 references),
+because the bundled OpenBLAS changes an element's last bits with its column and the call's shape. Its draws are the
+per-pair kernels' keyed draws, so the fills stay identical across threads, batches and parts. The BLAS stays on the
+calling thread by the build's contract. The dense table and the neighbourhood table's `state` representatives use it;
+the neighbourhood's members and cones were measured and left per pair. The items below are the expectations of
+2026-10-21.
+
 - **Where the code goes.** The memoized arrays are private to `polarft_calc`, so the kernel belongs there:
   - a bin-major reference copy built by `memoize_refs` (`simple_polarft_memo.f90`, components and interfaces in
     `simple_polarft_calc.f90`);

@@ -5,7 +5,7 @@ use simple_parameters, only: parameters
 use simple_type_defs,  only: ptcl_ref
 implicit none
 private
-public :: matcher_memory_terms, matcher_batch_capacity
+public :: matcher_memory_terms, matcher_batch_capacity, matcher_block_kernel_bytes
 
 contains
 
@@ -41,6 +41,22 @@ contains
             particle_bytes = particle_bytes + 32_int64*nr
         endif
     end subroutine matcher_memory_terms
+
+    !> The block kernel's memory, for a table that scores with it: the bin-major reference memo of both halves
+    !! (memoize_ref_bins) and each thread's particle terms, tile, products, transposed products and transforms
+    pure integer(int64) function matcher_block_kernel_bytes( params, nrefs, nthreads ) result( nbytes )
+        use simple_polarft_calc, only: PFTC_BLOCK_NB, PFTC_BLOCK_NR
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: nrefs, nthreads
+        integer(int64) :: p1, n2k, nb, nr
+        p1  = int(max(1,params%pftsz),int64) + 1_int64
+        n2k = 2_int64 * int(max(1,params%kfromto(2)-params%kfromto(1)+1),int64)
+        nb  = int(PFTC_BLOCK_NB,int64)
+        nr  = int(PFTC_BLOCK_NR,int64)
+        nbytes = 16_int64 * n2k * int(max(1,nrefs),int64) * p1
+        nbytes = nbytes + int(max(1,nthreads),int64) * (8_int64 * (n2k*nb*p1 + n2k*nr + 2_int64*nb*nr*p1) +&
+            &8_int64 * (p1 - 1_int64) * nr * nb)
+    end function matcher_block_kernel_bytes
 
     !> Keep the preferred capacity when it fits; an empty part still needs one calculator slot.
     !! A missing budget leaves capacity unchanged. A tight budget never reduces it below one particle

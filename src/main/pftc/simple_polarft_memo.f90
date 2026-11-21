@@ -231,7 +231,37 @@ contains
             enddo
             !$omp end parallel do
         endif
+        self%ref_gen = self%ref_gen + 1_int64
     end subroutine memoize_refs
+
+    !> The block kernel's bin-major copy of the reference memo, a layout transform of the finished ft_ref and ft_ref2
+    !! (so it carries memoize_refs' mirrors): for a table that scores with the block kernel, after memoize_refs
+    module subroutine memoize_ref_bins( self )
+        class(polarft_calc), intent(inout) :: self
+        character(len=STDLEN) :: alloc_msg
+        integer :: iref, ieo, j, k, kk, alloc_stat
+        if( OMP_IN_PARALLEL() ) THROW_HARD('No memoization inside OpenMP regions')
+        if( self%ref_gen < 1_int64 .or. .not. allocated(self%ft_ref) ) THROW_HARD('memoize_ref_bins after memoize_refs')
+        if( .not. allocated(self%ft_ref_bins) )then
+            alloc_msg = ''
+            allocate(self%ft_ref_bins(2*self%nk,self%nrefs,self%pftsz+1,N_REF_PARITIES), stat=alloc_stat, errmsg=alloc_msg)
+            if( alloc_stat /= 0 ) THROW_HARD('memoize_ref_bins failed allocating the bin-major memo: '//trim(alloc_msg))
+        endif
+        !$omp parallel do private(iref,ieo,j,k,kk) default(shared) proc_bind(close) schedule(static)
+        do iref = 1,self%nrefs
+            do ieo = REF_EVEN,REF_ODD
+                do j = 1,self%pftsz+1
+                    do k = self%kfromto(1),self%kfromto(2)
+                        kk = k - self%kfromto(1) + 1
+                        self%ft_ref_bins(kk,iref,j,ieo)         = conjg(self%ft_ref2(j,k,iref,ieo))
+                        self%ft_ref_bins(self%nk+kk,iref,j,ieo) = self%ft_ref(j,k,iref,ieo)
+                    enddo
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        self%ref_gen_bins = self%ref_gen
+    end subroutine memoize_ref_bins
 
     !> Transform one reference's two halves using the calling thread's existing FFT workspace.
     subroutine memoize_one_ref(self, iref, ithr)
@@ -419,6 +449,8 @@ contains
                                     &self%crmat_many(1)%r, onembed, 1_c_int, odist, plan_flags )
             if( .not. c_associated(self%plan_bwd_many_refs) ) THROW_HARD('FFTW failed to create plan_bwd_many_refs')
         endif
+        ! the block kernel's work and plan, planned as the others (and kept in the wisdom below)
+        call self%new_block_work(nthr_team, plan_flags)
         ! Retain FFTW wisdom
         if( .not. l_fixed_seed )then
             wsdm_ret = fftwf_export_wisdom_to_filename(fft_wisdoms_fname)
@@ -439,6 +471,8 @@ contains
         if( allocated(self%ft_ref) )then
             deallocate(self%ft_ref,self%ft_ref2)
         endif
+        if( allocated(self%ft_ref_bins) ) deallocate(self%ft_ref_bins)
+        self%ref_gen_bins = -1_int64
     end subroutine kill_memo_refs
 
     module subroutine kill_memo_workspace(self)
@@ -465,6 +499,7 @@ contains
             deallocate(self%crmat_many)
             call fftwf_destroy_plan(self%plan_bwd_many_refs)
         endif
+        call self%kill_block_work
     end subroutine kill_memo_workspace
 
 end submodule simple_polarft_memo

@@ -163,6 +163,8 @@ contains
         self%ptcl_gen        = 0_int64
         self%ptcl_gen_memo   = -1_int64
         self%sigma2_gen_memo = -1_int64
+        self%ref_gen         = 0_int64
+        self%ref_gen_bins    = -1_int64
         nullify(self%sigma2_gen)
     end subroutine kill
 

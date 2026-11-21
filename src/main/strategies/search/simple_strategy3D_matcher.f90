@@ -35,7 +35,7 @@ use simple_shiftmap_srch,              only: setup_shiftmap_srch
 use simple_matcher_2Dprep,             only: ptcl_on_disk
 use simple_strategy3D,                 only: strategy3D
 use simple_type_defs,                  only: OBJFUN_EUCLID
-use simple_matcher_memory,             only: matcher_memory_terms, matcher_batch_capacity
+use simple_matcher_memory,             only: matcher_memory_terms, matcher_batch_capacity, matcher_block_kernel_bytes
 implicit none
 
 public :: refine3D_exec
@@ -592,6 +592,10 @@ contains
                 nthreads = 1
                 !$ nthreads = omp_get_max_threads()
                 call matcher_memory_terms(p_ptr, nrefs, nptcls, nthreads, 0, fixed_bytes, particle_bytes)
+                ! the dense table and the neighbourhood table's state mode (its representatives) score with the block
+                ! kernel: its bin-major reference memo and per-thread work
+                if( trim(ctrl%refine_mode) /= 'prob_neigh' .or. trim(p_ptr%prob_neigh_mode) == 'state' )&
+                    &fixed_bytes = fixed_bytes + matcher_block_kernel_bytes(p_ptr, nrefs, nthreads)
                 preferred   = batchsz_max
                 batchsz_max = matcher_batch_capacity(nptcls, preferred, nthreads, pipeline_budget, fixed_bytes, particle_bytes)
                 if( batchsz_max < preferred ) write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
@@ -639,11 +643,11 @@ contains
                 allocate(eul_prob_tab_neigh :: eulprob_obj_part)
                 select type( tab => eulprob_obj_part )
                     type is( eul_prob_tab_neigh )
-                        call tab%new_neigh_pipeline(p_ptr, b_ptr, pinds)
+                        call tab%new_neigh_pipeline(p_ptr, b_ptr, pinds, block_memo=.true.)
                 end select
             else
                 allocate(eul_prob_tab :: eulprob_obj_part)
-                call eulprob_obj_part%new_pipeline(p_ptr, b_ptr, pinds)
+                call eulprob_obj_part%new_pipeline(p_ptr, b_ptr, pinds, block_memo=.true.)
             endif
             call eulprob_obj_part%set_model_from_field
             if( p_ptr%topk > 1 ) call eulprob_obj_part%set_insert_cone(insert_cone_from_fsc(p_ptr%nstates, &

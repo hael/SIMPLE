@@ -18,7 +18,7 @@ use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_eul_prob_tab_utils, only: shift_needs_disk, disk_radius_px, screen_pool_size, map_prior_weight, insert_pose_loss, &
     &shift_prior_sigma2, cone_view_dist, cone_cell_radii, cone_reachable_cells
 use simple_defs,               only: PROB_INSERT_WMIN
-use simple_polarft_calc, only: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, shift_ptcl2ref, shift_ref2ptcl
+use simple_polarft_calc, only: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, shift_ptcl2ref, shift_ref2ptcl, PFTC_BLOCK_NB
 use simple_ori,                only: ori
 use simple_ori_utils,          only: euler_mirror, euler_about_cell
 implicit none
@@ -85,13 +85,19 @@ end type coarse_search_ws
 contains
 
     !> the pipeline's neighbourhood table of a part (the shared-memory matcher): the assignment map, the thread
-    !! buffers the fill keeps for the batch's own selection (assign_batch); no part file
-    subroutine new_neigh_pipeline( self, params, build, pinds )
+    !! buffers the fill keeps for the batch's own selection (assign_batch); no part file. The state mode scores the
+    !! subspace representatives with the block kernel: with block_memo (a caller whose references are memoized) the
+    !! state mode asks for the kernel's memo
+    subroutine new_neigh_pipeline( self, params, build, pinds, block_memo )
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
-        call self%eul_prob_tab%new_pipeline(params,build,pinds)
+        logical, optional,         intent(in)    :: block_memo
+        logical :: l_memo
+        l_memo = .false.
+        if( present(block_memo) ) l_memo = block_memo .and. trim(params%prob_neigh_mode) == 'state'
+        call self%eul_prob_tab%new_pipeline(params, build, pinds, block_memo=l_memo)
         allocate(self%candidate_buffers(nthr_glob))
         call validate_neigh_mode(self)
         if( trim(self%p_ptr%prob_neigh_mode) == 'geom' ) call set_cell_radii(self)
@@ -405,7 +411,8 @@ contains
     ! NEIGHBORHOOD SUBSPACES BRANCH
 
     ! Identifies peak subspaces via coarse scoring, builds a pooled neighborhoo
-    ! and evaluates all fine refs & refines the best
+    ! and evaluates all fine refs & refines the best. The state mode runs in blocks of particles of one half: the
+    ! block's representatives scored at once by the block kernel, the rest per particle; geom per particle
     subroutine fill_tab_subspace_range( self, i_first, i_last )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer,                   intent(in)    :: i_first, i_last
@@ -413,12 +420,18 @@ contains
         type(pftc_shsrch_grad), target :: grad_shsrch_disk(nthr_glob) !< the disk's (shift_sigma > 0)
         type(coarse_search_ws) :: coarse_ws
         type(eval_ws)          :: eval_work
-        complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
-        integer :: i, ithr, max_refs_to_refine, nsubs, npeak_target, npooled_capacity
+        complex(sp), allocatable :: seed_bank(:,:,:,:) !< per thread: the seed-shifted particle memos of a block's slots
+        logical,     allocatable :: l_bank(:,:)        !< per thread: which slots hold one
+        real(sp),    allocatable :: dists_blk(:,:)     !< per thread: the block kernel's drawn distances (representatives x block)
+        integer,     allocatable :: irots_blk(:,:)     !< per thread: its drawn in-plane indices
+        integer,     allocatable :: rep_full(:), rep_isub(:), rep_state(:) !< the representatives the state mode scores, in order
+        integer,     allocatable :: prev_projs(:)      !< the batch's previous directions (state mode)
+        integer,     allocatable :: porder(:), blocks(:,:) !< the batch by half and previous cell, its blocks in porder
+        integer :: i, ithr, max_refs_to_refine, nsubs, npeak_target, npooled_capacity, nteam, nrep, nblocks, ib, nslots
         real    :: sigma2_prior  !< the shift prior's variance per axis (shift_prior=yes)
-        integer :: iptcl, i_from, i_to, nrots
+        integer :: iptcl, i_from, i_to, nrots, kfromto_loc(2)
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
-        logical :: l_geom_neigh, l_state_neigh, l_seed_sh_first, l_bank(nthr_glob), l_map
+        logical :: l_state_neigh, l_seed_sh_first, l_map
         real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
         real(dp)       :: prior_w
         real           :: step_win, step_disk, lims_disk(2,2)
@@ -426,7 +439,6 @@ contains
         integer(int64) :: nscored(nthr_glob), nbank(nthr_glob)
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
-        l_geom_neigh    = (trim(self%p_ptr%prob_neigh_mode) == 'geom')
         l_state_neigh   = (trim(self%p_ptr%prob_neigh_mode) == 'state')
         ! Keep shift-first seeding single-state only. In multi-state runs this
         ! can bias all states toward the same previous-state shift basin. Under the polar shift map's key the
@@ -445,19 +457,44 @@ contains
         ts_refine = 0.d0
         nscored   = 0_int64
         nbank     = 0_int64
-        l_bank    = .false.
         sigma2_prior = 0.
         if( .not. self%l_model_set ) THROW_HARD('the iteration model is set by the caller before the fill (set_iteration_model); eul_prob_tab_neigh%fill_tab_subspace_range')
         self%rnd_scope = prob_rnd_scope(self%p_ptr%which_iter, .false.)
         call self%b_ptr%pftc%set_rnd_scope(self%rnd_scope)
-        call alloc_seed_bank(self, seed_bank)
+        nteam = omp_get_max_threads()
+        kfromto_loc = self%b_ptr%pftc%get_kfromto()
+        ! the state mode's blocks hold a bank per slot, geom's particles one
+        nslots = 1
+        if( l_state_neigh ) nslots = PFTC_BLOCK_NB
+        allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto_loc(2)-kfromto_loc(1)+1, nslots, nteam))
+        allocate(l_bank(nslots,nteam), source=.false.)
         nsubs        = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
         npooled_capacity = min(nsubs, max(1, npeak_target * max(1, self%nstates)))
         max_refs_to_refine = max(1, self%p_ptr%npeaks_inpl)
         call eval_work%init_eval_subspace_ws(self, nsubs, max_refs_to_refine)
         call coarse_ws%alloc_coarse_ws(npeak_target, npooled_capacity, self%p_ptr%nstates, nthr_glob)
+        if( l_state_neigh )then
+            ! every active state's representatives in subspace order, the block kernel's list and its outputs
+            nrep = 0
+            do i = 1,self%nstates
+                if( self%state_exists(self%ssinds(i)) ) nrep = nrep + nsubs
+            enddo
+            allocate(rep_full(nrep), rep_isub(nrep), rep_state(nrep))
+            nrep = 0
+            do i = 1,self%nstates
+                if( .not. self%state_exists(self%ssinds(i)) ) cycle
+                do ib = 1,nsubs
+                    nrep = nrep + 1
+                    rep_state(nrep) = self%ssinds(i)
+                    rep_isub(nrep)  = ib
+                    rep_full(nrep)  = (self%ssinds(i)-1)*self%p_ptr%nspace + self%b_ptr%subspace_inds(ib)
+                enddo
+            enddo
+            allocate(dists_blk(max(1,nrep)*PFTC_BLOCK_NB,nteam), irots_blk(max(1,nrep)*PFTC_BLOCK_NB,nteam))
+        endif
         t_region = omp_get_wtime()
+        if( l_state_neigh ) call cut_blocks_state
         if( self%p_ptr%l_doshift )then
             lims(:,1)      = -self%p_ptr%trs
             lims(:,2)      =  self%p_ptr%trs
@@ -479,6 +516,17 @@ contains
                         &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
                 end do
             endif
+        endif
+        if( l_state_neigh )then
+            ! dynamic: blocks differ in cost (shift searches, the members); a block is processed whole by one thread
+            ! with its own search objects; every draw is keyed on the particle and the reference
+            !$omp parallel do default(shared) private(ib,ithr) proc_bind(close) schedule(dynamic)
+            do ib = 1,nblocks
+                ithr = omp_get_thread_num() + 1
+                call process_block_state(blocks(1,ib), blocks(2,ib), ithr)
+            enddo
+            !$omp end parallel do
+        else if( self%p_ptr%l_doshift )then
             ! dynamic: particles differ in cost (stopping rule, shift searches); each is processed
             ! whole by one thread with its own search object; its draws are keyed on the particle
             !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed) proc_bind(close) schedule(dynamic)
@@ -508,11 +556,169 @@ contains
         end do
         call coarse_ws%dealloc_coarse_ws
         call eval_work%dealloc_eval_ws
-        deallocate(seed_bank)
+        deallocate(seed_bank, l_bank)
+        if( allocated(dists_blk) ) deallocate(dists_blk, irots_blk, rep_full, rep_isub, rep_state)
+        if( allocated(porder)    ) deallocate(porder, blocks, prev_projs)
 
     contains
 
-        ! One particle evaluation
+        !> the state mode's blocks: the batch's previous directions (in parallel, as each particle's seed reads them),
+        !! its particles by half and then by the subspace cell of the previous direction, so that a block's particles
+        !! share pooled cells whose members one thread then scores in turn, each half in blocks of
+        !! min(PFTC_BLOCK_NB, max(4, n_half / (2 nteam)))
+        subroutine cut_blocks_state
+            type(ori), allocatable :: o_thr(:)
+            integer, allocatable   :: cell(:)
+            integer :: ih_loc, n_loc, j0_loc, j_loc, bsz_loc, i_loc, c_loc, ithr_loc
+            logical :: l_even
+            allocate(prev_projs(i_from:i_to), cell(i_from:i_to), o_thr(nteam))
+            !$omp parallel do default(shared) private(i_loc,ithr_loc) proc_bind(close) schedule(static)
+            do i_loc = i_from,i_to
+                ithr_loc = omp_get_thread_num() + 1
+                call self%b_ptr%spproj_field%get_ori(self%pinds(i_loc), o_thr(ithr_loc))
+                prev_projs(i_loc) = self%b_ptr%eulspace%find_closest_proj(o_thr(ithr_loc))
+            enddo
+            !$omp end parallel do
+            do ithr_loc = 1,nteam
+                call o_thr(ithr_loc)%kill
+            enddo
+            do i_loc = i_from,i_to
+                cell(i_loc) = self%b_ptr%subspace_full2sub_map(max(1, min(self%p_ptr%nspace, prev_projs(i_loc))))
+            enddo
+            allocate(porder(i_to-i_from+1), blocks(2,i_to-i_from+1))
+            n_loc   = 0
+            nblocks = 0
+            do ih_loc = 1,2
+                l_even = ih_loc == 1
+                j0_loc = n_loc + 1
+                do c_loc = minval(cell),maxval(cell)
+                    do i_loc = i_from,i_to
+                        if( cell(i_loc) /= c_loc ) cycle
+                        if( self%b_ptr%pftc%ptcl_iseven(self%pinds(i_loc)) .eqv. l_even )then
+                            n_loc = n_loc + 1
+                            porder(n_loc) = i_loc
+                        endif
+                    enddo
+                enddo
+                if( n_loc < j0_loc ) cycle
+                bsz_loc = min(PFTC_BLOCK_NB, max(4, (n_loc - j0_loc + 1) / (2 * nteam)))
+                do j_loc = j0_loc,n_loc,bsz_loc
+                    nblocks = nblocks + 1
+                    blocks(:,nblocks) = [j_loc, min(j_loc + bsz_loc - 1, n_loc)]
+                enddo
+            enddo
+            deallocate(cell, o_thr)
+        end subroutine cut_blocks_state
+
+        !> one block of the state mode, porder(j0:j1): each particle's seed and seed bank (in the block's slots), every
+        !! active state's representatives scored for the block at once (score_block_posterior: the keyed in-plane draw
+        !! of every pair over every grid rotation, through the particle's bank where it has one), then each particle in
+        !! turn: the representatives' entries and its peaks, its pool, its members per pair, its refinement
+        subroutine process_block_state( j0, j1, ithr_loc )
+            integer, intent(in) :: j0, j1, ithr_loc
+            real     :: shift_seed_b(3,PFTC_BLOCK_NB)
+            real(sp) :: temps_b(PFTC_BLOCK_NB)
+            integer  :: iptcls_b(PFTC_BLOCK_NB), nb_loc, b, i_loc
+            logical  :: l_disk_b(PFTC_BLOCK_NB), l_prior_b(PFTC_BLOCK_NB)
+            real(dp) :: t0
+            nb_loc       = j1 - j0 + 1
+            shift_seed_b = 0.
+            l_disk_b     = .false.
+            l_prior_b    = .false.
+            do b = 1,nb_loc
+                i_loc       = porder(j0+b-1)
+                iptcls_b(b) = self%pinds(i_loc)
+                call seed_particle_state(b, i_loc, iptcls_b(b), ithr_loc, shift_seed_b(:,b), l_disk_b(b), l_prior_b(b))
+                temps_b(b)  = self%b_ptr%pftc%ptcl_posterior_temp(iptcls_b(b))
+            enddo
+            t0 = omp_get_wtime()
+            if( any(l_bank(1:nb_loc,ithr_loc)) )then
+                call self%b_ptr%pftc%score_block_posterior(nb_loc, iptcls_b(1:nb_loc), nrep, rep_full, temps_b(1:nb_loc),&
+                    &dists_blk(:,ithr_loc), irots_blk(:,ithr_loc), banks=seed_bank(:,:,1:nb_loc,ithr_loc),&
+                    &l_bank=l_bank(1:nb_loc,ithr_loc))
+            else
+                call self%b_ptr%pftc%score_block_posterior(nb_loc, iptcls_b(1:nb_loc), nrep, rep_full, temps_b(1:nb_loc),&
+                    &dists_blk(:,ithr_loc), irots_blk(:,ithr_loc))
+            endif
+            ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
+            nscored(ithr_loc)  = nscored(ithr_loc) + int(nb_loc, int64) * int(nrep, int64)
+            do b = 1,nb_loc
+                i_loc = porder(j0+b-1)
+                call finish_particle_state(b, i_loc, iptcls_b(b), ithr_loc, shift_seed_b(:,b), l_disk_b(b), l_prior_b(b))
+                if( self%p_ptr%l_doshift )then
+                    self%seed_shifts(:,i_loc) = shift_seed_b(2:3,b)
+                    self%seed_has_sh(i_loc)   = l_seed_sh_first
+                endif
+            enddo
+        end subroutine process_block_state
+
+        !> a state-mode particle's seed: the shift seed from the previous pose and, when it moves the particle, its
+        !! seed bank in the block's slot ib_loc; the particle's temperature; its polar shift map's flags
+        subroutine seed_particle_state( ib_loc, i_loc, iptcl_loc, ithr_loc, shift_seed_loc, l_disk, l_prior )
+            integer, intent(in)  :: ib_loc, i_loc, iptcl_loc, ithr_loc
+            real,    intent(out) :: shift_seed_loc(3)
+            logical, intent(out) :: l_disk, l_prior
+            type(ori) :: o_prev
+            integer   :: prev_state
+            real(dp)  :: t0
+            real      :: shsig
+            call self%b_ptr%spproj_field%get_ori(iptcl_loc, o_prev)
+            prev_state = o_prev%get_state()
+            l_disk  = .false.
+            l_prior = .false.
+            if( l_map )then
+                shsig   = self%b_ptr%spproj_field%get(iptcl_loc, 'shsig')
+                l_disk  = shift_needs_disk(shsig, self%p_ptr%trs)
+                l_prior = shsig < 0.
+            endif
+            t0 = omp_get_wtime()
+            if( self%p_ptr%l_shift_prior .and. self%p_ptr%l_doshift ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(&
+                &sigma2_prior, posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
+            call estimate_shift_seed(self, grad_shsrch_obj, ithr_loc, iptcl_loc, prev_state, prev_projs(i_loc), o_prev,&
+                &l_seed_sh_first, shift_seed_loc)
+            call memoize_seed_bank(self, iptcl_loc, shift_seed_loc, seed_bank(:,:,ib_loc,ithr_loc), l_bank(ib_loc,ithr_loc),&
+                &nbank(ithr_loc))
+            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
+            ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
+            call o_prev%kill
+        end subroutine seed_particle_state
+
+        !> a state-mode particle after its block's scores: the representatives' entries recorded and the top npeaks of
+        !! each active state kept, in subspace order, the pool, the members of the pooled cells per pair, the refinement
+        subroutine finish_particle_state( ib_loc, i_loc, iptcl_loc, ithr_loc, shift_seed_loc, l_disk, l_prior )
+            integer, intent(in) :: ib_loc, i_loc, iptcl_loc, ithr_loc
+            real,    intent(in) :: shift_seed_loc(3)
+            logical, intent(in) :: l_disk, l_prior
+            integer  :: r_loc, k_loc, ri_loc, neval
+            real(dp) :: t0
+            t0 = omp_get_wtime()
+            coarse_ws%peak_subspace_dists(:,:,ithr_loc) = huge(1.0)
+            coarse_ws%peak_subspace_inds(:,:,ithr_loc)  = 0
+            coarse_ws%peak_subspace_count(:,ithr_loc)   = 0
+            do r_loc = 1,nrep
+                k_loc = (ib_loc - 1) * nrep + r_loc
+                call consider_peak_subspace(rep_isub(r_loc), rep_state(r_loc), ithr_loc, dists_blk(k_loc,ithr_loc))
+                ri_loc = eval_work%fullref_to_sparse_ref(rep_full(r_loc))
+                if( ri_loc > 0 ) call record_sparse_eval(self, i_loc, ithr_loc, ri_loc, dists_blk(k_loc,ithr_loc),&
+                    &irots_blk(k_loc,ithr_loc), 0., 0., .false.)
+            enddo
+            call build_pooled_neighborhood(ithr_loc, prev_projs(i_loc))
+            call evaluate_neighborhood(ib_loc, i_loc, ithr_loc, iptcl_loc, shift_seed_loc, self%p_ptr%l_doshift, neval)
+            ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
+            nscored(ithr_loc)  = nscored(ithr_loc) + int(neval, int64)
+            if( self%p_ptr%l_doshift )then
+                t0 = omp_get_wtime()
+                ! the particle's own shift prior again (the block's later seeds set theirs on the thread's search object)
+                if( self%p_ptr%l_shift_prior ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
+                    &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
+                call refine_best_neighbors(self, eval_work, grad_shsrch_obj, l_seed_sh_first, max_refs_to_refine,&
+                    &i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval, l_map, kscreen, step_win, step_disk, l_disk,&
+                    &l_prior, grad_shsrch_disk, prior_w)
+                ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
+            endif
+        end subroutine finish_particle_state
+
+        ! One particle evaluation: geom's cone (the state mode runs in blocks, process_block_state)
         subroutine process_particle_subspace(i_loc, iptcl_loc, ithr_loc, l_with_shift, shift_seed_loc)
             integer, intent(in)    :: i_loc, iptcl_loc, ithr_loc
             logical, intent(in)    :: l_with_shift
@@ -523,10 +729,9 @@ contains
             logical   :: l_disk, l_prior
             real      :: shsig, cone
             call get_particle_context(self, iptcl_loc, o_prev, prev_state, prev_proj)
-            ! geom: the directions within athres_cont of the particle's orientation, refine=cont's bound; the pose
+            ! the directions within athres_cont of the particle's orientation, refine=cont's bound; the pose
             ! student's cone (slot 'cone', degrees) replaces it for a particle that carries one, with its mirror view
-            cone = 0.
-            if( l_geom_neigh ) cone = self%b_ptr%spproj_field%get(iptcl_loc, 'cone')
+            cone    = self%b_ptr%spproj_field%get(iptcl_loc, 'cone')
             l_disk  = .false.
             l_prior = .false.
             if( l_map )then
@@ -539,22 +744,16 @@ contains
                 &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
             call estimate_shift_seed(self, grad_shsrch_obj, ithr_loc, iptcl_loc, prev_state, prev_proj, o_prev,&
                 &l_seed_sh_first, shift_seed_loc)
-            call memoize_seed_bank(self, iptcl_loc, shift_seed_loc, seed_bank(:,:,ithr_loc), l_bank(ithr_loc),&
+            call memoize_seed_bank(self, iptcl_loc, shift_seed_loc, seed_bank(:,:,1,ithr_loc), l_bank(1,ithr_loc),&
                 &nbank(ithr_loc))
             self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
             t0 = omp_get_wtime()
-            if( l_geom_neigh )then
-                if( cone > 0. )then
-                    call evaluate_cone(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, o_prev, cone, .true., neval)
-                else
-                    call evaluate_cone(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, o_prev, &
-                        &self%p_ptr%athres_cont, .false., neval)
-                endif
+            if( cone > 0. )then
+                call evaluate_cone(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, o_prev, cone, .true., neval)
             else
-                if( l_state_neigh ) call find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
-                call build_pooled_neighborhood(ithr_loc, prev_proj)
-                call evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval)
+                call evaluate_cone(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, o_prev, &
+                    &self%p_ptr%athres_cont, .false., neval)
             endif
             ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
             nscored(ithr_loc)  = nscored(ithr_loc) + int(neval, int64)
@@ -568,49 +767,6 @@ contains
             call o_prev%kill
         end subroutine process_particle_subspace
 
-        ! Scores all subspace representatives per active state independently and records the
-        ! top-npeak_target subspace indices; prob_neigh_mode=state
-        subroutine find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
-            integer, intent(in) :: i_loc, ithr_loc, iptcl_loc
-            real,    intent(in) :: shift_seed_loc(3)
-            logical, intent(in) :: l_with_shift
-            integer :: si_loc, istate_loc, isub_loc, full_ref_subspace, irot_loc, ri_loc, coarse_proj
-            real    :: dist
-            coarse_ws%peak_subspace_dists(:,:,ithr_loc) = huge(1.0)
-            coarse_ws%peak_subspace_inds(:,:,ithr_loc)  = 0
-            coarse_ws%peak_subspace_count(:,ithr_loc)   = 0
-            do si_loc = 1, self%nstates
-                istate_loc = self%ssinds(si_loc)
-                if( .not. self%state_exists(istate_loc) ) cycle
-                do isub_loc = 1, nsubs
-                    coarse_proj = self%b_ptr%subspace_inds(isub_loc)
-                    full_ref_subspace = (istate_loc-1)*self%p_ptr%nspace + coarse_proj
-                    call score_subspace_ref(full_ref_subspace, ithr_loc, iptcl_loc, shift_seed_loc,&
-                        &l_with_shift, dist, irot_loc)
-                    nscored(ithr_loc) = nscored(ithr_loc) + 1_int64
-                    call consider_peak_subspace(isub_loc, istate_loc, ithr_loc, dist)
-                    ri_loc = eval_work%fullref_to_sparse_ref(full_ref_subspace)
-                    if( ri_loc > 0 )&
-                        &call record_sparse_eval(self, i_loc, ithr_loc, ri_loc, dist, irot_loc, 0., 0., .false.)
-                enddo
-            enddo
-        end subroutine find_peak_subspaces
-
-
-        ! Evaluates a coarse subspace representative; prob_neigh_mode=state
-        subroutine score_subspace_ref(full_ref_loc, ithr_loc, iptcl_loc, shift_seed_loc,&
-            &l_with_shift, dist_loc, irot_loc)
-            integer, intent(in)  :: full_ref_loc, ithr_loc, iptcl_loc
-            real,    intent(in)  :: shift_seed_loc(3)
-            logical, intent(in)  :: l_with_shift
-            real,    intent(out) :: dist_loc
-            integer, intent(out) :: irot_loc
-            real    :: corr_loc, sh_loc(2)
-            sh_loc = 0.
-            if( l_with_shift ) sh_loc = shift_seed_loc(2:3)
-            call score_seeded_ref(self, full_ref_loc, iptcl_loc, sh_loc, seed_bank(:,:,ithr_loc), l_bank(ithr_loc),&
-                &dist_loc, corr_loc, irot_loc)
-        end subroutine score_subspace_ref
 
         ! Maintains a sorted top-npeak_target list of subspace indices per state; prob_neigh_mode=state
         subroutine consider_peak_subspace(isub_loc, istate_loc, ithr_loc, dist)
@@ -695,9 +851,9 @@ contains
             coarse_ws%pooled_sub_inds(pooled_count,1,ithr_loc) = isub_loc
         end subroutine add_pooled_subspace
 
-        ! Pass over fine references of the pooled neighborhoods
-        subroutine evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval)
-            integer, intent(in)  :: i_loc, ithr_loc, iptcl_loc
+        ! Pass over fine references of the pooled neighborhoods (the particle's seed bank in the block's slot ib_loc)
+        subroutine evaluate_neighborhood(ib_loc, i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval)
+            integer, intent(in)  :: ib_loc, i_loc, ithr_loc, iptcl_loc
             real,    intent(in)  :: shift_seed_loc(3)
             logical, intent(in)  :: l_with_shift
             integer, intent(out) :: neval
@@ -719,8 +875,8 @@ contains
                         if( ri_loc < 1 ) cycle
                         iproj_loc = self%ref_proj(ri_loc)
                         iref_loc  = self%ref_full(ri_loc)
-                        call score_seeded_ref(self, iref_loc, iptcl_loc, sh_loc, seed_bank(:,:,ithr_loc),&
-                            &l_bank(ithr_loc), dist, corr_loc, irot_loc)
+                        call score_seeded_ref(self, iref_loc, iptcl_loc, sh_loc, seed_bank(:,:,ib_loc,ithr_loc),&
+                            &l_bank(ib_loc,ithr_loc), dist, corr_loc, irot_loc)
                         call record_sparse_eval(self, i_loc, ithr_loc, ri_loc, dist, irot_loc, 0., 0., .false.)
                         neval = neval + 1
                         eval_work%evaluated_ref_ids(neval,ithr_loc)   = ri_loc
@@ -764,8 +920,8 @@ contains
                     if( cone_view_dist(self%b_ptr%pgrpsyms, euls_seed, euls_mirr, l_mirror, &
                         &self%b_ptr%eulspace%get_euler(self%ref_proj(ri_loc))) > cone_loc ) cycle
                     iref_loc = self%ref_full(ri_loc)
-                    call score_seeded_ref(self, iref_loc, iptcl_loc, sh_loc, seed_bank(:,:,ithr_loc),&
-                        &l_bank(ithr_loc), dist, corr_loc, irot_loc)
+                    call score_seeded_ref(self, iref_loc, iptcl_loc, sh_loc, seed_bank(:,:,1,ithr_loc),&
+                        &l_bank(1,ithr_loc), dist, corr_loc, irot_loc)
                     call record_sparse_eval(self, i_loc, ithr_loc, ri_loc, dist, irot_loc, 0., 0., .false.)
                     neval = neval + 1
                     eval_work%evaluated_ref_ids(neval,ithr_loc)   = ri_loc

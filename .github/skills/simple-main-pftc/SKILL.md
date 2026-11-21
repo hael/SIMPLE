@@ -89,6 +89,8 @@ Silent ones first: nothing reports these.
   continuous view tests run in the continuous in-plane suite.
 - New OpenMP code: repeated runs at many threads, not only the one-thread identity; for the tables'
   draws `test=polar_matching_bench suite=fills` (threads, batches and parts give identical entries).
+- Never judge a step, scale or stop rule of the shift searches on the fills' synthetic particles: there the
+  shift Gauss-Newton matrix is ~23x stiffer than the exact Hessian, on bgal 1.1-1.4x. Judge on a real solve3D.
 - Kernel speed or layout: `test=polar_matching_bench` (timings and identity checks, a dump of the
   production kernels' distance vectors for comparing builds).
 - A change in scores moves alignment: run `test=simulated_workflow`. Its map correlation is a

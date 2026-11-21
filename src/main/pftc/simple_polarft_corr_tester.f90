@@ -1,4 +1,4 @@
-!@descr: unit tests of the polar-Fourier correlations (gen_objfun_vals, calc_frc, the cross-half, at-pose and seed-bank Euclidean losses, the in-plane posterior draw, the slot detector, the reference model loaded at an offset) on generated images
+!@descr: unit tests of the polar-Fourier correlations (gen_objfun_vals, calc_frc, the cross-half, at-pose and seed-bank Euclidean losses, the in-plane posterior draw, the block kernel against it, the slot detector, the reference model loaded at an offset) on generated images
 ! Three smooth zero-mean images (so the shared mask envelope carries no correlation) are references
 ! and, rotated or unrelated, particles. gen_objfun_vals (objfun=cc) must peak at rotation 1 with cc ~1
 ! for an image against itself, at the applied sixth of a turn for a rotated copy, and stay low for an
@@ -8,13 +8,13 @@ module simple_polarft_corr_tester
 use simple_core_module_api
 use simple_cmdline,      only: cmdline
 use simple_parameters,   only: parameters
-use simple_polarft_calc, only: polarft_calc, shift_ptcl2ref
+use simple_polarft_calc, only: polarft_calc, shift_ptcl2ref, PFTC_BLOCK_NB, PFTC_BLOCK_NR
 use simple_image,        only: image
-use simple_rnd,          only: rnd_scope_key, RND_PROG_REFINE3D, RND_PASS_ALIGN
+use simple_rnd,          only: rnd_scope_key, ran3, RND_PROG_REFINE3D, RND_PASS_ALIGN
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_test_utils
 use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
-!$ use omp_lib,             only: omp_set_num_threads
+!$ use omp_lib,             only: omp_set_num_threads, omp_get_max_threads, omp_get_num_procs, omp_get_num_threads, omp_get_wtime
 implicit none
 private
 public :: run_all_polarft_corr_tests
@@ -38,6 +38,7 @@ contains
         call test_ref_pfts_offset_io()
         call test_bank_and_at_pose_kernels()
         call test_posterior_inpl_draw()
+        call test_block_kernel()
         call test_call_order_refusals()
     end subroutine run_all_polarft_corr_tests
 
@@ -307,6 +308,333 @@ contains
         end subroutine draws_against_posterior
 
     end subroutine test_posterior_inpl_draw
+
+    !> The block kernel (score_block_posterior) against the per-pair draw of the tables' fills (gen_posterior_val, its
+    !! bank form) on 200 directions at one and two states and 32 astigmatic-CTF particles of both halves, with and
+    !! without seed banks, with consecutive and listed tiles: the drawn rotation equal in all pairs but max(1, 2e-5 of
+    !! them), the drawn loss within 1e-6 relative of the per-pair loss at that rotation. A pair's entry depends on
+    !! neither its block nor the chunk of references it is scored in, and a team gives the serial entries bit for bit.
+    subroutine test_block_kernel()
+        use simple_sp_project, only: sp_project
+        integer, parameter :: BOX = 64, NSPACE = 200, NSTATES = 2, NREFS = NSPACE*NSTATES, NPTCLS = 32, NHALF = NPTCLS/2
+        integer, parameter :: NREPS = 3, BSZ = 6, NCHUNK = 2*PFTC_BLOCK_NR
+        real,    parameter :: SMPD = 2.0, MSKDIAM = 100.0, LP = 6.0, FALLOFF = 12.0
+        real,    parameter :: RTOL = 1.e-6, FLIP_RATE = 2.e-5
+        class(parameters),   allocatable, target :: p
+        class(polarft_calc), allocatable         :: pftc
+        class(sp_project),   allocatable         :: spproj
+        type(cmdline) :: cline
+        real,        allocatable, target :: sigma2(:,:)
+        complex(sp), allocatable :: pft(:,:), banks(:,:,:), banks_po(:,:,:)
+        real(sp),    allocatable :: pd(:,:,:), bd(:,:), bd_ref(:,:), td(:,:), temps(:), temps_po(:)
+        integer,     allocatable :: pr(:,:,:), br(:,:), br_ref(:,:), tr(:,:), irefs(:), perm(:), porder(:), blocks(:,:)
+        logical,     allocatable :: l_bank(:), lb_po(:)
+        real(dp) :: t0, t_pair, t_block
+        real     :: u(2), max_rel
+        integer  :: kfromto(2), pdim(3), nst, nr, ilist, ibank, i, iref, ieo, k, j, jj, nflip, nallowed, nthr_test
+        integer  :: nthr_prev, actual_team, expected_team, irep, ntasks, nchunks, itask, ib, c0, c1, ndiff
+        write(*,'(A)') 'test_block_kernel'
+        allocate(p, pftc, spproj)
+        nthr_test = 4
+        !$ nthr_test = min(24, max(4, omp_get_num_procs()))
+        nthr_prev = 1
+        !$ nthr_prev = omp_get_max_threads()
+        call cline%set('box',     real(BOX))
+        call cline%set('smpd',    SMPD)
+        call cline%set('mskdiam', MSKDIAM)
+        call cline%set('nptcls',  real(NPTCLS))
+        call cline%set('nthr',    real(nthr_test))
+        call cline%set('ctf',     'yes')
+        call cline%set('objfun',  'euclid')
+        call p%new(cline)
+        call set_fixed_seed(20261121)
+        kfromto = [2, calc_fourier_index(LP, BOX, SMPD)]
+        ! the calculator's per-thread work for the team of the thread check
+        !$ call omp_set_num_threads(nthr_test)
+        call pftc%new(p, NREFS, [1,NPTCLS], kfromto)
+        !$ call omp_set_num_threads(1)
+        pdim = pftc%get_pdim_interp()
+        allocate(pft(pdim(1),pdim(2):pdim(3)), source=cmplx(0.,0.,kind=sp))
+        do iref = 1,NREFS
+            do ieo = 1,2
+                call fill_band
+                call pftc%set_ref_pft(iref, pft, iseven=(ieo == 1))
+            enddo
+        enddo
+        do i = 1,NPTCLS
+            call fill_band
+            call pftc%set_ptcl_pft(i, pft)
+            call pftc%set_eo(i, mod(i,2) == 1)
+        enddo
+        ! per-particle astigmatic CTFs through the production path: a one-stack project
+        call spproj%os_stk%new(1, is_ptcl=.false.)
+        call spproj%os_stk%set(1, 'fromp', 1)
+        call spproj%os_stk%set(1, 'top',   NPTCLS)
+        call spproj%os_stk%set(1, 'nptcls_stk', NPTCLS)
+        call spproj%os_stk%set(1, 'box',   BOX)
+        call spproj%os_stk%set(1, 'smpd',  SMPD)
+        call spproj%os_stk%set(1, 'ctf',   'yes')
+        call spproj%os_stk%set(1, 'kv',    300.)
+        call spproj%os_stk%set(1, 'cs',    2.7)
+        call spproj%os_stk%set(1, 'fraca', 0.1)
+        call spproj%os_ptcl3D%new(NPTCLS, is_ptcl=.true.)
+        do i = 1,NPTCLS
+            call spproj%os_ptcl3D%set(i, 'stkind', 1)
+            call spproj%os_ptcl3D%set(i, 'indstk', i)
+            call spproj%os_ptcl3D%set(i, 'dfx',    0.8 + 1.7 * ran3())
+            call spproj%os_ptcl3D%set(i, 'dfy',    spproj%os_ptcl3D%get(i,'dfx') + 0.05 + 0.1 * ran3())
+            call spproj%os_ptcl3D%set(i, 'angast', 180. * ran3())
+            call spproj%os_ptcl3D%set_state(i, 1)
+        enddo
+        call pftc%create_polar_absctfmats(spproj, 'ptcl3D')
+        ! noise power falling with resolution to a floor, the halves slightly apart
+        allocate(sigma2(kfromto(1):kfromto(2),2))
+        do k = kfromto(1),kfromto(2)
+            sigma2(k,1) = 0.05 + exp(-real(k) / 10.)
+            sigma2(k,2) = 1.02 * sigma2(k,1)
+        enddo
+        call pftc%assign_sigma2_noise(sigma2)
+        call pftc%memoize_refs
+        call pftc%memoize_ptcls
+        call pftc%memoize_ref_bins
+        call pftc%set_rnd_scope(rnd_scope_key(20261121_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 1))
+        ! seed banks for every other pair of particles (both halves), at random particle-frame shifts
+        allocate(banks(pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1, NPTCLS), source=cmplx(0.,0.,kind=sp))
+        allocate(l_bank(NPTCLS), temps(NPTCLS))
+        do i = 1,NPTCLS
+            l_bank(i) = mod((i+1)/2, 2) == 1
+            temps(i)  = pftc%ptcl_posterior_temp(i)
+            if( l_bank(i) )then
+                u = [1.5 * (2. * ran3() - 1.), 1.5 * (2. * ran3() - 1.)]
+                call pftc%memoize_shifted_ptcl(i, u, banks(:,:,i))
+            endif
+        enddo
+        ! the per-pair references: without banks (1), and with them where a particle has one (2)
+        allocate(pd(NREFS,NPTCLS,2), pr(NREFS,NPTCLS,2))
+        t0 = 0._dp
+        !$ t0 = omp_get_wtime()
+        do i = 1,NPTCLS
+            do iref = 1,NREFS
+                call pftc%gen_posterior_val(iref, i, [0.,0.], temps(i), pd(iref,i,1), pr(iref,i,1))
+            enddo
+        enddo
+        t_pair = 0._dp
+        !$ t_pair = (omp_get_wtime() - t0) / real(NREFS*NPTCLS, dp)
+        pd(:,:,2) = pd(:,:,1)
+        pr(:,:,2) = pr(:,:,1)
+        do i = 1,NPTCLS
+            if( .not. l_bank(i) ) cycle
+            do iref = 1,NREFS
+                call pftc%gen_posterior_val_bank(iref, i, banks(:,:,i), temps(i), pd(iref,i,2), pr(iref,i,2))
+            enddo
+        enddo
+        ! particles in block order, even half first, and their banks, flags and temperatures in that order
+        allocate(porder(NPTCLS), banks_po(size(banks,1),size(banks,2),NPTCLS), lb_po(NPTCLS), temps_po(NPTCLS))
+        porder = [(2*j-1, j=1,NHALF), (2*j, j=1,NHALF)]
+        do jj = 1,NPTCLS
+            banks_po(:,:,jj) = banks(:,:,porder(jj))
+            lb_po(jj)        = l_bank(porder(jj))
+            temps_po(jj)     = temps(porder(jj))
+        enddo
+        allocate(bd(NREFS,NPTCLS), br(NREFS,NPTCLS), bd_ref(NREFS,NPTCLS), br_ref(NREFS,NPTCLS), td(NREFS,NPTCLS),&
+            &tr(NREFS,NPTCLS), irefs(NREFS), perm(NREFS))
+        ! against the per-pair draws: one and two states, consecutive and listed (shuffled) tiles, without and with banks
+        do nst = 1,NSTATES
+            nr = NSPACE * nst
+            call shuffle_refs(nr)
+            do ilist = 1,2
+                if( ilist == 1 )then
+                    irefs(1:nr) = [(j, j=1,nr)]
+                else
+                    irefs(1:nr) = perm(1:nr)
+                endif
+                do ibank = 1,2
+                    t0 = 0._dp
+                    !$ t0 = omp_get_wtime()
+                    call score_serial(nr, BSZ, nr, ibank == 2, bd, br)
+                    t_block = 0._dp
+                    !$ t_block = (omp_get_wtime() - t0) / real(nr*NPTCLS, dp)
+                    call compare_to_pairs(nr, ibank, nflip, max_rel)
+                    nallowed = max(1, int(FLIP_RATE * real(nr*NPTCLS)))
+                    write(*,'(A,I1,A,A,A,A,A,I0,A,I0,A,ES9.2,A,F7.3,A,F7.3)') '  states ', nst, ', ',&
+                        &trim(merge('listed     ', 'consecutive', ilist == 2)), ' tiles, ',&
+                        &trim(merge('banks   ', 'no banks', ibank == 2)), ': drawn rotations differing ', nflip, ' of ',&
+                        &nr*NPTCLS, ', max relative loss difference ', max_rel, '; us/pair block ', 1.e6*t_block,&
+                        &' per-pair ', 1.e6*t_pair
+                    call assert_true(nflip <= nallowed, 'the block kernel draws the per-pair rotation in all but max(1, 2e-5) of the pairs')
+                    call assert_true(max_rel <= RTOL, 'the block kernel''s drawn loss is the per-pair loss within 1e-6 relative')
+                enddo
+            enddo
+        enddo
+        ! with consecutive tiles (read in place) and listed ones (gathered): a pair's entry depends neither on its block
+        ! (one per half, singletons) nor on its chunk of references, and a team scoring tasks of a block and a chunk
+        ! gives what one thread gave for the whole, bit for bit in three repeats
+        call make_blocks(4)
+        nchunks = ceiling(real(NREFS) / real(NCHUNK))
+        ntasks  = size(blocks,2) * nchunks
+        expected_team = 1
+        !$ expected_team = 4
+        do ilist = 1,2
+            if( ilist == 1 )then
+                irefs = [(j, j=1,NREFS)]
+            else
+                irefs = perm(1:NREFS)
+            endif
+            call score_serial(NREFS, BSZ, NREFS, .true., bd_ref, br_ref)
+            call score_serial(NREFS, NHALF, NREFS, .true., bd, br)
+            ndiff = count(bd /= bd_ref) + count(br /= br_ref)
+            call score_serial(NREFS, 1, NCHUNK, .true., bd, br)
+            ndiff = ndiff + count(bd /= bd_ref) + count(br /= br_ref)
+            call assert_int(0, ndiff, 'a pair''s entry is the same whatever its block and its chunk of references, bit for bit')
+            call make_blocks(4)
+            ndiff = 0
+            do irep = 1,NREPS
+                td = 0.
+                tr = 0
+                !$ call omp_set_num_threads(nthr_test)
+                actual_team = 1
+                !$omp parallel default(shared) private(itask,ib,c0,c1) proc_bind(close)
+                !$omp single
+                !$ actual_team = omp_get_num_threads()
+                !$omp end single
+                !$omp do schedule(dynamic)
+                do itask = 1,ntasks
+                    ib = (itask - 1) / nchunks + 1
+                    c0 = mod(itask - 1, nchunks) * NCHUNK + 1
+                    c1 = min(NREFS, c0 + NCHUNK - 1)
+                    call score_task(blocks(1,ib), blocks(2,ib), c0, c1, .true., td, tr)
+                enddo
+                !$omp end do
+                !$omp end parallel
+                !$ call omp_set_num_threads(1)
+                ndiff = ndiff + count(td /= bd_ref) + count(tr /= br_ref)
+            enddo
+            write(*,'(A,A,A,I0,A,I0,A,I0)') '  block kernel, ', trim(merge('listed     ', 'consecutive', ilist == 2)),&
+                &' tiles: team ', actual_team, ', tasks ', ntasks, ', entries differing from one thread ', ndiff
+            call assert_true(actual_team >= expected_team, 'the block kernel''s thread check ran a parallel team')
+            call assert_int(0, ndiff, 'a team gives the one-thread block kernel entries bit for bit in three repeats')
+        enddo
+        !$ call omp_set_num_threads(nthr_prev)
+        call pftc%kill
+        call spproj%kill
+        deallocate(sigma2, pft, banks, banks_po, pd, bd, bd_ref, td, temps, temps_po, pr, br, br_ref, tr, irefs, perm,&
+            &porder, blocks, l_bank, lb_po)
+        deallocate(p, pftc, spproj)
+
+    contains
+
+        ! the benchmark's synthetic spectra: random complex values of unit scale with a radial falloff in the band
+        subroutine fill_band
+            integer :: kk, ip
+            pft = cmplx(0.,0.,kind=sp)
+            do kk = kfromto(1),kfromto(2)
+                do ip = 1,pdim(1)
+                    pft(ip,kk) = exp(-real(kk) / FALLOFF) * cmplx(2. * ran3() - 1., 2. * ran3() - 1., kind=sp)
+                enddo
+            enddo
+        end subroutine fill_band
+
+        ! a random order of the first n references (the listed tiles)
+        subroutine shuffle_refs( n )
+            integer, intent(in) :: n
+            integer :: ii, jr, tmp
+            perm(1:n) = [(ii, ii=1,n)]
+            do ii = n,2,-1
+                jr       = 1 + min(ii - 1, int(ran3() * real(ii)))
+                tmp      = perm(ii)
+                perm(ii) = perm(jr)
+                perm(jr) = tmp
+            enddo
+        end subroutine shuffle_refs
+
+        ! blocks of at most bsz_loc particles of one half, as positions in porder
+        subroutine make_blocks( bsz_loc )
+            integer, intent(in) :: bsz_loc
+            integer :: nblk_half, ih, jb
+            nblk_half = (NHALF + bsz_loc - 1) / bsz_loc
+            if( allocated(blocks) ) deallocate(blocks)
+            allocate(blocks(2,2*nblk_half))
+            do ih = 1,2
+                do jb = 1,nblk_half
+                    blocks(1,(ih-1)*nblk_half+jb) = (ih-1)*NHALF + (jb-1)*bsz_loc + 1
+                    blocks(2,(ih-1)*nblk_half+jb) = (ih-1)*NHALF + min(NHALF, jb*bsz_loc)
+                enddo
+            enddo
+        end subroutine make_blocks
+
+        ! every block of bsz_loc particles against irefs(1:nr_loc) in chunks of nchunk_loc references, one thread
+        subroutine score_serial( nr_loc, bsz_loc, nchunk_loc, l_banks, d, r )
+            integer,  intent(in)    :: nr_loc, bsz_loc, nchunk_loc
+            logical,  intent(in)    :: l_banks
+            real(sp), intent(inout) :: d(:,:)
+            integer,  intent(inout) :: r(:,:)
+            integer :: ib_loc, c0_loc
+            call make_blocks(bsz_loc)
+            do ib_loc = 1,size(blocks,2)
+                do c0_loc = 1,nr_loc,nchunk_loc
+                    call score_task(blocks(1,ib_loc), blocks(2,ib_loc), c0_loc, min(nr_loc, c0_loc+nchunk_loc-1),&
+                        &l_banks, d, r)
+                enddo
+            enddo
+        end subroutine score_serial
+
+        ! the block of porder positions j0..j1 against irefs(c0_loc:c1_loc), entries into d and r by identity
+        subroutine score_task( j0, j1, c0_loc, c1_loc, l_banks, d, r )
+            integer,  intent(in)    :: j0, j1, c0_loc, c1_loc
+            logical,  intent(in)    :: l_banks
+            real(sp), intent(inout) :: d(:,:)
+            integer,  intent(inout) :: r(:,:)
+            real(sp) :: dloc(NREFS*PFTC_BLOCK_NB)
+            integer  :: rloc(NREFS*PFTC_BLOCK_NB), nb_loc, nr_loc, b, ir
+            nb_loc = j1 - j0 + 1
+            nr_loc = c1_loc - c0_loc + 1
+            if( l_banks )then
+                call pftc%score_block_posterior(nb_loc, porder(j0:j1), nr_loc, irefs(c0_loc:c1_loc), temps_po(j0:j1),&
+                    &dloc, rloc, banks=banks_po(:,:,j0:j1), l_bank=lb_po(j0:j1))
+            else
+                call pftc%score_block_posterior(nb_loc, porder(j0:j1), nr_loc, irefs(c0_loc:c1_loc), temps_po(j0:j1),&
+                    &dloc, rloc)
+            endif
+            do b = 1,nb_loc
+                do ir = 1,nr_loc
+                    d(irefs(c0_loc+ir-1),porder(j0+b-1)) = dloc((b-1)*nr_loc+ir)
+                    r(irefs(c0_loc+ir-1),porder(j0+b-1)) = rloc((b-1)*nr_loc+ir)
+                enddo
+            enddo
+        end subroutine score_task
+
+        ! the block entries of irefs(1:nr_loc) against the per-pair draws (ibank_loc 2: through the banks): rotations
+        ! differing, and the drawn loss against the per-pair loss at the block's rotation
+        subroutine compare_to_pairs( nr_loc, ibank_loc, nflip_loc, max_rel_loc )
+            integer, intent(in)  :: nr_loc, ibank_loc
+            integer, intent(out) :: nflip_loc
+            real,    intent(out) :: max_rel_loc
+            real    :: dref
+            integer :: i_loc, ir, iref_loc
+            nflip_loc   = 0
+            max_rel_loc = 0.
+            do i_loc = 1,NPTCLS
+                do ir = 1,nr_loc
+                    iref_loc = irefs(ir)
+                    dref = pd(iref_loc,i_loc,ibank_loc)
+                    if( br(iref_loc,i_loc) /= pr(iref_loc,i_loc,ibank_loc) )then
+                        nflip_loc = nflip_loc + 1
+                        if( ibank_loc == 2 .and. l_bank(i_loc) )then
+                            call pftc%gen_euclid_val_at_bank(iref_loc, i_loc, banks(:,:,i_loc), br(iref_loc,i_loc), dref)
+                        else
+                            call pftc%gen_euclid_val_at(iref_loc, i_loc, [0.,0.], br(iref_loc,i_loc), dref)
+                        endif
+                    endif
+                    if( dref > 0.5 * huge(dref) )then
+                        if( .not. (bd(iref_loc,i_loc) > 0.5 * huge(dref)) ) max_rel_loc = huge(max_rel_loc)
+                    else
+                        max_rel_loc = max(max_rel_loc, abs(bd(iref_loc,i_loc) - dref) / max(abs(dref), 1.e-30))
+                    endif
+                enddo
+            enddo
+        end subroutine compare_to_pairs
+
+    end subroutine test_block_kernel
 
     !> The at-pose loss at a nonzero reference shift is the shift search's objective (gen_objfun_vals, exp(-L))
     !! at the same shift and rotation: the identical-pose null test of prob_post_diag re-scores a refined mode

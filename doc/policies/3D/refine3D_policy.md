@@ -527,7 +527,9 @@ before evaluating candidates:
 
 - `state`: score coarse subspace representatives independently per state, pool
   the selected neighborhoods across states, and evaluate the same pooled
-  projection search space for every active state.
+  projection search space for every active state. The representatives are
+  scored for a block of particles at once by the block kernel (below); the
+  members of the pooled neighbourhoods per pair.
 - `geom`: score every projection direction within `athres_cont` (refine=cont's
   bound, default 10 degrees) of the particle's current orientation, under the point
   group, for every active state, with no coarse scoring or pooled peaks; a particle
@@ -1081,6 +1083,93 @@ scores, and the power and bounded samplers of the 2D and greedy searches,
 work in per-thread buffers over arrays of distances (no internal procedures,
 so no heap trampolines).
 
+The continuous in-plane route's `'lm'` solve of the committed pose (euclid)
+stops at the draw's resolution instead of `factr`'s default (2026-11-21): both
+relative stops at `SHSRCH_JOINT_LOGP_TOL` (0.01) over the particle's
+prob_beta x T, at most a tenth of the material gain `JOINT_IMPROVE_REL_TOL`
+(a fixture's unphysical T cannot stop it before a material step).
+Gauss-Newton converges linearly here, and the default stop (a relative gain of
+2e-9) took 5-6 more accepted steps that gained below the draw's resolution: in
+a bgal solve3D a solve took 9-10 evaluations (3.0-3.5 with the stop), and the
+steps after the first accepted one moved the pose by 0.02-0.03 px and
+0.03-0.06 deg (medians). cc and the view mode keep the default stops. The
+tables' L-BFGS-B shift searches keep theirs. Their first iteration (a gradient
+step, capped at unit length on the bounded problem) gains almost nothing, but
+scaling the cost so that it is a Newton step saved at most 0.8-1.5 evaluations
+and 0.24-0.34 all-rotation scans per search on bgal, with the exact Hessian
+free of charge: a few per cent of the search once a curvature is paid for,
+within the run-to-run spread of its time.
+
+### Scoring in blocks (the block kernel)
+
+The dense table's fill (`fill_tab_range`, every reference) and the
+neighbourhood table's `state` mode (`fill_tab_subspace_range`, every active
+state's subspace representatives) score in blocks of particles of one even/odd
+half with the polar calculator's block kernel (`score_block_posterior`,
+`simple_polarft_block.f90`; `prob_table_matrix_scoring.md`, 2026-11-21). A
+batch's particles are ordered by half (the `state` mode then by the subspace
+cell of the particle's previous direction, so that a block's particles share
+pooled cells) and each half is cut into blocks of
+min(16, max(4, n_half / (2 x team))) particles. One parallel region per batch
+runs dynamically over the blocks, and a block is processed whole by one
+thread: each particle's shift seed and seed bank (in the block's slot of the
+thread's banks), then the block's scores at once, then each particle's
+remaining steps in its path's order (dense: the shift refinement of the row's
+best references, or under the polar shift map its screen and refinement, then
+the temperature and the posterior diagnostic where the path has them; `state`:
+the representatives' entries and peaks, the pool, the members per pair, the
+shift refinement). A particle's shift prior
+is set on the thread's search object again before its refinement, since the
+block's later seeds set theirs.
+
+The kernel computes, for every angular frequency bin 1..pftsz+1 (the Nyquist
+bin included), the two Euclidean sums of every pair as one single-precision
+complex matrix product (`cgemm`) of the block's weighted particle terms
+against a tile of 32 references, transposes the products so that each pair's
+bins are contiguous, runs one batched inverse FFT of 32 transforms per
+particle, and converts and draws each pair with the per-pair kernels' own
+procedures (`euclid_dists_from_crvec`, `draw_posterior_rvec`) and the pair's
+keyed variate. It gives the entries `gen_posterior_val` (zero shift) or
+`gen_posterior_val_bank` (the seed bank) give, but for the last bits of the
+sums (their order, the weighting of the terms, the batched transform): the
+kernel's tester in the fast gate (`unit_pftc_align2D3D`) holds the drawn losses
+within 1e-6 relative of the per-pair routine's and the drawn rotation equal
+but in max(1, 2e-5 of the pairs). The product always has the
+same shape, 16 particles by 32 references (an absent particle is a zero row, a
+missing reference a zero column), with each reference in the column of its
+place in the list: the bundled OpenBLAS gives an element other last bits in
+another column or in a call of another shape, but not in another row of a full
+call, so a pair's entry depends on neither its block-mates nor the team, and
+the fills are identical at one thread, any team, any batch size and any part
+count (`polar_matching_bench suite=fills`). Another BLAS must keep that row
+invariance or the identity is lost.
+
+The kernel reads a bin-major copy of the reference memo, `ft_ref_bins`
+(2·nk, nrefs, pftsz+1, half: conj(FT(REF2)) and FT(REF) per bin), derived by
+`memoize_ref_bins` from the finished `ft_ref`/`ft_ref2` after `memoize_refs`,
+in parallel over references; a generation counter stops the kernel on a stale
+copy. A table asks for it in its pipeline constructor when its caller passes
+`block_memo`: the dense table always, the neighbourhood table in `state` mode.
+Every caller that fills such a table passes it (the matcher, the pose
+student's training `learn_pose_student`, the benchmark's fills harness), after
+`memoize_refs`; a fill without the memo stops. The testers that build a table
+without filling it do not. It is released with the other
+reference memos and at `kill`. Its memory, 32 bytes per shell, bin and
+reference (two rows of both halves) beside the per-thread work
+(`matcher_block_kernel_bytes`; 1.8 GB at 5,000 directions, shells 2-81 and
+141 bins), is counted by the matcher when the dense
+table or the `state` mode runs. It covers every reference, although the
+`state` mode reads only the representatives.
+
+The per-pair kernels keep every other caller: `gen_posterior_val` the members
+of the `state` mode's pooled cells, the `geom` cones and the `shc`/`snhc`
+search, and the other pair kernels the 2D tables, the shift refinement, the
+posterior diagnostic's cross-half scoring and the cc objective. The members and the cones were measured on the block kernel and
+left per pair: at the matcher's batch a cell is pooled by two to four
+particles of a block, and the fixed product then uses a tenth to a fifth of
+its pairs. On beta-galactosidase (four parts of six threads) the dense score
+loop costs 0.38-0.40 of the per-pair routine's and the `state` mode's 0.53.
+
 ### Continuous in-plane policy
 
 `inpl_cont` is internal since release 4 (2026-10-03), not a command-line key.
@@ -1487,11 +1576,14 @@ record times the master's sample draw where it timed the pre-step. The
 `PROB_TAB*` and `PROB_ALIGN*` families were retired on 2026-11-05.
 
 Every table fill with a shift search (the single-state and multi-state `prob`
-tables and all `prob_neigh` fills) runs its particle loop with dynamic OpenMP
+tables and all `prob_neigh` fills) runs its loop with dynamic OpenMP
 scheduling: the particles' costs differ (the shift searches, the stopping rule
-of `prob_neigh`), and static blocks left threads idle at the tail. A particle
-is processed whole by one thread with that thread's search object, and every
-draw is keyed on the particle, so the schedule changes no draw.
+of `prob_neigh`), and static blocks left threads idle at the tail. The dense
+table and the `state` mode take blocks of particles (above), the other fills
+single particles; a block or a particle is processed whole by one thread with
+that thread's search object, and every draw is keyed on the particle and the
+reference, so the schedule changes no draw. The score loop's thread-seconds of
+a fill in blocks include the block kernel's call.
 
 Every probabilistic table holds its shifts in the particle frame (the only
 path since 2026-10-15; a developer key used to switch it on). The kernels shift the reference in its own polar frame and correlate
