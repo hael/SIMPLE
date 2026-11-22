@@ -302,19 +302,40 @@ every run seeds and owns its sigmas in its own directory.
 ## 4. Low-Pass and Cropping
 
 `lpinfo(istage)%lp` controls staged search/reference scheduling. Stage limits
-follow the molecule's size (`set_lplims_from_size`, since 2026-11-10): linear
-in A from `mskdiam/8` within 10-30 A (`LPSTART_SIZE_BOUNDS`) to `mskdiam/26.7`
-within `LPSTOP_BOUNDS` (4.5-6 A): both ends proportional to the size, the
-form of `mskdiam2lplimits`, so a mid-size molecule's ladder spans the same
-factor of 3.3. PfCRT (160 A) gets 20, 18, 16, 14, 12, 10, 8, 6 A and
-streptavidin (80 A) 10 to 4.5 A; 8 A, its no-2D start, was judged too
-ambitious for a default. A first version held the start at 20 A at least,
+follow the molecule's size (`set_lplims_ptcls`, `solve3D_ptcl_lplims`; ruling
+of 2026-11-22): from `mskdiam/10` within 10-30 A (`LPSTART_SIZE_BOUNDS`) to
+4.5 A (`LPSTOP_BOUNDS(1)`) for every size, each stage halving the distance to
+the stop as solve2D's frequency march does, the last stage at the stop
+(`lpstages_setlims` with `halving`). The export gate (155 A mask) gets 15.5,
+10.0, 7.2, 5.9, 5.2, 4.8, 4.7, 4.5 A; PfCRT (160 A) 16.0, 10.2, 7.4, 5.9, 5.2,
+4.9, 4.7, 4.5 A; streptavidin (80 A) 10.0, 7.2, 5.9, 5.2, 4.8, 4.7, 4.6,
+4.5 A. A shorter run (`nstages`) spans the same two ends over its stages.
+`lpstart` and `lpstop` set their end as given, coarser or finer, so a small
+target reaches below 4.5 A with `lpstop` alone, without `force_lp_range`.
+Why: the ladder linear in A was too conservative (the export gate still at
+13.6 A in stage 4); the march is done in the global stages, every size aims
+at 4.5 A in the last stage, which small targets need, and the stages after
+the first NU stage take only their crops from the ladder. The planned
+limits of the global stages usually lead the FSC=0.5 at their entry; the
+FSC rule below holds a stage back to it, or advances it (ruling of
+2026-11-22). A linear ladder in spatial frequency
+(15.5, 11.5, 9.1, 7.6, 6.5, 5.6, 5.0, 4.5 A for the export gate) was
+considered the same day and judged not aggressive enough.
+
+From 2026-11-10 to 2026-11-22 the ladder was linear in A from `mskdiam/8`
+within 10-30 A to `mskdiam/26.7` within 4.5-6 A (`set_lplims_from_size`,
+which the class-average route still uses for its size limits, and the
+particle route under `force_lp_range=yes`): PfCRT (160 A) got 20, 18, 16, 14,
+12, 10, 8, 6 A and streptavidin (80 A) 10 to 4.5 A; 8 A, its no-2D start, was
+judged too ambitious for a default. A first version held the start at 20 A at least,
 as the FRC planner did, and streptavidin failed
 (`failed_streptav`, 2026-11-10): from 20 A stage 3 was omitted and the D2
 axis was searched with the orientations still moving 53 deg per iteration,
 against 14 deg in the runs that started at 8 A.
-`lpstart` replaces the first limit, `lpstop` can only coarsen the last, and
-`force_lp_range=yes` uses the requested range directly. The crops are those of
+`force_lp_range=yes` uses the requested range directly, linear in A
+(`lpstages_fast`, as `solve3D_nano` runs it); with the size rule above it is
+no longer needed to set the ends. The input-volume and no-2D routes keep
+their own limits (`mskdiam2lplimits`, below). The crops are those of
 `lpstages_setlims`: the end stages at a third of their limit (at least 2 A per
 pixel, at least 88 px), a linear box ramp between. Do not crop the global
 stages to their own limits: tried in `85bbc2a2c` (2026-11-10), PfCRT's stages
@@ -417,6 +438,20 @@ Why: on PorF (single state) stage 2 ends at overlap 0.11-0.12 with FSC=0.5 at
 overlap 0.05-0.07 (`fa9b82b5`, 10 restarts at 16.9 A: 0.13-0.16), stage 4 at
 0.20-0.26 (0.36-0.43), and two restarts finished at 5.20 and 4.95 A at
 FSC=0.143 against 4.11-4.22 A for all ten `fa9b82b5` restarts.
+
+**Both ways, from stage 2 (ruling of 2026-11-22).** Supersedes the scope of
+the 11-13 ruling and the 11-15 amendment. In a single-state particle run,
+from stage 2 (`FSC05_SET_START_STAGE`, the first stage with a measured FSC)
+until gold standard, the NU stage before it included, the stage limit is the
+FSC=0.5 at stage entry, coarser than the planned rung (holding back) or finer
+(advancing), never finer than the ladder cap (4.5 A, or a command-line
+`lpstop` as given, coarser or finer) nor coarser than the ladder start
+(`lpinfo(1)%lp`). In the Gaussian-reference stages `gaufreq` follows the
+limit. Stage 1 keeps its planned limit, an explicit `lp` wins, and
+multi-state runs keep the one-rung advance above. Why: under the halving
+ladder the plan leads and the FSC is the brake. Known risk: the PorF runs
+of the amendment (stage 3 held at 22-24 A against a planned 16.9 A, worse
+finals), which ran under the ladder linear in A.
 
 **No stage is skipped (ruling of 2026-11-12).** Every stage runs at least
 `STAGE_MINITS` (3) iterations (`minits` on every stage command line, never

@@ -892,7 +892,7 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(gui_communicator)          :: gui_comm
-        real    :: lprange(2)
+        real    :: lprange(2), lpstart_ptcls, lpstop_ptcls
         integer :: state, istage, start_stage, nptcls2update, noris, nstates_on_cline
         integer :: nstates_in_project, last_stage, pose_init_iter
         logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
@@ -1239,16 +1239,19 @@ contains
             else
                 call set_lplims_from_input(params, spproj, params%lpstart, params%lpstop)
             endif
-        else
-            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                call set_lplims_from_size(params, spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
-            else if( cline%defined('lpstart') )then
-                call set_lplims_from_size(params, spproj, l_cavgs=.false., lpstart=params%lpstart)
-            else if( cline%defined('lpstop') )then
-                call set_lplims_from_size(params, spproj, l_cavgs=.false., lpstop=params%lpstop)
-            else
-                call set_lplims_from_size(params, spproj, l_cavgs=.false.)
+        else if( trim(params%force_lp_range).eq.'yes' )then
+            ! lpstart and lpstop as given, linear in A (solve3D_nano, scripts)
+            if( .not.(cline%defined('lpstart') .and. cline%defined('lpstop')) )then
+                THROW_HARD('force_lp_range=yes requires both lpstart and lpstop')
             endif
+            call set_lplims_from_size(params, spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
+        else
+            ! the size rule; an explicit lpstart or lpstop sets its end as given
+            lpstart_ptcls = 0.
+            lpstop_ptcls  = 0.
+            if( cline%defined('lpstart') ) lpstart_ptcls = params%lpstart
+            if( cline%defined('lpstop')  ) lpstop_ptcls  = params%lpstop
+            call set_lplims_ptcls(params, lpstart_ptcls, lpstop_ptcls)
         endif
         if( l_user_lpstop ) write(logfhandle,'(A,F8.3,A)') &
             &'>>> SOLVE3D COMMAND-LINE LPSTOP CEILING: ', params%lpstop, ' A'

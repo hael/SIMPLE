@@ -8,7 +8,6 @@ type(ui_program), target :: solve3D
 type(ui_program), target :: solve3D_cavgs
 type(ui_program), target :: solve3D_addon
 type(ui_program), target :: solve3D_chunks
-type(ui_program), target :: estimate_lpstages
 type(ui_program), target :: noisevol
 type(ui_program), target :: validate_pose_student
 
@@ -20,7 +19,6 @@ contains
         call new_solve3D_cavgs(prgtab)
         call new_solve3D_addon(prgtab)
         call new_solve3D_chunks(prgtab)
-        call new_estimate_lpstages(prgtab)
         call new_noisevol(prgtab)
         call new_validate_pose_student(prgtab)
     end subroutine construct_solve3D_programs
@@ -196,12 +194,14 @@ contains
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call prg%add_input(UI_FILT, 'lpstart',     'num', 'Starting low-pass limit', 'Starting low-pass limit',&
+        call prg%add_input(UI_FILT, 'lpstart',     'num', 'Starting low-pass limit', 'Starting low-pass limit, &
+            &used as given; default mskdiam/10 within 10-30 A',&
             &'low-pass limit for the initial stage in Angstroms',  .false., 20., group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call prg%add_input(UI_FILT, 'lpstop',     'num', 'Final low-pass limit', 'Final low-pass limit',&
+        call prg%add_input(UI_FILT, 'lpstop',     'num', 'Final low-pass limit', 'Final low-pass limit, &
+            &used as given; each stage halves the distance to it, as in solve2D',&
             &'low-pass limit for the final stage in Angstroms; default is 6 for nstates>1 &
-            &and 8 otherwise',    .false., 8., group="filter", &
+            &and 4.5 otherwise',    .false., 8., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_FILT, lp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
@@ -376,38 +376,6 @@ contains
         ! add to ui_hash
         call add_ui_program('solve3D_cavgs', solve3D_cavgs, prgtab, UI_CATEGORY)
     end subroutine new_solve3D_cavgs
-
-    subroutine new_estimate_lpstages( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call estimate_lpstages%new(&
-        &'estimate_lpstages',&                                                                                             ! name
-        &'Estimation of low-pass limits, shift boundaries, and downscaling parameters for solve3D',&                       ! summary
-        &'is a program for estimation of low-pass limits, shift boundaries, and downscaling parameters for solve3D',&      ! help
-        &'simple_exec',&                                                                                                   ! executable
-        &.true., &
-        &display_name='Estimate solve3D Stages') ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call estimate_lpstages%add_input(UI_FILE, projfile, &
-        &visibility=UI_VIS_STANDARD)
-        call estimate_lpstages%add_input(UI_PARM, 'nstages', 'num', 'Number of low-pass limit stages', 'Number of low-pass limit stages', '# stages', .true., 8., &
-        &visibility=UI_VIS_STANDARD)
-        ! <no additional inputs>
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-        ! add to ui_hash
-        call add_ui_program('estimate_lpstages', estimate_lpstages, prgtab, UI_CATEGORY)
-    end subroutine new_estimate_lpstages
 
     subroutine new_noisevol( prgtab )
         class(ui_hash), intent(inout) :: prgtab

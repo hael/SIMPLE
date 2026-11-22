@@ -40,11 +40,6 @@ type, extends(commander_base) :: commander_dose_filter3D
     procedure :: execute      => exec_dose_filter3D
 end type commander_dose_filter3D
 
-type, extends(commander_base) :: commander_estimate_lpstages
-  contains
-    procedure :: execute      => exec_estimate_lpstages
-end type commander_estimate_lpstages
-
 contains
 
     !> accumulates a dose series of half-map pairs under a measured attenuation model
@@ -822,50 +817,5 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_UNIFORM_FILTER2D NORMAL STOP ****')
     end subroutine exec_uniform_filter2D
-
-    subroutine exec_estimate_lpstages( self, cline )
-        class(commander_estimate_lpstages), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
-        type(builder)    :: build
-        type(parameters) :: params
-        real, parameter  :: LPSTART_LB=10., LPSTART_DEFAULT=20.
-        real, parameter  :: LPSTOP_BOUNDS(2)  = [4.5,6.0]
-        real, parameter  :: LPSTART_BOUNDS(2) = [10.,20.] 
-        type(string)     :: frcs_fname
-        real,              allocatable :: frcs_avg(:)
-        integer,           allocatable :: states(:)
-        type(lp_crop_inf), allocatable :: lpinfo(:)
-        integer :: filtsz
-        real    :: lpfinal
-        call build%init_params_and_build_general_tbox(cline, params)
-        call build%spproj%get_frcs(frcs_fname, 'frc2D', fail=.true.)
-        call build%clsfrcs%read(frcs_fname)
-        states  = nint(build%spproj%os_cls2D%get_all('state'))
-        filtsz = build%clsfrcs%get_filtsz()
-        allocate(frcs_avg(filtsz), source=0.)
-        call build%clsfrcs%avg_frc_getter(frcs_avg, states)
-        allocate(lpinfo(params%nstages))
-        lpfinal = max(LPSTOP_BOUNDS(1),calc_lplim_final_stage(3))
-        lpfinal = min(LPSTOP_BOUNDS(2),lpfinal)
-        call lpstages(params%box, params%nstages, frcs_avg, params%smpd,&
-        &LPSTART_BOUNDS(1), LPSTART_BOUNDS(2), lpfinal, lpinfo, l_cavgs=.false.)
-        call simple_end('**** SIMPLE_ESTIMATE_LPSTAGES NORMAL STOP ****')
-
-        contains
-
-            function calc_lplim_final_stage( nbest ) result( lplim )
-                integer, intent(in)  :: nbest
-                real,    allocatable :: res(:), tmp_rarr(:)
-                integer, allocatable :: tmp_iarr(:)
-                real :: lplim
-                tmp_rarr  = build%spproj%os_cls2D%get_all('res')
-                tmp_iarr  = nint(build%spproj%os_cls2D%get_all('state'))
-                res       = pack(tmp_rarr, mask=(tmp_iarr>0))
-                call hpsort(res)
-                lplim = median_nocopy(res(:nbest))
-                deallocate(tmp_rarr, tmp_iarr, res)
-            end function calc_lplim_final_stage
-
-    end subroutine exec_estimate_lpstages
 
 end module simple_commanders_resolest

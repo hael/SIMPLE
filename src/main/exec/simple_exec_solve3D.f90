@@ -8,7 +8,6 @@ use simple_commanders_solve3D, only: commander_solve3D_cavgs, commander_solve3D,
 use simple_commanders_solve3D_chunks, only: commander_solve3D_chunks
 use simple_commanders_pose_student, only: commander_validate_pose_student
 use simple_commanders_volops,   only: commander_noisevol
-use simple_commanders_resolest, only: commander_estimate_lpstages
 implicit none
 
 public :: exec_solve3D_commander
@@ -20,7 +19,6 @@ type(commander_solve3D_addon)                         :: xsolve3D_addon
 type(commander_solve3D_chunks)                        :: xsolve3D_chunks
 type(commander_validate_pose_student)                 :: xvalidate_pose_student
 type(commander_solve3D_cavgs_conditional_restarts) :: xsolve3D_cavgs_conditional_restarts
-type(commander_estimate_lpstages)                     :: xestimate_lpstages
 type(commander_noisevol)                              :: xnoisevol
 
 contains
@@ -56,8 +54,6 @@ contains
                 call xsolve3D_chunks%execute(cline)
             case( 'validate_pose_student' )
                 call xvalidate_pose_student%execute(cline)
-            case( 'estimate_lpstages' )
-                call xestimate_lpstages%execute(cline)
             case( 'noisevol' )
                 call xnoisevol%execute(cline)
             case default

@@ -17,6 +17,7 @@ contains
         call test_symsrch_stage()
         call test_stage_skipping()
         call test_size_lplims()
+        call test_ptcl_lplims()
         call test_gold_standard_stages()
         call test_symmetry_randomize()
         call test_no_weak_state()
@@ -33,7 +34,7 @@ contains
         call assert_int(4, solve3D_symsrch_stage(.true.),  'axis search after stage 4')
     end subroutine test_symsrch_stage
 
-    !> the size-planned ladder ends: mskdiam/8 within 10-30 A, mskdiam/26.7 within 4.5-6 A
+    !> the class-average route's size limits: mskdiam/8 within 10-30 A, mskdiam/26.7 within 4.5-6 A
     subroutine test_size_lplims()
         real :: lims(2)
         write(*,'(A)') 'test_size_lplims'
@@ -51,6 +52,74 @@ contains
         call assert_real(30.,    lims(1), 1.e-4, '300 A mask: the 30 A cap')
         call assert_real(6.,     lims(2), 1.e-4, '300 A mask: the 6 A bound')
     end subroutine test_size_lplims
+
+    !> the particle ladder: mskdiam/10 within 10-30 A to 4.5 A, each stage halving the distance to the stop;
+    !! an explicit lpstart or lpstop sets its end as given, coarser or finer
+    subroutine test_ptcl_lplims()
+        use simple_solve3D_utils, only: lpinfo, nstages_refine3D, l_cavgs_mode, l_refine3D_trs_override, &
+            &set_lplims_ptcls, solve3D_ptcl_lplims
+        use simple_parameters,    only: parameters
+        use simple_type_defs,     only: lp_crop_inf
+        use simple_string_utils,  only: int2str
+        real, parameter :: LPS_EXPORT_GATE(8) = [15.5, 10., 7.25, 5.875, 5.1875, 4.84375, 4.671875, 4.5]
+        real, parameter :: LPS_FINE_STOP(8)   = [15.5, 9.65, 6.725, 5.2625, 4.53125, 4.165625, 3.982813, 3.8]
+        class(parameters), allocatable :: params
+        type(lp_crop_inf), allocatable :: saved_lpinfo(:)
+        real    :: lims(2)
+        integer :: saved_nstages, i
+        logical :: saved_cavgs_mode, saved_trs_override
+        write(*,'(A)') 'test_ptcl_lplims'
+        lims = solve3D_ptcl_lplims(155.)
+        call assert_real(15.5,  lims(1), 1.e-4, '155 A mask (export gate): starts at mskdiam/10')
+        call assert_real(4.5,   lims(2), 1.e-4, '155 A mask: ends at 4.5 A')
+        lims = solve3D_ptcl_lplims(160.)
+        call assert_real(16.,   lims(1), 1.e-4, '160 A mask (PfCRT): starts at 16 A')
+        lims = solve3D_ptcl_lplims(80.)
+        call assert_real(10.,   lims(1), 1.e-4, '80 A mask (streptavidin): the 10 A floor')
+        call assert_real(4.5,   lims(2), 1.e-4, '80 A mask: ends at 4.5 A')
+        lims = solve3D_ptcl_lplims(400.)
+        call assert_real(30.,   lims(1), 1.e-4, '400 A mask: the 30 A cap')
+        allocate(params)
+        saved_nstages      = nstages_refine3D
+        saved_cavgs_mode   = l_cavgs_mode
+        saved_trs_override = l_refine3D_trs_override
+        if( allocated(lpinfo) ) call move_alloc(lpinfo, saved_lpinfo)
+        l_refine3D_trs_override = .false.
+        params%box     = 288
+        params%smpd    = 0.822
+        params%mskdiam = 155.
+        nstages_refine3D = 8
+        call set_lplims_ptcls(params, 0., 0.)
+        call assert_false(l_cavgs_mode, 'the particle ladder clears the class-average mode')
+        call assert_int(8, size(lpinfo), 'one rung per stage')
+        do i = 1,8
+            call assert_real(LPS_EXPORT_GATE(i), lpinfo(i)%lp, 1.e-3, 'export gate, stage '//int2str(i)//': halving')
+        end do
+        ! an explicit lpstop finer than 4.5 A sets the end as given
+        call set_lplims_ptcls(params, 0., 3.8)
+        do i = 1,8
+            call assert_real(LPS_FINE_STOP(i), lpinfo(i)%lp, 1.e-3, 'lpstop 3.8, stage '//int2str(i)//': as given')
+        end do
+        ! an explicit lpstart coarser than the size rule sets the start as given
+        call set_lplims_ptcls(params, 25., 0.)
+        call assert_real(25., lpinfo(1)%lp, 1.e-4, 'lpstart 25: the first rung as given')
+        call assert_real(4.5, lpinfo(8)%lp, 1.e-4, 'lpstart 25: the last rung from the size rule')
+        ! fewer stages: the same two ends over the stages the run executes
+        nstages_refine3D = 5
+        call set_lplims_ptcls(params, 0., 0.)
+        call assert_int(5, size(lpinfo), 'five stages: five rungs')
+        call assert_real(4.5, lpinfo(5)%lp, 1.e-4, 'five stages: ends at 4.5 A')
+        ! a start finer than the stop holds the ladder at the stop
+        nstages_refine3D = 4
+        call set_lplims_ptcls(params, 4., 5.)
+        call assert_true(all(abs(lpinfo(:)%lp - 5.) < 1.e-4), 'a start finer than the stop: flat at the stop')
+        deallocate(lpinfo)
+        if( allocated(saved_lpinfo) ) call move_alloc(saved_lpinfo, lpinfo)
+        nstages_refine3D        = saved_nstages
+        l_cavgs_mode            = saved_cavgs_mode
+        l_refine3D_trs_override = saved_trs_override
+        deallocate(params)
+    end subroutine test_ptcl_lplims
 
     !> stage omission and the mid-stage resolution exit: single-state runs only
     subroutine test_stage_skipping()
@@ -133,21 +202,32 @@ contains
         call assert_real(10., cline_refine3D%get_rarg('lpexit'), 1.e-6, 'stage 3 exits past stage 4''s limit')
         call set_cline_refine3D(params, 5, 1, .false.)
         call assert_real(6., cline_refine3D%get_rarg('lpexit'), 1.e-6, 'stage 5 exits past stage 6''s limit')
-        ! from the first ML-regularized stage until NU sets the band, FSC=0.5 at stage entry sets the limit
+        ! single state, from stage 2 until gold standard: FSC=0.5 at stage entry sets the limit, both ways
+        call set_cline_refine3D(params, 1, 1, .false.)
+        call assert_real(20., cline_refine3D%get_rarg('lp'), 1.e-6, 'stage 1 keeps its planned limit')
         call set_cline_refine3D(params, 2, 1, .false.)
-        call assert_real(16., cline_refine3D%get_rarg('lp'), 1.e-6, 'stage 2 keeps its planned limit')
+        call assert_real(5.3, cline_refine3D%get_rarg('lp'),      1.e-6, 'stage 2 matches at FSC=0.5')
+        call assert_real(5.3, cline_refine3D%get_rarg('gaufreq'), 1.e-6, 'stage 2''s Gaussian follows its limit')
         call set_cline_refine3D(params, 3, 1, .false.)
         call assert_real(5.3, cline_refine3D%get_rarg('lp'),     1.e-6, 'stage 3 matches at FSC=0.5')
         call assert_real(5.3, cline_refine3D%get_rarg('lpstop'), 1.e-6, 'stage 3''s ceiling is its limit')
         call write_res05(15.)
         call set_cline_refine3D(params, 4, 1, .false.)
-        call assert_real(10., cline_refine3D%get_rarg('lp'), 1.e-6, 'a coarser FSC=0.5 than planned keeps stage 4''s rung')
+        call assert_real(15., cline_refine3D%get_rarg('lp'), 1.e-6, 'a coarser FSC=0.5 than planned holds stage 4 back')
+        call write_res05(30.)
+        call set_cline_refine3D(params, 4, 1, .false.)
+        call assert_real(20., cline_refine3D%get_rarg('lp'), 1.e-6, 'the hold-back stops at the ladder start')
         call write_res05(9.)
         call set_cline_refine3D(params, 4, 1, .false.)
         call assert_real(9., cline_refine3D%get_rarg('lp'), 1.e-6, 'a finer FSC=0.5 than planned sets stage 4''s limit')
         call write_res05(3.)
         call set_cline_refine3D(params, 4, 1, .false.)
         call assert_real(4.5, cline_refine3D%get_rarg('lp'), 1.e-6, 'the ladder cap bounds the FSC=0.5 limit')
+        l_refine3D_lpstop_override = .true.
+        params%lpstop = 3.8
+        call set_cline_refine3D(params, 4, 1, .false.)
+        call assert_real(3.8, cline_refine3D%get_rarg('lp'), 1.e-6, 'a finer command-line lpstop replaces the cap')
+        l_refine3D_lpstop_override = .false.
         call write_res05(5.3)
         params%nstates = 2
         call set_cline_refine3D(params, 4, 1, .false.)
@@ -163,7 +243,7 @@ contains
             params%filt_mode = 'nonuniform_lpset'
             call set_cline_refine3D(params, 5, 1, .false.)
             call assert_string_eq('nonuniform_lpset', cline_refine3D%get_carg('filt_mode'), 'stage 5 uses merged NU references')
-            call assert_real(6., cline_refine3D%get_rarg('lp'), 1.e-6, 'FSC=0.5 still advances the planned 8 A rung')
+            call assert_real(5.3, cline_refine3D%get_rarg('lp'), 1.e-6, 'FSC=0.5 sets NU stage 5''s limit')
             call assert_false(cline_refine3D%defined('lpstop'), 'NU stage 5 has no added stage ceiling')
             ! Stage 6 is passed over here: stage 7 must clear the preceding LP-set command.
             call set_cline_refine3D(params, 7, 1, .false.)

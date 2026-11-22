@@ -43,9 +43,11 @@ character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
 integer,          parameter :: FSC05_PROMOTE_MIN_STAGE = 2    ! FSC=0.5 stage-boundary promotion applies past this stage
+integer,          parameter :: FSC05_SET_START_STAGE   = 2    ! single state: the FSC=0.5 at entry sets the limit from here to gold standard
 integer,          parameter :: STAGE_MINITS            = 3    ! every stage runs this many iterations before its exits apply
-real,             parameter :: LPSTART_MSKDIAM_DIV     = 8.          ! size-planned ladder: first limit mskdiam/8 within LPSTART_SIZE_BOUNDS
-real,             parameter :: LPSTART_SIZE_BOUNDS(2)  = [10.,30.]   ! (streptavidin 80 A: 10 A, PfCRT 160 A: 20 A)
+real,             parameter :: PTCL_LPSTART_MSKDIAM_DIV = 10.        ! particle ladder: mskdiam/10 within LPSTART_SIZE_BOUNDS to LPSTOP_BOUNDS(1)
+real,             parameter :: LPSTART_MSKDIAM_DIV     = 8.          ! class-average route's size limits: first mskdiam/8 within LPSTART_SIZE_BOUNDS
+real,             parameter :: LPSTART_SIZE_BOUNDS(2)  = [10.,30.]   ! start bounds of both size rules
 real,             parameter :: LPSTOP_MSKDIAM_DIV      = 160./6.     ! last limit mskdiam/26.7 within LPSTOP_BOUNDS (6 A at PfCRT's 160 A)
 real,             parameter :: CENLP_DEFAULT           = 30.
 real,             parameter :: LPSYMSRCH_LB            = 12.
@@ -80,7 +82,15 @@ contains
         bounds = LPSTOP_BOUNDS
     end function solve3D_lpstop_bounds
 
-    !> first and last limit of the size-planned ladder, from the mask diameter (A)
+    !> first and last limit of the particle ladder, from the mask diameter (A): mskdiam/10 within 10-30 A, 4.5 A
+    module function solve3D_ptcl_lplims( mskdiam ) result( lims )
+        real, intent(in) :: mskdiam
+        real :: lims(2)
+        lims(1) = min(max(mskdiam / PTCL_LPSTART_MSKDIAM_DIV, LPSTART_SIZE_BOUNDS(1)), LPSTART_SIZE_BOUNDS(2))
+        lims(2) = LPSTOP_BOUNDS(1)
+    end function solve3D_ptcl_lplims
+
+    !> first and last limit of set_lplims_from_size (the class-average route), from the mask diameter (A)
     module function solve3D_size_lplims( mskdiam ) result( lims )
         real, intent(in) :: mskdiam
         real :: lims(2)
@@ -606,17 +616,18 @@ contains
         l_full_update_stage = force_full_sampling_mode(params) .or. l_register
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         l_explicit_lp       = l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes'
-        ! Particle-route ladder cap LPSTOP_BOUNDS(1), not lpfinal; a coarser command-line lpstop stays a guard
-        ! (doc/policies/3D/solve3D_policy.md sec. 4).
+        ! Particle-route ladder cap LPSTOP_BOUNDS(1), not lpfinal; a command-line lpstop replaces it, coarser or
+        ! finer (doc/policies/3D/solve3D_policy.md sec. 4).
         lp_cap = LPSTOP_BOUNDS(1)
         if( l_cavgs ) lp_cap = lpinfo(active_refine3D_nstages())%lp
-        if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lp_cap = max(lp_cap, params%lpstop)
-        ! Until NU or gold standard sets the band, the FSC=0.5 at stage entry sets it from the first ML-regularized
-        ! stage on; other LP-set stages keep the one-rung FSC=0.5 advance, including the union FSC of add-ons.
+        if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lp_cap = params%lpstop
+        ! Single state, from stage 2 until gold standard: the FSC=0.5 at stage entry sets the limit, coarser or finer
+        ! than planned, between the ladder cap and the ladder start; multi-state stages keep the one-rung advance,
+        ! including the union FSC of add-ons.
         l_lp_from_fsc05 = .false.
         if( .not. l_cavgs .and. .not. l_explicit_lp .and. .not. l_register .and. .not. cfg%l_gold_standard )then
             if( fsc05_sets_stage_lp(cfg, params, istage, l_cmdline_lp_override) )then
-                call set_stage_lp_from_fsc05(params, lp_cap, lp_eff, l_lp_from_fsc05)
+                call set_stage_lp_from_fsc05(params, lp_cap, lpinfo(1)%lp, lp_eff, l_lp_from_fsc05)
             else
                 call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_lp_from_fsc05)
             endif
@@ -750,7 +761,12 @@ contains
         endif
         if( cfg%gaufreq > 0. )then
             call cline_refine3D%set('gauref',             'yes')
-            call cline_refine3D%set('gaufreq',            cfg%gaufreq)
+            if( l_lp_from_fsc05 )then
+                ! the Gaussian reference filter follows the stage limit the FSC=0.5 set
+                call cline_refine3D%set('gaufreq',        lp_eff)
+            else
+                call cline_refine3D%set('gaufreq',        cfg%gaufreq)
+            endif
         else
             call cline_refine3D%delete('gauref')
             call cline_refine3D%delete('gaufreq')
@@ -795,28 +811,28 @@ contains
         if( l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes' ) lp = params%lp
     end function stage_matching_lp
 
-    !> The FSC=0.5 resolution at stage entry sets the stage limit: single-state particle stages from the
-    !! first ML-regularized stage, whose prior already trusts the FSC, until NU or gold standard sets the band
+    !> The FSC=0.5 resolution at stage entry sets the stage limit: single-state particle stages from
+    !! FSC05_SET_START_STAGE (the first with a measured FSC) until gold standard, NU stages included
     logical function fsc05_sets_stage_lp( cfg, params, istage, l_cmdline_lp_override ) result( l_fsc )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cmdline_lp_override
-        l_fsc = params%nstates == 1 .and. istage >= ML_REG_START_STAGE .and. cfg%filt_mode .eq. 'none' .and. &
+        l_fsc = params%nstates == 1 .and. istage >= FSC05_SET_START_STAGE .and. &
             &.not. cfg%l_gold_standard .and. .not. l_cmdline_lp_override
     end function fsc05_sets_stage_lp
 
-    !> A project FSC=0.5 finer than the planned rung sets the stage limit, fixed for the stage and bounded
-    !! by the ladder cap; a coarser one (poses not yet settled) keeps the planned rung, never a retreat
-    subroutine set_stage_lp_from_fsc05( params, lp_cap, lp, l_set )
+    !> The project FSC=0.5 sets the stage limit, coarser (holding back) or finer (advancing) than the planned
+    !! rung, fixed for the stage, never finer than the ladder cap nor coarser than the ladder start lp_max
+    subroutine set_stage_lp_from_fsc05( params, lp_cap, lp_max, lp, l_set )
         class(parameters), intent(in)    :: params
-        real,              intent(in)    :: lp_cap
+        real,              intent(in)    :: lp_cap, lp_max
         real,              intent(inout) :: lp
         logical,           intent(out)   :: l_set
         real :: res05
         res05 = project_best_fsc05_resolution(params%projfile)
-        l_set = res05 > TINY .and. res05 < lp
-        if( l_set ) lp = max(res05, lp_cap)
+        l_set = res05 > TINY
+        if( l_set ) lp = min(max(res05, lp_cap), lp_max)
     end subroutine set_stage_lp_from_fsc05
 
     !> Advance the planned stage matching limit by one ladder rung when the

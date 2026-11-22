@@ -17,7 +17,7 @@ public :: fsc2ssnr, fsc2wiener_regularizer, fsc2optlp, fsc2optlp_sub, fsc2cref, 
 public :: lowpass_from_klim, gaussian_filter, bfac_cap_filter
 public :: mskdiam2lplimits, mskdiam2streamresthreshold
 public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
-public :: lpstages, lpstages_fast, lpstages_setlims, stage_trslim
+public :: lpstages_fast, lpstages_setlims, stage_trslim
 private
 #include "simple_local_flags.inc"
 real,    parameter :: LPSTAGES_STAGE1_LP_FLOOR = 20.
@@ -340,129 +340,6 @@ contains
         stage_trslim = min(8., max(2.0, AHELIX_WIDTH / smpd_crop))
     end function stage_trslim
 
-    subroutine lpstages( box, nstages, frcs_avg, smpd, lpstart_lb, lpstart_default, lpfinal, lpinfo, l_cavgs, verbose, trslim_override )
-        use simple_magic_boxes
-        integer,           intent(in)  :: box, nstages
-        real,              intent(in)  :: frcs_avg(:), smpd, lpstart_lb, lpstart_default, lpfinal
-        type(lp_crop_inf), intent(out) :: lpinfo(nstages)
-        logical,           intent(in)  :: l_cavgs
-        logical, optional, intent(in)  :: verbose
-        real,    optional, intent(in)  :: trslim_override
-        real,    parameter :: FRCLIMS_PTCLS(2) = [0.65,0.03]
-        real,    parameter :: FRCLIMS_CAVGS(2) = [0.80,0.05]
-        real,    parameter :: LP2SMPD_TARGET   = 1./3.
-        real,    parameter :: SMPD_TARGET_MIN  = 2.0
-        integer :: findlims(2), istage, box_trial
-        real    :: frclims(2), frc_stepsz, lpstart_lb_eff, lpstart_default_eff, rbox_stepsz
-        logical :: l_verbose
-        l_verbose = .true.
-        if( present(verbose) ) l_verbose = verbose
-        lpstart_lb_eff      = max(lpstart_lb,      LPSTAGES_STAGE1_LP_FLOOR)
-        lpstart_default_eff = max(lpstart_default, LPSTAGES_STAGE1_LP_FLOOR)
-        if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages')
-        if( nstages == 1 )then
-            lpinfo(1)%lp      = max(lpfinal, lpstart_default_eff)
-            lpinfo(1)%l_lpset = .true.
-            call stage_autoscale(box, smpd, max(SMPD_TARGET_MIN, lpinfo(1)%lp * LP2SMPD_TARGET), lpinfo(1))
-            call apply_trslim_override
-            if( l_verbose )then
-                print *, '########## single stage'
-                call print_lpinfo
-                call print_scaleinfo
-            endif
-            return
-        endif
-        ! (1) calculate FRC values at the inputted boundaries
-        findlims(1) = calc_fourier_index(lpstart_lb_eff, box, smpd)
-        findlims(2) = calc_fourier_index(lpfinal,    box, smpd)
-        ! (2) letting the shape of the FRC influence the limit choice, if needed
-        if( l_cavgs )then
-            frclims(1)  = max(frcs_avg(findlims(1)),FRCLIMS_CAVGS(1)) ! always moving the limit towards lower resolution
-            frclims(2)  = max(frcs_avg(findlims(2)),FRCLIMS_CAVGS(2))
-        else
-            frclims(1)  = max(frcs_avg(findlims(1)),FRCLIMS_PTCLS(1))
-            frclims(2)  = max(frcs_avg(findlims(2)),FRCLIMS_PTCLS(2))
-        endif
-        ! (3) calculate critical FRC limits and corresponding low-pass limits for the nstages
-        call calc_lpinfo(1, frclims(1))
-        frc_stepsz = (frclims(1) - frclims(2)) / real(nstages - 1)
-        do istage = 2, nstages
-            call calc_lpinfo(istage, lpinfo(istage-1)%frc_crit - frc_stepsz)
-        end do
-        lpinfo(nstages)%lp      = lpfinal
-        lpinfo(nstages)%l_lpset = .true.
-        lpinfo(1)%lp = max(lpinfo(1)%lp, LPSTAGES_STAGE1_LP_FLOOR)
-        if( l_verbose )then
-            print *, '########## 1st pass'
-            call print_lpinfo
-        endif
-        ! (4) gather low-pass limit information
-        if( all(lpinfo(:)%l_lpset) )then
-            ! nothing to do
-        else
-            if( l_verbose ) print *, 'reverting to linear scheme'
-            ! revert to linear scheme
-            do istage = 1, nstages
-                lpinfo(istage)%lp      = lpstart_default_eff - &
-                    &real(istage - 1) * (lpstart_default_eff - lpfinal) / real(nstages - 1)
-                lpinfo(istage)%l_lpset = .true.
-            end do
-            if( l_verbose )then
-                print *, '########## 2nd pass'
-                call print_lpinfo
-            endif
-        endif
-        if( .not. all(lpinfo(:)%l_lpset) ) THROW_HARD('Not all lp limits set')
-        ! (4) gather downscaling information
-        call stage_autoscale(box, smpd, max(SMPD_TARGET_MIN, lpinfo(1)%lp * LP2SMPD_TARGET), lpinfo(1))
-        call stage_autoscale(box, smpd, max(SMPD_TARGET_MIN, lpinfo(nstages)%lp * LP2SMPD_TARGET), lpinfo(nstages))
-        rbox_stepsz = real(lpinfo(nstages)%box_crop - lpinfo(1)%box_crop)/real(nstages - 1)
-        do istage = 2, nstages - 1 ! linear box_crop scheme
-            box_trial = nint(real(lpinfo(1)%box_crop) + real(istage-1)*rbox_stepsz)
-            call stage_box(box, smpd, min(lpinfo(nstages)%box_crop, find_magic_box(box_trial)), lpinfo(istage))
-        end do
-        call apply_trslim_override
-        if( l_verbose )then
-            print *, '########## scale info'
-            call print_scaleinfo
-        endif
-        
-        contains
-
-            subroutine calc_lpinfo( stage, thres )
-                integer, intent(in) :: stage
-                real,    intent(in) :: thres
-                integer :: find
-                lpinfo(stage)%frc_crit = thres
-                lpinfo(stage)%l_lpset  = .false.
-                if( all(frcs_avg > thres) ) return
-                if( any(frcs_avg > thres) )then           
-                    find = get_find_at_crit(frcs_avg, thres)
-                    lpinfo(stage)%lp = max(lpfinal,calc_lowpass_lim(find, box, smpd))
-                    lpinfo(stage)%l_lpset = .true.
-                endif
-            end subroutine calc_lpinfo
-
-            subroutine print_lpinfo
-                do istage = 1, nstages
-                    print *, 'frc_crit/l_lpset/lp ', lpinfo(istage)%frc_crit, lpinfo(istage)%l_lpset, lpinfo(istage)%lp
-                end do
-            end subroutine print_lpinfo
-
-            subroutine print_scaleinfo
-                do istage = 1, nstages
-                    print *, 'scale/box_crop/smpd_crop/trslim ',lpinfo(istage)%scale, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, lpinfo(istage)%trslim
-                end do
-            end subroutine print_scaleinfo
-
-            subroutine apply_trslim_override
-                if( present(trslim_override) )then
-                    if( trslim_override > 0. ) lpinfo(:)%trslim = trslim_override
-                endif
-            end subroutine apply_trslim_override
-
-    end subroutine lpstages
-
     subroutine lpstages_fast( box, nstages, smpd, lpstart, lpstop, lpinfo, force_lpstart, verbose, trslim_override )
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: smpd, lpstart, lpstop
@@ -501,8 +378,10 @@ contains
         endif
     end subroutine lpstages_fast
 
-    !> a linear ladder from lpstart to lpstop; the end stages cropped to their limits, a linear box ramp between
-    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose, first_stage, trslim_override )
+    !> a ladder from lpstart to lpstop, linear in A or (halving) halving the distance to lpstop at each stage as
+    !! solve2D does; the end stages cropped to their limits, a linear box ramp between
+    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose, first_stage, trslim_override, &
+        &halving )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: smpd, lpstart, lpstop
@@ -510,13 +389,16 @@ contains
         logical, optional, intent(in)  :: verbose
         integer, optional, intent(in)  :: first_stage
         real,    optional, intent(in)  :: trslim_override
+        logical, optional, intent(in)  :: halving
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
         integer :: i, box_trial, ifirst
         real    :: rbox_stepsz
-        logical :: l_verbose
+        logical :: l_verbose, l_halve
         l_verbose = .true.
         if( present(verbose) ) l_verbose = verbose
+        l_halve = .false.
+        if( present(halving) ) l_halve = halving
         if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_setlims')
         ifirst = 1
         if( present(first_stage) )then
@@ -529,12 +411,12 @@ contains
                 if( i <= ifirst )then
                     lpinfo(i)%lp = lpstart
                 else
-                    lpinfo(i)%lp = lpstart - real(i-ifirst)*(lpstart-lpstop)/real(nstages-ifirst)
+                    lpinfo(i)%lp = stage_lp(i, ifirst)
                 endif
             else if( nstages == 1 )then
                 lpinfo(i)%lp = lpstop
             else
-                lpinfo(i)%lp = lpstart - real(i-1)*(lpstart-lpstop)/real(nstages-1)
+                lpinfo(i)%lp = stage_lp(i, 1)
             endif
             call stage_autoscale(box, smpd, max(SMPD_TARGET_MIN, lpinfo(i)%lp * LP2SMPD_TARGET), lpinfo(i))
         enddo
@@ -554,6 +436,25 @@ contains
                     &lpinfo(i)%smpd_crop, lpinfo(i)%trslim
             end do
         endif
+
+        contains
+
+            !> the limit of stage istg of the ramp that leaves lpstart at stage i0
+            real function stage_lp( istg, i0 )
+                integer, intent(in) :: istg, i0
+                if( istg <= i0 )then
+                    stage_lp = lpstart
+                else if( l_halve )then
+                    if( istg == nstages )then
+                        stage_lp = lpstop
+                    else
+                        stage_lp = lpinfo(istg-1)%lp - (lpinfo(istg-1)%lp - lpstop)/2.
+                    endif
+                else
+                    stage_lp = lpstart - real(istg-i0)*(lpstart-lpstop)/real(nstages-i0)
+                endif
+            end function stage_lp
+
     end subroutine lpstages_setlims
 
 end module simple_estimate_ssnr
