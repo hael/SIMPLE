@@ -81,6 +81,7 @@ type shiftmap_work
     complex(kind=c_float_complex), pointer :: ghalf(:,:,:) => null() !< (nalpha/2+1, nrots, nrho) view
     real(kind=c_float),            pointer :: gout(:,:,:)  => null() !< (nalpha, nrots, nrho) view
     real(sp),    allocatable :: lw(:,:,:)   !< the sampler's log masses over the grid (nalpha, nrots, nrho)
+    real(dp),    allocatable :: xy(:,:,:)   !< the grid's shifts (2, nalpha, nrho), as shiftmap_shift gives them
     real(dp)                 :: ptclpow = 0.d0 !< the particle's weighted power: ksqsum for cc, wsqsum for euclid
     integer                  :: iref = 0, iptcl = 0 !< the pair the work holds
 end type shiftmap_work

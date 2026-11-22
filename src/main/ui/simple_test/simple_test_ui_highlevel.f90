@@ -308,7 +308,10 @@ contains
             &'and 64 particles unless given; rows to ./polar_fill_identity.tsv), or the neighbourhood route (neigh: '//&
             &'the state and geom candidates at 5000 directions, C1 and D2, 1 and 2 states unless given, nthr x 50 '//&
             &'particles unless given, scored per pair and by the block kernel''s paths at nthr and one thread; rows to '//&
-            &'./polar_neigh_bench.tsv and ./polar_neigh_check.tsv); list prints them. '//&
+            &'./polar_neigh_bench.tsv and ./polar_neigh_check.tsv), or the shift maps (shiftmap: the dense fill''s '//&
+            &'window and screen maps, 16 candidates per particle, each map''s mode and physical width, at 2500 '//&
+            &'directions and 4 states unless given; rows to ./polar_shiftmap_bench.tsv, one-thread results of 64 '//&
+            &'particles to ./polar_shiftmap_identity_*.bin for comparing builds); list prints them. '//&
             &'Default times all euclid layouts', '', .false., '')
         call polar_matching_bench%add_input(UI_PARM, 'nspace', 'num', 'Directions', &
             &'Run one number of projection directions. Default runs 1000 and 2500', '', .false., 0.)

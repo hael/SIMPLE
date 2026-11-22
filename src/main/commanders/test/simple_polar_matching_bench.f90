@@ -10,7 +10,7 @@ use, intrinsic :: iso_fortran_env, only: int64
 use simple_defs,         only: sp, dp
 use simple_error,        only: simple_exception
 use simple_parameters,   only: parameters
-use simple_polarft_calc, only: polarft_calc, PFTC_BLOCK_NB, PFTC_BLOCK_NR
+use simple_polarft_calc, only: polarft_calc, PFTC_BLOCK_NB, PFTC_BLOCK_NR, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
 use simple_linalg,       only: cgemm
 use simple_builder,      only: builder
 use simple_oris,         only: oris
@@ -139,12 +139,24 @@ type :: polar_matching_bench
     logical :: exists = .false.
     class(builder), allocatable :: build  !< the fill harness's toolbox (fill_route > 0): the same references and particles in build%pftc, the particle field of previous poses, the direction space
     integer :: fill_route = 0            !< the harness's route (PMB_ROUTE_*; 0: no harness)
+    ! the shift maps (score_maps): the dense fill's screen and window maps on the production calculator
+    real(dp), allocatable :: map_temps(:)        !< the maps' tempered temperature per particle (the fill's temp_s)
+    real(dp), allocatable :: map_res(:,:,:)      !< last score_maps (5, ncand, nptcls_use): loss, width, rotation, radius, direction
+    real(dp) :: map_prior_w  = 0._dp             !< the prior's weight on the squared shift (the screen's)
+    real(dp) :: map_parts(3) = 0._dp             !< last score_maps' thread seconds: construction, selection, reduction
+    integer  :: map_kscreen  = 0                 !< the maps' last shell
+    logical  :: with_maps    = .false.
 contains
     procedure :: new
     procedure :: run_fill
     procedure :: kill
     procedure :: score
+    procedure :: score_maps
+    procedure, private :: setup_maps
     procedure :: get_sizes
+    procedure :: get_map_geometry
+    procedure :: get_map_parts
+    procedure :: get_map_results
     procedure :: get_vecs
     procedure :: get_entries
     procedure :: get_temps
@@ -609,6 +621,12 @@ contains
         if( allocated(self%temps)       ) deallocate(self%temps)
         if( allocated(self%iseven)      ) deallocate(self%iseven)
         if( allocated(self%vecs)        ) deallocate(self%vecs)
+        if( allocated(self%map_temps)   ) deallocate(self%map_temps)
+        if( allocated(self%map_res)     ) deallocate(self%map_res)
+        self%map_prior_w = 0._dp
+        self%map_parts   = 0._dp
+        self%map_kscreen = 0
+        self%with_maps   = .false.
         if( c_associated(self%plan_c2r)  ) call fftwf_destroy_plan(self%plan_c2r)
         if( c_associated(self%plan_bat)  ) call fftwf_destroy_plan(self%plan_bat)
         if( c_associated(self%plan_bins) ) call fftwf_destroy_plan(self%plan_bins)
@@ -1040,6 +1058,107 @@ contains
             blocks(:,nblk) = [j0, min(j0+bsz-1, nptcls_use)]
         enddo
     end subroutine make_blocks
+
+    !> ncand shift maps per particle 1..nptcls_use on map imap (SHIFTMAP_SCREEN or SHIFTMAP_WINDOW), team of nthr:
+    !! each map built and reduced to its mode and physical width as the dense fill's screen does, the width for every
+    !! candidate (no width cutoff); candidate c of particle i is 1 + mod(i-1 + (c-1)*(nrefs/ncand), nrefs)
+    function score_maps( self, imap, nthr, nptcls_use, ncand ) result( wall )
+        class(polar_matching_bench), intent(inout) :: self
+        integer,                     intent(in)    :: imap, nthr, nptcls_use, ncand
+        real(dp)       :: wall, prior_w, beta, times0(6), times1(6)
+        integer(int64) :: counts(8)
+        real(sp)       :: loss, sdev
+        integer        :: i, c, iref, irot, irho, ialpha, stride
+        if( .not. self%exists ) THROW_HARD('polar_matching_bench: score_maps before new')
+        if( .not. self%with_prod_refs .or. self%l_cc ) THROW_HARD('polar_matching_bench: the maps need production references and euclid')
+        if( imap /= SHIFTMAP_SCREEN .and. imap /= SHIFTMAP_WINDOW ) THROW_HARD('polar_matching_bench: no such shift map')
+        if( nthr < 1 .or. nthr > self%nthr_max ) THROW_HARD('polar_matching_bench: team larger than the calculator')
+        if( nptcls_use < 1 .or. nptcls_use > self%nptcls ) THROW_HARD('polar_matching_bench: invalid particle count')
+        if( ncand < 1 .or. ncand > self%nrefs ) THROW_HARD('polar_matching_bench: invalid candidate count')
+        if( .not. self%with_maps ) call self%setup_maps
+        ! the screen carries the prior of a particle not yet centred, the window none
+        prior_w = 0._dp
+        if( imap == SHIFTMAP_SCREEN ) prior_w = self%map_prior_w
+        beta   = real(self%params%prob_beta, dp)
+        stride = self%nrefs / ncand
+        if( allocated(self%map_res) ) deallocate(self%map_res)
+        allocate(self%map_res(5,ncand,nptcls_use))
+        call self%pftc%get_shiftmap_profile(times0, counts)
+        !$ call omp_set_num_threads(nthr)
+        wall = 0._dp
+        !$ wall = omp_get_wtime()
+        !$omp parallel do default(shared) private(i,c,iref,irot,irho,ialpha,loss,sdev) proc_bind(close) schedule(dynamic)
+        do i = 1,nptcls_use
+            do c = 1,ncand
+                iref = 1 + modulo(i - 1 + (c - 1) * stride, self%nrefs)
+                call self%pftc%gen_shiftmap(imap, iref, i)
+                call self%pftc%shiftmap_mode(imap, self%map_temps(i), prior_w, irot, irho, ialpha, loss,&
+                    &temp_phys=self%map_temps(i) / beta, sdev=sdev)
+                self%map_res(:,c,i) = [real(loss,dp), real(sdev,dp), real(irot,dp), real(irho,dp), real(ialpha,dp)]
+            enddo
+        enddo
+        !$omp end parallel do
+        !$ wall = omp_get_wtime() - wall
+        !$ call omp_set_num_threads(self%nthr_max)
+        call self%pftc%get_shiftmap_profile(times1, counts)
+        self%map_parts = [times1(1) - times0(1), times1(4) - times0(4), times1(5) - times0(5)]
+    end function score_maps
+
+    !> the dense fill's two coarse maps on the production calculator (setup_shiftmaps as the table calls it: the disk
+    !! of three prior widths, a refinement stage's shift window) and every particle's tempered temperature
+    subroutine setup_maps( self )
+        use simple_eul_prob_tab_utils, only: posterior_temperature, disk_radius_px
+        use simple_estimate_ssnr,      only: stage_trslim
+        class(polar_matching_bench), intent(inout) :: self
+        real(dp) :: sigma_px, radius_disk, radius_win
+        integer  :: i
+        if( .not. (self%params%shift_sigma > 0.) ) THROW_HARD('polar_matching_bench: the maps need shift_sigma > 0')
+        sigma_px    = real(self%params%shift_sigma, dp) / real(self%params%smpd, dp)
+        radius_disk = real(disk_radius_px(self%params%shift_sigma, self%params%smpd, self%params%box), dp)
+        radius_win  = real(stage_trslim(self%params%smpd_crop), dp)
+        !$ call omp_set_num_threads(self%nthr_max)
+        call self%pftc%setup_shiftmaps(sigma_px, radius_disk, radius_win, self%map_prior_w, self%map_kscreen)
+        allocate(self%map_temps(self%nptcls))
+        do i = 1,self%nptcls
+            self%map_temps(i) = real(self%params%prob_beta, dp) * real(posterior_temperature(&
+                &self%pftc%wsqsum_ptcl_band(i, self%map_kscreen), self%pftsz), dp)
+        enddo
+        self%with_maps = .true.
+    end subroutine setup_maps
+
+    !> map imap's radii, directions, Bessel orders and last shell (geom), outer radius (pixels) and the prior weight
+    !! score_maps gives it (the screen's; none on the window)
+    subroutine get_map_geometry( self, imap, geom, rho_max, prior_w )
+        class(polar_matching_bench), intent(in)  :: self
+        integer,                     intent(in)  :: imap
+        integer,                     intent(out) :: geom(4)
+        real(dp),                    intent(out) :: rho_max, prior_w
+        real(dp)       :: times(6)
+        integer(int64) :: counts(8)
+        integer        :: geometry(3,NSHIFTMAPS)
+        if( .not. self%with_maps ) THROW_HARD('polar_matching_bench: no shift maps; score_maps first')
+        call self%pftc%get_shiftmap_profile(times, counts, geometry)
+        geom    = [geometry(:,imap), self%map_kscreen]
+        rho_max = norm2(self%pftc%shiftmap_shift(imap, geometry(1,imap), 1))
+        prior_w = 0._dp
+        if( imap == SHIFTMAP_SCREEN ) prior_w = self%map_prior_w
+    end subroutine get_map_geometry
+
+    !> thread seconds of the last score_maps: map construction, cell selection, posterior reduction
+    function get_map_parts( self ) result( parts )
+        class(polar_matching_bench), intent(in) :: self
+        real(dp) :: parts(3)
+        parts = self%map_parts
+    end function get_map_parts
+
+    !> the last score_maps' result of every candidate and particle: loss, physical width, the mode's rotation,
+    !! radius and direction (5, ncand, nptcls_use; integers held exactly)
+    subroutine get_map_results( self, res )
+        class(polar_matching_bench), intent(in)    :: self
+        real(dp), allocatable,       intent(inout) :: res(:,:,:)
+        if( .not. allocated(self%map_res) ) THROW_HARD('polar_matching_bench: no shift-map results; score_maps first')
+        res = self%map_res
+    end subroutine get_map_results
 
     !> gen_euclid_crvec's sums (unshifted branch, angular bins 1..pftsz+1) and inverse FFT into cvec/rvec
     subroutine pair_crvec( self, i, iref, buf )

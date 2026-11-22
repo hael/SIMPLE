@@ -23,7 +23,7 @@ contains
         real(dp),            intent(in)    :: rho(:)
         integer,             intent(in)    :: nalpha, kstop
         integer(c_int) :: n2(2), nin(2), plan_flags
-        integer        :: ithr, nmax, nrho, nhalf, k1, k2, nthreads
+        integer        :: ithr, nmax, nrho, nhalf, k1, k2, nthreads, ir, ia
         real(dp) :: t0
         if( .not. self%existence ) THROW_HARD('the calculator must exist; new_shiftmap')
         if( imap < 1 .or. imap > NSHIFTMAPS ) THROW_HARD('no such shift map; new_shiftmap')
@@ -64,6 +64,12 @@ contains
             self%smwork(ithr,imap)%gsum = cmplx(0., 0., kind=sp)
             allocate(self%smwork(ithr,imap)%gin(nalpha, self%nrots, nrho), source=cmplx(0., 0., kind=sp))
             allocate(self%smwork(ithr,imap)%lw(nalpha, self%nrots, nrho))
+            allocate(self%smwork(ithr,imap)%xy(2, nalpha, nrho))
+            do ir = 1, nrho
+                do ia = 1, nalpha
+                    self%smwork(ithr,imap)%xy(:,ia,ir) = self%shiftmap(imap)%get_shift(ir, ia)
+                enddo
+            enddo
             self%smwork(ithr,imap)%ghalf_p = fftwf_alloc_complex(int(nhalf * self%nrots * nrho, c_size_t))
             self%smwork(ithr,imap)%gout_p  = fftwf_alloc_real(int(nalpha * self%nrots * nrho, c_size_t))
             call c_f_pointer(self%smwork(ithr,imap)%ghalf_p, self%smwork(ithr,imap)%ghalf, [nhalf, self%nrots, nrho])
@@ -144,7 +150,7 @@ contains
             if( allocated(self%smwork(ithr,imap)%rhat) )then
                 deallocate(self%smwork(ithr,imap)%rhat, self%smwork(ithr,imap)%yhat, self%smwork(ithr,imap)%prod,&
                     &self%smwork(ithr,imap)%gsum, self%smwork(ithr,imap)%wj, self%smwork(ithr,imap)%refpow,&
-                    &self%smwork(ithr,imap)%gin, self%smwork(ithr,imap)%lw)
+                    &self%smwork(ithr,imap)%gin, self%smwork(ithr,imap)%lw, self%smwork(ithr,imap)%xy)
             endif
             if( c_associated(self%smwork(ithr,imap)%ghalf_p) )then
                 call fftwf_free(self%smwork(ithr,imap)%ghalf_p)
@@ -553,7 +559,7 @@ contains
                         lphys = -tphys * (-(real(wk%lw(j,ro,ir), dp) + pen - loga) / temp) - pen + loga - lmax_phys
                         if( lphys <= -40.d0 ) cycle
                         w  = exp(lphys)
-                        xc = self%shiftmap_shift(imap, ir, j)
+                        xc = wk%xy(:,j,ir)
                         w0 = w0 + w
                         w1(:,ro) = w1(:,ro) + w * xc
                         w2 = w2 + w * sum(xc**2)

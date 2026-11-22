@@ -5,6 +5,7 @@ use simple_polar_matching_bench, only: polar_matching_bench, PMB_PER_PAIR, PMB_R
     &PMB_DIFF_NAMES,&
     &pmb_route_name, kill_fill_result, compare_fill_results, PMB_ROUTE_3D_DENSE, PMB_ROUTE_3D_SEEDED,&
     &polar_neigh_bench, pnb_pass, PNB_PATH_REPS, PNB_PATH_MEMBERS, PNB_PATH_CONE, PNB_NPATHS
+use simple_polarft_calc,         only: SHIFTMAP_SCREEN, SHIFTMAP_WINDOW
 implicit none
 #include "simple_local_flags.inc"
 
@@ -15,6 +16,7 @@ character(len=*), parameter :: IDENTITY_TSV     = 'polar_kernel_identity.tsv'
 character(len=*), parameter :: FILLS_TSV        = 'polar_fill_identity.tsv'
 character(len=*), parameter :: NEIGH_TSV        = 'polar_neigh_bench.tsv'
 character(len=*), parameter :: NEIGHCHECK_TSV   = 'polar_neigh_check.tsv'
+character(len=*), parameter :: SHIFTMAP_TSV     = 'polar_shiftmap_bench.tsv'
 integer,          parameter :: NSPACE_FILLS     = 200    !< directions of suite fills unless nspace is given
 integer,          parameter :: NSTATES_FILLS(2) = [1, 2] !< its states unless nstates is given
 integer,          parameter :: NPTCLS_FILLS     = 64     !< its particles unless nptcls is given
@@ -37,6 +39,10 @@ integer,          parameter :: NSTATES_NEIGH(2) = [1, 2]      !< its states unle
 character(len=2), parameter :: NEIGH_PGRPS(2)   = ['c1', 'd2']
 integer,          parameter :: NEIGH_NREPS      = 2           !< timed repeats per team
 integer,          parameter :: NEIGH_TEAM_ID    = 4           !< the team of the identity pass
+integer,          parameter :: NSPACE_MAPS      = 2500        !< suite shiftmap: directions unless nspace is given (block_prod's largest case)
+integer,          parameter :: NSTATES_MAPS(1)  = [4]         !< its states unless nstates is given
+integer,          parameter :: NCAND_MAPS       = 16          !< its candidate references per particle (at most nrefs)
+integer,          parameter :: NCHECK_MAPS      = 64          !< its team identity: particles compared at one thread and the full team
 
 contains
 
@@ -48,7 +54,7 @@ module subroutine exec_test_polar_matching_bench( self, cline )
     integer, allocatable :: nspaces(:), nstates_list(:), nthrs(:), layouts(:)
     type(string) :: suite
     integer      :: nptcls, nthr_max, ispace, istate
-    logical      :: l_check, l_identity, l_fills, l_neigh
+    logical      :: l_check, l_identity, l_fills, l_neigh, l_maps
     integer      :: ipg
     suite    = ''
     nptcls   = 2000
@@ -65,10 +71,11 @@ module subroutine exec_test_polar_matching_bench( self, cline )
     l_identity = .false.
     l_fills    = .false.
     l_neigh    = .false.
+    l_maps     = .false.
     select case(suite%to_char())
         case('list')
             write(logfhandle,'(a)') 'Available suites for polar_matching_bench: per_pair, replica, blocked, states_inner,&
-                & matrix, matrix_t, block_prod, per_pair_cc, check, identity, fills, neigh'
+                & matrix, matrix_t, block_prod, per_pair_cc, check, identity, fills, neigh, shiftmap'
             return
         case('')
             layouts = [PMB_PER_PAIR, PMB_REPLICA, PMB_BLOCKED, PMB_STATES_INNER, PMB_MATRIX, PMB_MATRIX_T, PMB_BLOCK_PROD]
@@ -103,6 +110,12 @@ module subroutine exec_test_polar_matching_bench( self, cline )
             if( .not. cline%defined('nspace')  ) nspaces      = [NSPACE_NEIGH]
             if( .not. cline%defined('nstates') ) nstates_list = NSTATES_NEIGH
             if( .not. cline%defined('nptcls')  ) nptcls       = nthr_max * BATCHTHRSZ
+        case('shiftmap')
+            ! the dense fill's screen and window maps, by default on block_prod's largest case, so that both
+            ! suites run on the same data and reference memo
+            l_maps = .true.
+            if( .not. cline%defined('nspace')  ) nspaces      = [NSPACE_MAPS]
+            if( .not. cline%defined('nstates') ) nstates_list = NSTATES_MAPS
         case default
             THROW_HARD('no suite '//suite%to_char()//' in polar_matching_bench; use suite=list')
     end select
@@ -124,6 +137,8 @@ module subroutine exec_test_polar_matching_bench( self, cline )
                 enddo
             else if( l_fills )then
                 call fills_case(nspaces(ispace), nstates_list(istate), nptcls, nthr_max)
+            else if( l_maps )then
+                call shiftmap_case(nspaces(ispace), nstates_list(istate), nptcls, nthrs)
             else if( l_identity )then
                 if( cline%defined('nptcls') )then
                     call identity_case(nspaces(ispace), nstates_list(istate), nptcls, nthr_max)
@@ -242,6 +257,99 @@ function time_one( bench, layout, nspace, nstates, nptcls, nthr, bsz, rsz ) resu
         &' B=', bsz, ' R=', rsz, ' nptcls=', nptcls_use, ' load=', load1, ' wall=', wall_best, ' s, ', us_pair,&
         &' us/pair/thread, ', ref_gbps, ' GB/s'
 end function time_one
+
+!> The shift maps of one case: the window and the screen map, per team, best of NREPS after a warm-up; then each
+!! map's results on NCHECK_MAPS particles at one thread, written for comparing builds and held to the full team's
+subroutine shiftmap_case( nspace, nstates, nptcls, nthrs )
+    integer, intent(in) :: nspace, nstates, nptcls, nthrs(:)
+    class(polar_matching_bench), allocatable, target :: bench
+    integer,          parameter :: MAPS(2) = [SHIFTMAP_WINDOW, SHIFTMAP_SCREEN]
+    character(len=6), parameter :: MAPNAMES(2) = ['window', 'screen']
+    real(dp), allocatable :: res_one(:,:,:), res_team(:,:,:)
+    real(dp) :: wall
+    integer  :: imap, it, pftsz, nrots, kfromto(2), nrefs, ncand, nchk, ndiff, funit
+    allocate(bench)
+    call bench%new(nspace, nstates, nptcls, maxval(nthrs), .true., .false., .false., 0)
+    call report_case(bench, nspace, nstates)
+    call bench%get_sizes(pftsz, nrots, kfromto, nrefs)
+    ncand = min(NCAND_MAPS, nrefs)
+    nchk  = min(NCHECK_MAPS, nptcls)
+    do imap = 1,size(MAPS)
+        do it = 1,size(nthrs)
+            call time_maps(bench, MAPS(imap), nspace, nstates, nptcls, nthrs(it))
+        enddo
+        ! the one-thread results (loss, width, rotation, radius, direction per map) for comparing builds byte for byte
+        wall = bench%score_maps(MAPS(imap), 1, nchk, ncand)
+        call bench%get_map_results(res_one)
+        open(newunit=funit, file='polar_shiftmap_identity_'//MAPNAMES(imap)//'.bin', access='stream',&
+            &form='unformatted', status='replace', action='write')
+        write(funit) res_one
+        close(funit)
+        if( maxval(nthrs) > 1 )then
+            wall = bench%score_maps(MAPS(imap), maxval(nthrs), nchk, ncand)
+            call bench%get_map_results(res_team)
+            ndiff = count(any(abs(res_one - res_team) > 0._dp, dim=1))
+            write(logfhandle,'(4x,a,a,a,i0,a,i0,a,i0,a,i0,a)') 'shiftmap ', MAPNAMES(imap), ' team identity: ', nchk,&
+                &' particles x ', ncand, ' candidates, 1 against ', maxval(nthrs), ' threads: ', ndiff, ' maps differ'
+        endif
+    enddo
+    call bench%kill
+    deallocate(bench)
+end subroutine shiftmap_case
+
+!> one shift-map row: warm-up, best of NREPS, appended to the TSV with the map's geometry and the last repeat's
+!! thread microseconds per map of construction, cell selection and posterior reduction
+subroutine time_maps( bench, imap, nspace, nstates, nptcls, nthr )
+    use simple_rnd, only: has_global_seed
+    class(polar_matching_bench), intent(inout) :: bench
+    integer,                     intent(in)    :: imap, nspace, nstates, nptcls, nthr
+    character(len=:), allocatable :: mapname, plans
+    real(dp) :: walls(NREPS), wall_best, nmaps, us_map, maps_per_s, parts(3), rho_max, prior_w
+    real     :: load1
+    integer  :: nptcls_use, nwarm, ncand, irep, funit, pftsz, nrots, kfromto(2), nrefs, geom(4)
+    logical  :: l_new
+    call bench%get_sizes(pftsz, nrots, kfromto, nrefs)
+    mapname = 'window'
+    if( imap == SHIFTMAP_SCREEN ) mapname = 'screen'
+    ! the maps' FFTW plans: estimated under the test executable's fixed seed, measured in production
+    plans = 'measure'
+    if( has_global_seed() ) plans = 'estimate'
+    ncand      = min(NCAND_MAPS, nrefs)
+    nptcls_use = nptcls
+    if( nthr == 1 ) nptcls_use = min(nptcls, NPTCLS_ONE_THREAD)
+    nwarm = min(nptcls_use, max(2*nthr, nptcls_use/10))
+    load1 = load_average()
+    walls(1) = bench%score_maps(imap, nthr, nwarm, ncand)
+    do irep = 1,NREPS
+        walls(irep) = bench%score_maps(imap, nthr, nptcls_use, ncand)
+    enddo
+    nmaps      = real(nptcls_use,dp) * real(ncand,dp)
+    parts      = bench%get_map_parts() * 1.e6_dp / nmaps
+    wall_best  = minval(walls)
+    us_map     = wall_best * real(nthr,dp) * 1.e6_dp / nmaps
+    maps_per_s = nmaps / wall_best
+    call bench%get_map_geometry(imap, geom, rho_max, prior_w)
+    inquire(file=SHIFTMAP_TSV, exist=l_new)
+    l_new = .not. l_new
+    open(newunit=funit, file=SHIFTMAP_TSV, position='append', action='write', status='unknown')
+    if( l_new ) write(funit,'(a)') 'map'//achar(9)//'nspace'//achar(9)//'nstates'//achar(9)//'nrefs'//achar(9)//&
+        &'nptcls'//achar(9)//'ncand'//achar(9)//'nthr'//achar(9)//'pftsz'//achar(9)//'nrots'//achar(9)//&
+        &'kfrom'//achar(9)//'kscreen'//achar(9)//'nrho'//achar(9)//'nalpha'//achar(9)//'norder'//achar(9)//&
+        &'rho_max_px'//achar(9)//'prior_w'//achar(9)//'load1'//achar(9)//'wall_s'//achar(9)//&
+        &'wall_rep1'//achar(9)//'wall_rep2'//achar(9)//'wall_rep3'//achar(9)//'us_map_thread'//achar(9)//&
+        &'maps_per_s'//achar(9)//'us_construct'//achar(9)//'us_select'//achar(9)//'us_reduce'//achar(9)//'fftw_plans'
+    write(funit,'(a,13(a,i0),a,f10.4,a,es12.5,a,f6.2,4(a,f10.4),a,f10.3,a,es12.5,3(a,f10.3),a,a)') mapname,&
+        &achar(9), nspace, achar(9), nstates, achar(9), nrefs, achar(9), nptcls_use,&
+        &achar(9), ncand, achar(9), nthr, achar(9), pftsz, achar(9), nrots, achar(9), kfromto(1), achar(9), geom(4),&
+        &achar(9), geom(1), achar(9), geom(2), achar(9), geom(3), achar(9), rho_max, achar(9), prior_w,&
+        &achar(9), load1, achar(9), wall_best, achar(9), walls(1), achar(9), walls(2), achar(9), walls(3),&
+        &achar(9), us_map, achar(9), maps_per_s, achar(9), parts(1), achar(9), parts(2), achar(9), parts(3),&
+        &achar(9), plans
+    close(funit)
+    write(logfhandle,'(4x,a,a,a,i0,a,i0,a,i0,a,f6.2,a,f9.3,a,f10.2,a,es12.5,a)') 'shiftmap ', mapname, ' nthr=', nthr,&
+        &' nptcls=', nptcls_use, ' ncand=', ncand, ' load=', load1, ' wall=', wall_best, ' s, ', us_map,&
+        &' us/map/thread, ', maps_per_s, ' maps/s'
+end subroutine time_maps
 
 !> The identity checks of one case on nkeep particles, on the full rows over the rotations (the losses the posterior
 !! draws run over): production (layout 1) at one thread is the reference every layout is held to byte for byte, the

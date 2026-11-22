@@ -17,7 +17,7 @@ public :: fsc2ssnr, fsc2wiener_regularizer, fsc2optlp, fsc2optlp_sub, fsc2cref, 
 public :: lowpass_from_klim, gaussian_filter, bfac_cap_filter
 public :: mskdiam2lplimits, mskdiam2streamresthreshold
 public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
-public :: lpstages, lpstages_fast, lpstages_setlims
+public :: lpstages, lpstages_fast, lpstages_setlims, stage_trslim
 private
 #include "simple_local_flags.inc"
 real,    parameter :: LPSTAGES_STAGE1_LP_FLOOR = 20.
