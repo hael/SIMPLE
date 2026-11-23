@@ -7,7 +7,7 @@ use simple_error,       only: simple_exception
 use simple_defs,        only: MAXS
 implicit none
 private
-public :: prepare_tree_flex, prepare_tree_refine, collect_tree_fit, split_tree_states
+public :: prepare_tree_flex, prepare_tree_refine, collect_tree_fit, split_tree_states, write_tree_mask
 #include "simple_local_flags.inc"
 
 contains
@@ -168,6 +168,39 @@ contains
         node%models(1) = model
         call project%kill
     end subroutine collect_tree_fit
+
+    subroutine write_tree_mask( project_file, mskdiam, fname )
+        use simple_defs,             only: dp
+        use simple_syslib,           only: file_exists
+        use simple_fileio,           only: get_fpath
+        use simple_refine3D_fnames, only: refine3D_state_halfvol_fname
+        use simple_variance_mask,    only: write_variance_mask
+        type(string), intent(in) :: project_file, fname
+        real,         intent(in) :: mskdiam
+        type(sp_project), allocatable :: project
+        type(string),     allocatable :: evens(:), odds(:)
+        integer,          allocatable :: labels(:)
+        real(dp),         allocatable :: w(:)
+        type(string) :: directory, even, odd
+        integer :: i, state
+        allocate(project)
+        call project%read_segment('ptcl3D', project_file)
+        labels = [(project%os_ptcl3D%get_state(i), i=1,project%os_ptcl3D%get_noris())]
+        call project%kill
+        directory = get_fpath(project_file)
+        allocate(evens(0), odds(0), w(0))
+        do state = 1, maxval(labels)
+            if( count(labels == state) == 0 ) cycle
+            even = directory//refine3D_state_halfvol_fname(state, 'even', unfil=.true.)
+            odd  = directory//refine3D_state_halfvol_fname(state, 'odd',  unfil=.true.)
+            if( .not. file_exists(even) .or. .not. file_exists(odd) ) THROW_HARD('A populated FLEX state has no half maps')
+            evens = [evens, even]
+            odds  = [odds,  odd]
+            w     = [w, real(count(labels == state), dp)]
+        enddo
+        if( size(w) < 2 ) THROW_HARD('A variance mask needs at least two populated FLEX states')
+        call write_variance_mask(evens, odds, w, mskdiam, fname%to_char())
+    end subroutine write_tree_mask
 
     ! Each occupied positive state becomes one child; empty labels never create children.
     subroutine split_tree_states( node, decision, children )

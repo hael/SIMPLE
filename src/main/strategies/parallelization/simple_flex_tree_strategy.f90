@@ -167,7 +167,8 @@ contains
         use simple_parameters,     only: parameters
         use simple_cmdline,        only: cmdline
         use simple_commander_base, only: commander_base
-        use simple_flex_tree_project_gateway, only: prepare_tree_flex, collect_tree_fit
+        use simple_fileio,         only: get_fpath
+        use simple_flex_tree_project_gateway, only: prepare_tree_flex, collect_tree_fit, write_tree_mask
         class(flex_tree_strategy), intent(inout) :: self
         type(parameters),         intent(in)    :: params
         class(cmdline),           intent(in)    :: cline
@@ -175,30 +176,48 @@ contains
         integer,                  intent(in)    :: inode
         type(flex_tree_node),     intent(inout) :: node
         logical,                  intent(out)   :: ready
-        type(cmdline), allocatable :: flex_cline
-        type(string) :: directory, project, mean
+        type(string) :: directory, project, mean, mask
         character(len=24), parameter :: keys(*) = [character(len=24) :: &
             'neigs', 'npreimages', 'preimage_auto', 'n_probe_iters', 'nkern', 'state_axis', &
             'state_placement', 'min_neff', 'min_state_frac', 'column_separation', 'rec_backend', &
             'rec_states_backend', 'maxits_pcg', 'rtol', 'lp', 'box_crop', 'smpd_target', 'umap']
-        integer :: i
         directory = self%stage_directory(inode, 'flex')
         project = directory%to_char()//'/flex.simple'
         call prepare_tree_flex(node, project, mean, ready)
         if( .not. ready ) return
-        allocate(flex_cline)
-        call self%stage_command(params, project, 'flex_pca', flex_cline)
-        do i = 1, size(keys)
-            call flex_cline%copy_arg(cline, trim(keys(i)))
-        enddo
-        call flex_cline%set('vol1', mean)
-        call flex_cline%set('rec_states', 'yes')
-        if( .not. params%pcg_mskfile%is_blank() ) call flex_cline%set('pcg_mskfile', params%pcg_mskfile)
-        call self%execute_stage(flex_runner, flex_cline, directory)
-        call flex_cline%kill
+        if( .not. params%pcg_mskfile%is_blank() ) mask = params%pcg_mskfile
+        call fit(directory, project)
+        if( inode == 1 )then
+            mask = get_fpath(directory)//'variance_mask.mrc'
+            call write_tree_mask(project, params%mskdiam, mask)
+            directory = self%stage_directory(inode, 'fflex')
+            project = directory%to_char()//'/fflex.simple'
+            call prepare_tree_flex(node, project, mean, ready)
+            call fit(directory, project)
+            node%mask_file = mask
+        endif
         node%project_file = project
         if( allocated(node%project_states) ) deallocate(node%project_states)
         call collect_tree_fit(node, mean, directory)
+
+    contains
+
+        subroutine fit( stage_dir, stage_project )
+            type(string), intent(in) :: stage_dir, stage_project
+            type(cmdline), allocatable :: flex_cline
+            integer :: i
+            allocate(flex_cline)
+            call self%stage_command(params, stage_project, 'flex_pca', flex_cline)
+            do i = 1, size(keys)
+                call flex_cline%copy_arg(cline, trim(keys(i)))
+            enddo
+            call flex_cline%set('vol1', mean)
+            call flex_cline%set('rec_states', 'yes')
+            if( .not. mask%is_blank() ) call flex_cline%set('pcg_mskfile', mask)
+            call self%execute_stage(flex_runner, flex_cline, stage_dir)
+            call flex_cline%kill
+        end subroutine fit
+
     end subroutine run_node_flex
 
     ! Ordinary hard-label multistate refinement, initialized from the FLEX state maps and poses.
