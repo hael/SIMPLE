@@ -849,6 +849,11 @@ contains
             case DEFAULT
                 THROW_HARD('rec_states_backend must be gridding or pcg')
         end select
+        select case(trim(self%mode))
+            case('single','tree')
+            case DEFAULT
+                THROW_HARD('mode must be single or tree')
+        end select
         select case(trim(self%state_placement))
             case('kcenter','equal_occ')
             case DEFAULT

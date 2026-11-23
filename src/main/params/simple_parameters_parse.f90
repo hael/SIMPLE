@@ -152,6 +152,7 @@ contains
         call reg%add_char('m_estimator', self%m_estimator)
         call reg%add_yesno('rec_states', self%rec_states)
         call reg%add_char('rec_states_backend', self%rec_states_backend)
+        call reg%add_char('mode', self%mode)
         call reg%add_char('state_placement', self%state_placement)
         call reg%add_char('pcontrast', self%pcontrast)
         call reg%add_char('pickkind', self%pickkind)

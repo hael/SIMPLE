@@ -200,6 +200,29 @@ call flex_pca%add_input(UI_FILT, 'min_state_frac', 'num', &
             &are then reconstructed from their hard labels. Incompatible with preimage_auto and the merge', &
             'fraction of particles 0-1', .false., 0.0, &
         &visibility=UI_VIS_STANDARD)
+        call flex_pca%add_input(UI_PARM, 'mode', 'multi', 'One fit or the state tree (default single)', &
+        &'single runs one flex_pca fit; tree splits the particles recursively: at every node flex_pca, refine3D of its &
+        &states and a split by occupied state, the root fit focused by a variance mask from its whole-map states&
+        &(single|tree){single}', '', .false., 'single', &
+        &choices=ui_choices([character(len=6) :: 'single', 'tree']), visibility=UI_VIS_STANDARD)
+        call flex_pca%add_input(UI_SRCH, maxits, required_override=.false., group='tree', visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('mode', [character(len=4) :: 'tree']))
+        call flex_pca%add_input(UI_SRCH, nspace, group='tree', visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('mode', [character(len=4) :: 'tree']))
+        call flex_pca%add_input(UI_SRCH, trs, group='tree', visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('mode', [character(len=4) :: 'tree']))
+        call flex_pca%add_input(UI_SRCH, 'athres_cont', 'num', 'Local search radius of the node refinement', &
+        &'Halfwidth of the cone of directions the node refinement searches about each particle''s pose', &
+        &'in degrees{10}', .false., 10., group='tree', visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('mode', [character(len=4) :: 'tree']))
+        call flex_pca%add_input(UI_FILT, ml_reg, group='tree', visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('mode', [character(len=4) :: 'tree']))
+        call flex_pca%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode of the node refinement', &
+        &'Filtering mode(none|uniform|fsc|nonuniform|nonuniform_lpset){none}', '', .false., 'none', group='tree', &
+        &choices=ui_choices([character(len=16) :: 'none', 'uniform', 'fsc', 'nonuniform', 'nonuniform_lpset']), &
+        &visibility=UI_VIS_ADVANCED, activation=ui_activation_equals_any('mode', [character(len=4) :: 'tree']))
+        call flex_pca%add_input(UI_MASK, automsk, group='tree', visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('mode', [character(len=4) :: 'tree']))
         call add_ui_program('flex_pca', flex_pca, prgtab, UI_CATEGORY)
     end subroutine new_flex_pca
 
