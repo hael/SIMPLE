@@ -70,6 +70,30 @@ simple_exec prg=cavg_cnn_predict projfile=proj.simple infile=$SIMPLE_PATH/script
 - **Speed:** 100 class averages of 320 px take about 3 s at 16 threads and 31 s on one.
 - **The code:** the network is `src/main/learn/simple_cavg_cnn.f90`, the input preparation `src/main/cavg_quality/simple_cavg_cnn_input.f90`, the program's body `src/main/cavg_quality/simple_cavg_cnn_predict.f90`. Tests: `simple_test_exec test=unit_numerics suite=cavg_cnn` and `suite=cavg_cnn_input`, against a small committed model (`testdata/cavg_cnn/`) whose PyTorch outputs they reproduce.
 
+## Label real class averages
+
+To collect labelled real class averages for training, make a labelling page where the data are:
+
+```bash
+python3 scripts/sscnn/label_cavgs.py proj/2_solve2D/proj.simple run/3_cavg_cnn_predict --dataset NAME --out labels.html
+```
+
+- **Inputs, in any mix:** a project with class averages (a `.simple` file, such as `solve2D`'s); a
+  `cavg_cnn_predictions.txt`; or a folder, searched for those tables (a `cavg_cnn_predict` folder, or a
+  `scripts/mic_training_generator.py` output with all its runs).
+- **The labels:** secondary structure (helices or sheets visible), likely protein, protein with secondary structure
+  unsure, junk, and can't tell.
+- **`--blind`** leaves the CNN's calls out, so they cannot sway the labels. Otherwise the classes of a prediction
+  table are grouped by the CNN's call.
+- **`--dataset`** names the data in the labels. Give runs of the same sample the same name: cross-validation will hold
+  out whole datasets.
+- **Labelling:** the page is one self-contained HTML file. Copy it anywhere and open it in a browser, without a
+  server or Python. Labels are kept in the browser as you go. **Export TSV** writes them, one row per class
+  (stack, class, population, resolution, label, the CNN's call, curator, time), and **Import TSV** loads an export
+  to continue.
+- **Label every class of a run**, not only those the CNN gets wrong, and label some runs blind.
+- **Not yet used by training:** the training does not read the labels yet.
+
 ## Train a model
 
 The whole chain in one command:

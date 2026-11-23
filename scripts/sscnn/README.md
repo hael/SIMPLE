@@ -111,6 +111,7 @@ Every run simulates, with SIMPLE:
 | `emdb_search.py` | finds EMDB entries with half maps and a fitted model, by resolution, box and molecular weight (`--min-kda`, `--max-kda`, `--pages`) |
 | `cnn_data.py`, `cnn_ss.py`, `CNN.md` | the class-average CNN: data, model, training, cross-validation, prediction, summary; its description |
 | `ss_trainer.py`, `transfer_check.py` | the labelling and selection tool |
+| `label_cavgs.py` | a labelling page for real class averages in the CNN's groups (solve2D projects or `cavg_cnn_predict` tables; blind or with the CNN's calls), exported as TSV; uses `../mic_training_generator.py` |
 | `simulate_cavgs.py` | shared code (mmCIF reading, secondary-structure assignment, MRC writing); also a fast numpy-only simulator |
 | `export_fortran.py` | a trained model as the weights file of SIMPLE's `cavg_cnn_predict` (Fortran inference, no Python at run time); the unit tests' fixture (`testdata/cavg_cnn/`) |
 
