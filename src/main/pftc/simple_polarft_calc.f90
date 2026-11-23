@@ -192,6 +192,7 @@ type :: polarft_calc
     ! the spectra owner's generation (assign_sigma2_noise) and its value when the weights were formed
     integer(int64), pointer :: sigma2_gen => null()
     integer(int64)       :: sigma2_gen_memo = -1_int64
+    logical              :: benchmark_measure_fft = .false. !< measured FFTW plans under a fixed seed (benchmarks)
     logical              :: existence = .false.         !< to indicate existence
   contains
     ! ===== CORE (new, kill, setters, getters, pointer helpers): simple_polarft_core.f90
@@ -335,13 +336,14 @@ interface
 
     ! ===== CORE (new, kill, setters, getters, pointer helpers) =====
 
-   module subroutine new(self, params, nrefs, pfromto, kfromto, nmany_refs)
+   module subroutine new(self, params, nrefs, pfromto, kfromto, nmany_refs, fftw_measure)
         use simple_parameters, only: parameters
         class(polarft_calc), target, intent(inout) :: self
         class(parameters),   target, intent(in)    :: params
         integer,                     intent(in)    :: nrefs
         integer,                     intent(in)    :: pfromto(2), kfromto(2)
         integer, optional,           intent(in)    :: nmany_refs
+        logical, optional,           intent(in)    :: fftw_measure
     end subroutine new
 
     module subroutine kill(self)

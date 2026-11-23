@@ -311,14 +311,17 @@ contains
             &'./polar_neigh_bench.tsv and ./polar_neigh_check.tsv), or the shift maps (shiftmap: the dense fill''s '//&
             &'window and screen maps, 16 candidates per particle, each map''s mode and physical width, at 2500 '//&
             &'directions and 4 states unless given; rows to ./polar_shiftmap_bench.tsv, one-thread results of 64 '//&
-            &'particles to ./polar_shiftmap_identity_*.bin for comparing builds); list prints them. '//&
-            &'Default times all euclid layouts', '', .false., '')
+            &'particles to ./polar_shiftmap_identity_*.bin for comparing builds under fftw_plans=estimate); list '//&
+            &'prints them. Default times all euclid layouts', '', .false., '')
         call polar_matching_bench%add_input(UI_PARM, 'nspace', 'num', 'Directions', &
             &'Run one number of projection directions. Default runs 1000 and 2500', '', .false., 0.)
         call polar_matching_bench%add_input(UI_PARM, 'nstates', 'num', 'States', &
             &'Run one number of states. Default runs 1, 2 and 4', '', .false., 0.)
         call polar_matching_bench%add_input(UI_PARM, 'nptcls', 'num', 'Particles', &
             &'Particles per measurement (at most 200 at one thread)', '# particles{2000}', .false., 2000.)
+        call polar_matching_bench%add_input(UI_PARM, 'fftw_plans', 'str', 'FFTW planner', &
+            &'FFTW plans of block_prod and shiftmap(measure|estimate){measure}: measure as production; estimate '//&
+            &'gives reproducible output and the identity files for comparing builds', '', .false., '')
         call polar_matching_bench%add_input(UI_COMP, nthr, required_override=.false.)
         ! add to ui_hash
         call add_ui_program('polar_matching_bench', polar_matching_bench, tsttab, UI_CATEGORY)

@@ -7,17 +7,23 @@ contains
 
     ! ===== CORE (new, kill, setters, getters, pointer helpers) =====
 
-    module subroutine new(self, params, nrefs, pfromto, kfromto, nmany_refs)
+    module subroutine new(self, params, nrefs, pfromto, kfromto, nmany_refs, fftw_measure)
+        use simple_rnd, only: has_global_seed
         class(polarft_calc), target, intent(inout) :: self
         class(parameters),   target, intent(in)    :: params
         integer,                     intent(in)    :: nrefs
         integer,                     intent(in)    :: pfromto(2), kfromto(2)
         integer,           optional, intent(in)    :: nmany_refs
+        logical,           optional, intent(in)    :: fftw_measure
         real(sp), allocatable :: polar_here(:)
         real(dp)              :: A(2)
         integer               :: irot, k, ithr, i, nthr_team
         logical               :: even_dims, test(2)
         call self%kill
+        self%benchmark_measure_fft = .false.
+        if( present(fftw_measure) )then
+            if( has_global_seed() ) self%benchmark_measure_fft = fftw_measure
+        endif
         ! per-thread work buffers, one per thread of the team in use
         nthr_team = 1
         !$ nthr_team = omp_get_max_threads()

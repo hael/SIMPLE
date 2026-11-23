@@ -25,6 +25,7 @@ contains
         integer(c_int) :: n2(2), nin(2), plan_flags
         integer        :: ithr, nmax, nrho, nhalf, k1, k2, nthreads, ir, ia
         real(dp) :: t0
+        integer(int64) :: plan_start, plan_end, clock_rate
         if( .not. self%existence ) THROW_HARD('the calculator must exist; new_shiftmap')
         if( imap < 1 .or. imap > NSHIFTMAPS ) THROW_HARD('no such shift map; new_shiftmap')
         if( kstop <= self%kfromto(1) .or. kstop > self%kfromto(2) ) THROW_HARD('the map''s last shell must lie in the band; new_shiftmap')
@@ -37,7 +38,7 @@ contains
             allocate(self%sm_counts(6,nthreads), source=0_int64)
         endif
         plan_flags = FFTW_MEASURE
-        if( has_global_seed() ) plan_flags = FFTW_ESTIMATE
+        if( has_global_seed() .and. .not. self%benchmark_measure_fft ) plan_flags = FFTW_ESTIMATE
         k1 = self%kfromto(1)
         k2 = kstop
         if( self%shiftmap(imap)%matches(self%pftsz, [k1,k2], self%ldim(1), rho, nalpha) )then
@@ -77,15 +78,22 @@ contains
             self%smwork(ithr,imap)%iref = 0
         enddo
         ! one complex-to-real 2D transform per magnitude over (direction order, ring position), nrho of them in a
-        ! batch, out of place; measured plans defeat exact replay, so a fixed seed takes the estimated one (as the
-        ! memo workspace)
+        ! batch, out of place; use the memo workspace planner policy for reproducible tests and the benchmark
         n2(1)   = int(self%nrots, c_int)
         n2(2)   = int(nalpha, c_int)
         nin(1)  = int(self%nrots, c_int)
         nin(2)  = int(nhalf, c_int)
+        plan_start = 0_int64
+        clock_rate = 1_int64
+        if( self%benchmark_measure_fft ) call system_clock(plan_start, clock_rate)
         self%plan_shiftmap(imap) = fftwf_plan_many_dft_c2r(2_c_int, n2, int(nrho, c_int),&
             &self%smwork(1,imap)%ghalf, nin, 1_c_int, int(nhalf * self%nrots, c_int),&
             &self%smwork(1,imap)%gout,  n2,  1_c_int, int(nalpha * self%nrots, c_int), plan_flags)
+        if( self%benchmark_measure_fft )then
+            call system_clock(plan_end)
+            write(logfhandle,'(a,i0,a,f12.6)') 'FFTW shift map ', imap, ' planning seconds: ', &
+                &real(plan_end-plan_start,dp)/real(clock_rate,dp)
+        endif
         if( .not. c_associated(self%plan_shiftmap(imap)) ) THROW_HARD('FFTW failed to create the shift map plan; new_shiftmap')
         self%smcache(imap)%plan_flags = plan_flags
         self%sm_builds = self%sm_builds + 1_int64

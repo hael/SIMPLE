@@ -52,9 +52,9 @@ module subroutine exec_test_polar_matching_bench( self, cline )
     class(cmdline),                             intent(inout) :: cline
     integer, parameter :: NSPACE_ALL(2) = [1000, 2500], NSTATES_ALL(3) = [1, 2, 4]
     integer, allocatable :: nspaces(:), nstates_list(:), nthrs(:), layouts(:)
-    type(string) :: suite
+    type(string) :: suite, fftw_plans
     integer      :: nptcls, nthr_max, ispace, istate
-    logical      :: l_check, l_identity, l_fills, l_neigh, l_maps
+    logical      :: l_check, l_identity, l_fills, l_neigh, l_maps, l_measure, l_planner
     integer      :: ipg
     suite    = ''
     nptcls   = 2000
@@ -119,6 +119,23 @@ module subroutine exec_test_polar_matching_bench( self, cline )
         case default
             THROW_HARD('no suite '//suite%to_char()//' in polar_matching_bench; use suite=list')
     end select
+    ! block_prod and shiftmap plan the calculator's FFTs as production does, measured, unless fftw_plans=estimate
+    ! asks for the estimated plans, whose output is reproducible for comparing builds; the other suites estimate
+    l_planner  = suite%to_char() == 'block_prod' .or. suite%to_char() == 'shiftmap'
+    fftw_plans = 'estimate'
+    if( l_planner ) fftw_plans = 'measure'
+    if( cline%defined('fftw_plans') )then
+        if( .not. l_planner ) THROW_HARD('fftw_plans is supported only for block_prod and shiftmap')
+        fftw_plans = cline%get_carg('fftw_plans')
+    endif
+    select case(fftw_plans%to_char())
+        case('estimate')
+            l_measure = .false.
+        case('measure')
+            l_measure = .true.
+        case default
+            THROW_HARD('fftw_plans must be estimate or measure')
+    end select
     if( nptcls < 1 .or. nthr_max < 1 .or. any(nspaces < 1) .or. any(nstates_list < 1) )then
         THROW_HARD('polar_matching_bench needs nptcls, nthr, nspace and nstates >= 1')
     endif
@@ -138,7 +155,7 @@ module subroutine exec_test_polar_matching_bench( self, cline )
             else if( l_fills )then
                 call fills_case(nspaces(ispace), nstates_list(istate), nptcls, nthr_max)
             else if( l_maps )then
-                call shiftmap_case(nspaces(ispace), nstates_list(istate), nptcls, nthrs)
+                call shiftmap_case(nspaces(ispace), nstates_list(istate), nptcls, nthrs, l_measure)
             else if( l_identity )then
                 if( cline%defined('nptcls') )then
                     call identity_case(nspaces(ispace), nstates_list(istate), nptcls, nthr_max)
@@ -146,7 +163,7 @@ module subroutine exec_test_polar_matching_bench( self, cline )
                     call identity_case(nspaces(ispace), nstates_list(istate), NKEEP_IDENTITY, nthr_max)
                 endif
             else
-                call time_case(nspaces(ispace), nstates_list(istate), nptcls, nthrs, layouts)
+                call time_case(nspaces(ispace), nstates_list(istate), nptcls, nthrs, layouts, l_measure)
             endif
         enddo
     enddo
@@ -155,13 +172,19 @@ end subroutine exec_test_polar_matching_bench
 
 !> The timings of one case: per layout and team, best of NREPS after a warm-up; the tile sizes of layouts 2 and 4
 !! are swept at the full team and the fastest is timed at the others
-subroutine time_case( nspace, nstates, nptcls, nthrs, layouts )
+subroutine time_case( nspace, nstates, nptcls, nthrs, layouts, l_measure )
+    use simple_rnd, only: has_global_seed
     integer, intent(in) :: nspace, nstates, nptcls, nthrs(:), layouts(:)
+    logical, intent(in) :: l_measure
     class(polar_matching_bench), allocatable, target :: bench
+    character(len=:), allocatable :: plans
     integer, allocatable :: bszs(:), rszs(:)
     real(dp) :: wall, wall_best
     integer  :: ilay, it, nt, best_b, best_r, ib, ir
     logical  :: l_prod, l_memo, l_gmat, l_cc
+    ! the planner of the calculator's FFTs, for the TSV
+    plans = 'measure'
+    if( has_global_seed() .and. .not. l_measure ) plans = 'estimate'
     l_prod = any(layouts == PMB_PER_PAIR) .or. any(layouts == PMB_PER_PAIR_CC) .or. any(layouts == PMB_BLOCK_PROD)
     l_cc   = any(layouts == PMB_PER_PAIR_CC)
     if( l_cc .and. size(layouts) > 1 ) THROW_HARD('per_pair_cc is timed on its own')
@@ -169,9 +192,9 @@ subroutine time_case( nspace, nstates, nptcls, nthrs, layouts )
     l_gmat = any(layouts == PMB_MATRIX) .or. any(layouts == PMB_MATRIX_T)
     allocate(bench)
     if( l_cc )then
-        call bench%new(nspace, nstates, nptcls, maxval(nthrs), l_prod, l_memo, l_gmat, 0, objfun='cc')
+        call bench%new(nspace, nstates, nptcls, maxval(nthrs), l_prod, l_memo, l_gmat, 0, objfun='cc', fftw_measure=l_measure)
     else
-        call bench%new(nspace, nstates, nptcls, maxval(nthrs), l_prod, l_memo, l_gmat, 0)
+        call bench%new(nspace, nstates, nptcls, maxval(nthrs), l_prod, l_memo, l_gmat, 0, fftw_measure=l_measure)
     endif
     call report_case(bench, nspace, nstates)
     do ilay = 1,size(layouts)
@@ -197,7 +220,7 @@ subroutine time_case( nspace, nstates, nptcls, nthrs, layouts )
                 wall_best = huge(wall_best)
                 do ir = 1,size(rszs)
                     do ib = 1,size(bszs)
-                        wall = time_one(bench, layouts(ilay), nspace, nstates, nptcls, nt, bszs(ib), rszs(ir))
+                        wall = time_one(bench, layouts(ilay), nspace, nstates, nptcls, nt, bszs(ib), rszs(ir), plans)
                         if( wall < wall_best )then
                             wall_best = wall
                             best_b    = bszs(ib)
@@ -206,7 +229,7 @@ subroutine time_case( nspace, nstates, nptcls, nthrs, layouts )
                     enddo
                 enddo
             else
-                wall = time_one(bench, layouts(ilay), nspace, nstates, nptcls, nt, best_b, best_r)
+                wall = time_one(bench, layouts(ilay), nspace, nstates, nptcls, nt, best_b, best_r, plans)
             endif
         enddo
     enddo
@@ -214,10 +237,12 @@ subroutine time_case( nspace, nstates, nptcls, nthrs, layouts )
     deallocate(bench)
 end subroutine time_case
 
-!> one timing row: warm-up, best of NREPS, appended to the TSV; returns the best wall time
-function time_one( bench, layout, nspace, nstates, nptcls, nthr, bsz, rsz ) result( wall_best )
+!> one timing row: warm-up, best of NREPS, appended to the TSV with the calculator's FFTW planner; returns the best
+!! wall time
+function time_one( bench, layout, nspace, nstates, nptcls, nthr, bsz, rsz, plans ) result( wall_best )
     class(polar_matching_bench), intent(inout) :: bench
     integer,                     intent(in)    :: layout, nspace, nstates, nptcls, nthr, bsz, rsz
+    character(len=*),            intent(in)    :: plans
     real(dp) :: wall_best, walls(NREPS), pairs, us_pair, pairs_per_s, ref_gbps, parts(3)
     real     :: load1
     integer  :: nptcls_use, nwarm, irep, funit, pftsz, nrots, kfromto(2), nrefs
@@ -245,13 +270,13 @@ function time_one( bench, layout, nspace, nstates, nptcls, nthr, bsz, rsz ) resu
         &'kfrom'//achar(9)//'kto'//achar(9)//'load1'//achar(9)//'wall_s'//achar(9)//&
         &'wall_rep1'//achar(9)//'wall_rep2'//achar(9)//'wall_rep3'//achar(9)//'us_pair_thread'//achar(9)//&
         &'pairs_per_s'//achar(9)//'ref_GBps'//achar(9)//'memo_GB'//achar(9)//'check'//achar(9)//&
-        &'us_sums'//achar(9)//'us_fft'//achar(9)//'us_draw'
-    write(funit,'(a,11(a,i0),a,f6.2,4(a,f10.4),a,f9.3,a,es12.5,a,f8.3,a,f8.3,a,a,3(a,f9.3))') layout_name(layout),&
+        &'us_sums'//achar(9)//'us_fft'//achar(9)//'us_draw'//achar(9)//'fftw_plans'
+    write(funit,'(a,11(a,i0),a,f6.2,4(a,f10.4),a,f9.3,a,es12.5,a,f8.3,a,f8.3,a,a,3(a,f9.3),a,a)') layout_name(layout),&
         &achar(9), nspace, achar(9), nstates, achar(9), nrefs, achar(9), nptcls_use, achar(9), nthr, achar(9), bsz,&
         &achar(9), rsz, achar(9), pftsz, achar(9), nrots, achar(9), kfromto(1), achar(9), kfromto(2),&
         &achar(9), load1, achar(9), wall_best, achar(9), walls(1), achar(9), walls(2), achar(9), walls(3), achar(9),&
         &us_pair, achar(9), pairs_per_s, achar(9), ref_gbps, achar(9), bench%memo_gbytes(), achar(9), '-',&
-        &achar(9), parts(1), achar(9), parts(2), achar(9), parts(3)
+        &achar(9), parts(1), achar(9), parts(2), achar(9), parts(3), achar(9), plans
     close(funit)
     write(logfhandle,'(4x,a,a,i0,a,i0,a,i0,a,i0,a,f6.2,a,f9.3,a,f8.2,a,f8.2,a)') layout_name(layout), ' nthr=', nthr,&
         &' B=', bsz, ' R=', rsz, ' nptcls=', nptcls_use, ' load=', load1, ' wall=', wall_best, ' s, ', us_pair,&
@@ -259,9 +284,11 @@ function time_one( bench, layout, nspace, nstates, nptcls, nthr, bsz, rsz ) resu
 end function time_one
 
 !> The shift maps of one case: the window and the screen map, per team, best of NREPS after a warm-up; then each
-!! map's results on NCHECK_MAPS particles at one thread, written for comparing builds and held to the full team's
-subroutine shiftmap_case( nspace, nstates, nptcls, nthrs )
+!! map's results on NCHECK_MAPS particles at one thread, held to the full team's and, under estimated plans, written
+!! for comparing builds
+subroutine shiftmap_case( nspace, nstates, nptcls, nthrs, l_measure )
     integer, intent(in) :: nspace, nstates, nptcls, nthrs(:)
+    logical, intent(in) :: l_measure
     class(polar_matching_bench), allocatable, target :: bench
     integer,          parameter :: MAPS(2) = [SHIFTMAP_WINDOW, SHIFTMAP_SCREEN]
     character(len=6), parameter :: MAPNAMES(2) = ['window', 'screen']
@@ -269,22 +296,28 @@ subroutine shiftmap_case( nspace, nstates, nptcls, nthrs )
     real(dp) :: wall
     integer  :: imap, it, pftsz, nrots, kfromto(2), nrefs, ncand, nchk, ndiff, funit
     allocate(bench)
-    call bench%new(nspace, nstates, nptcls, maxval(nthrs), .true., .false., .false., 0)
+    call bench%new(nspace, nstates, nptcls, maxval(nthrs), .true., .false., .false., 0, fftw_measure=l_measure)
     call report_case(bench, nspace, nstates)
     call bench%get_sizes(pftsz, nrots, kfromto, nrefs)
     ncand = min(NCAND_MAPS, nrefs)
     nchk  = min(NCHECK_MAPS, nptcls)
     do imap = 1,size(MAPS)
         do it = 1,size(nthrs)
-            call time_maps(bench, MAPS(imap), nspace, nstates, nptcls, nthrs(it))
+            call time_maps(bench, MAPS(imap), nspace, nstates, nptcls, nthrs(it), l_measure)
         enddo
-        ! the one-thread results (loss, width, rotation, radius, direction per map) for comparing builds byte for byte
+        ! the one-thread results (loss, width, rotation, radius, direction per map) for comparing builds byte for
+        ! byte; measured plans may differ between runs in the last bits, so only estimated plans write the file
         wall = bench%score_maps(MAPS(imap), 1, nchk, ncand)
         call bench%get_map_results(res_one)
-        open(newunit=funit, file='polar_shiftmap_identity_'//MAPNAMES(imap)//'.bin', access='stream',&
-            &form='unformatted', status='replace', action='write')
-        write(funit) res_one
-        close(funit)
+        if( l_measure )then
+            write(logfhandle,'(4x,a,a,a)') 'shiftmap ', MAPNAMES(imap),&
+                &' identity file not written under measured plans; fftw_plans=estimate writes it'
+        else
+            open(newunit=funit, file='polar_shiftmap_identity_'//MAPNAMES(imap)//'.bin', access='stream',&
+                &form='unformatted', status='replace', action='write')
+            write(funit) res_one
+            close(funit)
+        endif
         if( maxval(nthrs) > 1 )then
             wall = bench%score_maps(MAPS(imap), maxval(nthrs), nchk, ncand)
             call bench%get_map_results(res_team)
@@ -299,10 +332,11 @@ end subroutine shiftmap_case
 
 !> one shift-map row: warm-up, best of NREPS, appended to the TSV with the map's geometry and the last repeat's
 !! thread microseconds per map of construction, cell selection and posterior reduction
-subroutine time_maps( bench, imap, nspace, nstates, nptcls, nthr )
+subroutine time_maps( bench, imap, nspace, nstates, nptcls, nthr, l_measure )
     use simple_rnd, only: has_global_seed
     class(polar_matching_bench), intent(inout) :: bench
     integer,                     intent(in)    :: imap, nspace, nstates, nptcls, nthr
+    logical,                     intent(in)    :: l_measure
     character(len=:), allocatable :: mapname, plans
     real(dp) :: walls(NREPS), wall_best, nmaps, us_map, maps_per_s, parts(3), rho_max, prior_w
     real     :: load1
@@ -311,9 +345,9 @@ subroutine time_maps( bench, imap, nspace, nstates, nptcls, nthr )
     call bench%get_sizes(pftsz, nrots, kfromto, nrefs)
     mapname = 'window'
     if( imap == SHIFTMAP_SCREEN ) mapname = 'screen'
-    ! the maps' FFTW plans: estimated under the test executable's fixed seed, measured in production
+    ! report the planner used for this run
     plans = 'measure'
-    if( has_global_seed() ) plans = 'estimate'
+    if( has_global_seed() .and. .not. l_measure ) plans = 'estimate'
     ncand      = min(NCAND_MAPS, nrefs)
     nptcls_use = nptcls
     if( nthr == 1 ) nptcls_use = min(nptcls, NPTCLS_ONE_THREAD)

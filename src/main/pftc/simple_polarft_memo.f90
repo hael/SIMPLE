@@ -337,6 +337,7 @@ contains
         integer             :: ithr, nthr_team
         integer(c_int)      :: plan_flags
         logical             :: l_fixed_seed
+        integer(int64)      :: plan_start, plan_end, clock_rate
         call self%kill_memo_workspace
         ! one workspace per thread of the team in use
         nthr_team = 1
@@ -370,9 +371,9 @@ contains
         l_fixed_seed = has_global_seed()
         plan_flags = FFTW_MEASURE
         if( l_fixed_seed )then
-            ! Timing-selected FFT plans defeat exact replay even with identical random draws.
+            ! Use estimated plans for reproducible tests unless the benchmark requests measured plans.
             call fftwf_forget_wisdom()
-            plan_flags = FFTW_ESTIMATE
+            if( .not. self%benchmark_measure_fft ) plan_flags = FFTW_ESTIMATE
         else
             wsdm_ret = fftwf_import_wisdom_from_filename(fft_wisdoms_fname)
         endif
@@ -387,6 +388,9 @@ contains
         odist      = int(self%nrots, c_int)
         inembed(1) = n(1)
         onembed(1) = n(1)
+        plan_start = 0_int64
+        clock_rate = 1_int64
+        if( self%benchmark_measure_fft ) call system_clock(plan_start, clock_rate)
         self%plan_fwd1_many = fftwf_plan_many_dft( rank, n, howmany, &
         &self%cmat2_many(1)%c, inembed, istride, idist, &
         &self%cmat2_many(1)%c, onembed, ostride, odist, FFTW_FORWARD, plan_flags)
@@ -448,6 +452,10 @@ contains
                                     &self%crmat_many(1)%c, inembed, 1_c_int, idist, &
                                     &self%crmat_many(1)%r, onembed, 1_c_int, odist, plan_flags )
             if( .not. c_associated(self%plan_bwd_many_refs) ) THROW_HARD('FFTW failed to create plan_bwd_many_refs')
+        endif
+        if( self%benchmark_measure_fft )then
+            call system_clock(plan_end)
+            write(logfhandle,'(a,f12.6)') 'FFTW memo planning seconds: ', real(plan_end-plan_start,dp)/real(clock_rate,dp)
         endif
         ! the block kernel's work and plan, planned as the others (and kept in the wisdom below)
         call self%new_block_work(nthr_team, plan_flags)

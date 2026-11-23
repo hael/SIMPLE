@@ -230,7 +230,7 @@ contains
     !! (memo) and in layout 4's bin-major copy (gmat); the data are the same in every combination.
     !! objfun (euclid by default) is the objective of the production calculator. fills_route (PMB_ROUTE_*) builds
     !! the fill harness's toolbox beside: the same data in a builder's calculator and a particle field (run_fill).
-    subroutine new( self, nspace, nstates, nptcls, nthr_max, prod_refs, memo, gmat, nkeep, objfun, fills_route )
+    subroutine new( self, nspace, nstates, nptcls, nthr_max, prod_refs, memo, gmat, nkeep, objfun, fills_route, fftw_measure )
         use simple_cmdline,    only: cmdline
         use simple_sp_project, only: sp_project
         use simple_math_ft,    only: calc_fourier_index
@@ -244,6 +244,7 @@ contains
         logical,                             intent(in)    :: prod_refs, memo, gmat
         character(len=*), optional,          intent(in)    :: objfun
         integer,          optional,          intent(in)    :: fills_route
+        logical,          optional,          intent(in)    :: fftw_measure
         class(cmdline),    allocatable :: cline
         class(sp_project), allocatable :: spproj
         complex(sp),       allocatable :: pft(:,:)
@@ -333,13 +334,14 @@ contains
         ! the shell range of set_bp_range at an explicit lp
         self%kfromto(1) = max(2, calc_fourier_index(self%params%hp, self%params%box, self%params%smpd))
         self%kfromto(2) = calc_fourier_index(self%params%lp, self%params%box, self%params%smpd)
-        ! a fixed seed after parameters%new: reproducible data and FFTW_ESTIMATE plans (no wisdom file)
+        ! a fixed seed after parameters%new: reproducible data; the calculator's FFTW plans are estimated unless
+        ! fftw_measure asks for measured ones, and no wisdom file is read or written
         call set_fixed_seed(PMB_SEED)
         ! without production references the calculator holds one (it serves the particle side)
         if( prod_refs )then
-            call self%pftc%new(self%params, self%nrefs, [1,nptcls], self%kfromto)
+            call self%pftc%new(self%params, self%nrefs, [1,nptcls], self%kfromto, fftw_measure=fftw_measure)
         else
-            call self%pftc%new(self%params, 1, [1,nptcls], self%kfromto)
+            call self%pftc%new(self%params, 1, [1,nptcls], self%kfromto, fftw_measure=fftw_measure)
         endif
         ! the fill harness's calculator, given the same references and particles
         if( self%fill_route > 0 )then

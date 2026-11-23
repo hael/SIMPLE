@@ -17,6 +17,7 @@ contains
         integer,             intent(in)    :: nthr_team
         integer(c_int),      intent(in)    :: plan_flags
         integer :: ithr, n1, npairs
+        integer(int64) :: plan_start, plan_end, clock_rate
         call self%kill_block_work
         n1     = self%pftsz + 1
         npairs = PFTC_BLOCK_NR * PFTC_BLOCK_NB
@@ -31,9 +32,16 @@ contains
             self%bwork(ithr)%pout = fftwf_alloc_real(int(self%nrots * npairs, c_size_t))
             call c_f_pointer(self%bwork(ithr)%pout, self%bwork(ithr)%out, [self%nrots, npairs])
         enddo
+        plan_start = 0_int64
+        clock_rate = 1_int64
+        if( self%benchmark_measure_fft ) call system_clock(plan_start, clock_rate)
         self%plan_block = fftwf_plan_many_dft_c2r(1_c_int, [int(self%nrots,c_int)], int(PFTC_BLOCK_NR,c_int),&
             &self%bwork(1)%ct, [int(n1,c_int)], 1_c_int, int(n1,c_int), self%bwork(1)%out, [int(self%nrots,c_int)],&
             &1_c_int, int(self%nrots,c_int), plan_flags)
+        if( self%benchmark_measure_fft )then
+            call system_clock(plan_end)
+            write(logfhandle,'(a,f12.6)') 'FFTW block planning seconds: ', real(plan_end-plan_start,dp)/real(clock_rate,dp)
+        endif
         if( .not. c_associated(self%plan_block) ) THROW_HARD('FFTW failed to create plan_block')
     end subroutine new_block_work
 

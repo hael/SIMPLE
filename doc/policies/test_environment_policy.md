@@ -161,7 +161,12 @@ timings, work counts and pose errors, no thresholds; owner decision
 layouts of the dense probability table's euclid scoring, production's cc
 scoring, and with `suite=shiftmap` the dense fill's screen and window shift
 maps; timings and identity checks, including a dump of the production kernels'
-distance vectors for comparing builds, no thresholds;
+distance vectors for comparing builds, no thresholds; for `suite=block_prod` and
+`suite=shiftmap`, `fftw_plans=measure|estimate` selects the fixed-seed FFTW
+planner, defaulting to `measure`, production's planner; `estimate` gives
+reproducible output and is the one that writes the shift maps' identity files
+for comparing builds; measured planning uses no wisdom file and is reported
+separately from the timed loops;
 `doc/implementation_notes/completed/polar_matching_layout_bench.md`),
 `pose_student_bench` (the pose student's HHCNN kernels on synthetic tensors:
 the forward and backward passes, the training step at one thread and at the
