@@ -15,7 +15,7 @@ type :: pickref_corr_batch
     private
     integer :: nx = 0, ny = 0, box = 0, npix = 0, nrefs = 0, batch_size = 0
     real, allocatable :: mic(:,:), refs(:,:), ref_sums(:)
-    real, allocatable :: windows(:,:), dots(:,:)
+    real, allocatable :: windows(:,:,:), dots(:,:,:)   !< (npix|nrefs, batch_size, team) per thread
     real(dp), allocatable :: sat(:,:), sat2(:,:)
     real(dp) :: mic_scale = 1.0_dp
     real(dp) :: prepare_seconds = 0.0_dp, gather_seconds = 0.0_dp
@@ -87,37 +87,58 @@ contains
             self%ref_sums(iref) = sum(self%refs(:,iref))
             deallocate(rmat)
         end do
-        allocate(self%windows(self%npix,self%batch_size), source=0.0)
-        allocate(self%dots(self%nrefs,self%batch_size), source=0.0)
         self%prepare_seconds = toc_omp(t0)
         self%exists = .true.
     end subroutine new
 
+    !> The best Pearson correlation over the valid references of each position's window, -1 where there is none:
+    !! batches of batch_size positions on the team, each gathered and multiplied by the references on its thread. A
+    !! batch's product has the shape its positions give it, so the scores are the same on any team
     subroutine score_positions( self, positions, scores )
+        use simple_timer, only: clock_count, clock_seconds_since, timer_int_kind
+        !$ use omp_lib,   only: omp_get_max_threads, omp_get_thread_num
         class(pickref_corr_batch), intent(inout) :: self
         integer,                   intent(in)    :: positions(:,:)
         real,                      intent(out)   :: scores(size(positions,1))
-        real(dp), allocatable :: means(:), sigmas(:)
-        logical, allocatable :: valid(:)
-        logical :: have_score
-        real(dp) :: sum_win, sumsq_win, variance, rnpix, t0
-        real :: score, best_score
-        integer :: ibeg, iend, nbatch, icol, ipos, iref, x, y
-        integer :: i0, i1, j0, j1, jwin, ivec
+        real(dp), allocatable   :: means(:,:), sigmas(:,:), tgather(:), tgemm(:), treduce(:)
+        logical,  allocatable   :: valid(:,:)
+        integer(timer_int_kind) :: t0
+        logical  :: have_score
+        real(dp) :: sum_win, sumsq_win, variance, rnpix
+        real     :: score, best_score
+        integer  :: nthr, ithr, nbatches, ib, ibeg, iend, nbatch, icol, ipos, iref, x, y
+        integer  :: i0, i1, j0, j1, jwin, ivec
         if( .not. self%exists ) error stop 'pickref_corr_batch: score_positions before new'
         if( size(positions,2) /= 2 ) error stop 'pickref_corr_batch: positions must have two columns'
         scores = -1.0
         self%candidates_scored = self%candidates_scored + int(size(positions,1),kind=8)
-        allocate(means(self%batch_size), sigmas(self%batch_size), valid(self%batch_size))
-        rnpix = real(self%npix,dp)
-        do ibeg = 1,size(positions,1),self%batch_size
-            iend = min(size(positions,1), ibeg+self%batch_size-1)
-            nbatch = iend-ibeg+1
-            self%windows(:,:nbatch) = 0.0
-            means(:nbatch) = 0.0_dp
-            sigmas(:nbatch) = 0.0_dp
-            valid(:nbatch) = .false.
-            t0 = tic_omp()
+        ! the windows and products of each thread of the team that runs
+        nthr = 1
+        !$ nthr = omp_get_max_threads()
+        if( allocated(self%windows) )then
+            if( size(self%windows,3) /= nthr ) deallocate(self%windows, self%dots)
+        endif
+        if( .not. allocated(self%windows) )then
+            allocate(self%windows(self%npix,self%batch_size,nthr), self%dots(self%nrefs,self%batch_size,nthr))
+        endif
+        allocate(means(self%batch_size,nthr), sigmas(self%batch_size,nthr), valid(self%batch_size,nthr))
+        allocate(tgather(nthr), tgemm(nthr), treduce(nthr), source=0.0_dp)
+        rnpix    = real(self%npix,dp)
+        nbatches = (size(positions,1) + self%batch_size - 1) / self%batch_size
+        !$omp parallel do default(shared) schedule(dynamic) proc_bind(close) &
+        !$omp& private(ib,ithr,ibeg,iend,nbatch,icol,ipos,iref,x,y,i0,i1,j0,j1,jwin,ivec,sum_win,sumsq_win,variance,&
+        !$omp& score,best_score,have_score,t0)
+        do ib = 1,nbatches
+            ithr = 1
+            !$ ithr = omp_get_thread_num() + 1
+            ibeg   = (ib - 1) * self%batch_size + 1
+            iend   = min(size(positions,1), ibeg + self%batch_size - 1)
+            nbatch = iend - ibeg + 1
+            self%windows(:,:nbatch,ithr) = 0.0
+            means(:nbatch,ithr)  = 0.0_dp
+            sigmas(:nbatch,ithr) = 0.0_dp
+            valid(:nbatch,ithr)  = .false.
+            t0 = clock_count()
             do icol = 1,nbatch
                 ipos = ibeg+icol-1
                 x = positions(ipos,1)
@@ -130,30 +151,30 @@ contains
                 j1 = y+self%box
                 sum_win = self%sat(i1,j1) - self%sat(i0-1,j1) - self%sat(i1,j0-1) + self%sat(i0-1,j0-1)
                 sumsq_win = self%sat2(i1,j1) - self%sat2(i0-1,j1) - self%sat2(i1,j0-1) + self%sat2(i0-1,j0-1)
-                means(icol) = sum_win / rnpix
-                variance = sumsq_win / rnpix - means(icol)*means(icol)
+                means(icol,ithr) = sum_win / rnpix
+                variance = sumsq_win / rnpix - means(icol,ithr)*means(icol,ithr)
                 if( .not.(variance*self%mic_scale*self%mic_scale > real(TINY,dp)) ) cycle
-                sigmas(icol) = sqrt(max(0.0_dp,variance))
+                sigmas(icol,ithr) = sqrt(max(0.0_dp,variance))
                 ivec = 0
                 do jwin = j0,j1
-                    self%windows(ivec+1:ivec+self%box,icol) = self%mic(i0:i1,jwin)
+                    self%windows(ivec+1:ivec+self%box,icol,ithr) = self%mic(i0:i1,jwin)
                     ivec = ivec+self%box
                 end do
-                valid(icol) = .true.
+                valid(icol,ithr) = .true.
             end do
-            self%gather_seconds = self%gather_seconds + toc_omp(t0)
-            t0 = tic_omp()
-            call gemm_tn(self%refs, self%windows(:,:nbatch), self%dots(:,:nbatch))
-            self%gemm_seconds = self%gemm_seconds + toc_omp(t0)
-            t0 = tic_omp()
+            tgather(ithr) = tgather(ithr) + clock_seconds_since(t0)
+            t0 = clock_count()
+            call gemm_tn(self%refs, self%windows(:,:nbatch,ithr), self%dots(:,:nbatch,ithr))
+            tgemm(ithr) = tgemm(ithr) + clock_seconds_since(t0)
+            t0 = clock_count()
             do icol = 1,nbatch
-                if( .not. valid(icol) ) cycle
+                if( .not. valid(icol,ithr) ) cycle
                 best_score = -huge(best_score)
                 have_score = .false.
                 do iref = 1,self%nrefs
                     if( .not. self%ref_valid(iref) ) cycle
-                    score = (self%dots(iref,icol) - real(means(icol))*self%ref_sums(iref)) &
-                        / (real(self%npix)*real(sigmas(icol)))
+                    score = (self%dots(iref,icol,ithr) - real(means(icol,ithr))*self%ref_sums(iref)) &
+                        / (real(self%npix)*real(sigmas(icol,ithr)))
                     if( .not. have_score .or. score > best_score )then
                         best_score = score
                         have_score = .true.
@@ -161,9 +182,14 @@ contains
                 end do
                 if( have_score ) scores(ibeg+icol-1) = best_score
             end do
-            self%reduce_seconds = self%reduce_seconds + toc_omp(t0)
+            treduce(ithr) = treduce(ithr) + clock_seconds_since(t0)
         end do
-        deallocate(means, sigmas, valid)
+        !$omp end parallel do
+        ! thread-seconds
+        self%gather_seconds = self%gather_seconds + sum(tgather)
+        self%gemm_seconds   = self%gemm_seconds   + sum(tgemm)
+        self%reduce_seconds = self%reduce_seconds + sum(treduce)
+        deallocate(means, sigmas, valid, tgather, tgemm, treduce)
     end subroutine score_positions
 
     subroutine report_stats( self, label )
@@ -171,8 +197,9 @@ contains
         character(len=*),          intent(in) :: label
         real(dp) :: memory_bytes
         if( .not. self%exists ) return
-        memory_bytes = real(size(self%mic)+size(self%refs)+size(self%ref_sums)+size(self%windows)+size(self%dots),dp) * 4.0_dp &
+        memory_bytes = real(size(self%mic)+size(self%refs)+size(self%ref_sums),dp) * 4.0_dp &
             + real(size(self%sat)+size(self%sat2),dp) * 8.0_dp + real(size(self%ref_valid),dp)
+        if( allocated(self%windows) ) memory_bytes = memory_bytes + real(size(self%windows)+size(self%dots),dp) * 4.0_dp
         write(logfhandle,'(a,1x,a,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,f8.2)') 'refpick correlation', trim(label), &
             'candidates=', self%candidates_scored, 'refs=', self%nrefs, 'batch=', self%batch_size, &
             'workspace_mb=', memory_bytes/(1024.0_dp*1024.0_dp)

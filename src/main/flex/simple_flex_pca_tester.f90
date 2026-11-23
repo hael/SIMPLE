@@ -26,7 +26,7 @@ use simple_flex_pca_weights,              only: build_covariance_state_weights
 use simple_flex_pca_deconv,               only: calibrate_noise_scale, deconvolve_latent
 use simple_flex_pca_fit_types,            only: flex_fit, xfsc_ctx_t, cleanup_plane
 use simple_flex_pca_posterior,            only: probe_solve_plain
-use simple_flex_pca_polar,                only: polar_grid_build, polar_project_recs
+use simple_flex_pca_polar,                only: polar_grid_build, polar_project_recs, polar_assign_directions
 use simple_flex_pca_plane_cache,          only: plane_cache_contract_header, &
     &plane_cache_master_matches, plane_cache_worker_matches
 use simple_flex_reconstructor_latent_ops, only: project_fplanes_mean_basis, &
@@ -53,6 +53,7 @@ contains
         call test_population_floor()
         call test_prune_states()
         call test_kernel_bandwidth()
+        call test_assign_directions()
         call test_state_weights()
         call test_deconvolution(4000, 0.5d0, 5.d0)
         call test_mstep_toy()
@@ -406,6 +407,48 @@ contains
         call assert_true(count(w > 0.) > nsupp, 'widening increases the support')
         call assert_true(neff_wide > neff, 'neff increases with the bandwidth')
     end subroutine test_kernel_bandwidth
+
+    !> every particle goes to the bank direction whose normal is closest to its own (by a double-precision brute
+    !! force, within the single-precision products' rounding), across chunk boundaries, and a team of three assigns
+    !! as one thread does
+    subroutine test_assign_directions()
+        !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
+        integer, parameter :: NP = 300, ND = 60
+        real,    parameter :: TOL_DOT = 1.e-6
+        real     :: nrm_p(3,NP), nrm_b(3,ND), z, phi, worst
+        real(dp) :: d, dmax
+        integer  :: dir1(NP), dirn(NP), i, j, nthr_prev
+        write(*,'(A)') 'test_assign_directions'
+        ! golden-angle spirals: the bank, and particle normals off its points
+        do j = 1, ND
+            z   = 1. - 2. * (real(j) - 0.5) / real(ND)
+            phi = real(j) * 2.399963
+            nrm_b(:,j) = [sqrt(1. - z*z) * cos(phi), sqrt(1. - z*z) * sin(phi), z]
+        end do
+        do i = 1, NP
+            z   = 1. - 2. * (real(i) - 0.37) / real(NP)
+            phi = real(i) * 1.7 + 0.3
+            nrm_p(:,i) = [sqrt(1. - z*z) * cos(phi), sqrt(1. - z*z) * sin(phi), z]
+        end do
+        nthr_prev = 1
+        !$ nthr_prev = omp_get_max_threads()
+        !$ call omp_set_num_threads(1)
+        call polar_assign_directions(nrm_p, NP, nrm_b, ND, dir1)
+        !$ call omp_set_num_threads(3)
+        call polar_assign_directions(nrm_p, NP, nrm_b, ND, dirn)
+        !$ call omp_set_num_threads(nthr_prev)
+        worst = 0.
+        do i = 1, NP
+            dmax = -huge(1._dp)
+            do j = 1, ND
+                dmax = max(dmax, dot_product(real(nrm_p(:,i),dp), real(nrm_b(:,j),dp)))
+            end do
+            d     = dot_product(real(nrm_p(:,i),dp), real(nrm_b(:,dir1(i)),dp))
+            worst = max(worst, real(dmax - d))
+        end do
+        call assert_true(worst <= TOL_DOT, 'each particle goes to the bank direction of the largest normal dot product')
+        call assert_true(all(dirn == dir1), 'a team of three assigns the directions of one thread')
+    end subroutine test_assign_directions
 
     !> covariance state weights on a clearly bimodal embedding
     subroutine test_state_weights()

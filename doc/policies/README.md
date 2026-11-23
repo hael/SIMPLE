@@ -16,6 +16,7 @@ validation, says so in its first lines.
 |---|---|
 | [layering_and_project_ownership_policy.md](layering_and_project_ownership_policy.md) | adding or changing a commander, a strategy routine, a worker step, or any code that reads or writes an `sp_project` |
 | [compile_time_policy.md](compile_time_policy.md) | adding a type, a module-level `use`, a CMake target or a compile option |
+| [blas_policy.md](blas_policy.md) | adding or changing a BLAS or LAPACK call, the OpenMP team around one, or the bundled OpenBLAS recipe |
 | [test_environment_policy.md](test_environment_policy.md) | adding, moving or deleting a test, or changing what the fast gate runs |
 | [ui_layer_policy.md](ui_layer_policy.md) | adding or changing a program, a parameter or its metadata (`src/main/ui`) |
 

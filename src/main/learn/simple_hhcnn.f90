@@ -7,7 +7,7 @@
 ! per direction class a learned template in that domain; the class score is the real Hermitian inner product
 ! maximised over the cyclic shifts of the ring (the rotation grid), times a learned scale; the softmax over the
 ! classes is the posterior and the gradient flows through the maximising shift. Forward and backward as im2col plus
-! a matrix product (serialized sgemm with a team-safe BLAS, explicit loops otherwise); a mini-batch is cut into chunks set by
+! a matrix product (sgemm on the calling thread with a team-safe BLAS, explicit loops otherwise); a mini-batch is cut into chunks set by
 ! its size alone, computed in parallel into per-chunk gradient buffers and reduced in chunk order over slices of the
 ! weights in parallel, so the same sum comes out at any thread count. The network is invariant to the mirror:
 ! its kernels are symmetric along the angle, so a reflected input gives reflected maps, and a class scores the map
@@ -23,7 +23,7 @@ use simple_timer,  only: tic, toc, timer_int_kind
 !$ use omp_lib,    only: omp_get_max_threads, omp_get_thread_num
 implicit none
 
-! the BLAS product (the library the build links; simple_linalg keeps its interface private)
+! the BLAS product (the library the build links)
 interface
     subroutine sgemm( transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc )
         character(len=1), intent(in)    :: transa, transb
@@ -60,7 +60,7 @@ real(sp),       parameter :: ADAM_BETA1   = 0.9
 real(sp),       parameter :: ADAM_BETA2   = 0.999
 real(sp),       parameter :: ADAM_EPS     = 1.e-8
 ! the products' arithmetic is a property of the build and the shape, never of the team, so that a step is the same at
-! any thread count: serialized sgemm where the build's BLAS stays on the calling thread inside teams; otherwise the faster of the
+! any thread count: sgemm where the build's BLAS stays on the calling thread inside teams; otherwise the faster of the
 ! explicit loops and the matmul intrinsic (the runtime's single-threaded product, optimised even in a Debug build,
 ! whose loops are not): doc/algorithms/pose_student.md
 #ifdef SIMPLE_BLAS_TEAM_SAFE
@@ -545,9 +545,7 @@ contains
         real(sp), intent(inout) :: c(ldc,*)
         integer :: j, l
         if( L_BLAS_TEAM_SAFE )then
-            !$omp critical(hhcnn_sgemm)
             call sgemm('N', 'N', m, n, k, 1.0, a, lda, b, ldb, beta, c, ldc)
-            !$omp end critical(hhcnn_sgemm)
         else if( L_MATMUL_PRODUCTS )then
             if( beta == 0. )then
                 c(1:m,1:n) = matmul(a(1:m,1:k), b(1:k,1:n))
@@ -577,9 +575,7 @@ contains
         real(sp), allocatable   :: bt(:,:)
         integer :: j, l
         if( L_BLAS_TEAM_SAFE )then
-            !$omp critical(hhcnn_sgemm)
             call sgemm('N', 'T', m, n, k, 1.0, a, lda, b, ldb, 1.0, c, ldc)
-            !$omp end critical(hhcnn_sgemm)
         else if( L_MATMUL_PRODUCTS )then
             bt = transpose(b(1:n,1:k))
             c(1:m,1:n) = c(1:m,1:n) + matmul(a(1:m,1:k), bt)
@@ -603,9 +599,7 @@ contains
         real(sp), allocatable :: atw(:,:)
         integer  :: i0, nr, i, j, l
         if( L_BLAS_TEAM_SAFE )then
-            !$omp critical(hhcnn_sgemm)
             call sgemm('T', 'N', m, n, k, 1.0, a, lda, b, ldb, 0.0, c, ldc)
-            !$omp end critical(hhcnn_sgemm)
         else if( L_MATMUL_PRODUCTS .or. m < CNN_MATMUL_ROWS )then
             atw = transpose(a(1:k,1:m))
             c(1:m,1:n) = matmul(atw, b(1:k,1:n))
@@ -1217,33 +1211,48 @@ contains
 
     !> The templates from geometry (ruling R3): each class's template is the readout spectrum of that class's
     !! reprojection xrefs(:,:,:,class) under g through the network as it stands, and the scale is set so that a
-    !! class's own reprojection scores SCALE_INIT_LOGIT on average; on thread 1's workspace (prepare_work first)
+    !! class's own reprojection scores SCALE_INIT_LOGIT on average; the classes on the team, summed in class order
     subroutine init_templates( self, xrefs, g )
         class(hhcnn), intent(inout) :: self
         real(sp),     intent(in)    :: xrefs(self%pftsz, self%nk, 2, self%nclasses), g(self%nk)
-        integer  :: ic, m, kb, n
+        real(sp), allocatable :: tmpl(:)
+        real(dp), allocatable :: sselfs(:)
+        integer  :: ic, m, kb, n, ithr, nthr
         real(dp) :: sself, ssum
-        if( .not. allocated(self%work) ) THROW_HARD('no workspace: prepare_work first; hhcnn%init_templates')
+        nthr = 1
+        !$ nthr = omp_get_max_threads()
+        call self%prepare_work(nthr)
         self%rd%tmpl  = 0.
         self%rd%scale = 1.
-        ssum = 0.d0
+        ! the passes read the zero templates, so the new ones are written apart and copied after the region
+        allocate(tmpl(self%ntmpl), source=0.)
+        allocate(sselfs(self%nclasses))
+        !$omp parallel do default(shared) private(ic,ithr,m,kb,n,sself) schedule(dynamic) proc_bind(close)
         do ic = 1,self%nclasses
-            call self%forward_sample(self%work(1), xrefs(:,:,:,ic), g, 0.)
+            ithr = 1
+            !$ ithr = omp_get_thread_num() + 1
+            call self%forward_sample(self%work(ithr), xrefs(:,:,:,ic), g, 0.)
             sself = 0.d0
             do m = 0,CNN_MREAD
                 do kb = 1,self%rd%kread
                     do n = 1,CNN_NREAD
-                        self%rd%tmpl(tix(n,kb,m,ic,1)) = self%work(1)%fhat(1,n,kb,m)
-                        if( m > 0 ) self%rd%tmpl(tix(n,kb,m,ic,2)) = self%work(1)%fhat(2,n,kb,m)
+                        tmpl(tix(n,kb,m,ic,1)) = self%work(ithr)%fhat(1,n,kb,m)
+                        if( m > 0 ) tmpl(tix(n,kb,m,ic,2)) = self%work(ithr)%fhat(2,n,kb,m)
                         if( m == 0 )then
-                            sself = sself + real(self%work(1)%fhat(1,n,kb,m),dp)**2
+                            sself = sself + real(self%work(ithr)%fhat(1,n,kb,m),dp)**2
                         else
-                            sself = sself + 2.d0 * (real(self%work(1)%fhat(1,n,kb,m),dp)**2 + real(self%work(1)%fhat(2,n,kb,m),dp)**2)
+                            sself = sself + 2.d0 * (real(self%work(ithr)%fhat(1,n,kb,m),dp)**2 + real(self%work(ithr)%fhat(2,n,kb,m),dp)**2)
                         endif
                     enddo
                 enddo
             enddo
-            ssum = ssum + sself / real(self%nrots,dp)
+            sselfs(ic) = sself
+        enddo
+        !$omp end parallel do
+        self%rd%tmpl = tmpl
+        ssum = 0.d0
+        do ic = 1,self%nclasses
+            ssum = ssum + sselfs(ic) / real(self%nrots,dp)
         enddo
         ssum = ssum / real(self%nclasses,dp)
         if( ssum > 0.d0 ) self%rd%scale = real(real(SCALE_INIT_LOGIT,dp) / ssum)

@@ -312,37 +312,43 @@ contains
         tazim = tazim / real(max(1,g%nk))
     end subroutine polar_sample_particle_fused
 
-    !> Nearest bank direction for every particle, by the plane normal (row 3 of the rotation
-    !! matrix). Done as a BLAS-3 sweep because a per-particle scan over the direction grid is
-    !! O(N*nspace) scalar work and nspace is deliberately large here.
+    !> Nearest bank direction for every particle, by the plane normal (row 3 of the rotation matrix): the normals'
+    !! dot products as one product per chunk of ASSIGN_CHUNK particles, the chunks on the team, each product on its
+    !! thread. A chunk's shape follows the particles alone, so the assignment is the same on any team
     subroutine polar_assign_directions( nrm_p, nptcls, nrm_b, ndir, dir_of )
+        use simple_linalg, only: sgemm
+        !$ use omp_lib,    only: omp_get_max_threads, omp_get_thread_num
         real,    intent(in)  :: nrm_p(3,nptcls)
         integer, intent(in)  :: nptcls, ndir
         real,    intent(in)  :: nrm_b(3,ndir)
         integer, intent(out) :: dir_of(nptcls)
-        integer, parameter :: CHUNK = 2048
-        real,    allocatable :: dots(:,:)
-        integer :: i0, i1, nc, i, j, jbest
+        integer, parameter :: ASSIGN_CHUNK = 128   !< particles per product: the products of a thread stay in its cache
+        real,    allocatable :: dots(:,:,:)
+        integer :: nthr, ithr, ic, i0, nc, i, j, jbest
         real    :: best
-        allocate(dots(ndir,CHUNK))
-        do i0 = 1, nptcls, CHUNK
-            i1 = min(nptcls, i0 + CHUNK - 1)
-            nc = i1 - i0 + 1
-            call sgemm('T','N', ndir, nc, 3, 1.0, nrm_b, 3, nrm_p(1,i0), 3, 0.0, dots, ndir)
-            !$omp parallel do default(shared) private(i,j,jbest,best) schedule(static) proc_bind(close)
+        nthr = 1
+        !$ nthr = omp_get_max_threads()
+        allocate(dots(ndir,ASSIGN_CHUNK,nthr))
+        !$omp parallel do default(shared) private(ic,ithr,i0,nc,i,j,jbest,best) schedule(static) proc_bind(close)
+        do ic = 1, (nptcls + ASSIGN_CHUNK - 1) / ASSIGN_CHUNK
+            ithr = 1
+            !$ ithr = omp_get_thread_num() + 1
+            i0 = (ic - 1) * ASSIGN_CHUNK + 1
+            nc = min(ASSIGN_CHUNK, nptcls - i0 + 1)
+            call sgemm('T','N', ndir, nc, 3, 1.0, nrm_b, 3, nrm_p(1,i0), 3, 0.0, dots(1,1,ithr), ndir)
             do i = 1, nc
                 jbest = 1
-                best  = dots(1,i)
+                best  = dots(1,i,ithr)
                 do j = 2, ndir
-                    if( dots(j,i) > best )then
-                        best  = dots(j,i)
+                    if( dots(j,i,ithr) > best )then
+                        best  = dots(j,i,ithr)
                         jbest = j
                     endif
                 end do
                 dir_of(i0+i-1) = jbest
             end do
-            !$omp end parallel do
         end do
+        !$omp end parallel do
         deallocate(dots)
     end subroutine polar_assign_directions
 

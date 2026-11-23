@@ -169,7 +169,6 @@ contains
         real(sp) :: g(self%nk)
         if( .not. self%exists ) THROW_HARD('student not constructed; polar_student%init_templates')
         g = 1.
-        call self%net%prepare_work(1)
         call self%net%init_templates(xtmpl, g)
     end subroutine init_templates
 

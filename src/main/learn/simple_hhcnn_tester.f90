@@ -1,4 +1,4 @@
-!@descr: unit tests of simple_hhcnn: the Hermitian contract of every layer, the rotation test of the template readout, the mirror invariance against the calculator's mirrored references, the gradient check with and without the reflected scores and with the log-sum-exp readout and its rotation targets, the log-sum-exp readout against a brute-force marginal and under rotation, conjugation and the mirror, the switch itself, the tiled blocks against the whole im2col matrix, the toy problem, the weights' round trip
+!@descr: unit tests of simple_hhcnn: the Hermitian contract of every layer, the rotation test of the template readout, the mirror invariance against the calculator's mirrored references, the gradient check with and without the reflected scores and with the log-sum-exp readout and its rotation targets, the log-sum-exp readout against a brute-force marginal and under rotation, conjugation and the mirror, the switch itself, the tiled blocks against the whole im2col matrix, the templates of a team against one thread, the toy problem, the weights' round trip
 submodule (simple_hhcnn) simple_hhcnn_tester
 use simple_test_utils
 use simple_cmdline,     only: cmdline
@@ -35,6 +35,7 @@ contains
         call test_lse_readout(.false.)
         call test_no_reflection()
         call test_tiled_blocks()
+        call test_init_templates_team()
         call test_weights_roundtrip()
         call test_toy_problem()
     end subroutine run_all_hhcnn_tests
@@ -804,6 +805,30 @@ contains
         call net%kill
     end subroutine test_tiled_blocks
 
+
+    !> the templates and the scale from the classes on a team of three are those of one thread, bit for bit
+    subroutine test_init_templates_team()
+        !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
+        type(hhcnn) :: net1, netn
+        real(sp) :: xr(T_PFTSZ, T_NK, 2, T_NCLS), g(T_NK), side
+        integer  :: ic, nthr_prev
+        write(*,'(A)') 'test_init_templates_team'
+        do ic = 1,T_NCLS
+            call random_input(xr(:,:,:,ic), g, side)
+        enddo
+        nthr_prev = 1
+        !$ nthr_prev = omp_get_max_threads()
+        call net1%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261123_int64, .true., .false.)
+        call netn%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261123_int64, .true., .false.)
+        !$ call omp_set_num_threads(1)
+        call net1%init_templates(xr, g)
+        !$ call omp_set_num_threads(3)
+        call netn%init_templates(xr, g)
+        !$ call omp_set_num_threads(nthr_prev)
+        call assert_true(netn%weights_identical(net1), 'the templates of a team are those of one thread, bit for bit')
+        call net1%kill
+        call netn%kill
+    end subroutine test_init_templates_team
 
     !> the weights written and read back are the same bit for bit, and give the same probabilities
     subroutine test_weights_roundtrip()

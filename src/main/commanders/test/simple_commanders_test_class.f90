@@ -34,6 +34,7 @@ use simple_image_msk_tester,                 only: run_all_mask_tests, run_all_n
 use simple_segmentation_tester,              only: run_all_segmentation_tests
 use simple_accum_blend_tester,               only: run_all_accum_blend_tests
 use simple_ctf_tester,                       only: run_all_ctf_tests
+use simple_pickref_corr_batch_tester,        only: run_all_pickref_corr_batch_tests
 use simple_starfile_tester,                  only: run_all_starfile_tests
 use simple_starproject_tester,               only: run_all_starproject_tests
 use simple_starproject_stream_tester,        only: run_all_starproject_stream_tests
@@ -388,6 +389,7 @@ contains
         call add_suite(s, n, 'trailing-reconstruction blend', run_all_accum_blend_tests)
         call add_suite(s, n, 'CTF',                  run_all_ctf_tests)
         call add_suite(s, n, 'image serialisation',  run_all_image_serialize_tests)
+        call add_suite(s, n, 'reference picking correlation', run_all_pickref_corr_batch_tests)
     end subroutine suites_image
 
     subroutine suites_numerics( s, n )
