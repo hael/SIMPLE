@@ -301,8 +301,8 @@ every run seeds and owns its sigmas in its own directory.
 
 ## 4. Low-Pass and Cropping
 
-`lpinfo(istage)%lp` controls staged search/reference scheduling. Stage limits
-follow the molecule's size (`set_lplims_ptcls`, `solve3D_ptcl_lplims`; ruling
+`lpinfo(istage)%lp` stores the planned ladder used for cropping and later-stage
+FSC bounds. The ladder follows the molecule's size (`set_lplims_ptcls`, `solve3D_ptcl_lplims`; ruling
 of 2026-11-22): from `mskdiam/10` within 10-30 A (`LPSTART_SIZE_BOUNDS`) to
 4.5 A (`LPSTOP_BOUNDS(1)`) for every size, each stage halving the distance to
 the stop as solve2D's frequency march does, the last stage at the stop
@@ -321,6 +321,18 @@ FSC rule below holds a stage back to it, or advances it (ruling of
 2026-11-22). A linear ladder in spatial frequency
 (15.5, 11.5, 9.1, 7.6, 6.5, 5.6, 5.0, 4.5 A for the export gate) was
 considered the same day and judged not aggressive enough.
+
+**Separate stage-1 start (ruling of 2026-11-23).** The default particle route
+starts matching at `min(30, max(10, mskdiam/8))` A. Its Gaussian reference
+filter (`gaufreq`) and stage matching ceiling (`lpstop`) use that same limit.
+This gives 10 A for streptavidin (80 A mask), 19.375 A for the export gate
+(155 A), 20 A for PfCRT (160 A), and 21.25 A for PorF (170 A). An explicit
+`lpstart` remains authoritative; the start cannot be finer than the requested
+`lpstop`. The controller receives this start separately: the stored
+`mskdiam/10` ladder, crops, stage 2 onward, and both FSC bounds remain unchanged.
+In particular, the coarser stage-1 limit does not relax the later FSC hold-back
+bound `lpinfo(1)%lp`. Class averages, input-volume/no-2D initialization,
+`force_lp_range`, and add-on replay retain their existing policies.
 
 From 2026-11-10 to 2026-11-22 the ladder was linear in A from `mskdiam/8`
 within 10-30 A to `mskdiam/26.7` within 4.5-6 A (`set_lplims_from_size`,
@@ -447,7 +459,8 @@ FSC=0.5 at stage entry, coarser than the planned rung (holding back) or finer
 (advancing), never finer than the ladder cap (4.5 A, or a command-line
 `lpstop` as given, coarser or finer) nor coarser than the ladder start
 (`lpinfo(1)%lp`). In the Gaussian-reference stages `gaufreq` follows the
-limit. Stage 1 keeps its planned limit, an explicit `lp` wins, and
+limit. Stage 1 uses the separate starting rule above; an explicit `lp` wins
+where applicable, and
 multi-state runs keep the one-rung advance above. Why: under the halving
 ladder the plan leads and the FSC is the brake. Known risk: the PorF runs
 of the amendment (stage 3 held at 22-24 A against a planned 16.9 A, worse

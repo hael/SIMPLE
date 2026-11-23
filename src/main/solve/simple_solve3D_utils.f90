@@ -173,11 +173,12 @@ interface
         integer :: istage
     end function solve3D_first_free_stage
 
-    module subroutine set_cline_refine3D( params, istage, first_stage, l_cavgs, addon )
+    module subroutine set_cline_refine3D( params, istage, first_stage, l_cavgs, addon, stage1_lp )
         class(parameters),                    intent(in) :: params
         integer,                              intent(in) :: istage, first_stage
         logical,                              intent(in) :: l_cavgs
         type(solve3D_addon_ctx), optional, intent(in) :: addon
+        real,                  optional, intent(in) :: stage1_lp
     end subroutine set_cline_refine3D
 
 end interface
@@ -492,11 +493,12 @@ contains
     end subroutine set_lplims_from_size
 
     !> the particle stage ladder from mskdiam/10 (10-30 A) to 4.5 A, each stage halving the distance to the stop as
-    !! solve2D does; an explicit start or stop (> 0) sets its end as given, coarser or finer
-    subroutine set_lplims_ptcls( params, lpstart, lpstop )
+    !! solve2D does; stage 1 separately starts at mskdiam/8 (10-30 A), unless lpstart is given
+    subroutine set_lplims_ptcls( params, lpstart, lpstop, stage1_lp )
         class(parameters), intent(in) :: params
         real,              intent(in) :: lpstart, lpstop
-        real    :: lims(2), trslim_override
+        real,             intent(out) :: stage1_lp
+        real    :: lims(2), start_lims(2), trslim_override
         integer :: nstages
         l_cavgs_mode = .false.
         trslim_override = 0.
@@ -512,6 +514,11 @@ contains
         allocate(lpinfo(nstages))
         call lpstages_setlims(params%box, nstages, params%smpd, lims(1), lims(2), lpinfo, trslim_override=trslim_override, &
             &halving=.true.)
+        stage1_lp = lims(1)
+        if( lpstart <= 0. )then
+            start_lims = solve3D_size_lplims(params%mskdiam)
+            stage1_lp  = max(start_lims(1), lims(2))
+        endif
     end subroutine set_lplims_ptcls
 
     subroutine set_lplims_from_input( params, spproj, lpstart, lpstop, first_stage )

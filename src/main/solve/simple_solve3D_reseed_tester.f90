@@ -65,7 +65,7 @@ contains
         real, parameter :: LPS_FINE_STOP(8)   = [15.5, 9.65, 6.725, 5.2625, 4.53125, 4.165625, 3.982813, 3.8]
         class(parameters), allocatable :: params
         type(lp_crop_inf), allocatable :: saved_lpinfo(:)
-        real    :: lims(2)
+        real    :: lims(2), stage1_lp
         integer :: saved_nstages, i
         logical :: saved_cavgs_mode, saved_trs_override
         write(*,'(A)') 'test_ptcl_lplims'
@@ -89,30 +89,36 @@ contains
         params%smpd    = 0.822
         params%mskdiam = 155.
         nstages_refine3D = 8
-        call set_lplims_ptcls(params, 0., 0.)
+        call set_lplims_ptcls(params, 0., 0., stage1_lp)
+        call assert_real(19.375, stage1_lp, 1.e-4, 'export gate: stage 1 separately starts at mskdiam/8')
         call assert_false(l_cavgs_mode, 'the particle ladder clears the class-average mode')
         call assert_int(8, size(lpinfo), 'one rung per stage')
         do i = 1,8
             call assert_real(LPS_EXPORT_GATE(i), lpinfo(i)%lp, 1.e-3, 'export gate, stage '//int2str(i)//': halving')
         end do
         ! an explicit lpstop finer than 4.5 A sets the end as given
-        call set_lplims_ptcls(params, 0., 3.8)
+        call set_lplims_ptcls(params, 0., 3.8, stage1_lp)
+        call assert_real(19.375, stage1_lp, 1.e-4, 'a finer stop leaves the stage-1 size rule unchanged')
         do i = 1,8
             call assert_real(LPS_FINE_STOP(i), lpinfo(i)%lp, 1.e-3, 'lpstop 3.8, stage '//int2str(i)//': as given')
         end do
         ! an explicit lpstart coarser than the size rule sets the start as given
-        call set_lplims_ptcls(params, 25., 0.)
+        call set_lplims_ptcls(params, 25., 0., stage1_lp)
+        call assert_real(25., stage1_lp, 1.e-4, 'an explicit lpstart also controls stage 1')
         call assert_real(25., lpinfo(1)%lp, 1.e-4, 'lpstart 25: the first rung as given')
         call assert_real(4.5, lpinfo(8)%lp, 1.e-4, 'lpstart 25: the last rung from the size rule')
         ! fewer stages: the same two ends over the stages the run executes
         nstages_refine3D = 5
-        call set_lplims_ptcls(params, 0., 0.)
+        call set_lplims_ptcls(params, 0., 0., stage1_lp)
         call assert_int(5, size(lpinfo), 'five stages: five rungs')
         call assert_real(4.5, lpinfo(5)%lp, 1.e-4, 'five stages: ends at 4.5 A')
         ! a start finer than the stop holds the ladder at the stop
         nstages_refine3D = 4
-        call set_lplims_ptcls(params, 4., 5.)
+        call set_lplims_ptcls(params, 4., 5., stage1_lp)
+        call assert_real(5., stage1_lp, 1.e-4, 'an explicit start finer than the stop respects the stop')
         call assert_true(all(abs(lpinfo(:)%lp - 5.) < 1.e-4), 'a start finer than the stop: flat at the stop')
+        call set_lplims_ptcls(params, 0., 25., stage1_lp)
+        call assert_real(25., stage1_lp, 1.e-4, 'a stop coarser than the stage-1 size rule remains a ceiling')
         deallocate(lpinfo)
         if( allocated(saved_lpinfo) ) call move_alloc(saved_lpinfo, lpinfo)
         nstages_refine3D        = saved_nstages
@@ -134,23 +140,29 @@ contains
         use simple_solve3D_utils, only: lpinfo, cline_refine3D, set_cline_refine3D, solve3D_addon_ctx, &
             &l_nonuniform, l_srch4symaxis, l_cavg_ini, l_state_continue_mode, &
             &l_refine3D_mode_override, l_refine3D_lp_override, l_refine3D_lpstop_override, &
-            &l_refine3D_trs_override, l_prob_beta_end_override, update_frac, nptcls_eff, nstages_refine3D
+            &l_refine3D_trs_override, l_prob_beta_end_override, update_frac, nptcls_eff, nstages_refine3D, &
+            &set_lplims_ptcls, l_cavgs_mode
         use simple_parameters, only: parameters
         use simple_cmdline,    only: cmdline
         use simple_type_defs,  only: lp_crop_inf
         use simple_sp_project, only: sp_project
         use simple_string,     only: string
         use simple_defs_conv,  only: OVERLAP_3D, OVERLAP_3D_STAGE
+        use simple_defs,       only: logfhandle
         use simple_final_rec,  only: final_rec_mask_settings
         class(parameters), allocatable :: params
         class(cmdline), allocatable    :: saved_cline
         class(sp_project), allocatable :: proj
-        type(lp_crop_inf), allocatable :: saved_lpinfo(:)
+        type(lp_crop_inf), allocatable :: saved_lpinfo(:), base_lpinfo(:)
         type(solve3D_addon_ctx) :: addon
         type(string) :: cwd, root, final_automsk
-        logical :: saved_flags(9), l_final_envfsc, l_final_nu_mask
-        real    :: saved_update_frac
-        integer :: saved_nptcls_eff, saved_nstages, nfail0, backend, istage, imode
+        logical :: saved_flags(10), l_final_envfsc, l_final_nu_mask
+        real    :: saved_update_frac, stage1_lp, planned_lp(8)
+        real, parameter :: START_DIAMS(6) = [50., 80., 155., 160., 170., 400.]
+        real, parameter :: START_LPS(6)   = [10., 10., 19.375, 20., 21.25, 30.]
+        real, parameter :: LADDER_LPS(6)  = [10., 10., 15.5, 16., 17., 30.]
+        integer :: saved_nptcls_eff, saved_nstages, nfail0, backend, istage, imode, i, stage1_box
+        integer :: saved_logfhandle, log_unit
         character(len=7), parameter :: mask_modes(4) = [character(len=7) :: 'no', 'density', 'nu', 'order']
         write(*,'(A)') 'test_gold_standard_stages'
         nfail0 = tests_failed
@@ -159,7 +171,7 @@ contains
         saved_cline = cline_refine3D
         saved_flags = [l_nonuniform, l_srch4symaxis, l_cavg_ini, l_state_continue_mode, &
             &l_refine3D_mode_override, l_refine3D_lp_override, l_refine3D_lpstop_override, &
-            &l_refine3D_trs_override, l_prob_beta_end_override]
+            &l_refine3D_trs_override, l_prob_beta_end_override, l_cavgs_mode]
         saved_update_frac = update_frac
         saved_nptcls_eff  = nptcls_eff
         saved_nstages     = nstages_refine3D
@@ -168,6 +180,7 @@ contains
         lpinfo%lp = [20., 16., 12., 10., 8., 6., 5., 4.5]
         lpinfo%box_crop = 64
         lpinfo%trslim   = 2.
+        base_lpinfo = lpinfo
         l_nonuniform = .true.
         l_srch4symaxis = .false.
         l_cavg_ini = .false.
@@ -193,6 +206,50 @@ contains
         call proj%os_ptcl3D%set_all2single('res05', 5.3)
         call proj%update_projinfo(params%projfile)
         call proj%write(params%projfile)
+        ! The first-stage matching and Gaussian limits are separate from the ladder and its FSC bounds.
+        saved_logfhandle = logfhandle
+        open(newunit=log_unit, status='scratch', action='write')
+        logfhandle = log_unit
+        params%box  = 240
+        params%smpd = 1.3
+        call write_res05(40.)
+        do i = 1,size(START_DIAMS)
+            params%mskdiam = START_DIAMS(i)
+            call set_lplims_ptcls(params, 0., 0., stage1_lp)
+            planned_lp = lpinfo%lp
+            stage1_box = lpinfo(1)%box_crop
+            call set_cline_refine3D(params, 1, 1, .false., stage1_lp=stage1_lp)
+            call assert_real(START_LPS(i), cline_refine3D%get_rarg('lp'), 1.e-4, 'stage 1 matches at the size-rule limit')
+            call assert_real(START_LPS(i), cline_refine3D%get_rarg('lpstop'), 1.e-4, 'stage 1 ceiling follows its limit')
+            call assert_real(START_LPS(i), cline_refine3D%get_rarg('gaufreq'), 1.e-4, 'stage 1 Gaussian follows its limit')
+            call assert_string_eq('yes', cline_refine3D%get_carg('gauref'), 'stage 1 retains Gaussian filtering')
+            call assert_int(stage1_box, cline_refine3D%get_iarg('box_crop'), 'stage 1 retains the ladder crop')
+            call assert_true(all(abs(lpinfo%lp-planned_lp) < 1.e-6), 'stage 1 does not mutate the ladder')
+            do istage = 2,5
+                call set_cline_refine3D(params, istage, 1, .false., stage1_lp=stage1_lp)
+                call assert_real(LADDER_LPS(i), cline_refine3D%get_rarg('lp'), 1.e-4, &
+                    &'later FSC hold-back remains bounded by the original ladder start')
+                if( istage == 2 ) call assert_real(LADDER_LPS(i), cline_refine3D%get_rarg('gaufreq'), 1.e-4, &
+                    &'stage 2 Gaussian retains its FSC-derived limit')
+            enddo
+        enddo
+        params%mskdiam = 170.
+        call set_lplims_ptcls(params, 25., 0., stage1_lp)
+        call set_cline_refine3D(params, 1, 1, .false., stage1_lp=stage1_lp)
+        call assert_real(25., cline_refine3D%get_rarg('lp'), 1.e-4, 'explicit lpstart controls stage-1 matching')
+        call assert_real(25., cline_refine3D%get_rarg('gaufreq'), 1.e-4, 'explicit lpstart controls stage-1 Gaussian')
+        call set_lplims_ptcls(params, 0., 0., stage1_lp)
+        call set_cline_refine3D(params, 1, 1, .true., stage1_lp=stage1_lp)
+        call assert_real(17., cline_refine3D%get_rarg('lp'), 1.e-4, 'class-average stages retain their own ladder')
+        call assert_real(17., cline_refine3D%get_rarg('gaufreq'), 1.e-4, 'class-average Gaussian retains its own ladder')
+        logfhandle = saved_logfhandle
+        close(log_unit)
+        lpinfo = base_lpinfo
+        deallocate(base_lpinfo)
+        params%box     = 64
+        params%smpd    = 2.
+        params%mskdiam = 0.
+        call write_res05(5.3)
         ! no stage is skipped: every stage runs 3 iterations, then its exits decide
         call set_cline_refine3D(params, 4, 1, .false.)
         call assert_int(15, cline_refine3D%get_iarg('maxits'), 'stage 4 keeps its budget behind FSC=0.5')
@@ -468,6 +525,7 @@ contains
         l_refine3D_lpstop_override = saved_flags(7)
         l_refine3D_trs_override = saved_flags(8)
         l_prob_beta_end_override = saved_flags(9)
+        l_cavgs_mode = saved_flags(10)
         update_frac = saved_update_frac
         nptcls_eff = saved_nptcls_eff
         nstages_refine3D = saved_nstages

@@ -255,7 +255,7 @@ contains
             endif
         endif
         call emit_refine3D_stage_cfg( cfg, params, istage, first_stage, l_cavgs, l_refine3D_lp_override, l_addon, &
-            &l_register )
+            &l_register, stage1_lp )
         call set_refine3D_sigma2_schedule(params, istage, first_stage, l_cavgs .or. l_addon)
         if( l_addon )then
             if( .not. addon%frozen_rec%is_allocated() ) THROW_HARD('active add-on context without a frozen run context')
@@ -603,7 +603,7 @@ contains
     end subroutine apply_refine3D_search_overrides
 
     subroutine emit_refine3D_stage_cfg( cfg, params, istage, first_stage, l_cavgs, l_cmdline_lp_override, l_addon, &
-        &l_register )
+        &l_register, stage1_lp )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         integer,                  intent(in) :: istage, first_stage
@@ -611,11 +611,17 @@ contains
         logical,                  intent(in) :: l_cmdline_lp_override
         logical,                  intent(in) :: l_addon    !< solve3D_addon stage: the cohort's own sampling, no sticky subset
         logical,                  intent(in) :: l_register !< solve3D_addon registration pass: full update, planned limit
+        real, optional,           intent(in) :: stage1_lp
         real :: lp_eff, lpstop_eff, lp_cap
-        logical :: l_full_update_stage, l_explicit_lp, l_lp_from_fsc05
+        logical :: l_full_update_stage, l_explicit_lp, l_lp_from_fsc05, l_stage1_lp
         l_full_update_stage = force_full_sampling_mode(params) .or. l_register
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         l_explicit_lp       = l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes'
+        l_stage1_lp = .false.
+        if( present(stage1_lp) )then
+            l_stage1_lp = istage == 1 .and. .not. l_cavgs .and. .not. l_addon .and. stage1_lp > 0.
+            if( l_stage1_lp ) lp_eff = stage1_lp
+        endif
         ! Particle-route ladder cap LPSTOP_BOUNDS(1), not lpfinal; a command-line lpstop replaces it, coarser or
         ! finer (doc/policies/3D/solve3D_policy.md sec. 4).
         lp_cap = LPSTOP_BOUNDS(1)
@@ -638,7 +644,7 @@ contains
             if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = params%lpstop
         else
             lpstop_eff = lpinfo(istage)%lp
-            if( l_lp_from_fsc05 ) lpstop_eff = lp_eff
+            if( l_lp_from_fsc05 .or. l_stage1_lp ) lpstop_eff = lp_eff
             if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = max(lpstop_eff, params%lpstop)
         endif
         call cline_refine3D%set('prg',    'refine3D')
@@ -761,8 +767,8 @@ contains
         endif
         if( cfg%gaufreq > 0. )then
             call cline_refine3D%set('gauref',             'yes')
-            if( l_lp_from_fsc05 )then
-                ! the Gaussian reference filter follows the stage limit the FSC=0.5 set
+            if( l_lp_from_fsc05 .or. l_stage1_lp )then
+                ! the Gaussian reference filter follows the effective stage limit
                 call cline_refine3D%set('gaufreq',        lp_eff)
             else
                 call cline_refine3D%set('gaufreq',        cfg%gaufreq)
