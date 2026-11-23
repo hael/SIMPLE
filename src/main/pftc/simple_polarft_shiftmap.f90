@@ -7,7 +7,11 @@
 ! is the real part of one 2D transform of G over (n, m) per magnitude, the orders folded modulo nalpha (exact on the
 ! sampled directions); the real part of a transform is the transform of the Hermitian-symmetrised input, so it is one
 ! complex-to-real transform of half the size. Two maps: the full band's, and the screen's over a shorter band.
+! The sums over the shells of one order are one real matrix product for every magnitude that keeps the order (BLAS):
+! the shell products as interleaved reals (2 nrots x shells) times the Bessel-weighted shell weights (shells x
+! magnitudes); a call's shape depends only on the map, so a pair's map depends on neither the team nor its neighbours.
 submodule (simple_polarft_calc) simple_polarft_shiftmap
+use simple_linalg, only: sgemm, SGEMM_ONE_THREAD_MNK
 #include "simple_local_flags.inc"
 implicit none
 
@@ -22,10 +26,11 @@ contains
         integer,             intent(in)    :: imap
         real(dp),            intent(in)    :: rho(:)
         integer,             intent(in)    :: nalpha, kstop
-        integer(c_int) :: n2(2), nin(2), plan_flags
-        integer        :: ithr, nmax, nrho, nhalf, k1, k2, nthreads, ir, ia
-        real(dp) :: t0
-        integer(int64) :: plan_start, plan_end, clock_rate
+        integer(c_int)       :: n2(2), nin(2), plan_flags
+        integer              :: ithr, nmax, nrho, nhalf, k1, k2, nthreads, ir, ia, n
+        integer, allocatable :: nharm(:), ir_first(:)
+        real(dp)             :: t0
+        integer(int64)       :: plan_start, plan_end, clock_rate
         if( .not. self%existence ) THROW_HARD('the calculator must exist; new_shiftmap')
         if( imap < 1 .or. imap > NSHIFTMAPS ) THROW_HARD('no such shift map; new_shiftmap')
         if( kstop <= self%kfromto(1) .or. kstop > self%kfromto(2) ) THROW_HARD('the map''s last shell must lie in the band; new_shiftmap')
@@ -55,6 +60,16 @@ contains
         nmax  = self%shiftmap(imap)%get_nharm_max()
         nrho  = self%shiftmap(imap)%get_nrho()
         nhalf = nalpha / 2 + 1
+        ! the orders kept per magnitude and, per order, the first of the trailing magnitudes that keep it (the
+        ! kernel's one product per order), 0 when the magnitudes that keep it do not trail (unsorted magnitudes)
+        allocate(nharm(nrho), ir_first(0:nmax), source=0)
+        do ir = 1, nrho
+            nharm(ir) = self%shiftmap(imap)%get_nharm(ir)
+        enddo
+        do n = 0, nmax
+            ir = findloc(nharm >= n, .true., dim=1)
+            if( all(nharm(ir:) >= n) ) ir_first(n) = ir
+        enddo
         do ithr = 1, nthreads
             allocate(self%smwork(ithr,imap)%rhat(self%nrots, k1:k2),&
                     &self%smwork(ithr,imap)%yhat(self%nrots, k1:k2),&
@@ -63,7 +78,11 @@ contains
                     &self%smwork(ithr,imap)%wj(k1:k2, nrho, 0:nmax),&
                     &self%smwork(ithr,imap)%refpow(self%nrots))
             self%smwork(ithr,imap)%gsum = cmplx(0., 0., kind=sp)
-            allocate(self%smwork(ithr,imap)%gin(nalpha, self%nrots, nrho), source=cmplx(0., 0., kind=sp))
+            allocate(self%smwork(ithr,imap)%wj_from(k1:k2), source=0.d0)
+            allocate(self%smwork(ithr,imap)%nharm(nrho), source=nharm)
+            allocate(self%smwork(ithr,imap)%ir_first(0:nmax), source=ir_first)
+            self%smwork(ithr,imap)%l_wj = .false.
+            allocate(self%smwork(ithr,imap)%gfold(self%nrots, 0:nalpha-1), source=cmplx(0., 0., kind=sp))
             allocate(self%smwork(ithr,imap)%lw(nalpha, self%nrots, nrho))
             allocate(self%smwork(ithr,imap)%xy(2, nalpha, nrho))
             do ir = 1, nrho
@@ -158,8 +177,10 @@ contains
             if( allocated(self%smwork(ithr,imap)%rhat) )then
                 deallocate(self%smwork(ithr,imap)%rhat, self%smwork(ithr,imap)%yhat, self%smwork(ithr,imap)%prod,&
                     &self%smwork(ithr,imap)%gsum, self%smwork(ithr,imap)%wj, self%smwork(ithr,imap)%refpow,&
-                    &self%smwork(ithr,imap)%gin, self%smwork(ithr,imap)%lw, self%smwork(ithr,imap)%xy)
+                    &self%smwork(ithr,imap)%wj_from, self%smwork(ithr,imap)%nharm, self%smwork(ithr,imap)%ir_first,&
+                    &self%smwork(ithr,imap)%gfold, self%smwork(ithr,imap)%lw, self%smwork(ithr,imap)%xy)
             endif
+            self%smwork(ithr,imap)%l_wj = .false.
             if( c_associated(self%smwork(ithr,imap)%ghalf_p) )then
                 call fftwf_free(self%smwork(ithr,imap)%ghalf_p)
                 call fftwf_free(self%smwork(ithr,imap)%gout_p)
@@ -260,14 +281,13 @@ contains
         self%sm_counts(6,ithr) = self%sm_counts(6,ithr) + 1_int64
     end subroutine gen_shiftmap
 
-    !> Preserve the original arithmetic and array layout in this numerical kernel.
+    !> The pair's shell sums, folded orders and grid on the calling thread's work (gen_shiftmap)
     subroutine gen_shiftmap_kernel( self, imap, iref, iptcl )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap, iref, iptcl
         type(shiftmap_work), pointer :: wk
         real(dp) :: w(self%kfromto(1):self%kfromto(2)), wj(self%kfromto(1):self%kfromto(2))
-        real(sp) :: fac
-        integer  :: ithr, i, ieo, ih, k, m, n, irho, nrho, nmax, nalpha, nh, jn, sgn, nhalf, mm, nn, kb(2), k1, k2, nwrap
+        integer  :: ithr, i, ieo, ih, k, m, n, irho, nrho, nmax, nalpha, nh, jn, sgn, kb(2), k1, k2, nwrap, ir0
         if( .not. self%has_shiftmap(imap) ) THROW_HARD('no shift map; new_shiftmap first; gen_shiftmap')
         ithr   =  omp_get_thread_num() + 1
         i      =  self%pinds(iptcl)
@@ -298,14 +318,19 @@ contains
         end select
         wk%iref  = iref
         wk%iptcl = iptcl
-        ! the Bessel-weighted shell weights of every order and magnitude
-        do n = 0, nmax
-            do irho = 1, nrho
-                if( n > self%shiftmap(imap)%get_nharm(irho) ) cycle
-                call self%shiftmap(imap)%shell_weights(w(k1:k2), n, irho, wj(k1:k2))
-                wk%wj(:,irho,n) = real(wj(k1:k2), sp)
+        ! the Bessel-weighted shell weights of every order and magnitude, made again only when the objective's shell
+        ! weights are not the ones the thread's work holds them for (another half, another objective, new sigma2)
+        if( .not. (wk%l_wj .and. same_bits(wk%wj_from, w(k1:k2))) )then
+            do n = 0, nmax
+                do irho = 1, nrho
+                    if( n > wk%nharm(irho) ) cycle
+                    call self%shiftmap(imap)%shell_weights(w(k1:k2), n, irho, wj(k1:k2))
+                    wk%wj(:,irho,n) = real(wj(k1:k2), sp)
+                enddo
             enddo
-        enddo
+            wk%wj_from = w(k1:k2)
+            wk%l_wj    = .true.
+        endif
         ! the weighted reference power under the rotated CTF: sum_k w_k FT(CTF2) FT(REF2) back-transformed is
         ! 2 nrots times the half-ring sum at every rotation (the reference term of the Euclidean kernels)
         self%crvec1(ithr)%c = cmplx(0., 0., kind=c_float_complex)
@@ -325,8 +350,8 @@ contains
             enddo
         enddo
         ! the shell sums of every order: R^[m-n] conj(Y^[m]) by two contiguous slices, the spectral index modulo the
-        ! ring (an order beyond the ring's length wraps), then one weighted sum per magnitude (single precision, as the
-        ! spectra)
+        ! ring (an order beyond the ring's length wraps), then their weighted sums over the shells for the magnitudes
+        ! that keep the order, one product when they trail, else one per magnitude (single precision, as the spectra)
         do n = 0, nmax
             nwrap = modulo(n, self%nrots)
             if( nwrap == 0 )then
@@ -335,42 +360,102 @@ contains
                 wk%prod(1:nwrap,:)            = wk%rhat(self%nrots-nwrap+1:self%nrots,:) * wk%yhat(1:nwrap,:)
                 wk%prod(nwrap+1:self%nrots,:) = wk%rhat(1:self%nrots-nwrap,:)            * wk%yhat(nwrap+1:self%nrots,:)
             endif
-            do irho = 1, nrho
-                if( n > self%shiftmap(imap)%get_nharm(irho) ) cycle
-                wk%gsum(:,n,irho) = wk%wj(k1,irho,n) * wk%prod(:,k1)
-                do k = k1 + 1, k2
-                    wk%gsum(:,n,irho) = wk%gsum(:,n,irho) + wk%wj(k,irho,n) * wk%prod(:,k)
+            ir0 = wk%ir_first(n)
+            if( ir0 > 0 )then
+                call shell_sums(wk, n, ir0, nrho - ir0 + 1)
+            else
+                do irho = 1, nrho
+                    if( n <= wk%nharm(irho) ) call shell_sums(wk, n, irho, 1)
                 enddo
-            enddo
-        enddo
-        ! the orders onto the direction axis, folded modulo nalpha (a_0 enters with a half); the input's other rows
-        ! are zero from new_shiftmap and stay so
-        do irho = 1, nrho
-            nh = self%shiftmap(imap)%get_nharm(irho)
-            do n = 0, min(nh, nalpha - 1)
-                fac = merge(0.5_sp, 1.0_sp, n == 0)
-                wk%gin(n+1,:,irho) = fac * wk%gsum(:,n,irho)
-            enddo
-            do n = nalpha, nh
-                jn = mod(n, nalpha) + 1
-                wk%gin(jn,:,irho) = wk%gin(jn,:,irho) + wk%gsum(:,n,irho)
-            enddo
+            endif
         enddo
         ! the real part of the forward transform is the forward transform of the Hermitian half
         ! X_h[n,m] = (X[n,m] + conj(X[-n,-m]))/2; the complex-to-real transform is the backward one, so it is fed
-        ! conj(X_h): one batched transform of half the size
-        nhalf = nalpha / 2 + 1
+        ! conj(X_h): one batched transform of half the size. The orders onto the direction axis, folded modulo nalpha
+        ! (a_0 enters with a half), in the same pass when they stay below nalpha
         do irho = 1, nrho
-            do m = 0, self%nrots - 1
-                mm = modulo(-m, self%nrots) + 1
-                do n = 0, nhalf - 1
-                    nn = modulo(-n, nalpha) + 1
-                    wk%ghalf(n+1,m+1,irho) = 0.5_sp * (conjg(wk%gin(n+1,m+1,irho)) + wk%gin(nn,mm,irho))
+            nh = wk%nharm(irho)
+            if( nh < nalpha )then
+                call hermitian_half(nalpha, 0.5_sp, wk%gsum(:,0:nh,irho), wk%ghalf(:,:,irho))
+            else
+                wk%gfold(:,0)          = 0.5_sp * wk%gsum(:,0,irho)
+                wk%gfold(:,1:nalpha-1) = wk%gsum(:,1:nalpha-1,irho)
+                do n = nalpha, nh
+                    jn = mod(n, nalpha)
+                    wk%gfold(:,jn) = wk%gfold(:,jn) + wk%gsum(:,n,irho)
                 enddo
-            enddo
+                call hermitian_half(nalpha, 1.0_sp, wk%gfold, wk%ghalf(:,:,irho))
+            endif
         enddo
         call fftwf_execute_dft_c2r(self%plan_shiftmap(imap), wk%ghalf, wk%gout)
     end subroutine gen_shiftmap_kernel
+
+    !> The weighted shell sums of order n at ncol magnitudes from ir0, gsum(:,n,ir0:) = prod wj(:,ir0:,n), the complex
+    !! arrays read as interleaved reals: one real product per block of rows, the blocks small enough for the BLAS to
+    !! stay on the calling thread whether or not it runs in a team
+    subroutine shell_sums( wk, n, ir0, ncol )
+        use, intrinsic :: iso_c_binding, only: c_loc
+        type(shiftmap_work), target, intent(inout) :: wk
+        integer,                     intent(in)    :: n, ir0, ncol
+        real(sp), pointer, contiguous :: a(:), c(:)
+        integer                       :: k1, nk, nrows, ldc, mblk, r0, mrows, m0
+        k1    = lbound(wk%prod, 2)
+        nk    = size(wk%prod, 2)
+        nrows = 2 * size(wk%prod, 1)
+        ldc   = nrows * size(wk%gsum, 2)
+        mblk  = nrows
+        if( int(nrows, int64) * int(ncol * nk, int64) > int(SGEMM_ONE_THREAD_MNK, int64) )then
+            mblk = max(2, 2 * (SGEMM_ONE_THREAD_MNK / (2 * ncol * nk)))
+        endif
+        do r0 = 1, nrows, mblk
+            mrows = min(mblk, nrows - r0 + 1)
+            m0    = (r0 + 1) / 2
+            call c_f_pointer(c_loc(wk%prod(m0,k1)),     a, [nrows * (nk - 1) + mrows])
+            call c_f_pointer(c_loc(wk%gsum(m0,n,ir0)), c, [ldc * (ncol - 1) + mrows])
+            call sgemm('N', 'N', mrows, ncol, nk, 1.0, a, nrows, wk%wj(k1,ir0,n), nk, 0.0, c, ldc)
+        enddo
+    end subroutine shell_sums
+
+    !> The conjugate Hermitian half of one magnitude's direction orders G(m, j): f0 g(m, 0) at j = 0, g(m, j) for
+    !! 1 <= j <= nhv (g's last column), zero beyond; gh(n+1, m) = (conj(G(m, n)) + G(-m, -n)) / 2 for n < nalpha/2 + 1,
+    !! the indices modulo the ring and nalpha. gh is explicit-shape: the transform's input is a pointer view, and as a
+    !! contiguous assumed-shape dummy it made the map 7 % slower at 24 threads
+    pure subroutine hermitian_half( nalpha, f0, g, gh )
+        integer,                 intent(in)  :: nalpha
+        real(sp),                intent(in)  :: f0
+        complex(sp), contiguous, intent(in)  :: g(:,0:)
+        complex(sp),             intent(out) :: gh(nalpha/2+1,size(g,1))
+        complex(sp) :: a, b
+        integer     :: nrots, nhv, m, mm, n, j2
+        nrots = size(g, 1)
+        nhv   = ubound(g, 2)
+        do m = 1, nrots
+            mm = modulo(1 - m, nrots) + 1
+            gh(1,m) = 0.5_sp * f0 * (conjg(g(m,0)) + g(mm,0))
+            do n = 1, nalpha / 2
+                j2 = nalpha - n
+                a  = cmplx(0., 0., kind=sp)
+                b  = cmplx(0., 0., kind=sp)
+                if( n  <= nhv ) a = g(m,n)
+                if( j2 <= nhv ) b = g(mm,j2)
+                gh(n+1,m) = 0.5_sp * (conjg(a) + b)
+            enddo
+        enddo
+    end subroutine hermitian_half
+
+    !> two real arrays of one size hold the same bits
+    pure logical function same_bits( a, b )
+        real(dp), intent(in) :: a(:), b(:)
+        integer              :: j
+        same_bits = size(a) == size(b)
+        if( .not. same_bits ) return
+        do j = 1, size(a)
+            if( transfer(a(j), 1_int64) /= transfer(b(j), 1_int64) )then
+                same_bits = .false.
+                return
+            endif
+        enddo
+    end function same_bits
 
     !> the cross term of the thread's pair on map imap at grid rotation irot and magnitude rho(irho), at any direction
     !! alpha (the sub-grid readout): the rotation's coefficients from the shell sums by a direct transform

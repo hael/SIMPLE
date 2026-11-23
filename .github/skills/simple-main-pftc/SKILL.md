@@ -41,6 +41,12 @@ Silent ones first: nothing reports these.
   thread; `shiftmap_cross`, `shiftmap_objfun_grid` and the other private bindings marked "test hook"
   have no production caller and serve the kernel's tester. The loaded state spans a whole
   minimisation: no nested parallel region or untied task inside it.
+- The shift-map kernel (`gen_shiftmap_kernel`) sums the shells of an order as one `sgemm` over the magnitudes
+  that keep it, in row blocks of m·n·k below `SGEMM_ONE_THREAD_MNK` (`simple_linalg`), so a pair's map has the
+  same bits on any thread, team or serial caller; keep new BLAS calls there under that bound. Its Bessel weights
+  are remade only when the shell weights change bits (`wj_from`). Its arithmetic is not frozen (ruling
+  2026-11-23): a change is judged by the kernel's tester, the bench's team identity and `simulated_workflow`, and
+  re-baselines the estimated-plan identity files of `polar_matching_bench suite=shiftmap`.
 - References are stored per half (`pfts_refs(:,:,iref,ieo)`) and picked by the particle's `iseven`;
   sigma2 is two spectra, one per half.
 - Shift matrices span only the searched shells `kfromto(1):kfromto(2)` (`gen_shmat4aln_8`; the

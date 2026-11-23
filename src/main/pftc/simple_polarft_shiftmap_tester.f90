@@ -1,10 +1,13 @@
 !@descr: white-box unit tests of the polar calculator's shift-map kernel (gen_shiftmap and its readers), a submodule of simple_polarft_calc
 ! The kernel must equal the mechanics (simple_polar_shiftmap) and the calculator's objective for cc and euclid at
 ! random poses, keep orders beyond the ring and the angular Nyquist, give the same grids on four threads as on one,
-! draw from the tempered posterior with the physical width, round a zero prior width, keep its map cache through the
-! lifecycle, match the screen's width and the disk, and its cost is tabled against the coarse grid.
+! sum the shells per magnitude for unsorted magnitudes and in row blocks past the BLAS's calling-thread bound (a
+! serial caller with a wide pool gets the team's grids), draw from the tempered posterior with the physical width,
+! round a zero prior width, keep its map cache through the lifecycle, match the screen's width and the disk, and its
+! cost is tabled against the coarse grid.
 submodule (simple_polarft_calc) simple_polarft_shiftmap_tester
 use simple_rnd,                only: rnd_scope_key, RND_PROG_REFINE3D, RND_PASS_ALIGN
+use simple_linalg,             only: SGEMM_ONE_THREAD_MNK
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_polar_shiftmap,     only: shiftmap_ndirections
 use simple_test_polar_fixture, only: shift_args, magnitudes
@@ -20,6 +23,8 @@ contains
         call test_orders_beyond_ring()
         call test_angular_nyquist()
         call test_kernel_threads()
+        call test_unsorted_magnitudes()
+        call test_blocked_shell_sums()
         call test_kernel_draw()
         call test_physical_width()
         call test_zero_prior_width_rounding()
@@ -441,6 +446,95 @@ contains
         deallocate(refs, ptcls, ctfs, vals_serial, vals_par, p, pftc)
         if( allocated(sigma2) ) deallocate(sigma2)
     end subroutine test_kernel_threads
+
+    !> Magnitudes in any order: where the magnitudes that keep an order do not trail, the kernel sums the shells per
+    !! magnitude instead of in one product; the grids equal the sorted list's at the permuted magnitudes (cc)
+    subroutine test_unsorted_magnitudes()
+        integer,  parameter :: NALPHA = 20, NRHO = 5
+        integer,  parameter :: PERM(NRHO) = [4, 1, 5, 2, 3]
+        real(dp), parameter :: RHOS(NRHO) = [0.d0, 1.5d0, 4.d0, 9.d0, 15.d0]
+        class(parameters),   allocatable, target :: p
+        class(polarft_calc), allocatable         :: pftc
+        real,        allocatable :: sigma2(:,:)
+        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),    allocatable :: ctfs(:,:,:), vals_sorted(:,:,:), vals_perm(:,:,:)
+        real(dp) :: err
+        integer  :: kfromto(2), nrots, ir
+        write(*,'(A)') 'test_unsorted_magnitudes'
+        call set_fixed_seed(20261123)
+        allocate(p, pftc)
+        call make_pftc_kernel(p, pftc, 'cc', 1, 64, 1.0, 48.0, 6.0, 48, 2, 1, sigma2, refs, ptcls, ctfs, kfromto)
+        nrots = pftc%get_nrots()
+        allocate(vals_sorted(NALPHA,nrots,NRHO), vals_perm(NALPHA,nrots,NRHO))
+        call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, NALPHA, kfromto(2))
+        call assert_true(all(pftc%smwork(1,SHIFTMAP_FULL)%ir_first > 0), 'sorted magnitudes: one product per order')
+        call pftc%gen_shiftmap(SHIFTMAP_FULL, 2, 1)
+        call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals_sorted)
+        call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS(PERM), NALPHA, kfromto(2))
+        call assert_true(any(pftc%smwork(1,SHIFTMAP_FULL)%ir_first == 0), 'unsorted magnitudes: sums per magnitude')
+        call pftc%gen_shiftmap(SHIFTMAP_FULL, 2, 1)
+        call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals_perm)
+        err = 0.d0
+        do ir = 1, NRHO
+            err = max(err, real(maxval(abs(vals_perm(:,:,ir) - vals_sorted(:,:,PERM(ir)))), dp))
+        enddo
+        write(*,'(A,ES10.2)') '  max |unsorted - sorted| ', err
+        call assert_true(err <= 1.d-6, 'unsorted magnitudes give the sorted grids at the permuted magnitudes')
+        call pftc%kill
+        deallocate(refs, ptcls, ctfs, vals_sorted, vals_perm, p, pftc)
+        if( allocated(sigma2) ) deallocate(sigma2)
+    end subroutine test_unsorted_magnitudes
+
+    !> Shell sums past the BLAS's calling-thread bound: a product whose m*n*k exceeds it goes in row blocks, so a
+    !! serial caller with a wide OpenMP pool (a threaded BLAS would split it) gets the team's grids bit for bit, and the
+    !! grid is the calculator's objective (euclid, box 128, a ring of 400, shells 2-63, seven magnitudes, orders folded)
+    subroutine test_blocked_shell_sums()
+        integer,  parameter :: NALPHA = 16, NRHO = 7
+        real(dp), parameter :: RHOS(NRHO) = [0.d0, 1.d0, 2.5d0, 4.d0, 6.d0, 9.d0, 12.d0]
+        class(parameters),   allocatable, target :: p
+        class(polarft_calc), allocatable         :: pftc
+        real,        allocatable :: sigma2(:,:)
+        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),    allocatable :: ctfs(:,:,:), vals_serial(:,:,:,:), vals_par(:,:,:,:)
+        integer(int64) :: mnk
+        integer        :: kfromto(2), nrots, ip, nthr_prev, nthr_test, nptcls
+        write(*,'(A)') 'test_blocked_shell_sums'
+        call set_fixed_seed(20261123)
+        allocate(p, pftc)
+        nthr_test = 4
+        !$ nthr_test = min(24, max(4, omp_get_num_procs()))
+        nptcls = 2 * nthr_test
+        call make_pftc_kernel(p, pftc, 'euclid', nthr_test, 128, 1.0, 100.0, 2.0, 200, 1, nptcls, sigma2, refs, ptcls,&
+            &ctfs, kfromto)
+        nrots = pftc%get_nrots()
+        mnk   = int(2 * nrots, int64) * int(NRHO * (kfromto(2) - kfromto(1) + 1), int64)
+        call assert_true(mnk > max(262144_int64, int(SGEMM_ONE_THREAD_MNK, int64)),&
+            &'the order-0 product is past the bundled BLAS''s calling-thread bound on every target')
+        call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, NALPHA, kfromto(2))
+        allocate(vals_serial(NALPHA,nrots,NRHO,nptcls), vals_par(NALPHA,nrots,NRHO,nptcls))
+        nthr_prev = 1
+        !$ nthr_prev = omp_get_max_threads()
+        ! serial, with the whole pool open to a threaded BLAS
+        !$ call omp_set_num_threads(nthr_test)
+        do ip = 1, nptcls
+            call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, ip)
+            call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals_serial(:,:,:,ip))
+        enddo
+        !$omp parallel do default(shared) private(ip) schedule(dynamic) proc_bind(close)
+        do ip = 1, nptcls
+            call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, ip)
+            call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals_par(:,:,:,ip))
+        enddo
+        !$omp end parallel do
+        !$ call omp_set_num_threads(nthr_prev)
+        write(*,'(A,I0,A,ES10.2)') '  order-0 m*n*k ', mnk, ', max |team - serial| ',&
+            &real(maxval(abs(vals_par - vals_serial)), dp)
+        call assert_true(all(vals_par == vals_serial), 'past the BLAS bound a serial caller gives the team''s grids bit for bit')
+        call check_map_objective(pftc, 1, 1)
+        call pftc%kill
+        deallocate(refs, ptcls, ctfs, vals_serial, vals_par, p, pftc)
+        if( allocated(sigma2) ) deallocate(sigma2)
+    end subroutine test_blocked_shell_sums
 
     !> The sampler on the kernel's fixture (euclid, box 64 at 1 A/px, a 30 px disk for sigma 10 px). At temperature
     !! zero the draw is the prior under the polar measure: the mean radius of 1500 draws is the discrete prior's

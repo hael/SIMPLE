@@ -13,7 +13,12 @@ public :: qr_solve
 public :: solve_real_spd_complex
 public :: cholesky, chol_forward, chol_backward, spd_inverse, spd_logdet, spd_solve_rel
 public :: trace, vabs, vector_angle_norm, vox2ang, ang2vox
-public :: gemm_tn, cgemm
+public :: gemm_tn, cgemm, sgemm, SGEMM_ONE_THREAD_MNK
+
+! the bundled OpenBLAS computes a real product of m*n*k below this on the calling thread wherever it is called;
+! past it a call outside an active OpenMP team may be threaded (from 125000 on its Neoverse V2 kernels, past 262144
+! on the others), and a threaded product can differ from the calling thread's in the last bits
+integer, parameter :: SGEMM_ONE_THREAD_MNK = 124999
 
 interface eigsrt
     module procedure eigsrt_sp, eigsrt_dp

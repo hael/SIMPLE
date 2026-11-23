@@ -638,6 +638,13 @@ contains
                 call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_lp_from_fsc05)
             endif
         endif
+        ! Stage 2 bridges the separate start and the existing FSC-bounded target in Angstroms.
+        ! Keep lpinfo intact: stage 3 onward still computes its limit against the original bounds.
+        if( present(stage1_lp) )then
+            if( istage == 2 .and. stage1_lp > 0. .and. l_lp_from_fsc05 .and. .not. l_addon )then
+                lp_eff = 0.5 * (stage1_lp + lp_eff)
+            endif
+        endif
         ! NU and gold-standard stages have only the user's explicit matching ceiling.
         if( cfg%l_gold_standard .or. cfg%filt_mode .ne. 'none' )then
             lpstop_eff = 0.

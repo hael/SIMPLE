@@ -1376,6 +1376,9 @@ contains
                     if( istage == 1 .and. stage1_lp > 0. )then
                         write(logfhandle,'(A,I3,A,F5.1,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', &
                             &cline_refine3D%get_rarg('lp'), ' A (stage-1 size rule; ladder starts at ', lpinfo(1)%lp, ' A)'
+                    else if( istage == 2 .and. stage1_lp > 0. )then
+                        write(logfhandle,'(A,I3,A,F5.1,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', &
+                            &cline_refine3D%get_rarg('lp'), ' A (stage-2 midpoint; stage 1 at ', stage1_lp, ' A)'
                     else
                         write(logfhandle,'(A,I3,A,F5.1,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', &
                             &cline_refine3D%get_rarg('lp'), ' A (planned ', lpinfo(istage)%lp, ' A, set by FSC=0.5)'

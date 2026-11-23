@@ -1142,7 +1142,12 @@ another column or in a call of another shape, but not in another row of a full
 call, so a pair's entry depends on neither its block-mates nor the team, and
 the fills are identical at one thread, any team, any batch size and any part
 count (`polar_matching_bench suite=fills`). Another BLAS must keep that row
-invariance or the identity is lost.
+invariance or the identity is lost. The polar shift maps' shell sums are BLAS
+products too (since 2026-11-23: one `sgemm` per order over the magnitudes that
+keep it): their shapes follow the map's geometry alone, and each is cut into row
+blocks of m·n·k below `SGEMM_ONE_THREAD_MNK` (`simple_linalg`), the bound under
+which the bundled OpenBLAS stays on the calling thread outside a team as well, so
+a pair's map is the same on any thread, in any team and from a serial caller.
 
 The kernel reads a bin-major copy of the reference memo, `ft_ref_bins`
 (2·nk, nrefs, pftsz+1, half: conj(FT(REF2)) and FT(REF) per bin), derived by

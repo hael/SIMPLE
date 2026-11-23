@@ -69,21 +69,25 @@ end type heap_vars
 
 ! the shift map's per-thread work: gen_shiftmap fills it, shiftmap_objfun_grid and shiftmap_cross read it on the same thread
 type shiftmap_work
-    complex(sp), allocatable :: rhat(:,:)   !< the reference's full-ring spectra (nrots, shells)
-    complex(sp), allocatable :: yhat(:,:)   !< conjugate full-ring spectra of the CTF-modulated particle (nrots, shells)
-    complex(sp), allocatable :: prod(:,:)   !< R^[m-n] conj(Y^[m]) at the order in hand (nrots, shells)
-    complex(sp), allocatable :: gsum(:,:,:) !< the shell sums G_n[m, rho]: (nrots, 0:nharm_max, nrho)
-    real(sp),    allocatable :: wj(:,:,:)   !< the objective's shell weights times J_n: (shells, nrho, 0:nharm_max)
-    real(dp),    allocatable :: refpow(:)   !< the weighted reference power under the rotated CTF per rotation (nrots)
-    complex(sp), allocatable :: gin(:,:,:)  !< the folded orders over (direction order, ring position, magnitude), zero elsewhere, kept across pairs
-    type(c_ptr)              :: ghalf_p = c_null_ptr !< the Hermitian half of gin, the complex-to-real transform's input
+    complex(sp), allocatable :: rhat(:,:)     !< the reference's full-ring spectra (nrots, shells)
+    complex(sp), allocatable :: yhat(:,:)     !< conjugate full-ring spectra of the CTF-modulated particle (nrots, shells)
+    complex(sp), allocatable :: prod(:,:)     !< R^[m-n] conj(Y^[m]) at the order in hand (nrots, shells)
+    complex(sp), allocatable :: gsum(:,:,:)   !< the shell sums G_n[m, rho]: (nrots, 0:nharm_max, nrho)
+    real(sp),    allocatable :: wj(:,:,:)     !< the objective's shell weights times J_n: (shells, nrho, 0:nharm_max)
+    real(dp),    allocatable :: wj_from(:)    !< the objective's shell weights wj was made from (shells)
+    integer,     allocatable :: nharm(:)      !< the highest order kept at each magnitude (nrho)
+    integer,     allocatable :: ir_first(:)   !< per order, the first of the trailing magnitudes that keep it, 0 when those that keep it do not trail (0:nharm_max)
+    real(dp),    allocatable :: refpow(:)     !< the weighted reference power under the rotated CTF per rotation (nrots)
+    complex(sp), allocatable :: gfold(:,:)    !< one magnitude's orders folded onto the direction orders, when they reach past them (nrots, 0:nalpha-1)
+    type(c_ptr)              :: ghalf_p = c_null_ptr !< the Hermitian half of the folded orders, the complex-to-real transform's input
     type(c_ptr)              :: gout_p  = c_null_ptr !< its output: the cross term on the grid
     complex(kind=c_float_complex), pointer :: ghalf(:,:,:) => null() !< (nalpha/2+1, nrots, nrho) view
     real(kind=c_float),            pointer :: gout(:,:,:)  => null() !< (nalpha, nrots, nrho) view
-    real(sp),    allocatable :: lw(:,:,:)   !< the sampler's log masses over the grid (nalpha, nrots, nrho)
-    real(dp),    allocatable :: xy(:,:,:)   !< the grid's shifts (2, nalpha, nrho), as shiftmap_shift gives them
+    real(sp),    allocatable :: lw(:,:,:)     !< the sampler's log masses over the grid (nalpha, nrots, nrho)
+    real(dp),    allocatable :: xy(:,:,:)     !< the grid's shifts (2, nalpha, nrho), as shiftmap_shift gives them
     real(dp)                 :: ptclpow = 0.d0 !< the particle's weighted power: ksqsum for cc, wsqsum for euclid
     integer                  :: iref = 0, iptcl = 0 !< the pair the work holds
+    logical                  :: l_wj = .false. !< wj holds the Bessel weights of wj_from
 end type shiftmap_work
 
 type shiftmap_cache

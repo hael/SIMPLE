@@ -1453,3 +1453,59 @@ are recorded in the review. No production changes were made by that review.
   maps, about -5 s. Awaiting Hans's choice.
 - Class quality of the three runs (single runs, the random start dominates): window best 4.24 A, 14 % of the
   particles in classes at 6.5 A or better; key 180: 4.60 A, 23 %; key with the estimate (185 A): 4.41 A, 10 %.
+
+### 2026-11-23: the shell sums as one product per order (after the close; Hans: "I would be happy to adopt this change and whatever downstream policy and test changes come with it"; Claude)
+
+- What changed in `gen_shiftmap_kernel`.
+  - The weighted sums over the shells of one order, for every magnitude that keeps it, are one real `sgemm`: the
+    complex shell products as interleaved reals (2 nrots x shells) times the real Bessel-weighted shell weights
+    (shells x magnitudes), written into `gsum` in place. That is the loops' operation count, at about 2.3 times
+    their rate.
+  - The magnitudes that keep an order trail when the orders grow with the magnitude, as `setup_shiftmaps` builds
+    them (`ir_first`). Otherwise each magnitude is its own product.
+  - Each product is cut into row blocks of m·n·k below `SGEMM_ONE_THREAD_MNK` (`simple_linalg`, 124 999). Below
+    that the bundled OpenBLAS computes on the calling thread wherever it is called; past it, a call outside an
+    active team may be threaded (from 125 000 on its Neoverse V2 kernels, 262 144 on the others). So a serial
+    caller with a wide pool gets the team's bits.
+  - The Bessel weights are made again only when the objective's shell weights change bits (`wj_from`, per thread).
+  - The fold onto the directions and the Hermitian half are one pass, a magnitude at a time; `gfold` replaces the
+    whole-map `gin`.
+  - The orders kept per magnitude are read once per map into the thread's work (`nharm`), not through the map
+    object in the loops. That alone builds the screen map 10.5 % faster, from the code generation.
+- Why the identity moved. The 2026-11-03 performance refactor kept the original generator byte for byte (its
+  record: `doc/refactoring_notes/completed/polar_shift_search_performance_refactoring.md`). Even reading the orders
+  once changes gfortran's code for the same arithmetic. With Hans's ruling the generator's arithmetic is no longer
+  frozen; a change is judged by tolerance, the team identity and the workflows.
+- Identity against the previous kernel (67c6a05e2): `polar_matching_bench suite=shiftmap fftw_plans=estimate`, one
+  thread, 64 particles x 16 candidates per map.
+  - 501 window and 601 screen maps of 1024 differ, by at most one float32 ulp of the loss (1.19e-7), and the widths
+    by at most 1.0e-4 px.
+  - No mode moved, and one thread against 24 gives 0 differences on both maps.
+  - The kernel against the mechanics stays at the old level, for example 5.3e-5 at a scale of 5.4e3.
+- Speed. M2 Ultra, Release, measured plans, case 2500 x 4, 2000 particles x 16 candidates, two passes against the
+  previous kernel in alternating order:
+
+  | | 24 threads | 12 threads | 1 thread |
+  | --- | --- | --- | --- |
+  | screen construction, µs per map and thread | 2038 -> 1335 (-35 %) | 1577 -> 1006 (-36 %) | 1516 -> 914 (-40 %) |
+  | screen maps/s | x1.28 | x1.30 | x1.34 |
+  | window construction | 370 -> 295 (-20 %) | 294 -> 228 (-23 %) | 274 -> 202 (-26 %) |
+  | window maps/s | x1.16 | x1.19 | x1.22 |
+
+  - Production skips most widths, so counting construction plus selection the screen map is 1.48 times faster at
+    24 threads.
+  - The row blocks cost about 2 % of the screen map's construction; the window map has none.
+  - The Hermitian half writes the transform's input as an explicit-shape array. As a contiguous assumed-shape
+    dummy over that pointer view it cost 7 % at 24 threads.
+  - The FFT is now more than half of the construction, and FFTW_PATIENT plans do not move it.
+- Tests and checks.
+  - New tests: `test_unsorted_magnitudes`; `test_blocked_shell_sums` (a ring of 400, shells 2-63, seven
+    magnitudes, so m·n·k reaches 347 200, past every bound; serial equals team bit for bit); and in the
+    linear-algebra suite `test_sgemm_strided`.
+  - Debug: `unit_pftc_align2D3D` 6659 of 6659, the linear-algebra suite 130 of 130 and the fast gate 15 of 15;
+    Release: the kernel suite 145 of 145.
+  - Release `simulated_workflow suite=6vxx`, one thread, 591 s, with the maps in both solve2D's and solve3D's
+    fills: every gate passes. Truth correlation 0.904 (floor 0.80), FSC=0.143 at 4.23 A (limit 6), median
+    pair-pose error 0.95 degrees (limit 15), pair fraction within 5 degrees 0.97 (floor 0.45).
+- The prototype, its variants and their logs are in `~/for_claude/bench/simple_sm_gemm_2026-11-23` on the M2
+  Ultra (`REPORT.md`).

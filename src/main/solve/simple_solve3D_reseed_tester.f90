@@ -161,7 +161,8 @@ contains
         real, parameter :: START_DIAMS(6) = [50., 80., 155., 160., 170., 400.]
         real, parameter :: START_LPS(6)   = [10., 10., 19.375, 20., 21.25, 30.]
         real, parameter :: LADDER_LPS(6)  = [10., 10., 15.5, 16., 17., 30.]
-        integer :: saved_nptcls_eff, saved_nstages, nfail0, backend, istage, imode, i, stage1_box
+        real, parameter :: MIDPOINT_LPS(6) = [10., 10., 17.4375, 18., 19.125, 30.]
+        integer :: saved_nptcls_eff, saved_nstages, nfail0, backend, istage, imode, i, stage1_box, stage2_box
         integer :: saved_logfhandle, log_unit
         character(len=7), parameter :: mask_modes(4) = [character(len=7) :: 'no', 'density', 'nu', 'order']
         write(*,'(A)') 'test_gold_standard_stages'
@@ -206,7 +207,7 @@ contains
         call proj%os_ptcl3D%set_all2single('res05', 5.3)
         call proj%update_projinfo(params%projfile)
         call proj%write(params%projfile)
-        ! The first-stage matching and Gaussian limits are separate from the ladder and its FSC bounds.
+        ! Early matching and Gaussian limits are separate from the ladder and later FSC bounds.
         saved_logfhandle = logfhandle
         open(newunit=log_unit, status='scratch', action='write')
         logfhandle = log_unit
@@ -218,6 +219,7 @@ contains
             call set_lplims_ptcls(params, 0., 0., stage1_lp)
             planned_lp = lpinfo%lp
             stage1_box = lpinfo(1)%box_crop
+            stage2_box = lpinfo(2)%box_crop
             call set_cline_refine3D(params, 1, 1, .false., stage1_lp=stage1_lp)
             call assert_real(START_LPS(i), cline_refine3D%get_rarg('lp'), 1.e-4, 'stage 1 matches at the size-rule limit')
             call assert_real(START_LPS(i), cline_refine3D%get_rarg('lpstop'), 1.e-4, 'stage 1 ceiling follows its limit')
@@ -225,12 +227,17 @@ contains
             call assert_string_eq('yes', cline_refine3D%get_carg('gauref'), 'stage 1 retains Gaussian filtering')
             call assert_int(stage1_box, cline_refine3D%get_iarg('box_crop'), 'stage 1 retains the ladder crop')
             call assert_true(all(abs(lpinfo%lp-planned_lp) < 1.e-6), 'stage 1 does not mutate the ladder')
-            do istage = 2,5
+            call set_cline_refine3D(params, 2, 1, .false., stage1_lp=stage1_lp)
+            call assert_real(MIDPOINT_LPS(i), cline_refine3D%get_rarg('lp'), 1.e-4, 'stage 2 matches at the midpoint')
+            call assert_real(MIDPOINT_LPS(i), cline_refine3D%get_rarg('lpstop'), 1.e-4, 'stage 2 ceiling is the midpoint')
+            call assert_real(MIDPOINT_LPS(i), cline_refine3D%get_rarg('gaufreq'), 1.e-4, 'stage 2 Gaussian is the midpoint')
+            call assert_string_eq('yes', cline_refine3D%get_carg('gauref'), 'stage 2 retains Gaussian filtering')
+            call assert_int(stage2_box, cline_refine3D%get_iarg('box_crop'), 'stage 2 retains the ladder crop')
+            call assert_true(all(abs(lpinfo%lp-planned_lp) < 1.e-6), 'stage 2 does not mutate the ladder')
+            do istage = 3,5
                 call set_cline_refine3D(params, istage, 1, .false., stage1_lp=stage1_lp)
                 call assert_real(LADDER_LPS(i), cline_refine3D%get_rarg('lp'), 1.e-4, &
                     &'later FSC hold-back remains bounded by the original ladder start')
-                if( istage == 2 ) call assert_real(LADDER_LPS(i), cline_refine3D%get_rarg('gaufreq'), 1.e-4, &
-                    &'stage 2 Gaussian retains its FSC-derived limit')
             enddo
         enddo
         params%mskdiam = 170.
@@ -238,10 +245,58 @@ contains
         call set_cline_refine3D(params, 1, 1, .false., stage1_lp=stage1_lp)
         call assert_real(25., cline_refine3D%get_rarg('lp'), 1.e-4, 'explicit lpstart controls stage-1 matching')
         call assert_real(25., cline_refine3D%get_rarg('gaufreq'), 1.e-4, 'explicit lpstart controls stage-1 Gaussian')
+        call set_cline_refine3D(params, 2, 1, .false., stage1_lp=stage1_lp)
+        call assert_real(25., cline_refine3D%get_rarg('lp'), 1.e-4, 'explicit start bounds the stage-2 midpoint')
+        ! A measured target inside the bounds, rather than the stored stage-3 rung: streptavidin.
+        params%mskdiam = 80.
         call set_lplims_ptcls(params, 0., 0., stage1_lp)
+        call write_res05(9.148)
+        call set_cline_refine3D(params, 2, 1, .false., stage1_lp=stage1_lp)
+        call assert_real(9.574, cline_refine3D%get_rarg('lp'), 1.e-4, 'stage 2 interpolates toward the measured FSC target')
+        call assert_real(9.574, cline_refine3D%get_rarg('gaufreq'), 1.e-4, 'the measured-target midpoint also filters references')
+        call write_res05(8.)
+        call set_cline_refine3D(params, 3, 1, .false., stage1_lp=stage1_lp)
+        call assert_real(8., cline_refine3D%get_rarg('lp'), 1.e-4, 'stage 3 recomputes its limit from its own entry FSC')
+        call assert_false(cline_refine3D%defined('gaufreq'), 'the midpoint Gaussian does not carry into stage 3')
+        ! The fine bound is applied to the target before interpolation; stage 3 still uses it directly.
+        params%mskdiam = 170.
+        call set_lplims_ptcls(params, 0., 0., stage1_lp)
+        call write_res05(3.)
+        call set_cline_refine3D(params, 2, 1, .false., stage1_lp=stage1_lp)
+        call assert_real(12.875, cline_refine3D%get_rarg('lp'), 1.e-4, 'stage 2 interpolates toward the 4.5 A fine bound')
+        call set_cline_refine3D(params, 3, 1, .false., stage1_lp=stage1_lp)
+        call assert_real(4.5, cline_refine3D%get_rarg('lp'), 1.e-4, 'stage 3 retains the original fine FSC bound')
+        l_refine3D_lpstop_override = .true.
+        params%lpstop = 3.8
+        call set_lplims_ptcls(params, 0., 3.8, stage1_lp)
+        call set_cline_refine3D(params, 2, 1, .false., stage1_lp=stage1_lp)
+        call assert_real(12.525, cline_refine3D%get_rarg('lp'), 1.e-4, 'stage 2 respects the explicit fine FSC bound')
+        call set_cline_refine3D(params, 3, 1, .false., stage1_lp=stage1_lp)
+        call assert_real(3.8, cline_refine3D%get_rarg('lp'), 1.e-4, 'stage 3 retains the explicit fine FSC bound')
+        l_refine3D_lpstop_override = .false.
+        call set_lplims_ptcls(params, 0., 0., stage1_lp)
+        call write_res05(0.)
+        call set_cline_refine3D(params, 2, 1, .false., stage1_lp=stage1_lp)
+        call assert_real(10.75, cline_refine3D%get_rarg('lp'), 1.e-4, 'missing FSC retains the planned fallback')
+        call write_res05(9.)
+        call set_cline_refine3D(params, 2, 1, .false., stage1_lp=0.)
+        call assert_real(9., cline_refine3D%get_rarg('lp'), 1.e-4, 'routes without a separate start keep their FSC limit')
+        params%nstates = 2
+        call set_cline_refine3D(params, 2, 1, .false., stage1_lp=stage1_lp)
+        call assert_real(10.75, cline_refine3D%get_rarg('lp'), 1.e-4, 'multi-state stage 2 retains its planned limit')
+        params%nstates = 1
+        addon%active = .true.
+        addon%l_register = .false.
+        addon%frozen_rec = 'frozen_context_for_midpoint_rule'
+        call set_cline_refine3D(params, 2, 1, .false., addon=addon, stage1_lp=stage1_lp)
+        call assert_real(9., cline_refine3D%get_rarg('lp'), 1.e-4, 'add-on stage 2 retains its FSC limit')
+        addon%active = .false.
+        call addon%frozen_rec%kill
         call set_cline_refine3D(params, 1, 1, .true., stage1_lp=stage1_lp)
         call assert_real(17., cline_refine3D%get_rarg('lp'), 1.e-4, 'class-average stages retain their own ladder')
         call assert_real(17., cline_refine3D%get_rarg('gaufreq'), 1.e-4, 'class-average Gaussian retains its own ladder')
+        call set_cline_refine3D(params, 2, 1, .true., stage1_lp=stage1_lp)
+        call assert_real(10.75, cline_refine3D%get_rarg('lp'), 1.e-4, 'class-average stage 2 retains its own ladder')
         logfhandle = saved_logfhandle
         close(log_unit)
         lpinfo = base_lpinfo

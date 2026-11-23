@@ -195,7 +195,8 @@ contains
         &Angstroms{30}', .false., 30., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_FILT, 'lpstart',     'num', 'Starting low-pass limit', 'Starting low-pass limit, &
-            &used as given; stage 1 defaults to mskdiam/8 within 10-30 A; later ladder starts at mskdiam/10',&
+            &used as given; stage 1 defaults to mskdiam/8 within 10-30 A; stage 2 ramps halfway to the FSC target; &
+            &later ladder starts at mskdiam/10',&
             &'low-pass limit for the initial stage in Angstroms',  .false., 20., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_FILT, 'lpstop',     'num', 'Final low-pass limit', 'Final low-pass limit, &

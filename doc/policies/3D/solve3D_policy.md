@@ -329,10 +329,23 @@ This gives 10 A for streptavidin (80 A mask), 19.375 A for the export gate
 (155 A), 20 A for PfCRT (160 A), and 21.25 A for PorF (170 A). An explicit
 `lpstart` remains authoritative; the start cannot be finer than the requested
 `lpstop`. The controller receives this start separately: the stored
-`mskdiam/10` ladder, crops, stage 2 onward, and both FSC bounds remain unchanged.
+`mskdiam/10` ladder, crops, stage 3 onward, and both FSC target bounds remain unchanged.
 In particular, the coarser stage-1 limit does not relax the later FSC hold-back
 bound `lpinfo(1)%lp`. Class averages, input-volume/no-2D initialization,
 `force_lp_range`, and add-on replay retain their existing policies.
+
+**Stage-2 midpoint ramp (ruling of 2026-11-23).** In the single-state particle
+route with a separate stage-1 start, stage 2 first computes its existing target
+`T = min(max(FSC05_at_entry, lpstop), lpinfo(1)%lp)`, with the usual 4.5 A
+fine bound unless `lpstop` is given. It then uses `(stage1_lp + T)/2` in A for
+matching, Gaussian reference filtering and the matching ceiling. For PorF this
+gives 19.125 A between 21.25 and 17 A; for PfCRT, 18 A between 20 and 16 A;
+for streptavidin with FSC=0.5 at 9.148 A, 9.574 A between 10 and 9.148 A.
+The target uses the FSC measured before stage 2, not the stored planned
+stage-3 rung or a future FSC measurement. Stage 3 recomputes its own limit
+normally, against the original bounds. Missing FSC keeps the planned fallback;
+multi-state, class-average, add-on and routes without a separate start keep
+their existing behavior. Sampling, crops and iteration budgets are unchanged.
 
 From 2026-11-10 to 2026-11-22 the ladder was linear in A from `mskdiam/8`
 within 10-30 A to `mskdiam/26.7` within 4.5-6 A (`set_lplims_from_size`,
@@ -459,7 +472,8 @@ FSC=0.5 at stage entry, coarser than the planned rung (holding back) or finer
 (advancing), never finer than the ladder cap (4.5 A, or a command-line
 `lpstop` as given, coarser or finer) nor coarser than the ladder start
 (`lpinfo(1)%lp`). In the Gaussian-reference stages `gaufreq` follows the
-limit. Stage 1 uses the separate starting rule above; an explicit `lp` wins
+limit. Stage 1 uses the separate starting rule above, and stage 2 applies the
+midpoint ramp above on the default particle route; an explicit `lp` wins
 where applicable, and
 multi-state runs keep the one-rung advance above. Why: under the halving
 ladder the plan leads and the FSC is the brake. Known risk: the PorF runs

@@ -38,6 +38,7 @@ contains
         call test_plane_fits()
         call test_vector_helpers()
         call test_gemm_tn()
+        call test_sgemm_strided()
         call test_real_spd_complex_solve()
         call test_spd_cholesky()
         call test_spd_solve_rel()
@@ -347,6 +348,30 @@ contains
         call gemm_tn(a, b, c)
         call assert_true(maxval(abs(c - matmul(transpose(a), b))) < 1.e-4, 'gemm_tn: C = A^T B')
     end subroutine test_gemm_tn
+
+    !> sgemm on blocks inside larger arrays (leading dimensions past the rows used): the product lands in the block
+    !! and the rows outside it keep their values, as the shift maps' shell sums use it
+    subroutine test_sgemm_strided()
+        real    :: a(7,3), b(3,2), c(9,2), cref(4,2)
+        integer :: i, j
+        write(*,'(A)') 'test_sgemm_strided'
+        do j = 1,3
+            do i = 1,7
+                a(i,j) = real(i) - 0.5 * real(j * j)
+            enddo
+        enddo
+        do j = 1,2
+            do i = 1,3
+                b(i,j) = 1.5 * real(i) - real(j)
+            enddo
+        enddo
+        c    = -7.
+        cref = matmul(a(2:5,:), b)
+        call sgemm('N', 'N', 4, 2, 3, 1.0, a(2,1), 7, b, 3, 0.0, c(3,1), 9)
+        call assert_true(maxval(abs(c(3:6,:) - cref)) < 1.e-4, 'sgemm: a block of rows times B into a block of C')
+        call assert_true(all(c(1:2,:) == -7.) .and. all(c(7:9,:) == -7.), 'sgemm: rows outside the block untouched')
+        call assert_true(SGEMM_ONE_THREAD_MNK > 0, 'sgemm: the calling-thread bound is set')
+    end subroutine test_sgemm_strided
 
     subroutine test_real_spd_complex_solve()
         real(dp)    :: matrix(2,2)
