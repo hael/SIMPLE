@@ -7,7 +7,7 @@
 ! per direction class a learned template in that domain; the class score is the real Hermitian inner product
 ! maximised over the cyclic shifts of the ring (the rotation grid), times a learned scale; the softmax over the
 ! classes is the posterior and the gradient flows through the maximising shift. Forward and backward as im2col plus
-! a matrix product (sgemm with a team-safe BLAS, explicit loops otherwise); a mini-batch is cut into chunks set by
+! a matrix product (serialized sgemm with a team-safe BLAS, explicit loops otherwise); a mini-batch is cut into chunks set by
 ! its size alone, computed in parallel into per-chunk gradient buffers and reduced in chunk order over slices of the
 ! weights in parallel, so the same sum comes out at any thread count. The network is invariant to the mirror:
 ! its kernels are symmetric along the angle, so a reflected input gives reflected maps, and a class scores the map
@@ -60,7 +60,7 @@ real(sp),       parameter :: ADAM_BETA1   = 0.9
 real(sp),       parameter :: ADAM_BETA2   = 0.999
 real(sp),       parameter :: ADAM_EPS     = 1.e-8
 ! the products' arithmetic is a property of the build and the shape, never of the team, so that a step is the same at
-! any thread count: sgemm where the build's BLAS stays on the calling thread inside teams; otherwise the faster of the
+! any thread count: serialized sgemm where the build's BLAS stays on the calling thread inside teams; otherwise the faster of the
 ! explicit loops and the matmul intrinsic (the runtime's single-threaded product, optimised even in a Debug build,
 ! whose loops are not): doc/algorithms/pose_student.md
 #ifdef SIMPLE_BLAS_TEAM_SAFE
@@ -547,7 +547,9 @@ contains
         real(sp), intent(inout) :: c(ldc,*)
         integer :: j, l
         if( L_BLAS_TEAM_SAFE )then
+            !$omp critical(hhcnn_sgemm)
             call sgemm('N', 'N', m, n, k, 1.0, a, lda, b, ldb, beta, c, ldc)
+            !$omp end critical(hhcnn_sgemm)
         else if( L_MATMUL_PRODUCTS )then
             if( beta == 0. )then
                 c(1:m,1:n) = matmul(a(1:m,1:k), b(1:k,1:n))
@@ -577,7 +579,9 @@ contains
         real(sp), allocatable   :: bt(:,:)
         integer :: j, l
         if( L_BLAS_TEAM_SAFE )then
+            !$omp critical(hhcnn_sgemm)
             call sgemm('N', 'T', m, n, k, 1.0, a, lda, b, ldb, 1.0, c, ldc)
+            !$omp end critical(hhcnn_sgemm)
         else if( L_MATMUL_PRODUCTS )then
             bt = transpose(b(1:n,1:k))
             c(1:m,1:n) = c(1:m,1:n) + matmul(a(1:m,1:k), bt)
@@ -601,7 +605,9 @@ contains
         real(sp), allocatable :: atw(:,:)
         integer  :: i0, nr, i, j, l
         if( L_BLAS_TEAM_SAFE )then
+            !$omp critical(hhcnn_sgemm)
             call sgemm('T', 'N', m, n, k, 1.0, a, lda, b, ldb, 0.0, c, ldc)
+            !$omp end critical(hhcnn_sgemm)
         else if( L_MATMUL_PRODUCTS .or. m < CNN_MATMUL_ROWS )then
             atw = transpose(a(1:k,1:m))
             c(1:m,1:n) = matmul(atw, b(1:k,1:n))
