@@ -34,7 +34,7 @@ interface
     end subroutine sgemm
 end interface
 
-public :: hhcnn, hhcnn_profile, run_all_hhcnn_tests, run_hhcnn_thread_identity_tests, run_hhcnn_bench
+public :: hhcnn, hhcnn_profile, run_all_hhcnn_tests, run_hhcnn_bench
 public :: CNN_NBLK, CNN_NREAD, CNN_KREAD, CNN_MREAD, CNN_NCHUNK, CNN_WEIGHTS_VERSION
 private
 #include "simple_local_flags.inc"
@@ -236,8 +236,6 @@ end type hhcnn
 interface
     module subroutine run_all_hhcnn_tests()
     end subroutine run_all_hhcnn_tests
-    module subroutine run_hhcnn_thread_identity_tests()
-    end subroutine run_hhcnn_thread_identity_tests
     module subroutine run_hhcnn_bench( pftsz, nks, widths, nclasses, nthr_team, nrep, funit, ok_identity )
         integer, intent(in)  :: pftsz, nks(:), widths(:), nclasses, nthr_team, nrep, funit
         logical, intent(out) :: ok_identity

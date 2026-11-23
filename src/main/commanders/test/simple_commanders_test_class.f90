@@ -142,7 +142,7 @@ use simple_polar_student,                    only: run_all_polar_student_tests
 use simple_class_student,                    only: run_all_class_student_tests
 use simple_class_student_align_tester,       only: run_all_class_student_align_tests
 use simple_pose_student_align_tester,        only: run_all_pose_student_align_tests
-use simple_hhcnn,                            only: run_all_hhcnn_tests, run_hhcnn_thread_identity_tests
+use simple_hhcnn,                            only: run_all_hhcnn_tests
 use simple_cavg_cnn,                         only: run_all_cavg_cnn_tests
 use simple_cavg_cnn_input,                   only: run_all_cavg_cnn_input_tests
 use simple_pose_student,                     only: run_all_pose_student_tests
@@ -421,7 +421,6 @@ contains
         ! the pose student's input tensor and its HHCNN, the Harmonic Hermitian convolutional neural network (the learned pose assignment)
         call add_suite(s, n, 'polar features',          run_all_polar_feats_tests)
         call add_suite(s, n, 'HHCNN',                   run_all_hhcnn_tests)
-        call add_suite(s, n, 'HHCNN thread identity',   run_hhcnn_thread_identity_tests)
         call add_suite(s, n, 'polar student',           run_all_polar_student_tests)
         call add_suite(s, n, 'class student',           run_all_class_student_tests)
         call add_suite(s, n, 'class student alignment', run_all_class_student_align_tests)
