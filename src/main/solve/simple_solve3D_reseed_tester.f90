@@ -600,8 +600,7 @@ contains
 
     end subroutine test_gold_standard_stages
 
-    !> Hand-planned boundaries: white to bootstrap over the first two stages, the bootstrap held through stage 4;
-    !! short runs reserve two measured stages; full sampling and states share the schedule.
+    !> Hand-planned boundaries: short runs reserve two measured stages; full sampling and states share the schedule.
     subroutine check_sigma2_schedules( params )
         use simple_solve3D_utils, only: cline_refine3D, set_cline_refine3D, nstages_refine3D
         use simple_parameters, only: parameters
@@ -626,11 +625,11 @@ contains
                     case(5)
                         bounds(0:3) = [-1.,-0.5,0.,1.]
                     case(6)
-                        bounds(0:4) = [-1.,-0.5,0.,0.,1.]
+                        bounds(0:4) = [-1.,-2./3.,-1./3.,0.,1.]
                     case(7)
-                        bounds(0:5) = [-1.,-0.5,0.,0.,0.,1.]
+                        bounds(0:5) = [-1.,-0.75,-0.5,-0.25,0.,1.]
                     case(8)
-                        bounds(0:6) = [-1.,-0.5,0.,0.,0.,0.5,1.]
+                        bounds(0:6) = [-1.,-0.75,-0.5,-0.25,0.,0.5,1.]
                 end select
                 do stage=1,nstages
                     call set_cline_refine3D(params, stage, 1, .false.)
@@ -651,7 +650,7 @@ contains
             call assert_real(bounds(stage-1),cline_refine3D%get_rarg('sigma2_weight_start'),1.e-6,'late entry ramp start')
             call assert_real(bounds(stage),cline_refine3D%get_rarg('sigma2_weight_end'),1.e-6,'late entry ramp end')
         enddo
-        bounds(2:8) = [-1.,0.,0.,0.5,1.,1.,1.]
+        bounds(2:8) = [-1.,-0.5,0.,0.5,1.,1.,1.]
         do stage=3,5
             call set_cline_refine3D(params,stage,3,.false.)
             call assert_real(bounds(stage-1),cline_refine3D%get_rarg('sigma2_weight_start'),1.e-6,'stage-3 entry ramp start')

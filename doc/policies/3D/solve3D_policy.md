@@ -217,23 +217,42 @@ stage. `refine3D` then treats `maxits` as the run length for that stage.
 
 Particle `solve3D` accepts `sigma2_anneal=yes|no`, default `yes`. With `yes`,
 matching starts from a white spectrum, reaches the saved smoothed bootstrap
-over stages 1–2 (`SIGMA2_WHITE_LAST_STAGE`), holds it through stage 4 (the
-sticky sampling window), then reaches the current model-residual spectra over
-stages 5–6. Stages 7–8 use model-residual spectra throughout. Each ramp is
-divided evenly across its stages, with linear interpolation over each stage's
-iteration budget. Why the white phase ends at stage 2 (2026-11-24): spread over
-stages 1–4 it kept the export gate's stage-3 posteriors flat (effective poses
-per particle 260 falling to 150 over eight iterations, against 100 falling to
-24 in the unannealed Nov16 runs) and its helical density appeared in stage 6
-rather than stage 3; unannealed restarts had been clean. Stages keep their
-ordinary convergence exits: a stage that converges before its weight reaches
-the end of its ramp stops there, and the next stage starts at its own planned
-weight, so the weight can step forward by at most the remaining part of that
-stage's ramp. Annealing therefore costs no iterations over `sigma2_anneal=no`.
-Each iteration logs the weight and the shells' mean log ratio of measured to
-bootstrap noise (`SIGMA2 ANNEAL`), read before the iteration's residual update.
+over stages 1–4 (the sticky sampling window), then reaches the current
+model-residual spectra over stages 5–6. Stages 7–8 use model-residual spectra
+throughout. Each phase is divided evenly across its stages, with linear
+interpolation over each stage's iteration budget. Stages keep their ordinary
+convergence exits: a stage that converges before its weight reaches the end of
+its ramp stops there, and the next stage starts at its own planned weight.
+Annealing adds no mandatory iterations; the changed search trajectory can
+still change when a stage converges. Each iteration logs the weight and the
+shells' mean log ratio of measured to bootstrap noise (`SIGMA2 ANNEAL`), read
+before the iteration's residual update.
 The residual-only sigma pass after a stage prints no annealing readout: it
 updates measured noise without scoring or refining poses.
+
+**Reason for restoring the longer ramp (2026-11-24).** The Nov24 cohort at
+`82f4aca46` assigned the white-to-bootstrap ramp to stages 1–2 and used the
+bootstrap throughout stages 3–4. Compared with `0a8b0903`, PorF's median
+effective-pose count at the fifth iteration of stage 3 fell from 12.16 to 4.75,
+its median end-stage
+overlap rose from 0.362 to 0.497, and its median end-stage FSC=0.5 worsened
+from 11.56 to 12.48 A. Reported outright failures rose from 1/10 at `0a8b0903`
+to 3/10 at `82f4aca46`; the latter finished at postprocessing limits of 6.24,
+6.78 and 6.12 A. More concentrated assignments alongside poorer reconstruction are
+consistent with premature commitment, but do not establish its cause.
+That commit also changed the low-pass ladder and exit thresholds, and the
+earlier annealing stages changed the state entering stage 3.
+
+The restored annealing schedule was used by the Nov19 batches with no reported
+failures among ten restarts each of PfCRT, PorF and streptavidin. It does not
+restore the entire Nov19 code configuration. The next comparison changes only
+annealing, retaining the current linear low-pass ladder and exits; success is
+judged by outright failure counts in real-data runs. The completed Nov24
+export-gate logs show stage-3 statistics close to the older unannealed runs,
+but do not establish that the datasets require incompatible schedules.
+Effective-pose counts describe the search and are not a universal acceptance
+target. The supplied Nov24 export-gate R10 log ends during stage 5, so its
+4.38 A estimate is not a documented final result.
 
 Full-sampling and multi-state particle runs follow the same stage schedule.
 Short or late-entry runs reserve the last two executed stages for model-based
@@ -323,20 +342,22 @@ A shorter run (`nstages`) spans the same two ends over its stages. An explicit
 the 4.5 A cap of the FSC rule below. Stages 1-2 match and filter their
 references (`gaufreq`) at their rungs, whatever the FSC.
 
-Why (ruling of 2026-11-24): this ladder and the FSC rule below are what the
-Nov16 export-gate runs (9/9) and the Nov19 PfCRT, PorF and streptavidin runs
-(10/10 each) used, except that the NU stage now takes the same rule (it took
+Why (ruling of 2026-11-24): this ladder and the FSC rule below follow the
+completed Nov16 export-gate runs (eight supplied logs; the ninth ends in a
+worker error) and the Nov19 PfCRT, PorF and streptavidin runs (10/10 each),
+except that the NU stage now takes the same rule (it took
 the one-rung advance; the NU filter's limit replaces either in the stage's
 first iteration) and a finer explicit `lpstop` now replaces the cap. From
 2026-11-22 to 2026-11-24 the particle route ran a ladder from `mskdiam/10` to
 4.5 A halving the distance per stage, with a separate `mskdiam/8` stage-1
 start, a stage-2 midpoint and a FSC=0.5 rule both ways from stage 2
-(`ed0aaa342`, `3a268d1b5`, `0a8b0903e`). For 155-170 A masks it reproduced the
-linear rungs in stages 1-3; after stage 3 its rungs only bounded the FSC rule,
-and its next-stage limits (6 A and finer) left the resolution exits of stages
-3-5 unable to fire. It brought no gain: PfCRT and PorF each had one restart in
-ten fail (finals at 8.62 and 4.95 A) against none on Nov19, which ten
-restarts cannot separate, and with stage 2 at the stage-3 rung (`3a268d1b5`)
+(`ed0aaa342`, `3a268d1b5`, `0a8b0903e`). With the separate start and midpoint,
+PfCRT and PorF used the same quantized matching bands as Nov19 in stages 1-3.
+After stage 3 the halving rungs bounded the FSC rule, and their next-stage
+limits were too fine for the resolution exits to fire in stages 3-5 of those
+supplied batches. PfCRT and PorF each had one restart in ten fail (finals at
+8.62 and 4.95 A) against none on Nov19; these counts do not establish benefit
+or harm. With stage 2 at the stage-3 rung (`3a268d1b5`),
 the export gate's stage 3 ended on the plateau exit after 4-8 iterations at
 FSC=0.5 14.8 A, against 12.5 A in Nov16.
 
@@ -612,11 +633,15 @@ is the printed stage limit and, in non-NU stages, the `lpstop` ceiling. The
 decision is taken once per stage boundary and never per iteration:
 In LP-set stages the halves share alignment references, so an FSC crossing is
 interpreted relative to the band that produced the alignments.
-The crossing at the end of the previous stage lies beyond that stage's band
-and is clean; a per-iteration rule would ratchet on noise fitted inside the
-newly opened band. An explicit command-line `lp` (with `ml_reg=yes`) disables
-the advance for that stage. Multi-state follows the standard single-band
-rule: the best resolved populated state sets the band for all states.
+Holding the band fixed within a stage limits feedback between alignment and
+the FSC-driven band update. A stage boundary does not make the alignment
+references independent or guarantee an unbiased FSC, and the crossing need
+not lie beyond the previous matching band. Repeated per-iteration updates
+could reinforce correlations fitted inside newly opened bands; the current
+boundary rule avoids that additional feedback. An explicit command-line `lp`
+(with `ml_reg=yes`) disables the advance for that stage. Multi-state follows
+the standard single-band rule: the best resolved populated state sets the band
+for all states.
 (Streptavidin log set 2026-09-06: the plan sat at 8.6/7.6 A in stages 4/5
 while the half maps agreed to 4.3 A at FSC=0.5.)
 

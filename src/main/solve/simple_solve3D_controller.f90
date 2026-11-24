@@ -27,7 +27,6 @@ integer,          parameter :: NOSYMSRCH_STAGE         = 3           ! its count
 integer,          parameter :: VOL_SUPPLIED_STAGE      = NOSYMSRCH_STAGE + 1 ! first stage for supplied volumes
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: STICKY_LAST_STAGE       = 4           ! single state holds its sticky subset through this stage, free from the next
-integer,          parameter :: SIGMA2_WHITE_LAST_STAGE = 2           ! annealed scoring reaches the smoothed bootstrap spectrum by the end of this stage
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = STICKY_LAST_STAGE + 1 ! single state trails from the first freely sampled stage
 integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
 integer,          parameter :: GOLD_STD_STAGE          = 6           ! first eligible single-state gold-standard stage
@@ -254,13 +253,12 @@ contains
         endif
     end procedure set_cline_refine3D
 
-    !> Scoring only: white to bootstrap over the first two stages, the bootstrap held through the sticky window,
-    !! then to model noise before the last two stages.
+    !> Scoring only: white to bootstrap over the sticky window, then to model noise before the last two stages.
     subroutine set_refine3D_sigma2_schedule( params, istage, first_stage, l_excluded )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: istage, first_stage
         logical,           intent(in) :: l_excluded
-        integer :: last_ramp, last_flat, last_white
+        integer :: last_ramp, last_flat
         real    :: first, last
         call cline_refine3D%delete('sigma2_weight')
         call cline_refine3D%delete('sigma2_weight_start')
@@ -271,18 +269,14 @@ contains
         endif
         first = 1.
         last  = 1.
-        last_ramp  = active_refine3D_nstages() - 2
-        last_flat  = min(max(first_stage, STICKY_LAST_STAGE), last_ramp - 1)
-        last_white = min(max(first_stage, SIGMA2_WHITE_LAST_STAGE), last_flat)
+        last_ramp = active_refine3D_nstages() - 2
+        last_flat = min(max(first_stage, STICKY_LAST_STAGE), last_ramp - 1)
         if( istage <= last_ramp )then
             if( last_ramp == first_stage )then
                 first = -1.
-            else if( istage <= last_white )then
-                first = -1. + real(istage-first_stage)   / real(last_white-first_stage+1)
-                last  = -1. + real(istage-first_stage+1) / real(last_white-first_stage+1)
             else if( istage <= last_flat )then
-                first = 0.
-                last  = 0.
+                first = -1. + real(istage-first_stage)   / real(last_flat-first_stage+1)
+                last  = -1. + real(istage-first_stage+1) / real(last_flat-first_stage+1)
             else
                 first = real(istage-last_flat-1) / real(last_ramp-last_flat)
                 last  = real(istage-last_flat)   / real(last_ramp-last_flat)
