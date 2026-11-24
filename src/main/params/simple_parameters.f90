@@ -410,6 +410,8 @@ type :: parameters
     integer :: nmoldiams=1         !< # moldiams
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed execution
+    integer :: nodepar=1           !< # tree nodes run at once (flex_pca mode=tree){1}
+    integer :: maxdepth=0          !< deepest tree level split further, 0 = no cap (flex_pca mode=tree){0}
     integer :: nparts_chunk=1      !< # partitions in chunks distributed execution
     integer :: nparts_pool =1      !< # partitions for pool distributed execution
     integer :: nparts3D=0          !< # partitions of the stream's 3D jobs (0: the stage's default)

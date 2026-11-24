@@ -438,6 +438,8 @@ contains
         call reg%add_int('nstates_pickrefs', self%nstates_pickrefs)
         call reg%add_int('class', self%class)
         call reg%add_int('nparts', self%nparts)
+        call reg%add_int('nodepar', self%nodepar)
+        call reg%add_int('maxdepth', self%maxdepth)
         call reg%add_int('nparts_chunk', self%nparts_chunk)
         call reg%add_int('nparts_pool', self%nparts_pool)
         call reg%add_int('nparts3D', self%nparts3D)

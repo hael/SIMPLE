@@ -8,6 +8,7 @@ use simple_defs,        only: MAXS
 implicit none
 private
 public :: prepare_tree_flex, prepare_tree_refine, collect_tree_fit, split_tree_states, write_tree_mask, write_tree_groups, tree_node_rows
+public :: write_tree_record, read_tree_record, tree_value, get_tree_node
 #include "simple_local_flags.inc"
 
 contains
@@ -75,13 +76,14 @@ contains
     end subroutine write_stage_project
 
     ! The existing paired FLEX fit needs at least 100 rows in each mod-4 fit.
-    subroutine prepare_tree_flex( node, destination, mean, ready )
+    subroutine prepare_tree_flex( node, destination, mean, ready, l_write )
         use simple_flex_pca_stages, only: flex_pca_half_of, FLEX_FIT_A, FLEX_FIT_B
         use simple_syslib,          only: file_exists, simple_abspath
         type(flex_tree_node), intent(in)  :: node
         type(string),        intent(in)  :: destination
         type(string),        intent(out) :: mean
         logical,             intent(out) :: ready
+        logical, optional,   intent(in)  :: l_write
         type(sp_project), allocatable :: project
         logical, allocatable :: selected(:)
         integer, allocatable :: states(:)
@@ -105,16 +107,21 @@ contains
         endif
         if( .not. file_exists(mean) ) THROW_HARD('FLEX tree node mean volume is missing')
         mean = simple_abspath(mean)
-        call write_stage_project(project, destination, selected, states, .true.)
+        if( .not. present(l_write) )then
+            call write_stage_project(project, destination, selected, states, .true.)
+        else if( l_write )then
+            call write_stage_project(project, destination, selected, states, .true.)
+        endif
         call project%kill
     end subroutine prepare_tree_flex
 
     ! Compact occupied labels for refine3D, returning corresponding map references in that order.
-    subroutine prepare_tree_refine( node, destination, volumes )
+    subroutine prepare_tree_refine( node, destination, volumes, l_write )
         use simple_syslib, only: file_exists
         type(flex_tree_node), intent(in) :: node
         type(string),        intent(in) :: destination
         type(string), allocatable, intent(out) :: volumes(:)
+        logical, optional,   intent(in) :: l_write
         type(sp_project), allocatable :: project
         logical, allocatable :: selected(:)
         integer, allocatable :: states(:), boxes(:)
@@ -127,6 +134,9 @@ contains
             call project%get_vol('vol', states(i), volumes(i), smpds(i), boxes(i))
             if( .not. file_exists(volumes(i)) ) THROW_HARD('A FLEX state has no map for refinement')
         enddo
+        if( present(l_write) )then
+            if( .not. l_write ) states = [integer ::]
+        endif
         if( size(states) > 0 )then
             call write_stage_project(project, destination, selected, states, .false.)
             do i = 1, size(states)
@@ -345,5 +355,140 @@ contains
             node%odd_file = odd
         endif
     end subroutine state_artifacts
+
+    subroutine write_tree_record( fname, head, tags, nodes )
+        use simple_fileio, only: fopen, fclose, fileiochk
+        use simple_syslib, only: simple_rename
+        use simple_string_utils, only: int2str
+        type(string),         intent(in) :: fname
+        type(string),         intent(in) :: head(:), tags(:)
+        type(flex_tree_node), intent(in) :: nodes(:)
+        type(string) :: tmp
+        integer :: funit, ios, i, j
+        character(len=:), allocatable :: t, st
+        tmp = fname%to_char()//'.tmp'
+        call fopen(funit, tmp, status='replace', action='write', iostat=ios)
+        call fileiochk('write_tree_record: cannot write '//tmp%to_char(), ios)
+        do i = 1, size(head)
+            write(funit,'(A)') head(i)%to_char()
+        end do
+        do i = 1, size(nodes)
+            t = tags(i)%to_char()
+            call put(t, 'name', nodes(i)%name)
+            call put(t, 'project_file', nodes(i)%project_file)
+            if( allocated(nodes(i)%project_states) )then
+                st = ''
+                do j = 1, size(nodes(i)%project_states)
+                    st = st//int2str(nodes(i)%project_states(j))//','
+                end do
+                write(funit,'(A)') t//' project_states '//st
+            endif
+            call put(t, 'map_file', nodes(i)%map_file)
+            call put(t, 'even_file', nodes(i)%even_file)
+            call put(t, 'odd_file', nodes(i)%odd_file)
+            call put(t, 'mask_file', nodes(i)%mask_file)
+            call put(t, 'fsc_file', nodes(i)%fsc_file)
+            if( allocated(nodes(i)%models) )then
+                call put(t, 'model_name', nodes(i)%models(1)%name)
+                call put(t, 'model_project', nodes(i)%models(1)%project_file)
+                call put(t, 'model_embedding', nodes(i)%models(1)%embedding_file)
+                call put(t, 'model_mean', nodes(i)%models(1)%mean_file)
+                call put(t, 'model_weights', nodes(i)%models(1)%weights_file)
+                call put(t, 'model_targets', nodes(i)%models(1)%targets_file)
+                call put(t, 'model_provenance', nodes(i)%models(1)%provenance_file)
+            endif
+            if( allocated(nodes(i)%decision) )then
+                write(funit,'(A)') t//' outcome '//int2str(nodes(i)%decision%outcome)
+                call put(t, 'reason', nodes(i)%decision%reason)
+            endif
+        end do
+        call fclose(funit)
+        call simple_rename(tmp, fname, overwrite=.true.)
+
+    contains
+
+        subroutine put( tag, key, val )
+            character(len=*), intent(in) :: tag, key
+            type(string),     intent(in) :: val
+            if( .not. val%is_blank() ) write(funit,'(A)') tag//' '//key//' '//val%to_char()
+        end subroutine put
+
+    end subroutine write_tree_record
+
+    subroutine read_tree_record( fname, lines )
+        use simple_fileio, only: fopen, fclose, fileiochk, nlines
+        type(string),              intent(in)  :: fname
+        type(string), allocatable, intent(out) :: lines(:)
+        character(len=8192) :: buf
+        integer :: funit, ios, i
+        allocate(lines(nlines(fname)))
+        call fopen(funit, fname, status='old', action='read', iostat=ios)
+        call fileiochk('read_tree_record: cannot read '//fname%to_char(), ios)
+        do i = 1, size(lines)
+            read(funit,'(A)') buf
+            lines(i) = trim(buf)
+        end do
+        call fclose(funit)
+    end subroutine read_tree_record
+
+    function tree_value( lines, tag, key ) result( val )
+        type(string),     intent(in) :: lines(:)
+        character(len=*), intent(in) :: tag, key
+        type(string) :: val
+        character(len=:), allocatable :: line, prefix
+        integer :: i
+        val    = ''
+        prefix = tag//' '//key//' '
+        do i = 1, size(lines)
+            line = lines(i)%to_char()
+            if( len(line) <= len(prefix) ) cycle
+            if( line(1:len(prefix)) == prefix ) val = line(len(prefix)+1:)
+        end do
+    end function tree_value
+
+    subroutine get_tree_node( lines, tag, node )
+        use simple_string_utils, only: list_of_ints2arr, str2int
+        type(string),         intent(in)  :: lines(:)
+        character(len=*),     intent(in)  :: tag
+        type(flex_tree_node), intent(out) :: node
+        type(string) :: v
+        call setv(node%name, 'name')
+        call setv(node%project_file, 'project_file')
+        v = tree_value(lines, tag, 'project_states')
+        if( .not. v%is_blank() ) node%project_states = list_of_ints2arr(v%to_char())
+        call setv(node%map_file, 'map_file')
+        call setv(node%even_file, 'even_file')
+        call setv(node%odd_file, 'odd_file')
+        call setv(node%mask_file, 'mask_file')
+        call setv(node%fsc_file, 'fsc_file')
+        v = tree_value(lines, tag, 'model_project')
+        if( .not. v%is_blank() )then
+            allocate(node%models(1))
+            node%models(1)%project_file = v
+            call setv(node%models(1)%name, 'model_name')
+            call setv(node%models(1)%embedding_file, 'model_embedding')
+            call setv(node%models(1)%mean_file, 'model_mean')
+            call setv(node%models(1)%weights_file, 'model_weights')
+            call setv(node%models(1)%targets_file, 'model_targets')
+            call setv(node%models(1)%provenance_file, 'model_provenance')
+        endif
+        v = tree_value(lines, tag, 'outcome')
+        if( .not. v%is_blank() )then
+            allocate(node%decision)
+            node%decision%outcome = str2int(v%to_char())
+            call setv(node%decision%reason, 'reason')
+        endif
+
+    contains
+
+        subroutine setv( dst, key )
+            type(string),     intent(inout) :: dst
+            character(len=*), intent(in)    :: key
+            type(string) :: val
+            val = tree_value(lines, tag, key)
+            if( .not. val%is_blank() ) dst = val
+        end subroutine setv
+
+    end subroutine get_tree_node
 
 end module simple_flex_tree_project_gateway

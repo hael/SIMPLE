@@ -15,21 +15,23 @@ end type commander_flex_tree
 contains
 
     subroutine exec_flex_tree( self, cline )
-        use simple_flex_tree_strategy,  only: flex_tree_strategy
+        use simple_flex_tree_strategy,  only: flex_tree_strategy, create_flex_tree_strategy
         use simple_commanders_refine3D, only: commander_refine3D
         class(commander_flex_tree), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(flex_tree_strategy) :: tree
-        type(commander_flex_pca) :: xflex
-        type(commander_refine3D) :: xrefine3D
+        class(flex_tree_strategy), allocatable :: strategy
+        type(commander_flex_pca), target :: xflex
+        type(commander_refine3D), target :: xrefine3D
         type(parameters)         :: params
         type(builder)            :: build
         call apply_flex_pca_defaults(cline)
-        call tree%initialize(params, build, cline)
-        call tree%execute(params, cline, xflex, xrefine3D)
-        call tree%cleanup
+        strategy = create_flex_tree_strategy(cline)
+        call strategy%set_runners(xflex, xrefine3D)
+        call strategy%initialize(params, build, cline)
+        call strategy%execute(params, cline)
+        call strategy%cleanup
         call build%kill_general_tbox
-        call simple_end('**** SIMPLE_FLEX_PCA TREE NORMAL STOP ****')
+        call simple_end(strategy%end_message())
     end subroutine exec_flex_tree
 
 end module simple_commanders_flex_tree

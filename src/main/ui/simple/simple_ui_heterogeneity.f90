@@ -205,6 +205,11 @@ call flex_pca%add_input(UI_FILT, 'min_state_frac', 'num', &
         &states and a split by occupied state, the root fit focused by a variance mask from its whole-map states&
         &(single|tree){single}', '', .false., 'single', &
         &choices=ui_choices([character(len=6) :: 'single', 'tree']), visibility=UI_VIS_STANDARD)
+        call flex_pca%add_input(UI_PARM, 'maxdepth', 'num', 'Deepest tree level split further (default 0 = no cap)', &
+        &'mode=tree: nodes below this depth are leaves without a fit', 'depth{0}', .false., 0., visibility=UI_VIS_ADVANCED)
+        call flex_pca%add_input(UI_COMP, 'nodepar', 'num', 'Tree nodes run at once (default 1)', &
+        &'mode=tree: node jobs in the queue at the same time', '# nodes{1}', .false., 1., group="compute", &
+        &visibility=UI_VIS_ADVANCED)
         call add_ui_program('flex_pca', flex_pca, prgtab, UI_CATEGORY)
     end subroutine new_flex_pca
 
