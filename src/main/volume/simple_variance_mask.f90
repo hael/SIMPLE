@@ -1,12 +1,13 @@
 !@descr: soft mask from the population-weighted cross-half variance of state half maps
 module simple_variance_mask
-use simple_core_module_api, only: dp, find_img_smpd, find_ldim_nptcls, int2str, logfhandle, PI, string
+use simple_core_module_api, only: dp, eigh, find_img_smpd, find_ldim_nptcls, hpsort, int2str, logfhandle, PI, ran3, string
 use simple_image,           only: image
 implicit none
 
-public :: write_variance_mask
+public :: write_variance_mask, variance_mask_groups
 private
 
+integer, parameter :: VARMASK_NGROUPS = 10, VARMASK_PERBIN = 1300, VARMASK_NBIN_MIN = 20, VARMASK_KM_ITS = 40
 real, parameter :: VARMASK_FRAC = 0.2, VARMASK_SUPPORT = 0.1, VARMASK_DIL = 3., VARMASK_FALL = 6., VARMASK_LP = 15., VARMASK_SIG = 1.5
 
 contains
@@ -42,6 +43,85 @@ contains
             &int2str(count(m > 0.5))//' voxels above 0.5 ('//int2str(nint(100. * real(count(m > 0.5 .and. sup)) / &
             &real(max(1,count(sup)))))//' % of the molecule support)'
     end subroutine write_variance_mask
+
+    function variance_mask_groups( z, dirs ) result( labels )
+        real, intent(in)     :: z(:,:), dirs(:,:)
+        integer, allocatable :: labels(:)
+        real,    allocatable :: zc(:,:), y(:), cen(:,:), bm(:,:), cov(:,:), vals(:), evec(:,:), acc(:,:)
+        integer, allocatable :: lab(:), bins(:), nbin(:), inds(:), sel(:), cnt(:)
+        real    :: ev(1)
+        integer :: n, q, nb, it, j, b, k, nsel, r, t
+        n  = size(z,1)
+        q  = size(z,2)
+        nb = max(VARMASK_NBIN_MIN, nint(real(n) / real(VARMASK_PERBIN)))
+        sel = [(j, j=1,n)]
+        do j = 1, nb
+            r      = min(n, j + int(ran3() * real(n - j + 1)))
+            t      = sel(j)
+            sel(j) = sel(r)
+            sel(r) = t
+        end do
+        cen = dirs(:, sel(1:nb))
+        allocate(lab(n), cnt(nb), acc(3,nb))
+        do it = 1, VARMASK_KM_ITS + 1
+            do j = 1, n
+                lab(j) = maxloc(matmul(dirs(:,j), cen), dim=1)
+            end do
+            if( it > VARMASK_KM_ITS ) exit
+            acc = 0.
+            cnt = 0
+            do j = 1, n
+                acc(:,lab(j)) = acc(:,lab(j)) + dirs(:,j)
+                cnt(lab(j))   = cnt(lab(j)) + 1
+            end do
+            do b = 1, nb
+                if( cnt(b) > 0 )then
+                    cen(:,b) = acc(:,b) / max(norm2(acc(:,b)), 1.e-12)
+                else
+                    cen(:,b) = dirs(:, min(n, 1 + int(ran3() * real(n))))
+                endif
+            end do
+        end do
+        allocate(bins(n), source=0)
+        nsel = 0
+        do b = 1, nb
+            if( count(lab == b) == 0 ) cycle
+            nsel = nsel + 1
+            where( lab == b ) bins = nsel
+        end do
+        nb   = nsel
+        nbin = [(count(bins == b), b=1,nb)]
+        allocate(bm(nb,q), source=0.)
+        do j = 1, n
+            bm(bins(j),:) = bm(bins(j),:) + z(j,:)
+        end do
+        do b = 1, nb
+            bm(b,:) = bm(b,:) / real(nbin(b))
+        end do
+        allocate(zc(n,q))
+        do j = 1, n
+            zc(j,:) = z(j,:) - bm(bins(j),:)
+        end do
+        do k = 1, q
+            zc(:,k) = zc(:,k) - sum(zc(:,k)) / real(n)
+        end do
+        cov = matmul(transpose(zc), zc) / real(max(n - 1, 1))
+        allocate(evec(q,1))
+        call eigh(q, cov, 1, ev, evec)
+        y = matmul(zc, evec(:,1))
+        allocate(labels(n), source=0)
+        do b = 1, nb
+            sel  = pack([(j, j=1,n)], bins == b)
+            vals = y(sel)
+            inds = [(j, j=1,size(sel))]
+            call hpsort(vals, inds)
+            do r = 1, size(sel)
+                labels(sel(inds(r))) = min((r - 1) * VARMASK_NGROUPS / size(sel), VARMASK_NGROUPS - 1) + 1
+            end do
+        end do
+        write(logfhandle,'(A)') '>>> VARIANCE MASK groups: '//int2str(n)//' particles, '//int2str(nb)//' direction bins, '//&
+            &int2str(q)//'-dim latent'
+    end function variance_mask_groups
 
     subroutine half_variance( evens, odds, w, mskdiam, n, smpd, sph, sup, vs )
         type(string),         intent(in)  :: evens(:), odds(:)

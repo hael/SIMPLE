@@ -9,6 +9,8 @@ private
 public :: flex_tree_strategy
 #include "simple_local_flags.inc"
 
+logical, parameter :: ROOT_MASK_GROUPS = .true.
+
 type :: flex_tree_strategy
     private
     type(flex_tree), allocatable :: tree
@@ -168,7 +170,10 @@ contains
         use simple_cmdline,        only: cmdline
         use simple_commander_base, only: commander_base
         use simple_fileio,         only: get_fpath
-        use simple_flex_tree_project_gateway, only: prepare_tree_flex, collect_tree_fit, write_tree_mask
+        use simple_defs,           only: logfhandle
+        use simple_commanders_rec, only: commander_rec3D
+        use simple_flex_tree_project_gateway, only: prepare_tree_flex, collect_tree_fit, write_tree_mask, write_tree_groups, &
+            &tree_node_rows
         class(flex_tree_strategy), intent(inout) :: self
         type(parameters),         intent(in)    :: params
         class(cmdline),           intent(in)    :: cline
@@ -176,7 +181,11 @@ contains
         integer,                  intent(in)    :: inode
         type(flex_tree_node),     intent(inout) :: node
         logical,                  intent(out)   :: ready
-        type(string) :: directory, project, mean, mask
+        type(commander_rec3D)      :: xrec3D
+        type(cmdline), allocatable :: rec_cline
+        type(flex_tree_node)       :: parent
+        type(string) :: directory, project, mean, mask, gdir, gproj
+        integer      :: ngroups, nmaps, iparent
         character(len=24), parameter :: keys(*) = [character(len=24) :: &
             'neigs', 'npreimages', 'preimage_auto', 'n_probe_iters', 'nkern', 'state_axis', &
             'state_placement', 'min_neff', 'min_state_frac', 'column_separation', 'rec_backend', &
@@ -186,10 +195,38 @@ contains
         call prepare_tree_flex(node, project, mean, ready)
         if( .not. ready ) return
         if( .not. params%pcg_mskfile%is_blank() ) mask = params%pcg_mskfile
+        iparent = self%tree%get_parent(inode)
+        if( iparent > 0 )then
+            ! a child's mask: the parent's flex states its rows occupy (the parent's stA0 maps once stA0 is ported)
+            parent = self%tree%get_node(iparent)
+            mask   = get_fpath(directory)//'variance_mask.mrc'
+            call write_tree_mask(parent%models(1)%project_file, params%mskdiam, mask, nmaps, tree_node_rows(node))
+            if( nmaps < 2 )then
+                mask = parent%mask_file
+                write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX TREE node ', inode, ' occupies ', nmaps, &
+                    &' parent flex state(s): it inherits its parent''s mask'
+            endif
+            node%mask_file = mask
+        endif
         call fit(directory, project)
-        if( inode == 1 )then
+        if( iparent < 1 )then
             mask = get_fpath(directory)//'variance_mask.mrc'
-            call write_tree_mask(project, params%mskdiam, mask)
+            if( ROOT_MASK_GROUPS )then
+                gdir  = self%stage_directory(inode, 'groups')
+                gproj = gdir%to_char()//'/groups.simple'
+                call write_tree_groups(directory, project, gproj, ngroups)
+                allocate(rec_cline)
+                call self%stage_command(params, gproj, 'reconstruct3D', rec_cline)
+                call rec_cline%set('nstates', ngroups)
+                call rec_cline%set('ml_reg', 'no')
+                call rec_cline%set('postprocess', 'no')
+                call self%execute_stage(xrec3D, rec_cline, gdir)
+                call rec_cline%kill
+                call write_tree_mask(gproj, params%mskdiam, mask, nmaps)
+            else
+                call write_tree_mask(project, params%mskdiam, mask, nmaps)
+            endif
+            if( nmaps < 2 ) THROW_HARD('The root variance mask needs at least two populated state maps')
             directory = self%stage_directory(inode, 'fflex')
             project = directory%to_char()//'/fflex.simple'
             call prepare_tree_flex(node, project, mean, ready)

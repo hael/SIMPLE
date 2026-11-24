@@ -7,7 +7,7 @@ use simple_error,       only: simple_exception
 use simple_defs,        only: MAXS
 implicit none
 private
-public :: prepare_tree_flex, prepare_tree_refine, collect_tree_fit, split_tree_states, write_tree_mask
+public :: prepare_tree_flex, prepare_tree_refine, collect_tree_fit, split_tree_states, write_tree_mask, write_tree_groups, tree_node_rows
 #include "simple_local_flags.inc"
 
 contains
@@ -66,6 +66,8 @@ contains
             call project%os_ptcl2D%set(i, 'pind', i)
         enddo
         ! New selection/labels invalidate inherited weights and stage artifact registrations.
+        call project%os_ptcl3D%clean_entry('updatecnt', 'sampled')
+        call project%os_ptcl2D%clean_entry('updatecnt', 'sampled')
         call project%os_out%kill
         call project%projinfo%delete_entry('sigma2_state')
         call project%update_projinfo(destination)
@@ -169,14 +171,16 @@ contains
         call project%kill
     end subroutine collect_tree_fit
 
-    subroutine write_tree_mask( project_file, mskdiam, fname )
+    subroutine write_tree_mask( project_file, mskdiam, fname, nmaps, rows )
         use simple_defs,             only: dp
         use simple_syslib,           only: file_exists
         use simple_fileio,           only: get_fpath
         use simple_refine3D_fnames, only: refine3D_state_halfvol_fname
         use simple_variance_mask,    only: write_variance_mask
-        type(string), intent(in) :: project_file, fname
-        real,         intent(in) :: mskdiam
+        type(string),      intent(in)  :: project_file, fname
+        real,              intent(in)  :: mskdiam
+        integer,           intent(out) :: nmaps
+        logical, optional, intent(in)  :: rows(:)
         type(sp_project), allocatable :: project
         type(string),     allocatable :: evens(:), odds(:)
         integer,          allocatable :: labels(:)
@@ -187,6 +191,7 @@ contains
         call project%read_segment('ptcl3D', project_file)
         labels = [(project%os_ptcl3D%get_state(i), i=1,project%os_ptcl3D%get_noris())]
         call project%kill
+        if( present(rows) ) where( .not. rows ) labels = 0
         directory = get_fpath(project_file)
         allocate(evens(0), odds(0), w(0))
         do state = 1, maxval(labels)
@@ -198,9 +203,84 @@ contains
             odds  = [odds,  odd]
             w     = [w, real(count(labels == state), dp)]
         enddo
-        if( size(w) < 2 ) THROW_HARD('A variance mask needs at least two populated FLEX states')
-        call write_variance_mask(evens, odds, w, mskdiam, fname%to_char())
+        nmaps = size(w)
+        if( nmaps >= 2 ) call write_variance_mask(evens, odds, w, mskdiam, fname%to_char())
     end subroutine write_tree_mask
+
+    function tree_node_rows( node ) result( rows )
+        type(flex_tree_node), intent(in) :: node
+        logical, allocatable :: rows(:)
+        type(sp_project), allocatable :: project
+        integer, allocatable :: states(:)
+        allocate(project)
+        call load_node(node, project, rows, states)
+        call project%kill
+    end function tree_node_rows
+
+    subroutine write_tree_groups( fit_dir, fit_project, destination, ngroups )
+        use simple_defs,          only: PI
+        use simple_fileio,        only: fopen, fclose, fileiochk
+        use simple_variance_mask, only: variance_mask_groups
+        type(string), intent(in)  :: fit_dir, fit_project, destination
+        integer,      intent(out) :: ngroups
+        type(sp_project), allocatable :: project
+        real,    allocatable :: z(:,:), dirs(:,:)
+        integer, allocatable :: pinds(:), labels(:), child(:), groups(:)
+        character(len=8192)  :: line
+        real    :: e(3), u(2)
+        integer :: funit, ios, n, q, k, j, g, i, ieo, ilab
+        call fopen(funit, string(fit_dir%to_char()//'/flex_pca_coordinates.txt'), status='old', action='read', iostat=ios)
+        call fileiochk('write_tree_groups: cannot read the fit''s flex_pca_coordinates.txt', ios)
+        n = 0
+        q = 0
+        do
+            read(funit,'(A)',iostat=ios) line
+            if( ios /= 0 ) exit
+            if( line(1:1) == '#' .or. len_trim(line) == 0 ) cycle
+            n = n + 1
+            if( q == 0 ) q = nwords(line) - 5
+        end do
+        rewind(funit)
+        allocate(pinds(n), z(n,q))
+        k = 0
+        do while( k < n )
+            read(funit,'(A)') line
+            if( line(1:1) == '#' .or. len_trim(line) == 0 ) cycle
+            k = k + 1
+            read(line,*) pinds(k), ieo, ilab, u(1), u(2), z(k,:)
+        end do
+        call fclose(funit)
+        allocate(project)
+        call project%read(fit_project)
+        allocate(dirs(3,n))
+        do j = 1, n
+            e         = project%os_ptcl3D%get_euler(pinds(j)) * PI / 180.
+            dirs(:,j) = [sin(e(2))*cos(e(1)), sin(e(2))*sin(e(1)), cos(e(2))]
+        end do
+        labels = variance_mask_groups(z, dirs)
+        allocate(child(project%os_ptcl3D%get_noris()), source=0)
+        child(pinds) = labels
+        do i = 1, size(child)
+            call project%os_ptcl3D%set_state(i, child(i))
+        end do
+        groups  = pack([(g, g=1,maxval(child))], [(count(child == g) > 0, g=1,maxval(child))])
+        ngroups = size(groups)
+        call write_stage_project(project, destination, child > 0, groups, .false.)
+        call project%kill
+        deallocate(project)
+
+    contains
+
+        pure integer function nwords( str )
+            character(len=*), intent(in) :: str
+            integer :: c
+            nwords = 0
+            do c = 1, len_trim(str)
+                if( str(c:c) /= ' ' .and. (c == 1 .or. str(max(1,c-1):max(1,c-1)) == ' ') ) nwords = nwords + 1
+            end do
+        end function nwords
+
+    end subroutine write_tree_groups
 
     ! Each occupied positive state becomes one child; empty labels never create children.
     subroutine split_tree_states( node, decision, children )
