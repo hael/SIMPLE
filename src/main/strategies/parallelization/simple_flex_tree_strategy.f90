@@ -221,6 +221,7 @@ contains
     end subroutine run_node_flex
 
     ! Ordinary hard-label multistate refinement, initialized from the FLEX state maps and poses.
+    ! the node's whole refinement procedure, swapped by editing this routine: stage A 15 A box 64, then stage B 10 A box 88
     subroutine refine_node( self, params, cline, refine_runner, inode, node )
         use simple_parameters,     only: parameters
         use simple_cmdline,        only: cmdline
@@ -233,38 +234,61 @@ contains
         class(commander_base),    intent(inout) :: refine_runner
         integer,                  intent(in)    :: inode
         type(flex_tree_node),     intent(inout) :: node
-        type(cmdline), allocatable :: refine_cline
-        type(string), allocatable :: volumes(:)
-        type(string) :: directory, project
         character(len=24), parameter :: keys(*) = [character(len=24) :: &
-            'maxits', 'nspace', 'nspace_sub', 'trs', 'lp', 'ml_reg', 'automsk', 'filt_mode', &
-            'prob_beta', 'prob_beta_end', 'athres_cont']
-        integer :: i
-        directory = self%stage_directory(inode, 'refine')
-        project = directory%to_char()//'/refine.simple'
-        call prepare_tree_refine(node, project, volumes)
-        if( size(volumes) == 0 ) return
-        allocate(refine_cline)
-        call self%stage_command(params, project, 'refine3D', refine_cline)
-        call refine_cline%set('refine', 'prob_neigh')
-        call refine_cline%set('prob_neigh_mode', 'state')
-        call refine_cline%set('multivol_mode', 'input_oris_refine')
-        call refine_cline%set('center', 'no')
-        call refine_cline%set('trail_rec', 'no')
-        call refine_cline%set('m_estimator', 'no')
-        call refine_cline%set('objfun', 'euclid')
-        call refine_cline%set('maxits', 10)
-        do i = 1, size(keys)
-            call refine_cline%copy_arg(cline, trim(keys(i)))
-        enddo
-        call refine_cline%set('nstates', size(volumes))
-        do i = 1, size(volumes)
-            call refine_cline%set('vol'//int2str(i), volumes(i))
-        enddo
-        call self%execute_stage(refine_runner, refine_cline, directory)
-        call refine_cline%kill
-        node%project_file = project
-        if( allocated(node%project_states) ) deallocate(node%project_states)
+            'nspace_sub', 'trs', 'ml_reg', 'automsk', 'filt_mode', 'athres_cont']
+        type(string) :: mask
+        logical :: l_done
+        mask = node%mask_file
+        if( mask%is_blank() .and. .not. params%pcg_mskfile%is_blank() ) mask = params%pcg_mskfile
+        call refine_stage('stageA', 15., 64, 2500, 3)
+        if( l_done ) return
+        call refine_stage('stageB', 10., 88, 5000, 3)
+
+    contains
+
+        subroutine refine_stage( stage, lp, box_crop, nspace, maxits )
+            character(len=*), intent(in) :: stage
+            real,             intent(in) :: lp
+            integer,          intent(in) :: box_crop, nspace, maxits
+            type(cmdline), allocatable :: refine_cline
+            type(string),  allocatable :: volumes(:)
+            type(string) :: directory, project
+            integer :: i
+            directory = self%stage_directory(inode, stage)
+            project = directory%to_char()//'/refine.simple'
+            call prepare_tree_refine(node, project, volumes)
+            l_done = size(volumes) == 0
+            if( l_done ) return
+            allocate(refine_cline)
+            call self%stage_command(params, project, 'refine3D', refine_cline)
+            call refine_cline%set('refine', 'prob_neigh')
+            call refine_cline%set('prob_neigh_mode', 'geom')
+            call refine_cline%set('multivol_mode', 'input_oris_refine')
+            call refine_cline%set('prob_beta', 10.)
+            call refine_cline%set('center', 'no')
+            call refine_cline%set('trail_rec', 'no')
+            call refine_cline%set('m_estimator', 'no')
+            call refine_cline%set('objfun', 'euclid')
+            call refine_cline%set('rec_backend', 'pcg')
+            ! the tree's reference runs also focused the reconstruction (pcg_focus), which master lacks
+            if( .not. mask%is_blank() ) call refine_cline%set('pcg_mskfile', mask)
+            do i = 1, size(keys)
+                call refine_cline%copy_arg(cline, trim(keys(i)))
+            enddo
+            call refine_cline%set('lp', lp)
+            call refine_cline%set('box_crop', box_crop)
+            call refine_cline%set('nspace', nspace)
+            call refine_cline%set('maxits', maxits)
+            call refine_cline%set('nstates', size(volumes))
+            do i = 1, size(volumes)
+                call refine_cline%set('vol'//int2str(i), volumes(i))
+            enddo
+            call self%execute_stage(refine_runner, refine_cline, directory)
+            call refine_cline%kill
+            node%project_file = project
+            if( allocated(node%project_states) ) deallocate(node%project_states)
+        end subroutine refine_stage
+
     end subroutine refine_node
 
     ! Branching is determined by occupied states, with no fixed binary-tree assumption.
