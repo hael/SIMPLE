@@ -500,7 +500,7 @@ contains
     subroutine exec_fsc( self, cline )
         class(commander_fsc), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
-        real, allocatable :: res(:), fsc(:), fsc_t(:), fsc_n(:)
+        real, allocatable :: res(:), fsc(:), fsc_u(:), fsc_t(:), fsc_n(:)
         type(parameters)  :: params
         type(image)       :: even, odd, merged
         type(image_msk)   :: mskvol
@@ -521,7 +521,7 @@ contains
             call merged%add(odd)
             call merged%mul(0.5)
             call mskvol%automask3D(params, merged, params%automsk.eq.'tight')
-            call phase_rand_fsc(even, odd, mskvol, 1, nyq, fsc, fsc_t, fsc_n)
+            call phase_rand_fsc(even, odd, mskvol, 1, nyq, fsc, fsc_t, fsc_n, fsc_u)
             call merged%kill
         else
             ! spherical masking
@@ -545,7 +545,7 @@ contains
         fsc_templ = refine3D_fsc_fbody(1)
         call arr2file(fsc, refine3D_fsc_fname(1))
         if( params%automsk .ne. 'no' )then
-            call plot_phrand_fsc(size(fsc), fsc, fsc_t, fsc_n, res, params%smpd, fsc_templ%to_char())
+            call plot_phrand_fsc(size(fsc), fsc, fsc_u, fsc_t, fsc_n, res, params%smpd, fsc_templ%to_char())
         else
             call plot_fsc(size(fsc), fsc, res, params%smpd, fsc_templ%to_char())
         endif

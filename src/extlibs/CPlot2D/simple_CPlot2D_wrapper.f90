@@ -114,6 +114,11 @@ interface
         type(C_ptr), value :: this
         real(C_double), value :: r, g, b
     end subroutine C_CDataSet__SetDatasetColor
+    subroutine C_CDataSet__SetDatasetTitle(this, title) bind(C,name="CDataSet__SetDatasetTitle")
+        import
+        type(C_ptr), value :: this
+        character(kind=c_char), dimension(*) :: title
+    end subroutine C_CDataSet__SetDatasetTitle
     function C_CDataPoint__new2(x, y) result(this) bind(C,name="CDataPoint__new2")
         import
         type(C_ptr) :: this
@@ -235,6 +240,11 @@ contains
         real(C_double), intent(in) :: r, g, b
         call C_CDataSet__SetDatasetColor(this%object, r, g, b)
     end subroutine CDataSet__SetDatasetColor
+    subroutine CDataSet__SetDatasetTitle(this, title)
+        type(CDataSet_type), intent(inout) :: this
+        character(kind=c_char), dimension(*), intent(in) :: title
+        call C_CDataSet__SetDatasetTitle(this%object, title)
+    end subroutine CDataSet__SetDatasetTitle
     subroutine CDataSet__delete(this)
         type(CDataSet_type), intent(inout) :: this
         call C_CDataSet__delete(this%object)

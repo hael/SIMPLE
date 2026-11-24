@@ -1073,6 +1073,11 @@ void CDataSet__SetDatasetColor(CDataSet* This, double r, double g, double b)
   This->SetDatasetColor(r, g, b);
 }
 
+void CDataSet__SetDatasetTitle(CDataSet* This, const char* title)
+{
+  This->SetDatasetTitle(title);
+}
+
 CDataPoint* CDataPoint__new2(double x, double y)
 {
   return new CDataPoint(x, y);

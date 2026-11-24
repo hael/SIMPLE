@@ -2,6 +2,7 @@
 module simple_refine3D_fnames
 use simple_defs_fname, only: BIN_EXT, MRC_EXT, TXT_EXT, JPG_EXT,&
     &FSC_FBODY, STARTVOL_FBODY, VOL_FBODY
+use simple_defs_fsc,     only: FSC_UNMASKED_FBODY, FSC_MASKED_FBODY, FSC_RANDOMIZED_FBODY
 use simple_string,       only: string
 use simple_string_utils, only: int2str_pad
 implicit none
@@ -16,6 +17,7 @@ public :: refine3D_startvol_fname
 public :: refine3D_startvol_half_fname
 public :: refine3D_fsc_fbody
 public :: refine3D_fsc_fname
+public :: refine3D_fsc_unmasked_fname, refine3D_fsc_masked_fname, refine3D_fsc_randomized_fname
 public :: refine3D_reproj_model_diag_fname
 public :: refine3D_fsc_plot_fbody
 public :: refine3D_resolution_txt_fbody
@@ -126,6 +128,21 @@ contains
         integer, intent(in) :: state
         fname = refine3D_fsc_fbody(state)//BIN_EXT
     end function refine3D_fsc_fname
+
+    type(string) function refine3D_fsc_unmasked_fname( state ) result(fname)
+        integer, intent(in) :: state
+        fname = string(FSC_UNMASKED_FBODY)//state_tag(state)//BIN_EXT
+    end function refine3D_fsc_unmasked_fname
+
+    type(string) function refine3D_fsc_masked_fname( state ) result(fname)
+        integer, intent(in) :: state
+        fname = string(FSC_MASKED_FBODY)//state_tag(state)//BIN_EXT
+    end function refine3D_fsc_masked_fname
+
+    type(string) function refine3D_fsc_randomized_fname( state ) result(fname)
+        integer, intent(in) :: state
+        fname = string(FSC_RANDOMIZED_FBODY)//state_tag(state)//BIN_EXT
+    end function refine3D_fsc_randomized_fname
 
     type(string) function refine3D_fsc_plot_fbody( state, iter ) result(fname)
         integer, intent(in) :: state, iter

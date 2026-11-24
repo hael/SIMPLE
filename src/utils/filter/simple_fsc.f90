@@ -5,7 +5,7 @@ use simple_image, only: image
 use CPlot2D_wrapper_module
 implicit none
 
-public :: phase_rand_fsc, plot_fsc, plot_fsc2, plot_phrand_fsc, plot_fsc_area_score
+public :: phase_rand_fsc, plot_fsc, plot_phrand_fsc, plot_fsc_area_score
 public :: fsc_area_score_result, write_fsc_area_score_outputs
 private
 #include "simple_local_flags.inc"
@@ -40,6 +40,8 @@ contains
 
     ! calculate phase-randomized FSC according to Chen et al,JSB,2013
     subroutine phase_rand_fsc(even, odd, envmask, state, n, fsc, fsc_t, fsc_n, fsc_u )
+        use simple_refine3D_fnames, only: refine3D_fsc_unmasked_fname, refine3D_fsc_masked_fname, &
+            &refine3D_fsc_randomized_fname
         class(image),                intent(in)    :: even, odd
         class(image),                intent(inout) :: envmask
         integer,                     intent(in)    :: state, n
@@ -112,9 +114,9 @@ contains
             enddo
         endif
         if( present(fsc_u) ) allocate(fsc_u(n), source=fsc_unmasked)
-        call arr2file(fsc_unmasked, string('fscu_state'//int2str_pad(state,2)//BIN_EXT))
-        call arr2file(fsc_t,        string('fsct_state'//int2str_pad(state,2)//BIN_EXT))
-        call arr2file(fsc_n,        string('fscn_state'//int2str_pad(state,2)//BIN_EXT))
+        call arr2file(fsc_unmasked, refine3D_fsc_unmasked_fname(state))
+        call arr2file(fsc_t,        refine3D_fsc_masked_fname(state))
+        call arr2file(fsc_n,        refine3D_fsc_randomized_fname(state))
         call work_even%kill
         call work_odd%kill
         deallocate(fsc_unmasked)
@@ -158,69 +160,27 @@ contains
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot_fsc
 
-    subroutine plot_fsc2( n, fsc1, fsc2, res, smpd, tmpl_fname )
+    subroutine plot_phrand_fsc( n, fsc, fsc_u, fsc_t, fsc_n, res, smpd, tmpl_fname )
+        use simple_string_utils, only: posix_quote
         integer,           intent(in) :: n
-        real,              intent(in) :: fsc1(n), fsc2(n), res(n), smpd
-        character(len=*),  intent(in) :: tmpl_fname
-        type(string)              :: title
-        type(CPlot2D_type)        :: plot2D
-        type(CDataSet_type)       :: dataSet1
-        type(CDataSet_type)       :: dataSet2
-        character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
-        integer  :: k,iostat
-        if( n == 0 ) THROW_HARD('Empty FSC vector; plot_fsc')
-        fname_eps  = trim(tmpl_fname)//'.eps'
-        fname_pdf  = trim(tmpl_fname)//'.pdf'
-        call CPlot2D__new(plot2D, trim(tmpl_fname)//C_NULL_CHAR)
-        call CPlot2D__SetXAxisSize(plot2D, 400.d0)
-        call CPlot2D__SetYAxisSize(plot2D, 400.d0)
-        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
-        call CPlot2D__SetFlipY(plot2D, C_FALSE)
-        call CDataSet__new(dataSet1)
-        do k = 1,n
-            call CDataSet_addpoint(dataSet1, 1.0/res(k), fsc1(k))
-        end do
-        call CPlot2D__AddDataSet(plot2D, dataSet1)
-        call CDataSet__delete(dataSet1)
-        call CDataSet__new(dataSet2)
-        call CDataSet__SetDatasetColor(dataSet2, 0.d0,0.d0,1.d0)
-        do k = 1,n
-            call CDataSet_addpoint(dataSet2, 1.0/res(k), fsc2(k))
-        end do
-        call CPlot2D__AddDataSet(plot2D, dataSet2)
-        call CDataSet__delete(dataSet2)
-        title = 'Resolution (Angstroms^-1)'//C_NULL_CHAR
-        call CPlot2D__SetXAxisTitle(plot2D, title%to_char())
-        title = 'Fourier Shell Correlations'//C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(plot2D, title%to_char())
-        call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname_eps)//C_NULL_CHAR)
-        call CPlot2D__delete(plot2D)
-        ! conversion to PDF
-        ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
-            &//trim(fname_pdf)//' '//trim(fname_eps)
-        call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
-        if( iostat == 0 ) call del_file(fname_eps)
-    end subroutine plot_fsc2
-
-    subroutine plot_phrand_fsc( n, fsc, fsc_t, fsc_n, res, smpd, tmpl_fname )
-        integer,           intent(in) :: n
-        real,              intent(in) :: fsc(n), fsc_n(n), fsc_t(n), res(n), smpd
+        real,              intent(in) :: fsc(n), fsc_u(n), fsc_n(n), fsc_t(n), res(n), smpd
         character(len=*),  intent(in) :: tmpl_fname
         type(string)              :: title
         type(CPlot2D_type)        :: plot2D
         type(CDataSet_type)       :: dataSet
         character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
         integer  :: k,iostat
-        if( n == 0 ) THROW_HARD('Empty FSC vector; plot_fsc')
+        if( n == 0 ) THROW_HARD('Empty FSC vector; plot_phrand_fsc')
         fname_eps  = trim(tmpl_fname)//'.eps'
         fname_pdf  = trim(tmpl_fname)//'.pdf'
         call CPlot2D__new(plot2D, trim(tmpl_fname)//C_NULL_CHAR)
         call CPlot2D__SetXAxisSize(plot2D, 400.d0)
         call CPlot2D__SetYAxisSize(plot2D, 400.d0)
-        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+        call CPlot2D__SetDrawLegend(plot2D, C_TRUE)
         call CPlot2D__SetFlipY(plot2D, C_FALSE)
         ! corrected fsc
         call CDataSet__new(dataSet)
+        call CDataSet__SetDatasetTitle(dataSet, 'Corrected'//C_NULL_CHAR)
         call CDataSet__SetDrawMarker(dataSet, C_FALSE)
         call CDataSet__SetDatasetColor(dataSet, 0.d0,0.d0,1.d0)
         do k = 1,n
@@ -228,8 +188,19 @@ contains
         end do
         call CPlot2D__AddDataSet(plot2D, dataset)
         call CDataSet__delete(dataset)
-        ! raw fsc
+        ! unmasked fsc (before the envelope)
         call CDataSet__new(dataSet)
+        call CDataSet__SetDatasetTitle(dataSet, 'Unmasked'//C_NULL_CHAR)
+        call CDataSet__SetDrawMarker(dataSet, C_FALSE)
+        call CDataSet__SetDatasetColor(dataSet, 0.d0,0.d0,0.d0)
+        do k = 1,n
+            call CDataSet_addpoint(dataSet, 1.0/res(k), fsc_u(k))
+        end do
+        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CDataSet__delete(dataset)
+        ! envelope-masked fsc
+        call CDataSet__new(dataSet)
+        call CDataSet__SetDatasetTitle(dataSet, 'Masked'//C_NULL_CHAR)
         call CDataSet__SetDrawMarker(dataSet, C_FALSE)
         call CDataSet__SetDatasetColor(dataSet, 0.d0,1.d0,0.d0)
         do k = 1,n
@@ -239,6 +210,7 @@ contains
         call CDataSet__delete(dataset)
         ! phase randomized fsc
         call CDataSet__new(dataSet)
+        call CDataSet__SetDatasetTitle(dataSet, 'Randomized'//C_NULL_CHAR)
         call CDataSet__SetDrawMarker(dataSet, C_FALSE)
         call CDataSet__SetDatasetColor(dataSet, 1.d0,0.d0,0.d0)
         do k = 1,n
@@ -254,7 +226,7 @@ contains
         call CPlot2D__delete(plot2D)
         ! conversion to PDF
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
-            &//trim(fname_pdf)//' '//trim(fname_eps)
+            &//posix_quote(trim(fname_pdf))//' '//posix_quote(trim(fname_eps))
         call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot_phrand_fsc

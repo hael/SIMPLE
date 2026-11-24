@@ -1539,6 +1539,7 @@ extern "C"
   void CDataSet__SetDashedLine(CDataSet* This, bool flag);
   void CDataSet__SetFillArea(CDataSet* This, bool flag);
   void CDataSet__SetDatasetColor(CDataSet* This, double r, double g, double b);
+  void CDataSet__SetDatasetTitle(CDataSet* This, const char* title);
   CDataPoint* CDataPoint__new2(double x, double y);
   void CDataPoint__delete(CDataPoint* This);
   void CDataSet__AddDataPoint(CDataSet* This, CDataPoint* point);

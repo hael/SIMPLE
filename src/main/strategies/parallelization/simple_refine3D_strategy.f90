@@ -672,6 +672,46 @@ contains
         endif
     end subroutine invalidate_fresh_start_refs_from_volumes
 
+    ! Project I/O: none; read assembled FSCs and write per-state iteration plots.
+    subroutine plot_refine3D_state_fsc( params, state, iter )
+        use simple_fsc, only: plot_fsc, plot_phrand_fsc
+        type(parameters), intent(in) :: params
+        integer,          intent(in) :: state, iter
+        type(string) :: fsc_file, fsc_templ, fname_u, fname_t, fname_n
+        real, allocatable :: res(:), fsc(:), fsc_u(:), fsc_t(:), fsc_n(:)
+        logical :: have_u, have_t, have_n
+        fsc_file = refine3D_fsc_fname(state)
+        if( .not. file_exists(fsc_file) ) return
+        res = get_resarr(params%box_crop, params%smpd_crop)
+        fsc = file2rarr(fsc_file)
+        if( size(fsc) == 0 .or. size(fsc) > size(res) )then
+            THROW_WARN('FSC plot skipped: incompatible shell count for state '//int2str(state))
+            return
+        endif
+        fsc_templ = refine3D_fsc_plot_fbody(state, iter)
+        if( params%l_envfsc .and. trim(params%rec_backend) == 'gridding' )then
+            fname_u = refine3D_fsc_unmasked_fname(state)
+            fname_t = refine3D_fsc_masked_fname(state)
+            fname_n = refine3D_fsc_randomized_fname(state)
+            have_u = file_exists(fname_u)
+            have_t = file_exists(fname_t)
+            have_n = file_exists(fname_n)
+            if( have_u .and. have_t .and. have_n )then
+                fsc_u = file2rarr(fname_u)
+                fsc_t = file2rarr(fname_t)
+                fsc_n = file2rarr(fname_n)
+                if( size(fsc_u) == size(fsc) .and. size(fsc_t) == size(fsc) .and. size(fsc_n) == size(fsc) )then
+                    call plot_phrand_fsc(size(fsc), fsc, fsc_u, fsc_t, fsc_n, res, params%smpd_crop, fsc_templ%to_char())
+                    return
+                endif
+                THROW_WARN('Using ordinary FSC plot: incompatible curves for state '//int2str(state))
+            else if( have_u .or. have_t .or. have_n )then
+                THROW_WARN('Using ordinary FSC plot: incomplete curves for state '//int2str(state))
+            endif
+        endif
+        call plot_fsc(size(fsc), fsc, res, params%smpd_crop, fsc_templ%to_char())
+    end subroutine plot_refine3D_state_fsc
+
     subroutine refresh_resolution_fields_from_fsc( params, build )
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
@@ -1357,6 +1397,7 @@ contains
                 do state = 1, params%nstates
                     volname = refine3D_state_vol_fname(state)
                     if( .not. file_exists(volname) ) cycle
+                    call plot_refine3D_state_fsc(params, state, iter)
                     call adopt_refine3D_reference(params, cline, state, volname)
                 end do
             endif
@@ -1711,7 +1752,6 @@ contains
         use simple_postprocess_strategy, only: run_postprocess
         use simple_eul_prob_tab_utils,   only: merge_prob_readouts, prob_insert_cone, insert_cone_from_fsc, prob_readout
         !$ use omp_lib,                  only: omp_get_max_threads, omp_set_num_threads
-        use simple_fsc,                     only: plot_fsc
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4iter3D, master_draws_sample3D, sample_ptcls4prob3D
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
@@ -1721,9 +1761,8 @@ contains
         type(cmdline) :: cline_volassemble
         type(string)  :: str
         integer(timer_int_kind) :: t_recphase
-        type(string)  :: vol, vol_iter, fsc_templ, fsc_file
+        type(string)  :: vol, vol_iter, fsc_file
         type(string)  :: fname_vol, volpproc, vollp
-        real, allocatable :: res(:), fsc(:)
         integer, allocatable :: state_pops(:), pinds_smpl(:)
         logical, allocatable :: l_no_new_map(:)
         type(chash) :: job_descr_pass
@@ -1902,11 +1941,7 @@ contains
                                     cycle
                                 endif
                                 call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
-                                ! FSC plot
-                                res       = get_resarr(params%box_crop, params%smpd_crop)
-                                fsc       = file2rarr(fsc_file)
-                                fsc_templ = refine3D_fsc_plot_fbody(state, iter)
-                                call plot_fsc(size(fsc), fsc, res, params%smpd_crop, fsc_templ%to_char())
+                                call plot_refine3D_state_fsc(params, state, iter)
                                 if( trim(params%oritype).eq.'cls3D' )then
                                     call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
                                 else
@@ -2017,13 +2052,10 @@ contains
         call str%kill
         call vol%kill
         call vol_iter%kill
-        call fsc_templ%kill
         call fsc_file%kill
         call fname_vol%kill
         call volpproc%kill
         call vollp%kill
-        if( allocated(res) ) deallocate(res)
-        if( allocated(fsc) ) deallocate(fsc)
         if( allocated(state_pops) ) deallocate(state_pops)
         if( allocated(l_no_new_map) ) deallocate(l_no_new_map)
         ! the iteration's particle field, once (its out segment went to the file before postprocessing)

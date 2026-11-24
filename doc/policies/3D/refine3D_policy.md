@@ -1884,6 +1884,14 @@ restart or workflow-handoff artifact. An empty state may produce no
 new image. Failure to write this JPEG warns but does not invalidate the
 refinement iteration.
 
+After assembly, both strategies write one per-state
+`fsc_stateNN_iterNNN.pdf` plot. Gridding with `envfsc=yes` uses a complete set
+of diagnostic binaries (`fscu_stateNN.bin`, `fsct_stateNN.bin`,
+`fscn_stateNN.bin`) with matching shell counts to show the corrected,
+pre-envelope, envelope-masked and phase-randomized FSCs, identified by a legend.
+PCG, `envfsc=no`, or missing/incompatible diagnostics use the ordinary FSC
+curve under the same filename. No separate `_phrand` plot is written.
+
 On finalization:
 
 - `endit` is written to the command line
