@@ -127,6 +127,7 @@ use simple_persistent_worker_message_tester, only: run_all_persistent_worker_mes
 use simple_persistent_worker_server_tester,  only: run_all_persistent_worker_server_tests
 use simple_stream_pipe_tester,               only: run_all_stream_pipe_tests
 use simple_forked_process_tester,            only: run_all_forked_process_tests
+use simple_gtk_tester,                       only: run_all_gtk_tile_tests, run_all_gtk_window_tests
 use simple_test_dispatch_tester,             only: run_all_test_dispatch_tests
 use simple_test_tools_tester,                only: run_all_test_tools_tests
 use simple_test_truth_metrics_tester,        only: run_all_truth_metrics_tests, run_all_truth_docking_tests
@@ -202,7 +203,7 @@ implicit none
 ! (doc/refactoring_notes/completed/uniform_test_environment_refactoring.md, section 5.1): assertions
 ! through simple_test_utils, localhost only, no downloads or user data, one OpenMP thread.
 ! suite=<name> runs one sub-suite (suite=list names them); test=units runs every area (not the gate);
-! lib_<area> are nightly library suites (section 5.2.1); forked_process and openmp_offload are label
+! lib_<area> are nightly library suites (section 5.2.1); forked_process, openmp_offload and gtk are label
 ! `platform`. SIMPLE_UNIT_ORDER=reverse runs a table backwards: a differing result is a state leak.
 
 
@@ -325,6 +326,11 @@ type, extends(commander_base) :: commander_test_forked_process
   contains
     procedure :: execute      => exec_test_forked_process
 end type commander_test_forked_process
+
+type, extends(commander_base) :: commander_test_gtk
+  contains
+    procedure :: execute      => exec_test_gtk
+end type commander_test_gtk
 
 ! a sub-suite: a name and a no-argument procedure that asserts through simple_test_utils
 abstract interface
@@ -951,6 +957,19 @@ contains
         call add_suite(s, n, 'test dispatcher',  run_all_test_dispatch_tests)
         call run_unit_suites('forked_process', cline, s(1:n))
     end subroutine exec_test_forked_process
+
+    !> GTK 4 through gtk-fortran: the cairo tile offscreen and a window that closes itself (needs a
+    !! display, otherwise skipped); label `platform`
+    subroutine exec_test_gtk( self, cline )
+        class(commander_test_gtk), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        type(unit_suite) :: s(2)
+        integer :: n
+        n = 0
+        call add_suite(s, n, 'cairo tile', run_all_gtk_tile_tests)
+        call add_suite(s, n, 'window',     run_all_gtk_window_tests)
+        call run_unit_suites('gtk', cline, s(1:n))
+    end subroutine exec_test_gtk
 
     ! ---- the runner ----------------------------------------------------------
 

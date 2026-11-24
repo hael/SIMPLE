@@ -65,6 +65,12 @@ foreach(exe IN LISTS SIMPLE_EXECUTABLES)
     endif()
 endforeach()
 
+# GTK code in the library is reached only from the GTK tester: simple_test_exec is the one
+# executable that links GTK
+if(BUILD_TESTS)
+    target_link_libraries(${SIMPLE_TEST_EXE} PRIVATE ${SIMPLE_GTK_LIBRARIES})
+endif()
+
 install(TARGETS ${SIMPLE_EXECUTABLES}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
@@ -419,6 +425,10 @@ if(BUILD_TESTS)
   # and its third, test dispatcher, the suite runner's failing, hanging and passing children.
   simple_add_test(forked_process platform 300 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=forked_process)
+  # GTK 4 through gtk-fortran: the cairo tile offscreen and a window that closes itself after
+  # 1.5 s, skipped without a display; its own process for the GTK main loop
+  simple_add_test(gtk platform 120 1 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=gtk)
   # Registered only when CMake has the capability and the launcher.
   if(USE_OPENMP_OFFLOAD)
     # OpenMP target offload, cuFFT against FFTW, cuBLAS, the KB device forms (Cyril's,
@@ -443,7 +453,8 @@ if(BUILD_TESTS)
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
   # particle_sieving_2: a program of its own whose children are whole programs; no existing entry runs it
-  set(SIMPLE_CTEST_BUDGET 46)   # 15 fast + 1 platform + 23 highlevel + 7 library
+  # gtk: the GTK main loop and its window in a process of their own
+  set(SIMPLE_CTEST_BUDGET 47)   # 15 fast + 2 platform + 23 highlevel + 7 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

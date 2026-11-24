@@ -31,7 +31,7 @@ jobs:
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
-             sudo apt-get -y install gcc gfortran cmake make liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc mpich libmpich-dev libcurl4-openssl-dev
+             sudo apt-get -y install gcc gfortran cmake make liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc mpich libmpich-dev libcurl4-openssl-dev libgtk-4-dev pkg-config
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
@@ -42,6 +42,8 @@ jobs:
              eval "$(/opt/homebrew/bin/brew shellenv)"
              brew install jbigkit
              brew install fftw
+             brew install gtk4
+             brew install pkgconf
              brew install curl 
              
       - name: Build SIMPLE in debug mode (Linux/MacOS)
@@ -72,7 +74,7 @@ jobs:
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
-             sudo apt-get install -y gcc gfortran cmake make liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 openmpi-bin libopenmpi-dev libcoarrays-openmpi-dev libcurl4-openssl-dev
+             sudo apt-get install -y gcc gfortran cmake make liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 openmpi-bin libopenmpi-dev libcoarrays-openmpi-dev libcurl4-openssl-dev libgtk-4-dev pkg-config
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
@@ -84,6 +86,8 @@ jobs:
              brew install opencoarrays
              brew install jbigkit
              brew install fftw
+             brew install gtk4
+             brew install pkgconf
              brew install curl
 
       - name: Build SIMPLE with coarrays (Linux/MacOS)

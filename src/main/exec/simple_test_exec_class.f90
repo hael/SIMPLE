@@ -12,7 +12,7 @@ use simple_commanders_test_class, only: commander_test_units, &
                                         commander_test_unit_heterogeneity, commander_test_lib_heterogeneity, &
                                         commander_test_unit_parallel, commander_test_unit_single, commander_test_lib_single, &
                                         commander_test_unit_stream, commander_test_lib_stream, commander_test_stream_chains, &
-                                        commander_test_openmp_offload
+                                        commander_test_openmp_offload, commander_test_gtk
 implicit none
 
 public :: exec_test_class_commander
@@ -42,6 +42,7 @@ type(commander_test_stream_chains)       :: xstream_chains
 type(commander_test_lib_heterogeneity)   :: xlib_heterogeneity
 type(commander_test_openmp_offload)      :: xopenmp_offload
 type(commander_test_forked_process) :: xforked_process
+type(commander_test_gtk)            :: xgtk
 
 contains
 
@@ -102,6 +103,8 @@ contains
                 call xopenmp_offload%execute(cline)
             case( 'forked_process' )
                 call xforked_process%execute(cline)
+            case( 'gtk' )
+                call xgtk%execute(cline)
             case default
                 l_did_execute = .false.
         end select

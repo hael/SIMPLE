@@ -27,6 +27,7 @@ type(ui_program), target :: lib_stream
 type(ui_program), target :: lib_heterogeneity
 type(ui_program), target :: openmp_offload
 type(ui_program), target :: forked_process
+type(ui_program), target :: gtk
 
 contains
 
@@ -55,6 +56,7 @@ contains
         call new_lib_stream(tsttab)
         call new_openmp_offload(tsttab)
         call new_forked_process(tsttab)
+        call new_gtk(tsttab)
     end subroutine construct_test_class_programs
 
     subroutine new_units( tsttab )
@@ -363,5 +365,18 @@ contains
             &'One sub-suite of this suite to run alone (forked_process, stream_heartbeat, test_dispatcher)', '', .false., '')
         call add_ui_program('forked_process', forked_process, tsttab, UI_CATEGORY)
     end subroutine new_forked_process
+
+    subroutine new_gtk( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call gtk%new(&
+        &'gtk',&
+        &'GTK 4 through gtk-fortran',&
+        &'checks an 8-bit tile painted with cairo offscreen and a GTK window that opens, draws the tile and closes itself after 1.5 s (needs a display, otherwise skipped); platform label',&
+        &'simple_test_exec',&
+        &.false., display_name='GTK Test')
+        call gtk%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this suite to run alone (cairo_tile, window)', '', .false., '')
+        call add_ui_program('gtk', gtk, tsttab, UI_CATEGORY)
+    end subroutine new_gtk
 
 end module simple_test_ui_class

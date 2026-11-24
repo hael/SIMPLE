@@ -7,6 +7,32 @@
 set(SIMPLE_LIBRARIES "")
 set(SIMPLE_DEPENDENCY_TARGETS "")
 
+# Download a pinned archive into the persistent cache once, or verify the cached copy
+# (OpenBLAS, gtk-fortran).
+function(simple_fetch_pinned_archive label url archive sha256)
+    if(NOT EXISTS "${archive}")
+        message(STATUS "Fetching ${label}: ${url}")
+        file(DOWNLOAD "${url}" "${archive}"
+            EXPECTED_HASH "SHA256=${sha256}"
+            STATUS _download_status
+            SHOW_PROGRESS
+            TLS_VERIFY ON
+        )
+        list(GET _download_status 0 _download_error)
+        if(NOT _download_error EQUAL 0)
+            file(REMOVE "${archive}")
+            message(FATAL_ERROR "Could not download ${label}: ${_download_status}")
+        endif()
+    else()
+        file(SHA256 "${archive}" _archive_hash)
+        if(NOT _archive_hash STREQUAL sha256)
+            message(FATAL_ERROR
+                "Cached ${label} archive has SHA-256 ${_archive_hash}; expected ${sha256}: ${archive}"
+            )
+        endif()
+    endif()
+endfunction()
+
 # ------------------------------------------------------------------------------
 # OpenMP (required by default)
 # ------------------------------------------------------------------------------
@@ -203,30 +229,6 @@ else()
         "${SIMPLE_NUMERICS_INSTALL_PREFIX}/lib"
         "${SIMPLE_NUMERICS_INSTALL_PREFIX}/include"
     )
-
-    function(simple_fetch_pinned_archive label url archive sha256)
-        if(NOT EXISTS "${archive}")
-            message(STATUS "Fetching ${label}: ${url}")
-            file(DOWNLOAD "${url}" "${archive}"
-                EXPECTED_HASH "SHA256=${sha256}"
-                STATUS _download_status
-                SHOW_PROGRESS
-                TLS_VERIFY ON
-            )
-            list(GET _download_status 0 _download_error)
-            if(NOT _download_error EQUAL 0)
-                file(REMOVE "${archive}")
-                message(FATAL_ERROR "Could not download ${label}: ${_download_status}")
-            endif()
-        else()
-            file(SHA256 "${archive}" _archive_hash)
-            if(NOT _archive_hash STREQUAL sha256)
-                message(FATAL_ERROR
-                    "Cached ${label} archive has SHA-256 ${_archive_hash}; expected ${sha256}: ${archive}"
-                )
-            endif()
-        endif()
-    endfunction()
 
     simple_fetch_pinned_archive(
         "OpenBLAS ${SIMPLE_OPENBLAS_VERSION}"
@@ -526,6 +528,160 @@ list(APPEND SIMPLE_LIBRARIES CURL::libcurl)
 message(STATUS "libcurl: FOUND")
 
 # ------------------------------------------------------------------------------
+# GTK 4 and gtk-fortran (required)
+# ------------------------------------------------------------------------------
+# GTK 4 comes from the system through pkg-config. gtk-fortran is pinned and built
+# like OpenBLAS: once per Fortran compiler into a cache outside build/, because
+# gfortran module files do not load across compiler versions. SIMPLE_GTK_LIBRARIES
+# is for the executables that run GTK code; it is never added to SIMPLE_LIBRARIES,
+# so the other executables do not link GTK.
+find_package(PkgConfig)
+if(NOT PkgConfig_FOUND)
+    message(FATAL_ERROR
+        "================================================================================\n"
+        "  PKG-CONFIG REQUIRED but NOT FOUND\n"
+        "================================================================================\n"
+        "  SIMPLE finds GTK 4 through pkg-config.\n"
+        "  Install pkg-config via your system package manager:\n"
+        "  Linux (Debian/Ubuntu):\n"
+        "    sudo apt-get update\n"
+        "    sudo apt-get install pkg-config\n"
+        "  Linux (Fedora/RHEL/CentOS/Rocky):\n"
+        "    sudo yum install pkgconf-pkg-config\n"
+        "    or: sudo dnf install pkgconf-pkg-config\n"
+        "  Linux (Arch):\n"
+        "    sudo pacman -S pkgconf\n"
+        "  macOS (Homebrew):\n"
+        "    brew install pkgconf\n"
+        "  macOS (MacPorts):\n"
+        "    sudo port install pkgconfig\n"
+        "  After installation, reconfigure CMake:\n"
+        "    rm -rf build/\n"
+        "    cmake -B build\n"
+        "================================================================================\n"
+    )
+endif()
+pkg_check_modules(GTK4 IMPORTED_TARGET gtk4)
+if(NOT GTK4_FOUND)
+    message(FATAL_ERROR
+        "================================================================================\n"
+        "  GTK 4 REQUIRED but NOT FOUND\n"
+        "================================================================================\n"
+        "  SIMPLE requires the GTK 4 development files to compile;\n"
+        "  pkg-config (${PKG_CONFIG_EXECUTABLE}) found no gtk4 package.\n"
+        "  Install them via your system package manager:\n"
+        "  Linux (Debian/Ubuntu):\n"
+        "    sudo apt-get update\n"
+        "    sudo apt-get install libgtk-4-dev\n"
+        "  Linux (Fedora/RHEL/CentOS/Rocky):\n"
+        "    sudo yum install gtk4-devel\n"
+        "    or: sudo dnf install gtk4-devel\n"
+        "  Linux (Arch):\n"
+        "    sudo pacman -S gtk4\n"
+        "  macOS (Homebrew):\n"
+        "    brew install gtk4\n"
+        "  macOS (MacPorts):\n"
+        "    sudo port install gtk4\n"
+        "  GTK 4 in another prefix: add <prefix>/lib/pkgconfig to PKG_CONFIG_PATH.\n"
+        "  After installation, reconfigure CMake:\n"
+        "    rm -rf build/\n"
+        "    cmake -B build\n"
+        "================================================================================\n"
+    )
+endif()
+
+set(SIMPLE_GTK_FORTRAN_VERSION "4.9.0")
+set(SIMPLE_GTK_FORTRAN_SHA256 "addeb090ff4bdfd027db1f9c3729310f90b9f6f23560e07051b5f596dfe42b22")
+# the core interface modules only: no PLplot, high-level API, sketcher or examples
+set(SIMPLE_GTK_FORTRAN_BUILD_FLAGS
+    "-DCMAKE_BUILD_TYPE=Release"
+    "-DCMAKE_Fortran_FLAGS_RELEASE=-O2"
+    "-DEXCLUDE_PLPLOT=true"
+    "-DNO_BUILD_HL=true"
+    "-DNO_BUILD_EXAMPLES=true"
+)
+string(JOIN " " SIMPLE_GTK_FORTRAN_RECIPE
+    "gtk-fortran=${SIMPLE_GTK_FORTRAN_VERSION}"
+    "system=${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
+    "Fortran=${CMAKE_Fortran_COMPILER_ID}-${CMAKE_Fortran_COMPILER_VERSION}-${CMAKE_Fortran_COMPILER}"
+    ${SIMPLE_GTK_FORTRAN_BUILD_FLAGS}
+)
+string(MAKE_C_IDENTIFIER
+    "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_Fortran_COMPILER_ID}-${CMAKE_Fortran_COMPILER_VERSION}"
+    SIMPLE_GTK_CACHE_KEY
+)
+set(SIMPLE_GTK_CACHE_ROOT "${CMAKE_SOURCE_DIR}/.deps/gtk" CACHE PATH
+    "Persistent cache for SIMPLE's pinned gtk-fortran build")
+set(SIMPLE_GTK_FORTRAN_PREFIX
+    "${SIMPLE_GTK_CACHE_ROOT}/${SIMPLE_GTK_CACHE_KEY}/gtk-fortran-${SIMPLE_GTK_FORTRAN_VERSION}"
+)
+set(SIMPLE_GTK_FORTRAN_RECIPE_STAMP "${SIMPLE_GTK_FORTRAN_PREFIX}/simple-gtk-fortran-recipe.txt")
+set(SIMPLE_GTK_FORTRAN_MODULE_DIR "${SIMPLE_GTK_FORTRAN_PREFIX}/include/gtk-4-fortran")
+set(SIMPLE_GTK_FORTRAN_LIBRARY
+    "${SIMPLE_GTK_FORTRAN_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}gtk-4-fortran${CMAKE_STATIC_LIBRARY_SUFFIX}"
+)
+set(SIMPLE_GTK_FORTRAN_EP_PREFIX "${CMAKE_BINARY_DIR}/_deps/gtk-fortran")
+
+message(STATUS
+    "GTK: GTK ${GTK4_VERSION} (pkg-config), pinned gtk-fortran ${SIMPLE_GTK_FORTRAN_VERSION} "
+    "(persistent cache: ${SIMPLE_GTK_FORTRAN_PREFIX})"
+)
+
+set(SIMPLE_GTK_CACHE_CURRENT FALSE)
+if(EXISTS "${SIMPLE_GTK_FORTRAN_LIBRARY}" AND EXISTS "${SIMPLE_GTK_FORTRAN_RECIPE_STAMP}")
+    file(READ "${SIMPLE_GTK_FORTRAN_RECIPE_STAMP}" SIMPLE_GTK_CACHED_RECIPE)
+    string(STRIP "${SIMPLE_GTK_CACHED_RECIPE}" SIMPLE_GTK_CACHED_RECIPE)
+    if(SIMPLE_GTK_CACHED_RECIPE STREQUAL SIMPLE_GTK_FORTRAN_RECIPE)
+        set(SIMPLE_GTK_CACHE_CURRENT TRUE)
+    endif()
+endif()
+
+if(SIMPLE_GTK_CACHE_CURRENT)
+    message(STATUS "Reusing the cached gtk-fortran; no gtk-fortran build is scheduled")
+else()
+    if(EXISTS "${SIMPLE_GTK_FORTRAN_PREFIX}")
+        message(STATUS "Cached gtk-fortran recipe changed or is incomplete; rebuilding ${SIMPLE_GTK_FORTRAN_PREFIX}")
+        file(REMOVE_RECURSE "${SIMPLE_GTK_FORTRAN_PREFIX}")
+    endif()
+    # stale ExternalProject stamps in an existing build tree must not suppress the rebuild
+    file(REMOVE_RECURSE "${SIMPLE_GTK_FORTRAN_EP_PREFIX}")
+    set(SIMPLE_GTK_FORTRAN_ARCHIVE
+        "${CMAKE_SOURCE_DIR}/.deps/downloads/gtk-fortran-${SIMPLE_GTK_FORTRAN_VERSION}.tar.gz"
+    )
+    file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/.deps/downloads" "${SIMPLE_GTK_FORTRAN_PREFIX}")
+    simple_fetch_pinned_archive(
+        "gtk-fortran ${SIMPLE_GTK_FORTRAN_VERSION}"
+        "https://github.com/vmagnin/gtk-fortran/archive/refs/tags/v${SIMPLE_GTK_FORTRAN_VERSION}.tar.gz"
+        "${SIMPLE_GTK_FORTRAN_ARCHIVE}"
+        "${SIMPLE_GTK_FORTRAN_SHA256}"
+    )
+    file(WRITE "${SIMPLE_GTK_FORTRAN_RECIPE_STAMP}" "${SIMPLE_GTK_FORTRAN_RECIPE}\n")
+    include(ExternalProject)
+    # gtk-fortran's own CMake build, with SIMPLE's Fortran compiler; the installed
+    # static library and module files persist outside build/
+    ExternalProject_Add(simple_gtk_fortran_ep
+        URL "${SIMPLE_GTK_FORTRAN_ARCHIVE}"
+        URL_HASH "SHA256=${SIMPLE_GTK_FORTRAN_SHA256}"
+        PREFIX "${SIMPLE_GTK_FORTRAN_EP_PREFIX}"
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        CMAKE_ARGS
+            "-DCMAKE_Fortran_COMPILER:FILEPATH=${CMAKE_Fortran_COMPILER}"
+            "-DPKG_CONFIG_EXECUTABLE:FILEPATH=${PKG_CONFIG_EXECUTABLE}"
+            "-DCMAKE_INSTALL_PREFIX:PATH=${SIMPLE_GTK_FORTRAN_PREFIX}"
+            "-DCMAKE_INSTALL_LIBDIR:PATH=lib"
+            "-DCMAKE_INSTALL_INCLUDEDIR:PATH=include"
+            ${SIMPLE_GTK_FORTRAN_BUILD_FLAGS}
+        BUILD_BYPRODUCTS "${SIMPLE_GTK_FORTRAN_LIBRARY}"
+        LOG_CONFIGURE TRUE
+        LOG_BUILD TRUE
+        LOG_INSTALL TRUE
+        LOG_OUTPUT_ON_FAILURE TRUE
+    )
+    list(APPEND SIMPLE_DEPENDENCY_TARGETS simple_gtk_fortran_ep)
+endif()
+set(SIMPLE_GTK_LIBRARIES "${SIMPLE_GTK_FORTRAN_LIBRARY}" PkgConfig::GTK4)
+
+# ------------------------------------------------------------------------------
 # Final dependency summary
 # ------------------------------------------------------------------------------
 message(STATUS "=== SIMPLE Dependency Summary ===")
@@ -533,6 +689,7 @@ message(STATUS "=== SIMPLE Dependency Summary ===")
 message(STATUS " BLAS:                YES (${SIMPLE_BLAS_STATUS})")
 message(STATUS " BLAS in OMP teams:   ${SIMPLE_BLAS_TEAM_STATUS}")
 message(STATUS " FFTW3:               YES")
+message(STATUS " GTK 4 / gtk-fortran: YES (GTK ${GTK4_VERSION}, gtk-fortran ${SIMPLE_GTK_FORTRAN_VERSION})")
 message(STATUS " JPEG_LIBRARY:        YES")
 message(STATUS " LAPACK:              YES (${SIMPLE_BLAS_STATUS})")
 message(STATUS " LIBCURL:             YES")

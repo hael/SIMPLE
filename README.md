@@ -88,6 +88,7 @@ https://zenodo.org/records/18789533
 -   FFTW ≥ 3.3 (double + single + threaded builds)
 -   libcurl ≥ 7 
 -   libTIFF ≥ 4 
+-   GTK 4 development files and pkg-config (SIMPLE downloads and builds its pinned gtk-fortran)
 -   jbigkit ≥ 2 (optional)
 -   Python ≥ 3.10
 

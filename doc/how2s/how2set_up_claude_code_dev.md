@@ -55,6 +55,7 @@ To work in VS Code, install the Claude Code extension. It uses the same
   then reuses the compatible `.deps/numerics/` cache across clean build trees)
 - FFTW 3.3 with its double, single and threaded builds
 - libcurl and libTIFF
+- GTK 4 development files and pkg-config (SIMPLE builds its pinned gtk-fortran)
 - Python 3.7 or newer for the build scripts and the fast gate
 
 Install `ripgrep` (`rg`) too: the repository instructions search with it.
@@ -70,6 +71,9 @@ sudo dnf install -y gcc-toolset-15 gcc-toolset-15-gcc-gfortran gcc-toolset-15-gc
     cmake make fftw-devel libcurl-devel libtiff-devel git
 sudo dnf install -y ripgrep     # from EPEL on enterprise Linux
 ```
+
+GTK 4 is packaged from Enterprise Linux 9 on (`sudo dnf install -y gtk4-devel pkgconf-pkg-config`); EL8,
+Oracle Linux 8 included, has no GTK 4 package, so there it has to come from conda-forge or a source build.
 
 On macOS, follow the "New Mac Installation" section of
 [doc/installation.md](../installation.md) (Homebrew GCC, make and FFTW;

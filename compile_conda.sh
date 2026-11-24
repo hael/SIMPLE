@@ -25,7 +25,7 @@ fi
 
 mkdir -p build
 
-conda create --prefix `pwd`/build/simple-conda conda-forge::gcc=15.2.0 conda-forge::gxx=15.2.0 conda-forge::gfortran=15.2.0 conda-forge::fftw conda-forge::libtiff conda-forge::jbig conda-forge::jpeg python=3.10 cmake
+conda create --prefix `pwd`/build/simple-conda conda-forge::gcc=15.2.0 conda-forge::gxx=15.2.0 conda-forge::gfortran=15.2.0 conda-forge::fftw conda-forge::libtiff conda-forge::jbig conda-forge::jpeg conda-forge::gtk4 conda-forge::pkg-config python=3.10 cmake
 export PATH=`pwd`/build/simple-conda/bin:$PATH
 export LD_LIBRARY_PATH=`pwd`/build/simple-conda/lib:$LD_LIBRARY_PATH
 cd build
