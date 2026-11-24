@@ -26,9 +26,9 @@ SIMPLE also builds its pinned gtk-fortran release, the Fortran interface to GTK 
 gfortran module files do not load across compiler versions. The verified source archive sits under
 `.deps/downloads/`, the installed library and module files under `.deps/gtk/`. GTK 3 itself comes from the
 system through pkg-config; it is GTK 3 rather than 4 because Enterprise Linux 8 packages no GTK 4.
-The dependency build omits gtk-fortran's informational executable and its installation rule:
-that executable requires GLib 2.64, newer than EL8's GLib. The interface libraries and modules
-are still built and installed; no system GLib upgrade is needed for this executable.
+Of gtk-fortran's build only the static interface library is made, and it is kept with its module files;
+its other products, among them an informational program that needs GLib 2.64 (newer than EL8's), are not
+built, so EL8 needs no newer GLib.
 
 With GNU C and Fortran compilers and OpenMP enabled, SIMPLE builds the OpenMP flavour of OpenBLAS: a product
 called from serial code runs on SIMPLE's OpenMP threads, a product called inside one of SIMPLE's OpenMP teams

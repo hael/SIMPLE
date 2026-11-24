@@ -600,11 +600,11 @@ set(SIMPLE_GTK_FORTRAN_BUILD_FLAGS
     "-DNO_BUILD_HL=true"
     "-DNO_BUILD_EXAMPLES=true"
 )
-set(SIMPLE_GTK_FORTRAN_PATCH "${CMAKE_SOURCE_DIR}/cmake/PatchGtkFortran.cmake")
-file(SHA256 "${SIMPLE_GTK_FORTRAN_PATCH}" SIMPLE_GTK_FORTRAN_PATCH_SHA256)
+# the one target of gtk-fortran's build that SIMPLE links; nothing else of it is built
+set(SIMPLE_GTK_FORTRAN_TARGET "gtk-fortran_static")
 string(JOIN " " SIMPLE_GTK_FORTRAN_RECIPE
     "gtk-fortran=${SIMPLE_GTK_FORTRAN_VERSION}"
-    "patch=${SIMPLE_GTK_FORTRAN_PATCH_SHA256}"
+    "target=${SIMPLE_GTK_FORTRAN_TARGET}"
     "system=${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
     "Fortran=${CMAKE_Fortran_COMPILER_ID}-${CMAKE_Fortran_COMPILER_VERSION}-${CMAKE_Fortran_COMPILER}"
     ${SIMPLE_GTK_FORTRAN_BUILD_FLAGS}
@@ -660,22 +660,25 @@ else()
     )
     file(WRITE "${SIMPLE_GTK_FORTRAN_RECIPE_STAMP}" "${SIMPLE_GTK_FORTRAN_RECIPE}\n")
     include(ExternalProject)
-    # gtk-fortran's own CMake build, with SIMPLE's Fortran compiler; the installed
-    # static library and module files persist outside build/
+    # gtk-fortran's own CMake build with SIMPLE's Fortran compiler, limited to the static library:
+    # its other products (the shared library, an informational program that needs GLib 2.64, newer
+    # than EL8's) are never built. The library and its module files are copied into the cache.
     ExternalProject_Add(simple_gtk_fortran_ep
         URL "${SIMPLE_GTK_FORTRAN_ARCHIVE}"
         URL_HASH "SHA256=${SIMPLE_GTK_FORTRAN_SHA256}"
         PREFIX "${SIMPLE_GTK_FORTRAN_EP_PREFIX}"
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        PATCH_COMMAND "${CMAKE_COMMAND}" "-DSOURCE_DIR=<SOURCE_DIR>"
-            -P "${SIMPLE_GTK_FORTRAN_PATCH}"
         CMAKE_ARGS
             "-DCMAKE_Fortran_COMPILER:FILEPATH=${CMAKE_Fortran_COMPILER}"
             "-DPKG_CONFIG_EXECUTABLE:FILEPATH=${PKG_CONFIG_EXECUTABLE}"
-            "-DCMAKE_INSTALL_PREFIX:PATH=${SIMPLE_GTK_FORTRAN_PREFIX}"
-            "-DCMAKE_INSTALL_LIBDIR:PATH=lib"
-            "-DCMAKE_INSTALL_INCLUDEDIR:PATH=include"
             ${SIMPLE_GTK_FORTRAN_BUILD_FLAGS}
+        BUILD_COMMAND "${CMAKE_COMMAND}" --build <BINARY_DIR> --target ${SIMPLE_GTK_FORTRAN_TARGET}
+        INSTALL_COMMAND "${CMAKE_COMMAND}" -E copy_directory
+                <BINARY_DIR>/src/modules "${SIMPLE_GTK_FORTRAN_MODULE_DIR}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMPLE_GTK_FORTRAN_PREFIX}/lib"
+            COMMAND "${CMAKE_COMMAND}" -E copy
+                "<BINARY_DIR>/src/${CMAKE_STATIC_LIBRARY_PREFIX}gtk-3-fortran${CMAKE_STATIC_LIBRARY_SUFFIX}"
+                "${SIMPLE_GTK_FORTRAN_LIBRARY}"
         BUILD_BYPRODUCTS "${SIMPLE_GTK_FORTRAN_LIBRARY}"
         LOG_CONFIGURE TRUE
         LOG_BUILD TRUE
