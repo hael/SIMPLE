@@ -49,6 +49,10 @@ character(len=48), parameter :: MINI_OUT(13) = [character(len=48) :: '*.mrc', '*
     &'2_mini_stream/*.box', '2_mini_stream/*.bin', '2_mini_stream/*.star', '2_mini_stream/*.txt', '2_mini_stream/*.simple']
 character(len=48), parameter :: SIMPTCLS_OUT(6) = [character(len=48) :: '*.mrc', '*.mrcs', '*.pdb', '*.txt', &
     &'*/*.mrc', '*/*.txt']
+! particle_sieving_2's result, its labels and the class averages of its rounds (simple_test_exec makes no execution
+! directory: the program runs in the test's)
+character(len=48), parameter :: SIEVE2_OUT(3) = [character(len=48) :: '*.simple', 'labels_*.txt', &
+    &'round_*/cavgs_iter*.mrc']
 character(len=48), parameter :: ATOMS_OUT(3) = [character(len=48) :: '*.mrc', '*.pdb', '*.csv']
 character(len=48), parameter :: PREPROC_OUT(8) = [character(len=48) :: '*.mrcs', '*.simple', '1_simulate_movies/*.mrc', &
     &'simulation_truth/*.mrc', 'simulation_truth/*.txt', 'stream_preproc/*.simple', 'stream_preproc/motion_correct/*.mrc', &
@@ -101,6 +105,12 @@ contains
         ! validate_class_student in miniature on 2 000 simulated beta-galactosidase particles with planted shifts, one
         ! process of eight threads: 36 s on the dell (Release), 1:49 Debug (2026-11-13)
         &test_entry('class_student', 'class_student', 'nthr=8', 8, 0, 0, 8, 2400, ENTRY_GATE, '', mem_gb=2.0, disk_gb=1.0), &
+        ! particle_sieving_2 in miniature on the class_student test's 2 000 particles cut into 20 stacks, one process of
+        ! eight threads: 29 to 130 s on the development machine (16 cores), 92 to 141 s at one thread, 0.25 GB, 136 MB of
+        ! run directory, kept for test=identity (2026-11-23). Not named after the program: params%new would find the
+        ! test's descriptor, not the program's
+        &test_entry('particle_sieving_2_mini', 'particle_sieving_2_mini', 'nthr=8', 8, 0, 0, 8, 1200, ENTRY_GATE, &
+            &outputs_of('', SIEVE2_OUT), mem_gb=0.5, disk_gb=0.2), &
         ! its reconstruction overlaps the eight search threads (peak 10.8 cores); its five routes take
         ! 45 minutes alone on dell2 (2026-11-05, the labels route 4 of them), an hour beside other
         ! entries (2026-10-19), about 1.5 h on a 4-core runner

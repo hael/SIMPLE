@@ -352,6 +352,11 @@ if(BUILD_TESTS)
   # reported (completed/class_student_2D.md)
   simple_add_test(class_student highlevel 2400 8 PROCESSORS 8
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=class_student nthr=8)
+  # particle_sieving_2 (a seed solve2D, the CNN fixture's labels, the class student in batches, greedy rounds) on
+  # the same particles cut into 20 stacks: its batches, rounds and accepted particles gated, its reads reported
+  # (planned/particle_sieving_2.md)
+  simple_add_test(particle_sieving_2_mini highlevel 1200 8 PROCESSORS 8
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=particle_sieving_2_mini nthr=8)
   # the multi-state workflows on simulated beta-galactosidase states, judged against the known state
   # of every particle: the class-average route, solve3D nstates=3 from the particles, refine3D_states
   # from the true poses, and single-state solve3D followed by refine3D_states (the de novo routes'
@@ -441,7 +446,8 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 45)   # 15 fast + 1 platform + 22 highlevel + 7 library (simulated_workflow_1jxy removed 2026-11-17)
+  # particle_sieving_2: a program of its own whose children are whole programs; no existing entry runs it
+  set(SIMPLE_CTEST_BUDGET 46)   # 15 fast + 1 platform + 23 highlevel + 7 library (particle_sieving_2 added 2026-11-23)
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

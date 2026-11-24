@@ -1,13 +1,14 @@
 !@descr: execution of project management commanders
 module simple_exec_sieve
 use simple_cmdline,                 only: cmdline
-use simple_commanders_sieve,        only: commander_sieve_ptcls
+use simple_commanders_sieve,        only: commander_sieve_ptcls, commander_sieve_ptcls2
 implicit none
 
 public :: exec_sieve_commander
 private
 
-type(commander_sieve_ptcls) :: xsieve_ptcls
+type(commander_sieve_ptcls)  :: xsieve_ptcls
+type(commander_sieve_ptcls2) :: xsieve_ptcls2
 
 contains
 
@@ -22,6 +23,8 @@ contains
         select case(trim(adjustl(which)))
             case( 'particle_sieving' )
                 call xsieve_ptcls%execute(cline)
+            case( 'particle_sieving_2' )
+                call xsieve_ptcls2%execute(cline)
             case default
                 l_did_execute = .false.
         end select

@@ -57,7 +57,8 @@ The flow is `ui -> exec -> commander -> strategy/domain object`.
 Imports point downward. A strategy or domain module does not import a concrete
 commander module (`simple_commanders_<topic>`) **(proposed)**; the controllers
 (`src/main/solve`, the multi-state controller, the final reconstruction, the
-external-reference pose initialization) may, to run whole programs (section 4).
+external-reference pose initialization, `particle_sieving_2`'s `simple_ptcl_sieve2`
+in `src/main/sieve`) may, to run whole programs (section 4).
 The strategy modules of the three master steps (volume assembly, class-average
 assembly, the sigma2 commit) never import the commander that wraps them: a body
 that needs an in-process commander takes it as a `commander_base` dummy
@@ -234,7 +235,7 @@ write-and-reread around the `prob_align` step) are gone from the list.
   (`calc_pspec_assemble`) and `simple_pick_strategy` (`cluster_cavgs`). The controllers import them by design
   (`simple_solve3D_utils`, `simple_refine3D_states_controller`,
   `simple_external_reference_pose_initialization`, `simple_sigma2_bootstrap`,
-  `simple_flex_pca_project_gateway`).
+  `simple_flex_pca_project_gateway`, `simple_ptcl_sieve2`).
 - **The PCG master writes the project.** `execute_rec3D_pcg_distributed_master`
   writes the particle field once per call, with no `write` flag like the
   gridding path has (`simple_rec3D_pcg_strategy.f90`, after the `res`, `res05`,

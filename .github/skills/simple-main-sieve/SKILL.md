@@ -49,6 +49,15 @@ Silent ones first: nothing reports these.
   p05's restart rebuilds `chunked_mics.txt` from the coarse chunks' lists (`rebuild_chunked_mics`), and
   gives up, with a warning, only on a chunk without its list (`pre_chunked`, or older than the fix).
 
+## `particle_sieving_2`
+
+`particle_sieving_2` (`simple_ptcl_sieve2`) is a separate controller that shares nothing with `ptcl_sieve`: a
+seed `solve2D`, the class-average CNN's labels, the class student trained on the seed (again after the rounds
+`retrain` lists) and used for the batches, and a greedy `refine2D` round at the full box every five batches.
+Each step runs on a copy of the work project under the project's own file name in its own folder (the sigma2
+store's layout digest holds `projname`); the result carries no sigma2 store. Policy section 15; tests
+`unit_project suite=particle_sieve2`, CTest `particle_sieving_2_mini`.
+
 ## Order of calls
 
 `new(params, settings, completedir[, pre_chunked, optics_dir])` (calls `kill` first; `settings`

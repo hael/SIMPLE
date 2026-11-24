@@ -199,6 +199,7 @@ contains
         call reg%add_yesno('remap_cls', self%remap_cls)
         call reg%add_yesno('reset_boxfiles', self%reset_boxfiles)
         call reg%add_yesno('restore_cavgs', self%restore_cavgs)
+        call reg%add_char('retrain', self%retrain)
         call reg%add_yesno('ring', self%ring)
         call reg%add_yesno('roavg', self%roavg)
         call reg%add_yesno('script', self%script)

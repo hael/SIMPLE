@@ -433,3 +433,71 @@ When changing `ptcl_sieve` behavior:
   revised;
 7. update tester coverage for behavior changes;
 8. update this policy document in the same change.
+
+## 15. particle_sieving_2
+
+`particle_sieving_2` (`simple_exec`, developer visibility) is a second offline sieving program. It shares no
+code, file or sentinel with `ptcl_sieve`: its logic is `ptcl_sieve2`
+([simple_ptcl_sieve2.f90](../../../src/main/sieve/simple_ptcl_sieve2.f90)), a controller of whole programs,
+behind the thin `commander_sieve_ptcls2`. Its decisions and their reasons are in
+[particle_sieving_2.md](../../implementation_notes/planned/particle_sieving_2.md); this section is the
+living description.
+
+The run, in its execution directory:
+
+0. **Halves.** The program makes the even/odd halves of every selected particle first (`ensure_field_halves` on
+   the work project; by micrograph group when every stack has its micrograph). A step labels only its own active
+   particles: left to the seed's `solve2D`, every stack it does not hold would go to the lighter half.
+1. **Seed.** `solve2D` on the selected particles of the first stacks with selected particles, in project order,
+   up to `nmics` (100) stacks or 10,000 selected particles (`SIEVE2_SEED_NPTCLS`), whichever comes first (the
+   stack that reaches 10,000 is the seed's last), into `ncls` (100) classes, under `mskdiam`, which is required;
+   every step uses the same mask. `mskdiam=0` runs the seed's `solve2D` in its automatic mode, and the later steps
+   take the mask it registers with its final class averages. A mask far wider than the particle (the box's) lets
+   `solve2D`'s stage 2 leave many classes as ring-shaped rotational averages (decisions 23 and 28 of the plan).
+   Each seed particle is then given `updatecnt` 1.
+2. **Labels.** The class-average CNN (`infile`, `cavg_cnn_class_probs`) scores the current class averages; a
+   class is junk when it is populated, not empty and its `p_junk` exceeds 0.9 (`SIEVE2_JUNK_THRES`,
+   strictly). The run stops when no populated class is left that is not junk.
+3. **Student.** `learn_class_student` on a random sample of at most 10,000 ingested particles (junk classes
+   included) against the current class averages: after the seed, on the seed's particles, and again after each
+   greedy round listed in `retrain` (comma-separated rounds; none by default) that a batch follows (a listed round
+   no batch follows is ignored with a warning). The batches are predicted with the latest model. Retraining after
+   every round placed new particles no better and took most of the run's time (decisions 26 and 27 of the plan).
+4. **Batches.** The other stacks, in project order, in batches closed once they hold 10,000 selected
+   particles (the tail is the last batch); on a set of about 53,000 particles that is five batches and one greedy
+   round, after the last batch. `predict_classes` gives each particle its class, angle and shift
+   (the student's candidates and the alignment over them); nothing else is searched. Then the batch's sigma2
+   records are seeded (`sigma2_state_extend`): each starts from the store's global curve of its half, every other
+   record is kept, and the store is published over the batch folder's copy. A pass rewrites a record over its band
+   only, so an unseeded batch particle would never get a valid record (the seed's `calc_pspec` filled only the
+   seed's). The extension takes each half's mean over the seeded rows: particles of one half (halves follow
+   micrographs) wait for the next batch, and any left at the end are logged.
+5. **Greedy rounds.** After every five batches and after the last one: one `refine2D` iteration,
+   `refine=greedy`, at the full box (`autoscale=no`), on every ingested particle, junk classes included.
+   The first round is a full update; it publishes carried class sums at the full box (`solve2D`'s are at
+   its crop and its final averages at the full box), and every later round takes `update_frac =
+   min(1, 2 * new / ingested)`, the new particles (update count 0) and as many of the lowest update count,
+   blended with the carried sums. Round r is iteration `SIEVE2_ROUND_ITER0 + r - 1` (8 first). Each round
+   is followed by the labels and, when listed in `retrain` and a batch follows, the student. A class a round
+   empties stays empty: the first round empties the seed's nearly empty classes (17 to 23 of 100 on betagal) and
+   nothing refills them (decision 29).
+6. **Result.** A particle is accepted (state 1 in `ptcl2D` and `ptcl3D`) when it is selected, ingested and
+   its class is not junk by the last labels; junk classes get state 0 in `cls2D` and `cls3D`. The 2D shifts
+   go to `ptcl3D` unless it holds a 3D alignment, and the project is written once (a temporary file, renamed).
+   It carries no sigma2 store, as `particle_sieving`'s combined result has none; a later program rebuilds it.
+
+Folders and files: `seed/`, `learn_<nn>/` (`nn` the rounds done, `00` after the seed), `batch_<nnn>/`,
+`round_<nn>/`, each with
+its own copy of the work project under the project's own file name (the sigma2 store's layout digest
+includes the project name) and of the current sigma2 store; `labels_seed.txt`, `labels_round_<nn>.txt`
+(class, population, the three probabilities, empty, junk); `particle_sieving_2_report.txt` (step, wall
+time, particles ingested and accepted, junk classes). There is no restart: a rerun needs a fresh folder.
+
+Tests: `test=unit_project suite=particle_sieve2` (the seed and batch cut with the seed's two limits, the
+retraining rounds, the labels, the update fraction, the final states, the halves of the sigma2 seeding, the two
+stops in forked children) and the CTest entry `particle_sieving_2_mini` (the program on 2 000 simulated particles
+in 20 stacks, a micrograph each and no halves, the seed ended by its particle cap before `nmics`, the student
+retrained after round 1 of a list that also names the last round, with the CNN fixture at a threshold frozen
+between its `p_junk` values; among its gates, the training folders, both halves in
+every batch, balanced halves and a valid sigma2 record for every particle in the last round's store; its run
+directory is kept for `test=identity`).

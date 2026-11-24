@@ -11,6 +11,7 @@ type(ui_program), target :: refine_motion_model
 type(ui_program), target :: gen_pspecs_and_thumbs
 type(ui_program), target :: motion_correct
 type(ui_program), target :: particle_sieving
+type(ui_program), target :: particle_sieving_2
 type(ui_program), target :: pick
 type(ui_program), target :: preprocess
 type(ui_program), target :: reextract
@@ -26,6 +27,7 @@ contains
         call new_gen_pspecs_and_thumbs(prgtab)
         call new_motion_correct(prgtab)
         call new_particle_sieving(prgtab)
+        call new_particle_sieving_2(prgtab)
         call new_pick(prgtab)
         call new_preprocess(prgtab)
         call new_reextract(prgtab)
@@ -376,6 +378,46 @@ contains
         ! add to ui_hash
         call add_ui_program('particle_sieving', particle_sieving, prgtab, UI_CATEGORY)
     end subroutine new_particle_sieving
+
+    subroutine new_particle_sieving_2( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call particle_sieving_2%new(&
+        &'particle_sieving_2', &                                                   ! name
+        &'Sieve particles: a seed solve2D, CNN junk labels and the class student for the rest',& ! summary
+        &'is a workflow that runs solve2D on the particles of the first micrographs, up to nmics micrographs or 10000 &
+        &particles, whichever comes first, labels the class averages with the class-average CNN (junk above p_junk &
+        &0.9), trains the class student on them and classifies the remaining particles in batches of 10000 by &
+        &prediction and alignment, with a greedy refine2D round every five batches, after which the classes are &
+        &labelled again and, after the rounds listed in retrain, the student trained again. Particles in junk classes &
+        &are deselected at the end',&                                              ! help
+        &'simple_exec',&                                                           ! executable
+        &.true., display_name='Select Particles with the Class Student')           ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        call particle_sieving_2%add_input(UI_FILE, 'infile', 'file', 'Class-average CNN weights', &
+        &'Weights file of the class-average CNN, exported by scripts/sscnn/export_fortran.py', &
+        &'e.g. cavg_cnn_weights.bin', .true., '', visibility=UI_VIS_STANDARD)
+        ! search controls
+        call particle_sieving_2%add_input(UI_SRCH, 'nmics', 'num', '# of micrographs of the seed', &
+        &'Most micrographs whose particles the seed solve2D classifies; the seed also ends once it holds 10000 &
+        &particles{100}', '# of micrographs{100}', .false., 100., group="search", visibility=UI_VIS_ADVANCED)
+        call particle_sieving_2%add_input(UI_SRCH, ncls, required_override=.false., &
+        &placeholder_override='# of classes{100}', group="search", visibility=UI_VIS_ADVANCED)
+        call particle_sieving_2%add_input(UI_SRCH, 'retrain', 'str', 'Rounds after which to retrain the student', &
+        &'Comma-separated greedy rounds after each of which the class student is trained again on the particles &
+        &classified so far; by default it is trained once, on the seed', 'round1,round2', .false., '', &
+        &group="search", visibility=UI_VIS_ADVANCED)
+        ! mask controls
+        call particle_sieving_2%add_input(UI_MASK, mskdiam, required_override=.true., &
+        &help_override='Mask diameter (in A) of every step; 0: the seed solve2D''s estimate', &
+        &group="mask", visibility=UI_VIS_STANDARD)
+        ! computer controls
+        call particle_sieving_2%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
+        call particle_sieving_2%add_input(UI_COMP, nparts, required_override=.false., group="compute", &
+        &visibility=UI_VIS_ADVANCED)
+        ! add to ui_hash
+        call add_ui_program('particle_sieving_2', particle_sieving_2, prgtab, UI_CATEGORY)
+    end subroutine new_particle_sieving_2
 
     subroutine new_pick( prgtab )
         class(ui_hash), intent(inout) :: prgtab

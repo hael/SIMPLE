@@ -79,6 +79,11 @@ type, extends(commander_base) :: commander_test_class_student
     procedure :: execute      => exec_test_class_student
 end type commander_test_class_student
 
+type, extends(commander_base) :: commander_test_particle_sieving_2
+  contains
+    procedure :: execute      => exec_test_particle_sieving_2
+end type commander_test_particle_sieving_2
+
 type, extends(commander_base) :: commander_test_polar_matching_bench
   contains
     procedure :: execute      => exec_test_polar_matching_bench
@@ -227,6 +232,11 @@ interface
         class(commander_test_class_student), intent(inout) :: self
         class(cmdline), intent(inout) :: cline
     end subroutine exec_test_class_student
+
+    module subroutine exec_test_particle_sieving_2( self, cline )
+        class(commander_test_particle_sieving_2), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+    end subroutine exec_test_particle_sieving_2
 
     module subroutine exec_test_polar_matching_bench( self, cline )
         class(commander_test_polar_matching_bench), intent(inout) :: self

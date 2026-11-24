@@ -14,6 +14,11 @@ type, extends(commander_base) :: commander_sieve_ptcls
     procedure :: execute      => exec_sieve_ptcls
 end type commander_sieve_ptcls
 
+type, extends(commander_base) :: commander_sieve_ptcls2
+  contains
+    procedure :: execute      => exec_sieve_ptcls2
+end type commander_sieve_ptcls2
+
 contains
 
     subroutine exec_sieve_ptcls( self, cline )
@@ -111,5 +116,50 @@ contains
         call qsys_cleanup(params)
         call simple_end('**** SIMPLE_SIEVE_PTCLS NORMAL STOP ****')
     end subroutine exec_sieve_ptcls
+
+    !> particle_sieving_2: the seed's solve2D, the CNN's junk labels and the class student for the rest
+    !! (simple_ptcl_sieve2); the work project is the execution directory's copy, written once at the end
+    subroutine exec_sieve_ptcls2( self, cline )
+        use simple_ptcl_sieve2,  only: ptcl_sieve2, sieve2_settings
+        use simple_defs_sieve2,  only: SIEVE2_NMICS, SIEVE2_NCLS
+        use simple_string_utils, only: list_of_ints2arr
+        class(commander_sieve_ptcls2), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        class(ptcl_sieve2), allocatable :: sieve
+        type(sieve2_settings) :: settings
+        type(parameters)      :: params
+        type(string)          :: retrain
+        integer, allocatable  :: rounds(:)
+        real                  :: mskdiam
+        logical               :: l_parts
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('nmics') ) call cline%set('nmics', SIEVE2_NMICS)
+        if( .not. cline%defined('ncls')  ) call cline%set('ncls',  SIEVE2_NCLS)
+        call cline%set('oritype', 'ptcl2D')
+        l_parts = cline%defined('nparts')
+        if( .not. cline%defined('mskdiam') ) THROW_HARD('mskdiam is required (0: the seed''s solve2D estimates it)')
+        ! 0: the seed's solve2D estimates the mask; params%new would replace a zero with a default
+        mskdiam = max(0., cline%get_rarg('mskdiam'))
+        if( mskdiam < 0.1 ) call cline%delete('mskdiam')
+        if( cline%defined('retrain') )then
+            ! refused before params%new makes the execution directory; a non-integer entry reads as 0
+            retrain = cline%get_carg('retrain')
+            rounds  = list_of_ints2arr(retrain%to_char())
+            if( size(rounds) < 1 ) THROW_HARD('retrain: no greedy round given')
+            if( any(rounds < 1) )  THROW_HARD('retrain: greedy rounds are integers from 1, separated by commas')
+        endif
+        call params%new(cline)
+        settings%nmics   = params%nmics
+        settings%ncls    = params%ncls
+        settings%mskdiam = mskdiam
+        if( l_parts ) settings%nparts = params%nparts
+        if( len_trim(params%retrain) > 0 ) settings%retrain_rounds = list_of_ints2arr(params%retrain)
+        allocate(sieve)
+        call sieve%new(params, settings)
+        call sieve%run
+        call sieve%kill
+        deallocate(sieve)
+        call simple_end('**** SIMPLE_PARTICLE_SIEVING_2 NORMAL STOP ****')
+    end subroutine exec_sieve_ptcls2
 
 end module simple_commanders_sieve

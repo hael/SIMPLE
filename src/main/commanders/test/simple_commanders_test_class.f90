@@ -47,6 +47,7 @@ use simple_cavgs_work_project_tester,        only: run_all_cavgs_work_project_te
 use simple_eo_partition,                     only: run_all_eo_partition_tests
 use simple_class_compatibility,              only: run_all_class_compatibility_tests
 use simple_ptcl_sieve,                       only: run_all_ptcl_sieve_tests
+use simple_ptcl_sieve2,                      only: run_all_ptcl_sieve2_tests
 use simple_mic_import_tester,                only: run_all_mic_import_tests
 use simple_mic_selection_tester,             only: run_all_mic_selection_tests
 use simple_mic_subset_tester,                only: run_all_mic_subset_tests
@@ -445,6 +446,7 @@ contains
         call add_suite(s, n, 'project merge',           run_all_project_merge_tests)
         call add_suite(s, n, 'class compatibility',     run_all_class_compatibility_tests)
         call add_suite(s, n, 'particle sieve',          run_all_ptcl_sieve_tests)
+        call add_suite(s, n, 'particle sieve2',         run_all_ptcl_sieve2_tests)
         call add_suite(s, n, 'micrograph import',       run_all_mic_import_tests)
         call add_suite(s, n, 'micrograph selection',    run_all_mic_selection_tests)
         call add_suite(s, n, 'micrograph subset',       run_all_mic_subset_tests)

@@ -15,6 +15,7 @@ type(ui_program), target :: pose_student
 type(ui_program), target :: pose_student_bench
 type(ui_program), target :: center_ptcls
 type(ui_program), target :: class_student
+type(ui_program), target :: particle_sieving_2
 type(ui_program), target :: polar_matching_bench
 type(ui_program), target :: multistate_workflows
 type(ui_program), target :: state_fixture
@@ -47,6 +48,7 @@ contains
         call new_pose_student_bench(tsttab)
         call new_center_ptcls(tsttab)
         call new_class_student(tsttab)
+        call new_particle_sieving_2(tsttab)
         call new_polar_matching_bench(tsttab)
         call new_multistate_workflows(tsttab)
         call new_state_fixture(tsttab)
@@ -79,6 +81,7 @@ contains
         write(logfhandle,'(A)') pose_student_bench%name%to_char()
         write(logfhandle,'(A)') center_ptcls%name%to_char()
         write(logfhandle,'(A)') class_student%name%to_char()
+        write(logfhandle,'(A)') particle_sieving_2%name%to_char()
         write(logfhandle,'(A)') polar_matching_bench%name%to_char()
         write(logfhandle,'(A)') multistate_workflows%name%to_char()
         write(logfhandle,'(A)') state_fixture%name%to_char()
@@ -234,6 +237,19 @@ contains
         &.false., display_name='Class Student Validation')                                        ! requires sp_project
         call add_ui_program('class_student', class_student, tsttab, UI_CATEGORY)
     end subroutine new_class_student
+
+    subroutine new_particle_sieving_2( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call particle_sieving_2%new(&
+        &'particle_sieving_2_mini',&                ! name
+        &'particle_sieving_2 in miniature on simulated beta-galactosidase particles in 20 stacks',&
+        &'particle_sieving_2 on 2 000 simulated beta-galactosidase particles cut into 20 stacks: a seed of five, '//&
+        &'batches of 300, a greedy round every two batches, the CNN fixture at a frozen threshold; the batches, the '//&
+        &'rounds and the accepted particles gated, the junk classes per round reported; the run directory kept',&
+        &'simple_test_exec',&                       ! executable
+        &.false., display_name='Particle Sieving 2 Validation')                                  ! requires sp_project
+        call add_ui_program('particle_sieving_2_mini', particle_sieving_2, tsttab, UI_CATEGORY)
+    end subroutine new_particle_sieving_2
 
     subroutine new_pose_student_bench( tsttab )
         class(ui_hash), intent(inout) :: tsttab
