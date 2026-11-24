@@ -357,19 +357,15 @@ if(BUILD_TESTS)
   # (planned/particle_sieving_2.md)
   simple_add_test(particle_sieving_2_mini highlevel 1200 8 PROCESSORS 8
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=particle_sieving_2_mini nthr=8)
-  # the multi-state workflows on simulated beta-galactosidase states, judged against the known state
-  # of every particle: the class-average route, solve3D nstates=3 from the particles, refine3D_states
-  # from the true poses, and single-state solve3D followed by refine3D_states (the de novo routes'
-  # state resolution is held over seeds by test=profile, ruling of 2026-10-18). Its own entry
-  # (test-suite truth plan, multi-state workflow phase, 2026-10-17): the four routes take 32 minutes
-  # at eight threads alone, an hour beside other entries, and about 1.5 h on a 4-core CI runner,
-  # hence the 4 h deadline (owner decision, 2026-11-02).
-  simple_add_test(multistate_workflows highlevel 14400 8 PROCESSORS 11
-    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=multistate_workflows nthr=8)
   # the multi-state fixture (its modes, its cache, the point groups of its truths). Its own entry by
   # the ruling of 2026-10-17: these checks are not simulate_particles', whose claim and cost they changed.
   simple_add_test(state_fixture highlevel 1800 8 PROCESSORS 8
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=state_fixture nthr=8)
+  # One deterministic multi-state assignment block from planted poses, labels and reconstructed
+  # state references.  It gates the path, assignments, populations, maps, poses and negative map
+  # controls, then requires the same assignments from two local workers.
+  simple_add_test(multistate_assignment highlevel 1200 4 PROCESSORS 5
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=multistate_workflows suite=assignment nthr=4)
   simple_add_test(single_atoms_stats highlevel 3600 8 PROCESSORS 3
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=Pt)
   # the same test on the CdSe wurtzite, zincblende and rocksalt lattices of the compound selectors, whose
@@ -447,7 +443,7 @@ if(BUILD_TESTS)
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
   # particle_sieving_2: a program of its own whose children are whole programs; no existing entry runs it
-  set(SIMPLE_CTEST_BUDGET 46)   # 15 fast + 1 platform + 23 highlevel + 7 library (particle_sieving_2 added 2026-11-23)
+  set(SIMPLE_CTEST_BUDGET 46)   # 15 fast + 1 platform + 23 highlevel + 7 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

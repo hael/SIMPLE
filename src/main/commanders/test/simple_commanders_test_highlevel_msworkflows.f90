@@ -1,7 +1,12 @@
 !@descr: the multi-state workflow tests of simple_commanders_test_highlevel: solve3D, refine3D and refine3D_states on beta-galactosidase states against their known labels
-! The multi-state workflows on the compositional beta-galactosidase states of the state fixture (the
+! The focused assignment gate and the multi-state workflows on the compositional beta-galactosidase states of the state fixture (the
 ! tetramer, the tetramer less chain D, the A-B dimer; populations 50, 30 and 20 %), each judged
 ! against the truth with the metrics of the multi-state assignment test:
+!   assignment  the automated correctness gate: the true poses and state labels with the
+!           fixed distinct maps reconstructed from those assignments, followed by one production
+!           refine3D refine=prob_neigh,
+!           objfun=euclid block; shared memory and two local workers must give identical state
+!           assignments, and the labels, populations, maps, path, poses and map-copy controls gate;
 !   cavgs   solve3D_cavgs nstates=3 on simulated images of the states imported as its class
 !           averages (import_cavgs; rulings of 2026-10-17 and 2026-10-18): 600 images of known state,
 !           view and shift, populations 50, 30 and 20 %, without CTF, each the average of an even and
@@ -31,7 +36,8 @@
 ! the states and consensus routes; in the de novo multi-state routes (shc, cavgs) it is decided by the
 ! early stages, which take the best-scoring state outright from random labels, and a single run may
 ! miss it (ruling of 2026-10-18): there it is a success, which test=profile holds to the fraction of
-! 20 seeds below, and the labels are reported. The default (the CTest entry) runs the five routes;
+! 20 seeds below, and the labels are reported. The default manual invocation runs the five routes;
+! the registered CTest entry runs only suite=assignment.
 ! suite=<route> runs one, suite=<route>_identical a route on identical states, suite=hard_<route>
 ! on the conformational states (a chain rotated by 10 degrees, low SNR, a small second state), a
 ! robustness profile. labels_identical reports the populations and the mutual correlations of the
@@ -164,7 +170,14 @@ real,    parameter :: LABELS_RESOLVED_FLOOR = 0.30
 real,    parameter :: LABELS_LABEL_FLOORS(5) = [0.70, 0.75, -1., 0.30, -1.]
 real,    parameter :: LABELS_MAX_ROT_ERR = 2.0, LABELS_MAX_SH_ERR = 0.10
 character(len=*), parameter :: LABELS_START = 'states_start.txt' !< the drawn labels, as refine3D prints its iterations'
-character(len=*), parameter :: SUITES = 'labels, cavgs, shc, states, consensus, labels_identical, '//&
+integer, parameter :: ASSIGNMENT_NPTCLS = 1500
+integer, parameter :: ASSIGNMENT_NSPACE = 2500
+integer, parameter :: ASSIGNMENT_NSPACE_SUB = 500
+integer, parameter :: ASSIGNMENT_MAXITS = 1
+integer, parameter :: ASSIGNMENT_NPARTS = 2
+real,    parameter :: ASSIGNMENT_SNR = 2.0
+real,    parameter :: ASSIGNMENT_LP  = 8.0
+character(len=*), parameter :: SUITES = 'assignment, labels, cavgs, shc, states, consensus, labels_identical, '//&
     &'cavgs_identical, shc_identical, states_identical, consensus_identical, hard_labels, hard_cavgs, hard_shc, '//&
     &'hard_states, hard_consensus, cavgs_single, cavgs_as_particles'
 !> suite=cavgs_single (by hand): the single-state class-average start, solve3D_cavgs nstates=1 on the
@@ -176,7 +189,7 @@ real :: cavgs_prob_athres = 0.
 
 contains
 
-!> simple_test_exec test=multistate_workflows [suite=<route>|<route>_identical|hard_<route>|cavgs_single|
+!> simple_test_exec test=multistate_workflows [suite=assignment|<route>|<route>_identical|hard_<route>|cavgs_single|
 !! cavgs_as_particles|list]
 !! [nthr=<n>] [prob_athres=<deg>]
 module subroutine exec_test_multistate_workflows( self, cline )
@@ -196,7 +209,7 @@ module subroutine exec_test_multistate_workflows( self, cline )
         case('list')
             write(logfhandle,'(a)') 'Available suites for multistate_workflows: '//SUITES
             return
-        case('', 'labels', 'cavgs', 'shc', 'states', 'consensus', 'labels_identical', 'cavgs_identical', &
+        case('', 'assignment', 'labels', 'cavgs', 'shc', 'states', 'consensus', 'labels_identical', 'cavgs_identical', &
             &'shc_identical', 'states_identical', 'consensus_identical', 'hard_labels', 'hard_cavgs', 'hard_shc', &
             &'hard_states', 'hard_consensus', 'cavgs_single', 'cavgs_as_particles')
         case default
@@ -214,6 +227,8 @@ module subroutine exec_test_multistate_workflows( self, cline )
     if( dir_exists(root) ) call simple_rmdir(root)
     call simple_mkdir(root)
     select case(suite)
+        case('assignment')
+            call run_assignment_gate(root, nthr, gate)
         case('')
             call run_case(root, 'labels', 'labels', 'compositional', nthr, gate)
             call run_case(root, 'cavgs',  'cavgs',  'compositional', nthr, gate)
@@ -244,6 +259,168 @@ module subroutine exec_test_multistate_workflows( self, cline )
         THROW_HARD('TEST_MULTISTATE_WORKFLOWS FAILED')
     endif
 end subroutine exec_test_multistate_workflows
+
+!> The deterministic multi-state assignment gate.  Both executions start from the same planted
+!! poses and labels and fixed distinct reconstructed maps.  The shared run owns the full truth evaluation;
+!! the two-worker run must take the same path, populate every map and return the same labels.
+subroutine run_assignment_gate( root, nthr, gate )
+    use simple_commanders_rec,      only: commander_rec3D
+    use simple_commanders_refine3D, only: commander_refine3D
+    use simple_refine3D_fnames,     only: refine3D_state_vol_fname
+    use simple_sigma2_bootstrap,    only: prepare_residual_sigma2_pass_cline
+    use simple_sp_project,          only: sp_project
+    use simple_test_utils,          only: set_fixed_seed
+    use simple_syslib,              only: simple_abspath
+    use simple_oris,                only: oris
+    use simple_fileio,              only: simple_copy_file
+    class(string),   intent(in)    :: root
+    integer,         intent(in)    :: nthr
+    type(test_gate), intent(inout) :: gate
+    character(len=*), parameter :: RUN_DIRS(2) = [character(len=11) :: 'shared', 'distributed']
+    type(state_fixture) :: fix
+    class(commander_rec3D),    allocatable :: xrec
+    class(commander_refine3D), allocatable :: xrefine
+    class(sp_project),         allocatable :: baseline, result
+    class(cmdline),            allocatable :: cl
+    type(cmdline) :: cl_sigma
+    type(oris)   :: truth
+    type(string) :: dir, here, projfile, vols(NSTATES)
+    integer, allocatable :: shared_states(:), distributed_states(:)
+    integer :: irun, iptcl, s, status
+    logical :: assignments_agree
+    write(logfhandle,'(a)') '>>> TEST_MULTISTATE_ASSIGNMENT: fixed maps and planted poses'
+    dir = root//'/assignment'
+    call simple_mkdir(dir)
+    call simple_chdir(dir, status)
+    if( status /= 0 ) THROW_HARD('could not enter '//dir%to_char())
+    CWD_GLOB = dir%to_char()
+    call fix%new('betagal', FIX_KNOWN, NSTATES, ASSIGNMENT_NPTCLS, ASSIGNMENT_SNR, nthr, &
+        &kind='compositional', pops=POPS)
+    call fix%build
+    allocate(baseline)
+    call baseline%read(fix%project_fname())
+    ! Seed the Euclidean objective with residual spectra against the correct planted map at the
+    ! planted pose and label.  The measured block must preserve those assignments and populations.
+    call truth%new(ASSIGNMENT_NPTCLS, is_ptcl=.true.)
+    call truth%read(fix%truth_doc(), [1, ASSIGNMENT_NPTCLS])
+    do iptcl = 1, ASSIGNMENT_NPTCLS
+        call baseline%os_ptcl3D%set_state(iptcl, truth%get_state(iptcl))
+    enddo
+    call truth%kill
+    ! Fixed references in the same numerical scale and support as a production handoff: reconstruct
+    ! each planted state once from its correctly labelled particles at their planted poses.
+    projfile = simple_abspath(string('reconstruction_seed.simple'), check_exists=.false.)
+    call baseline%write(projfile)
+    allocate(xrec, cl)
+    call cl%set('prg',      'reconstruct3D')
+    call cl%set('projfile', projfile)
+    call cl%set('mkdir',    'no')
+    call cl%set('oritype',  'ptcl3D')
+    call cl%set('nstates',  NSTATES)
+    call cl%set('pgrp',     'c1')
+    call cl%set('mskdiam',  fix%mskdiam())
+    call cl%set('objfun',   'cc')
+    call cl%set('nthr',     nthr)
+    call xrec%execute(cl)
+    call cl%kill
+    deallocate(xrec, cl)
+    do s = 1, NSTATES
+        if( .not. file_exists(refine3D_state_vol_fname(s)) ) &
+            &THROW_HARD('the assignment fixture did not reconstruct every planted state')
+        call simple_copy_file(refine3D_state_vol_fname(s), string('start_state'//int2str_pad(s, 2)//'.mrc'))
+        vols(s) = simple_abspath(string('start_state'//int2str_pad(s, 2)//'.mrc'))
+    enddo
+    call simple_getcwd(here)
+    do irun = 1, 2
+        call simple_mkdir(trim(RUN_DIRS(irun)))
+        call simple_chdir(string(trim(RUN_DIRS(irun))), status)
+        if( status /= 0 ) THROW_HARD('could not enter assignment run '//trim(RUN_DIRS(irun)))
+        CWD_GLOB = trim(here%to_char())//'/'//trim(RUN_DIRS(irun))
+        projfile = simple_abspath(string('assignment.simple'), check_exists=.false.)
+        call baseline%write(projfile)
+        allocate(xrefine, cl)
+        call configure_assignment_cline(cl, projfile, merge(max(1, nthr / ASSIGNMENT_NPARTS), nthr, irun == 2))
+        ! The canonical sigma2 identity includes its project layout.  Build the residual estimate in
+        ! each isolated run directory so both measured executions receive the same valid input.
+        call prepare_residual_sigma2_pass_cline(cl, 1, NSTATES, vols, cl_sigma)
+        call set_fixed_seed(fix%seed + 1, propagate=.true.)
+        call xrefine%execute(cl_sigma)
+        call cl_sigma%kill
+        if( irun == 2 ) call cl%set('nparts', ASSIGNMENT_NPARTS)
+        call set_fixed_seed(fix%seed + 3, propagate=.true.)
+        call xrefine%execute(cl)
+        call cl%kill
+        deallocate(xrefine, cl)
+        call check_path('assignment_'//trim(RUN_DIRS(irun)), ['sigma     ', 'prob_neigh'], &
+            &[ASSIGNMENT_NSPACE, ASSIGNMENT_NSPACE], &
+            &NSTATES, gate)
+        call gate%check('assignment_'//trim(RUN_DIRS(irun))//'_one_map_per_state', &
+            &all([(file_exists(refine3D_state_vol_fname(s)), s = 1, NSTATES)]))
+        allocate(result)
+        call result%read_segment('ptcl3D', projfile)
+        if( irun == 1 )then
+            shared_states = nint(result%os_ptcl3D%get_all('state'))
+            do s = 1, NSTATES
+                if( file_exists(refine3D_state_vol_fname(s)) ) call simple_copy_file(refine3D_state_vol_fname(s), &
+                    &string('rec_final_state'//int2str_pad(s, 2)//'.mrc'))
+            enddo
+            call evaluate(fix, projfile, 'assignment_shared', .false., gate, gated=.true., &
+                &max_rot_err=STATES_MAX_ROT_ERR, max_sh_err=STATES_MAX_SH_ERR, labels_gated=.true.)
+        else
+            distributed_states = nint(result%os_ptcl3D%get_all('state'))
+            call gate%check('assignment_distributed_every_state_populated', &
+                &all([(count(distributed_states == s) > 0, s = 1, NSTATES)]))
+        endif
+        call result%kill
+        deallocate(result)
+        call simple_chdir(here, status)
+        if( status /= 0 ) THROW_HARD('could not return to the assignment directory')
+        CWD_GLOB = here%to_char()
+    enddo
+    assignments_agree = size(shared_states) == size(distributed_states)
+    if( assignments_agree ) assignments_agree = all(shared_states == distributed_states)
+    call gate%check('assignment_shared_and_two_worker_states_agree', assignments_agree)
+    call baseline%kill
+    deallocate(baseline)
+    call fix%kill
+    call simple_chdir(root, status)
+    if( status /= 0 ) THROW_HARD('could not return to '//root%to_char())
+    CWD_GLOB = root%to_char()
+
+  contains
+
+    subroutine configure_assignment_cline( line, project, nthreads )
+        class(cmdline), intent(inout) :: line
+        class(string),  intent(in)    :: project
+        integer,        intent(in)    :: nthreads
+        integer :: state
+        call line%set('prg',           'refine3D')
+        call line%set('projfile',      project)
+        call line%set('mkdir',         'no')
+        call line%set('refine',        'prob_neigh')
+        call line%set('prob_neigh_mode', 'geom')
+        call line%set('nstates',       NSTATES)
+        do state = 1, NSTATES
+            call line%set('vol'//int2str(state), vols(state))
+        enddo
+        call line%set('pgrp',          'c1')
+        call line%set('mskdiam',       fix%mskdiam())
+        call line%set('lp',            ASSIGNMENT_LP)
+        call line%set('nspace',        ASSIGNMENT_NSPACE)
+        call line%set('nspace_sub',    ASSIGNMENT_NSPACE_SUB)
+        call line%set('update_frac',   1.0)
+        call line%set('balance',       'none')
+        call line%set('maxits',        ASSIGNMENT_MAXITS)
+        call line%set('objfun',        'euclid')
+        call line%set('ml_reg',        'yes')
+        call line%set('prob_beta',     1.0)
+        call line%set('prob_beta_end', 1.0)
+        call line%set('center',        'no')
+        call line%set('bfac',          0.0)
+        call line%set('nthr',          nthreads)
+    end subroutine configure_assignment_cline
+
+end subroutine run_assignment_gate
 
 !> one workflow (route labels, cavgs, shc, states or consensus) in root/<tag> on the betagal states of kind,
 !! and its metrics, named after tag

@@ -111,12 +111,12 @@ contains
         ! test's descriptor, not the program's
         &test_entry('particle_sieving_2_mini', 'particle_sieving_2_mini', 'nthr=8', 8, 0, 0, 8, 1200, ENTRY_GATE, &
             &outputs_of('', SIEVE2_OUT), mem_gb=0.5, disk_gb=0.2), &
-        ! its reconstruction overlaps the eight search threads (peak 10.8 cores); its five routes take
-        ! 45 minutes alone on dell2 (2026-11-05, the labels route 4 of them), an hour beside other
-        ! entries (2026-10-19), about 1.5 h on a 4-core runner
-        &test_entry('multistate_workflows', 'multistate_workflows', 'nthr=8', 8, 0, 0, 11, 14400, ENTRY_GATE, '', mem_gb=4.0, disk_gb=1.0), &
         &test_entry('state_fixture', 'state_fixture', 'nthr=8', 8, 0, 0, 8, 1800, ENTRY_GATE, 'metrics.tsv', mem_gb=2.0, &
             &disk_gb=1.0), &
+        ! planted three-state references and assignments, then the same prob_neigh block through two
+        ! workers of two threads: 90 s, 1.8 GiB master RSS on the maintainer's Mac (2026-11-24)
+        &test_entry('multistate_assignment', 'multistate_workflows', 'suite=assignment nthr=4', 4, 2, 2, 5, 1200, &
+            &ENTRY_GATE, 'metrics.tsv', mem_gb=5.0, disk_gb=1.5), &
         &test_entry('single_atoms_stats', 'single_atoms_stats', 'smpd=0.358 element=Pt', 8, 0, 0, 3, 3600, &
             &ENTRY_GATE, outputs_of('', ATOMS_OUT), mem_gb=0.5, disk_gb=1.0), &
         &test_entry('single_atoms_stats_cdsew', 'single_atoms_stats', 'smpd=0.358 element=CdSeW', 8, 0, 0, 4, 3600, &

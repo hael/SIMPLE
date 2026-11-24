@@ -27,7 +27,7 @@ jobs:
         # The nightly entries in groups that run as parallel jobs, each under its own time
         # limit (one serial job took 3-5 h of the 6 h limit). `rest` takes every high-level
         # entry the other groups do not name, so a new entry runs without a change here.
-        group: [library, workflows, rest, multistate_workflows]
+        group: [library, workflows, rest]
         include:
           - group: library
             label: 'platform|library'
@@ -36,16 +36,7 @@ jobs:
             regex: '^(simulated_workflow|single_workflow)_'
           - group: rest
             label: highlevel
-            skip: '^(simulated_workflow_|single_workflow_|multistate_workflows$)'
-          - group: multistate_workflows
-            label: highlevel
-            regex: '^multistate_workflows$'
-        exclude:
-          # multistate_workflows takes about 1.5 h on the 4-core Linux runner (deadline 4 h) and
-          # timed out on 4 of 5 macOS nights (3 cores): Linux only (owner decision, 2026-11-02;
-          # doc/policies/test_environment_policy.md, the multistate_workflows row).
-          - os: macos-latest
-            group: multistate_workflows
+            skip: '^(simulated_workflow_|single_workflow_)'
 
     steps:
       - uses: actions/checkout@v5

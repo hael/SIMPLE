@@ -32,7 +32,7 @@ labels.
 | --- | --- | --- | --- |
 | `fast` | 15 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` and the PCG entries `pcg_recon` and `pcg_frac_update` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
-| `highlevel` | 21 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
+| `highlevel` | 23 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
 | `platform` | `forked_process` (with the test dispatcher's own tests), plus `coarrays`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
 
 The fast tier is the build-time gate. Library and supported platform tests may
@@ -137,13 +137,13 @@ convenience and deliberately not a CTest entry.
 | `single_workflow_fcc`, `single_workflow_alloy`, `single_workflow_wurtzite` | highlevel | independent SINGLE pipelines on simulated FCC Pt, random-site FCC Pt/Ni and wurtzite CdSe nanoparticles (fcc through `trajectory_solve3D`, whose gates may lose at most 5% of the frames, alloy and wurtzite by hand with the atomicity-prior refinement); the poses are judged by their median rotation error against the truth after one docking of the `autorefine3D_nano` map, up to the rotations of the lattice's group (O for FCC and the alloy, D6 for wurtzite), since these near-symmetric particles are posed only up to them |
 | `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume; `simulate_particles` with three blob volumes and given populations (exact state counts, every image closest to the projection of its own state's volume at its true pose); 50 images without CTF, each correlating better with the reprojection at its own recorded pose than with one at another image's pose |
 | `state_fixture` | highlevel | the multi-state test fixture (`simple_test_state_fixture`): blob phantoms in its search, known-pose and exact-view modes (built twice, the second from the cache) and the compositional and conformational beta-galactosidase states, each truth holding its declared point group and no larger one (its correlation over the group at least 0.99 and at least 0.01 above its correlation over the next larger group) |
+| `multistate_assignment` | highlevel | one deterministic `refine3D refine=prob_neigh prob_neigh_mode=geom objfun=euclid` block on three compositional beta-galactosidase states at planted poses and labels, from fixed references reconstructed once from those assignments; strict state labels and 50/30/20 populations, one map per state, the sigma-to-prob-neigh path, pose preservation, copied-map controls, and exact shared/two-worker assignment agreement are gates |
 | `solve3D_addon` | highlevel | `solve3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `solve3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
 | `cont_refine3D_1jxy` | highlevel | continuous Cartesian pose refinement on 1 000 simulated 1JYX particles from perturbed poses: `refine3D refine=cont` (euclid, cc, distributed), `refine3D_local`, the follow-up `pose_cont=yes` in `refine3D` and `refine3D_auto`, and the continuation of a polar `refine3D_auto`, gated on the ground-truth orientations; the positive NU-bundle handoff case also runs alone with `suite=nu_handoff`, checking staged constituents, first matching LP and source preservation |
 | `pose_student` | highlevel | the pose student's split-half protocol in miniature on 2 000 blob-phantom particles of the multi-state fixture with their truth poses: `learn_pose_student` on the training half against the truth map, `predict_poses` on the blank test half, `refine3D refine=prob_neigh prob_neigh_mode=geom` from the students' cones and the coarse cells, the half reconstructed; the route's and the fold's contracts and the fallback's identity to a search without student records are the gates, the reads against the truth are reported (ruling R3 of the pose student plan: no floor from a student that seeds nobody) |
 | `class_student` | highlevel | `validate_class_student` on 2 000 beta-galactosidase particles of the multi-state fixture with planted shifts: a `solve2D` teacher on 1 000, the class student trained on its class averages, the unseen 1 000 predicted at their picked positions (no centring) and aligned to the teacher's averages of their candidate lists over the disk, and assigned by one full search against the teacher's averages; the model reading back with the teacher's classes, a prediction on every unseen particle and none on a training particle, the student's agreement with the full search above chance, and the distributed prediction (two parts) equal to shared memory byte for byte are the gates; the validation report's reads and diagnostics are reported |
 | `particle_sieving_2_mini` | highlevel | `particle_sieving_2` in miniature on the `class_student` entry's 2 000 beta-galactosidase particles cut into 20 stacks, a micrograph each and no halves: a seed `solve2D` of five stacks ended by its particle cap, the class-average CNN fixture's labels at a frozen threshold, the class student for the rest in batches of 300, a greedy `refine2D` round every two batches, the student retrained after round 1; the batch and round counts, both halves in every batch, the training folders, a valid sigma2 record for every particle and the accepted set against the last labels are the gates, the accepted particles and junk classes per round are reported; the run directory is kept for `test=identity` (the selection is not judged) |
 | `center_ptcls` | highlevel | `center_ptcls` on 2 000 beta-galactosidase particles of the multi-state fixture whose project holds no shift, the simulator having planted shifts within 6 px: every particle carries the same shift and state of centring in both fields (a width, or the sentinel when the pass left it unmoved), no other parameter changed, every shift within the disk, the centring better than the planted error are the gates; the residual against the planted shifts is reported |
-| `multistate_workflows` | highlevel | the multi-state workflows on 3 000 simulated particles of three beta-galactosidase states (the tetramer, the tetramer less chain D, the A-B dimer; populations 50, 30 and 20 %, SNR 1), in five routes: `labels`, the state assignment alone (`refine3D refine=prob nstates=3` from the true poses and random balanced labels, with the starting maps reconstructed from those labels and the last iterations annealed to the physical posterior; plan of 2026-11-04, `multistate_posterior_state_draw.md`); `cavgs`, `solve3D_cavgs` on 600 simulated images of the three states (class-average stand-ins: even and odd halves that are independent noise realisations of the same state, view and shift, each at SNR 2.5, no CTF, shifts within a pixel) imported with `import_cavgs` (owner ruling 2026-10-17); `shc`, `solve3D` from the particles; `states`, `refine3D_states` from the true poses and the consensus map; `consensus`, single-state `solve3D` in C1 followed by `refine3D_states`, the route used on real data (owner ruling 2026-10-18). Each is judged against the simulation truth: the path each refinement took (refine mode, directions and states per iteration, from the refine3D strategy's record), the state labels, the maps docked in both hands, their discrimination and the poses, with the shuffled-label and duplicated-maps controls. The de novo routes `shc` and `cavgs` resolve every true state in only part of the runs (13 and 9 of 20 in the profile of 2026-10-19; `shc` 15 of 20 with the posterior state draw, 2026-11-05), a limitation of the method: whether they do is a `success` row, held by `test=profile` to 6 and 2 of 20 seeds, and their labels are reported; their path, checks and pose ceilings are gates. The `labels` route prints the accuracy of the labels and the state readout of the draw at every iteration; whether it resolves every true state is a `success` row (13 of 20 in its profile of 2026-11-05: a random start drains a state in the others, as the closest-state rule does), held to 6 of 20, and its labels, population error and poses are held to the floors of that profile. The `states` and `consensus` routes resolve every state in every run: that is checked, and their labels, populations and poses are held to floors. `states` also holds the discrimination margin to its floor; `consensus` reports that stale-profile margin and checks that its pairwise map differences agree with the truth, while duplicated-map controls must fail discrimination. The entry runs all five (2 692 s at eight threads alone on dell2, 2026-11-05, `labels` about 230 s of them); `suite=<route>` runs one, `suite=cavgs_single` (the single-state class-average start, `prob_athres=` passed on), `suite=cavgs_as_particles` (the same simulated halves through particle `solve3D`), `suite=<route>_identical` (identical states; `labels_identical` reports the populations and the mutual correlations of the maps) and `suite=hard_<route>` (a chain rotated by 10 degrees, SNR 0.5, populations 80 and 20 %) are run by hand |
 | `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection (`detect_atoms`, species-free), the products of the atomic density model (`_FIT`, `_RES`, `_atoms.csv`, `_model.txt`, occupancy and width in `_ATMS.pdb`, the contact-score ceiling derived from the data, reported) and statistics (`atoms_stats` with the element) |
 | `single_atoms_stats_cdsew`, `single_atoms_stats_cdsez`, `single_atoms_stats_cdser` | highlevel | the same test on simulated wurtzite, zincblende and rocksalt CdSe nanoparticles (`element=CdSeW`, `CdSeZ`, `CdSeR`), whose lattice lookups use the compound selector; also asserts the coordination number of the interior atoms (4, 4, 6) and the fitted lattice constant within 2% of the table |
 | `species_discovery` | highlevel | the pair `detect_atoms`, then `detect_atomic_species` on its atoms (with a species list, with the class count free, with and without half maps) on simulated Pt, Pt/Ni and Pt/Al particles rendered with the five-Gaussian element kernels and surface B factors, judged against the generating models through `test_gate` (`metrics.tsv`): the weak atoms the residual recovery adds (read from `_atoms.csv`) and the class call (`_species` files, with each atom's posterior standard error and coordination spread); the species call must leave the products of `detect_atoms` unchanged, and on a particle of one species the weak atoms stay within the recovery's expected false count. Two cases run the atomic density model of `detect_atoms` (no element) on the Pt lattice rendered by the model with known profiles, transfer and noise at the real maps' level, against the floors of its unit tests |
@@ -965,7 +965,6 @@ minutes after the push. A newer push cancels the build of an older one.
   | `library` | `-L 'platform\|library'` |
   | `workflows` | `-L highlevel -R '^(simulated_workflow\|single_workflow)_'` |
   | `rest` | `-L highlevel`, every high-level entry the other groups do not name, so a new entry runs without a change to the workflow |
-  | `multistate_workflows` | `-L highlevel -R '^multistate_workflows$'`, Linux only (about 1.5 h on the 4-core Linux runner; it timed out on most macOS nights) |
 
   The groups do not wait for one another and fail independently
   (`fail-fast: false`). In a group, CTest packs the entries by their
@@ -1230,15 +1229,39 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Profile: none yet; the reports are the material for one (the floor rule).
 - Cost: 36 s at 8 threads on the dell (Release, 2026-11-13), 1:49 for the Debug build, both passing.
 
-**`multistate_assignment`** (retired 2026-11-02)
+**`multistate_assignment`**
 
-- Retired by owner decision: it ran multi-state `refine3D` under `cc`, which production never
-  uses, and since `811934ca5` (2026-10-24) the probability tables require `euclid`, under which
-  its start (truths low-passed, no noise model) merges states in every run. Production's
-  multi-state routes are `multistate_workflows`'. Its code is in git at `eefc7e1a1`
-  (`simple_commanders_test_highlevel_multistate.f90`), for a revival on the `euclid` route.
+- Claim: one production multi-state refinement block preserves a valid three-state handoff. The
+  fixture is 1 500 particles from the compositional beta-galactosidase states at SNR 2 and exact
+  50/30/20 populations. Their planted poses and labels reconstruct one fixed reference per state;
+  a residual `sigma` pass establishes the Euclidean noise model, then one `refine3D`
+  `refine=prob_neigh prob_neigh_mode=geom objfun=euclid` iteration searches all particles at 8 A
+  over 2 500 directions with a full update and physical posterior temperature.
+- Checks: adjusted Rand index, mapped accuracy and smallest state recall at least 0.99; largest
+  population error at most 0.01; every state resolved and populated with a map; the map mapping
+  agrees with the label mapping and its discrimination margin is at least 0.40; copies of one map
+  and copies of the mean fail the discrimination control; median pose and shift errors are at most
+  2 degrees and 0.10 pixels. The recorded path contains the three-state `sigma` and `prob_neigh`
+  blocks at 2 500 directions. A second run through two two-thread workers must produce every map
+  and exactly the shared-memory particle assignments.
+- Evidence (2026-11-24, maintainer Mac, Release, four shared threads then two two-thread workers):
+  ARI, accuracy and recall 1.0; populations exactly 750/450/300; discrimination margin 0.456;
+  median rotation error 1.61 degrees and shift error 0.050 pixels; all 1 500 distributed labels
+  identical; 90.4 s, master peak RSS 1.76 GiB.
+- History: the test with this name retired on 2026-11-02 used `objfun=cc`, searched poses from
+  low-passed truth maps without a residual noise model, and did not represent production. Its code
+  remains in git at `eefc7e1a1` (`simple_commanders_test_highlevel_multistate.f90`). The replacement
+  is `suite=assignment` of the retained workflow test so the fixture, evaluator and controls have
+  one owner.
 
 **`multistate_workflows`**
+
+- Status: manual robustness program, not a CTest or nightly gate. Four consecutive Linux nightly
+  jobs failed while a current fixed-seed rerun passed all five routes; its de novo convergence
+  and long coupled pipeline do not provide a stable single-run correctness boundary. Keep its
+  focused `suite=` routes for investigation and profiles. The registered replacement is its
+  deterministic `suite=assignment` described above; it does not gate on de novo discovery or
+  convergence.
 
 - Claim: the multi-state workflows recover three compositional beta-galactosidase states (the
   tetramer, the tetramer less chain D, the A-B dimer; 50/30/20 %) in five routes: `labels` (the
@@ -1294,7 +1317,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
   recall 0.636). A profile of the current route is pending.
 - By hand: `suite=cavgs_single`, `suite=cavgs_as_particles`, `suite=<route>_identical`,
   `suite=hard_<route>` (`labels_identical` and `hard_labels` included).
-- Cost: 2 692 s at 8 threads alone on dell2 for the five routes (2026-11-05; each route alone on that tree: `labels` about 4 minutes, `cavgs` 7, `shc` 20-22, `states` 3, `consensus` 11), 2 517 s on the tree of 2026-11-04 (`shc` 16 minutes); before `labels` joined, 1809 s at 8 threads (reserving 11 cores) for the four routes; the consensus route alone about 70 minutes at one thread. On a 4-core CI runner about 1.5 h (4 866 s on four pinned cores here, 2026-11-01), hence the 4 h deadline; CI runs it on Linux only (owner decision, 2026-11-02).
+- Cost: 2 692 s at 8 threads alone on dell2 for the five routes (2026-11-05; each route alone on that tree: `labels` about 4 minutes, `cavgs` 7, `shc` 20-22, `states` 3, `consensus` 11), 2 517 s on the tree of 2026-11-04 (`shc` 16 minutes); before `labels` joined, 1809 s at 8 threads (reserving 11 cores) for the four routes; the consensus route alone about 70 minutes at one thread. On a 4-core CI runner the former entry took about 1.5 h (4 866 s on four pinned cores here, 2026-11-01); while registered it ran on Linux only (owner decision, 2026-11-02).
 
 **`single_atoms_stats` and its CdSe variants (`_cdsew`, `_cdsez`, `_cdser`)**
 
