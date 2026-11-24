@@ -113,6 +113,7 @@ contains
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, &
             &star_flag(rlnflag="rlnPhaseShift", splflag="phshift", mult=RELION_PHASE_DEG2RAD)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
+        self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnRandomSubset", splflag="eo", int=.true.)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnClassNumber", splflag="class", int=.true.)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnGroupNumber", splflag="gid", int=.true.)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnVoltage", splflag="kv")]
@@ -136,6 +137,7 @@ contains
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, &
             &star_flag(rlnflag="rlnPhaseShift", splflag="phshift", mult=RELION_PHASE_DEG2RAD)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
+        self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnRandomSubset", splflag="eo", int=.true.)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnClassNumber", splflag="class", int=.true.)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnGroupNumber", splflag="gid", int=.true.)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnVoltage", splflag="kv")]
@@ -327,7 +329,7 @@ contains
         if(isptcl) then
             call sporis%new(self%starfile%stkptclcount, .true.)
             do ival = 1, self%starfile%stkptclcount
-               call sporis%set(ival, "stkind", 1)
+                call sporis%set(ival, "stkind", 1)
             end do 
         else
             call sporis%new(stardata%dataend - stardata%datastart, .false.)
@@ -377,6 +379,10 @@ contains
                         call sporis%set(projindex, stardata%flags(flagsindex)%splflag, entrystr)
                     else if(stardata%flags(flagsindex)%int) then
                         ival = entrystr%to_int()
+                        if(stardata%flags(flagsindex)%splflag == 'eo') then
+                            if(ival /= 1 .and. ival /= 2) THROW_HARD('rlnRandomSubset must be 1 or 2; import_stardata')
+                            ival = ival - 1
+                        endif
                         if(stardata%flags(flagsindex)%mult > 0) then
                             ival = int(real(ival) * stardata%flags(flagsindex)%mult)
                         end if

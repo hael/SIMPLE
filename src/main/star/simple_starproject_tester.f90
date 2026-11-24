@@ -1113,9 +1113,10 @@ contains
         write(funit,'(A)') '_rlnOriginXAngst #5'
         write(funit,'(A)') '_rlnOriginYAngst #6'
         write(funit,'(A)') '_rlnOpticsGroup #7'
+        write(funit,'(A)') '_rlnRandomSubset #8'
         do i = 1, 2
-            write(funit,'(2A,5F12.6,A,I0)') '1@', stknames(i)%to_char(), ORIGINS_EUL(:,i), &
-                &ORIGINS_SMPDS(i) * ORIGINS_PX(:,i), ' ', i
+            write(funit,'(2A,5F12.6,A,I0,A,I0)') '1@', stknames(i)%to_char(), ORIGINS_EUL(:,i), &
+                &ORIGINS_SMPDS(i) * ORIGINS_PX(:,i), ' ', i, ' ', i
         end do
         close(funit)
     end subroutine write_origins_star
@@ -1146,9 +1147,10 @@ contains
     subroutine test_import_origins_angstrom()
         type(starproject) :: sp
         type(sp_project)  :: proj
+        class(sp_project), allocatable :: proj_read
         type(cmdline)     :: cl
-        type(string)      :: dir, stknames(2), fname
-        integer           :: ipath
+        type(string)      :: dir, stknames(2), fname, projfile
+        integer           :: ipath, i
         write(*,'(A)') 'test_import_origins_angstrom'
         call make_origins_stacks(dir, stknames)
         fname = dir//'/particles31.star'
@@ -1170,6 +1172,24 @@ contains
                     call sp%import_ptcls(fname, proj, string('no'))
                     call check_origins_px(proj, .true., 'import_particles')
             end select
+            do i = 1, 2
+                call assert_int(i - 1, proj%os_ptcl2D%get_eo(i), 'RELION subset imported into ptcl2D')
+                call assert_int(i - 1, proj%os_ptcl3D%get_eo(i), 'RELION subset imported into ptcl3D')
+            end do
+            if( ipath == 3 )then
+                projfile = dir//'/imported_halves.simple'
+                call proj%write(projfile)
+                allocate(sp_project :: proj_read)
+                call proj_read%read(projfile)
+                do i = 1, 2
+                    call assert_int(i - 1, proj_read%os_ptcl2D%get_eo(i), 'imported ptcl2D subset survives project I/O')
+                    call assert_int(i - 1, proj_read%os_ptcl3D%get_eo(i), 'imported ptcl3D subset survives project I/O')
+                end do
+                call proj_read%kill
+                deallocate(proj_read)
+                call del_file(projfile)
+                call projfile%kill
+            endif
             call sp%kill
             call proj%kill
         end do
