@@ -97,7 +97,7 @@ contains
         type(string)                       :: pose_cont_arg, refine_arg, init_vol, pose_init_refs(1), pose_init_checkpoint(1)
         integer                            :: maxits_user, nactive
         logical                            :: l_followup, l_have_init_vol, l_external_input, l_maxits_defined
-        logical                            :: l_local_polar
+        logical                            :: l_local_polar, l_local_view
         integer                            :: box_crop
         real                               :: smpd_crop
         character(len=14)                  :: workflow_label
@@ -127,11 +127,13 @@ contains
                     if( cline%get_carg('cont_prior') /= 'none' ) &
                         THROW_HARD('Cartesian priors require refine3D_local refine=cont')
                 endif
-                if( cline%defined('prob_neigh_mode') )then
-                    if( cline%get_carg('prob_neigh_mode') /= 'geom' ) &
-                        THROW_HARD('refine3D_local refine=prob_neigh searches about the stored poses: prob_neigh_mode=geom')
+                l_local_view = .false.
+                if( cline%defined('cont_view') ) l_local_view = cline%get_carg('cont_view') /= 'no'
+                if( .not. cline%defined('prob_neigh_mode') ) call cline%set('prob_neigh_mode', 'geom')
+                if( cline%get_carg('prob_neigh_mode') /= 'geom' )then
+                    if( .not. l_local_view .or. cline%get_carg('prob_neigh_mode') /= 'state' ) &
+                        THROW_HARD('refine3D_local requires geom, or state with cont_view active')
                 endif
-                call cline%set('prob_neigh_mode', 'geom')
                 ! the continuous view refinement searches the coarse grid itself: nspace_sub = nspace (decision 8 of
                 ! polar_continuous_view.md), 1,000 directions unless given
                 if( cline%defined('cont_view') )then

@@ -892,7 +892,7 @@ contains
     !! irot_in is authoritative, there is no all-angle rescan. An invalid or non-material solve returns the
     !! seed cell re-scored at xy_in (irot never 0, always committable); evaluation_valid/improved say which.
     function grad_shsrch_minimize_joint( self, irot, xy_in, sh_rot, rotind_frac, &
-            &evaluation_valid, improved, initial_cost_out, irot_in, xsol ) result(cxy)
+            &evaluation_valid, improved, initial_cost_out, irot_in, xsol, rotind_seed ) result(cxy)
         class(pftc_shsrch_grad), intent(inout) :: self
         integer,                 intent(out)   :: irot
         real,                    intent(in)    :: xy_in(2)
@@ -902,13 +902,14 @@ contains
         real(dp),      optional, intent(out)   :: initial_cost_out
         integer,                 intent(in)    :: irot_in
         real(dp),      optional, intent(out)   :: xsol(:)  !< the result's point: the solution when improved, else the seed (shift in the reference frame, rotation index[, tilts])
+        real,          optional, intent(in)    :: rotind_seed !< geometric proposal's exact stored in-plane coordinate
         ! a final cost this far outside its physical range is a series artifact: invalid solve
         real(dp), parameter :: JOINT_NEG_COST_TOL = 1.d-2
         ! a gain must be material, not solver noise
         real(dp), parameter :: JOINT_IMPROVE_REL_TOL = 1.d-4
         ! bound-pinned solutions never displace the seed
         real(dp), parameter :: JOINT_BOUND_TOL = 1.d-3
-        real :: cxy(3), rotmat(2,2), lowest_cost, seed_corr, joint_lims(5,2)
+        real :: cxy(3), rotmat(2,2), lowest_cost, seed_corr, joint_lims(5,2), seed_coord, seed_angle
         real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(5), brange, beta_temp, rel_tol
         integer  :: idim, ndim
         logical :: valid_result, improved_result, valid_coordinates
@@ -927,16 +928,22 @@ contains
         ! score at xy_in is recovered from the solver's initial cost below
         irot      = irot_in
         seed_corr = 0.0
+        seed_coord = real(irot)
+        seed_angle = self%b_ptr%pftc%get_rot(irot)
+        if( present(rotind_seed) )then
+            seed_coord = rotind_seed
+            seed_angle = (seed_coord - 1.) * self%b_ptr%pftc%get_dang()
+        endif
         self%cur_inpl_idx    = irot
-        self%cur_inpl_rotind = real(irot)
+        self%cur_inpl_rotind = seed_coord
         joint_lims(1:ndim,:) = self%ospec%limits
-        joint_lims(3,:) = [real(irot)-2., real(irot)+2.]
+        joint_lims(3,:) = [seed_coord-2., seed_coord+2.]
         call self%set_limits(joint_lims(1:ndim,:))
         if( self%search_mode == SHSRCH_JOINT_VIEW )then
             ! the drawn pose: its cell, its shift and the reference's own view
-            self%ospec%x = [xy_in, real(irot), 0., 0.]
+            self%ospec%x = [xy_in, seed_coord, 0., 0.]
         else
-            self%ospec%x = [xy_in, real(irot)]
+            self%ospec%x = [xy_in, seed_coord]
         endif
         self%ospec%x_8 = dble(self%ospec%x)
         ! the seed, replaced by the solution when the solve improves
@@ -944,6 +951,7 @@ contains
         ! the prior is centred at the start, the committed shift, kept as the stored shift (xy_in is expressed
         ! at irot_in)
         call self%set_prior_centre(self%ospec%x_8(1:2), irot_in)
+        if( present(rotind_seed) ) self%prior_u0 = real(shift_ref2ptcl(xy_in, seed_angle), dp)
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
         ! 'lm': the curvature's shift-independent terms of this reference, once per solve
@@ -1003,6 +1011,12 @@ contains
             endif
         endif
         improved_result = valid_result .and. final_cost < initial_cost - improve_tol
+        if( present(rotind_seed) )then
+            ! A failed geometric solve may still contribute its independently evaluated seed.
+            if( .not. valid_result .and. self%joint_initial_cost_valid .and. ieee_is_finite(initial_cost) )then
+                if( initial_cost >= -JOINT_NEG_COST_TOL ) valid_result = .true.
+            endif
+        endif
         ! demote bound-pinned solutions to the discrete floor: collapsed
         ! dimensions (doshift=no) have zero range and are skipped
         if( improved_result )then
@@ -1020,11 +1034,11 @@ contains
             ! return the incoming seed cell (irot = irot_in) and its score
             if( present(evaluation_valid) ) evaluation_valid = .false.
             if( present(improved) ) improved = .false.
-            rotind_frac = real(irot,dp)
+            rotind_frac = real(seed_coord,dp)
             cxy(1)  = seed_corr
             cxy(2:) = xy_in
             if( sh_rot )then
-                call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
+                call rotmat2d(seed_angle, rotmat)
                 cxy(2:) = matmul(cxy(2:), rotmat)
             endif
             return
@@ -1032,11 +1046,11 @@ contains
         if( present(evaluation_valid) ) evaluation_valid = valid_result
         if( present(improved) ) improved = improved_result
         if( .not. improved_result )then
-            rotind_frac = real(irot,dp)
+            rotind_frac = real(seed_coord,dp)
             cxy(1)  = seed_corr
             cxy(2:) = xy_in
             if( sh_rot )then
-                call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
+                call rotmat2d(seed_angle, rotmat)
                 cxy(2:) = matmul(cxy(2:), rotmat)
             endif
             return

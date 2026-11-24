@@ -22,7 +22,7 @@ use simple_refine3D_fnames, only: refine3D_fsc_fname
 implicit none
 
 public :: angle_sampling, calc_athres, calc_num2sample
-public :: cone_view_dist, cone_cell_radii, cone_reachable_cells
+public :: cone_view_dist, cone_cell_radii, cone_reachable_cells, nearest_cone_views
 public :: prob_rnd_scope, keyed_candidate_order
 public :: eulprob_corr_switch, eulprob_dist_switch
 public :: record_seed_shift, write_fill_profile_bench
@@ -2953,6 +2953,48 @@ contains
             dist = min(dist, dist_mirr)
         endif
     end function cone_view_dist
+
+    !> At most k nearest cone directions, stable by bank index at equal distance; no image scoring.
+    !! Each seed carries the incoming pose's closest symmetry/mirror representative about its selected cell.
+    subroutine nearest_cone_views( eulspace, pgrpsyms, seed, cone, l_mirror, k, refs, eulers, nkept )
+        use simple_srch_sort_loc, only: scores2order_stable
+        use simple_ori_utils,    only: euler_mirror, euler_about_cell
+        class(oris), intent(in)  :: eulspace
+        class(sym),  intent(in)  :: pgrpsyms
+        real,        intent(in)  :: seed(3), cone
+        logical,     intent(in)  :: l_mirror
+        integer,     intent(in)  :: k
+        integer,     intent(out) :: refs(k), nkept
+        real,        intent(out) :: eulers(3,k)
+        real(dp) :: order_scores(eulspace%get_noris())
+        integer  :: order(eulspace%get_noris()), j, r
+        real     :: mirrored(3), cell(3), near(3), near_mirr(3), d, dm, dinpl
+        refs = 0
+        eulers = 0.
+        nkept = 0
+        if( k < 1 .or. .not. all(ieee_is_finite(seed)) ) return
+        call euler_mirror(seed, mirrored)
+        do r = 1,eulspace%get_noris()
+            d = cone_view_dist(pgrpsyms, seed, mirrored, l_mirror, eulspace%get_euler(r))
+            order_scores(r) = -huge(1.d0)
+            if( d <= cone ) order_scores(r) = -real(d,dp)
+        enddo
+        order = scores2order_stable(order_scores)
+        do j = 1,size(order)
+            r = order(j)
+            if( order_scores(r) == -huge(1.d0) ) exit
+            cell = eulspace%get_euler(r)
+            call pgrpsyms%sym_dists(cell, seed, near, d, dinpl)
+            if( l_mirror )then
+                call pgrpsyms%sym_dists(cell, mirrored, near_mirr, dm, dinpl)
+                if( dm < d ) near = near_mirr
+            endif
+            nkept = nkept + 1
+            refs(nkept) = r
+            eulers(:,nkept) = euler_about_cell(near, cell)
+            if( nkept == k ) exit
+        enddo
+    end subroutine nearest_cone_views
 
     !> per subspace, the largest view distance (degrees) from its representative (eulspace index sub_inds(isub)) to a
     !! member (full2sub, over the directions of eulspace)

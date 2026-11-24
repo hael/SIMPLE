@@ -17,7 +17,7 @@ use simple_eul_prob_tab_utils, only: record_seed_shift, cone_view_dist, cone_cel
     &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss, update_screen_best, start_shift_state, &
     &prob_readout, write_prob_readout, read_prob_readout, add_prob_readout, inpl_quadrature, inpl_view_weights, &
     &PROB_READOUT_3D_DENSE, PROB_READOUT_2D_DENSE, report_prob_readout, prob_row_marginal, prob_row_record, prob_row_file, &
-    &marginal_dist
+    &marginal_dist, nearest_cone_views
 use simple_eul_prob_marginal,  only: eul_prob_marginal, inpl_insert_temp
 use simple_polarft_calc,       only: polarft_calc
 use simple_cmdline,            only: cmdline
@@ -84,6 +84,8 @@ contains
         write(*,'(A)') 'test_geom_cone_prefilter'
         call test_geom_cone_prefilter('c1')
         call test_geom_cone_prefilter('d2')
+        call test_nearest_cone_views('c1')
+        call test_nearest_cone_views('d2')
         write(*,'(A)') 'test_inpl_view_weights'
         call test_inpl_view_weights()
         write(*,'(A)') 'test_inpl_readout_round_trip'
@@ -968,6 +970,92 @@ contains
         call se%kill
         deallocate(sub_inds, full2sub, radius, l_reach)
     end subroutine test_geom_cone_prefilter
+
+    !> Geometry shortlist against exhaustive symmetry-operation distances, including poles, mirrors and stable ties.
+    subroutine test_nearest_cone_views( pgrp )
+        use simple_ori_utils, only: euler_dist, euler2m
+        use simple_linalg,    only: rad2deg
+        character(len=*), intent(in) :: pgrp
+        integer, parameter :: NSP = 100, KMAX = 3
+        type(oris) :: bank
+        type(sym)  :: se
+        real :: seed(3), mirrored(3), equivalent(3), ds(NSP), work(NSP), eulers(3,KMAX), cone, dm
+        integer :: refs(KMAX), expected(KMAX), n, nexp, i, g, j, icase, imir, ithr, saved_team
+        integer :: refs_team(KMAX,4), nteam(4)
+        real :: eulers_team(3,KMAX,4)
+        logical :: mirror
+        call se%new(pgrp)
+        call bank%new(NSP, is_ptcl=.false.)
+        call se%build_refspiral(bank)
+        do icase = 1,4
+            select case(icase)
+                case(1)
+                    seed = [17., 62., 123.4567]
+                    cone = 25.
+                case(2)
+                    seed = [117., 0., 0.]
+                    cone = 180.
+                case(3)
+                    seed = [53., 180., 0.]
+                    cone = 10.
+                case(4)
+                    seed = bank%get_euler(1)
+                    cone = 0.
+            end select
+            call euler_mirror(seed, mirrored)
+            do imir = 0,1
+                mirror = imir == 1
+                do i = 1,NSP
+                    ds(i) = huge(1.)
+                    do g = 1,se%get_nsym()
+                        call se%apply(bank%get_euler(i), g, equivalent)
+                        dm = rad2deg(euler_dist(seed, equivalent))
+                        if( mirror ) dm = min(dm, rad2deg(euler_dist(mirrored, equivalent)))
+                        ds(i) = min(ds(i),dm)
+                    enddo
+                enddo
+                work = ds
+                expected = 0
+                nexp = 0
+                do j = 1,KMAX
+                    i = minloc(work,dim=1)
+                    if( work(i) > cone ) exit
+                    nexp = nexp + 1
+                    expected(j) = i
+                    work(i) = huge(1.)
+                enddo
+                call nearest_cone_views(bank, se, seed, cone, mirror, KMAX, refs, eulers, n)
+                call assert_int(nexp, n, 'geometry seeds: cone count matches brute force ('//pgrp//')')
+                call assert_true(all(refs == expected), 'geometry seeds: nearest topk match brute force ('//pgrp//')')
+            enddo
+        enddo
+        ! Equal bank directions retain their input-index ordering, and a single seed never expands to topk.
+        call bank%new(4, is_ptcl=.false.)
+        do i = 1,4
+            call bank%set_euler(i, [0., 90., 0.])
+        enddo
+        seed = [0., 90., 73.4567]
+        call nearest_cone_views(bank, se, seed, 180., .false., KMAX, refs, eulers, n)
+        call assert_true(all(refs == [1,2,3]), 'geometry seeds: equal distances are stable by bank index')
+        call assert_real(seed(3), eulers(3,1), 1.e-4, 'geometry seed keeps the fractional stored in-plane angle')
+        call nearest_cone_views(bank, se, seed, 180., .false., 1, refs(1:1), eulers(:,1:1), n)
+        call assert_int(1, n, 'topk=1 selects exactly one geometric seed')
+        saved_team = 1
+        !$ saved_team = omp_get_max_threads()
+        !$ call omp_set_num_threads(4)
+        !$omp parallel do default(shared) private(ithr) schedule(static)
+        do ithr = 1,4
+            call nearest_cone_views(bank, se, seed, 180., .false., KMAX, refs_team(:,ithr), eulers_team(:,:,ithr), nteam(ithr))
+        enddo
+        !$omp end parallel do
+        !$ call omp_set_num_threads(saved_team)
+        call assert_true(all(nteam == KMAX), 'geometry seeds: every thread obeys topk')
+        do ithr = 1,4
+            call assert_true(all(refs_team(:,ithr) == [1,2,3]), 'geometry seeds: team agrees with serial tie order')
+        enddo
+        call bank%kill
+        call se%kill
+    end subroutine test_nearest_cone_views
 
     !> The draw from a row posterior (draw_posterior_row) with its variate given: against an independent
     !! cumulative-posterior oracle on hand-built rows (the mode's mass, ties at the minimum, an invalid entry,

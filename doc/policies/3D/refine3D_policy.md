@@ -1288,20 +1288,30 @@ The downscaled particle cache is a 2D-only feature: `refine3D` rejects
 ### Continuous view refinement on polar sections (`cont_view`)
 
 `cont_view=no|lbfgsb|lm` (default `no`; `doc/implementation_notes/planned/polar_continuous_view.md`) refines
-the committed pose's projection direction continuously after the probabilistic draw of
-`refine3D_local refine=prob_neigh` (one state, `objfun=euclid`). It is a solver choice for one extra solve,
-not a search mode:
+projection directions continuously in `refine3D_local refine=prob_neigh` (one state, `objfun=euclid`).
+`prob_neigh_mode` chooses how the solver is seeded; `topk` bounds the hypotheses, without another seed-budget key:
 
-- **Pipeline unchanged.** The fill, keyed draw and temperatures are those of `prob_neigh`; the draw sees the KB
-  bank's scores only.
+- **Geometric seeding (`prob_neigh_mode=geom`, local default).** Select at most `topk` nearest bank directions
+  inside the incoming pose's geometric cone, by symmetry-aware direction distance and stable bank-index ties.
+  A positive particle `cone` retains its mirror-view contract; otherwise `athres_cont` bounds eligibility.
+  Re-express the stored in-plane pose about each selected direction, keeping its fractional angle, and run the
+  bounded view solver from zero residual shift (the batch particle already carries its stored shift). No
+  all-angle bank score, shift map, or exhaustive fallback runs. Merge the evaluated solutions into resolution
+  basins before the keyed draw at `prob_beta * temperature`; insert their best representatives with summed
+  physical-temperature basin masses. An empty cone or no valid evaluated seed retains the incoming pose.
+  A valid seed survives a non-improving or invalid solver result at its own B-spline score.
+- **Image-posterior seeding (`prob_neigh_mode=state`).** The existing fill, keyed draw and temperatures are those
+  of `prob_neigh`; the draw sees the KB bank's scores before the committed pose and extras take the view solve.
+  This route retains image-based in-plane recovery. Without `cont_view`, local `geom` retains its image-scored
+  cone search unchanged.
 - **The extras (topk > 1).** On the coarse bank no other cell lies within the insertion cone, so the extras are
-  not the cone's occupants but the row's `topk - 1` entries of highest posterior (the tables skip the cone test
+  not the cone's occupants but, in the image-posterior route, the row's `topk - 1` entries of highest posterior (the tables skip the cone test
   under the key). After the committed pose, each takes the view solve from its own cell and shift
   (`refine_extra_pose_continuously`); the committed pose and the valid refined extras are merged into basins
   within the cone of one another (`merge_view_basins`: single linkage on the refined poses, `within_poses`), each
   basin enters the reconstruction at its best pose with its members' posterior weights at the particle's
   temperature added, a basin below `PROB_INSERT_WMIN` is dropped, and the committed pose becomes its basin's best
-  when a refined extra beats it (`strategy3D_prob%resolve_extra_poses_view`). The effective topk is the number of
+  when a refined extra beats it (`strategy3D_prob%resolve_extra_poses_view`, image-posterior route). The effective topk is the number of
   basins. The readout's `view_*` fields and the part's bench report the outcome.
 - **Bank = coarse grid.** With the key on, `nspace_sub = nspace` (1,000 unless given); the commander refuses an
   explicit different `nspace_sub` and the parameters refuse `nspace_sub /= nspace`. The bank holds `nspace`

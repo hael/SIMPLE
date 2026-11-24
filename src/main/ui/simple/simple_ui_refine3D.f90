@@ -241,7 +241,7 @@ contains
         call add_refine3D_workflow_inputs(refine3D_local)
         call refine3D_local%add_input(UI_SRCH, 'refine', 'multi', 'Local search', &
         &'Search about each stored pose: cont refines it continuously; prob_neigh searches the polar references '//&
-        &'within athres_cont of it (prob_neigh_mode=geom) with the shift prior and continuous in-plane '//&
+        &'within athres_cont of it (geom), or seeds continuous views with an image posterior (state), with continuous in-plane '//&
         &'refinement(cont|prob_neigh){cont}', '', .false., 'cont', group='search', &
         &choices=ui_choices([character(len=10) :: 'cont', 'prob_neigh']), visibility=UI_VIS_ADVANCED)
         call refine3D_local%add_input(UI_SRCH, 'nspace', 'num', 'Number of projection directions', &
@@ -252,9 +252,14 @@ contains
         &'Regularize shift or pose updates around each particle seed(none|shift|pose){none}', '', .false., 'none', &
         &group='search', choices=ui_choices([character(len=5) :: 'none', 'shift', 'pose']), visibility=UI_VIS_ADVANCED)
         call refine3D_local%add_input(UI_SRCH, 'cont_view', 'multi', 'Continuous view refinement', &
-        &'refine=prob_neigh: refine the drawn pose''s view continuously on polar sections with this solver; the polar '//&
-        &'search then scores a bank of nspace directions itself (nspace_sub = nspace, 1000 unless given)(no|lbfgsb|lm){no}', &
+        &'refine=prob_neigh: refine view seeds continuously on polar sections with this solver; the bank has '//&
+        &'nspace_sub = nspace, 1000 unless given(no|lbfgsb|lm){no}', &
         &'', .false., 'no', group='search', choices=ui_choices([character(len=6) :: 'no', 'lbfgsb', 'lm']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_local%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Polar view seed mode', &
+        &'With cont_view: geom refines at most topk nearest directions from the stored in-plane pose without an '//&
+        &'image scan, then draws a basin; state seeds from the image posterior. Without cont_view only geom applies(geom|state){geom}', &
+        &'', .false., 'geom', group='search', choices=ui_choices([character(len=5) :: 'geom', 'state']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_local%add_input(UI_SRCH, 'cont_prior_shift_sigma', 'num', 'Fixed shift prior standard deviation', &
         &'Per-axis standard deviation in A; zero estimates the width from all active stored shift increments', '', .false., 0., &

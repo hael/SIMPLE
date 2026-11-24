@@ -34,7 +34,7 @@ type view_solve
 end type view_solve
 
 type strategy3D_spec
-    type(eul_prob_tab),       pointer :: eulprob_obj_part
+    class(eul_prob_tab),      pointer :: eulprob_obj_part => null()
     type(prob_insert_poses),  pointer :: extra_poses => null() !< the weighted insertion's poses of the part (topk > 1), filled by the prob strategy
     integer :: iptcl=0, iptcl_map=0
 end type strategy3D_spec
@@ -562,7 +562,7 @@ contains
     !> The same local solve for one of the weighted insertion's extra poses, from the extra's own cell and shift, with
     !! the view when the committed pose takes it (cont_view: the extras' basins, section 6 of polar_continuous_view.md),
     !! the solve returned in vs; the particle's route status stays the committed pose's
-    subroutine refine_extra_pose_continuously( self, ref, inpl, corr, sh, inpl_coord, inpl_valid, vs )
+    subroutine refine_extra_pose_continuously( self, ref, inpl, corr, sh, inpl_coord, inpl_valid, vs, seed_coord )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref
         integer,                intent(inout) :: inpl
@@ -570,14 +570,15 @@ contains
         real,                   intent(out)   :: inpl_coord
         logical,                intent(out)   :: inpl_valid
         type(view_solve),       intent(out)   :: vs
-        call self%refine_assignment_continuously_impl(ref, inpl, corr, sh, inpl_coord, inpl_valid, self%view_active, vs)
+        real, optional,        intent(in)    :: seed_coord
+        call self%refine_assignment_continuously_impl(ref, inpl, corr, sh, inpl_coord, inpl_valid, self%view_active, vs, seed_coord)
     end subroutine refine_extra_pose_continuously
 
     !> The local solve of a drawn pose from its cell, shift and rotation: the joint (sx, sy, rotind_frac) solve on
     !! the bank reference or, with l_view (cont_view), the five-variable solve with the drawn reference's two tilts
     !! on the B-spline sections of build%pcont, returned in vs: a valid view solve's point (the seed when it did not
     !! improve) gives the sigma2 residual on its own section, an improving one the pose (view_pose, commit_view)
-    subroutine refine_assignment_continuously_impl( self, ref, inpl, corr, sh, inpl_coord, inpl_valid, l_view, vs )
+    subroutine refine_assignment_continuously_impl( self, ref, inpl, corr, sh, inpl_coord, inpl_valid, l_view, vs, seed_coord )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref
         integer,                intent(inout) :: inpl
@@ -586,7 +587,8 @@ contains
         logical,                intent(out)   :: inpl_valid
         logical,                intent(in)    :: l_view
         type(view_solve),       intent(out)   :: vs
-        real     :: cxy(3), lims(5,2), xy_ref(2), rbox
+        real, optional,        intent(in)    :: seed_coord
+        real     :: cxy(3), lims(5,2), xy_ref(2), rbox, seed_angle
         real(dp) :: rotind_frac, xsol(5)
         integer  :: refined_inpl, iproj, state
         logical  :: evaluation_valid, improved
@@ -610,6 +612,10 @@ contains
         ! the stored shift (the particle frame) as the shift of the reference at the drawn rotation, the joint
         ! objective's frame
         xy_ref = shift_ptcl2ref(sh, self%b_ptr%pftc%get_rot(inpl))
+        if( present(seed_coord) )then
+            seed_angle = (seed_coord - 1.) * self%b_ptr%pftc%get_dang()
+            xy_ref = shift_ptcl2ref(sh, seed_angle)
+        endif
         ! the joint domain contains the particle's box (its disk under the key) and the incoming shift, so the solve
         ! starts at, and is judged against, the pose it refines
         rbox = self%p_ptr%trs
@@ -640,7 +646,7 @@ contains
             call self%view_optimizer%set_indices(ref, self%iptcl)
             call self%view_optimizer%set_limits(lims)
             cxy = self%view_optimizer%minimize_joint(refined_inpl, xy_ref, sh_rot=.true., rotind_frac=rotind_frac, &
-                &evaluation_valid=evaluation_valid, improved=improved, irot_in=inpl, xsol=xsol)
+                &evaluation_valid=evaluation_valid, improved=improved, irot_in=inpl, xsol=xsol, rotind_seed=seed_coord)
         else
             call self%joint_inpl_optimizer%set_indices(ref, self%iptcl)
             call self%joint_inpl_optimizer%set_limits(lims(1:3,:))
@@ -664,6 +670,10 @@ contains
             corr       = cxy(1)
             sh         = cxy(2:3)
             inpl_coord = real(refined_inpl)
+            if( present(seed_coord) )then
+                inpl_coord = real(rotind_frac)
+                inpl_valid = .true.
+            endif
             self%continuous_route_outcome = CONT_ROUTE_NO_IMPROVEMENT
             return
         endif

@@ -2304,7 +2304,7 @@ contains
         integer,                  optional, intent(out)   :: niters
         type(pcg_solver_outcome), optional, intent(out)   :: outcome
         real,                     optional, intent(in)    :: start_max_rel_resid
-        real, pointer :: x_flat(:), b_flat(:)
+        real, contiguous, pointer :: x_flat(:), b_flat(:)
         type(reconstructor_pcg_adapter) :: op
         type(pcg_solver_options) :: options
         type(pcg_solver_outcome) :: result

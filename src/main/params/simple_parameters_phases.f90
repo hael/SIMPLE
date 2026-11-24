@@ -1110,6 +1110,7 @@ contains
                     if( self%nstates /= 1 ) THROW_HARD('cont_view refines one state')
                     if( self%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('cont_view requires objfun=euclid')
                     if( trim(self%oritype) /= 'ptcl3D' ) THROW_HARD('cont_view refines 3D particle poses')
+                    if( self%prob_neigh_mode /= 'geom' .and. self%prob_neigh_mode /= 'state' ) THROW_HARD('cont_view supports prob_neigh_mode=geom|state')
                 case DEFAULT
                     ! the master's reconstruction and assembly children inherit its command line and ignore the key
                     self%l_cont_view = .false.

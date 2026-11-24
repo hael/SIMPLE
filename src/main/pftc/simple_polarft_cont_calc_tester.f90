@@ -77,6 +77,8 @@ contains
         call test_view_gradient_and_curvature(.false.)
         call test_view_gradient_and_curvature(.true.)
         call test_threads()
+        call test_fractional_view_seed()
+        call test_geom_view_pipeline()
         call del_file(PHANTOM_FILE)
     end subroutine run_all_polarft_cont_calc_tests
 
@@ -107,7 +109,7 @@ contains
 
     !> the unmasked phantom as the KB bank of nspace spiral directions (even half) and as the B-spline references of one
     !! state (both halves), the polar grid of lp, one particle slot (odd: of the odd half, its sigma2 rising), unit sigma2
-    subroutine build_fixture( b, p, pcont, lp, nspace, nthr, odd )
+    subroutine build_fixture( b, p, pcont, lp, nspace, nthr, odd, nptcls )
         class(builder),    target, intent(inout) :: b
         class(parameters), target, intent(inout) :: p
         class(polarft_cont_calc),  intent(inout) :: pcont
@@ -115,10 +117,14 @@ contains
         integer,                   intent(in)    :: nspace
         integer, optional,         intent(in)    :: nthr
         logical, optional,         intent(in)    :: odd
-        type(cmdline)     :: cline
+        integer, optional,         intent(in)    :: nptcls
+        class(cmdline), allocatable :: cline
         real, allocatable :: rmat(:,:,:)
         logical :: l_odd
-        integer :: k
+        integer :: k, np
+        allocate(cline)
+        np = 1
+        if( present(nptcls) ) np = nptcls
         l_odd = .false.
         if( present(odd) ) l_odd = odd
         call cline%set('vol1',      PHANTOM_FILE)
@@ -126,7 +132,7 @@ contains
         call cline%set('smpd',      SMPD)
         call cline%set('lp',        lp)
         call cline%set('trs',       TRS)
-        call cline%set('nptcls',    1.)
+        call cline%set('nptcls',    np)
         call cline%set('nspace',    nspace)
         call cline%set('ctf',       'no')
         call cline%set('objfun',    'euclid')
@@ -135,13 +141,15 @@ contains
         call cline%check
         call b%init_params_and_build_strategy3D_tbox(cline, p)
         call set_bp_range3D(p, b, cline)
-        call b%pftc%new(p, p%nspace, [1,1], p%kfromto)
+        call b%pftc%new(p, p%nspace, [1,np], p%kfromto)
         call b%vol%read(p%vols(1))
         call b%vol_pad%new([p%box_croppd, p%box_croppd, p%box_croppd], p%smpd_crop, wthreads=.false.)
         call b%vol%pad_fft(b%vol_pad)
         call b%vol_pad%expand_cmat()
         call vol_pad2ref_pfts_opt(b%pftc, b%vol_pad, b%eulspace, 1, iseven=.true.)
-        call b%pftc%set_eo(1, .not. l_odd)
+        do k = 1,np
+            call b%pftc%set_eo(k, .not. l_odd)
+        enddo
         call b%pftc%memoize_refs
         rmat = b%vol%get_rmat()
         call b%cftc%new(1, p%box, 1)
@@ -285,7 +293,7 @@ contains
         real(dp),                 intent(in)    :: rref(3,3)
         complex(sp), allocatable :: sect(:,:), dnv(:,:), rot(:,:), pft(:,:)
         real(dp),    allocatable :: ax(:,:), ay(:,:)
-        integer :: pftsz, kfromto(2), pdim(3)
+        integer :: pftsz, kfromto(2), pdim(3), iptcl
         pftsz   = b%pftc%get_pftsz()
         kfromto = b%pftc%get_kfromto()
         pdim    = b%pftc%get_pdim_interp()
@@ -297,9 +305,13 @@ contains
         call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, sect, TRUTH_IROT, rot)
         pft = cmplx(0.,0.,kind=sp)
         pft(:,kfromto(1):kfromto(2)) = rot
-        call b%pftc%set_ptcl_pft(1, pft)
+        do iptcl = 1,b%pftc%get_nptcls()
+            call b%pftc%set_ptcl_pft(iptcl, pft)
+        enddo
         call b%pftc%memoize_ptcls
-        call b%pftc%memoize_sqsum_ptcl(1)
+        do iptcl = 1,b%pftc%get_nptcls()
+            call b%pftc%memoize_sqsum_ptcl(iptcl)
+        enddo
     end subroutine set_truth_particle
 
     !> central differences of f in every variable at x: the largest error and the check's tolerance
@@ -415,6 +427,203 @@ contains
         call kill_fixture(b, pcont)
         deallocate(b, p)
     end subroutine test_view_gradient_and_curvature
+
+    !> The geometry optimizer starts at the exact fractional seed and returns shifts in that pose's particle frame.
+    subroutine test_fractional_view_seed()
+        use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
+        use simple_polarft_calc,    only: shift_ptcl2ref, shift_ref2ptcl
+        class(builder), allocatable, target :: b
+        class(parameters), allocatable, target :: p
+        type(polarft_cont_calc) :: pcont
+        type(pftc_shsrch_grad) :: opt
+        real :: lims(5,2), cxy(3), coord, angle, xy(2)
+        real(dp) :: rref(3,3), xs(5), xr(5), f, g(5), initial, refined_coord
+        integer :: irot, isolver
+        logical :: valid, improved
+        character(len=6), parameter :: SOLVERS(2) = ['lm    ','lbfgsb']
+        allocate(b,p)
+        call build_fixture(b,p,pcont,LP_LOW,2)
+        allocate(b%pcont)
+        call b%pcont%new(b%pftc,b%cftc)
+        rref = real(euler2m(REF_EULER),dp)
+        call set_truth_particle(b,b%pcont,rref)
+        coord = real(TRUTH_IROT) + 0.37
+        angle = (coord-1.) * b%pftc%get_dang()
+        xy = shift_ptcl2ref([1.2,-0.7],angle)
+        xs = [real(xy,dp),real(coord,dp),0.d0,0.d0]
+        lims(1:2,1) = -TRS
+        lims(1:2,2) = TRS
+        lims(3,:) = [coord-2.,coord+2.]
+        lims(4:5,1) = -0.2
+        lims(4:5,2) = 0.2
+        do isolver = 1,2
+            call b%pcont%set_view_ref(1,.true.,rref)
+            call b%pcont%eval(1,xs,f,g)
+            call opt%new_joint_view(b,lims,20,trim(SOLVERS(isolver)))
+            call opt%set_indices(1,1)
+            cxy = opt%minimize_joint(irot,xy,sh_rot=.true.,rotind_frac=refined_coord, &
+                &evaluation_valid=valid,improved=improved,initial_cost_out=initial, &
+                &irot_in=nint(coord),xsol=xr,rotind_seed=coord)
+            call assert_true(abs(initial-f) < 1.d-5,'geometry solver evaluates the exact fractional seed, not its rounded cell')
+            call assert_true(valid,'fractional geometric seed yields a valid evaluated pose')
+            call assert_true(abs(refined_coord-real(coord,dp)) <= 2.d0,'geometry solver never rescans all in-plane angles')
+            if( valid )then
+                call b%pcont%eval(1,xr,f,g)
+                call assert_real(real(exp(-f)),cxy(1),1.e-4,'fractional view score is its returned B-spline point')
+                angle = real((xr(3)-1.d0)*real(b%pftc%get_dang(),dp))
+                call assert_true(norm2(cxy(2:3)-shift_ref2ptcl(real(xr(1:2)),angle)) < 1.e-4, &
+                    &'fractional view shift is converted at the returned angle')
+            endif
+            call opt%kill
+        enddo
+        call b%pcont%kill
+        deallocate(b%pcont)
+        call kill_fixture(b,pcont)
+    end subroutine test_fractional_view_seed
+
+    !> The production geometry pipeline: bounded solves, no bank scans, pose/section consistency and team/batch identity.
+    subroutine test_geom_view_pipeline()
+        use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
+        use simple_strategy3D_prob,   only: strategy3D_prob
+        use simple_strategy3D_srch,   only: strategy3D_spec, view_solve
+        use simple_strategy3D_alloc,  only: prep_strategy3D, clean_strategy3D
+        use simple_eul_prob_tab_utils, only: prob_insert_poses, prob_insert_cone
+        integer, parameter :: NP = 6, NS = 20, K = 3, NTEAM = 4
+        class(builder), allocatable, target :: b
+        class(parameters), allocatable, target :: p
+        class(eul_prob_tab_neigh), allocatable, target :: tab
+        class(strategy3D_prob), allocatable :: srch
+        type(strategy3D_spec) :: spec
+        type(polarft_cont_calc) :: pcont
+        type(prob_insert_poses), target :: extras
+        type(prob_insert_cone) :: cone
+        type(view_solve) :: vs
+        real :: serial(9,NP), team(9,NP), batched(9,NP), euls(3), seed_pose(3)
+        real(dp) :: rref(3,3), f, g(5)
+        integer :: pinds(NP), i, saved_team
+        allocate(b, p, tab, srch)
+        saved_team = 1
+        !$ saved_team = omp_get_max_threads()
+        call build_fixture(b, p, pcont, LP_LOW, NS, nthr=NTEAM, nptcls=NP)
+        allocate(b%pcont)
+        call b%pcont%new(b%pftc, b%cftc)
+        rref = real(b%eulspace%get_mat(NS/2),dp)
+        call set_truth_particle(b, b%pcont, rref)
+        p%refine = 'prob_neigh'
+        p%prob_neigh_mode = 'geom'
+        p%cont_view = 'lm'
+        p%l_cont_view = .true.
+        p%inpl_cont = 'yes'
+        p%l_doshift = .true.
+        p%l_shift_prior = .false.
+        p%l_centring = .false.
+        p%topk = K
+        p%nspace_sub = NS
+        p%athres_cont = 180.
+        p%maxits_sh = 20
+        if( .not. allocated(b%subspace_inds) ) allocate(b%subspace_inds(NS), b%subspace_full2sub_map(NS))
+        b%subspace_inds = [(i,i=1,NS)]
+        b%subspace_full2sub_map = b%subspace_inds
+        pinds = [(i,i=1,NP)]
+        seed_pose = b%eulspace%get_euler(NS/2)
+        seed_pose(3) = modulo(360. - (real(TRUTH_IROT)-1.+0.37)*b%pftc%get_dang(),360.)
+        call cone%new([8.], MSKDIAM, SMPD)
+        call reset_particles()
+        call prep_strategy3D(p, b)
+        call run_pipeline(1, NP, serial)
+        call run_pipeline(NTEAM, NP, team)
+        call run_pipeline(NTEAM, 2, batched)
+        call assert_true(all(serial == team), 'geometry view pipeline: team results equal serial')
+        call assert_true(all(serial == batched), 'geometry view pipeline: batch size does not change results')
+        p%topk = 1
+        call run_pipeline(1, NP, serial)
+        call assert_true(all(serial(7,:) == 1.) .and. all(serial(8,:) == 0.), 'topk=1 commits unit weight without extras')
+        seed_pose = REF_EULER
+        p%athres_cont = 1.e-6
+        call reset_particles()
+        call tab%new_neigh_pipeline(p,b,pinds)
+        call tab%set_model_from_field
+        call tab%open_assignment
+        call tab%fill_tab_range(1,NP)
+        call tab%assign_batch(1,NP)
+        call assert_true(all(tab%geom_nkeep == 0),'an empty geometric cone has no fabricated assignment')
+        call assert_true(tab%fill_profile%minimize_calls == 0_int64,'an empty cone never falls back to image scoring')
+        spec%eulprob_obj_part => tab
+        nullify(spec%extra_poses)
+        spec%iptcl = 1
+        spec%iptcl_map = 1
+        euls = b%spproj_field%get_euler(1)
+        call srch%new(p,spec,b)
+        call srch%srch(b%spproj_field,1)
+        call assert_true(all(euls == b%spproj_field%get_euler(1)),'an empty geometric cone retains the stored pose')
+        call srch%kill
+        call tab%close_assignment
+        call tab%kill
+        call clean_strategy3D
+        call extras%kill
+        call cone%kill
+        call b%pcont%kill
+        deallocate(b%pcont)
+        call kill_fixture(b, pcont)
+        !$ call omp_set_num_threads(saved_team)
+    contains
+        subroutine reset_particles()
+            integer :: ip
+            do ip = 1,NP
+                call b%spproj_field%set_state(ip,1)
+                call b%spproj_field%set_euler(ip,seed_pose)
+                call b%spproj_field%set_shift(ip,[1.2,-0.7])
+                call b%spproj_field%set(ip,'eo',0.)
+                call b%spproj_field%set(ip,'sampled',1.)
+            enddo
+        end subroutine reset_particles
+
+        subroutine run_pipeline( nthr, batch, result )
+            integer, intent(in) :: nthr, batch
+            real, intent(out) :: result(9,NP)
+            integer :: first, last, ip, iloc
+            call reset_particles()
+            !$ call omp_set_num_threads(nthr)
+            call tab%new_neigh_pipeline(p, b, pinds)
+            call tab%set_model_from_field
+            call tab%set_insert_cone(cone)
+            call tab%open_assignment
+            do first = 1,NP,batch
+                last = min(NP,first+batch-1)
+                call tab%fill_tab_range(first,last)
+                call assert_true(size(tab%geom_views,1) == p%topk, 'geometry solve capacity is exactly topk')
+                call assert_true(all(tab%geom_refs > 0), 'full cone supplies exactly topk geometric proposals')
+                call tab%assign_batch(first,last)
+                call extras%setup_range(tab%insert_tab,pinds,first,last)
+                spec%eulprob_obj_part => tab
+                spec%extra_poses => extras
+                do ip = first,last
+                    call assert_true(tab%geom_nkeep(ip) > 0, 'a valid geometric seed survives the solve')
+                    if( tab%geom_nkeep(ip) < 1 ) cycle
+                    spec%iptcl = ip
+                    spec%iptcl_map = ip
+                    call srch%new(p,spec,b)
+                    call srch%srch(b%spproj_field,1)
+                    call srch%s%get_view_solution(vs)
+                    call b%pcont%set_view_ref(vs%state,.true.,vs%rref)
+                    call b%pcont%eval(ip,vs%x,f,g)
+                    call assert_real(real(exp(-f)), b%spproj_field%get(ip,'corr'), 1.e-4, 'committed score is its final section score')
+                    euls = b%spproj_field%get_euler(ip)
+                    iloc = extras%loc(ip)
+                    result(:,ip) = [euls, b%spproj_field%get_2Dshift(ip), b%spproj_field%get(ip,'corr'), &
+                        &extras%wc(iloc), real(extras%nextra(iloc)), real(tab%assgn_map(ip)%inpl)]
+                    call assert_real(1.,extras%wc(iloc)+sum(extras%w(extras%first(iloc): &
+                        &extras%first(iloc)+extras%nextra(iloc)-1)),1.e-5,'geometry insertion conserves particle weight')
+                    call srch%kill
+                enddo
+            enddo
+            call assert_true(tab%fill_profile%nscored == 0_int64 .and. tab%fill_profile%grid_points == 0_int64, &
+                &'geometry pipeline performs no bank or shift-grid image scan')
+            call assert_true(tab%fill_profile%minimize_calls <= int(NP*p%topk,int64), 'geometry solves never exceed topk per particle')
+            call tab%close_assignment
+            call tab%kill
+        end subroutine run_pipeline
+    end subroutine test_geom_view_pipeline
 
     ! ---- threads ---------------------------------------------------------------------------------------------------
 

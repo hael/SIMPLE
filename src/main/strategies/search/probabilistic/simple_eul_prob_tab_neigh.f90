@@ -21,6 +21,9 @@ use simple_defs,               only: PROB_INSERT_WMIN
 use simple_polarft_calc, only: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, shift_ptcl2ref, shift_ref2ptcl, PFTC_BLOCK_NB
 use simple_ori,                only: ori
 use simple_ori_utils,          only: euler_mirror, euler_about_cell
+use simple_strategy3D_srch,    only: strategy3D_srch, strategy3D_spec, view_solve
+use simple_eul_prob_tab_utils, only: nearest_cone_views, merge_view_basins
+use simple_ori_utils,          only: euler2m
 implicit none
 
 public :: eul_prob_tab_neigh
@@ -39,6 +42,9 @@ type, extends(eul_prob_tab) :: eul_prob_tab_neigh
     logical                     :: l_direct_stoch_neigh = .false.
     integer                     :: nkept = 0   !< particles without a valid candidate, orientation kept (the assignment's count)
     real,           allocatable :: cell_radius(:) !< geom: degrees from each subspace's representative to its farthest member
+    type(view_solve), allocatable :: geom_views(:,:) !< topk solved proposals of the current batch
+    integer, allocatable :: geom_refs(:,:), geom_inpls(:,:), geom_keep(:,:), geom_nkeep(:), geom_nvalid(:), geom_nbasins(:)
+    real, allocatable :: geom_coords(:,:), geom_shifts(:,:,:), geom_weights(:,:)
 contains
     procedure :: new_neigh_pipeline
     procedure :: set_model_from_field => set_model_from_field_neigh
@@ -143,6 +149,10 @@ contains
     subroutine fill_tab_neigh_range( self, i_first, i_last )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer,                   intent(in)    :: i_first, i_last
+        if( self%p_ptr%l_cont_view .and. self%p_ptr%prob_neigh_mode == 'geom' )then
+            call fill_geom_views(self, i_first, i_last)
+            return
+        endif
         ! the polar shift map lives in the dense fill; this fill's increments are the window search's
         ! Search paths
         select case(trim(self%p_ptr%prob_neigh_mode))
@@ -156,6 +166,89 @@ contains
                 THROW_HARD('simple_eul_prob_tab_neigh::fill_tab_neigh_range; unsupported prob_neigh_mode')
         end select
     end subroutine fill_tab_neigh_range
+
+    !> Geometry proposals and bounded view solves on the prepared batch; no project writes or bank image scans.
+    subroutine fill_geom_views( self, i_first, i_last )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer, intent(in) :: i_first, i_last
+        class(strategy3D_srch), allocatable :: srch(:)
+        type(strategy3D_spec) :: spec
+        integer, allocatable :: refs(:,:)
+        real, allocatable :: seeds(:,:,:)
+        integer :: i, iptcl, ithr, nteam, kcap, k, nseed, inpl
+        real :: seed(3), cone, corr, sh(2), coord, refined_coord
+        logical :: valid_coord, mirror
+        real(dp) :: t0, temp, sigma2
+        integer(int64) :: nevals, ngrads, nalts, ngrid, ncalls
+        if( .not. self%l_model_set ) THROW_HARD('geometry view fill requires the iteration model')
+        kcap = min(self%p_ptr%topk, self%p_ptr%nspace)
+        nteam = omp_get_max_threads()
+        call kill_geom_views(self)
+        allocate(self%geom_views(kcap,i_first:i_last))
+        allocate(self%geom_refs(kcap,i_first:i_last), self%geom_inpls(kcap,i_first:i_last), &
+            &self%geom_keep(kcap,i_first:i_last), self%geom_nkeep(i_first:i_last), &
+            &self%geom_nvalid(i_first:i_last), self%geom_nbasins(i_first:i_last), source=0)
+        allocate(self%geom_coords(kcap,i_first:i_last), self%geom_shifts(2,kcap,i_first:i_last), &
+            &self%geom_weights(kcap,i_first:i_last), source=0.)
+        allocate(srch(nteam), refs(kcap,nteam), seeds(3,kcap,nteam))
+        do ithr = 1,nteam
+            call srch(ithr)%new(self%p_ptr, spec, self%b_ptr)
+            srch(ithr)%ithr = ithr
+        enddo
+        t0 = omp_get_wtime()
+        !$omp parallel do default(shared) schedule(dynamic) proc_bind(close) &
+        !$omp private(i,iptcl,ithr,k,nseed,inpl,seed,cone,corr,sh,coord,refined_coord,valid_coord,mirror,temp,sigma2)
+        do i = i_first,i_last
+            iptcl = self%pinds(i)
+            if( self%b_ptr%spproj_field%get_state(iptcl) /= 1 ) cycle
+            if( .not. self%state_exists(1) ) cycle
+            ithr = omp_get_thread_num() + 1
+            seed = self%b_ptr%spproj_field%get_euler(iptcl)
+            cone = self%b_ptr%spproj_field%get(iptcl, 'cone')
+            mirror = cone > 0.
+            if( .not. mirror ) cone = self%p_ptr%athres_cont
+            call nearest_cone_views(self%b_ptr%eulspace, self%b_ptr%pgrpsyms, seed, cone, mirror, &
+                &kcap, refs(:,ithr), seeds(:,:,ithr), nseed)
+            srch(ithr)%iptcl = iptcl
+            temp = real(posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), self%b_ptr%pftc%get_pftsz()),dp)
+            self%temps(i) = real(temp)
+            sigma2 = real(self%sigma2_prior_model,dp)
+            if( self%p_ptr%l_centring ) sigma2 = (real(self%p_ptr%shift_sigma,dp) / real(self%p_ptr%smpd,dp))**2
+            if( sigma2 > 0.d0 .and. temp > 0.d0 ) call srch(ithr)%view_optimizer%set_shift_prior(real(sigma2), real(temp))
+            do k = 1,nseed
+                coord = 1. + modulo(360. - seeds(3,k,ithr), 360.) / self%b_ptr%pftc%get_dang()
+                inpl = self%b_ptr%pftc%get_roind(360. - seeds(3,k,ithr))
+                corr = 0.
+                sh = 0. ! the batch particle is already shifted at its incoming stored pose
+                call srch(ithr)%refine_extra_pose_continuously(refs(k,ithr), inpl, corr, sh, &
+                    &refined_coord, valid_coord, self%geom_views(k,i), seed_coord=coord)
+                self%geom_refs(k,i) = refs(k,ithr)
+                self%geom_inpls(k,i) = inpl
+                self%geom_coords(k,i) = refined_coord
+                self%geom_shifts(:,k,i) = sh
+            enddo
+        enddo
+        !$omp end parallel do
+        self%fill_profile%wall_region = self%fill_profile%wall_region + omp_get_wtime() - t0
+        self%fill_profile%nthr = nteam
+        self%fill_profile%projs_ns = kcap
+        self%fill_profile%nptcls = self%fill_profile%nptcls + int(i_last-i_first+1,int64)
+        self%fill_profile%nrefined = self%fill_profile%nrefined + int(count(self%geom_refs > 0),int64)
+        self%fill_profile%minimize_calls = self%fill_profile%minimize_calls + int(count(self%geom_refs > 0),int64)
+        do ithr = 1,nteam
+            call srch(ithr)%view_optimizer%get_profile(nevals, ngrads, nalts, ngrid, ncalls)
+            self%fill_profile%objective_evals = self%fill_profile%objective_evals + nevals
+            self%fill_profile%gradient_evals = self%fill_profile%gradient_evals + ngrads
+            call srch(ithr)%kill
+        enddo
+    end subroutine fill_geom_views
+
+    subroutine kill_geom_views( self )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        if( allocated(self%geom_views) ) deallocate(self%geom_views, self%geom_refs, self%geom_inpls, &
+            &self%geom_keep, self%geom_nkeep, self%geom_nvalid, self%geom_nbasins, self%geom_coords, &
+            &self%geom_shifts, self%geom_weights)
+    end subroutine kill_geom_views
 
     ! STOCHASTIC NEIGHBORHOOD BRANCH
 
@@ -984,10 +1077,95 @@ contains
     subroutine assign_batch_neigh( self, i_first, i_last )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer,                   intent(in)    :: i_first, i_last
+        if( self%p_ptr%l_cont_view .and. self%p_ptr%prob_neigh_mode == 'geom' )then
+            call assign_geom_views(self, i_first, i_last)
+            return
+        endif
         call self%batch_store_from_buffers(i_first, i_last)
         call self%assign_rows_neigh(i_first, i_last)
         call self%candidate_store%kill
     end subroutine assign_batch_neigh
+
+    !> Merge solved proposals, draw at the tempered basin mass and insert at the physical mass.
+    subroutine assign_geom_views( self, i_first, i_last )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer, intent(in) :: i_first, i_last
+        type(prob_candidate), allocatable :: cands(:)
+        real, allocatable :: rmats(:,:,:), shifts(:,:), scores(:), wd(:), wp(:), losses(:), masses(:), kw(:)
+        integer, allocatable :: pos(:), basin(:), reps(:), kept(:)
+        logical, allocatable :: valid(:), best(:), eligible(:)
+        integer :: i, k, j, nv, nb, nbphys, nc, which, nk, nelig, cap
+        real :: euler(3), temp, dist
+        if( .not. self%l_assign_open ) THROW_HARD('geometry view assignment is not open')
+        cap = size(self%geom_views,1)
+        allocate(cands(cap), rmats(3,3,0:cap-1), shifts(2,0:cap-1), scores(0:cap-1), &
+            &wd(0:cap-1), wp(0:cap-1), losses(cap), masses(cap), kw(cap), pos(cap), &
+            &basin(0:cap-1), reps(cap), kept(cap), valid(0:cap-1), best(0:cap-1), eligible(cap))
+        do i = i_first,i_last
+            nv = 0
+            do k = 1,cap
+                if( .not. self%geom_views(k,i)%evaluated ) cycle
+                nv = nv + 1
+                pos(nv) = k
+                euler = self%b_ptr%eulspace%get_euler(self%geom_refs(k,i))
+                euler(3) = modulo(360. - (self%geom_coords(k,i) - 1.) * self%b_ptr%pftc%get_dang(), 360.)
+                ! compose the solved tilt in the same chart as strategy3D_srch%view_pose
+                rmats(:,:,nv-1) = euler2m(euler)
+                if( self%geom_views(k,i)%committed ) rmats(:,:,nv-1) = real(matmul( &
+                    &matmul(real(rmats(:,:,nv-1),dp), transpose(self%geom_views(k,i)%rref)), &
+                    &self%b_ptr%pcont%view_frame(self%geom_views(k,i)%rref, self%geom_views(k,i)%x(4:5))))
+                shifts(:,nv-1) = self%b_ptr%spproj_field%get_2Dshift(self%pinds(i)) + self%geom_shifts(:,k,i)
+                scores(nv-1) = self%geom_views(k,i)%score
+            enddo
+            self%geom_nvalid(i) = nv
+            if( nv == 0 )then
+                self%nkept = self%nkept + 1
+                cycle ! preserve the input pose; never fall back to an exhaustive bank scan
+            endif
+            ! Do not report seed entropy as basin entropy: merging changes the draw's distribution.
+            temp = temperature_or_argmin(self%temps(i))
+            if( .not. (self%temps(i) > 0.) ) self%ntemp_missing = self%ntemp_missing + 1
+            valid(0:nv-1) = .true.
+            call merge_view_basins(self%insert_cone, 1, self%p_ptr%prob_beta * temp, nv-1, &
+                &rmats(:,:,0:nv-1), shifts(:,0:nv-1), scores(0:nv-1), valid(0:nv-1), 0., &
+                &basin(0:nv-1), nb, wd(0:nv-1), best(0:nv-1))
+            self%geom_nbasins(i) = nb
+            nc = 0
+            do k = 0,nv-1
+                if( .not. best(k) ) cycle
+                nc = nc + 1
+                reps(nc) = k
+                losses(nc) = -log(max(wd(k), 1.e-30))
+            enddo
+            call draw_posterior_row(nc, losses(1:nc), 1., masses, &
+                &rnd_keyed(rnd_draw_key(self%rnd_scope, self%pinds(i), RND_FAM_ASSIGN)), which, dist)
+            if( which == minloc(losses(1:nc),dim=1) ) self%nmode = self%nmode + 1
+            call merge_view_basins(self%insert_cone, 1, temp, nv-1, rmats(:,:,0:nv-1), shifts(:,0:nv-1), &
+                &scores(0:nv-1), valid(0:nv-1), 0., basin(0:nv-1), nbphys, wp(0:nv-1), best(0:nv-1))
+            do j = 1,nc
+                losses(j) = -log(max(wp(reps(j)), 1.e-30))
+            enddo
+            eligible(1:nc) = self%l_extras
+            eligible(which) = .true.
+            call top_posterior_extras(nc, losses(1:nc), 1., eligible(1:nc), which, &
+                &min(cap,self%kmax), PROB_INSERT_WMIN, nk, kept, kw, nelig)
+            self%geom_nkeep(i) = nk
+            do j = 1,nk
+                k = pos(reps(kept(j))+1)
+                self%geom_keep(j,i) = k
+                self%geom_weights(j,i) = kw(j)
+                cands(j)%iref = self%geom_refs(k,i)
+                cands(j)%inpl = self%geom_inpls(k,i)
+                cands(j)%dist = eulprob_dist_switch(self%geom_views(k,i)%score, self%p_ptr%cc_objfun)
+                cands(j)%x = self%geom_shifts(1,k,i)
+                cands(j)%y = self%geom_shifts(2,k,i)
+                cands(j)%has_sh = .true.
+            enddo
+            call self%assign_candidate(i, cands(1))
+            self%assgn_map(i)%frac = 100. * real(count(self%geom_refs(:,i) > 0)) / real(self%p_ptr%nspace)
+            call self%insert_tab%add(i, kw(1), nk-1, cands(2:nk), kw(2:nk), nelig)
+        enddo
+    end subroutine assign_geom_views
 
     !> the thread buffers of the batch as the candidate store of the part: the particles outside the batch hold no
     !! candidate; a particle's candidates come in its thread's append order
@@ -1708,6 +1886,7 @@ contains
         call self%candidate_store%kill
         if( allocated(self%candidate_fill_counts) ) deallocate(self%candidate_fill_counts)
         if( allocated(self%cell_radius)           ) deallocate(self%cell_radius)
+        call kill_geom_views(self)
         self%l_direct_stoch_neigh = .false.
         self%nkept = 0
         call self%eul_prob_tab%kill

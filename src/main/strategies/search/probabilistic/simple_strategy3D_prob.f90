@@ -9,6 +9,7 @@ use simple_strategy3D_srch,    only: strategy3D_spec, view_solve
 use simple_ori_utils,          only: euler2m
 use simple_ori,                only: ori
 use simple_oris,               only: oris
+use simple_eul_prob_tab_neigh,  only: eul_prob_tab_neigh
 implicit none
 
 public :: strategy3D_prob
@@ -26,6 +27,7 @@ contains
     procedure :: has_valid_assignment
     procedure, private :: resolve_extra_poses
     procedure, private :: resolve_extra_poses_view
+    procedure, private :: commit_geom_view
 end type strategy3D_prob
 
 contains
@@ -55,6 +57,10 @@ contains
             self%s%ithr = ithr
             ! prep
             call self%s%prep4prob
+            if( self%s%p_ptr%l_cont_view .and. self%s%p_ptr%prob_neigh_mode == 'geom' )then
+                call self%commit_geom_view
+                return
+            endif
             self%s%nrefs_eval = self%s%nrefs
             iptcl_map = self%s%iptcl_map
             istate    =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%istate
@@ -112,6 +118,56 @@ contains
             call os%reject(self%s%iptcl)
         endif
     end subroutine srch_prob
+
+    !> Commit the batch's already solved geometry draw and resolved extras; write only this particle's in-memory row.
+    subroutine commit_geom_view( self )
+        class(strategy3D_prob), intent(inout) :: self
+        type(view_solve) :: vs
+        real :: sh(2), euler(3), shvec(2), frac
+        integer :: i, k, j, inpl, iloc, ipose, ninserted
+        i = self%s%iptcl_map
+        select type( tab => self%spec%eulprob_obj_part )
+            type is(eul_prob_tab_neigh)
+                if( tab%geom_nkeep(i) < 1 ) return
+                k = tab%geom_keep(1,i)
+                vs = tab%geom_views(k,i)
+                sh = tab%geom_shifts(:,k,i)
+                inpl = tab%geom_inpls(k,i)
+                self%s%nrefs_eval = count(tab%geom_refs(:,i) > 0)
+                call assign_ori(self%s, tab%geom_refs(k,i), inpl, vs%score, sh, tab%geom_coords(k,i), .true.)
+                call self%s%set_view(vs)
+                call self%s%commit_view
+                ninserted = 0
+                if( associated(self%spec%extra_poses) )then
+                    if( self%spec%extra_poses%has(self%s%iptcl) )then
+                        iloc = self%spec%extra_poses%loc(self%s%iptcl)
+                        self%spec%extra_poses%wc(iloc) = tab%geom_weights(1,i)
+                        do j = 2,tab%geom_nkeep(i)
+                            k = tab%geom_keep(j,i)
+                            inpl = tab%geom_inpls(k,i)
+                            call candidate_pose(self%s, tab%geom_refs(k,i), inpl, tab%geom_shifts(:,k,i), euler, shvec)
+                            euler(3) = resolve_inplane_e3(inpl, tab%geom_coords(k,i), .true., .true., self%s%b_ptr%pftc%get_dang())
+                            if( tab%geom_views(k,i)%committed ) euler = self%s%view_pose(euler, tab%geom_views(k,i))
+                            ipose = self%spec%extra_poses%first(iloc) + j - 2
+                            self%spec%extra_poses%euler(:,ipose) = euler
+                            self%spec%extra_poses%shift(:,ipose) = shvec
+                            self%spec%extra_poses%w(ipose) = tab%geom_weights(j,i)
+                            ninserted = ninserted + 1
+                        enddo
+                    endif
+                endif
+                if( self%s%p_ptr%l_centring ) call record_shift_state(self%s%b_ptr%spproj_field, self%s%iptcl, norm2(sh), &
+                    &-1., self%s%p_ptr%shift_sigma, self%s%p_ptr%smpd, self%s%p_ptr%box, &
+                    &self%s%p_ptr%trs, self%s%b_ptr%pftc%get_kfromto())
+                frac = tab%assgn_map(i)%frac
+                call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'frac', frac)
+                call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'cont_inpl_attempted', 1.)
+                call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'cont_inpl_improved', merge(1.,0.,vs%committed))
+                call self%s%set_view_extras_counts(max(0,tab%geom_nvalid(i)-1), ninserted, &
+                    &tab%geom_nvalid(i)-tab%geom_nbasins(i), tab%geom_weights(1,i))
+                self%assignment_valid = .true.
+        end select
+    end subroutine commit_geom_view
 
     !> The particle's extra poses for the weighted insertion: the part's table entries (reference, in-plane index,
     !! native shift increment, weight) as Euler triplets and absolute stored shifts through candidate_pose, the
