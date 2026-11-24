@@ -224,7 +224,6 @@ contains
             ! parameters update
             call set_cline_refine2D_stage(cline_refine2D, cline, params, stage_parms, maxits, istage)
             ! classify
-            write(logfhandle,'(A,I0)')'>>> SOLVE2D ENTERING REFINE2D STAGE ', istage
             call flush(logfhandle)
             call execute_refine2D
             ! update GUI

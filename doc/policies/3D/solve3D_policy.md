@@ -232,6 +232,8 @@ weight, so the weight can step forward by at most the remaining part of that
 stage's ramp. Annealing therefore costs no iterations over `sigma2_anneal=no`.
 Each iteration logs the weight and the shells' mean log ratio of measured to
 bootstrap noise (`SIGMA2 ANNEAL`), read before the iteration's residual update.
+The residual-only sigma pass after a stage prints no annealing readout: it
+updates measured noise without scoring or refining poses.
 
 Full-sampling and multi-state particle runs follow the same stage schedule.
 Short or late-entry runs reserve the last two executed stages for model-based

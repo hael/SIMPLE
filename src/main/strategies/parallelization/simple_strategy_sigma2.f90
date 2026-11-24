@@ -32,6 +32,7 @@ contains
         logical :: found
         character(len=512) :: message
         if( trim(params%sigma2_anneal) == 'no' ) return
+        if( trim(params%refine) == 'sigma' ) return
         call build%spproj%get_sigma2_state_path(fname, found)
         if( .not. found ) THROW_HARD('missing sigma2 store for the sigma2 anchor readout')
         call sigma2_anchor_band_stats(fname%to_char(), band, mean_log, edge_log, nabove, status, message)

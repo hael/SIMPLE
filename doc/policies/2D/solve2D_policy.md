@@ -208,8 +208,7 @@ class resolution tracked the ladder within one rung and no stage was omitted;
 the rule is meant for the easy data whose classes outrun the march.
 
 The log marks each stage (`>>> STAGE n WITH LP x A`, or `WITH GOLD STANDARD
-E/O`) and its call (`>>> SOLVE2D ENTERING REFINE2D STAGE n`, `>>> SOLVE2D
-RETURNED FROM REFINE2D STAGE n`). Each iteration prints one `>>> CONVERGED:
+E/O`) without separate entry/return messages. Each iteration prints one `>>> CONVERGED:
 yes|no`, the decision after `minits`, `maxits` and the full-assignment
 coverage, as 3D does.
 

@@ -1385,13 +1385,10 @@ contains
             ! the first freely sampled stage after the sticky stages restarts the update history
             call release_sticky_subset(spproj, params%projfile, l_sticky_prev)
             ! Executing the refinement with the above settings
-            write(logfhandle,'(A,I0)')'>>> SOLVE3D ENTERING REFINE3D STAGE ', istage
             call flush(logfhandle)
             if( L_BENCH_GLOB ) t_phase = tic()
             call exec_refine3D(params, istage, xrefine3D)
             if( L_BENCH_GLOB ) rt_stages = rt_stages + toc(t_phase)
-            write(logfhandle,'(A,I0)')'>>> SOLVE3D RETURNED FROM REFINE3D STAGE ', istage
-            call flush(logfhandle)
             call print_states(params, istage)
             ! Symmetrization
             if( istage == solve3D_symsrch_stage(l_srch4symaxis) )then
