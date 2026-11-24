@@ -17,10 +17,11 @@ on:
       - 'compile_clean.sh'
   workflow_dispatch:
 
-# a newer push cancels the build of an older one still running
+# Preserve every push build and run them sequentially.
 concurrency:
   group: ci-push-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   Build:
