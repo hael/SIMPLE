@@ -2237,7 +2237,7 @@ contains
         integer,                 intent(out) :: basin(0:n), nbasins
         real,                    intent(out) :: w(0:n)
         logical,                 intent(out) :: best(0:n)
-        real(dp) :: u(0:n), wb(0:n), tot, arg
+        real(dp) :: u(0:n), wb(1:n+1), tot, arg
         real     :: loss(0:n), lmin
         integer  :: label(0:n), i, j, k, li, lj, m, b
         logical  :: changed

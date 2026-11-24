@@ -1632,6 +1632,12 @@ contains
         temp   = 1.
         scores = exp(-[1.0, 0.5, 2.0, 1.5])
         valid  = .true.
+        ! zero extras still require one basin, numbered 1, for pose 0
+        call merge_view_basins(cone, 1, temp, 0, rmats(:,:,0:0), shifts(:,0:0), scores(0:0), valid(0:0), 0.01, &
+            &basin(0:0), nbasins, w(0:0), best(0:0))
+        call assert_int(1, nbasins, 'merge: a committed pose without extras forms one basin')
+        call assert_true(basin(0) == 1 .and. best(0), 'merge: the lone committed pose is its basin''s best')
+        call assert_real(1., w(0), 1.e-5, 'merge: the lone committed pose carries unit weight')
         call merge_view_basins(cone, 1, temp, 3, rmats, shifts, scores, valid, 0.01, basin, nbasins, w, best)
         call assert_int(2, nbasins, 'merge: the chained poses are one basin, the far one another')
         call assert_true(basin(0) == 1 .and. basin(1) == 1 .and. basin(2) == 1 .and. basin(3) == 2, 'merge: the basins, the committed first')
@@ -1654,6 +1660,14 @@ contains
         valid(0) = .false.
         call merge_view_basins(cone, 1, temp, 3, rmats, shifts, scores, valid, 0.01, basin, nbasins, w, best)
         call assert_int(0, nbasins, 'merge: without a valid committed pose there is no basin')
+        ! every pose can form a distinct basin: four poses need basin indices 1..4
+        valid = .true.
+        scores = exp(-1.)
+        shifts(1,:) = [0., 20., 40., 60.]
+        call merge_view_basins(cone, 1, temp, 3, rmats, shifts, scores, valid, 0.01, basin, nbasins, w, best)
+        call assert_int(4, nbasins, 'merge: four separated poses form four basins')
+        call assert_true(all(basin == [1,2,3,4]) .and. all(best), 'merge: every separated pose is its basin''s best')
+        call assert_true(all(abs(w - 0.25) < 1.e-5), 'merge: equally scored separated poses carry equal posterior shares')
         call cone%kill
         call eul%kill
     end subroutine test_merge_view_basins
