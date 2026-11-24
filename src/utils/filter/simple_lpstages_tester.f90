@@ -108,7 +108,6 @@ contains
         integer, parameter :: BOXCROP_DELAYED(8) = [88, 88, 88, 88, 108, 128, 150, 168]
         real,    parameter :: LPS(5)             = [15., 12.5, 10., 7.5, 5.]
         real,    parameter :: LPS_DELAYED(8)     = [15., 15., 15., 15., 12.5, 10., 7.5, 5.]
-        real,    parameter :: LPS_HALVING(8)     = [15.5, 10., 7.25, 5.875, 5.1875, 4.84375, 4.671875, 4.5]
         integer :: i, nlines
         write(*,'(A)') 'test_lpstages_setlims'
         call lpstages_setlims(BOX, 5, SMPD, 15., 5., info(1:5), verbose=.false.)
@@ -127,14 +126,6 @@ contains
         call assert_int(8, nlines, 'setlims diagnostics: ordinary schedule prints every stage')
         call count_setlims_diagnostics(nlines, first_stage=4)
         call assert_int(5, nlines, 'setlims diagnostics: delayed schedule starts at stage 4')
-        ! halving the distance to lpstop at each stage (solve2D's march), the last stage at lpstop; same crops
-        call lpstages_setlims(BOX, 8, SMPD, 15.5, 4.5, info, verbose=.false., halving=.true.)
-        do i = 1,8
-            call assert_real(LPS_HALVING(i), info(i)%lp, 1.e-4, 'setlims halving, stage '//int2str(i)//': low-pass limit')
-            call assert_crop_consistent(info(i), 'setlims halving, stage '//int2str(i))
-        end do
-        call assert_int(info(1)%box_crop, BOXCROP(1), 'setlims halving: the first crop as the linear ladder''s')
-        call assert_int(168, info(8)%box_crop, 'setlims halving: the last crop for 4.5 A at the 2 A floor')
         call lpstages_setlims(BOX, 1, SMPD, 15., 5., info(1:1), verbose=.false.)
         call assert_real(5.,   info(1)%lp, TOL, 'setlims, one stage: lpstop')
         call assert_int(168, info(1)%box_crop, 'setlims, one stage: cropped for lpstop')

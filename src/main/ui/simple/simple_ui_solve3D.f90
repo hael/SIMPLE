@@ -37,7 +37,7 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         call add_solve3D_base_inputs(solve3D, l_stream_compatible=.false., l_include_nsample=.true., l_include_pcg=.true.)
         call solve3D%add_input(UI_SRCH, 'sigma2_anneal', 'binary', 'Anneal bootstrap noise for matching', &
-            &'Start from white noise and reach the smoothed bootstrap over the sticky sampling stages (1-4), '//&
+            &'Start from white noise, reach the smoothed bootstrap over stages 1-2 and hold it through stage 4, '//&
             &'then reach model-based noise before the final two stages. The same stage schedule applies to '//&
             &'full sampling and multiple states; shorter runs compress the ramps. Reconstruction retains '//&
             &'measured spectra. Requires Euclidean matching(yes|no){yes}', &
@@ -195,14 +195,13 @@ contains
         &Angstroms{30}', .false., 30., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_FILT, 'lpstart',     'num', 'Starting low-pass limit', 'Starting low-pass limit, &
-            &used as given; stage 1 defaults to mskdiam/8 within 10-30 A; stage 2 ramps halfway to the FSC target; &
-            &later ladder starts at mskdiam/10',&
+            &default mskdiam/8 within 10-30 A, never finer than the last limit; the ladder is linear in A',&
             &'low-pass limit for the initial stage in Angstroms',  .false., 20., group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call prg%add_input(UI_FILT, 'lpstop',     'num', 'Final low-pass limit', 'Final low-pass limit, &
-            &used as given; each stage halves the distance to it, as in solve2D',&
+        call prg%add_input(UI_FILT, 'lpstop',     'num', 'Final low-pass limit', 'Final low-pass limit; &
+            &a value coarser than the size rule sets the last stage, any value caps the limits FSC=0.5 sets',&
             &'low-pass limit for the final stage in Angstroms; default is 6 for nstates>1 &
-            &and 4.5 otherwise',    .false., 8., group="filter", &
+            &and mskdiam/26.7 within 4.5-6 otherwise',    .false., 8., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_FILT, lp, group="filter", &
         &visibility=UI_VIS_ADVANCED)

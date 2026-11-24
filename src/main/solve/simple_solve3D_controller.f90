@@ -27,6 +27,7 @@ integer,          parameter :: NOSYMSRCH_STAGE         = 3           ! its count
 integer,          parameter :: VOL_SUPPLIED_STAGE      = NOSYMSRCH_STAGE + 1 ! first stage for supplied volumes
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: STICKY_LAST_STAGE       = 4           ! single state holds its sticky subset through this stage, free from the next
+integer,          parameter :: SIGMA2_WHITE_LAST_STAGE = 2           ! annealed scoring reaches the smoothed bootstrap spectrum by the end of this stage
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = STICKY_LAST_STAGE + 1 ! single state trails from the first freely sampled stage
 integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
 integer,          parameter :: GOLD_STD_STAGE          = 6           ! first eligible single-state gold-standard stage
@@ -43,11 +44,9 @@ character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
 integer,          parameter :: FSC05_PROMOTE_MIN_STAGE = 2    ! FSC=0.5 stage-boundary promotion applies past this stage
-integer,          parameter :: FSC05_SET_START_STAGE   = 2    ! single state: the FSC=0.5 at entry sets the limit from here to gold standard
 integer,          parameter :: STAGE_MINITS            = 3    ! every stage runs this many iterations before its exits apply
-real,             parameter :: PTCL_LPSTART_MSKDIAM_DIV = 10.        ! particle ladder: mskdiam/10 within LPSTART_SIZE_BOUNDS to LPSTOP_BOUNDS(1)
-real,             parameter :: LPSTART_MSKDIAM_DIV     = 8.          ! class-average route's size limits: first mskdiam/8 within LPSTART_SIZE_BOUNDS
-real,             parameter :: LPSTART_SIZE_BOUNDS(2)  = [10.,30.]   ! start bounds of both size rules
+real,             parameter :: LPSTART_MSKDIAM_DIV     = 8.          ! size ladder: first limit mskdiam/8 within LPSTART_SIZE_BOUNDS
+real,             parameter :: LPSTART_SIZE_BOUNDS(2)  = [10.,30.]   ! start bounds of the size ladder
 real,             parameter :: LPSTOP_MSKDIAM_DIV      = 160./6.     ! last limit mskdiam/26.7 within LPSTOP_BOUNDS (6 A at PfCRT's 160 A)
 real,             parameter :: CENLP_DEFAULT           = 30.
 real,             parameter :: LPSYMSRCH_LB            = 12.
@@ -82,15 +81,7 @@ contains
         bounds = LPSTOP_BOUNDS
     end function solve3D_lpstop_bounds
 
-    !> first and last limit of the particle ladder, from the mask diameter (A): mskdiam/10 within 10-30 A, 4.5 A
-    module function solve3D_ptcl_lplims( mskdiam ) result( lims )
-        real, intent(in) :: mskdiam
-        real :: lims(2)
-        lims(1) = min(max(mskdiam / PTCL_LPSTART_MSKDIAM_DIV, LPSTART_SIZE_BOUNDS(1)), LPSTART_SIZE_BOUNDS(2))
-        lims(2) = LPSTOP_BOUNDS(1)
-    end function solve3D_ptcl_lplims
-
-    !> first and last limit of set_lplims_from_size (the class-average route), from the mask diameter (A)
+    !> first and last limit of the size ladder (set_lplims_from_size), from the mask diameter (A)
     module function solve3D_size_lplims( mskdiam ) result( lims )
         real, intent(in) :: mskdiam
         real :: lims(2)
@@ -255,7 +246,7 @@ contains
             endif
         endif
         call emit_refine3D_stage_cfg( cfg, params, istage, first_stage, l_cavgs, l_refine3D_lp_override, l_addon, &
-            &l_register, stage1_lp )
+            &l_register )
         call set_refine3D_sigma2_schedule(params, istage, first_stage, l_cavgs .or. l_addon)
         if( l_addon )then
             if( .not. addon%frozen_rec%is_allocated() ) THROW_HARD('active add-on context without a frozen run context')
@@ -263,13 +254,14 @@ contains
         endif
     end procedure set_cline_refine3D
 
-    !> Scoring only: white to bootstrap over the sticky window, then to model noise before the last two stages.
+    !> Scoring only: white to bootstrap over the first two stages, the bootstrap held through the sticky window,
+    !! then to model noise before the last two stages.
     subroutine set_refine3D_sigma2_schedule( params, istage, first_stage, l_excluded )
         class(parameters), intent(in) :: params
-        integer, intent(in) :: istage, first_stage
-        logical, intent(in) :: l_excluded
-        integer :: last_ramp, last_flat
-        real :: first, last
+        integer,           intent(in) :: istage, first_stage
+        logical,           intent(in) :: l_excluded
+        integer :: last_ramp, last_flat, last_white
+        real    :: first, last
         call cline_refine3D%delete('sigma2_weight')
         call cline_refine3D%delete('sigma2_weight_start')
         call cline_refine3D%delete('sigma2_weight_end')
@@ -279,14 +271,18 @@ contains
         endif
         first = 1.
         last  = 1.
-        last_ramp = active_refine3D_nstages() - 2
-        last_flat = min(max(first_stage, STICKY_LAST_STAGE), last_ramp - 1)
+        last_ramp  = active_refine3D_nstages() - 2
+        last_flat  = min(max(first_stage, STICKY_LAST_STAGE), last_ramp - 1)
+        last_white = min(max(first_stage, SIGMA2_WHITE_LAST_STAGE), last_flat)
         if( istage <= last_ramp )then
             if( last_ramp == first_stage )then
                 first = -1.
+            else if( istage <= last_white )then
+                first = -1. + real(istage-first_stage)   / real(last_white-first_stage+1)
+                last  = -1. + real(istage-first_stage+1) / real(last_white-first_stage+1)
             else if( istage <= last_flat )then
-                first = -1. + real(istage-first_stage)   / real(last_flat-first_stage+1)
-                last  = -1. + real(istage-first_stage+1) / real(last_flat-first_stage+1)
+                first = 0.
+                last  = 0.
             else
                 first = real(istage-last_flat-1) / real(last_ramp-last_flat)
                 last  = real(istage-last_flat)   / real(last_ramp-last_flat)
@@ -603,7 +599,7 @@ contains
     end subroutine apply_refine3D_search_overrides
 
     subroutine emit_refine3D_stage_cfg( cfg, params, istage, first_stage, l_cavgs, l_cmdline_lp_override, l_addon, &
-        &l_register, stage1_lp )
+        &l_register )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         integer,                  intent(in) :: istage, first_stage
@@ -611,38 +607,24 @@ contains
         logical,                  intent(in) :: l_cmdline_lp_override
         logical,                  intent(in) :: l_addon    !< solve3D_addon stage: the cohort's own sampling, no sticky subset
         logical,                  intent(in) :: l_register !< solve3D_addon registration pass: full update, planned limit
-        real, optional,           intent(in) :: stage1_lp
-        real :: lp_eff, lpstop_eff, lp_cap
-        logical :: l_full_update_stage, l_explicit_lp, l_lp_from_fsc05, l_stage1_lp
+        real    :: lp_eff, lpstop_eff, lp_cap
+        logical :: l_full_update_stage, l_explicit_lp, l_lp_from_fsc05
         l_full_update_stage = force_full_sampling_mode(params) .or. l_register
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         l_explicit_lp       = l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes'
-        l_stage1_lp = .false.
-        if( present(stage1_lp) )then
-            l_stage1_lp = istage == 1 .and. .not. l_cavgs .and. .not. l_addon .and. stage1_lp > 0.
-            if( l_stage1_lp ) lp_eff = stage1_lp
-        endif
-        ! Particle-route ladder cap LPSTOP_BOUNDS(1), not lpfinal; a command-line lpstop replaces it, coarser or
-        ! finer (doc/policies/3D/solve3D_policy.md sec. 4).
+        ! Particle-route ladder cap LPSTOP_BOUNDS(1), not lpfinal; a command-line lpstop replaces it, coarser or finer.
         lp_cap = LPSTOP_BOUNDS(1)
         if( l_cavgs ) lp_cap = lpinfo(active_refine3D_nstages())%lp
         if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lp_cap = params%lpstop
-        ! Single state, from stage 2 until gold standard: the FSC=0.5 at stage entry sets the limit, coarser or finer
-        ! than planned, between the ladder cap and the ladder start; multi-state stages keep the one-rung advance,
-        ! including the union FSC of add-ons.
+        ! Single state, from the first ML-regularized stage until gold standard: a FSC=0.5 at stage entry finer than
+        ! the planned rung sets the limit, never a coarser one; multi-state stages keep the one-rung advance, on the
+        ! union FSC in a multi-state add-on.
         l_lp_from_fsc05 = .false.
         if( .not. l_cavgs .and. .not. l_explicit_lp .and. .not. l_register .and. .not. cfg%l_gold_standard )then
             if( fsc05_sets_stage_lp(cfg, params, istage, l_cmdline_lp_override) )then
-                call set_stage_lp_from_fsc05(params, lp_cap, lpinfo(1)%lp, lp_eff, l_lp_from_fsc05)
+                call set_stage_lp_from_fsc05(params, lp_cap, lp_eff, l_lp_from_fsc05)
             else
                 call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_lp_from_fsc05)
-            endif
-        endif
-        ! Stage 2 bridges the separate start and the existing FSC-bounded target in Angstroms.
-        ! Keep lpinfo intact: stage 3 onward still computes its limit against the original bounds.
-        if( present(stage1_lp) )then
-            if( istage == 2 .and. stage1_lp > 0. .and. l_lp_from_fsc05 .and. .not. l_addon )then
-                lp_eff = 0.5 * (stage1_lp + lp_eff)
             endif
         endif
         ! NU and gold-standard stages have only the user's explicit matching ceiling.
@@ -651,7 +633,7 @@ contains
             if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = params%lpstop
         else
             lpstop_eff = lpinfo(istage)%lp
-            if( l_lp_from_fsc05 .or. l_stage1_lp ) lpstop_eff = lp_eff
+            if( l_lp_from_fsc05 ) lpstop_eff = lp_eff
             if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = max(lpstop_eff, params%lpstop)
         endif
         call cline_refine3D%set('prg',    'refine3D')
@@ -774,12 +756,7 @@ contains
         endif
         if( cfg%gaufreq > 0. )then
             call cline_refine3D%set('gauref',             'yes')
-            if( l_lp_from_fsc05 .or. l_stage1_lp )then
-                ! the Gaussian reference filter follows the effective stage limit
-                call cline_refine3D%set('gaufreq',        lp_eff)
-            else
-                call cline_refine3D%set('gaufreq',        cfg%gaufreq)
-            endif
+            call cline_refine3D%set('gaufreq',            cfg%gaufreq)
         else
             call cline_refine3D%delete('gauref')
             call cline_refine3D%delete('gaufreq')
@@ -824,28 +801,28 @@ contains
         if( l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes' ) lp = params%lp
     end function stage_matching_lp
 
-    !> The FSC=0.5 resolution at stage entry sets the stage limit: single-state particle stages from
-    !! FSC05_SET_START_STAGE (the first with a measured FSC) until gold standard, NU stages included
+    !> The FSC=0.5 resolution at stage entry may set the stage limit: single-state particle stages from
+    !! ML_REG_START_STAGE until gold standard, NU stages included
     logical function fsc05_sets_stage_lp( cfg, params, istage, l_cmdline_lp_override ) result( l_fsc )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cmdline_lp_override
-        l_fsc = params%nstates == 1 .and. istage >= FSC05_SET_START_STAGE .and. &
+        l_fsc = params%nstates == 1 .and. istage >= ML_REG_START_STAGE .and. &
             &.not. cfg%l_gold_standard .and. .not. l_cmdline_lp_override
     end function fsc05_sets_stage_lp
 
-    !> The project FSC=0.5 sets the stage limit, coarser (holding back) or finer (advancing) than the planned
-    !! rung, fixed for the stage, never finer than the ladder cap nor coarser than the ladder start lp_max
-    subroutine set_stage_lp_from_fsc05( params, lp_cap, lp_max, lp, l_set )
+    !> A project FSC=0.5 finer than the planned rung sets the stage limit, fixed for the stage and bounded by
+    !! the ladder cap; a coarser one keeps the planned rung, never a retreat
+    subroutine set_stage_lp_from_fsc05( params, lp_cap, lp, l_set )
         class(parameters), intent(in)    :: params
-        real,              intent(in)    :: lp_cap, lp_max
+        real,              intent(in)    :: lp_cap
         real,              intent(inout) :: lp
         logical,           intent(out)   :: l_set
         real :: res05
         res05 = project_best_fsc05_resolution(params%projfile)
-        l_set = res05 > TINY
-        if( l_set ) lp = min(max(res05, lp_cap), lp_max)
+        l_set = res05 > TINY .and. max(res05, lp_cap) < lp
+        if( l_set ) lp = max(res05, lp_cap)
     end subroutine set_stage_lp_from_fsc05
 
     !> Advance the planned stage matching limit by one ladder rung when the

@@ -64,11 +64,6 @@ interface
         real :: bounds(2)
     end function solve3D_lpstop_bounds
 
-    module function solve3D_ptcl_lplims( mskdiam ) result( lims )
-        real, intent(in) :: mskdiam
-        real :: lims(2)
-    end function solve3D_ptcl_lplims
-
     module function solve3D_size_lplims( mskdiam ) result( lims )
         real, intent(in) :: mskdiam
         real :: lims(2)
@@ -173,12 +168,11 @@ interface
         integer :: istage
     end function solve3D_first_free_stage
 
-    module subroutine set_cline_refine3D( params, istage, first_stage, l_cavgs, addon, stage1_lp )
-        class(parameters),                    intent(in) :: params
-        integer,                              intent(in) :: istage, first_stage
-        logical,                              intent(in) :: l_cavgs
+    module subroutine set_cline_refine3D( params, istage, first_stage, l_cavgs, addon )
+        class(parameters),                 intent(in) :: params
+        integer,                           intent(in) :: istage, first_stage
+        logical,                           intent(in) :: l_cavgs
         type(solve3D_addon_ctx), optional, intent(in) :: addon
-        real,                  optional, intent(in) :: stage1_lp
     end subroutine set_cline_refine3D
 
 end interface
@@ -458,8 +452,9 @@ contains
         endif
     end subroutine set_symmetry_class_vars
 
-    !> the class-average stage ladder (particles: force_lp_range only) from the molecule's size: linear in A from
-    !! mskdiam/8 (10-30 A) to mskdiam/26.7 (4.5-6 A); lpstart replaces the first limit, lpstop coarsens the last
+    !> the stage ladder of the class-average and particle routes from the molecule's size: linear in A from
+    !! mskdiam/8 (10-30 A) to mskdiam/26.7 (4.5-6 A); lpstart replaces the first limit, never finer than the last,
+    !! and lpstop coarsens the last
     subroutine set_lplims_from_size( params, spproj, l_cavgs, lpstart, lpstop )
         class(parameters), intent(inout) :: params
         class(sp_project), intent(in)    :: spproj
@@ -487,39 +482,11 @@ contains
         lims = solve3D_size_lplims(params%mskdiam)
         if( present(lpstart) ) lims(1) = max(lpstart, lims(2))
         if( present(lpstop)  ) lims(2) = max(lpstop,  lims(2))
+        lims(1) = max(lims(1), lims(2))
         write(logfhandle,'(A,F6.1,A,F6.2,A,F6.2,A)') '>>> SOLVE3D LOW-PASS LADDER FROM MSKDIAM ', params%mskdiam, &
             &' A: ', lims(1), ' -> ', lims(2), ' A'
         call lpstages_setlims(params%box, nstages, params%smpd, lims(1), lims(2), lpinfo, trslim_override=trslim_override)
     end subroutine set_lplims_from_size
-
-    !> the particle stage ladder from mskdiam/10 (10-30 A) to 4.5 A, each stage halving the distance to the stop as
-    !! solve2D does; stage 1 separately starts at mskdiam/8 (10-30 A), unless lpstart is given
-    subroutine set_lplims_ptcls( params, lpstart, lpstop, stage1_lp )
-        class(parameters), intent(in) :: params
-        real,              intent(in) :: lpstart, lpstop
-        real,             intent(out) :: stage1_lp
-        real    :: lims(2), start_lims(2), trslim_override
-        integer :: nstages
-        l_cavgs_mode = .false.
-        trslim_override = 0.
-        if( l_refine3D_trs_override ) trslim_override = params%trs
-        nstages = active_lp_schedule_nstages()
-        lims = solve3D_ptcl_lplims(params%mskdiam)
-        if( lpstart > 0. ) lims(1) = lpstart
-        if( lpstop  > 0. ) lims(2) = lpstop
-        lims(1) = max(lims(1), lims(2))
-        write(logfhandle,'(A,F6.1,A,F6.2,A,F6.2,A)') '>>> SOLVE3D LOW-PASS LADDER AT MSKDIAM ', params%mskdiam, &
-            &' A: ', lims(1), ' -> ', lims(2), ' A, HALVING THE DISTANCE PER STAGE'
-        if( allocated(lpinfo) ) deallocate(lpinfo)
-        allocate(lpinfo(nstages))
-        call lpstages_setlims(params%box, nstages, params%smpd, lims(1), lims(2), lpinfo, trslim_override=trslim_override, &
-            &halving=.true.)
-        stage1_lp = lims(1)
-        if( lpstart <= 0. )then
-            start_lims = solve3D_size_lplims(params%mskdiam)
-            stage1_lp  = max(start_lims(1), lims(2))
-        endif
-    end subroutine set_lplims_ptcls
 
     subroutine set_lplims_from_input( params, spproj, lpstart, lpstop, first_stage )
         class(parameters), intent(inout) :: params

@@ -892,7 +892,7 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(gui_communicator)          :: gui_comm
-        real    :: lprange(2), lpstart_ptcls, lpstop_ptcls, stage1_lp
+        real    :: lprange(2)
         integer :: state, istage, start_stage, nptcls2update, noris, nstates_on_cline
         integer :: nstates_in_project, last_stage, pose_init_iter
         logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
@@ -1222,7 +1222,6 @@ contains
             endif
         endif
         ! set low-pass limits and downscaling info from the mask diameter
-        stage1_lp = 0.
         if( l_addon )then
             ! the base run's ladder at the limits it emitted; never planned again
             call set_lplims_from_manifest(man_addon)
@@ -1240,19 +1239,17 @@ contains
             else
                 call set_lplims_from_input(params, spproj, params%lpstart, params%lpstop)
             endif
-        else if( trim(params%force_lp_range).eq.'yes' )then
-            ! lpstart and lpstop as given, linear in A (solve3D_nano, scripts)
-            if( .not.(cline%defined('lpstart') .and. cline%defined('lpstop')) )then
-                THROW_HARD('force_lp_range=yes requires both lpstart and lpstop')
-            endif
-            call set_lplims_from_size(params, spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
         else
-            ! the size rule; an explicit lpstart or lpstop sets its end as given
-            lpstart_ptcls = 0.
-            lpstop_ptcls  = 0.
-            if( cline%defined('lpstart') ) lpstart_ptcls = params%lpstart
-            if( cline%defined('lpstop')  ) lpstop_ptcls  = params%lpstop
-            call set_lplims_ptcls(params, lpstart_ptcls, lpstop_ptcls, stage1_lp)
+            ! the size ladder; force_lp_range=yes takes lpstart and lpstop as given (solve3D_nano, scripts)
+            if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
+                call set_lplims_from_size(params, spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
+            else if( cline%defined('lpstart') )then
+                call set_lplims_from_size(params, spproj, l_cavgs=.false., lpstart=params%lpstart)
+            else if( cline%defined('lpstop') )then
+                call set_lplims_from_size(params, spproj, l_cavgs=.false., lpstop=params%lpstop)
+            else
+                call set_lplims_from_size(params, spproj, l_cavgs=.false.)
+            endif
         endif
         if( l_user_lpstop ) write(logfhandle,'(A,F8.3,A)') &
             &'>>> SOLVE3D COMMAND-LINE LPSTOP CEILING: ', params%lpstop, ' A'
@@ -1334,7 +1331,7 @@ contains
             ! This reconstruction feeds start_stage but runs before the stage
             ! loop. Emit the same controller policy here so a requested PCG
             ! backend never executes with the unprocessed outer command line.
-            call set_cline_refine3D(params, start_stage, start_stage, l_cavgs=.false., stage1_lp=stage1_lp)
+            call set_cline_refine3D(params, start_stage, start_stage, l_cavgs=.false.)
             call calc_rec(params, params%projfile, xrec3D, start_stage)
         endif
         if( L_BENCH_GLOB ) rt_start = toc(t_phase)
@@ -1363,7 +1360,7 @@ contains
             if( l_addon )then
                 call set_cline_refine3D(params, istage, start_stage, l_cavgs=.false., addon=addon_ctx)
             else
-                call set_cline_refine3D(params, istage, start_stage, l_cavgs=.false., stage1_lp=stage1_lp)
+                call set_cline_refine3D(params, istage, start_stage, l_cavgs=.false.)
             endif
             call record_emitted_limits(istage)
             if( l_addon ) call addon_stage_boundary(istage)
@@ -1373,16 +1370,8 @@ contains
                     write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', &
                         &cline_refine3D%get_rarg('lp'), ' A (command line)'
                 else if( abs(cline_refine3D%get_rarg('lp') - lpinfo(istage)%lp) > 1.e-3 )then
-                    if( istage == 1 .and. stage1_lp > 0. )then
-                        write(logfhandle,'(A,I3,A,F5.1,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', &
-                            &cline_refine3D%get_rarg('lp'), ' A (stage-1 size rule; ladder starts at ', lpinfo(1)%lp, ' A)'
-                    else if( istage == 2 .and. stage1_lp > 0. )then
-                        write(logfhandle,'(A,I3,A,F5.1,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', &
-                            &cline_refine3D%get_rarg('lp'), ' A (stage-2 midpoint; stage 1 at ', stage1_lp, ' A)'
-                    else
-                        write(logfhandle,'(A,I3,A,F5.1,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', &
-                            &cline_refine3D%get_rarg('lp'), ' A (planned ', lpinfo(istage)%lp, ' A, set by FSC=0.5)'
-                    endif
+                    write(logfhandle,'(A,I3,A,F5.1,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', &
+                        &cline_refine3D%get_rarg('lp'), ' A (planned ', lpinfo(istage)%lp, ' A, set by FSC=0.5)'
                 else
                     write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', cline_refine3D%get_rarg('lp'), ' A'
                 endif

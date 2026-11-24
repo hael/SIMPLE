@@ -217,16 +217,21 @@ stage. `refine3D` then treats `maxits` as the run length for that stage.
 
 Particle `solve3D` accepts `sigma2_anneal=yes|no`, default `yes`. With `yes`,
 matching starts from a white spectrum, reaches the saved smoothed bootstrap
-over stages 1–4 (the sticky sampling window), then reaches the current
-model-residual spectra over stages 5–6. Stages 7–8 use model-residual spectra
-throughout. Each phase is divided evenly across its stages, with linear
-interpolation over each stage's iteration budget. Stages keep their ordinary
-convergence exits: a stage that converges before its weight reaches the end of
-its ramp stops there, and the next stage starts at its own planned weight, so
-the weight can step forward by at most the remaining part of that stage's ramp.
-Annealing therefore costs no iterations over `sigma2_anneal=no`. Each iteration
-logs the weight and the shells' mean log ratio of measured to bootstrap noise
-(`SIGMA2 ANNEAL`), read before the iteration's residual update.
+over stages 1–2 (`SIGMA2_WHITE_LAST_STAGE`), holds it through stage 4 (the
+sticky sampling window), then reaches the current model-residual spectra over
+stages 5–6. Stages 7–8 use model-residual spectra throughout. Each ramp is
+divided evenly across its stages, with linear interpolation over each stage's
+iteration budget. Why the white phase ends at stage 2 (2026-11-24): spread over
+stages 1–4 it kept the export gate's stage-3 posteriors flat (effective poses
+per particle 260 falling to 150 over eight iterations, against 100 falling to
+24 in the unannealed Nov16 runs) and its helical density appeared in stage 6
+rather than stage 3; unannealed restarts had been clean. Stages keep their
+ordinary convergence exits: a stage that converges before its weight reaches
+the end of its ramp stops there, and the next stage starts at its own planned
+weight, so the weight can step forward by at most the remaining part of that
+stage's ramp. Annealing therefore costs no iterations over `sigma2_anneal=no`.
+Each iteration logs the weight and the shells' mean log ratio of measured to
+bootstrap noise (`SIGMA2 ANNEAL`), read before the iteration's residual update.
 
 Full-sampling and multi-state particle runs follow the same stage schedule.
 Short or late-entry runs reserve the last two executed stages for model-based
@@ -301,66 +306,46 @@ every run seeds and owns its sigmas in its own directory.
 
 ## 4. Low-Pass and Cropping
 
-`lpinfo(istage)%lp` stores the planned ladder used for cropping and later-stage
-FSC bounds. The ladder follows the molecule's size (`set_lplims_ptcls`, `solve3D_ptcl_lplims`; ruling
-of 2026-11-22): from `mskdiam/10` within 10-30 A (`LPSTART_SIZE_BOUNDS`) to
-4.5 A (`LPSTOP_BOUNDS(1)`) for every size, each stage halving the distance to
-the stop as solve2D's frequency march does, the last stage at the stop
-(`lpstages_setlims` with `halving`). The export gate (155 A mask) gets 15.5,
-10.0, 7.2, 5.9, 5.2, 4.8, 4.7, 4.5 A; PfCRT (160 A) 16.0, 10.2, 7.4, 5.9, 5.2,
-4.9, 4.7, 4.5 A; streptavidin (80 A) 10.0, 7.2, 5.9, 5.2, 4.8, 4.7, 4.6,
-4.5 A. A shorter run (`nstages`) spans the same two ends over its stages.
-`lpstart` and `lpstop` set their end as given, coarser or finer, so a small
-target reaches below 4.5 A with `lpstop` alone, without `force_lp_range`.
-Why: the ladder linear in A was too conservative (the export gate still at
-13.6 A in stage 4); the march is done in the global stages, every size aims
-at 4.5 A in the last stage, which small targets need, and the stages after
-the first NU stage take only their crops from the ladder. The planned
-limits of the global stages usually lead the FSC=0.5 at their entry; the
-FSC rule below holds a stage back to it, or advances it (ruling of
-2026-11-22). A linear ladder in spatial frequency
-(15.5, 11.5, 9.1, 7.6, 6.5, 5.6, 5.0, 4.5 A for the export gate) was
-considered the same day and judged not aggressive enough.
+`lpinfo(istage)%lp` stores the planned ladder: the limits of stages 1-2, the
+rungs the FSC rule below may only advance, the crops and the next-stage limits
+the exits compare against. The ladder follows the molecule's size
+(`set_lplims_from_size`, `solve3D_size_lplims`, which `solve3D_cavgs` runs with
+its own 20 and 8 A ends): linear in A from `mskdiam/8` within 10-30 A
+(`LPSTART_SIZE_BOUNDS`) to `mskdiam/26.7` within 4.5-6 A (`LPSTOP_BOUNDS`).
+Eight stages give the export gate (155 A mask) 19.4, 17.4, 15.5, 13.6, 11.6,
+9.7, 7.8, 5.8 A; PfCRT (160 A) 20, 18, 16, 14, 12, 10, 8, 6 A; PorF (170 A)
+21.3, 19.1, 16.9, 14.7, 12.5, 10.4, 8.2, 6 A; streptavidin (80 A) 10 to 4.5 A.
+A shorter run (`nstages`) spans the same two ends over its stages. An explicit
+`lpstart` replaces the first limit, never finer than the last; an explicit
+`lpstop` coarser than the last replaces it, and any explicit `lpstop` replaces
+the 4.5 A cap of the FSC rule below. Stages 1-2 match and filter their
+references (`gaufreq`) at their rungs, whatever the FSC.
 
-**Separate stage-1 start (ruling of 2026-11-23).** The default particle route
-starts matching at `min(30, max(10, mskdiam/8))` A. Its Gaussian reference
-filter (`gaufreq`) and stage matching ceiling (`lpstop`) use that same limit.
-This gives 10 A for streptavidin (80 A mask), 19.375 A for the export gate
-(155 A), 20 A for PfCRT (160 A), and 21.25 A for PorF (170 A). An explicit
-`lpstart` remains authoritative; the start cannot be finer than the requested
-`lpstop`. The controller receives this start separately: the stored
-`mskdiam/10` ladder, crops, stage 3 onward, and both FSC target bounds remain unchanged.
-In particular, the coarser stage-1 limit does not relax the later FSC hold-back
-bound `lpinfo(1)%lp`. Class averages, input-volume/no-2D initialization,
-`force_lp_range`, and add-on replay retain their existing policies.
+Why (ruling of 2026-11-24): this ladder and the FSC rule below are what the
+Nov16 export-gate runs (9/9) and the Nov19 PfCRT, PorF and streptavidin runs
+(10/10 each) used, except that the NU stage now takes the same rule (it took
+the one-rung advance; the NU filter's limit replaces either in the stage's
+first iteration) and a finer explicit `lpstop` now replaces the cap. From
+2026-11-22 to 2026-11-24 the particle route ran a ladder from `mskdiam/10` to
+4.5 A halving the distance per stage, with a separate `mskdiam/8` stage-1
+start, a stage-2 midpoint and a FSC=0.5 rule both ways from stage 2
+(`ed0aaa342`, `3a268d1b5`, `0a8b0903e`). For 155-170 A masks it reproduced the
+linear rungs in stages 1-3; after stage 3 its rungs only bounded the FSC rule,
+and its next-stage limits (6 A and finer) left the resolution exits of stages
+3-5 unable to fire. It brought no gain: PfCRT and PorF each had one restart in
+ten fail (finals at 8.62 and 4.95 A) against none on Nov19, which ten
+restarts cannot separate, and with stage 2 at the stage-3 rung (`3a268d1b5`)
+the export gate's stage 3 ended on the plateau exit after 4-8 iterations at
+FSC=0.5 14.8 A, against 12.5 A in Nov16.
 
-**Stage-2 midpoint ramp (ruling of 2026-11-23).** In the single-state particle
-route with a separate stage-1 start, stage 2 first computes its existing target
-`T = min(max(FSC05_at_entry, lpstop), lpinfo(1)%lp)`, with the usual 4.5 A
-fine bound unless `lpstop` is given. It then uses `(stage1_lp + T)/2` in A for
-matching, Gaussian reference filtering and the matching ceiling. For PorF this
-gives 19.125 A between 21.25 and 17 A; for PfCRT, 18 A between 20 and 16 A;
-for streptavidin with FSC=0.5 at 9.148 A, 9.574 A between 10 and 9.148 A.
-The target uses the FSC measured before stage 2, not the stored planned
-stage-3 rung or a future FSC measurement. Stage 3 recomputes its own limit
-normally, against the original bounds. Missing FSC keeps the planned fallback;
-multi-state, class-average, add-on and routes without a separate start keep
-their existing behavior. Sampling, crops and iteration budgets are unchanged.
-
-From 2026-11-10 to 2026-11-22 the ladder was linear in A from `mskdiam/8`
-within 10-30 A to `mskdiam/26.7` within 4.5-6 A (`set_lplims_from_size`,
-which the class-average route still uses for its size limits, and the
-particle route under `force_lp_range=yes`): PfCRT (160 A) got 20, 18, 16, 14,
-12, 10, 8, 6 A and streptavidin (80 A) 10 to 4.5 A; 8 A, its no-2D start, was
-judged too ambitious for a default. A first version held the start at 20 A at least,
-as the FRC planner did, and streptavidin failed
-(`failed_streptav`, 2026-11-10): from 20 A stage 3 was omitted and the D2
-axis was searched with the orientations still moving 53 deg per iteration,
-against 14 deg in the runs that started at 8 A.
+8 A, the no-2D start, was judged too ambitious for a default. A first version
+of the size ladder held the start at 20 A at least, as the FRC planner did, and
+streptavidin failed (`failed_streptav`, 2026-11-10): from 20 A stage 3 was
+omitted and the D2 axis was searched with the orientations still moving 53 deg
+per iteration, against 14 deg in the runs that started at 8 A.
 `force_lp_range=yes` uses the requested range directly, linear in A
-(`lpstages_fast`, as `solve3D_nano` runs it); with the size rule above it is
-no longer needed to set the ends. The input-volume and no-2D routes keep
-their own limits (`mskdiam2lplimits`, below). The crops are those of
+(`lpstages_fast`, as `solve3D_nano` runs it). The input-volume and no-2D
+routes keep their own limits (`mskdiam2lplimits`, below). The crops are those of
 `lpstages_setlims`: the end stages at a third of their limit (at least 2 A per
 pixel, at least 88 px), a linear box ramp between. Do not crop the global
 stages to their own limits: tried in `85bbc2a2c` (2026-11-10), PfCRT's stages
@@ -431,23 +416,23 @@ resolution of the best resolved populated state (the per-particle `res05`
 field written by the reconstruction) is finer than the planned
 `lpinfo(istage)%lp`, the stage runs at the *next* rung
 `lpinfo(istage+1)%lp` instead, bounded by the ladder cap
-(`LPSTOP_BOUNDS(1)`, 4.5 A, or the coarser explicit `lpstop`; the
-class-average route keeps its final limit). `res05` gates the advance; the
+(`LPSTOP_BOUNDS(1)`, 4.5 A, or an explicit `lpstop`; the class-average route
+keeps its final limit). `res05` gates the advance; the
 ladder sets its size.
 
 **Stage limit from FSC=0.5 (ruling of 2026-11-13).** In a single-state
 particle run, from the first ML-regularized stage (`ML_REG_START_STAGE`, 3)
-until NU filtering or gold standard sets the matching band, the stage limit
-is the project's FSC=0.5 resolution at stage entry (`fsc05_sets_stage_lp`,
-`set_stage_lp_from_fsc05`) when it is finer than the planned rung (amended
-2026-11-15, below), bounded by the ladder cap and an explicit `lpstop`; an explicit `lp`
-wins. The ML-regularized references already trust the FSC, so the band
-does too. It is fixed for the stage because one iteration's FSC fluctuates;
-the stage exits end the stage when it stops gaining. Without a `res05` field
-the planned rung stands. The ladder keeps the crops, stages 1-2 and the
-next-stage limits the exits compare against. Multi-state runs and NU stages
-keep the one-rung advance above: a multi-state run's best state resolves
-early while its states split (section 6). The stage banner logs
+until gold standard, the stage limit is the project's FSC=0.5 resolution at
+stage entry (`fsc05_sets_stage_lp`, `set_stage_lp_from_fsc05`) when it is
+finer than the planned rung (amended 2026-11-15, below), bounded by the ladder
+cap and an explicit `lpstop`; an explicit `lp` wins. The ML-regularized
+references already trust the FSC, so the band does too. It is fixed for the
+stage because one iteration's FSC fluctuates; the stage exits end the stage
+when it stops gaining. Without a `res05` field the planned rung stands. In the
+NU stage the limit is only the start the NU filter's own limit replaces in
+the stage's first iteration. Multi-state runs keep the one-rung advance above:
+a multi-state run's best state resolves early while its states split
+(section 6). The stage banner logs
 `(planned X A, set by FSC=0.5)`. Why: on the size ladder (PfCRT, `fa9b82b5`)
 stage 4 was planned at 14 A and reached 12 A only through the one-rung
 advance; restart 8 left stage 3 at 14.79 A, one shell short, ran stage 4 at
@@ -463,22 +448,6 @@ Why: on PorF (single state) stage 2 ends at overlap 0.11-0.12 with FSC=0.5 at
 overlap 0.05-0.07 (`fa9b82b5`, 10 restarts at 16.9 A: 0.13-0.16), stage 4 at
 0.20-0.26 (0.36-0.43), and two restarts finished at 5.20 and 4.95 A at
 FSC=0.143 against 4.11-4.22 A for all ten `fa9b82b5` restarts.
-
-**Both ways, from stage 2 (ruling of 2026-11-22).** Supersedes the scope of
-the 11-13 ruling and the 11-15 amendment. In a single-state particle run,
-from stage 2 (`FSC05_SET_START_STAGE`, the first stage with a measured FSC)
-until gold standard, the NU stage before it included, the stage limit is the
-FSC=0.5 at stage entry, coarser than the planned rung (holding back) or finer
-(advancing), never finer than the ladder cap (4.5 A, or a command-line
-`lpstop` as given, coarser or finer) nor coarser than the ladder start
-(`lpinfo(1)%lp`). In the Gaussian-reference stages `gaufreq` follows the
-limit. Stage 1 uses the separate starting rule above, and stage 2 applies the
-midpoint ramp above on the default particle route; an explicit `lp` wins
-where applicable, and
-multi-state runs keep the one-rung advance above. Why: under the halving
-ladder the plan leads and the FSC is the brake. Known risk: the PorF runs
-of the amendment (stage 3 held at 22-24 A against a planned 16.9 A, worse
-finals), which ran under the ladder linear in A.
 
 **No stage is skipped (ruling of 2026-11-12).** Every stage runs at least
 `STAGE_MINITS` (3) iterations (`minits` on every stage command line, never

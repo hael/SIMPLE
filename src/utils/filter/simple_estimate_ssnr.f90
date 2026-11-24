@@ -378,10 +378,8 @@ contains
         endif
     end subroutine lpstages_fast
 
-    !> a ladder from lpstart to lpstop, linear in A or (halving) halving the distance to lpstop at each stage as
-    !! solve2D does; the end stages cropped to their limits, a linear box ramp between
-    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose, first_stage, trslim_override, &
-        &halving )
+    !> a linear ladder from lpstart to lpstop; the end stages cropped to their limits, a linear box ramp between
+    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose, first_stage, trslim_override )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: smpd, lpstart, lpstop
@@ -389,16 +387,13 @@ contains
         logical, optional, intent(in)  :: verbose
         integer, optional, intent(in)  :: first_stage
         real,    optional, intent(in)  :: trslim_override
-        logical, optional, intent(in)  :: halving
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
         integer :: i, box_trial, ifirst
         real    :: rbox_stepsz
-        logical :: l_verbose, l_halve
+        logical :: l_verbose
         l_verbose = .true.
         if( present(verbose) ) l_verbose = verbose
-        l_halve = .false.
-        if( present(halving) ) l_halve = halving
         if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_setlims')
         ifirst = 1
         if( present(first_stage) )then
@@ -411,12 +406,12 @@ contains
                 if( i <= ifirst )then
                     lpinfo(i)%lp = lpstart
                 else
-                    lpinfo(i)%lp = stage_lp(i, ifirst)
+                    lpinfo(i)%lp = lpstart - real(i-ifirst)*(lpstart-lpstop)/real(nstages-ifirst)
                 endif
             else if( nstages == 1 )then
                 lpinfo(i)%lp = lpstop
             else
-                lpinfo(i)%lp = stage_lp(i, 1)
+                lpinfo(i)%lp = lpstart - real(i-1)*(lpstart-lpstop)/real(nstages-1)
             endif
             call stage_autoscale(box, smpd, max(SMPD_TARGET_MIN, lpinfo(i)%lp * LP2SMPD_TARGET), lpinfo(i))
         enddo
@@ -436,25 +431,6 @@ contains
                     &lpinfo(i)%smpd_crop, lpinfo(i)%trslim
             end do
         endif
-
-        contains
-
-            !> the limit of stage istg of the ramp that leaves lpstart at stage i0
-            real function stage_lp( istg, i0 )
-                integer, intent(in) :: istg, i0
-                if( istg <= i0 )then
-                    stage_lp = lpstart
-                else if( l_halve )then
-                    if( istg == nstages )then
-                        stage_lp = lpstop
-                    else
-                        stage_lp = lpinfo(istg-1)%lp - (lpinfo(istg-1)%lp - lpstop)/2.
-                    endif
-                else
-                    stage_lp = lpstart - real(istg-i0)*(lpstart-lpstop)/real(nstages-i0)
-                endif
-            end function stage_lp
-
     end subroutine lpstages_setlims
 
 end module simple_estimate_ssnr
