@@ -115,13 +115,13 @@ contains
         if( .not. self%source_project%is_blank() )then
             if( self%source_project%to_char() /= project_file%to_char() ) THROW_HARD('flex_tree: source project already set')
         endif
-        self%source_project = project_file%to_char()
+        self%source_project = project_file
     end subroutine set_source_project
 
     function get_source_project( self ) result( project_file )
         class(flex_tree), intent(in) :: self
         type(string) :: project_file
-        project_file = self%source_project%to_char()
+        project_file = self%source_project
     end function get_source_project
 
     ! Replace the complete payload after validation. Intrinsic assignment copies all nested allocations.

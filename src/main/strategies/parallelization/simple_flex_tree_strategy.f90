@@ -402,7 +402,8 @@ contains
             case default
                 THROW_HARD('Split assessment must return SPLIT, LEAF or JUNK')
         end select
-        node%decision = decision
+        if( allocated(node%decision) ) deallocate(node%decision)
+        allocate(node%decision, source=decision)
         call self%tree%set_node(inode, node)
     end subroutine apply_node_decision
 
