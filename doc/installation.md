@@ -13,8 +13,7 @@ README.
 - FFTW 3.3 or newer, with double, single, and threaded builds
 - libcurl 7 or newer
 - libTIFF 4 or newer
-- GTK 4 development files and pkg-config; SIMPLE builds its pinned gtk-fortran itself (GTK 4 is packaged on
-  Enterprise Linux 9 and newer, not on EL8)
+- GTK 3 development files and pkg-config; SIMPLE builds its pinned gtk-fortran itself
 - jbigkit 2 or newer, optional
 - Python 3.7 or newer for the core build; NICE currently requires Python 3.10-3.13
 
@@ -23,10 +22,10 @@ in the build folder; the verified source archive and the installed static librar
 archive under the gitignored `.deps/downloads/` (checked against its pinned SHA-256), the library under
 `.deps/numerics/`. System BLAS and LAPACK libraries, including macOS Accelerate, are not selected.
 
-SIMPLE also builds its pinned gtk-fortran release, the Fortran interface to GTK 4, with its own gfortran:
+SIMPLE also builds its pinned gtk-fortran release, the Fortran interface to GTK 3, with its own gfortran:
 gfortran module files do not load across compiler versions. The verified source archive sits under
-`.deps/downloads/`, the installed library and module files under `.deps/gtk/`. GTK 4 itself comes from the
-system through pkg-config.
+`.deps/downloads/`, the installed library and module files under `.deps/gtk/`. GTK 3 itself comes from the
+system through pkg-config; it is GTK 3 rather than 4 because Enterprise Linux 8 packages no GTK 4.
 
 With GNU C and Fortran compilers and OpenMP enabled, SIMPLE builds the OpenMP flavour of OpenBLAS: a product
 called from serial code runs on SIMPLE's OpenMP threads, a product called inside one of SIMPLE's OpenMP teams
@@ -226,7 +225,7 @@ make distclean
 
     Add brew to your path
 
-2. Install git, gcc, make, libtiff, jbigkit, gtk4 and cmake. Install Python 3.12 for NICE. SIMPLE builds its pinned OpenBLAS and gtk-fortran itself.
+2. Install git, gcc, make, libtiff, jbigkit, gtk+3 and cmake. Install Python 3.12 for NICE. SIMPLE builds its pinned OpenBLAS and gtk-fortran itself.
 
         brew install git
         brew install cmake
@@ -234,7 +233,7 @@ make distclean
         brew install make
         brew install libtiff
         brew install jbigkit
-        brew install gtk4
+        brew install gtk+3
         brew install python@3.12
 
 3. Install fftw and libraries as described above

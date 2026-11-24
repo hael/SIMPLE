@@ -958,7 +958,7 @@ contains
         call run_unit_suites('forked_process', cline, s(1:n))
     end subroutine exec_test_forked_process
 
-    !> GTK 4 through gtk-fortran: the cairo tile offscreen and a window that closes itself (needs a
+    !> GTK 3 through gtk-fortran: the cairo tile offscreen and a window that closes itself (needs a
     !! display, otherwise skipped); label `platform`
     subroutine exec_test_gtk( self, cline )
         class(commander_test_gtk), intent(inout) :: self

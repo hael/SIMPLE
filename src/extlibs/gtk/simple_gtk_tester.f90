@@ -1,4 +1,4 @@
-!@descr: platform test of GTK 4 through gtk-fortran: an 8-bit tile painted with cairo, and a window that opens, draws and closes
+!@descr: platform test of GTK 3 through gtk-fortran: an 8-bit tile painted with cairo, and a window that opens, draws and closes
 ! The tile takes the path select2D will (real image -> 8-bit -> cairo surface) and is checked
 ! offscreen, without a display; the window needs one (otherwise it is skipped) and closes itself
 ! WINDOW_MS after its first draw.
@@ -6,10 +6,10 @@ module simple_gtk_tester
 use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_int32_t, c_double, c_null_char, c_null_ptr, &
     c_funloc, c_loc, c_f_pointer, c_associated
 use gtk,               only: gtk_init_check, gtk_application_new, gtk_application_window_new, &
-    gtk_window_set_title, gtk_window_set_default_size, gtk_window_set_child, gtk_window_present, &
-    gtk_window_destroy, gtk_box_new, gtk_box_append, gtk_label_new, gtk_button_new_with_label, &
-    gtk_drawing_area_new, gtk_drawing_area_set_content_width, gtk_drawing_area_set_content_height, &
-    gtk_drawing_area_set_draw_func, gtk_widget_set_hexpand, gtk_widget_set_vexpand, &
+    gtk_window_set_title, gtk_window_set_default_size, gtk_container_add, gtk_widget_show_all, &
+    gtk_widget_destroy, gtk_box_new, gtk_box_pack_start, gtk_label_new, gtk_button_new_with_label, &
+    gtk_drawing_area_new, gtk_widget_set_size_request, gtk_widget_get_allocated_width, &
+    gtk_widget_get_allocated_height, gtk_widget_set_hexpand, gtk_widget_set_vexpand, &
     gtk_widget_set_margin_start, gtk_widget_set_margin_end, gtk_widget_set_margin_top, &
     gtk_widget_set_margin_bottom, gtk_get_major_version, gtk_get_minor_version, &
     gtk_get_micro_version, g_signal_connect, TRUE, FALSE, G_APPLICATION_NON_UNIQUE, &
@@ -128,13 +128,13 @@ contains
         call cairo_surface_destroy(tile)
     end subroutine test_tile_paint
 
-    ! a GtkApplication window opens, draws the tile area at least at its content size and closes itself
+    ! a GtkApplication window opens, draws the tile area at least at its requested size and closes itself
     subroutine test_window()
         type(gtk_run), target :: run
         type(c_ptr)           :: app
         integer(c_int)        :: status
         write(logfhandle,'(a)') 'test_window'
-        if( gtk_init_check() == FALSE )then
+        if( gtk_init_check(c_null_ptr, [c_null_ptr]) == FALSE )then
             write(logfhandle,'(a)') 'skipped: no display to open a GTK window on'
             return
         endif
@@ -142,11 +142,12 @@ contains
         call g_signal_connect(app, 'activate'//c_null_char, c_funloc(activate), c_loc(run))
         status = g_application_run(app, 0_c_int, [c_null_ptr])
         call g_object_unref(app)
+        ! the window and its drawing area are gone: no draw can reach the tile any more
         if( c_associated(run%tile) ) call cairo_surface_destroy(run%tile)
         call assert_int(0, int(status), 'the GTK application exits with status 0')
         call assert_true(run%activated, 'the application activates')
         call assert_true(run%ndraws > 0, 'GTK draws the tile area')
-        call assert_true(run%width >= TILE_BOX .and. run%height >= TILE_BOX, 'the tile area is drawn at least at its content size')
+        call assert_true(run%width >= TILE_BOX .and. run%height >= TILE_BOX, 'the tile area is drawn at least at its requested size')
         call assert_true(.not. c_associated(run%window), 'the window is gone once it closes')
     end subroutine test_window
 
@@ -243,34 +244,37 @@ contains
         call gtk_widget_set_margin_top(box,    MARGIN)
         call gtk_widget_set_margin_bottom(box, MARGIN)
         label = gtk_label_new(trim(text)//c_null_char)
-        call gtk_box_append(box, label)
+        call gtk_box_pack_start(box, label, FALSE, FALSE, 0_c_int)
         run%tile = make_tile()
         area     = gtk_drawing_area_new()
-        call gtk_drawing_area_set_content_width(area,  TILE_BOX)
-        call gtk_drawing_area_set_content_height(area, TILE_BOX)
+        call gtk_widget_set_size_request(area, TILE_BOX, TILE_BOX)
         call gtk_widget_set_hexpand(area, TRUE)
         call gtk_widget_set_vexpand(area, TRUE)
-        call gtk_drawing_area_set_draw_func(area, c_funloc(draw_area), user_data, c_funloc(release_tile))
-        call gtk_box_append(box, area)
+        call g_signal_connect(area, 'draw'//c_null_char, c_funloc(draw_area), user_data)
+        call gtk_box_pack_start(box, area, TRUE, TRUE, 0_c_int)
         button = gtk_button_new_with_label('Close'//c_null_char)
         call g_signal_connect(button, 'clicked'//c_null_char, c_funloc(close_window), window)
-        call gtk_box_append(box, button)
-        call gtk_window_set_child(window, box)
-        call gtk_window_present(window)
+        call gtk_box_pack_start(box, button, FALSE, FALSE, 0_c_int)
+        call gtk_container_add(window, box)
+        call gtk_widget_show_all(window)
     end subroutine activate
 
-    ! records the draw; the first one starts the timer that closes the window
-    subroutine draw_area( area, cr, width, height, user_data ) bind(c)
-        type(c_ptr),    value  :: area, cr, user_data
-        integer(c_int), value  :: width, height
+    ! the "draw" signal: paints and records the draw; the first one starts the timer that closes the window
+    function draw_area( area, cr, user_data ) bind(c) result( handled )
+        type(c_ptr), value     :: area, cr, user_data
+        integer(c_int)         :: handled
         type(gtk_run), pointer :: run
+        integer(c_int)         :: width, height
         call c_f_pointer(user_data, run)
+        width  = gtk_widget_get_allocated_width(area)
+        height = gtk_widget_get_allocated_height(area)
         call paint_tile(cr, width, height, run%tile)
         run%ndraws = run%ndraws + 1
         run%width  = int(width)
         run%height = int(height)
         if( run%ndraws == 1 ) run%timeout_id = g_timeout_add(WINDOW_MS, c_funloc(close_on_timeout), user_data)
-    end subroutine draw_area
+        handled = FALSE
+    end function draw_area
 
     function close_on_timeout( user_data ) bind(c) result( again )
         type(c_ptr), value     :: user_data
@@ -278,7 +282,7 @@ contains
         type(gtk_run), pointer :: run
         call c_f_pointer(user_data, run)
         run%timeout_id = 0_c_int
-        if( c_associated(run%window) ) call gtk_window_destroy(run%window)
+        if( c_associated(run%window) ) call gtk_widget_destroy(run%window)
         again = FALSE
     end function close_on_timeout
 
@@ -294,18 +298,9 @@ contains
         endif
     end subroutine on_destroy
 
-    ! GTK releases the draw function's data with the drawing area
-    subroutine release_tile( user_data ) bind(c)
-        type(c_ptr), value     :: user_data
-        type(gtk_run), pointer :: run
-        call c_f_pointer(user_data, run)
-        if( c_associated(run%tile) ) call cairo_surface_destroy(run%tile)
-        run%tile = c_null_ptr
-    end subroutine release_tile
-
     subroutine close_window( button, window ) bind(c)
         type(c_ptr), value :: button, window
-        call gtk_window_destroy(window)
+        call gtk_widget_destroy(window)
     end subroutine close_window
 
 end module simple_gtk_tester

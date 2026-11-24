@@ -425,7 +425,7 @@ if(BUILD_TESTS)
   # and its third, test dispatcher, the suite runner's failing, hanging and passing children.
   simple_add_test(forked_process platform 300 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=forked_process)
-  # GTK 4 through gtk-fortran: the cairo tile offscreen and a window that closes itself after
+  # GTK 3 through gtk-fortran: the cairo tile offscreen and a window that closes itself after
   # 1.5 s, skipped without a display; its own process for the GTK main loop
   simple_add_test(gtk platform 120 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=gtk)

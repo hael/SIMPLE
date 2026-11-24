@@ -370,7 +370,7 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call gtk%new(&
         &'gtk',&
-        &'GTK 4 through gtk-fortran',&
+        &'GTK 3 through gtk-fortran',&
         &'checks an 8-bit tile painted with cairo offscreen and a GTK window that opens, draws the tile and closes itself after 1.5 s (needs a display, otherwise skipped); platform label',&
         &'simple_test_exec',&
         &.false., display_name='GTK Test')

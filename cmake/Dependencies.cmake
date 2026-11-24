@@ -528,9 +528,9 @@ list(APPEND SIMPLE_LIBRARIES CURL::libcurl)
 message(STATUS "libcurl: FOUND")
 
 # ------------------------------------------------------------------------------
-# GTK 4 and gtk-fortran (required)
+# GTK 3 and gtk-fortran (required)
 # ------------------------------------------------------------------------------
-# GTK 4 comes from the system through pkg-config. gtk-fortran is pinned and built
+# GTK 3 comes from the system through pkg-config. gtk-fortran's GTK 3 release is pinned and built
 # like OpenBLAS: once per Fortran compiler into a cache outside build/, because
 # gfortran module files do not load across compiler versions. SIMPLE_GTK_LIBRARIES
 # is for the executables that run GTK code; it is never added to SIMPLE_LIBRARIES,
@@ -541,7 +541,7 @@ if(NOT PkgConfig_FOUND)
         "================================================================================\n"
         "  PKG-CONFIG REQUIRED but NOT FOUND\n"
         "================================================================================\n"
-        "  SIMPLE finds GTK 4 through pkg-config.\n"
+        "  SIMPLE finds GTK 3 through pkg-config.\n"
         "  Install pkg-config via your system package manager:\n"
         "  Linux (Debian/Ubuntu):\n"
         "    sudo apt-get update\n"
@@ -561,28 +561,28 @@ if(NOT PkgConfig_FOUND)
         "================================================================================\n"
     )
 endif()
-pkg_check_modules(GTK4 IMPORTED_TARGET gtk4)
-if(NOT GTK4_FOUND)
+pkg_check_modules(GTK3 IMPORTED_TARGET gtk+-3.0)
+if(NOT GTK3_FOUND)
     message(FATAL_ERROR
         "================================================================================\n"
-        "  GTK 4 REQUIRED but NOT FOUND\n"
+        "  GTK 3 REQUIRED but NOT FOUND\n"
         "================================================================================\n"
-        "  SIMPLE requires the GTK 4 development files to compile;\n"
-        "  pkg-config (${PKG_CONFIG_EXECUTABLE}) found no gtk4 package.\n"
+        "  SIMPLE requires the GTK 3 development files to compile;\n"
+        "  pkg-config (${PKG_CONFIG_EXECUTABLE}) found no gtk+-3.0 package.\n"
         "  Install them via your system package manager:\n"
         "  Linux (Debian/Ubuntu):\n"
         "    sudo apt-get update\n"
-        "    sudo apt-get install libgtk-4-dev\n"
+        "    sudo apt-get install libgtk-3-dev\n"
         "  Linux (Fedora/RHEL/CentOS/Rocky):\n"
-        "    sudo yum install gtk4-devel\n"
-        "    or: sudo dnf install gtk4-devel\n"
+        "    sudo yum install gtk3-devel\n"
+        "    or: sudo dnf install gtk3-devel\n"
         "  Linux (Arch):\n"
-        "    sudo pacman -S gtk4\n"
+        "    sudo pacman -S gtk3\n"
         "  macOS (Homebrew):\n"
-        "    brew install gtk4\n"
+        "    brew install gtk+3\n"
         "  macOS (MacPorts):\n"
-        "    sudo port install gtk4\n"
-        "  GTK 4 in another prefix: add <prefix>/lib/pkgconfig to PKG_CONFIG_PATH.\n"
+        "    sudo port install gtk3\n"
+        "  GTK 3 in another prefix: add <prefix>/lib/pkgconfig to PKG_CONFIG_PATH.\n"
         "  After installation, reconfigure CMake:\n"
         "    rm -rf build/\n"
         "    cmake -B build\n"
@@ -590,8 +590,8 @@ if(NOT GTK4_FOUND)
     )
 endif()
 
-set(SIMPLE_GTK_FORTRAN_VERSION "4.9.0")
-set(SIMPLE_GTK_FORTRAN_SHA256 "addeb090ff4bdfd027db1f9c3729310f90b9f6f23560e07051b5f596dfe42b22")
+set(SIMPLE_GTK_FORTRAN_VERSION "3.24.49")
+set(SIMPLE_GTK_FORTRAN_SHA256 "e8a00fb1b144f56d2d3c84669a1a70256c779ee263206fdc853631823c4f5a91")
 # the core interface modules only: no PLplot, high-level API, sketcher or examples
 set(SIMPLE_GTK_FORTRAN_BUILD_FLAGS
     "-DCMAKE_BUILD_TYPE=Release"
@@ -616,14 +616,14 @@ set(SIMPLE_GTK_FORTRAN_PREFIX
     "${SIMPLE_GTK_CACHE_ROOT}/${SIMPLE_GTK_CACHE_KEY}/gtk-fortran-${SIMPLE_GTK_FORTRAN_VERSION}"
 )
 set(SIMPLE_GTK_FORTRAN_RECIPE_STAMP "${SIMPLE_GTK_FORTRAN_PREFIX}/simple-gtk-fortran-recipe.txt")
-set(SIMPLE_GTK_FORTRAN_MODULE_DIR "${SIMPLE_GTK_FORTRAN_PREFIX}/include/gtk-4-fortran")
+set(SIMPLE_GTK_FORTRAN_MODULE_DIR "${SIMPLE_GTK_FORTRAN_PREFIX}/include/gtk-3-fortran")
 set(SIMPLE_GTK_FORTRAN_LIBRARY
-    "${SIMPLE_GTK_FORTRAN_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}gtk-4-fortran${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    "${SIMPLE_GTK_FORTRAN_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}gtk-3-fortran${CMAKE_STATIC_LIBRARY_SUFFIX}"
 )
 set(SIMPLE_GTK_FORTRAN_EP_PREFIX "${CMAKE_BINARY_DIR}/_deps/gtk-fortran")
 
 message(STATUS
-    "GTK: GTK ${GTK4_VERSION} (pkg-config), pinned gtk-fortran ${SIMPLE_GTK_FORTRAN_VERSION} "
+    "GTK: GTK ${GTK3_VERSION} (pkg-config), pinned gtk-fortran ${SIMPLE_GTK_FORTRAN_VERSION} "
     "(persistent cache: ${SIMPLE_GTK_FORTRAN_PREFIX})"
 )
 
@@ -679,7 +679,7 @@ else()
     )
     list(APPEND SIMPLE_DEPENDENCY_TARGETS simple_gtk_fortran_ep)
 endif()
-set(SIMPLE_GTK_LIBRARIES "${SIMPLE_GTK_FORTRAN_LIBRARY}" PkgConfig::GTK4)
+set(SIMPLE_GTK_LIBRARIES "${SIMPLE_GTK_FORTRAN_LIBRARY}" PkgConfig::GTK3)
 
 # ------------------------------------------------------------------------------
 # Final dependency summary
@@ -689,7 +689,7 @@ message(STATUS "=== SIMPLE Dependency Summary ===")
 message(STATUS " BLAS:                YES (${SIMPLE_BLAS_STATUS})")
 message(STATUS " BLAS in OMP teams:   ${SIMPLE_BLAS_TEAM_STATUS}")
 message(STATUS " FFTW3:               YES")
-message(STATUS " GTK 4 / gtk-fortran: YES (GTK ${GTK4_VERSION}, gtk-fortran ${SIMPLE_GTK_FORTRAN_VERSION})")
+message(STATUS " GTK 3 / gtk-fortran: YES (GTK ${GTK3_VERSION}, gtk-fortran ${SIMPLE_GTK_FORTRAN_VERSION})")
 message(STATUS " JPEG_LIBRARY:        YES")
 message(STATUS " LAPACK:              YES (${SIMPLE_BLAS_STATUS})")
 message(STATUS " LIBCURL:             YES")
