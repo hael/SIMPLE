@@ -65,8 +65,9 @@ foreach(exe IN LISTS SIMPLE_EXECUTABLES)
     endif()
 endforeach()
 
-# GTK code in the library is reached only from the GTK tester: simple_test_exec is the one
-# executable that links GTK
+# GTK code in the library is reached from simple_exec (prg=select2D) and the GTK tester: the two
+# executables that link GTK
+target_link_libraries(${SIMPLE_EXE} PRIVATE ${SIMPLE_GTK_LIBRARIES})
 if(BUILD_TESTS)
     target_link_libraries(${SIMPLE_TEST_EXE} PRIVATE ${SIMPLE_GTK_LIBRARIES})
 endif()

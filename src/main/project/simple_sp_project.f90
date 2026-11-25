@@ -114,6 +114,7 @@ contains
     procedure          :: shape_ranked_cavgs2jpg
     procedure          :: cavgs2jpg
     procedure          :: cavgs2mrc
+    procedure          :: report_state2cls2D
     ! CLS2D/3D - getters
     procedure          :: get_selected_clsinds
     procedure          :: get_cavgs_stk
@@ -548,6 +549,12 @@ interface
     module subroutine cavgs2mrc( self )
         class(sp_project), intent(inout) :: self
     end subroutine cavgs2mrc
+
+    module subroutine report_state2cls2D( self, states, append )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: states(:)
+        logical,           intent(in)    :: append
+    end subroutine report_state2cls2D
 
     ! PTCL2D/3D
 

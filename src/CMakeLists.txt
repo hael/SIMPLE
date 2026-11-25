@@ -86,10 +86,6 @@ file(GLOB_RECURSE UTILS_src      "utils/*.[Ff][90][08]")
 file(GLOB FILEIO_src             "fileio/*.[Ff][90][08]")
 file(GLOB_RECURSE SIMPLE_src     "main/*.[Ff][90][08]")
 
-# SIMPLE's GTK sources: they read the module files of the pinned gtk-fortran build
-# (cmake/Dependencies.cmake)
-file(GLOB GTK_src "extlibs/gtk/*.[Ff][90][08]")
-
 # JPG sources including C
 file(GLOB JPG_src "extlibs/jpg/*.[Ff][90][08]")
 list(APPEND JPG_src "extlibs/jpg/stb_image_write.c")
@@ -141,7 +137,6 @@ set(SIMPLE_ALL_SOURCES
     ${FILEIO_src}
     ${SIMPLE_VENDOR_SOURCES}
     ${SIMPLE_EXTLIB_WRAPPER_SOURCES}
-    ${GTK_src}
     ${SIMPLE_src}
 )
 
@@ -224,7 +219,7 @@ target_include_directories(${SIMPLELIB}
         $<INSTALL_INTERFACE:include>
         $<BUILD_INTERFACE:${SIMPLE_GEN_DIR}>
 )
-# gtk-fortran's module files, for the GTK sources
+# the module files of the pinned gtk-fortran build (cmake/Dependencies.cmake), for src/main/gtk
 target_include_directories(${SIMPLELIB} PRIVATE "${SIMPLE_GTK_FORTRAN_MODULE_DIR}")
 
 # ------------------------------------------------------------------------------

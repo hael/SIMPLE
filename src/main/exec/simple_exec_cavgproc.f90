@@ -4,6 +4,7 @@ use simple_cmdline,           only: cmdline
 use simple_commanders_cavgs,  only: commander_cluster_cavgs, commander_model_cavgs_rejection, &
 commander_cluster_cavgs_selection, commander_select_clusters, commander_match_cavgs, commander_cavg_cnn_predict
 use simple_commanders_stkops, only: commander_cluster_stack, commander_match_stacks
+use simple_commanders_select2D, only: commander_select2D
 implicit none
 
 public :: exec_cavgproc_commander
@@ -17,6 +18,7 @@ type(commander_cluster_stack)           :: xcluster_stack
 type(commander_match_cavgs)             :: xmatch_cavgs
 type(commander_match_stacks)            :: xmatch_stacks
 type(commander_select_clusters)         :: xsel_clusts
+type(commander_select2D)                :: xselect2D
 
 contains
 
@@ -45,6 +47,8 @@ contains
                 call xmatch_stacks%execute(cline)
             case( 'select_clusters' )
                  call xsel_clusts%execute(cline)
+            case( 'select2D' )
+                call xselect2D%execute(cline)
             case default
                 l_did_execute = .false.
         end select

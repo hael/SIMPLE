@@ -197,6 +197,16 @@ contains
         if(allocated(cls_mask)) deallocate(cls_mask)
     end subroutine cavgs2mrc
 
+    ! a class selection: states into cls2D, then through map2ptcls_state into ptcl2D, ptcl3D and cls3D
+    module subroutine report_state2cls2D( self, states, append )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: states(:)
+        logical,           intent(in)    :: append
+        if( size(states) /= self%os_cls2D%get_noris() ) THROW_HARD('states do not match the cls2D segment; report_state2cls2D')
+        call self%os_cls2D%set_all('state', real(states))
+        call self%map2ptcls_state(append=append)
+    end subroutine report_state2cls2D
+
     ! Getters
 
     module function get_selected_clsinds( self ) result( clsinds )

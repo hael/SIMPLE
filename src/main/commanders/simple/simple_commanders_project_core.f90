@@ -1062,9 +1062,7 @@ contains
                     ! map partitions to ptcl2D/3D
                     call spproj%map_cls2D_flag_to_ptcls('cluster')
                 else
-                    call spproj%os_cls2D%set_all('state', real(states))
-                    ! map states to ptcl2D/3D & cls3D segments
-                    call spproj%map2ptcls_state(append=l_append)
+                    call spproj%report_state2cls2D(states, l_append)
                 endif
                 if(params%write_imgarr .eq. 'yes') then
                     call spproj%set_cavgs_thumb(params%projfile)
@@ -1090,9 +1088,7 @@ contains
                 endif
             case(CLS3D_SEG)
                 if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
-                    call spproj%os_cls2D%set_all('state', real(states))
-                    ! map states to ptcl2D/3D & cls3D segments
-                    call spproj%map2ptcls_state(append=l_append)
+                    call spproj%report_state2cls2D(states, l_append)
                 else
                     ! class averages
                     call spproj%os_cls3D%set_all('state', real(states))

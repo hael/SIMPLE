@@ -11,6 +11,8 @@ implicit none
 
 integer, parameter :: LOG_LABEL_LEN = 17 !< label column of an iteration's readout lines (log_item)
 
+private :: round_sig, exp_text, strip_trailing_zeros
+
 interface str2format
     module procedure str2format_real
     module procedure str2format_dp
@@ -475,6 +477,136 @@ contains
         str = str_cast%to_char()
         call str_cast%kill
     end function int2str
+
+    !> an integer with thousands separators (12,345)
+    function int2str_sep( intg ) result( str )
+        integer(kind=8), intent(in) :: intg
+        character(len=:), allocatable :: str
+        character(len=24) :: buf
+        integer :: i, cnt
+        write(buf,'(I0)') abs(intg)
+        str = ''
+        cnt = 0
+        do i = len_trim(buf),1,-1
+            str = buf(i:i)//str
+            cnt = cnt + 1
+            if( mod(cnt, 3) == 0 .and. i > 1 ) str = ','//str
+        end do
+        if( intg < 0_8 ) str = '-'//str
+    end function int2str_sep
+
+    !> a real with nsig significant digits as Python's '%.<nsig>g': fixed notation for decimal exponents
+    !! -4 .. nsig-1, else e-notation, trailing zeros dropped (8.5, 0.00123, 2.5e+05)
+    function real2str_sig( rval, nsig ) result( str )
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        real(dp), intent(in) :: rval
+        integer,  intent(in) :: nsig
+        character(len=:), allocatable :: str, digits, sgn
+        character(len=24) :: buf
+        integer(kind=8) :: r
+        integer :: e, p
+        if( .not. ieee_is_finite(rval) )then
+            str = 'nan'
+            return
+        endif
+        if( rval == 0._dp )then
+            str = '0'
+            return
+        endif
+        sgn = ''
+        if( rval < 0._dp ) sgn = '-'
+        p = max(nsig, 1)
+        call round_sig(abs(rval), p, r, e)
+        write(buf,'(I0)') r
+        digits = trim(buf)
+        if( e >= -4 .and. e < p )then
+            if( e >= p - 1 )then
+                str = digits//repeat('0', e - p + 1)
+            else if( e >= 0 )then
+                str = digits(1:e+1)//'.'//digits(e+2:)
+            else
+                str = '0.'//repeat('0', -e - 1)//digits
+            endif
+            str = sgn//strip_trailing_zeros(str)
+        else
+            str = sgn//strip_trailing_zeros(digits(1:1)//'.'//digits(2:))//exp_text(e)
+        endif
+    end function real2str_sig
+
+    !> a real in e-notation with ndec decimals, as Python's '%.<ndec>e' (1.23e+05)
+    function real2str_exp( rval, ndec ) result( str )
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        real(dp), intent(in) :: rval
+        integer,  intent(in) :: ndec
+        character(len=:), allocatable :: str, digits
+        character(len=24) :: buf
+        integer(kind=8) :: r
+        integer :: e
+        if( .not. ieee_is_finite(rval) )then
+            str = 'nan'
+            return
+        endif
+        if( rval == 0._dp )then
+            digits = repeat('0', max(ndec, 0) + 1)
+            e      = 0
+        else
+            call round_sig(abs(rval), max(ndec, 0) + 1, r, e)
+            write(buf,'(I0)') r
+            digits = trim(buf)
+        endif
+        str = digits(1:1)
+        if( ndec > 0 ) str = str//'.'//digits(2:)
+        if( rval < 0._dp ) str = '-'//str
+        str = str//exp_text(e)
+    end function real2str_exp
+
+    ! a > 0 rounded to p significant digits: r has p digits and a ~ r * 10**(e - p + 1)
+    subroutine round_sig( a, p, r, e )
+        real(dp),        intent(in)  :: a
+        integer,         intent(in)  :: p
+        integer(kind=8), intent(out) :: r
+        integer,         intent(out) :: e
+        e = floor(log10(a))
+        r = nint(a / 10._dp**(e - p + 1), kind=8)
+        if( r >= 10_8**p )then
+            r = r / 10_8
+            e = e + 1
+        else if( r < 10_8**(p - 1) )then
+            e = e - 1
+            r = nint(a / 10._dp**(e - p + 1), kind=8)
+        endif
+    end subroutine round_sig
+
+    ! a decimal exponent as Python prints it: e+05, e-12, e+123
+    function exp_text( e ) result( str )
+        integer, intent(in) :: e
+        character(len=:), allocatable :: str
+        character(len=12) :: buf
+        if( abs(e) < 100 )then
+            write(buf,'(I2.2)') abs(e)
+        else
+            write(buf,'(I0)') abs(e)
+        endif
+        str = 'e+'
+        if( e < 0 ) str = 'e-'
+        str = str//trim(buf)
+    end function exp_text
+
+    ! trailing zeros of a fraction and a bare decimal point removed
+    function strip_trailing_zeros( str_in ) result( str )
+        character(len=*), intent(in) :: str_in
+        character(len=:), allocatable :: str
+        integer :: n
+        str = str_in
+        if( index(str, '.') == 0 ) return
+        n = len(str)
+        do while( n > 1 )
+            if( str(n:n) /= '0' ) exit
+            n = n - 1
+        end do
+        if( str(n:n) == '.' ) n = n - 1
+        str = str(1:n)
+    end function strip_trailing_zeros
 
     !>  \brief  turn integer variable into zero padded character variable
     function int2str_pad( intg, numlen ) result( str )

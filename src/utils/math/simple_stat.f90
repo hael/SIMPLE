@@ -1396,6 +1396,30 @@ contains
         endif
     end function median_dp
 
+    !>   the q-th percentile (0 <= q <= 100) with linear interpolation between order statistics, as
+    !!   numpy.percentile's default; arr is left unchanged
+    function percentile( arr, q ) result( val )
+        real(dp), intent(in)  :: arr(:)
+        real(dp), intent(in)  :: q
+        real(dp), allocatable :: copy(:)
+        real(dp) :: val, h, frac, v1, v2
+        integer  :: n, k
+        n = size(arr)
+        if( n == 0 ) THROW_HARD('percentile of an empty array')
+        h    = real(n - 1, dp) * min(max(q, 0._dp), 100._dp) / 100._dp
+        k    = int(h)
+        frac = h - real(k, dp)
+        allocate(copy(n), source=arr)
+        v1  = selec(k + 1, n, copy)
+        val = v1
+        if( k + 1 < n )then
+            if( frac > 0._dp )then
+                v2  = selec(k + 2, n, copy)
+                val = v1 + frac * (v2 - v1)
+            endif
+        endif
+    end function percentile
+
     !>   for calculating the median
     function median_nocopy( arr ) result( val )
         real, intent(inout) :: arr(:)

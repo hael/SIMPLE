@@ -1,25 +1,22 @@
 !@descr: platform test of GTK 3 through gtk-fortran: an 8-bit tile painted with cairo, and a window that opens, draws and closes
-! The tile takes the path select2D will (real image -> 8-bit -> cairo surface) and is checked
-! offscreen, without a display; the window needs one (otherwise it is skipped) and closes itself
-! WINDOW_MS after its first draw.
+! The tile takes the path of the image grid (real image -> 8-bit -> cairo surface, simple_gtk_draw) and is
+! checked offscreen, without a display; the window (simple_gtk_utils' application run) needs one, otherwise
+! it is skipped, and closes itself WINDOW_MS after its first draw.
 module simple_gtk_tester
 use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_int32_t, c_double, c_null_char, c_null_ptr, &
     c_funloc, c_loc, c_f_pointer, c_associated
-use gtk,               only: gtk_init_check, gtk_application_new, gtk_application_window_new, &
-    gtk_window_set_title, gtk_window_set_default_size, gtk_container_add, gtk_widget_show_all, &
-    gtk_widget_destroy, gtk_box_new, gtk_box_pack_start, gtk_label_new, gtk_button_new_with_label, &
-    gtk_drawing_area_new, gtk_widget_set_size_request, gtk_widget_get_allocated_width, &
-    gtk_widget_get_allocated_height, gtk_widget_set_hexpand, gtk_widget_set_vexpand, &
-    gtk_widget_set_margin_start, gtk_widget_set_margin_end, gtk_widget_set_margin_top, &
-    gtk_widget_set_margin_bottom, gtk_get_major_version, gtk_get_minor_version, &
-    gtk_get_micro_version, g_signal_connect, TRUE, FALSE, G_APPLICATION_NON_UNIQUE, &
-    GTK_ORIENTATION_VERTICAL, CAIRO_FORMAT_RGB24, CAIRO_FILTER_GOOD, CAIRO_STATUS_SUCCESS
-use g,                 only: g_application_run, g_object_unref, g_timeout_add, g_source_remove
-use cairo,             only: cairo_image_surface_create, cairo_image_surface_get_data, &
-    cairo_image_surface_get_stride, cairo_surface_flush, cairo_surface_mark_dirty, &
-    cairo_surface_destroy, cairo_create, cairo_destroy, cairo_status, cairo_set_source_surface, &
-    cairo_set_source_rgb, cairo_paint, cairo_scale, cairo_translate, cairo_save, cairo_restore, &
-    cairo_pattern_set_filter, cairo_get_source
+use gtk,               only: gtk_application_window_new, gtk_window_set_title, gtk_window_set_default_size, &
+    gtk_container_add, gtk_widget_show_all, gtk_widget_destroy, gtk_box_new, gtk_box_pack_start, gtk_label_new, &
+    gtk_button_new_with_label, gtk_drawing_area_new, gtk_widget_set_size_request, gtk_widget_get_allocated_width, &
+    gtk_widget_get_allocated_height, gtk_widget_set_hexpand, gtk_widget_set_vexpand, gtk_get_major_version, &
+    gtk_get_minor_version, gtk_get_micro_version, g_signal_connect, TRUE, FALSE, GTK_ORIENTATION_VERTICAL, &
+    CAIRO_FORMAT_RGB24, CAIRO_FILTER_GOOD, CAIRO_STATUS_SUCCESS
+use g,                 only: g_timeout_add, g_source_remove
+use cairo,             only: cairo_image_surface_create, cairo_surface_destroy, cairo_create, cairo_destroy, &
+    cairo_status, cairo_set_source_surface, cairo_set_source_rgb, cairo_paint, cairo_scale, cairo_translate, &
+    cairo_save, cairo_restore, cairo_pattern_set_filter, cairo_get_source
+use simple_gtk_utils,  only: gtkui_display_available, gtkui_run_app, gtkui_margins
+use simple_gtk_draw,   only: gtkui_gray_surface, gtkui_surface_pixels
 use simple_test_utils, only: assert_true, assert_int
 use simple_defs,       only: logfhandle
 implicit none
@@ -28,7 +25,7 @@ public :: run_all_gtk_tile_tests, run_all_gtk_window_tests
 private
 
 integer(c_int), parameter :: TILE_BOX  = 128_c_int  ! side of the synthetic tile, pixels
-integer(c_int), parameter :: MARGIN    = 12_c_int   ! window padding, pixels
+integer,        parameter :: MARGIN    = 12         ! window padding, pixels
 integer(c_int), parameter :: WINDOW_MS = 1500_c_int ! the window closes itself this long after its first draw
 integer(c_int), parameter :: PAINT_W   = 300_c_int  ! offscreen canvas of the paint check, pixels
 integer(c_int), parameter :: PAINT_H   = 200_c_int
@@ -68,7 +65,7 @@ contains
         real                        :: centre
         write(logfhandle,'(a)') 'test_tile_pixels'
         tile = make_tile()
-        call surface_pixels(tile, TILE_BOX, pix)
+        call gtkui_surface_pixels(tile, int(TILE_BOX), pix)
         l_gray = .true.
         do j = 1,TILE_BOX
             do i = 1,TILE_BOX
@@ -104,7 +101,7 @@ contains
         call paint_tile(cr, PAINT_W, PAINT_H, tile)
         call assert_int(int(CAIRO_STATUS_SUCCESS), int(cairo_status(cr)), 'cairo paints the tile without error')
         call cairo_destroy(cr)
-        call surface_pixels(canvas, PAINT_H, pix)
+        call gtkui_surface_pixels(canvas, int(PAINT_H), pix)
         scale = real(PAINT_H) / real(TILE_BOX)
         x0    = 0.5 * (real(PAINT_W) - scale * real(TILE_BOX))
         ! background (0.13, 0.13, 0.15) is (33, 33, 38) in 8 bits, left and right of the tile
@@ -131,20 +128,16 @@ contains
     ! a GtkApplication window opens, draws the tile area at least at its requested size and closes itself
     subroutine test_window()
         type(gtk_run), target :: run
-        type(c_ptr)           :: app
-        integer(c_int)        :: status
+        integer               :: status
         write(logfhandle,'(a)') 'test_window'
-        if( gtk_init_check(c_null_ptr, [c_null_ptr]) == FALSE )then
+        if( .not. gtkui_display_available() )then
             write(logfhandle,'(a)') 'skipped: no display to open a GTK window on'
             return
         endif
-        app = gtk_application_new('org.simple.gtk_tester'//c_null_char, G_APPLICATION_NON_UNIQUE)
-        call g_signal_connect(app, 'activate'//c_null_char, c_funloc(activate), c_loc(run))
-        status = g_application_run(app, 0_c_int, [c_null_ptr])
-        call g_object_unref(app)
+        status = gtkui_run_app('org.simple.gtk_tester', c_funloc(activate), c_loc(run))
         ! the window and its drawing area are gone: no draw can reach the tile any more
         if( c_associated(run%tile) ) call cairo_surface_destroy(run%tile)
-        call assert_int(0, int(status), 'the GTK application exits with status 0')
+        call assert_int(0, status, 'the GTK application exits with status 0')
         call assert_true(run%activated, 'the application activates')
         call assert_true(run%ndraws > 0, 'GTK draws the tile area')
         call assert_true(run%width >= TILE_BOX .and. run%height >= TILE_BOX, 'the tile area is drawn at least at its requested size')
@@ -155,10 +148,10 @@ contains
 
     ! a synthetic class average (a ring and an off-centre blob) as an RGB24 surface, R = G = B
     function make_tile() result( surface )
-        type(c_ptr)                 :: surface
-        integer(c_int32_t), pointer :: pix(:,:)
-        real                        :: img(TILE_BOX,TILE_BOX), x, y, r, box, lo, hi
-        integer                     :: i, j, gray
+        type(c_ptr) :: surface
+        real        :: img(TILE_BOX,TILE_BOX), x, y, r, box, lo, hi
+        integer     :: gray(TILE_BOX,TILE_BOX)
+        integer     :: i, j
         box = real(TILE_BOX)
         do j = 1,TILE_BOX
             y = real(j) - 0.5 * (box + 1.)
@@ -171,15 +164,8 @@ contains
         end do
         lo = minval(img)
         hi = maxval(img)
-        surface = cairo_image_surface_create(CAIRO_FORMAT_RGB24, TILE_BOX, TILE_BOX)
-        call surface_pixels(surface, TILE_BOX, pix)
-        do j = 1,TILE_BOX
-            do i = 1,TILE_BOX
-                gray     = nint(255. * (img(i,j) - lo) / (hi - lo))
-                pix(i,j) = int(gray * 65793, c_int32_t)
-            end do
-        end do
-        call cairo_surface_mark_dirty(surface)
+        gray    = nint(255. * (img - lo) / (hi - lo))
+        surface = gtkui_gray_surface(gray)
     end function make_tile
 
     ! the tile scaled to fit width x height and centred on a dark background
@@ -201,17 +187,6 @@ contains
         call cairo_paint(cr)
         call cairo_restore(cr)
     end subroutine paint_tile
-
-    ! the pixels of an RGB24 image surface: rows stride bytes apart, a pixel a native-endian 0x00RRGGBB word
-    subroutine surface_pixels( surface, nrows, pix )
-        type(c_ptr),                 intent(in)           :: surface
-        integer(c_int),              intent(in)           :: nrows
-        integer(c_int32_t),          pointer, intent(out) :: pix(:,:)
-        integer :: stride
-        call cairo_surface_flush(surface)
-        stride = int(cairo_image_surface_get_stride(surface))
-        call c_f_pointer(cairo_image_surface_get_data(surface), pix, [stride / 4, int(nrows)])
-    end subroutine surface_pixels
 
     ! a pixel equal to (r, g, b) up to cairo's rounding of colours to 8 bits
     logical function is_rgb( pixel, r, g, b )
@@ -239,10 +214,7 @@ contains
         call gtk_window_set_title(window, 'SIMPLE GTK test'//c_null_char)
         call gtk_window_set_default_size(window, 360_c_int, 420_c_int)
         box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8_c_int)
-        call gtk_widget_set_margin_start(box,  MARGIN)
-        call gtk_widget_set_margin_end(box,    MARGIN)
-        call gtk_widget_set_margin_top(box,    MARGIN)
-        call gtk_widget_set_margin_bottom(box, MARGIN)
+        call gtkui_margins(box, MARGIN, MARGIN, MARGIN, MARGIN)
         label = gtk_label_new(trim(text)//c_null_char)
         call gtk_box_pack_start(box, label, FALSE, FALSE, 0_c_int)
         run%tile = make_tile()
