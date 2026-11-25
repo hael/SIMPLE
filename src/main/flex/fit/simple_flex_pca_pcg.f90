@@ -41,7 +41,7 @@ real,     parameter :: FLEX_PCG_SUPPORT_FLOOR      = 0.05
 type :: flex_pcg_environment
     private
     type(image) :: envelope
-    logical :: l_active = .false., l_initialized = .false.
+    logical     :: l_active = .false., l_initialized = .false.
   contains
     procedure :: new            => flex_env_new
     procedure :: copy_from      => flex_env_copy_from
@@ -66,67 +66,67 @@ type, extends(pcg_lattice) :: flex_pcg_t
     ! of a wrap image of the origin, the physical list every physical point the fold reads into.
     ! Slot maps are 0 outside the lists. eorder/efold replay fold_accum's (m,k,h>=0) loop order, so
     ! the fold is bitwise the fold of the dense arrays.
-    integer :: nband = 0, nexp = 0, npk = 0, nfold = 0
-    integer, allocatable :: emap(:,:,:)    !< (expanded index triple) -> expanded slot
-    integer, allocatable :: pmap(:,:,:)    !< (physical i,j,k) -> physical slot
-    integer, allocatable :: eijk(:,:)      !< (3,nexp) expanded slot -> index triple
-    integer, allocatable :: pijk(:,:)      !< (3,npk)  physical slot -> (i,j,k)
-    integer, allocatable :: eorder(:), efold(:) !< (nfold) fold pairs: kpk(:,efold(t)) += kacc(:,eorder(t))
-    logical :: l_lists = .false.
-    real,    allocatable :: env(:,:,:)      !< native-lattice KB gather envelope E, unity at the centre
-    real,    allocatable :: dep_c(:,:,:)    !< the 2x-lattice deposition envelope cropped to the native box (RHS deapodization)
-    real,    allocatable :: khat(:,:,:,:)   !< (npairs, cdim) finalized pair kernels
-    real,    allocatable :: ridge(:,:)      !< (ncomp, nshell) optional Fourier shell ridge in the operator
-    real,    allocatable :: rhofl(:,:)      !< (ncomp, 0:Rnat) shell-relative preconditioner floors
-    real,    allocatable :: lam(:)          !< (ncomp) Tikhonov term of the operator and preconditioner
-    real    :: lam_rel = FLEX_PCG_LAMBDA_REL_DEFAULT !< lam = lam_rel x low-band mean of the diagonal density
-    integer :: verbose = 0                  !< CG iteration log level (set_verbose; 0 = outcome lines only)
-    logical :: l_kernel = .false., l_ridge = .false., l_floor = .false.
-    type(image) :: wimg                     !< persistent boxpd^3 work image (keeps its plans)
-    type(image) :: nimg                     !< persistent box^3 work image (band limit, ridge, precond)
+    integer              :: nband    = 0, nexp = 0, npk = 0, nfold = 0
+    integer, allocatable :: emap(:,:,:)                            !< (expanded index triple) -> expanded slot
+    integer, allocatable :: pmap(:,:,:)                            !< (physical i,j,k) -> physical slot
+    integer, allocatable :: eijk(:,:)                              !< (3,nexp) expanded slot -> index triple
+    integer, allocatable :: pijk(:,:)                              !< (3,npk)  physical slot -> (i,j,k)
+    integer, allocatable :: eorder(:), efold(:)                    !< (nfold) fold pairs: kpk(:,efold(t)) += kacc(:,eorder(t))
+    logical              :: l_lists  = .false.
+    real,    allocatable :: env(:,:,:)                             !< native-lattice KB gather envelope E, unity at the centre
+    real,    allocatable :: dep_c(:,:,:)                           !< the 2x-lattice deposition envelope cropped to the native box (RHS deapodization)
+    real,    allocatable :: khat(:,:,:,:)                          !< (npairs, cdim) finalized pair kernels
+    real,    allocatable :: ridge(:,:)                             !< (ncomp, nshell) optional Fourier shell ridge in the operator
+    real,    allocatable :: rhofl(:,:)                             !< (ncomp, 0:Rnat) shell-relative preconditioner floors
+    real,    allocatable :: lam(:)                                 !< (ncomp) Tikhonov term of the operator and preconditioner
+    real                 :: lam_rel  = FLEX_PCG_LAMBDA_REL_DEFAULT !< lam = lam_rel x low-band mean of the diagonal density
+    integer              :: verbose  = 0                           !< CG iteration log level (set_verbose; 0 = outcome lines only)
+    logical              :: l_kernel = .false., l_ridge = .false., l_floor = .false.
+    type(image)          :: wimg                                   !< persistent boxpd^3 work image (keeps its plans)
+    type(image)          :: nimg                                   !< persistent box^3 work image (band limit, ridge, precond)
     ! Per-thread transform pool: independent transforms run one per thread on single-threaded FFTW plans
     ! (the image%construct_thread_safe_tmp_imgs idiom); threaded plans stalled in os_sem_down. Width nthr.
-    type(image), allocatable :: wpool(:)    !< per-thread boxpd^3 images
-    type(image), allocatable :: npool(:)    !< per-thread box^3 images (band limit)
-    real,    allocatable :: tp_work(:,:,:,:)!< (box,box,box,nthr_pool)
-    real,    allocatable :: tp_emb(:,:,:,:) !< (boxpd,boxpd,boxpd,nthr_pool)
-    complex, allocatable :: tp_acc(:,:,:,:) !< (cdim,nthr_pool)
-    integer :: nthr_pool = 0
-    complex, allocatable :: pc_cq(:,:,:,:) !< persistent apply_precond accumulator
-    complex, allocatable :: op_hq(:,:,:,:) !< coupled-multiply output, one plane set per component
-    integer, allocatable :: pidx(:,:)      !< pair_index(min(q,r),max(q,r)) lookup, built once
-    logical :: exists = .false.
+    type(image), allocatable :: wpool(:)         !< per-thread boxpd^3 images
+    type(image), allocatable :: npool(:)         !< per-thread box^3 images (band limit)
+    real,        allocatable :: tp_work(:,:,:,:) !< (box,box,box,nthr_pool)
+    real,        allocatable :: tp_emb(:,:,:,:)  !< (boxpd,boxpd,boxpd,nthr_pool)
+    complex,     allocatable :: tp_acc(:,:,:,:)  !< (cdim,nthr_pool)
+    integer                  :: nthr_pool = 0
+    complex,     allocatable :: pc_cq(:,:,:,:)   !< persistent apply_precond accumulator
+    complex,     allocatable :: op_hq(:,:,:,:)   !< coupled-multiply output, one plane set per component
+    integer,     allocatable :: pidx(:,:)        !< pair_index(min(q,r),max(q,r)) lookup, built once
+    logical                  :: exists    = .false.
   contains
-    procedure :: new
-    procedure :: kill
-    procedure :: is_ready
-    procedure :: set_window_sphere => flex_set_window_sphere
-    procedure :: set_band
-    procedure :: get_npk
-    procedure :: get_nexp
-    procedure :: alloc_accum
-    procedure :: alloc_packed
-    procedure :: alloc_rhs_accum
-    procedure :: alloc_rhs_packed
-    procedure :: accumulate
-    procedure :: accumulate_rhs
-    procedure :: fold_accum
-    procedure :: fold_rhs
-    procedure :: finalize
-    procedure :: finalize_rhs
-    procedure :: set_ridge
-    procedure :: clear_ridge
-    procedure :: set_lambda_relative
-    procedure :: set_verbose
-    procedure :: solve
-    procedure :: cg_core
-    procedure :: apply_operator
-    procedure :: apply_precond
-    procedure :: get_npairs
-    procedure :: bytes_accum
-    procedure :: bytes_packed
-    procedure :: bytes_rhs_accum
-    procedure :: bytes_rhs_packed
+    procedure          :: new
+    procedure          :: kill
+    procedure          :: is_ready
+    procedure          :: set_window_sphere => flex_set_window_sphere
+    procedure          :: set_band
+    procedure          :: get_npk
+    procedure          :: get_nexp
+    procedure          :: alloc_accum
+    procedure          :: alloc_packed
+    procedure          :: alloc_rhs_accum
+    procedure          :: alloc_rhs_packed
+    procedure          :: accumulate
+    procedure          :: accumulate_rhs
+    procedure          :: fold_accum
+    procedure          :: fold_rhs
+    procedure          :: finalize
+    procedure          :: finalize_rhs
+    procedure          :: set_ridge
+    procedure          :: clear_ridge
+    procedure          :: set_lambda_relative
+    procedure          :: set_verbose
+    procedure          :: solve
+    procedure          :: cg_core
+    procedure          :: apply_operator
+    procedure          :: apply_precond
+    procedure          :: get_npairs
+    procedure          :: bytes_accum
+    procedure          :: bytes_packed
+    procedure          :: bytes_rhs_accum
+    procedure          :: bytes_rhs_packed
     procedure, private :: win_wraps
     ! the scatters are called directly in this module; the bindings give them external linkage for the
     ! self-test submodule (gfortran may link private module procedures internally)
@@ -144,9 +144,9 @@ end type flex_pcg_t
 
 !> Rank-1 view of the coupled component operator for the shared PCG engine.
 type, extends(pcg_operator) :: flex_pcg_adapter
-    class(flex_pcg_t), pointer :: client => null()
-    real, pointer, contiguous  :: density(:,:,:,:) => null()
-    integer                    :: density_lb(3) = 0
+    class(flex_pcg_t), pointer             :: client           => null()
+    real,              pointer, contiguous :: density(:,:,:,:) => null()
+    integer                                :: density_lb(3)    = 0
   contains
     procedure :: size    => flex_vector_size
     procedure :: apply   => flex_vector_apply
@@ -158,10 +158,10 @@ interface
     !> White-box self-test of the operator, checks (A)-(F) (submodule simple_flex_pca_pcg_tester, built
     !! only with BUILD_TESTS=ON)
     module subroutine test_flex_pcg_operator( box, nsamples, l_pass, passes, sweep )
-        integer,           intent(in)  :: box, nsamples
-        logical,           intent(out) :: l_pass
-        logical, optional, intent(out) :: passes(6)
-        logical, optional, intent(in)  :: sweep
+        integer,           intent(in)            :: box, nsamples
+        logical,           intent(out)           :: l_pass
+        logical,           optional, intent(out) :: passes(6)
+        logical,           optional, intent(in)  :: sweep
     end subroutine test_flex_pcg_operator
 end interface
 
@@ -176,7 +176,7 @@ contains
         integer,           intent(in)    :: box, ncomp
         real,              intent(in)    :: smpd
         real, allocatable :: env1d(:)
-        integer :: i, j, k
+        integer           :: i, j, k
         call self%kill
         call self%new_lattice(box, smpd)
         self%ncomp  = ncomp
@@ -325,32 +325,32 @@ contains
     !! 1-based on every axis (index = logical - lims3(:,1) + 1): the scatter sees it through an
     !! assumed-shape dummy and fold_accum through an allocatable one, and the two must agree
     subroutine alloc_accum( self, kacc )
-        class(flex_pcg_t), intent(in)  :: self
-        real, allocatable, intent(out) :: kacc(:,:)
+        class(flex_pcg_t), intent(in)               :: self
+        real,              allocatable, intent(out) :: kacc(:,:)
         call self%require_lists('alloc_accum')
         allocate(kacc(self%npairs, self%nexp), source=0.0)
     end subroutine alloc_accum
 
     !> packed (h >= 0, real) kernel set: the transport and reduction form
     subroutine alloc_packed( self, kpk )
-        class(flex_pcg_t), intent(in)  :: self
-        real, allocatable, intent(out) :: kpk(:,:)
+        class(flex_pcg_t), intent(in)               :: self
+        real,              allocatable, intent(out) :: kpk(:,:)
         call self%require_lists('alloc_packed')
         allocate(kpk(self%npairs, self%npk), source=0.0)
     end subroutine alloc_packed
 
     !> full-range accumulator of the doubled-coordinate right-hand-side scatter, one row per component
     subroutine alloc_rhs_accum( self, racc )
-        class(flex_pcg_t),    intent(in)  :: self
-        complex, allocatable, intent(out) :: racc(:,:)
+        class(flex_pcg_t),    intent(in)               :: self
+        complex,              allocatable, intent(out) :: racc(:,:)
         call self%require_lists('alloc_rhs_accum')
         allocate(racc(self%ncomp, self%nexp), source=cmplx(0.,0.))
     end subroutine alloc_rhs_accum
 
     !> packed (h >= 0, complex) right-hand-side set: the transport and reduction form
     subroutine alloc_rhs_packed( self, rpk )
-        class(flex_pcg_t),    intent(in)  :: self
-        complex, allocatable, intent(out) :: rpk(:,:)
+        class(flex_pcg_t),    intent(in)               :: self
+        complex,              allocatable, intent(out) :: rpk(:,:)
         call self%require_lists('alloc_rhs_packed')
         allocate(rpk(self%ncomp, self%npk), source=cmplx(0.,0.))
     end subroutine alloc_rhs_packed
@@ -487,12 +487,12 @@ contains
         real(dp),          intent(in)    :: density_scales(:,:,:)
         logical,           intent(in)    :: valid(:)
         integer,           intent(in)    :: nrecords
-        type(ori) :: o_sym
+        type(ori)            :: o_sym
         real,    allocatable :: rotmats(:,:,:,:), dpack(:,:)
         integer, allocatable :: fpllims(:,:,:), nyq_disks(:)
-        real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3), ctfsq_raw
-        integer :: i, isym, nsym, l, h, k, q, r, pf, i0(3), nyq_eff, fpllims_pd(3,2)
-        integer :: h_sq, k_max_h, k_lo, k_hi
+        real                 :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3), ctfsq_raw
+        integer              :: i, isym, nsym, l, h, k, q, r, pf, i0(3), nyq_eff, fpllims_pd(3,2)
+        integer              :: h_sq, k_max_h, k_lo, k_hi
         if( nrecords < 1 ) return
         if( size(kacc,1) /= self%npairs ) THROW_HARD('pair kernel accumulator has the wrong leading extent; accumulate')
         call self%require_lists('accumulate')
@@ -599,13 +599,13 @@ contains
         real(dp),          intent(in)    :: data_scales(:,:)
         logical,           intent(in)    :: valid(:)
         integer,           intent(in)    :: nrecords
-        type(ori) :: o_sym
+        type(ori)            :: o_sym
         real,    allocatable :: rotmats(:,:,:,:), dsc(:,:)
         integer, allocatable :: fpllims(:,:,:), nyq_disks(:)
-        complex :: cmplx_raw, vals(self%ncomp)
-        real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3), pf2
-        integer :: i, isym, nsym, l, h, k, pf, i0(3), nyq_eff, fpllims_pd(3,2)
-        integer :: h_sq, k_max_h, k_lo, k_hi
+        complex              :: cmplx_raw, vals(self%ncomp)
+        real                 :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3), pf2
+        integer              :: i, isym, nsym, l, h, k, pf, i0(3), nyq_eff, fpllims_pd(3,2)
+        integer              :: h_sq, k_max_h, k_lo, k_hi
         if( nrecords < 1 ) return
         if( size(racc,1) /= self%ncomp ) THROW_HARD('rhs accumulator has the wrong leading extent; accumulate_rhs')
         call self%require_lists('accumulate_rhs')
@@ -797,9 +797,9 @@ contains
     !> fold the band-list accumulator into the packed kernels: the same (m, k, h >= 0) visits as the
     !! dense fold, replayed from eorder/efold, so the sums are bitwise those of the dense arrays
     subroutine fold_accum( self, kacc, kpk )
-        class(flex_pcg_t), intent(inout) :: self
-        real, allocatable, intent(inout) :: kacc(:,:)
-        real,              intent(inout) :: kpk(:,:)
+        class(flex_pcg_t), intent(inout)              :: self
+        real,              allocatable, intent(inout) :: kacc(:,:)
+        real,              intent(inout)              :: kpk(:,:)
         integer :: t
         if( .not. allocated(kacc) ) return
         if( size(kpk,1) /= self%npairs ) THROW_HARD('packed kernel set has the wrong leading extent; fold_accum')
@@ -812,9 +812,9 @@ contains
     
     !> the same fold for the complex right-hand-side accumulator
     subroutine fold_rhs( self, racc, rpk )
-        class(flex_pcg_t),    intent(inout) :: self
-        complex, allocatable, intent(inout) :: racc(:,:)
-        complex,              intent(inout) :: rpk(:,:)
+        class(flex_pcg_t),    intent(inout)              :: self
+        complex,              allocatable, intent(inout) :: racc(:,:)
+        complex,              intent(inout)              :: rpk(:,:)
         integer :: t
         if( .not. allocated(racc) ) return
         if( size(rpk,1) /= self%ncomp ) THROW_HARD('packed rhs set has the wrong leading extent; fold_rhs')
@@ -830,10 +830,10 @@ contains
     subroutine finalize( self, kpk )
         class(flex_pcg_t), intent(inout) :: self
         real,              intent(in)    :: kpk(:,:)
-        real,    pointer     :: rp(:,:,:)
-        integer, parameter :: IBLK = 16
-        real,    allocatable :: kt(:,:,:,:)   !< (cdim, npairs): each pair's kernel, written contiguously by its thread
-        integer :: ipair, i, j, k, tid, t, ib, i2
+        real,    pointer        :: rp(:,:,:)
+        integer, parameter      :: IBLK = 16
+        real,    allocatable    :: kt(:,:,:,:) !< (cdim, npairs): each pair's kernel, written contiguously by its thread
+        integer                 :: ipair, i, j, k, tid, t, ib, i2
         integer(timer_int_kind) :: t_fold
         if( size(kpk,1) /= self%npairs ) THROW_HARD('packed kernel set has the wrong leading extent; finalize')
         if( size(kpk,2) /= self%npk ) THROW_HARD('packed kernel set is not on the band list; finalize')
@@ -902,7 +902,7 @@ contains
         complex,           intent(in)    :: rpk(:,:)
         real,              intent(out)   :: b(:,:,:,:)
         real, pointer :: rp(:,:,:)
-        integer :: q, i, j, k, tid, off, t
+        integer       :: q, i, j, k, tid, off, t
         if( size(rpk,1) /= self%ncomp ) THROW_HARD('packed rhs set has the wrong leading extent; finalize_rhs')
         if( size(rpk,2) /= self%npk ) THROW_HARD('packed rhs set is not on the band list; finalize_rhs')
         call self%ensure_pool()
@@ -980,7 +980,7 @@ contains
         real,              intent(inout) :: work(:,:,:)
         class(image),      intent(inout) :: img
         real, pointer :: rp(:,:,:)
-        integer :: lims(3,2), h, k, m, phys(3)
+        integer       :: lims(3,2), h, k, m, phys(3)
         call img%set_rmat(work, .false.)
         call img%fft()
         lims = img%loop_lims(2)
@@ -1006,8 +1006,8 @@ contains
         real,              intent(in)    :: x(:,:,:,:)
         real,              intent(out)   :: hx(:,:,:,:)
         real,    pointer :: rp(:,:,:)
-        complex :: acc
-        integer :: q, r, i, j, k, sh, h, kk, m, phys(3), nsh, off, tid
+        complex          :: acc
+        integer          :: q, r, i, j, k, sh, h, kk, m, phys(3), nsh, off, tid
         if( .not. self%l_kernel ) THROW_HARD('kernels are not finalized; apply_operator')
         ! Persistent scratch: per-call allocation of these component-sized buffers left the solve page-fault bound.
         ! center_embed/center_crop are inlined on it with simple_cartesian_fourier's offset (boxpd-box)/2 and zero fill.
@@ -1130,7 +1130,7 @@ contains
         integer,           intent(in)    :: rho_lb(3)
         real(dp), allocatable :: ssum(:,:)
         integer,  allocatable :: scnt(:)
-        integer :: lims(3,2), h, k, m, sh, q, ih, ik, im
+        integer               :: lims(3,2), h, k, m, sh, q, ih, ik, im
         if( size(rho,1) /= self%npairs ) THROW_HARD('preconditioner density must be the full packed triangle; prep_floor')
         if( allocated(self%rhofl) ) deallocate(self%rhofl)
         allocate(self%rhofl(self%ncomp, 0:self%Rnat), source=0.0)
@@ -1186,9 +1186,9 @@ contains
         integer,           intent(in)    :: rho_lb(3)
         real,              intent(out)   :: z(:,:,:,:)
         real,    pointer     :: rp(:,:,:)
-        complex(dp) :: rhs(self%ncomp), sol(self%ncomp)
-        real(dp)    :: amat(self%ncomp,self%ncomp), diag_sum, ridge, denom
-        integer :: lims(3,2), h, k, m, sh, q, rr, ih, ik, im, phys(3), flag, tid
+        complex(dp)          :: rhs(self%ncomp), sol(self%ncomp)
+        real(dp)             :: amat(self%ncomp,self%ncomp), diag_sum, ridge, denom
+        integer              :: lims(3,2), h, k, m, sh, q, rr, ih, ik, im, phys(3), flag, tid
         if( .not. self%l_floor ) call self%prep_floor(rho, rho_lb)
         call self%ensure_pool()
         if( .not. allocated(self%pc_cq) )then
@@ -1280,17 +1280,17 @@ contains
     !> preconditioned CG on B x = b from the initial guess x (warm start), true-residual bookkeeping,
     !! periodic residual replacement, dx/x diminishing-returns stop, one cold restart on indefiniteness
     subroutine cg_core( self, b, x, rho, rho_lb, maxits, rtol, outcome, tag )
-        class(flex_pcg_t), target, intent(inout) :: self
-        real, contiguous, target,  intent(in)    :: b(:,:,:,:)
-        real, contiguous, target,  intent(inout) :: x(:,:,:,:)
-        real, contiguous, target,  intent(in)    :: rho(:,:,:,:)
-        integer,                  intent(in)    :: rho_lb(3)
-        integer,                  intent(in)    :: maxits
-        real,                     intent(in)    :: rtol
-        type(flex_pcg_outcome_t), intent(inout) :: outcome
-        character(len=*),         intent(in)    :: tag
-        real, pointer :: b_flat(:), x_flat(:)
-        type(flex_pcg_adapter) :: op
+        class(flex_pcg_t),        target, intent(inout)              :: self
+        real,                     contiguous, target,  intent(in)    :: b(:,:,:,:)
+        real,                     contiguous, target,  intent(inout) :: x(:,:,:,:)
+        real,                     contiguous, target,  intent(in)    :: rho(:,:,:,:)
+        integer,                  intent(in)                         :: rho_lb(3)
+        integer,                  intent(in)                         :: maxits
+        real,                     intent(in)                         :: rtol
+        type(flex_pcg_outcome_t), intent(inout)                      :: outcome
+        character(len=*),         intent(in)                         :: tag
+        real, pointer            :: b_flat(:), x_flat(:)
+        type(flex_pcg_adapter)   :: op
         type(pcg_solver_options) :: options
         if( maxits > 0 .and. .not. self%l_kernel ) THROW_HARD('kernels are not finalized; cg_core')
         call self%prep_floor(rho, rho_lb)
@@ -1327,8 +1327,8 @@ contains
         !! leaving the relative scaling to be inferred from the source.
         subroutine audit_terms
             real, allocatable :: h0(:,:,:,:), h1(:,:,:,:), lam_save(:)
-            logical  :: ridge_save
-            real(dp) :: n0, nl, nr
+            logical           :: ridge_save
+            real(dp)          :: n0, nl, nr
             allocate(h0, mold=b); allocate(h1, mold=b)
             ridge_save = self%l_ridge
             if( allocated(self%lam) ) lam_save = self%lam
@@ -1362,9 +1362,9 @@ contains
     end function flex_vector_size
 
     subroutine flex_vector_apply( self, x, y )
-        class(flex_pcg_adapter), intent(inout) :: self
-        real, contiguous, target, intent(in)   :: x(:)
-        real, contiguous, target, intent(out)  :: y(:)
+        class(flex_pcg_adapter), intent(inout)                   :: self
+        real,                    contiguous, target, intent(in)  :: x(:)
+        real,                    contiguous, target, intent(out) :: y(:)
         real, pointer :: x4(:,:,:,:), y4(:,:,:,:)
         x4(1:self%client%box,1:self%client%box,1:self%client%box,1:self%client%ncomp) => x
         y4(1:self%client%box,1:self%client%box,1:self%client%box,1:self%client%ncomp) => y
@@ -1372,9 +1372,9 @@ contains
     end subroutine flex_vector_apply
 
     subroutine flex_vector_precond( self, r, z )
-        class(flex_pcg_adapter), intent(inout) :: self
-        real, contiguous, target, intent(in)   :: r(:)
-        real, contiguous, target, intent(out)  :: z(:)
+        class(flex_pcg_adapter), intent(inout)                   :: self
+        real,                    contiguous, target, intent(in)  :: r(:)
+        real,                    contiguous, target, intent(out) :: z(:)
         real, pointer :: r4(:,:,:,:), z4(:,:,:,:)
         r4(1:self%client%box,1:self%client%box,1:self%client%box,1:self%client%ncomp) => r
         z4(1:self%client%box,1:self%client%box,1:self%client%box,1:self%client%ncomp) => z
@@ -1382,8 +1382,8 @@ contains
     end subroutine flex_vector_precond
 
     real(dp) function flex_vector_dot( self, a, b ) result(value)
-        class(flex_pcg_adapter), intent(in) :: self
-        real, contiguous, target, intent(in) :: a(:), b(:)
+        class(flex_pcg_adapter), intent(in)                     :: self
+        real,                    contiguous, target, intent(in) :: a(:), b(:)
         real, pointer :: a4(:,:,:,:), b4(:,:,:,:)
         a4(1:self%client%box,1:self%client%box,1:self%client%box,1:self%client%ncomp) => a
         b4(1:self%client%box,1:self%client%box,1:self%client%box,1:self%client%ncomp) => b
@@ -1394,19 +1394,19 @@ contains
     !! CG on the 2x right-hand sides starts from it, masked to the support (cg_core rescales it).
     !! Returns E*u on the expanded lattice.
     subroutine solve( self, Y, rho, rpk, maxits, rtol, outcome, tag )
-        class(flex_pcg_t),          intent(inout) :: self
-        type(reconstructor),        intent(inout) :: Y(:)
-        real,                       intent(in)    :: rho(:,:,:,:)
-        complex,                    intent(in)    :: rpk(:,:)
-        integer,                    intent(in)    :: maxits
-        real,                       intent(in)    :: rtol
-        type(flex_pcg_outcome_t),   intent(out)   :: outcome
-        character(len=*), optional, intent(in)    :: tag
-        real, allocatable :: b(:,:,:,:), x(:,:,:,:), xgrid(:,:,:,:)
-        real, pointer     :: rp(:,:,:)
-        integer  :: q, rho_lb(3), verbose
-        real(dp) :: gnorm, dnorm, gdot
-        integer(timer_int_kind) :: t0
+        class(flex_pcg_t),          intent(inout)        :: self
+        type(reconstructor),        intent(inout)        :: Y(:)
+        real,                       intent(in)           :: rho(:,:,:,:)
+        complex,                    intent(in)           :: rpk(:,:)
+        integer,                    intent(in)           :: maxits
+        real,                       intent(in)           :: rtol
+        type(flex_pcg_outcome_t),   intent(out)          :: outcome
+        character(len=*),           optional, intent(in) :: tag
+        real,             allocatable :: b(:,:,:,:), x(:,:,:,:), xgrid(:,:,:,:)
+        real,             pointer     :: rp(:,:,:)
+        integer                       :: q, rho_lb(3), verbose
+        real(dp)                      :: gnorm, dnorm, gdot
+        integer(timer_int_kind)       :: t0
         character(len=:), allocatable :: ttag
         ttag = 'FLEX_PCA PCG MSTEP'
         if( present(tag) ) ttag = trim(tag)
@@ -1507,8 +1507,8 @@ contains
         character(len=*), intent(in)    :: tag
         type(image)   :: nat, rc
         real, pointer :: rp(:,:,:)
-        real    :: vmin, vmax, frac_out, occ_box_n, occ_sph_n, occ_box_t, occ_sph_t
-        integer :: ldim(3), ifoo, n
+        real          :: vmin, vmax, frac_out, occ_box_n, occ_sph_n, occ_box_t, occ_sph_t
+        integer       :: ldim(3), ifoo, n
         if( .not. flex_mskfile_set(pcg_mskfile) ) THROW_HARD('pcg_mskfile is not set; flex_pcg_support_volume')
         call find_ldim_nptcls(pcg_mskfile, ldim, ifoo)
         if( ldim(1) /= ldim(2) .or. ldim(1) /= ldim(3) ) THROW_HARD('pcg_mskfile must be a cubic volume')
@@ -1581,10 +1581,10 @@ contains
     !> idempotent: the envelope at the covariance box when pcg_mskfile is set on the PCG backend
     subroutine flex_env_new( self, rec_backend, pcg_mskfile, box, smpd, mskdiam, box_crop, smpd_crop )
         class(flex_pcg_environment), intent(inout) :: self
-        character(len=*), intent(in) :: rec_backend
-        type(string),     intent(in) :: pcg_mskfile
-        integer,          intent(in) :: box, box_crop
-        real,             intent(in) :: smpd, mskdiam, smpd_crop
+        character(len=*),            intent(in)    :: rec_backend
+        type(string),                intent(in)    :: pcg_mskfile
+        integer,                     intent(in)    :: box, box_crop
+        real,                        intent(in)    :: smpd, mskdiam, smpd_crop
         call self%kill
         self%l_initialized = .true.
         self%l_active = trim(rec_backend) == 'pcg' .and. flex_mskfile_set(pcg_mskfile)
@@ -1622,9 +1622,9 @@ contains
     !! class(image) dummy segfaulted at -O3 on the first call of the M-step tail (gfortran codegen).
     subroutine flex_window_apply( self, img, box_crop, msk_crop )
         class(flex_pcg_environment), intent(inout) :: self
-        type(image), intent(inout) :: img   !< at the covariance box
-        integer,     intent(in)    :: box_crop
-        real,        intent(in)    :: msk_crop
+        type(image),                 intent(inout) :: img !< at the covariance box
+        integer,                     intent(in)    :: box_crop
+        real,                        intent(in)    :: msk_crop
         real, pointer :: rp(:,:,:)
         if( .not. self%l_initialized ) THROW_HARD('flex_window_apply: flex environment is not initialized')
         if( self%l_active )then
@@ -1640,9 +1640,9 @@ contains
     !> the same for a reconstructor (the initial basis is built on one)
     subroutine flex_window_apply_rec( self, rec, box_crop, msk_crop )
         class(flex_pcg_environment), intent(inout) :: self
-        type(reconstructor), intent(inout) :: rec
-        integer,             intent(in)    :: box_crop
-        real,                intent(in)    :: msk_crop
+        type(reconstructor),         intent(inout) :: rec
+        integer,                     intent(in)    :: box_crop
+        real,                        intent(in)    :: msk_crop
         real, pointer :: rp(:,:,:)
         if( .not. self%l_initialized ) THROW_HARD('flex_window_apply_rec: flex environment is not initialized')
         if( self%l_active )then
@@ -1657,11 +1657,11 @@ contains
 
     !> elementwise product with the envelope on the logical box (loops: no array temporary)
     subroutine window_product( self, rp, b )
-        class(flex_pcg_environment), intent(inout) :: self
-        real, pointer, intent(inout) :: rp(:,:,:)
-        integer,       intent(in)    :: b
+        class(flex_pcg_environment), intent(inout)          :: self
+        real,                        pointer, intent(inout) :: rp(:,:,:)
+        integer,                     intent(in)             :: b
         real, pointer :: wp(:,:,:)
-        integer :: i, j, k
+        integer       :: i, j, k
         if( .not. self%envelope%exists() ) THROW_HARD('window_product: the envelope window is not loaded')
         call self%envelope%get_rmat_ptr(wp)
         do k = 1, b
@@ -1676,9 +1676,9 @@ contains
     !> the solver's support at the covariance box: the envelope when set, else the sphere
     subroutine flex_pcg_install_window( self, op, khi, msk_crop )
         class(flex_pcg_environment), intent(inout) :: self
-        type(flex_pcg_t), intent(inout) :: op
-        integer,          intent(in)    :: khi
-        real,             intent(in)    :: msk_crop
+        type(flex_pcg_t),            intent(inout) :: op
+        integer,                     intent(in)    :: khi
+        real,                        intent(in)    :: msk_crop
         if( .not. self%l_initialized ) THROW_HARD('flex_pcg_install_window: flex environment is not initialized')
         if( self%l_active )then
             call op%set_window_volume(self%envelope)

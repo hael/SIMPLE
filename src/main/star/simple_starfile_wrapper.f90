@@ -137,8 +137,8 @@ interface
     subroutine C_starfile_table__open_ofile(this, fname, mode) bind(C,name="StarFileTable__open_ofile")
         import
         type(C_ptr),       value             :: this
-        character(C_char),        intent(in) :: fname
-        integer(C_int),    value, intent(in) :: mode
+        character(C_char),        intent(in)        :: fname
+        integer(C_int),           value, intent(in) :: mode
     end subroutine C_starfile_table__open_ofile
 
     subroutine C_starfile_table__write_ofile(this, ignoreheader, tableend) bind(C,name="StarFileTable__write_ofile")
@@ -150,9 +150,9 @@ interface
     subroutine C_starfile_table__write_omem(this, str, partlength, ignoreheader) bind(C,name="StarFileTable__write_omem")
         import
         type(C_ptr),            value       :: this
-        type(C_ptr),            intent(out) :: str
-        integer(C_long),        intent(out) :: partlength
-        logical(C_bool), value, intent(in)  :: ignoreheader
+        type(C_ptr),            intent(out)       :: str
+        integer(C_long),        intent(out)       :: partlength
+        logical(C_bool),        value, intent(in) :: ignoreheader
     end subroutine C_starfile_table__write_omem
 
     subroutine C_starfile_table__close_ofile(this) bind(C,name="StarFileTable__close_ofile")
@@ -188,8 +188,8 @@ interface
 
     function C_starfile_table__hascomment(this) result(ares) bind(C, name="StarFileTable__hasComment")
         import
-        type(C_ptr), value ::this
-        logical(C_bool) :: ares
+        type(C_ptr), value :: this
+        logical(C_bool)    :: ares
     end function C_starfile_table__hascomment
 
     function C_starfile_table__hasLabel(this, EMDL_id) result(ares) bind(C, name="StarFileTable__hasLabel")
@@ -267,10 +267,10 @@ contains
     end subroutine starfile_table__setIsList
 
     subroutine starfile_table__setValue_double(this, EMDL_id, avalue, object_id)
-        type(starfile_table_type), intent(inout) :: this
-        integer(C_int),            intent(in)    :: EMDL_id
-        real(C_double),            intent(in)    :: avalue
-        integer(C_long), optional, intent(in)    :: object_id
+        type(starfile_table_type), intent(inout)        :: this
+        integer(C_int),            intent(in)           :: EMDL_id
+        real(C_double),            intent(in)           :: avalue
+        integer(C_long),           optional, intent(in) :: object_id
         integer(C_long) :: object_id_here
         if( present(object_id) ) then
             object_id_here = object_id
@@ -281,10 +281,10 @@ contains
     end subroutine starfile_table__setValue_double
 
     subroutine starfile_table__setValue_float(this, EMDL_id, avalue, object_id)
-        type(starfile_table_type), intent(inout) :: this
-        integer(C_int),            intent(in)    :: EMDL_id
-        real(C_float),             intent(in)    :: avalue
-        integer(C_long), optional, intent(in)    :: object_id
+        type(starfile_table_type), intent(inout)        :: this
+        integer(C_int),            intent(in)           :: EMDL_id
+        real(C_float),             intent(in)           :: avalue
+        integer(C_long),           optional, intent(in) :: object_id
         integer(C_long) :: object_id_here
         if( present(object_id) ) then
             object_id_here = object_id
@@ -295,10 +295,10 @@ contains
     end subroutine starfile_table__setValue_float
 
     subroutine starfile_table__setValue_int(this, EMDL_id, avalue, object_id)
-        type(starfile_table_type), intent(inout) :: this
-        integer(C_int),            intent(in)    :: EMDL_id
-        integer(C_int),            intent(in)    :: avalue
-        integer(C_long), optional, intent(in)    :: object_id
+        type(starfile_table_type), intent(inout)        :: this
+        integer(C_int),            intent(in)           :: EMDL_id
+        integer(C_int),            intent(in)           :: avalue
+        integer(C_long),           optional, intent(in) :: object_id
         integer(C_long) :: object_id_here
         if( present(object_id) ) then
             object_id_here = object_id
@@ -401,10 +401,10 @@ contains
     end function starfile_table__getValue_bool
 
     function starfile_table__getValue_string(this, EMDL_id, str, object_id) result(aresult)
-      type(starfile_table_type),     intent(inout) :: this
-      integer(C_int),                intent(in)    :: EMDL_id
-      character(len=:), allocatable, intent(out)   :: str
-      logical                                      :: aresult
+      type(starfile_table_type),     intent(inout)            :: this
+      integer(C_int),                intent(in)               :: EMDL_id
+      character(len=:),              allocatable, intent(out) :: str
+      logical                                             :: aresult
       type(C_ptr)                                         :: c_str
       character(len=1,kind=C_char), dimension(:), pointer :: f_str
       integer(c_int)                                      :: alen
@@ -451,8 +451,8 @@ contains
     end subroutine starfile_table__open_ofile
 
     subroutine starfile_table__write_ofile(this, ignoreheader, tableend)
-        type(starfile_table_type), intent(inout) :: this
-        logical, optional,         intent(in)    :: ignoreheader, tableend
+        type(starfile_table_type), intent(inout)                :: this
+        logical,                   optional,         intent(in) :: ignoreheader, tableend
         logical(C_bool)                          :: l_ignoreheader, l_tableend
         l_ignoreheader = .false.
         l_tableend     = .true.
@@ -462,15 +462,15 @@ contains
     end subroutine starfile_table__write_ofile
 
     subroutine starfile_table__write_omem(this, str, length, ignoreheader)
-        type(starfile_table_type),     intent(inout) :: this
-        character(len=:), allocatable, intent(inout) :: str
-        integer,                       intent(inout) :: length
-        logical,          optional,    intent(in)    :: ignoreheader
+        type(starfile_table_type),     intent(inout)              :: this
+        character(len=:),              allocatable, intent(inout) :: str
+        integer,                       intent(inout)              :: length
+        logical,                       optional,    intent(in)    :: ignoreheader
         character(len=1,kind=C_char), dimension(:), pointer :: f_str
-        type(C_ptr)     :: c_str
-        integer(C_long) :: partlength
-        integer         :: i
-        logical(C_bool) :: l_ignoreheader
+        type(C_ptr)                                         :: c_str
+        integer(C_long)                                     :: partlength
+        integer                                             :: i
+        logical(C_bool)                                     :: l_ignoreheader
         if(present(ignoreheader) .and. ignoreheader) then
             l_ignoreheader = .true.
         else
@@ -499,9 +499,9 @@ contains
     end subroutine starfile_table__append
 
     subroutine starfile_table__read(this, fname, name)
-        type(starfile_table_type),  intent(inout) :: this
-        class(string),              intent(in)    :: fname
-        character(len=*), optional, intent(in)    :: name
+        type(starfile_table_type),  intent(inout)        :: this
+        class(string),              intent(in)           :: fname
+        character(len=*),           optional, intent(in) :: name
         character(len=:), allocatable :: str_fname
         character(len=:), allocatable :: str_name
         str_fname = fname%to_char() // C_NULL_CHAR
@@ -530,8 +530,8 @@ contains
     end subroutine starfile_table__setcomment
 
     subroutine starfile_table__getcomment(this, str)
-        type(starfile_table_type),     intent(inout) :: this
-        character(len=:), allocatable, intent(out)   :: str
+        type(starfile_table_type),     intent(inout)            :: this
+        character(len=:),              allocatable, intent(out) :: str
         type(C_ptr)                                         :: c_str
         character(len=1,kind=C_char), dimension(:), pointer :: f_str
         integer(C_int)                                      :: alen
@@ -547,7 +547,7 @@ contains
 
     function starfile_table__hascomment(this) result(ares)
         type(starfile_table_type), intent(inout) :: this
-        logical :: ares
+        logical         :: ares
         logical(C_bool) :: ares2
         ares2 = C_starfile_table__hascomment(this%object)
         ares = ares2
@@ -556,7 +556,7 @@ contains
     function starfile_table__haslabel(this, emdl_id) result(ares)
         type(starfile_table_type), intent(inout) :: this
         integer(C_int),            intent(in)    :: EMDL_id
-        logical :: ares
+        logical         :: ares
         logical(C_bool) :: ares2
         ares2 = C_starfile_table__hasLabel(this%object,emdl_id)
         ares  = ares2
@@ -581,15 +581,15 @@ contains
     end function starfile_table__nextobject
 
     subroutine starfile_table__getnames(this, fname, names)
-        type(starfile_table_type), intent(inout) :: this
-        class(string),             intent(in)    :: fname
-        type(string), allocatable, intent(out)   :: names(:)
-        character(len=:), allocatable :: fname2, buffer
-        integer(C_int) :: count
-        integer(C_int) :: nr
-        integer(C_int) :: alen
-        type(C_ptr)    :: c_str
-        integer        :: i
+        type(starfile_table_type), intent(inout)            :: this
+        class(string),             intent(in)               :: fname
+        type(string),              allocatable, intent(out) :: names(:)
+        character(len=:),             allocatable           :: fname2, buffer
+        integer(C_int)                                      :: count
+        integer(C_int)                                      :: nr
+        integer(C_int)                                      :: alen
+        type(C_ptr)                                         :: c_str
+        integer                                             :: i
         character(len=1,kind=C_char), dimension(:), pointer :: f_str
         ! first determine number of names
         fname2 = fname%to_char() // C_NULL_CHAR

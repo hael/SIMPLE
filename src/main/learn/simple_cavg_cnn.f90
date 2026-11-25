@@ -46,31 +46,31 @@ end type cnn_gn
 
 !> a residual block: 3x3 convolutions w1 (9 cin, cout) at stride 2 and w2 (9 cout, cout), the skip's 1x1 ws (cin, cout)
 type :: cnn_block
-    integer :: cin = 0, cout = 0
+    integer               :: cin = 0, cout = 0
     real(sp), allocatable :: w1(:,:), w2(:,:), ws(:,:)
-    type(cnn_gn) :: n1, n2, ns
+    type(cnn_gn)          :: n1, n2, ns
 end type cnn_block
 
 type :: cavg_cnn
     private
-    integer  :: width = 0, cin = 0, box = 0
-    real(sp) :: smpd  = 0.
-    logical  :: l_blas = L_BLAS_TEAM_SAFE
+    integer               :: width  = 0, cin = 0, box = 0
+    real(sp)              :: smpd   = 0.
+    logical               :: l_blas = L_BLAS_TEAM_SAFE
     real(sp), allocatable :: w0(:,:)            !< the stem's 3x3 convolution (9 cin, width)
     type(cnn_gn)          :: n0
     type(cnn_block)       :: blk(CAVG_CNN_NBLK)
     real(sp), allocatable :: wh(:,:), bh(:)     !< the head (channels of the last block, 2) and its bias
-    logical  :: exists = .false.
+    logical               :: exists = .false.
   contains
-    procedure :: new
-    procedure :: get_box
-    procedure :: get_smpd
-    procedure :: get_nchannels
-    procedure :: predict
-    procedure :: kill
-    procedure, private :: read_weights
-    procedure, private :: logits_sym
-    procedure, private :: forward
+    procedure                  :: new
+    procedure                  :: get_box
+    procedure                  :: get_smpd
+    procedure                  :: get_nchannels
+    procedure                  :: predict
+    procedure                  :: kill
+    procedure, private         :: read_weights
+    procedure, private         :: logits_sym
+    procedure, private         :: forward
     procedure, private, nopass :: conv3x3
     procedure, private, nopass :: conv1x1_s2
     procedure, private, nopass :: group_norm
@@ -90,7 +90,7 @@ contains
         class(cavg_cnn), intent(inout) :: self
         class(string),   intent(in)    :: fname
         character(len=:), allocatable  :: msg
-        logical :: ok
+        logical                        :: ok
         call self%read_weights(fname, ok, msg)
         if( .not. ok ) THROW_HARD(msg)
     end subroutine new
@@ -118,8 +118,8 @@ contains
         real(sp),        intent(in)  :: x(:,:,:,:)
         real(dp),        intent(out) :: probs(:,:)
         real(sp), allocatable :: lsym(:,:,:)
-        real(dp) :: l(2), pp, ps
-        integer  :: n, itask, i, s
+        real(dp)              :: l(2), pp, ps
+        integer               :: n, itask, i, s
         if( .not. self%exists ) THROW_HARD('network not constructed; cavg_cnn%predict')
         n = size(x,4)
         if( size(x,1) /= self%box .or. size(x,2) /= self%box ) THROW_HARD('inputs are not of the network box; cavg_cnn%predict')
@@ -186,10 +186,10 @@ contains
 
     !> the weights file read whole; ok is false with the reason in msg on any mismatch, a short or a long file
     subroutine read_weights( self, fname, ok, msg )
-        class(cavg_cnn),               intent(inout) :: self
-        class(string),                 intent(in)    :: fname
-        logical,                       intent(out)   :: ok
-        character(len=:), allocatable, intent(out)   :: msg
+        class(cavg_cnn),               intent(inout)            :: self
+        class(string),                 intent(in)               :: fname
+        logical,                       intent(out)              :: ok
+        character(len=:),              allocatable, intent(out) :: msg
         integer :: funit, ios
         call self%kill
         ok = .false.
@@ -215,8 +215,8 @@ contains
 
         subroutine read_all
             integer(int64) :: magic, version
-            integer  :: width, cin, box, groups, nblk, b, ch(0:CAVG_CNN_NBLK), extra
-            real(sp) :: smpd
+            integer        :: width, cin, box, groups, nblk, b, ch(0:CAVG_CNN_NBLK), extra
+            real(sp)       :: smpd
             read(funit, iostat=ios) magic, version
             if( ios /= 0 )then
                 msg = 'too short for a weights file'
@@ -289,7 +289,7 @@ contains
         logical function tensor( ext, a, n )
             integer,  intent(in)  :: ext(:), n
             real(sp), intent(out) :: a(n)
-            integer :: rank
+            integer              :: rank
             integer, allocatable :: ext_file(:)
             tensor = .false.
             read(funit, iostat=ios) rank
@@ -329,9 +329,9 @@ contains
         real(sp),        intent(in)  :: x(:,:,:)
         real(sp),        intent(out) :: l(2)
         real(sp), allocatable :: xs(:,:,:)
-        real(sp) :: lv(2)
-        real(dp) :: acc(2)
-        integer  :: s
+        real(sp)              :: lv(2)
+        real(dp)              :: acc(2)
+        integer               :: s
         allocate(xs, mold=x)
         acc = 0.d0
         do s = 0,CAVG_CNN_NSYM-1
@@ -349,7 +349,7 @@ contains
         real(sp),        intent(out) :: l(2)
         real(sp), allocatable :: a(:,:), y(:,:), y2(:,:), sk(:,:)
         real(dp), allocatable :: feat(:)
-        integer :: n, na, ny, ny2, b, c
+        integer               :: n, na, ny, ny2, b, c
         n = size(x,1)
         call self%conv3x3(reshape(x, [n*n, self%cin]), n, self%cin, self%w0, self%width, 1, self%l_blas, a, na)
         call self%group_norm(a, self%n0%g, self%n0%b)
@@ -378,13 +378,13 @@ contains
     !> PyTorch's 3x3 convolution with zero padding 1 at stride 1 or 2 (a cross-correlation, no bias): x(n*n, cin) to
     !! y(ny*ny, cout), ny = (n - 1) / stride + 1; w(9 cin, cout) holds the taps kw fastest, then kh, then cin
     subroutine conv3x3( x, n, cin, w, cout, stride, l_blas, y, ny )
-        integer,               intent(in)    :: n, cin, cout, stride
-        real(sp),              intent(in)    :: x(n*n, cin), w(9*cin, cout)
-        logical,               intent(in)    :: l_blas
-        real(sp), allocatable, intent(inout) :: y(:,:)
-        integer,               intent(out)   :: ny
+        integer,               intent(in)                 :: n, cin, cout, stride
+        real(sp),              intent(in)                 :: x(n*n, cin), w(9*cin, cout)
+        logical,               intent(in)                 :: l_blas
+        real(sp),              allocatable, intent(inout) :: y(:,:)
+        integer,               intent(out)                :: ny
         real(sp), allocatable :: col(:,:)
-        integer :: ci, kh, kw, k, oh, ow, ih, iw, p0
+        integer               :: ci, kh, kw, k, oh, ow, ih, iw, p0
         ny = (n - 1) / stride + 1
         allocate(col(ny*ny, 9*cin))
         do ci = 1,cin
@@ -418,13 +418,13 @@ contains
 
     !> PyTorch's 1x1 convolution at stride 2 (no padding, no bias): x(n*n, cin) to y(ny*ny, cout), w(cin, cout)
     subroutine conv1x1_s2( x, n, cin, w, cout, l_blas, y, ny )
-        integer,               intent(in)    :: n, cin, cout
-        real(sp),              intent(in)    :: x(n*n, cin), w(cin, cout)
-        logical,               intent(in)    :: l_blas
-        real(sp), allocatable, intent(inout) :: y(:,:)
-        integer,               intent(out)   :: ny
+        integer,               intent(in)                 :: n, cin, cout
+        real(sp),              intent(in)                 :: x(n*n, cin), w(cin, cout)
+        logical,               intent(in)                 :: l_blas
+        real(sp),              allocatable, intent(inout) :: y(:,:)
+        integer,               intent(out)                :: ny
         real(sp), allocatable :: sub(:,:)
-        integer :: ci, oh, ow
+        integer               :: ci, oh, ow
         ny = (n - 1) / 2 + 1
         allocate(sub(ny*ny, cin))
         do ci = 1,cin

@@ -37,17 +37,17 @@ integer, parameter :: timer_int_kind = dp
 #else
 integer, parameter :: timer_int_kind = sp
 #endif
-   integer(timer_int_kind), public   :: clock_ticks_per_second = INT(0, timer_int_kind) !< Number of counts per second
-   integer(timer_int_kind), public   :: last_time_point = INT(0, timer_int_kind)        !< Current timesamp
-   integer               :: idx_elapsed = 0, num_elapsed = 3
-   integer               :: num_profile_loops, num_profile_vars
-   logical               :: in_loop = .false.
-   integer, parameter, public :: MAX_TOKENS = 10                          !< number of entries in token dictionary
-   integer, parameter, public :: MAX_TOKEN_CHARSIZE = 30                  !< max char length of tokens
-   real(timer_int_kind), allocatable, public :: elapsed_times(:)                 !< timer loop storage of elapsed times
-   real(timer_int_kind), allocatable, public :: profile_matrix(:, :)             !< profiler storage of elapsed times for each token
-   integer(timer_int_kind), dimension(MAX_TOKENS), public :: profile_last_timerstamp !< storage of time stamps for profiler
-   character(len=MAX_TOKEN_CHARSIZE), dimension(MAX_TOKENS), public :: profile_labels = ""
+   integer(timer_int_kind),           public                        :: clock_ticks_per_second = INT(0, timer_int_kind) !< Number of counts per second
+   integer(timer_int_kind),           public                        :: last_time_point        = INT(0, timer_int_kind) !< Current timesamp
+   integer                                                          :: idx_elapsed            = 0, num_elapsed = 3
+   integer                                                          :: num_profile_loops, num_profile_vars
+   logical                                                          :: in_loop                = .false.
+   integer,                           parameter, public             :: MAX_TOKENS             = 10                     !< number of entries in token dictionary
+   integer,                           parameter, public             :: MAX_TOKEN_CHARSIZE     = 30                     !< max char length of tokens
+   real(timer_int_kind),              allocatable, public           :: elapsed_times(:)                                !< timer loop storage of elapsed times
+   real(timer_int_kind),              allocatable, public           :: profile_matrix(:, :)                            !< profiler storage of elapsed times for each token
+   integer(timer_int_kind),           dimension(MAX_TOKENS), public :: profile_last_timerstamp                         !< storage of time stamps for profiler
+   character(len=MAX_TOKEN_CHARSIZE), dimension(MAX_TOKENS), public :: profile_labels         = ""
 
    public :: simple_gettime,cast_time_char, timer_int_kind
    public :: tic, tickrate
@@ -138,9 +138,9 @@ end function cast_time_char
 !< Complete the timing regime using a reference timestamp or the one
 !  in last_time_point
    subroutine tocprint(tstart, comment)
-      character(len=*), intent(inout), optional :: comment
-      integer(timer_int_kind), intent(in), optional ::  tstart
-      integer(timer_int_kind)                     ::  end_point
+      character(len=*),        intent(inout), optional :: comment
+      integer(timer_int_kind), intent(in), optional    :: tstart
+      integer(timer_int_kind)                     :: end_point
       real(timer_int_kind)                        :: elapsed
       if (.not. present(comment)) comment = " Simple timer "
 
@@ -240,7 +240,7 @@ end function cast_time_char
       integer,          intent(in)    :: nVars
       character(len=*), intent(inout) :: vin
       character(len=20), allocatable  :: v(:)
-      integer :: nargs_parse, ind, tmp_nargs=0
+      integer                         :: nargs_parse, ind, tmp_nargs=0
       ! define number of tokens
       if(nVars .le. 0)then
           call removepunct(vin)
@@ -387,7 +387,7 @@ end function cast_time_char
    subroutine timer_profile_break(token)
       character(len=*), intent(in) :: token
       integer(timer_int_kind) :: tmp_tstamp = INT(0, timer_int_kind)
-      integer ::  ival = 0, iloop = 0
+      integer                 :: ival       = 0, iloop = 0
 !
 ! Need bounds checking of timestamps and matrix
       do ival = 1, num_profile_vars
@@ -427,7 +427,7 @@ end function cast_time_char
       real(timer_int_kind),  intent(in) :: totaltime
       real(timer_int_kind)              :: total_avg
       real(timer_int_kind), allocatable :: avgtime_token(:)
-      integer :: ival
+      integer                           :: ival
 
       if (allocated(profile_matrix)) then
          total_avg = totaltime/REAL(num_profile_loops, timer_int_kind)

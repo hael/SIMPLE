@@ -19,7 +19,7 @@ contains
 
     !>   returns the Fourier index of resolution
     integer pure function calc_fourier_index( res, box, smpd )
-        real, intent(in)    :: res, smpd
+        real,    intent(in) :: res, smpd
         integer, intent(in) :: box
         real :: res_here
         res_here = max(res,2.*smpd)
@@ -53,7 +53,7 @@ contains
     !>   returns the Fourier index of res
     real pure function calc_lowpass_lim( find, box, smpd )
         integer, intent(in) :: find, box !< box size
-        real, intent(in)    :: smpd      !< smpd pixel size \f$ (\si{\angstrom}) \f$
+        real,    intent(in) :: smpd      !< smpd pixel size \f$ (\si{\angstrom}) \f$
         calc_lowpass_lim = real(box)*smpd/real(find)
     end function calc_lowpass_lim
 
@@ -172,8 +172,8 @@ contains
         integer,           intent(in)    :: stride
         type(fplane_type), intent(inout) :: fpl_out
         complex(c_float_complex) :: w1, w2, ph0, ph_h, ph_k
-        real(dp) :: pshift(2)
-        integer  :: hlo, hhi, klo, h, k
+        real(dp)                 :: pshift(2)
+        integer                  :: hlo, hhi, klo, h, k
         if( .not. allocated(fpl%cmplx_plane) ) return
         hlo = lbound(fpl%cmplx_plane,1); hhi = ubound(fpl%cmplx_plane,1)
         klo = lbound(fpl%cmplx_plane,2)
@@ -247,7 +247,7 @@ contains
     end function get_find_at_res
 
     function get_find_at_crit( corrs, crit_corr, incrreslim ) result( find )
-        real,    intent(in) :: corrs(:), crit_corr
+        real,    intent(in)           :: corrs(:), crit_corr
         logical, intent(in), optional :: incrreslim
         integer :: n, h, find
         logical :: iincrreslim
@@ -275,7 +275,7 @@ contains
         integer, intent(in) :: box
         real,    intent(in) :: smpd
         real, allocatable   :: res(:)
-        integer :: n, k
+        integer             :: n, k
         n = fdim(box) - 1
         allocate( res(n) )
         do k=1,n

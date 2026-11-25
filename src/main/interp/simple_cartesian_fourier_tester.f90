@@ -19,16 +19,16 @@ private
 public :: run_all_cartesian_fourier_tests
 
 ! KB derivative
-real(sp), parameter :: FD_STEP = 5.e-3_sp
-integer, parameter :: N_IDEAL_SAMPLES = 281
-integer, parameter :: N_VALUE_SAMPLES = 321
-real(sp), parameter :: SWITCH_OFFSET = 1.e-4_sp
-real(sp), parameter :: FD_POINTS(7) = [-1.20_sp, -0.75_sp, -0.27_sp, 0._sp, 0.36_sp, 0.81_sp, 1.19_sp]
+real(sp), parameter :: FD_STEP         = 5.e-3_sp
+integer,  parameter :: N_IDEAL_SAMPLES = 281
+integer,  parameter :: N_VALUE_SAMPLES = 321
+real(sp), parameter :: SWITCH_OFFSET   = 1.e-4_sp
+real(sp), parameter :: FD_POINTS(7)    = [-1.20_sp, -0.75_sp, -0.27_sp, 0._sp, 0.36_sp, 0.81_sp, 1.19_sp]
 ! neutral extraction (box 8 padded to 16)
-integer, parameter :: BOX = 8
-integer, parameter :: BOXPD = 16
-integer, parameter :: WDIM = 3
-real, parameter :: ENVELOPE_TOL = 2.e-6
+integer, parameter :: BOX          = 8
+integer, parameter :: BOXPD        = 16
+integer, parameter :: WDIM         = 3
+real,    parameter :: ENVELOPE_TOL = 2.e-6
 
 contains
 
@@ -46,7 +46,7 @@ contains
 !! from the spline's piecewise form; then its value and derivatives across half-grid stencil
 !! switches, which the KB stencil jumps at (test_stencil_switch)
 subroutine test_fused_bspline3_gather_oracle()
-    integer, parameter :: NCASES = 9, NSWITCH = 4
+    integer,  parameter :: NCASES = 9, NSWITCH = 4
     real(sp), parameter :: OFFSET = 1.e-4_sp
     ! Exercise ordinary signs, periodic edges, both sides of half-grid cell
     ! switches, an integer location, and one point outside wrap support.
@@ -70,14 +70,14 @@ subroutine test_fused_bspline3_gather_oracle()
     ! most 2*OFFSET times the spline's second differences (1, -2, 1 per axis) of the field: ratios to
     ! these bounds stay near one or below it; the KB stencil's jump is a hundred times the first
     real(dp), parameter :: VALUE_RATIO_TOL = 2._dp, GRADIENT_RATIO_TOL = 1._dp
-    complex :: cmat(BOXPD/2+1,BOXPD,BOXPD)
-    complex :: fused_gradient(3), fused_value, oracle_gradient(3), oracle_value
-    complex :: below_value, above_value, below_gradient(3), above_gradient(3)
-    real(sp) :: derivatives(WDIM,WDIM,WDIM,3), weights(WDIM,WDIM,WDIM), loc(3)
-    real(sp) :: w1(WDIM,3), dw1(WDIM,3), d
-    real(dp) :: max_gradient_error, max_value_error, max_value_ratio, max_gradient_ratio, tolerance, scale
-    integer :: i, j, k, icase, axis, i0(3), wrap(-BOXPD-2:BOXPD+2)
-    logical :: fused_inside, oracle_inside, inside_below, inside_above
+    complex             :: cmat(BOXPD/2+1,BOXPD,BOXPD)
+    complex             :: fused_gradient(3), fused_value, oracle_gradient(3), oracle_value
+    complex             :: below_value, above_value, below_gradient(3), above_gradient(3)
+    real(sp)            :: derivatives(WDIM,WDIM,WDIM,3), weights(WDIM,WDIM,WDIM), loc(3)
+    real(sp)            :: w1(WDIM,3), dw1(WDIM,3), d
+    real(dp)            :: max_gradient_error, max_value_error, max_value_ratio, max_gradient_ratio, tolerance, scale
+    integer             :: i, j, k, icase, axis, i0(3), wrap(-BOXPD-2:BOXPD+2)
+    logical             :: fused_inside, oracle_inside, inside_below, inside_above
 
     ! An asymmetric complex field exposes axis-order, wrapping, and Friedel
     ! conjugation errors that a symmetric fixture could hide.
@@ -180,7 +180,7 @@ end function complex_is_finite
 !> Verify the executed fast KB polynomial and its derivative, and the stencil switch.
 subroutine run_kb_derivative()
     type(kbinterpol) :: kbwin
-    integer :: iwinsz, wdim
+    integer          :: iwinsz, wdim
 
     kbwin  = kbinterpol(KBWINSZ, KBALPHA)
     iwinsz = ceiling(KBWINSZ - 0.5_sp)
@@ -198,8 +198,8 @@ subroutine test_fast_polynomial(kbwin)
     real(dp) :: max_ideal_value_error, max_fd_error, xdp
     real(sp) :: derivative, fd_derivative, outside_derivative, outside_value
     real(sp) :: value, value_minus, value_plus, x
-    logical :: values_match
-    integer :: i
+    logical  :: values_match
+    integer  :: i
 
     values_match = .true.
     do i = 0, N_VALUE_SAMPLES - 1
@@ -252,12 +252,12 @@ end subroutine test_fast_polynomial
 
 !> Measure the discontinuity when nearest-grid stencil ownership changes.
 subroutine test_stencil_switch(kbwin, iwinsz, wdim)
-    type(kbinterpol), intent(in) :: kbwin
+    type(kbinterpol),   intent(in) :: kbwin
     integer,            intent(in) :: iwinsz, wdim
     real(sp) :: loc_left(3), loc_right(3)
     real(sp) :: w_left(wdim,wdim,wdim), w_right(wdim,wdim,wdim)
     real(dp) :: jump, value_left, value_right
-    integer :: i0_left(3), i0_right(3)
+    integer  :: i0_left(3), i0_right(3)
 
     loc_left  = [0.5_sp-SWITCH_OFFSET, 0.13_sp, -0.21_sp]
     loc_right = [0.5_sp+SWITCH_OFFSET, 0.13_sp, -0.21_sp]
@@ -287,8 +287,8 @@ pure subroutine ideal_kb_reference(x, value, derivative)
     real(dp), intent(in)  :: x
     real(dp), intent(out) :: value, derivative
     integer, parameter :: REFERENCE_DEGREE = 40
-    real(dp) :: coeff(0:REFERENCE_DEGREE), dpdu, p, scale, u, width
-    integer :: k
+    real(dp)           :: coeff(0:REFERENCE_DEGREE), dpdu, p, scale, u, width
+    integer            :: k
 
     ! Independently generate a double-precision I0 power series rather than
     ! reusing the production's 15 stored single-precision coefficients.
@@ -314,7 +314,7 @@ pure real(dp) function gather_synthetic_field(weights, i0) result(value)
     real(sp), intent(in) :: weights(:,:,:)
     integer,  intent(in) :: i0(3)
     real(dp) :: sample
-    integer :: i, ix, iy, iz, j, k
+    integer  :: i, ix, iy, iz, j, k
 
     value = 0._dp
     do k = 1, size(weights,3)
@@ -345,10 +345,10 @@ end subroutine run_neutral_extract
 
 !> Verify exact centered indices and the embed/crop adjoint pair.
 subroutine test_centered_embed_crop()
-    real :: native(BOX, BOX, BOX), arbitrary_padded(BOXPD, BOXPD, BOXPD)
+    real              :: native(BOX, BOX, BOX), arbitrary_padded(BOXPD, BOXPD, BOXPD)
     real, allocatable :: legacy_crop(:, :, :), legacy_embed(:, :, :)
     real, allocatable :: neutral_crop(:, :, :), neutral_embed(:, :, :)
-    integer :: i, j, k
+    integer           :: i, j, k
 
     do k = 1, BOX
         do j = 1, BOX
@@ -383,13 +383,13 @@ end subroutine test_centered_embed_crop
 !> Verify padded-period native factors and the PCG 3-D envelope (build_env's: the lattice's
 !! deposition envelope normalised at the centre, its inverse the product of the inverse factors).
 subroutine test_centered_crop_envelope()
-    type(kbinterpol) :: kbwin
+    type(kbinterpol)                :: kbwin
     class(pcg_lattice), allocatable :: lat
-    real, allocatable :: env_padded(:), inv1d(:), legacy_inv1d(:)
-    real, allocatable :: legacy_env3(:, :, :), legacy_invenv3(:, :, :)
-    real, allocatable :: pcg_env(:, :, :), pcg_invenv(:, :, :)
-    real :: center_value, max_env_error, max_factor_error, max_invenv_error
-    integer :: i, j, k, offset
+    real,               allocatable :: env_padded(:), inv1d(:), legacy_inv1d(:)
+    real,               allocatable :: legacy_env3(:, :, :), legacy_invenv3(:, :, :)
+    real,               allocatable :: pcg_env(:, :, :), pcg_invenv(:, :, :)
+    real                            :: center_value, max_env_error, max_factor_error, max_invenv_error
+    integer                         :: i, j, k, offset
 
     kbwin = kbinterpol(KBWINSZ, KBALPHA)
     call kb_stencil_envelope_1d(kbwin, BOXPD, env_padded)
@@ -453,7 +453,7 @@ subroutine test_packed_gathers()
     complex :: cmat(BOXPD/2 + 1, BOXPD, BOXPD)
     complex :: legacy_gradient(3), legacy_value, neutral_gradient(3), neutral_value
     complex :: neutral_value_only
-    real :: dw(WDIM, WDIM, WDIM, 3), w(WDIM, WDIM, WDIM)
+    real    :: dw(WDIM, WDIM, WDIM, 3), w(WDIM, WDIM, WDIM)
     integer :: i, j, k, axis, i0(3), wrap(-BOXPD - 2:BOXPD + 2)
 
     do k = 1, BOXPD
@@ -495,10 +495,10 @@ end subroutine test_packed_gathers
 
 !> Verify the neutral extraction against old code.
 subroutine test_native_plane_extraction()
-    type(image) :: img2d
-    real :: pixels(BOX, BOX, 1)
+    type(image)          :: img2d
+    real                 :: pixels(BOX, BOX, 1)
     complex, allocatable :: legacy_plane(:, :), neutral_plane(:, :)
-    integer :: i, j, lims2(2, 2), sqlp
+    integer              :: i, j, lims2(2, 2), sqlp
 
     do j = 1, BOX
         do i = 1, BOX
@@ -523,10 +523,10 @@ end subroutine test_native_plane_extraction
 
 !> Pre-extraction centered embedding retained as a direct comparison oracle.
 function legacy_center_embed(native, padded_box) result(padded)
-    real, intent(in) :: native(:, :, :)
+    real,    intent(in) :: native(:, :, :)
     integer, intent(in) :: padded_box
     real, allocatable :: padded(:, :, :)
-    integer :: native_box, offset
+    integer           :: native_box, offset
     native_box = size(native, 1)
     offset = (padded_box - native_box)/2
     allocate (padded(padded_box, padded_box, padded_box), source=0.0)
@@ -536,10 +536,10 @@ end function legacy_center_embed
 
 !> Pre-extraction centered crop retained as a direct comparison oracle.
 function legacy_center_crop(padded, native_box) result(native)
-    real, intent(in) :: padded(:, :, :)
+    real,    intent(in) :: padded(:, :, :)
     integer, intent(in) :: native_box
     real, allocatable :: native(:, :, :)
-    integer :: offset
+    integer           :: offset
     offset = (size(padded, 1) - native_box)/2
     allocate (native(native_box, native_box, native_box), &
         &source=padded(offset + 1:offset + native_box, offset + 1:offset + native_box, &
@@ -548,9 +548,9 @@ end function legacy_center_crop
 
 !> Pre-extraction packed gather retained as a direct comparison oracle.
 pure subroutine legacy_packed_gather(cmat, wrap_lower, wrap, i0, w, dw, value, gradient)
-    complex, intent(in) :: cmat(:, :, :)
-    integer, intent(in) :: wrap_lower, wrap(wrap_lower:), i0(3)
-    real, intent(in) :: w(:, :, :), dw(:, :, :, :)
+    complex, intent(in)  :: cmat(:, :, :)
+    integer, intent(in)  :: wrap_lower, wrap(wrap_lower:), i0(3)
+    real,    intent(in)  :: w(:, :, :), dw(:, :, :, :)
     complex, intent(out) :: value, gradient(3)
     complex :: fcomp
     integer :: di, dj, dk, hh, kk, mm, ph, pk, pm, ny, nz
@@ -585,7 +585,7 @@ end subroutine legacy_packed_gather
 !> Pre-extraction native-plane loop retained as a direct comparison oracle.
 function legacy_native_plane(img2d, lims2, sqlp) result(plane)
     class(image), intent(in) :: img2d
-    integer, intent(in) :: lims2(2, 2), sqlp
+    integer,      intent(in) :: lims2(2, 2), sqlp
     complex :: plane(lims2(1, 1):lims2(1, 2), lims2(2, 1):lims2(2, 2))
     integer :: h, k, phys(3)
     plane = cmplx(0., 0.)

@@ -14,10 +14,10 @@ public :: run_all_polarft_shiftmap_tests, run_all_polarft_mirr_tests
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: REF_EVEN = 1
-integer, parameter :: REF_ODD  = 2
+integer, parameter :: REF_EVEN       = 1
+integer, parameter :: REF_ODD        = 2
 integer, parameter :: N_REF_PARITIES = 2
-real,    parameter :: SHERRSQ = 0.00001 !< squared shift below which the memoised unshifted terms are used
+real,    parameter :: SHERRSQ        = 0.00001 !< squared shift below which the memoised unshifted terms are used
 ! the calculator's shift maps: the full band's, and the screen's over a coarser band and grid (the candidates' choice)
 integer, parameter :: SHIFTMAP_FULL = 1, SHIFTMAP_SCREEN = 2, SHIFTMAP_WINDOW = 3, NSHIFTMAPS = 3
 ! the block kernel's product shape (score_block_posterior): at most NB particles of a block, NR references per tile
@@ -49,14 +49,14 @@ type heap_vars
     complex(sp), pointer :: shmat(:,:)          => null()
     complex(dp), pointer :: pft_ref_8(:,:)      => null()
     complex(dp), pointer :: pft_ref_tmp_8(:,:)  => null()
-    complex(dp), pointer :: pft_ref_aln_8(:,:)  => null()  ! the reference of one shift search (load_ref_aln_8)
-    integer              :: aln_iref = 0                    ! its index and half, checked by the _aln evaluators
-    integer              :: aln_ieo  = 0
+    complex(dp), pointer :: pft_ref_aln_8(:,:)  => null()   ! the reference of one shift search (load_ref_aln_8)
+    integer              :: aln_iref            = 0         ! its index and half, checked by the _aln evaluators
+    integer              :: aln_ieo             = 0
     ! the joint curvature's shift-independent terms of one reference (load_ref_joint_curv_8): |REF|^2,
     ! Im(conj(REF) REF') and |REF'|^2 on the half ring, REF' the derivative along the ring index
     real(dp),    pointer :: joint_curv_8(:,:,:) => null()
-    integer              :: jc_iref = 0
-    integer              :: jc_ieo  = 0
+    integer              :: jc_iref             = 0
+    integer              :: jc_ieo              = 0
     complex(dp), pointer :: shvec(:)            => null()
     complex(dp), pointer :: shmat_8(:,:)        => null()
     ! one reference's row over the rotations (the distances) and the samplers' work array (the draws' weights)
@@ -69,25 +69,25 @@ end type heap_vars
 
 ! the shift map's per-thread work: gen_shiftmap fills it, shiftmap_objfun_grid and shiftmap_cross read it on the same thread
 type shiftmap_work
-    complex(sp), allocatable :: rhat(:,:)     !< the reference's full-ring spectra (nrots, shells)
-    complex(sp), allocatable :: yhat(:,:)     !< conjugate full-ring spectra of the CTF-modulated particle (nrots, shells)
-    complex(sp), allocatable :: prod(:,:)     !< R^[m-n] conj(Y^[m]) at the order in hand (nrots, shells)
-    complex(sp), allocatable :: gsum(:,:,:)   !< the shell sums G_n[m, rho]: (nrots, 0:nharm_max, nrho)
-    real(sp),    allocatable :: wj(:,:,:)     !< the objective's shell weights times J_n: (shells, nrho, 0:nharm_max)
-    real(dp),    allocatable :: wj_from(:)    !< the objective's shell weights wj was made from (shells)
-    integer,     allocatable :: nharm(:)      !< the highest order kept at each magnitude (nrho)
-    integer,     allocatable :: ir_first(:)   !< per order, the first of the trailing magnitudes that keep it, 0 when those that keep it do not trail (0:nharm_max)
-    real(dp),    allocatable :: refpow(:)     !< the weighted reference power under the rotated CTF per rotation (nrots)
-    complex(sp), allocatable :: gfold(:,:)    !< one magnitude's orders folded onto the direction orders, when they reach past them (nrots, 0:nalpha-1)
-    type(c_ptr)              :: ghalf_p = c_null_ptr !< the Hermitian half of the folded orders, the complex-to-real transform's input
-    type(c_ptr)              :: gout_p  = c_null_ptr !< its output: the cross term on the grid
-    complex(kind=c_float_complex), pointer :: ghalf(:,:,:) => null() !< (nalpha/2+1, nrots, nrho) view
-    real(kind=c_float),            pointer :: gout(:,:,:)  => null() !< (nalpha, nrots, nrho) view
-    real(sp),    allocatable :: lw(:,:,:)     !< the sampler's log masses over the grid (nalpha, nrots, nrho)
-    real(dp),    allocatable :: xy(:,:,:)     !< the grid's shifts (2, nalpha, nrho), as shiftmap_shift gives them
-    real(dp)                 :: ptclpow = 0.d0 !< the particle's weighted power: ksqsum for cc, wsqsum for euclid
-    integer                  :: iref = 0, iptcl = 0 !< the pair the work holds
-    logical                  :: l_wj = .false. !< wj holds the Bessel weights of wj_from
+    complex(sp),                   allocatable :: rhat(:,:)                   !< the reference's full-ring spectra (nrots, shells)
+    complex(sp),                   allocatable :: yhat(:,:)                   !< conjugate full-ring spectra of the CTF-modulated particle (nrots, shells)
+    complex(sp),                   allocatable :: prod(:,:)                   !< R^[m-n] conj(Y^[m]) at the order in hand (nrots, shells)
+    complex(sp),                   allocatable :: gsum(:,:,:)                 !< the shell sums G_n[m, rho]: (nrots, 0:nharm_max, nrho)
+    real(sp),                      allocatable :: wj(:,:,:)                   !< the objective's shell weights times J_n: (shells, nrho, 0:nharm_max)
+    real(dp),                      allocatable :: wj_from(:)                  !< the objective's shell weights wj was made from (shells)
+    integer,                       allocatable :: nharm(:)                    !< the highest order kept at each magnitude (nrho)
+    integer,                       allocatable :: ir_first(:)                 !< per order, the first of the trailing magnitudes that keep it, 0 when those that keep it do not trail (0:nharm_max)
+    real(dp),                      allocatable :: refpow(:)                   !< the weighted reference power under the rotated CTF per rotation (nrots)
+    complex(sp),                   allocatable :: gfold(:,:)                  !< one magnitude's orders folded onto the direction orders, when they reach past them (nrots, 0:nalpha-1)
+    type(c_ptr)                                :: ghalf_p      = c_null_ptr   !< the Hermitian half of the folded orders, the complex-to-real transform's input
+    type(c_ptr)                                :: gout_p       = c_null_ptr   !< its output: the cross term on the grid
+    complex(kind=c_float_complex), pointer     :: ghalf(:,:,:) => null()      !< (nalpha/2+1, nrots, nrho) view
+    real(kind=c_float),            pointer     :: gout(:,:,:)  => null()      !< (nalpha, nrots, nrho) view
+    real(sp),                      allocatable :: lw(:,:,:)                   !< the sampler's log masses over the grid (nalpha, nrots, nrho)
+    real(dp),                      allocatable :: xy(:,:,:)                   !< the grid's shifts (2, nalpha, nrho), as shiftmap_shift gives them
+    real(dp)                                   :: ptclpow      = 0.d0         !< the particle's weighted power: ksqsum for cc, wsqsum for euclid
+    integer                                    :: iref         = 0, iptcl = 0 !< the pair the work holds
+    logical                                    :: l_wj         = .false.      !< wj holds the Bessel weights of wj_from
 end type shiftmap_work
 
 type shiftmap_cache
@@ -97,33 +97,33 @@ end type shiftmap_cache
 ! the block kernel's per-thread work (simple_polarft_block.f90): the block's particle terms, a gathered tile, the
 ! products of every angular bin, each pair's bins made contiguous and their inverse transforms
 type block_work
-    complex(sp), allocatable :: pterms(:,:,:)  !< (2nk, PFTC_BLOCK_NB, pftsz+1) the weighted particle terms per bin
-    complex(sp), allocatable :: tile(:,:)      !< (2nk, PFTC_BLOCK_NR) one bin of a gathered or partial tile
-    complex(sp), allocatable :: prods(:,:,:)   !< (PFTC_BLOCK_NB, PFTC_BLOCK_NR, pftsz+1) the conjugated sums per bin
-    real(dp),    allocatable :: norms(:)       !< (PFTC_BLOCK_NB) the particles' loss normalisation
-    type(c_ptr)              :: pct  = c_null_ptr
-    type(c_ptr)              :: pout = c_null_ptr
+    complex(sp),                   allocatable         :: pterms(:,:,:)      !< (2nk, PFTC_BLOCK_NB, pftsz+1) the weighted particle terms per bin
+    complex(sp),                   allocatable         :: tile(:,:)          !< (2nk, PFTC_BLOCK_NR) one bin of a gathered or partial tile
+    complex(sp),                   allocatable         :: prods(:,:,:)       !< (PFTC_BLOCK_NB, PFTC_BLOCK_NR, pftsz+1) the conjugated sums per bin
+    real(dp),                      allocatable         :: norms(:)           !< (PFTC_BLOCK_NB) the particles' loss normalisation
+    type(c_ptr)                                        :: pct      = c_null_ptr
+    type(c_ptr)                                        :: pout     = c_null_ptr
     complex(kind=c_float_complex), pointer, contiguous :: ct(:,:)  => null() !< (pftsz+1, NR*NB) each pair's bins
     real(kind=c_float),            pointer, contiguous :: out(:,:) => null() !< (nrots, NR*NB) each pair's inverse transform
 end type block_work
 
 type :: polarft_calc
     private
-    class(parameters), pointer :: p_ptr => null()        !< pointer to parameters object (for access to runtime parameters)
-    integer                  :: nptcls     = 1           !< the total number of particles in partition (logically indexded [fromp,top])
-    integer                  :: nrefs      = 1           !< the number of references (logically indexded [1,nrefs])
-    integer                  :: nrots      = 0           !< number of in-plane rotations for one pft (determined by radius of molecule)
-    integer                  :: pftsz      = 0           !< size of reference and particle pft (nrots/2)
-    integer                  :: pfromto(2) = 0           !< particle index range
-    integer                  :: ldim(3)    = 0           !< logical dimensions of original cartesian image
-    integer                  :: kfromto(2)               !< band-pass Fourier index limits
-    integer                  :: nk                       !< number of shells used during alignment
-    integer                  :: interpklim               !< highest shell index used for interpolation
-    real                     :: dang                     !< angular increment
-    integer,     allocatable :: pinds(:)                 !< index array (to reduce memory when frac_update < 1)
-    real(dp),    allocatable :: sqsums_ptcls(:)          !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
-    real(dp),    allocatable :: ksqsums_ptcls(:)         !< memoized k-weighted square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
-    real(dp),    allocatable :: wsqsums_ptcls(:)         !< memoized square sums weighted by k and  sigmas^2 (taken from kfromto(1):kfromto(2))
+    class(parameters), pointer     :: p_ptr      => null() !< pointer to parameters object (for access to runtime parameters)
+    integer                        :: nptcls     = 1       !< the total number of particles in partition (logically indexded [fromp,top])
+    integer                        :: nrefs      = 1       !< the number of references (logically indexded [1,nrefs])
+    integer                        :: nrots      = 0       !< number of in-plane rotations for one pft (determined by radius of molecule)
+    integer                        :: pftsz      = 0       !< size of reference and particle pft (nrots/2)
+    integer                        :: pfromto(2) = 0       !< particle index range
+    integer                        :: ldim(3)    = 0       !< logical dimensions of original cartesian image
+    integer                        :: kfromto(2)           !< band-pass Fourier index limits
+    integer                        :: nk                   !< number of shells used during alignment
+    integer                        :: interpklim           !< highest shell index used for interpolation
+    real                           :: dang                 !< angular increment
+    integer,           allocatable :: pinds(:)             !< index array (to reduce memory when frac_update < 1)
+    real(dp),          allocatable :: sqsums_ptcls(:)      !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
+    real(dp),          allocatable :: ksqsums_ptcls(:)     !< memoized k-weighted square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
+    real(dp),          allocatable :: wsqsums_ptcls(:)     !< memoized square sums weighted by k and  sigmas^2 (taken from kfromto(1):kfromto(2))
     ! sigma2-independent k-weighted per-shell square sums; lets the joint
     ! continuous evaluator normalize with the CURRENT sigma2 at evaluation
     ! time, immune to sigma2 updates after wsqsums memoization
@@ -143,7 +143,7 @@ type :: polarft_calc
     ! Memoized terms
     complex(kind=c_float_complex), allocatable :: ft_ptcl_ctf(:,:,:)                      !< Fourier Transform of particle times CTF
     complex(kind=c_float_complex), allocatable :: ft_ctf2(:,:,:)                          !< Fourier Transform of CTF squared modulus
-    complex(kind=c_float_complex), allocatable :: ft_ref(:,:,:,:)  !< Fourier transforms of references, final dimension is parity
+    complex(kind=c_float_complex), allocatable :: ft_ref(:,:,:,:)                         !< Fourier transforms of references, final dimension is parity
     ! Fourier transforms of squared reference moduli; final dimension is parity
     complex(kind=c_float_complex), allocatable :: ft_ref2(:,:,:,:)
     ! the block kernel's bin-major copy of the two (memoize_ref_bins): conj(FT(REF2)) on rows 1..nk and FT(REF) on
@@ -169,13 +169,13 @@ type :: polarft_calc
     type(heap_vars),               allocatable :: heap_vars(:)
     type(fftw_drvec),              allocatable :: drvec(:)
     ! the polar shift map: the Fourier-Bessel tables of the shift grid and the per-thread work (simple_polarft_shiftmap.f90)
-    type(polar_shiftmap),          allocatable :: shiftmap(:)  !< (NSHIFTMAPS), built by new_shiftmap
-    type(shiftmap_work),           allocatable :: smwork(:,:)  !< (team at new, NSHIFTMAPS)
+    type(polar_shiftmap),          allocatable :: shiftmap(:)                            !< (NSHIFTMAPS), built by new_shiftmap
+    type(shiftmap_work),           allocatable :: smwork(:,:)                            !< (team at new, NSHIFTMAPS)
     type(shiftmap_cache),          allocatable :: smcache(:)
-    real(dp),                     allocatable :: sm_times(:,:) !< construction, two reserved slots, selection, posterior reduction
-    integer(int64),               allocatable :: sm_counts(:,:) !< disk/window/full maps, selections, widths, particle expansions
-    real(dp)                                  :: sm_setup_time = 0.d0
-    integer(int64)                            :: sm_builds = 0, sm_reuses = 0
+    real(dp),                      allocatable :: sm_times(:,:)                          !< construction, two reserved slots, selection, posterior reduction
+    integer(int64),                allocatable :: sm_counts(:,:)                         !< disk/window/full maps, selections, widths, particle expansions
+    real(dp)                                   :: sm_setup_time             = 0.d0
+    integer(int64)                             :: sm_builds                 = 0, sm_reuses = 0
     type(c_ptr)                                :: plan_shiftmap(NSHIFTMAPS) = c_null_ptr !< the batched 2D transforms
     ! Others
     ! Others
@@ -185,7 +185,7 @@ type :: polarft_calc
     ! use, formed once when the spectra are filled (memoize_sigma2_weights) instead of per shell per evaluation
     real(sp),    allocatable :: sigma2_wk(:,:)
     real(dp),    allocatable :: sigma2_wk8(:,:)
-    logical              :: with_ctf  = .false.         !< CTF flag
+    logical                  :: with_ctf  = .false.     !< CTF flag
     ! the keyed draws' scope (the run's seed, the pass, the iteration), set by the calculator's owner before a
     ! posterior draw: the draw's key completes it with the particle, the family, the reference and the ordinal
     type(rnd_key)        :: rnd_scope
@@ -194,10 +194,10 @@ type :: polarft_calc
     integer(int64)       :: ptcl_gen      = 0_int64
     integer(int64)       :: ptcl_gen_memo = -1_int64
     ! the spectra owner's generation (assign_sigma2_noise) and its value when the weights were formed
-    integer(int64), pointer :: sigma2_gen => null()
-    integer(int64)       :: sigma2_gen_memo = -1_int64
-    logical              :: benchmark_measure_fft = .false. !< measured FFTW plans under a fixed seed (benchmarks)
-    logical              :: existence = .false.         !< to indicate existence
+    integer(int64), pointer :: sigma2_gen            => null()
+    integer(int64)          :: sigma2_gen_memo       = -1_int64
+    logical                 :: benchmark_measure_fft = .false. !< measured FFTW plans under a fixed seed (benchmarks)
+    logical                 :: existence             = .false. !< to indicate existence
   contains
     ! ===== CORE (new, kill, setters, getters, pointer helpers): simple_polarft_core.f90
     procedure          :: new
@@ -342,12 +342,12 @@ interface
 
    module subroutine new(self, params, nrefs, pfromto, kfromto, nmany_refs, fftw_measure)
         use simple_parameters, only: parameters
-        class(polarft_calc), target, intent(inout) :: self
-        class(parameters),   target, intent(in)    :: params
-        integer,                     intent(in)    :: nrefs
-        integer,                     intent(in)    :: pfromto(2), kfromto(2)
-        integer, optional,           intent(in)    :: nmany_refs
-        logical, optional,           intent(in)    :: fftw_measure
+        class(polarft_calc),         target, intent(inout)          :: self
+        class(parameters),           target, intent(in)             :: params
+        integer,                     intent(in)                     :: nrefs
+        integer,                     intent(in)                     :: pfromto(2), kfromto(2)
+        integer,                     optional,           intent(in) :: nmany_refs
+        logical,                     optional,           intent(in) :: fftw_measure
     end subroutine new
 
     module subroutine kill(self)
@@ -437,9 +437,9 @@ interface
     end subroutine set_rnd_scope
 
     module subroutine assign_sigma2_noise(self, sigma2_noise, spectra_gen)
-        class(polarft_calc),                     intent(inout) :: self
-        real, allocatable,               target, intent(inout) :: sigma2_noise(:,:)
-        integer(int64), optional, target,        intent(inout) :: spectra_gen
+        class(polarft_calc),                     intent(inout)                                    :: self
+        real,                                    allocatable,               target, intent(inout) :: sigma2_noise(:,:)
+        integer(int64),                          optional, target,        intent(inout)           :: spectra_gen
     end subroutine assign_sigma2_noise
 
     module subroutine vol_pad2ref_pfts_opt(self, vol_pad, eulspace, state, iseven)
@@ -552,8 +552,8 @@ interface
     end subroutine get_ptcl_ctfmat
 
     module subroutine get_sigma2_weights(self, wk)
-        class(polarft_calc),   intent(in)  :: self
-        real(sp), allocatable, intent(out) :: wk(:,:)
+        class(polarft_calc),   intent(in)               :: self
+        real(sp),              allocatable, intent(out) :: wk(:,:)
     end subroutine get_sigma2_weights
 
     module subroutine get_ptcl_line(self, iptcl, irot, line)
@@ -572,7 +572,7 @@ interface
 
     module logical function ptcl_iseven(self, iptcl)
         class(polarft_calc), intent(in) :: self
-        integer, intent(in) :: iptcl
+        integer,             intent(in) :: iptcl
     end function ptcl_iseven
 
     module integer function get_nptcls(self)
@@ -580,8 +580,8 @@ interface
     end function get_nptcls
 
     module subroutine get_pinds(self, pinds)
-        class(polarft_calc),  intent(in)  :: self
-        integer, allocatable, intent(out) :: pinds(:)
+        class(polarft_calc),  intent(in)               :: self
+        integer,              allocatable, intent(out) :: pinds(:)
     end subroutine get_pinds
 
     module pure logical function is_with_ctf( self )
@@ -602,33 +602,33 @@ interface
     ! ===== CTF =====
 
     module subroutine create_polar_absctfmats(self, spproj, oritype, pfromto)
-        class(polarft_calc),       intent(inout) :: self
-        class(sp_project), target, intent(inout) :: spproj
-        character(len=*),          intent(in)    :: oritype
-        integer, optional,         intent(in)    :: pfromto(2)
+        class(polarft_calc),       intent(inout)                :: self
+        class(sp_project),         target, intent(inout)        :: spproj
+        character(len=*),          intent(in)                   :: oritype
+        integer,                   optional,         intent(in) :: pfromto(2)
     end subroutine create_polar_absctfmats
 
     ! ===== GEOM (rotation & shift of matrices) =====
 
     module subroutine gen_shmat4aln(self, ithr, shift, shmat)
-        class(polarft_calc),  intent(inout) :: self
-        integer,              intent(in)    :: ithr
-        real(sp),             intent(in)    :: shift(2)
-        complex(sp), pointer, intent(inout) :: shmat(:,:)
+        class(polarft_calc),  intent(inout)          :: self
+        integer,              intent(in)             :: ithr
+        real(sp),             intent(in)             :: shift(2)
+        complex(sp),          pointer, intent(inout) :: shmat(:,:)
     end subroutine gen_shmat4aln
 
     module subroutine gen_shmat4aln_8(self, ithr, shift_8, shmat_8)
-        class(polarft_calc),  intent(inout) :: self
-        integer,              intent(in)    :: ithr
-        real(dp),             intent(in)    :: shift_8(2)
-        complex(dp), pointer, intent(inout) :: shmat_8(:,:)
+        class(polarft_calc),  intent(inout)          :: self
+        integer,              intent(in)             :: ithr
+        real(dp),             intent(in)             :: shift_8(2)
+        complex(dp),          pointer, intent(inout) :: shmat_8(:,:)
     end subroutine gen_shmat4aln_8
 
     module subroutine mirror_ref_bank(self, refs, partners, frame_angles)
         class(polarft_calc), intent(inout) :: self
-        complex(sp),        intent(inout) :: refs(:,:,:)
-        integer,            intent(in)    :: partners(:)
-        real,               intent(in)    :: frame_angles(:)
+        complex(sp),         intent(inout) :: refs(:,:,:)
+        integer,             intent(in)    :: partners(:)
+        real,                intent(in)    :: frame_angles(:)
     end subroutine mirror_ref_bank
 
     module subroutine shift_ptcl( self, iptcl, shvec)
@@ -671,7 +671,7 @@ interface
 
     module subroutine memoize_sqsum_ptcl(self, iptcl)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iptcl
+        integer,             intent(in)    :: iptcl
     end subroutine memoize_sqsum_ptcl
 
     module subroutine memoize_sigma2_weights(self)
@@ -701,8 +701,8 @@ interface
     end subroutine bump_ptcl_gen
 
     module subroutine memoize_refs( self, eulspace )
-        class(polarft_calc),           intent(inout) :: self
-        class(oris),         optional, intent(in)    :: eulspace
+        class(polarft_calc),           intent(inout)        :: self
+        class(oris),                   optional, intent(in) :: eulspace
     end subroutine memoize_refs
 
     module subroutine memoize_ref_bins( self )
@@ -725,8 +725,8 @@ interface
     end subroutine alloc_memo_refs
 
     module subroutine allocate_memo_workspace(self, nmany_refs)
-        class(polarft_calc), intent(inout) :: self
-        integer,   optional, intent(in)    :: nmany_refs
+        class(polarft_calc), intent(inout)        :: self
+        integer,             optional, intent(in) :: nmany_refs
     end subroutine allocate_memo_workspace
 
     module subroutine kill_memo_ptcls(self)
@@ -745,9 +745,9 @@ interface
 
     module subroutine calc_frc(self, iref, iptcl, irot, shvec, frc)
         class(polarft_calc), intent(inout) :: self
-        integer,             intent(in) :: iref, iptcl, irot
-        real(sp),            intent(in) :: shvec(2)
-        real(sp),            intent(out) :: frc(self%kfromto(1):self%kfromto(2))
+        integer,             intent(in)    :: iref, iptcl, irot
+        real(sp),            intent(in)    :: shvec(2)
+        real(sp),            intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
     end subroutine calc_frc
 
     module subroutine gen_objfun_vals(self, iref, iptcl, shift, vals)
@@ -765,10 +765,10 @@ interface
     end subroutine gen_objfun_vals_bank
 
     module subroutine gen_euclid_dists(self, iref, iptcl, shift, dists)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: dists(self%nrots)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(out)           :: dists(self%nrots)
     end subroutine gen_euclid_dists
 
     module subroutine gen_euclid_dists_bank(self, iref, iptcl, bank, dists)
@@ -779,11 +779,11 @@ interface
     end subroutine gen_euclid_dists_bank
 
     module subroutine gen_posterior_val(self, iref, iptcl, shift, temp, dist, irot)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2), temp
-        real(sp),                    intent(out)   :: dist
-        integer,                     intent(out)   :: irot
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2), temp
+        real(sp),                    intent(out)           :: dist
+        integer,                     intent(out)           :: irot
     end subroutine gen_posterior_val
 
     module subroutine gen_posterior_val_bank(self, iref, iptcl, bank, temp, dist, irot)
@@ -846,63 +846,63 @@ interface
     end subroutine gen_prob_power_objfun_val
 
     module subroutine gen_corrs(self, iref, iptcl, shift, cc)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: cc(self%nrots)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(out)           :: cc(self%nrots)
     end subroutine gen_corrs
 
     module subroutine gen_euclids(self, iref, iptcl, shift, euclids)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real,                        intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: euclids(self%nrots)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real,                        intent(in)            :: shift(2)
+        real(sp),                    intent(out)           :: euclids(self%nrots)
     end subroutine gen_euclids
 
     module subroutine gen_best_euclid_val(self, iref, iptcl, shift, dist, irot)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: dist
-        integer,                     intent(out)   :: irot
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(out)           :: dist
+        integer,                     intent(out)           :: irot
     end subroutine gen_best_euclid_val
 
     !> the Euclidean loss at the best in-plane rotation against the OTHER half's reference, with the
     !! particle's own noise weights (prob_post_diag: the posterior against a reference it did not enter)
     module subroutine gen_best_euclid_val_cross(self, iref, iptcl, shift, dist, irot)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: dist
-        integer,                     intent(out)   :: irot
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(out)           :: dist
+        integer,                     intent(out)           :: irot
     end subroutine gen_best_euclid_val_cross
 
     !> the Euclidean loss at one grid rotation and shift (the kernel's frame), own or other slot
     module subroutine gen_euclid_val_at(self, iref, iptcl, shift, irot, dist, cross)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: dist
-        logical, optional,           intent(in)    :: cross
+        class(polarft_calc),         target, intent(inout)          :: self
+        integer,                     intent(in)                     :: iref, iptcl, irot
+        real(sp),                    intent(in)                     :: shift(2)
+        real(sp),                    intent(out)                    :: dist
+        logical,                     optional,           intent(in) :: cross
     end subroutine gen_euclid_val_at
 
     !> the Euclidean loss of a bank entry at its best grid rotation, own or other slot
     module subroutine gen_best_euclid_val_bank(self, iref, iptcl, bank, dist, irot, cross)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        complex(sp),                 intent(in)    :: bank(:,:)
-        real(sp),                    intent(out)   :: dist
-        integer,                     intent(out)   :: irot
-        logical, optional,           intent(in)    :: cross
+        class(polarft_calc),         target, intent(inout)          :: self
+        integer,                     intent(in)                     :: iref, iptcl
+        complex(sp),                 intent(in)                     :: bank(:,:)
+        real(sp),                    intent(out)                    :: dist
+        integer,                     intent(out)                    :: irot
+        logical,                     optional,           intent(in) :: cross
     end subroutine gen_best_euclid_val_bank
 
     !> the Euclidean loss of a bank entry at one grid rotation, own or other slot
     module subroutine gen_euclid_val_at_bank(self, iref, iptcl, bank, irot, dist, cross)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        complex(sp),                 intent(in)    :: bank(:,:)
-        real(sp),                    intent(out)   :: dist
-        logical, optional,           intent(in)    :: cross
+        class(polarft_calc),         target, intent(inout)          :: self
+        integer,                     intent(in)                     :: iref, iptcl, irot
+        complex(sp),                 intent(in)                     :: bank(:,:)
+        real(sp),                    intent(out)                    :: dist
+        logical,                     optional,           intent(in) :: cross
     end subroutine gen_euclid_val_at_bank
 
     !> whether the two half slots of reference iref hold the same section
@@ -918,131 +918,131 @@ interface
     end function ptcl_posterior_temp
 
     module subroutine gen_prob_euclid_val(self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(in)    :: athres_ub, prob_athres
-        real(sp),                    intent(out)   :: dist
-        integer,                     intent(out)   :: irot
-        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
-        integer,                     intent(inout) :: sorted_inds(self%nrots)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(in)            :: athres_ub, prob_athres
+        real(sp),                    intent(out)           :: dist
+        integer,                     intent(out)           :: irot
+        real(sp),                    intent(inout)         :: pvec_sorted(self%nrots)
+        integer,                     intent(inout)         :: sorted_inds(self%nrots)
     end subroutine gen_prob_euclid_val
 
     module subroutine gen_prob_power_euclid_val(self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
         &pvec_sorted, sorted_inds)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, nsample
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(in)    :: power
-        real(sp),                    intent(out)   :: dist, corr
-        integer,                     intent(out)   :: irot
-        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
-        integer,                     intent(inout) :: sorted_inds(self%nrots)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl, nsample
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(in)            :: power
+        real(sp),                    intent(out)           :: dist, corr
+        integer,                     intent(out)           :: irot
+        real(sp),                    intent(inout)         :: pvec_sorted(self%nrots)
+        integer,                     intent(inout)         :: sorted_inds(self%nrots)
     end subroutine gen_prob_power_euclid_val
 
     module real(dp) function gen_corr_for_rot_8_noshift( self, iref, iptcl, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl, irot
     end function gen_corr_for_rot_8_noshift
 
     module real(dp) function gen_corr_for_rot_8_shifted( self, iref, iptcl, shvec, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2)
-        integer,                     intent(in)    :: irot
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(dp),                    intent(in)            :: shvec(2)
+        integer,                     intent(in)            :: irot
     end function gen_corr_for_rot_8_shifted
 
     module real(dp) function gen_corr_cc_for_rot_8_noshift( self, pft_ref, i, irot )
-        class(polarft_calc),  intent(inout) :: self
-        complex(dp), pointer, intent(inout) :: pft_ref(:,:)
-        integer,              intent(in)    :: i, irot
+        class(polarft_calc),  intent(inout)          :: self
+        complex(dp),          pointer, intent(inout) :: pft_ref(:,:)
+        integer,              intent(in)             :: i, irot
     end function gen_corr_cc_for_rot_8_noshift
 
     module real(dp) function gen_corr_cc_for_rot_8_shifted( self, pft_ref, i, shvec, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
-        integer,                     intent(in)    :: i, irot
-        real(dp),                    intent(in)    :: shvec(2)
+        class(polarft_calc),         target, intent(inout)  :: self
+        complex(dp),                 pointer, intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)             :: i, irot
+        real(dp),                    intent(in)             :: shvec(2)
     end function gen_corr_cc_for_rot_8_shifted
 
     module real(dp) function gen_euclid_for_rot_8_noshift( self, pft_ref, iptcl, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
-        integer,                     intent(in)    :: iptcl, irot
+        class(polarft_calc),         target, intent(inout)  :: self
+        complex(dp),                 pointer, intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)             :: iptcl, irot
     end function gen_euclid_for_rot_8_noshift
 
     module real(dp) function gen_euclid_for_rot_8_shifted( self, pft_ref, iptcl, shvec, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
-        integer,                     intent(in)    :: iptcl, irot
-        real(dp),                    intent(in)    :: shvec(2)
+        class(polarft_calc),         target, intent(inout)  :: self
+        complex(dp),                 pointer, intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)             :: iptcl, irot
+        real(dp),                    intent(in)             :: shvec(2)
     end function gen_euclid_for_rot_8_shifted
 
     module subroutine gen_raw_euclid_grad_for_rot_8(self, iref, iptcl, shvec, irot, f, grad)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        real(dp),                    intent(in)    :: shvec(2)
-        real(dp),                    intent(out)   :: f, grad(2)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl, irot
+        real(dp),                    intent(in)            :: shvec(2)
+        real(dp),                    intent(out)           :: f, grad(2)
     end subroutine gen_raw_euclid_grad_for_rot_8
 
     module subroutine gen_raw_euclid_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2), rotind_frac
-        real(dp),                    intent(out)   :: f, grad(3)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(dp),                    intent(in)            :: shvec(2), rotind_frac
+        real(dp),                    intent(out)           :: f, grad(3)
     end subroutine gen_raw_euclid_grad_at_angle
 
     module subroutine gen_corr_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2), rotind_frac
-        real(dp),                    intent(out)   :: f, grad(3)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(dp),                    intent(in)            :: shvec(2), rotind_frac
+        real(dp),                    intent(out)           :: f, grad(3)
     end subroutine gen_corr_grad_at_angle
 
     module subroutine gen_shift_curv_for_rot_8_aln( self, iref, iptcl, shvec, irot, f, grad, curv )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        real(dp),                    intent(in)    :: shvec(2)
-        real(dp),                    intent(out)   :: f, grad(2)
-        real(dp), optional,          intent(out)   :: curv(2,2)
+        class(polarft_calc),         target, intent(inout)          :: self
+        integer,                     intent(in)                     :: iref, iptcl, irot
+        real(dp),                    intent(in)                     :: shvec(2)
+        real(dp),                    intent(out)                    :: f, grad(2)
+        real(dp),                    optional,          intent(out) :: curv(2,2)
     end subroutine gen_shift_curv_for_rot_8_aln
 
     module subroutine load_ref_joint_curv_8( self, iref, iptcl )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
     end subroutine load_ref_joint_curv_8
 
     module subroutine gen_joint_curv_at_angle( self, iref, iptcl, shvec, rotind_frac, curv )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2), rotind_frac
-        real(dp),                    intent(out)   :: curv(3,3)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(dp),                    intent(in)            :: shvec(2), rotind_frac
+        real(dp),                    intent(out)           :: curv(3,3)
     end subroutine gen_joint_curv_at_angle
 
     module subroutine gen_sect_euclid_grad_at_angle( self, iptcl, sect, dsect, shvec, rotind_frac, f, grad, curv )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iptcl
-        complex(sp),                 intent(in)    :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp),                 intent(in)    :: dsect(self%pftsz,self%kfromto(1):self%kfromto(2),2)
-        real(dp),                    intent(in)    :: shvec(2), rotind_frac
-        real(dp),                    intent(out)   :: f, grad(5)
-        real(dp), optional,          intent(out)   :: curv(5,5)
+        class(polarft_calc),         target, intent(inout)          :: self
+        integer,                     intent(in)                     :: iptcl
+        complex(sp),                 intent(in)                     :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),                 intent(in)                     :: dsect(self%pftsz,self%kfromto(1):self%kfromto(2),2)
+        real(dp),                    intent(in)                     :: shvec(2), rotind_frac
+        real(dp),                    intent(out)                    :: f, grad(5)
+        real(dp),                    optional,          intent(out) :: curv(5,5)
     end subroutine gen_sect_euclid_grad_at_angle
 
     module subroutine gen_corr_cc_grad_for_rot_8( self, pft_ref, i, shvec, irot, f, grad)
-        class(polarft_calc), target, intent(inout) :: self
-        complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
-        integer,                     intent(in)    :: i, irot
-        real(dp),                    intent(in)    :: shvec(2)
-        real(dp),                    intent(out)   :: f, grad(2)
+        class(polarft_calc),         target, intent(inout)  :: self
+        complex(dp),                 pointer, intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)             :: i, irot
+        real(dp),                    intent(in)             :: shvec(2)
+        real(dp),                    intent(out)            :: f, grad(2)
     end subroutine gen_corr_cc_grad_for_rot_8
 
     module subroutine gen_euclid_grad_for_rot_8(self, pft_ref, iptcl, shvec, irot, f, grad)
-        class(polarft_calc), target, intent(inout) :: self
-        complex(dp), pointer,        intent(inout) :: pft_ref(:,:)
-        integer,                     intent(in)    :: iptcl, irot
-        real(dp),                    intent(in)    :: shvec(2)
-        real(dp),                    intent(out)   :: f, grad(2)
+        class(polarft_calc),         target, intent(inout)         :: self
+        complex(dp),                 pointer,        intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)                    :: iptcl, irot
+        real(dp),                    intent(in)                    :: shvec(2)
+        real(dp),                    intent(out)                   :: f, grad(2)
     end subroutine gen_euclid_grad_for_rot_8
 
     module subroutine load_ref_aln_8( self, iref, iptcl )
@@ -1051,35 +1051,35 @@ interface
     end subroutine load_ref_aln_8
 
     module real(dp) function gen_corr_for_rot_8_aln( self, iref, iptcl, shvec, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        real(dp),                    intent(in)    :: shvec(2)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl, irot
+        real(dp),                    intent(in)            :: shvec(2)
     end function gen_corr_for_rot_8_aln
 
     module subroutine gen_corr_grad_for_rot_8_aln( self, iref, iptcl, shvec, irot, f, grad )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        real(dp),                    intent(in)    :: shvec(2)
-        real(dp),                    intent(out)   :: f, grad(2)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl, irot
+        real(dp),                    intent(in)            :: shvec(2)
+        real(dp),                    intent(out)           :: f, grad(2)
     end subroutine gen_corr_grad_for_rot_8_aln
 
     module subroutine gen_sigma_contrib(self, iref, iptcl, shvec, irot, sigma_contrib, ref_pow, ptcl_pow, v)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        real(sp),                    intent(in)    :: shvec(2)
-        real(sp),                    intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
-        real(sp), optional,          intent(out)   :: ref_pow(self%kfromto(1):self%kfromto(2))
-        real(sp), optional,          intent(out)   :: ptcl_pow(self%kfromto(1):self%kfromto(2))
-        real(sp), optional,          intent(out)   :: v
+        class(polarft_calc),         target, intent(inout)          :: self
+        integer,                     intent(in)                     :: iref, iptcl, irot
+        real(sp),                    intent(in)                     :: shvec(2)
+        real(sp),                    intent(out)                    :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real(sp),                    optional,          intent(out) :: ref_pow(self%kfromto(1):self%kfromto(2))
+        real(sp),                    optional,          intent(out) :: ptcl_pow(self%kfromto(1):self%kfromto(2))
+        real(sp),                    optional,          intent(out) :: v
     end subroutine gen_sigma_contrib
 
     module subroutine gen_sigma_contrib_sect( self, iptcl, sect, shvec, irot, sigma_contrib )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iptcl
-        complex(sp),                 intent(in)    :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp),                    intent(in)    :: shvec(2)
-        integer,                     intent(in)    :: irot
-        real(sp),                    intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iptcl
+        complex(sp),                 intent(in)            :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp),                    intent(in)            :: shvec(2)
+        integer,                     intent(in)            :: irot
+        real(sp),                    intent(out)           :: sigma_contrib(self%kfromto(1):self%kfromto(2))
     end subroutine gen_sigma_contrib_sect
 
     module subroutine gen_many_objfun_vals( self, nr, irefs, iptcl, shift )
@@ -1091,11 +1091,11 @@ interface
     end subroutine gen_many_objfun_vals
 
     module subroutine gen_many_euclids( self, nr, irefs, iptcl, shift )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: nr
-        integer,                     intent(in)    :: irefs(nr)
-        integer,                     intent(in)    :: iptcl
-        real(sp),                    intent(in)    :: shift(2)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: nr
+        integer,                     intent(in)            :: irefs(nr)
+        integer,                     intent(in)            :: iptcl
+        real(sp),                    intent(in)            :: shift(2)
     end subroutine gen_many_euclids
 
     module subroutine gen_many_euclids_gpu( self, iptcl )
@@ -1121,14 +1121,14 @@ interface
     end subroutine kill_block_work
 
     module subroutine score_block_posterior( self, nb, iptcls, nr, irefs, temps, dists, irots, banks, l_bank )
-        class(polarft_calc),   intent(inout) :: self
-        integer,               intent(in)    :: nb, nr
-        integer,               intent(in)    :: iptcls(nb), irefs(nr)
-        real(sp),              intent(in)    :: temps(nb)
-        real(sp),              intent(out)   :: dists(nr,nb)
-        integer,               intent(out)   :: irots(nr,nb)
-        complex(sp), optional, intent(in)    :: banks(:,:,:)
-        logical,     optional, intent(in)    :: l_bank(nb)
+        class(polarft_calc),   intent(inout)        :: self
+        integer,               intent(in)           :: nb, nr
+        integer,               intent(in)           :: iptcls(nb), irefs(nr)
+        real(sp),              intent(in)           :: temps(nb)
+        real(sp),              intent(out)          :: dists(nr,nb)
+        integer,               intent(out)          :: irots(nr,nb)
+        complex(sp),           optional, intent(in) :: banks(:,:,:)
+        logical,               optional, intent(in) :: l_bank(nb)
     end subroutine score_block_posterior
 
     ! ===== SHIFT MAP: simple_polarft_shiftmap.f90
@@ -1185,8 +1185,8 @@ interface
     end function wsqsum_ptcl_band
 
     module subroutine gen_shiftmap( self, imap, iref, iptcl )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: imap, iref, iptcl
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: imap, iref, iptcl
     end subroutine gen_shiftmap
 
     module real(dp) function shiftmap_cross( self, imap, irot, irho, alpha )
@@ -1196,9 +1196,9 @@ interface
     end function shiftmap_cross
 
     module subroutine shiftmap_objfun_grid( self, imap, vals )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: imap
-        real(sp),                    intent(out)   :: vals(:,:,:)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: imap
+        real(sp),                    intent(out)           :: vals(:,:,:)
     end subroutine shiftmap_objfun_grid
 
     module subroutine shiftmap_prior( self, imap, prior_w, lse_prior, logp0 )
@@ -1210,36 +1210,36 @@ interface
 
     module subroutine shiftmap_draw( self, imap, temp, prior_w, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
             &temp_phys, sdev, width_cutoff, ordinal )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: imap
-        real(dp),                    intent(in)    :: temp, prior_w, lse_prior
-        logical,                     intent(in)    :: l_greedy
-        real(dp),          optional, intent(out)   :: logz
-        integer,                     intent(out)   :: irot, irho, ialpha
-        real(sp),                    intent(out)   :: loss
-        real(dp),          optional, intent(in)    :: temp_phys
-        real(sp),          optional, intent(out)   :: sdev
-        real(sp),          optional, intent(in)    :: width_cutoff
-        integer,           optional, intent(in)    :: ordinal
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: imap
+        real(dp),                    intent(in)            :: temp, prior_w, lse_prior
+        logical,                     intent(in)            :: l_greedy
+        real(dp),                    optional, intent(out) :: logz
+        integer,                     intent(out)           :: irot, irho, ialpha
+        real(sp),                    intent(out)           :: loss
+        real(dp),                    optional, intent(in)  :: temp_phys
+        real(sp),                    optional, intent(out) :: sdev
+        real(sp),                    optional, intent(in)  :: width_cutoff
+        integer,                     optional, intent(in)  :: ordinal
     end subroutine shiftmap_draw
 
     module subroutine shiftmap_mode( self, imap, temp, prior_w, irot, irho, ialpha, loss, temp_phys, sdev, width_cutoff )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: imap
-        real(dp),                    intent(in)    :: temp, prior_w
-        integer,                     intent(out)   :: irot, irho, ialpha
-        real(sp),                    intent(out)   :: loss
-        real(dp),          optional, intent(in)    :: temp_phys
-        real(sp),          optional, intent(out)   :: sdev
-        real(sp),          optional, intent(in)    :: width_cutoff
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: imap
+        real(dp),                    intent(in)            :: temp, prior_w
+        integer,                     intent(out)           :: irot, irho, ialpha
+        real(sp),                    intent(out)           :: loss
+        real(dp),                    optional, intent(in)  :: temp_phys
+        real(sp),                    optional, intent(out) :: sdev
+        real(sp),                    optional, intent(in)  :: width_cutoff
     end subroutine shiftmap_mode
 
 
     module subroutine get_shiftmap_profile( self, times, counts, geometry )
-        class(polarft_calc), intent(in) :: self
-        real(dp), intent(out) :: times(6)
-        integer(int64), intent(out) :: counts(8)
-        integer, optional, intent(out) :: geometry(3,NSHIFTMAPS)
+        class(polarft_calc), intent(in)            :: self
+        real(dp),            intent(out)           :: times(6)
+        integer(int64),      intent(out)           :: counts(8)
+        integer,             optional, intent(out) :: geometry(3,NSHIFTMAPS)
     end subroutine get_shiftmap_profile
 
     ! ===== I/O: simple_polarft_ops_io.f90
@@ -1258,10 +1258,10 @@ interface
     end subroutine write_ref_pfts
 
     module subroutine read_ref_pfts( self, fname, iseven, iref_from )
-        class(polarft_calc), intent(inout) :: self
-        class(string),       intent(in)    :: fname
-        logical,             intent(in)    :: iseven
-        integer, optional,   intent(in)    :: iref_from
+        class(polarft_calc), intent(inout)          :: self
+        class(string),       intent(in)             :: fname
+        logical,             intent(in)             :: iseven
+        integer,             optional,   intent(in) :: iref_from
     end subroutine read_ref_pfts
 
 end interface

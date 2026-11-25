@@ -16,12 +16,12 @@ public :: has_clusterable_cavgs, cluster_cavgs_into_groups
 private
 #include "simple_local_flags.inc"
 
-character(len=*), parameter :: VIEW_PARTITION_FBODY = 'view_partition'
-character(len=*), parameter :: VIEW_PARTITION_CRIT  = 'cc' !< in-plane, shift and mirror invariant correlation
-real,             parameter :: VIEW_PARTITION_HP    = 30. !< high-pass limit: the protein, not the micelle/belt outline
-real,             parameter :: VIEW_PARTITION_LP    = 6.  !< low-pass limit of the class-average alignment (as cluster_cavgs)
+character(len=*), parameter :: VIEW_PARTITION_FBODY    = 'view_partition'
+character(len=*), parameter :: VIEW_PARTITION_CRIT     = 'cc'  !< in-plane, shift and mirror invariant correlation
+real,             parameter :: VIEW_PARTITION_HP       = 30.   !< high-pass limit: the protein, not the micelle/belt outline
+real,             parameter :: VIEW_PARTITION_LP       = 6.    !< low-pass limit of the class-average alignment (as cluster_cavgs)
 real,             parameter :: VIEW_PARTITION_MIN_FRAC = 0.025 !< smallest cavg group, fraction of the particles in units
-real,             parameter :: VIEW_PARTITION_TRS   = 10. !< shift search range of the class-average alignment (as cluster_cavgs)
+real,             parameter :: VIEW_PARTITION_TRS      = 10.   !< shift search range of the class-average alignment (as cluster_cavgs)
 
 contains
 
@@ -62,14 +62,14 @@ contains
     !! under class, the class-average group under cavg. l_drop_inactive3D leaves out rows inactive in
     !! ptcl3D (a workflow whose ptcl3D states are its own). The cavg clustering runs on nthr threads.
     subroutine make_class_samples( params, spproj, balance, nthr, l_drop_inactive3D, clssmp )
-        class(parameters),               intent(in)    :: params
-        class(sp_project),               intent(inout) :: spproj
-        character(len=*),                intent(in)    :: balance
-        integer,                         intent(in)    :: nthr
-        logical,                         intent(in)    :: l_drop_inactive3D
-        type(class_sample), allocatable, intent(inout) :: clssmp(:)
+        class(parameters),               intent(in)                 :: params
+        class(sp_project),               intent(inout)              :: spproj
+        character(len=*),                intent(in)                 :: balance
+        integer,                         intent(in)                 :: nthr
+        logical,                         intent(in)                 :: l_drop_inactive3D
+        type(class_sample),              allocatable, intent(inout) :: clssmp(:)
         integer, allocatable :: clsinds(:), labels(:)
-        integer :: i
+        integer              :: i
         select case(trim(balance))
             case('class', 'cavg')
             case DEFAULT
@@ -92,14 +92,14 @@ contains
 
     !> class-average group of every selected class (clsinds order); pops are the particles of every class
     subroutine cluster_selected_cavgs( params, spproj, nthr, clsinds, pops, labels )
-        class(parameters),    intent(in)    :: params
-        class(sp_project),    intent(inout) :: spproj
-        integer,              intent(in)    :: nthr
-        integer,              intent(in)    :: clsinds(:)
-        real,                 intent(in)    :: pops(:)
-        integer, allocatable, intent(inout) :: labels(:)
+        class(parameters),    intent(in)                 :: params
+        class(sp_project),    intent(inout)              :: spproj
+        integer,              intent(in)                 :: nthr
+        integer,              intent(in)                 :: clsinds(:)
+        real,                 intent(in)                 :: pops(:)
+        integer,              allocatable, intent(inout) :: labels(:)
         logical, allocatable :: l_sel(:)
-        integer :: i
+        integer              :: i
         if( params%nclust < 1 ) THROW_HARD('balance=cavg needs nclust >= 1')
         if( .not. has_selected_cavgs(spproj) ) THROW_HARD('balance=cavg needs selected class averages')
         l_sel = spproj%os_cls2D%get_all_asint('state') > 0
@@ -114,22 +114,22 @@ contains
     !! weight keeps merging into its nearest group, so fewer than nclust may result. Writes the group stacks
     !! <fbody>NN_cavgs and the table <fbody>.txt; runs on nthr threads, then restores the team.
     subroutine cluster_cavgs_into_groups( params, spproj, nthr, l_sel, nclust, fbody, labels, weights, min_frac )
-        class(parameters),    intent(in)    :: params
-        class(sp_project),    intent(inout) :: spproj
-        integer,              intent(in)    :: nthr, nclust
-        logical,              intent(in)    :: l_sel(:)
-        character(len=*),     intent(in)    :: fbody
-        integer, allocatable, intent(inout) :: labels(:)
-        real,    optional,    intent(in)    :: weights(:), min_frac
+        class(parameters),    intent(in)                 :: params
+        class(sp_project),    intent(inout)              :: spproj
+        integer,              intent(in)                 :: nthr, nclust
+        logical,              intent(in)                 :: l_sel(:)
+        character(len=*),     intent(in)                 :: fbody
+        integer,              allocatable, intent(inout) :: labels(:)
+        real,                 optional,    intent(in)    :: weights(:), min_frac
         type(cmdline)            :: cline_clust
         type(parameters)         :: params_clust
         type(image), allocatable :: cavg_imgs(:)
         real,        allocatable :: mm(:,:), dmat(:,:)
         integer,     allocatable :: clspops(:), clsinds(:), clsinds_clust(:), i_medoids(:)
-        integer(timer_int_kind) :: t_start
-        integer :: nsel, ngroups, ldim(3), nthr_prev, nteam_prev, i
-        real    :: min_weight
-        logical :: l_floor, l_every_class
+        integer(timer_int_kind)  :: t_start
+        integer                  :: nsel, ngroups, ldim(3), nthr_prev, nteam_prev, i
+        real                     :: min_weight
+        logical                  :: l_floor, l_every_class
         t_start = tic()
         if( nclust < 1 ) THROW_HARD('class-average groups need nclust >= 1')
         if( size(l_sel) /= spproj%os_cls2D%get_noris() ) THROW_HARD('class mask does not match cls2D')
@@ -204,7 +204,7 @@ contains
 
         subroutine write_group_table
             type(string) :: fname
-            integer :: funit, io_stat, k
+            integer      :: funit, io_stat, k
             fname = string(trim(fbody)//TXT_EXT)
             call fopen(funit, file=fname, status='REPLACE', action='WRITE', iostat=io_stat)
             call fileiochk('cluster_cavgs_into_groups; '//fname%to_char(), io_stat)
@@ -224,7 +224,7 @@ contains
         type(class_sample), intent(inout) :: clssmp(:)
         integer, allocatable :: states(:)
         logical, allocatable :: l_keep(:)
-        integer :: i
+        integer              :: i
         if( spproj%os_ptcl3D%get_noris() /= spproj%os_ptcl2D%get_noris() ) return
         states = spproj%os_ptcl3D%get_all_asint('state')
         do i = 1, size(clssmp)
@@ -247,8 +247,8 @@ contains
         real,    allocatable :: quotas(:), visits(:), keys(:)
         integer, allocatable :: order(:)
         character(len=256)   :: msg
-        integer :: nunits, ngroups, nactive, sweep, nfull, i, k
-        real    :: target, vmin, vmax
+        integer              :: nunits, ngroups, nactive, sweep, nfull, i, k
+        real                 :: target, vmin, vmax
         nunits  = size(clssmp)
         if( nunits < 1 ) return
         nactive = sum(clssmp(:)%pop)

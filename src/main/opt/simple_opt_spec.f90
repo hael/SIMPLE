@@ -9,54 +9,54 @@ private
 
 !> struct for all opt specifications
 type :: opt_spec
-    procedure(costfun),      pointer, nopass :: costfun      =>null() !< defines cost function
-    procedure(gcostfun),     pointer, nopass :: gcostfun     =>null() !< defines the gradient of the cost function
-    procedure(fdfcostfun),   pointer, nopass :: fdfcostfun   =>null() !< defines the gradient of the cost function
-    procedure(costfun_8),    pointer, nopass :: costfun_8    =>null() !< defines cost function, double precision
-    procedure(gcostfun_8),   pointer, nopass :: gcostfun_8   =>null() !< defines the gradient of the cost function, double precision
-    procedure(fdfcostfun_8), pointer, nopass :: fdfcostfun_8 =>null() !< defines the gradient of the cost function, double precision
-    procedure(fdfcurvfun_8), pointer, nopass :: fdfcurvfun_8 =>null() !< cost, gradient and PSD curvature, double precision ('lm')
-    procedure(opt_callback), pointer, nopass :: opt_callback =>null() !< callback function for in-between iteration steps
-    character(len=STDLEN)     :: str_opt=''                           !< string descriptor (of optimization routine to be used)
-    character(len=STDLEN)     :: str_mode=''                          !< mode string descriptor
-    integer                   :: ndim=0, ldim=0                       !< dimension parameters
-    real                      :: ftol=1e-5, gtol=1e-5                 !< fractional convergence tolerance to be achieved in costfun/gradient
-    real(dp)                  :: factr=1.0d+7                         !< f-tolerance for lbfgsb
-    real(dp)                  :: pgtol=1.0d-5                         !< g-tolerance for lbfgsb
-    real                      :: eps=0.5                              !< learning rate
-    real                      :: cfac=0.1                             !< convergence factor bfgs
+    procedure(costfun),      pointer, nopass :: costfun      => null() !< defines cost function
+    procedure(gcostfun),     pointer, nopass :: gcostfun     => null() !< defines the gradient of the cost function
+    procedure(fdfcostfun),   pointer, nopass :: fdfcostfun   => null() !< defines the gradient of the cost function
+    procedure(costfun_8),    pointer, nopass :: costfun_8    => null() !< defines cost function, double precision
+    procedure(gcostfun_8),   pointer, nopass :: gcostfun_8   => null() !< defines the gradient of the cost function, double precision
+    procedure(fdfcostfun_8), pointer, nopass :: fdfcostfun_8 => null() !< defines the gradient of the cost function, double precision
+    procedure(fdfcurvfun_8), pointer, nopass :: fdfcurvfun_8 => null() !< cost, gradient and PSD curvature, double precision ('lm')
+    procedure(opt_callback), pointer, nopass :: opt_callback => null() !< callback function for in-between iteration steps
+    character(len=STDLEN)     :: str_opt          = ''                !< string descriptor (of optimization routine to be used)
+    character(len=STDLEN)     :: str_mode         = ''                !< mode string descriptor
+    integer                   :: ndim             = 0, ldim=0         !< dimension parameters
+    real                      :: ftol             = 1e-5, gtol=1e-5   !< fractional convergence tolerance to be achieved in costfun/gradient
+    real(dp)                  :: factr            = 1.0d+7            !< f-tolerance for lbfgsb
+    real(dp)                  :: pgtol            = 1.0d-5            !< g-tolerance for lbfgsb
+    real                      :: eps              = 0.5               !< learning rate
+    real                      :: cfac             = 0.1               !< convergence factor bfgs
     real                      :: yb                                   !< best cost obtained so far
-    real                      :: max_step=0.01                        !< maximum step size
-    integer                   :: maxits=100                           !< maximum number of iterations
-    integer                   :: nbest=0                              !< number of best solutions used to re-estimate the model in CE
-    integer                   :: niter=0                              !< actual number of iterations
-    integer                   :: nrestarts=1                          !< number of restarts
-    integer                   :: nevals=0                             !< total number of cost function evaluations
-    integer                   :: ngevals=0                            !< total number of gradient function evaluations
-    integer                   :: nstates=1                            !< number of states
-    integer                   :: npeaks=0                             !< number of peaks (local optima to identify)
-    integer                   :: npop=0                               !< population size (4 evolutionary optimizers)
-    integer                   :: nnn=0                                !< number of nearest neighbors
-    integer                   :: peakcnt=0                            !< peak counter
-    integer                   :: lbfgsb_m=15                          !< m-parameter for lbfgsb algorithm (default: 15)
-    logical, allocatable      :: cyclic(:)                            !< to indicate which variables are cyclic (Euler angles)
-    real, allocatable         :: limits(:,:)                          !< variable bounds
-    real, allocatable         :: limits_init(:,:)                     !< variable bounds for initialisation (randomized bounds)
-    real, allocatable         :: stepsz(:)                            !< step sizes for brute force search
-    real, allocatable         :: x(:)                                 !< best/final solution
+    real                      :: max_step         = 0.01              !< maximum step size
+    integer                   :: maxits           = 100               !< maximum number of iterations
+    integer                   :: nbest            = 0                 !< number of best solutions used to re-estimate the model in CE
+    integer                   :: niter            = 0                 !< actual number of iterations
+    integer                   :: nrestarts        = 1                 !< number of restarts
+    integer                   :: nevals           = 0                 !< total number of cost function evaluations
+    integer                   :: ngevals          = 0                 !< total number of gradient function evaluations
+    integer                   :: nstates          = 1                 !< number of states
+    integer                   :: npeaks           = 0                 !< number of peaks (local optima to identify)
+    integer                   :: npop             = 0                 !< population size (4 evolutionary optimizers)
+    integer                   :: nnn              = 0                 !< number of nearest neighbors
+    integer                   :: peakcnt          = 0                 !< peak counter
+    integer                   :: lbfgsb_m         = 15                !< m-parameter for lbfgsb algorithm (default: 15)
+    logical,  allocatable     :: cyclic(:)                            !< to indicate which variables are cyclic (Euler angles)
+    real,     allocatable     :: limits(:,:)                          !< variable bounds
+    real,     allocatable     :: limits_init(:,:)                     !< variable bounds for initialisation (randomized bounds)
+    real,     allocatable     :: stepsz(:)                            !< step sizes for brute force search
+    real,     allocatable     :: x(:)                                 !< best/final solution
     real(dp), allocatable     :: x_8(:)                               !< double precision value for best/final solution
-    real, allocatable         :: xi(:)                                !< search direction used in linmin
-    real, allocatable         :: xt(:)                                !< test point, used in linmin
-    real, allocatable         :: population(:,:)                      !< output solution population from the evolutionary approaches
-    real, allocatable         :: peaks(:,:)                           !< output peaks (local optimal solutions)
-    real, allocatable         :: grad_4_tmp(:)                        !< temporary storage for single precision gradient
-    real, allocatable         :: x_4_tmp(:)                           !< temporary storage for single precision function value
-    logical                   :: debug     = .false.
-    logical                   :: warn      = .false.
-    logical                   :: converged = .false.                  !< converged status
+    real,     allocatable     :: xi(:)                                !< search direction used in linmin
+    real,     allocatable     :: xt(:)                                !< test point, used in linmin
+    real,     allocatable     :: population(:,:)                      !< output solution population from the evolutionary approaches
+    real,     allocatable     :: peaks(:,:)                           !< output peaks (local optimal solutions)
+    real,     allocatable     :: grad_4_tmp(:)                        !< temporary storage for single precision gradient
+    real,     allocatable     :: x_4_tmp(:)                           !< temporary storage for single precision function value
+    logical                   :: debug            = .false.
+    logical                   :: warn             = .false.
+    logical                   :: converged        = .false.           !< converged status
     logical                   :: callback_changed = .true.            !< 'lm': opt_callback clears it when the objective is unchanged
-    logical                   :: nostart   = .false.                  !< x is no start: simplex draws one, DE keeps its random population
-    logical                   :: exists    = .false.                  !< to indicate existence
+    logical                   :: nostart          = .false.           !< x is no start: simplex draws one, DE keeps its random population
+    logical                   :: exists           = .false.           !< to indicate existence
   contains
     procedure :: specify
     procedure :: set_limits
@@ -74,8 +74,8 @@ type :: opt_spec
     procedure :: eval_df_8
     procedure :: eval_fdf_8
     procedure :: eval_fdfcurv_8
-    generic   :: eval_f  => eval_f_4, eval_f_8
-    generic   :: eval_df => eval_df_4, eval_df_8
+    generic   :: eval_f   => eval_f_4, eval_f_8
+    generic   :: eval_df  => eval_df_4, eval_df_8
     generic   :: eval_fdf => eval_fdf_4, eval_fdf_8
     procedure :: kill
 end type opt_spec
@@ -84,8 +84,8 @@ end type opt_spec
 abstract interface
     function costfun( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
-        integer, intent(in)     :: D
-        real,    intent(in)     :: vec(D)
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
         real                    :: cost
     end function
 end interface
@@ -94,9 +94,9 @@ end interface
 abstract interface
     subroutine gcostfun( fun_self, vec, grad, D )
         class(*), intent(inout) :: fun_self
-        integer, intent(in)     :: D
-        real,    intent(inout)  :: vec(D)
-        real,    intent(out)    :: grad(D)
+        integer,  intent(in)    :: D
+        real,     intent(inout) :: vec(D)
+        real,     intent(out)   :: grad(D)
     end subroutine
 end interface
 
@@ -104,9 +104,9 @@ end interface
 abstract interface
     subroutine fdfcostfun( fun_self, vec, f, grad, D )
         class(*), intent(inout) :: fun_self
-        integer, intent(in)     :: D
-        real,    intent(inout)  :: vec(D)
-        real,    intent(out)    :: f, grad(D)
+        integer,  intent(in)    :: D
+        real,     intent(inout) :: vec(D)
+        real,     intent(out)   :: f, grad(D)
     end subroutine
 end interface
 
@@ -164,31 +164,31 @@ contains
     subroutine specify( self, str_opt, ndim, mode, ldim, ftol, gtol, maxits,&
     &nrestarts, limits, limits_init, cyclic, verbose_arg, debug_arg, npop,&
     &cfac, warn_arg, nbest, nstates, stepsz, npeaks, nnn, max_step, factr, pgtol )
-        class(opt_spec),            intent(inout) :: self                !< instance
-        character(len=*),           intent(in)    :: str_opt             !< string descriptor (of optimization routine to be used)
-        integer,                    intent(in)    :: ndim                !< problem dimensionality
-        character(len=*), optional, intent(in)    :: mode                !< mode string descriptor
-        integer,          optional, intent(in)    :: ldim                !< second problem dimensionality
-        real,             optional, intent(in)    :: ftol                !< fractional convergence tolerance to be achieved in costfun
-        real,             optional, intent(in)    :: gtol                !< fractional convergence tolerance to be achieved in gradient
-        integer,          optional, intent(in)    :: maxits              !< maximum number of iterations
-        integer,          optional, intent(in)    :: nbest               !< nr of best solutions used to update the CE model
-        integer,          optional, intent(in)    :: nrestarts           !< number of restarts
-        integer,          optional, intent(in)    :: nstates             !< nr of states
-        real,             optional, intent(in)    :: limits(ndim,2)      !< variable bounds
-        real,             optional, intent(in)    :: limits_init(ndim,2) !< variable bounds for initialisation (randomized bounds)
-        logical,          optional, intent(in)    :: cyclic(ndim)        !< to indicate which variables are cyclic (Euler angles)
-        logical,          optional, intent(in)    :: verbose_arg         !< verbose output of optimizer
-        logical,          optional, intent(in)    :: debug_arg           !< debugging mode
-        logical,          optional, intent(in)    :: warn_arg            !< warning mode
-        integer,          optional, intent(in)    :: npop                !< population size (4 evolutionary optimizers)
-        integer,          optional, intent(in)    :: npeaks              !< number of peaks (local optima to identify)
-        integer,          optional, intent(in)    :: nnn                 !< number of nearest neighbors
-        real,             optional, intent(in)    :: cfac                !< convergence factor (bfgs)
-        real,             optional, intent(in)    :: stepsz(ndim)        !< step sizes for brute force search
-        real,             optional, intent(in)    :: max_step            !< initial step size
-        real(dp),         optional, intent(in)    :: factr               !< factr (f-tolerance) for lbfgsb optimizer
-        real(dp),         optional, intent(in)    :: pgtol               !< pgtol (g-tolerance) for lbfgsb optimizer
+        class(opt_spec),            intent(inout)        :: self                !< instance
+        character(len=*),           intent(in)           :: str_opt             !< string descriptor (of optimization routine to be used)
+        integer,                    intent(in)           :: ndim                !< problem dimensionality
+        character(len=*),           optional, intent(in) :: mode                !< mode string descriptor
+        integer,                    optional, intent(in) :: ldim                !< second problem dimensionality
+        real,                       optional, intent(in) :: ftol                !< fractional convergence tolerance to be achieved in costfun
+        real,                       optional, intent(in) :: gtol                !< fractional convergence tolerance to be achieved in gradient
+        integer,                    optional, intent(in) :: maxits              !< maximum number of iterations
+        integer,                    optional, intent(in) :: nbest               !< nr of best solutions used to update the CE model
+        integer,                    optional, intent(in) :: nrestarts           !< number of restarts
+        integer,                    optional, intent(in) :: nstates             !< nr of states
+        real,                       optional, intent(in) :: limits(ndim,2)      !< variable bounds
+        real,                       optional, intent(in) :: limits_init(ndim,2) !< variable bounds for initialisation (randomized bounds)
+        logical,                    optional, intent(in) :: cyclic(ndim)        !< to indicate which variables are cyclic (Euler angles)
+        logical,                    optional, intent(in) :: verbose_arg         !< verbose output of optimizer
+        logical,                    optional, intent(in) :: debug_arg           !< debugging mode
+        logical,                    optional, intent(in) :: warn_arg            !< warning mode
+        integer,                    optional, intent(in) :: npop                !< population size (4 evolutionary optimizers)
+        integer,                    optional, intent(in) :: npeaks              !< number of peaks (local optima to identify)
+        integer,                    optional, intent(in) :: nnn                 !< number of nearest neighbors
+        real,                       optional, intent(in) :: cfac                !< convergence factor (bfgs)
+        real,                       optional, intent(in) :: stepsz(ndim)        !< step sizes for brute force search
+        real,                       optional, intent(in) :: max_step            !< initial step size
+        real(dp),                   optional, intent(in) :: factr               !< factr (f-tolerance) for lbfgsb optimizer
+        real(dp),                   optional, intent(in) :: pgtol               !< pgtol (g-tolerance) for lbfgsb optimizer
         call self%kill
         ! take care of optimizer specifics
         select case(str_opt)
@@ -274,8 +274,8 @@ contains
 
     !>  \brief  sets the optimizer limits
     subroutine set_limits( self, lims )
-        class(opt_spec), intent(inout) :: self              !< instance
-        real,               intent(in) :: lims(self%ndim,2) !< new limits
+        class(opt_spec),    intent(inout) :: self              !< instance
+        real,               intent(in)    :: lims(self%ndim,2) !< new limits
         integer  :: i
         do i=1,self%ndim
             if(lims(i,2) >= lims(i,1)) then

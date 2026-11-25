@@ -9,11 +9,11 @@ private
 
 type :: ori
     private
-    real        :: pparms(N_PTCL_ORIPARAMS) = 0. !< hardcoded per-particle parameters (see simple_defs_ori)
-    type(hash)  :: htab                          !< hash table for dynamic parameters
-    type(chash) :: chtab                         !< hash table for filenames etc.
-    logical     :: is_ptcl   = .false.           !< to indicate whether the info is of particle kind
-    logical     :: existence = .false.           !< to indicate existence
+    real        :: pparms(N_PTCL_ORIPARAMS) = 0.      !< hardcoded per-particle parameters (see simple_defs_ori)
+    type(hash)  :: htab                               !< hash table for dynamic parameters
+    type(chash) :: chtab                              !< hash table for filenames etc.
+    logical     :: is_ptcl                  = .false. !< to indicate whether the info is of particle kind
+    logical     :: existence                = .false. !< to indicate existence
   contains
     ! CONSTRUCTOR
     procedure          :: new_ori
@@ -37,13 +37,13 @@ type :: ori
     procedure          :: set_shift
     procedure          :: set_dfx, set_dfy
     procedure, private :: set_dp, set_real, set_char, set_int, set_str
-    generic            :: set => set_dp, set_real, set_char, set_int, set_str
+    generic            :: set           => set_dp, set_real, set_char, set_int, set_str
     procedure          :: set_state
     procedure          :: set_class
     procedure          :: set_stkind
     procedure          :: set_ogid
     procedure, private :: rnd_euler_full, rnd_euler_lims, rnd_euler_near, rnd_euler_near_projinpl, rnd_euler_offset
-    generic            :: rnd_euler => rnd_euler_full, rnd_euler_lims, rnd_euler_near, rnd_euler_near_projinpl, rnd_euler_offset
+    generic            :: rnd_euler     => rnd_euler_full, rnd_euler_lims, rnd_euler_near, rnd_euler_near_projinpl, rnd_euler_offset
     procedure          :: rnd_ori
     procedure          :: rnd_inpl
     procedure          :: rnd_shift, gau_rnd_shift
@@ -185,7 +185,7 @@ contains
         class(ori), intent(inout)  :: self_out
         character(len=KEYLEN)      :: key
         type(string), allocatable  :: keys(:)
-        integer :: sz, i, ind
+        integer                    :: sz, i, ind
         if( self_out%existence )then
             self_out%pparms = self_in%pparms
             self_out%htab   = self_in%htab
@@ -221,8 +221,8 @@ contains
         class(ori), intent(in)     :: self_in
         class(ori), intent(inout)  :: self_out
         type(string), allocatable :: keys(:)
-        type(string) :: key, val
-        integer :: sz, i
+        type(string)              :: key, val
+        integer                   :: sz, i
         if(.not. self_out%is_ptcl .and. .not. self_in%is_ptcl) then
             sz   = self_in%htab%size_of()
             keys = self_in%htab%get_keys()
@@ -251,8 +251,8 @@ contains
     end subroutine delete_entry
 
     subroutine delete_2Dclustering( self, keepshifts, keepcls )
-        class(ori),        intent(inout) :: self
-        logical, optional, intent(in)    :: keepshifts, keepcls
+        class(ori),        intent(inout)        :: self
+        logical,           optional, intent(in) :: keepshifts, keepcls
         logical :: kkeepshifts, kkeepcls
         kkeepshifts = .true.
         if( present(keepshifts) ) kkeepshifts = keepshifts
@@ -280,8 +280,8 @@ contains
     end subroutine delete_2Dclustering
 
     subroutine delete_3Dalignment( self, keepshifts )
-        class(ori),        intent(inout) :: self
-        logical, optional, intent(in)    :: keepshifts
+        class(ori),        intent(inout)        :: self
+        logical,           optional, intent(in) :: keepshifts
         logical :: kkeepshifts
         kkeepshifts = .false.
         if( present(keepshifts) ) kkeepshifts = keepshifts
@@ -649,9 +649,9 @@ contains
 
     !>  \brief  for generating random ori
     subroutine rnd_ori( self, trs, eullims )
-        class(ori),     intent(inout) :: self
-        real, optional, intent(in)    :: trs         !< threshold
-        real, optional, intent(inout) :: eullims(3,2)!< Euler angles
+        class(ori),     intent(inout)           :: self
+        real,           optional, intent(in)    :: trs          !< threshold
+        real,           optional, intent(inout) :: eullims(3,2) !< Euler angles
         real :: x, y, z
         if( present(trs) )then
             if( abs(trs) < 1e-3 )then
@@ -675,8 +675,8 @@ contains
     end subroutine rnd_ori
 
     subroutine rnd_inpl( self, trs )
-        class(ori), intent(inout)  :: self
-        real, intent(in), optional :: trs !< threshold
+        class(ori), intent(inout)        :: self
+        real,       intent(in), optional :: trs !< threshold
         if( present(trs) ) call self%rnd_shift(trs)
         call self%e3set(ran3()*359.99)
     end subroutine rnd_inpl
@@ -791,7 +791,7 @@ contains
     pure function get_mat( self ) result( mat )
         class(ori), intent(in) :: self
         real, dimension(3,3) :: mat
-        real :: euls(3)
+        real                 :: euls(3)
         euls = self%get_euler()
         mat  = euler2m(euls)
     end function get_mat
@@ -1054,10 +1054,10 @@ contains
 
     function pparms2str( self ) result( str_out )
         class(ori), intent(in)     :: self
-        type(string) :: str_out
+        type(string)                  :: str_out
         character(len=XLONGSTRLEN)    :: str_tmp
         character(len=:), allocatable :: str
-        integer :: i, cnt, n
+        integer                       :: i, cnt, n
         write(str_tmp, *)(trim(get_oriparam_flag(i)),'=',self%pparms(i),'/', i=1,I_LAST_NAMED_ORIPARAM)
         n   = len_trim(str_tmp)
         str = repeat(' ',n)
@@ -1119,17 +1119,17 @@ contains
     end function ori2str
 
     subroutine ori2json( self, json_ori, boxes )
-        class(ori),                 intent(in)    :: self
-        logical,          optional, intent(in)    :: boxes
-        type(json_value), pointer,  intent(inout) :: json_ori
+        class(ori),                 intent(in)              :: self
+        logical,                    optional, intent(in)    :: boxes
+        type(json_value),           pointer,  intent(inout) :: json_ori
         type(json_core)                           :: json
         type(json_value), pointer                 :: box, boxes_array
         type(nrtxtfile)                           :: boxfile
         type(string),     allocatable             :: keys(:), hkeys(:)
         real,             allocatable             :: boxdata(:,:)
-        type(string) :: str_tmp, box_tmp
-        integer      :: sz_chash, sz_hash, i, j, x, y, diameter, type
-        logical      :: l_boxes = .false.
+        type(string)                              :: str_tmp, box_tmp
+        integer                                   :: sz_chash, sz_hash, i, j, x, y, diameter, type
+        logical                                   :: l_boxes = .false.
         if(present(boxes)) l_boxes = boxes
         sz_chash = self%chtab%size_of()
         if( self%is_ptcl )then
@@ -1244,7 +1244,7 @@ contains
         type(chash)  :: ch
         type(hash)   :: h
         type(string) :: key
-        integer :: i
+        integer      :: i
         ch = self%chtab
         h  = self%htab
         if( h%size_of() >= 1 )then
@@ -1259,7 +1259,7 @@ contains
     subroutine chash2ori( self, ch )
         class(ori),   intent(inout) :: self
         class(chash), intent(in)    :: ch
-        type(string) :: line
+        type(string)                  :: line
         character(len=:), allocatable :: line_buffer
         line = ch%chash2str()
         line_buffer = line%to_char()
@@ -1281,7 +1281,7 @@ contains
     function get_ctfvars( self ) result( ctfvars )
         class(ori), intent(in) :: self
         type(ctfparams)        :: ctfvars
-        type(string) :: ctfstr
+        type(string)           :: ctfstr
         if( self%isthere('ctf') )then
             ctfstr = self%get_str('ctf')
             ctfvars%ctfflag = CTFFLAG_YES
@@ -1331,7 +1331,7 @@ contains
     function nonslot_key( self ) result( key )
         class(ori), intent(in) :: self
         type(string) :: key
-        integer :: i
+        integer      :: i
         key = ''
         if( .not. self%is_ptcl ) return
         if( self%chtab%size_of() > 0 )then
@@ -1364,7 +1364,7 @@ contains
     function get_keys( self ) result( keys )
         class(ori), intent(in)  :: self
         type(string), allocatable :: hkeys(:), keys(:)
-        integer :: sz_chash, sz_hash, i, j
+        integer                   :: sz_chash, sz_hash, i, j
         sz_chash = self%chtab%size_of()
         if( self%is_ptcl )then
             sz_hash = 0
@@ -1410,7 +1410,7 @@ contains
     subroutine print_ori( self )
         class(ori), intent(in) :: self
         character(len=KEYLEN) :: flag
-        integer :: i
+        integer               :: i
         if( self%is_ptcl )then
             do i=1,I_LAST_NAMED_ORIPARAM
                 if( oriparam_is_spare(i) ) cycle
@@ -1435,8 +1435,8 @@ contains
     subroutine read( self, fhandle )
         class(ori), intent(inout)  :: self
         integer,    intent(in)     :: fhandle
-        character(len=XLONGSTRLEN) :: buffer_static 
-        logical :: is_ptcl
+        character(len=XLONGSTRLEN) :: buffer_static
+        logical                    :: is_ptcl
         read(fhandle,'(A)') buffer_static
         is_ptcl = self%is_ptcl
         call self%str2ori(trim(adjustl(buffer_static)), is_ptcl)

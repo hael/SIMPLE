@@ -12,7 +12,7 @@ contains
         class(image), intent(inout) :: img
         integer,      intent(in)    :: sqrad
         real, allocatable :: rmat(:,:,:)
-        integer :: ldim(3), lo(3), hi(3)
+        integer           :: ldim(3), lo(3), hi(3)
         ldim = img%get_ldim()
         if( any(ldim(1:2) <= sqrad) .or. (ldim(3) > 1 .and. ldim(3) <= sqrad) )then
             error stop 'draw_square: the image is too small for the square'

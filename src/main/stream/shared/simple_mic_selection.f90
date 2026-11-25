@@ -43,9 +43,9 @@ contains
     !> Sets state 0 on every micrograph of @p os_mic with state > 0 that exceeds a supplied threshold;
     !! @p nrejected is the number newly rejected.
     subroutine reject_mics_by_thresholds( os_mic, nrejected, ctfres, icefrac, astig )
-        class(oris),    intent(inout) :: os_mic
-        integer,        intent(out)   :: nrejected
-        real, optional, intent(in)    :: ctfres, icefrac, astig
+        class(oris),    intent(inout)        :: os_mic
+        integer,        intent(out)          :: nrejected
+        real,           optional, intent(in) :: ctfres, icefrac, astig
         integer :: imic
         nrejected = 0
         do imic = 1,os_mic%get_noris()
@@ -59,8 +59,8 @@ contains
     contains
 
         logical function exceeds( key, threshold )
-            character(len=*), intent(in) :: key
-            real, optional,   intent(in) :: threshold
+            character(len=*), intent(in)             :: key
+            real,             optional,   intent(in) :: threshold
             exceeds = .false.
             if( .not. present(threshold) ) return
             if( .not. os_mic%isthere(imic, key) ) return

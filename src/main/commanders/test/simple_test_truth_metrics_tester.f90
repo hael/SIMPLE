@@ -18,7 +18,7 @@ implicit none
 public :: run_all_truth_metrics_tests, run_all_truth_docking_tests
 private
 
-integer, parameter :: B = 32
+integer, parameter :: B      = 32
 real,    parameter :: SMPD_T = 2.
 
 contains
@@ -48,9 +48,9 @@ contains
         use simple_simple_volinterp, only: rotvol
         type(image) :: t, tm, w
         type(ori)   :: od
-        real    :: pos(3,4), a(3,3), s3(3), r(3,3), sh(2), rc(3,3), shc(2), eul(3), shift(3), ccd, ccm
-        logical :: mirrored
-        integer :: i
+        real        :: pos(3,4), a(3,3), s3(3), r(3,3), sh(2), rc(3,3), shc(2), eul(3), shift(3), ccd, ccm
+        logical     :: mirrored
+        integer     :: i
         write(*,'(A)') 'test_docking_frame'
         pos = reshape([10.,4.,-6., -5.,9.,3., 2.,-8.,7., -9.,-3.,-4.], [3,4])
         call blob_volume(t, pos, [3.,2.5,2.,3.5], [1.,.8,.7,.5])
@@ -92,8 +92,8 @@ contains
         type(image), intent(inout) :: vol
         real,        intent(in)    :: pos(:,:), sig(:), amp(:)
         real, allocatable :: rmat(:,:,:)
-        real    :: c, d2
-        integer :: i, j, k, n
+        real              :: c, d2
+        integer           :: i, j, k, n
         allocate(rmat(B,B,B), source=0.)
         c = real(B)/2. + 1.
         do k = 1, B
@@ -150,8 +150,8 @@ contains
 
     !> the matching of estimated onto true states, and its invariance under a renaming
     subroutine test_matching()
-        integer, parameter :: RENAME(3) = [2,3,1]
-        integer :: truth(10), est(10), renamed(10), i
+        integer, parameter   :: RENAME(3) = [2,3,1]
+        integer              :: truth(10), est(10), renamed(10), i
         integer, allocatable :: map(:), map2(:)
         write(*,'(A)') 'test_matching'
         truth = [1,1,1,1,1,2,2,2,3,3]
@@ -200,9 +200,9 @@ contains
     !! collapsed predictor; the null's median and 99.9th percentile (0.383 and 0.426) come from a
     !! Python emulation of 2000 shuffles
     subroutine test_null()
-        integer :: truth(1000)
+        integer              :: truth(1000)
         integer, allocatable :: est(:)
-        real :: med, p999
+        real                 :: med, p999
         write(*,'(A)') 'test_null'
         truth(1:500) = 1
         truth(501:800) = 2
@@ -217,7 +217,7 @@ contains
 
     !> the map mapping agrees with the label mapping, and fails on correct labels with swapped maps
     subroutine test_map_mapping()
-        real :: cc(3,3)
+        real                 :: cc(3,3)
         integer, allocatable :: maps(:), labels(:)
         write(*,'(A)') 'test_map_mapping'
         labels = match_states([1,1,2,2,3,3], [1,1,2,2,3,3], 3, 3)
@@ -235,8 +235,8 @@ contains
     subroutine test_discrimination()
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
         type(image) :: truth(3), est(3)
-        real    :: margins(3), diffcorr(3,3), body(3,3), lobes(3,3), corr(3,3)
-        integer :: k, nmask
+        real        :: margins(3), diffcorr(3,3), body(3,3), lobes(3,3), corr(3,3)
+        integer     :: k, nmask
         write(*,'(A)') 'test_discrimination'
         body  = reshape([0.,0.,0., 8.,0.,0., -4.,6.,0.], [3,3])
         lobes = reshape([0.,10.,6., 10.,-8.,-4., -9.,-6.,5.], [3,3])
@@ -291,8 +291,8 @@ contains
         use simple_simple_volinterp, only: rotvol
         type(image) :: t, tm, w
         type(ori)   :: od
-        real :: pos(3,4), a(3,3), s3(3), r(3,3), sh(2), rc(3,3), shc(2), wrong(3,3)
-        integer :: i, ihand
+        real        :: pos(3,4), a(3,3), s3(3), r(3,3), sh(2), rc(3,3), shc(2), wrong(3,3)
+        integer     :: i, ihand
         write(*,'(A)') 'test_frame_rule'
         pos = reshape([10.,4.,-6., -5.,9.,3., 2.,-8.,7., -9.,-3.,-4.], [3,4])
         call blob_volume(t, pos, [3.,2.5,2.,3.5], [1.,.8,.7,.5])
@@ -329,10 +329,10 @@ contains
     !! (r g, the composition under which a symmetric map projects the same, pinned here by
     !! projection) score zero; a global frame error that a learnt cluster would accept does not
     subroutine test_group_error()
-        type(image) :: vs
+        type(image)       :: vs
         real, allocatable :: ops(:,:,:), errs(:)
-        real :: rt(3,3,12), re(3,3,12), w(3,3)
-        integer :: j, g
+        real              :: rt(3,3,12), re(3,3,12), w(3,3)
+        integer           :: j, g
         write(*,'(A)') 'test_group_error'
         ops = group_operators('d2')
         call assert_int(4, size(ops,3), 'D2 has four operators')
@@ -371,12 +371,12 @@ contains
     !> the pair pose error of a de novo result: zero up to a global frame on the right, the
     !! symmetry mate of each particle and the mirrored hand; large under a frame per particle
     subroutine test_sym_pair_pose_error()
-        real, parameter :: MZ(3,3) = reshape([1.,0.,0., 0.,1.,0., 0.,0.,-1.], [3,3])
-        real, parameter :: MX(3,3) = reshape([-1.,0.,0., 0.,1.,0., 0.,0.,1.], [3,3])
-        type(oris) :: truth, est
+        real, parameter   :: MZ(3,3) = reshape([1.,0.,0., 0.,1.,0., 0.,0.,-1.], [3,3])
+        real, parameter   :: MX(3,3) = reshape([-1.,0.,0., 0.,1.,0., 0.,0.,1.], [3,3])
+        type(oris)        :: truth, est
         real, allocatable :: ops(:,:,:)
-        real    :: rt(3,3), w(3,3), err, frac5
-        integer :: j, inds(12)
+        real              :: rt(3,3), w(3,3), err, frac5
+        integer           :: j, inds(12)
         write(*,'(A)') 'test_sym_pair_pose_error'
         ops  = group_operators('d2')
         inds = [(j, j = 1, 12)]

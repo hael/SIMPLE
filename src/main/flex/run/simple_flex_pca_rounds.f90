@@ -15,22 +15,22 @@ private
 public :: flex_pca_rounds, flex_pca_rounds_shmem
 
 type, abstract :: flex_pca_rounds
-    logical :: l_master   = .false.
-    logical :: l_worker   = .false.
-    integer :: nparts_run = 1
-    integer :: fit_sel    = FLEX_FIT_ALL   !< the fit every scheduled round serves (two-fit harnesses)
+    logical                                  :: l_master   = .false.
+    logical                                  :: l_worker   = .false.
+    integer                                  :: nparts_run = 1
+    integer                                  :: fit_sel    = FLEX_FIT_ALL !< the fit every scheduled round serves (two-fit harnesses)
     type(flex_pca_artifact_catalog), private :: artifacts
   contains
     procedure(plan_iface), deferred :: plan_partitions
     procedure(run_iface),  deferred :: run_stage
-    procedure :: is_master   => rounds_is_master
-    procedure :: is_worker   => rounds_is_worker
-    procedure :: nparts      => rounds_nparts
-    procedure :: distributed => rounds_distributed
-    procedure :: part_fname  => rounds_part_fname
-    procedure :: part_path   => rounds_part_path
-    procedure :: set_part_dir => rounds_set_part_dir
-    procedure :: kill_artifacts => rounds_kill_artifacts
+    procedure                       :: is_master      => rounds_is_master
+    procedure                       :: is_worker      => rounds_is_worker
+    procedure                       :: nparts         => rounds_nparts
+    procedure                       :: distributed    => rounds_distributed
+    procedure                       :: part_fname     => rounds_part_fname
+    procedure                       :: part_path      => rounds_part_path
+    procedure                       :: set_part_dir   => rounds_set_part_dir
+    procedure                       :: kill_artifacts => rounds_kill_artifacts
 end type flex_pca_rounds
 
 !> Shared memory and workers: no partitions, no rounds. Workers set l_worker.

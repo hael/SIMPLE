@@ -28,7 +28,7 @@ module simple_gui_metadata_stream_preprocess
     real                  :: cutoff_ice_score    = 0.0  ! rejection threshold: ice score
     real                  :: cutoff_astigmatism  = 0.0  ! rejection threshold: astigmatism (Å)
   contains
-    procedure :: kill => kill_override
+    procedure :: kill    => kill_override
     procedure :: set
     procedure :: get
     procedure :: jsonise => jsonise_override

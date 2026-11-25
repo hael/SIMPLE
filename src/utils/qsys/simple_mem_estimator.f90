@@ -7,11 +7,11 @@ implicit none
 contains
 
     subroutine estimate_mem_usage(job_descr, q_descr, extra_params)
-        class(chash),               intent(inout) :: q_descr
-        class(chash),               intent(in)    :: job_descr
-        type(parameters), optional, intent(in)    :: extra_params
+        class(chash),               intent(inout)        :: q_descr
+        class(chash),               intent(in)           :: job_descr
+        type(parameters),           optional, intent(in) :: extra_params
         type(string) :: prg
-        integer      :: top, fromp, np, part, io_stat      
+        integer      :: top, fromp, np, part, io_stat
         if(job_descr%isthere("prg")) then
             prg   = job_descr%get("prg")
             top   = 0

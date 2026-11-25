@@ -116,7 +116,7 @@ contains
     function create_flex_pca_strategy( cline ) result( strategy )
         class(cmdline), intent(in) :: cline
         class(flex_pca_strategy), allocatable :: strategy
-        integer :: nparts
+        integer                               :: nparts
         if( cline%defined('part') ) THROW_HARD('a flex_pca part runs through the worker commander (simple_private_exec)')
         nparts = 1
         if( cline%defined('nparts') ) nparts = max(1, cline%get_iarg('nparts'))
@@ -131,9 +131,9 @@ contains
 
     subroutine shmem_initialize( self, params, build, cline )
         class(flex_pca_shmem_strategy), intent(inout) :: self
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
+        type(parameters),               intent(inout) :: params
+        type(builder),                  intent(inout) :: build
+        class(cmdline),                 intent(inout) :: cline
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         call ensure_canonical_sigma_state(params, build, cline)
         ! a command-line pcafit pins the whole job to one independent half (two-job halfset fits)
@@ -142,34 +142,34 @@ contains
 
     subroutine shmem_execute( self, params, build, cline )
         class(flex_pca_shmem_strategy), intent(inout) :: self
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
+        type(parameters),               intent(inout) :: params
+        type(builder),                  intent(inout) :: build
+        class(cmdline),                 intent(inout) :: cline
         type(flex_pca_application) :: app
         call app%run(params, build, cline, self%rounds)
     end subroutine shmem_execute
 
     subroutine shmem_finalize_run( self, params, build, cline )
         class(flex_pca_shmem_strategy), intent(inout) :: self
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
+        type(parameters),               intent(inout) :: params
+        type(builder),                  intent(inout) :: build
+        class(cmdline),                 intent(inout) :: cline
     end subroutine shmem_finalize_run
 
     subroutine shmem_cleanup( self, params, build, cline )
         class(flex_pca_shmem_strategy), intent(inout) :: self
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
+        type(parameters),               intent(inout) :: params
+        type(builder),                  intent(inout) :: build
+        class(cmdline),                 intent(inout) :: cline
     end subroutine shmem_cleanup
 
     ! ------------------------------------------------------------------ distributed master
 
     subroutine master_initialize( self, params, build, cline )
         class(flex_pca_master_strategy), intent(inout) :: self
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
         integer :: fromp_glob, top_glob, nsel
         ! the master's budget is reported as every distributed master's; the master's own stages run
         ! at params%nthr, which FLEX sizes its per-thread scratch from
@@ -212,9 +212,9 @@ contains
 
     subroutine master_execute( self, params, build, cline )
         class(flex_pca_master_strategy), intent(inout) :: self
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
         type(flex_pca_application) :: app
         ! the master runs the shared-memory control flow; each distributable phase fans its
         ! particle partition out as one qsys round through self%rounds and reduces the parts
@@ -223,17 +223,17 @@ contains
 
     subroutine master_finalize_run( self, params, build, cline )
         class(flex_pca_master_strategy), intent(inout) :: self
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
     end subroutine master_finalize_run
 
     subroutine master_cleanup( self, params, build, cline )
         use simple_qsys_funs, only: qsys_cleanup
         class(flex_pca_master_strategy), intent(inout) :: self
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
         integer :: ipart
         if( allocated(self%rounds%part_params) )then
             do ipart = 1, size(self%rounds%part_params)
@@ -259,7 +259,7 @@ contains
         type(parameters),              intent(inout) :: params
         integer,                       intent(in)    :: pinds(:)
         type(string) :: fname
-        integer :: ipart, first, last, nsel, numlen
+        integer      :: ipart, first, last, nsel, numlen
         nsel = size(pinds)
         if( nsel < 1 ) THROW_HARD('flex_pca plan_partitions: empty particle selection')
         self%nparts_run = min(self%nparts_run, nsel)
@@ -315,9 +315,9 @@ contains
     !! never re-derives a master decision.
     subroutine worker_initialize( self, params, build, cline )
         class(flex_pca_worker_strategy), intent(inout) :: self
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
         if( .not. cline%defined('part') )     THROW_HARD('part= must be defined for flex_pca worker execution')
         if( .not. cline%defined('stage') )    THROW_HARD('stage= must be defined for flex_pca worker execution')
         if( .not. cline%defined('pindfile') ) THROW_HARD('pindfile= (the part''s particle list) must be defined for flex_pca worker execution')
@@ -340,9 +340,9 @@ contains
     subroutine worker_execute( self, params, build, cline )
         use simple_qsys_funs, only: qsys_declare_part_finished
         class(flex_pca_worker_strategy), intent(inout) :: self
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
         type(flex_pca_application) :: app
         call app%run_worker(params, build, cline, self%rounds)
         call qsys_declare_part_finished(params, string('simple_flex_pca_strategy :: worker_execute'))
@@ -350,16 +350,16 @@ contains
 
     subroutine worker_finalize_run( self, params, build, cline )
         class(flex_pca_worker_strategy), intent(inout) :: self
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
     end subroutine worker_finalize_run
 
     subroutine worker_cleanup( self, params, build, cline )
         class(flex_pca_worker_strategy), intent(inout) :: self
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
     end subroutine worker_cleanup
 
 end module simple_flex_pca_strategy

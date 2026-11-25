@@ -121,9 +121,9 @@ contains
         integer,      intent(in)    :: nframes
         type(image),  intent(out)   :: inv_avg_img
         real,         intent(out)   :: avg_value
-        real, parameter :: INV_AVG_EPS = 1.0e-12
-        integer :: ldim(3)
-        real    :: npix
+        real, parameter   :: INV_AVG_EPS = 1.0e-12
+        integer           :: ldim(3)
+        real              :: npix
         real, allocatable :: rmat(:,:,:)
 
         if( nframes < 1 )then
@@ -174,9 +174,9 @@ contains
     !> Reads a gain reference from disk and writes a normalized jpeg preview
     !> resized to the standard GUI micrograph thumbnail size.
     subroutine gainref_to_jpg(gainref_fname, jpg_fname, quality)
-        class(string),     intent(in) :: gainref_fname
-        class(string),     intent(in) :: jpg_fname
-        integer, optional, intent(in) :: quality
+        class(string),     intent(in)           :: gainref_fname
+        class(string),     intent(in)           :: jpg_fname
+        integer,           optional, intent(in) :: quality
         type(image)                   :: gain_img, thumb_img
         integer                       :: ldim(3), ldim_thumb(3), ifoo
         real                          :: smpd, scale

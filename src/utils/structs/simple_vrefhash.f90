@@ -38,7 +38,7 @@ public :: vrefhash
 !-------------------------
 type :: vrefhash_node
     type(string)                 :: key
-    class(*),            pointer :: p => null()     ! <--- reference to external TARGET
+    class(*),            pointer :: p    => null()  ! <--- reference to external TARGET
     type(vrefhash_node), pointer :: next => null()
 contains
     final :: finalize_node
@@ -54,9 +54,9 @@ end type vrefhash_bucket
 type :: vrefhash
     private
     type(vrefhash_bucket), allocatable :: buckets(:)
-    integer :: nbuckets = 0
-    integer :: n        = 0
-    logical :: exists   = .false.
+    integer                            :: nbuckets = 0
+    integer                            :: n        = 0
+    logical                            :: exists   = .false.
 contains
     ! lifecycle
     procedure          :: init
@@ -76,7 +76,7 @@ contains
     generic            :: get_ref => get_ref_char, get_ref_str
     procedure, private :: del_char
     procedure, private :: del_str
-    generic            :: del => del_char, del_str
+    generic            :: del     => del_char, del_str
     ! keys getters
     procedure          :: keys
     procedure          :: keys_sorted
@@ -98,7 +98,7 @@ contains
 
     integer function fnv1a_hash_bytes(s) result(h)
         character(len=*), intent(in) :: s
-        integer :: i, c
+        integer         :: i, c
         integer(kind=8) :: x
         ! 64-bit FNV-1a reduced to default integer via mod
         x = int(Z'CBF29CE484222325', kind=8)
@@ -123,11 +123,11 @@ contains
     end function bucket_index
 
     subroutine find_node(self, b, k, prev, cur)
-        class(vrefhash),               intent(in)  :: self
-        integer,                       intent(in)  :: b
-        character(len=*),              intent(in)  :: k
-        type(vrefhash_node), pointer,  intent(out) :: prev
-        type(vrefhash_node), pointer,  intent(out) :: cur
+        class(vrefhash),               intent(in)            :: self
+        integer,                       intent(in)            :: b
+        character(len=*),              intent(in)            :: k
+        type(vrefhash_node),           pointer,  intent(out) :: prev
+        type(vrefhash_node),           pointer,  intent(out) :: cur
         prev => null()
         cur  => self%buckets(b)%head
         do while (associated(cur))
@@ -142,8 +142,8 @@ contains
     !=====================
 
     subroutine init(self, nbuckets)
-        class(vrefhash), intent(inout) :: self
-        integer, optional, intent(in)  :: nbuckets
+        class(vrefhash), intent(inout)        :: self
+        integer,         optional, intent(in) :: nbuckets
         integer :: nloc, i
         call self%destroy()
         if (present(nbuckets)) then
@@ -162,7 +162,7 @@ contains
 
     subroutine clear(self)
         class(vrefhash), intent(inout) :: self
-        integer :: i
+        integer                      :: i
         type(vrefhash_node), pointer :: p, q
         if (.not. self%exists) return
         do i = 1, self%nbuckets
@@ -200,9 +200,9 @@ contains
     logical function has_key_char(self, key) result(tf)
         class(vrefhash),     intent(in) :: self
         character(len=*),    intent(in) :: key
-        type(vrefhash_node), pointer    :: prev, cur
-        character(len=:), allocatable   :: k
-        integer :: b
+        type(vrefhash_node), pointer     :: prev, cur
+        character(len=:),    allocatable :: k
+        integer                          :: b
         if (.not. self%exists) then
             tf = .false.; return
         end if
@@ -215,9 +215,9 @@ contains
     logical function has_key_str(self, key) result(tf)
         class(vrefhash), intent(in) :: self
         class(string),   intent(in) :: key
-        character(len=:), allocatable :: k
-        type(vrefhash_node), pointer :: prev, cur
-        integer :: b
+        character(len=:),    allocatable :: k
+        type(vrefhash_node), pointer     :: prev, cur
+        integer                          :: b
         if (.not. self%exists) then
             tf = .false.; return
         end if
@@ -232,12 +232,12 @@ contains
     !=====================
 
     subroutine set_ref_char(self, key, val)
-        class(vrefhash),               intent(inout) :: self
-        character(len=*),              intent(in)    :: key
-        class(*), target,              intent(inout) :: val
-        character(len=:), allocatable :: k
-        integer :: b
-        type(vrefhash_node), pointer :: prev, cur, pnew
+        class(vrefhash),               intent(inout)                      :: self
+        character(len=*),              intent(in)                         :: key
+        class(*),                      target,              intent(inout) :: val
+        character(len=:),    allocatable :: k
+        integer                          :: b
+        type(vrefhash_node), pointer     :: prev, cur, pnew
         if (.not. self%exists) call self%init()
         k = trim(adjustl(key))
         b = bucket_index(self, k)
@@ -257,12 +257,12 @@ contains
     end subroutine set_ref_char
 
     subroutine set_ref_str(self, key, val)
-        class(vrefhash),               intent(inout) :: self
-        class(string),                 intent(in)    :: key
-        class(*), target,              intent(inout) :: val
-        character(len=:), allocatable :: k
-        integer :: b
-        type(vrefhash_node), pointer :: prev, cur, pnew
+        class(vrefhash),               intent(inout)                      :: self
+        class(string),                 intent(in)                         :: key
+        class(*),                      target,              intent(inout) :: val
+        character(len=:),    allocatable :: k
+        integer                          :: b
+        type(vrefhash_node), pointer     :: prev, cur, pnew
         if (.not. self%exists) call self%init()
         k = adjustl(key%to_char())
         b = bucket_index(self, k)
@@ -284,13 +284,13 @@ contains
     !=====================
 
     subroutine get_ref_char(self, key, p, found)
-        class(vrefhash),              intent(in)  :: self
-        character(len=*),             intent(in)  :: key
-        class(*), pointer,            intent(out) :: p
-        logical, optional,            intent(out) :: found
-        character(len=:), allocatable :: k
-        integer :: b
-        type(vrefhash_node), pointer :: prev, cur
+        class(vrefhash),              intent(in)                       :: self
+        character(len=*),             intent(in)                       :: key
+        class(*),                     pointer,            intent(out)  :: p
+        logical,                      optional,            intent(out) :: found
+        character(len=:),    allocatable :: k
+        integer                          :: b
+        type(vrefhash_node), pointer     :: prev, cur
         nullify(p)
         if (present(found)) found = .false.
         if (.not. self%exists) return
@@ -304,13 +304,13 @@ contains
     end subroutine get_ref_char
 
     subroutine get_ref_str(self, key, p, found)
-        class(vrefhash),              intent(in)  :: self
-        class(string),                intent(in)  :: key
-        class(*), pointer,            intent(out) :: p
-        logical, optional,            intent(out) :: found
-        character(len=:), allocatable :: k
-        integer :: b
-        type(vrefhash_node), pointer :: prev, cur
+        class(vrefhash),              intent(in)                       :: self
+        class(string),                intent(in)                       :: key
+        class(*),                     pointer,            intent(out)  :: p
+        logical,                      optional,            intent(out) :: found
+        character(len=:),    allocatable :: k
+        integer                          :: b
+        type(vrefhash_node), pointer     :: prev, cur
         nullify(p)
         if (present(found)) found = .false.
         if (.not. self%exists) return
@@ -330,9 +330,9 @@ contains
     subroutine del_char(self, key)
         class(vrefhash),  intent(inout) :: self
         character(len=*), intent(in)    :: key
-        character(len=:), allocatable :: k
-        integer :: b
-        type(vrefhash_node), pointer :: prev, cur
+        character(len=:),    allocatable :: k
+        integer                          :: b
+        type(vrefhash_node), pointer     :: prev, cur
         if (.not. self%exists) return
         k = trim(adjustl(key))
         b = bucket_index(self, k)
@@ -351,9 +351,9 @@ contains
     subroutine del_str(self, key)
         class(vrefhash), intent(inout) :: self
         class(string),   intent(in)    :: key
-        character(len=:), allocatable :: k
-        integer :: b
-        type(vrefhash_node), pointer :: prev, cur
+        character(len=:),    allocatable :: k
+        integer                          :: b
+        type(vrefhash_node), pointer     :: prev, cur
         if (.not. self%exists) return
         k = adjustl(key%to_char())
         b = bucket_index(self, k)
@@ -375,9 +375,9 @@ contains
 
     function keys(self) result(karr)
         class(vrefhash), intent(in) :: self
-        type(string), allocatable   :: karr(:)
-        type(vrefhash_node), pointer :: p
-        integer :: i, idx
+        type(string),        allocatable :: karr(:)
+        type(vrefhash_node), pointer     :: p
+        integer                          :: i, idx
         if (.not. self%exists) then
             allocate(karr(0))
             return

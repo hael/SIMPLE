@@ -13,7 +13,7 @@ public :: run_all_tseries_denoise_tests
 
 integer, parameter :: NX = 24, NY = 16, NFRAMES = 24
 ! Two single-precision transforms and the kernel reductions, with amplitude bounded by five.
-real, parameter :: FFT_TOL = 64.*epsilon(1.)*5., SMPD = 1.
+real, parameter :: FFT_TOL  = 64.*epsilon(1.)*5., SMPD = 1.
 real, parameter :: NOISE_SD = 0.2, ERROR_RATIO_MAX = 0.95
 
 contains
@@ -33,9 +33,9 @@ contains
     !> Preserve DC, low spatial frequencies and the Nyquist checkerboard on a rectangular grid.
     subroutine test_noiseless_rectangle()
         type(image), allocatable :: imgs(:), den(:)
-        real, allocatable :: actual(:,:,:)
-        real :: truth(NX,NY,1)
-        integer :: n, i, x, y
+        real,        allocatable :: actual(:,:,:)
+        real                     :: truth(NX,NY,1)
+        integer                  :: n, i, x, y
         write(*,'(A)') 'test_noiseless_rectangle'
         do y = 1, NY
             do x = 1, NX
@@ -73,9 +73,9 @@ contains
     !> Static signal plus independent white noise has a known clean target; narrow windows have too few frames to fit.
     subroutine test_static_noise_and_windows()
         type(image), allocatable :: imgs(:), den(:), serial(:)
-        real, allocatable :: actual(:,:,:), expected(:,:,:)
-        real :: truth(NX,NY,1), noisy(NX,NY,1), raw_error, den_error
-        integer :: t, x, y, mode, halfwin
+        real,        allocatable :: actual(:,:,:), expected(:,:,:)
+        real                     :: truth(NX,NY,1), noisy(NX,NY,1), raw_error, den_error
+        integer                  :: t, x, y, mode, halfwin
         !$ integer :: threads_saved
         !$ logical :: dynamic_saved
         write(*,'(A)') 'test_static_noise_and_windows'

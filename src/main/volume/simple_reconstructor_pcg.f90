@@ -34,11 +34,11 @@ integer, parameter :: PCG_OP_MATRIXFREE = 0 !< reference operator: exact, cost ~
 integer, parameter :: PCG_OP_KERNEL     = 1 !< kernelized Toeplitz operator: cost independent of nptcls
 !> 3: the payload is the h >= 0 half of every m-slice, the wrapped Nyquist mate (lims3(1,1)) as its
 !! last row; 2 added the applied weight mass and the state weight set identity to the header
-integer, parameter :: PCG_RAW_ACCUM_VERSION = 3
-integer, parameter :: PCG_RAW_PROV_LEN = 256
-real,    parameter :: PCG_SUPPORT_DIV_MIN = 0.1 !< window floor of the x/window warm-start conversion, see window_div
-real,    parameter :: PCG_RHO_SAMPLED_FRAC = 0.1 !< density below this fraction of its shell's measured mean is unmeasured, see finalize_density_accum
-character(len=16), parameter :: PCG_RAW_ACCUM_MAGIC = 'SIMPLE_PCG_RAW03'
+integer,           parameter :: PCG_RAW_ACCUM_VERSION = 3
+integer,           parameter :: PCG_RAW_PROV_LEN      = 256
+real,              parameter :: PCG_SUPPORT_DIV_MIN   = 0.1 !< window floor of the x/window warm-start conversion, see window_div
+real,              parameter :: PCG_RHO_SAMPLED_FRAC  = 0.1 !< density below this fraction of its shell's measured mean is unmeasured, see finalize_density_accum
+character(len=16), parameter :: PCG_RAW_ACCUM_MAGIC   = 'SIMPLE_PCG_RAW03'
 
 real,             parameter, public :: PCG_LAMBDA = 1.0e-3 !< the Tikhonov coefficient of production reconstructions
 !> a particle is a PCG member of a state when its state weight exceeds this (the sig2/w conditioning floor)
@@ -51,14 +51,14 @@ real,             parameter         :: PCG_START_MAX_REL_RESID = 1.0
 !! and the plane gather and scatter come from pcg_lattice
 type, extends(pcg_lattice) :: reconstructor_pcg
     private
-    real             :: lambda     = 0.0 !< effective absolute coefficient used by apply_normal
-    real             :: lambda_rel = 0.0 !< coefficient relative to the weighted data-operator scale
-    real             :: data_scale = 0.0 !< deterministic scale derived from raw data-only D
-    real             :: realspace_diag = 0.0 !< real-space diagonal of the data operator: mean of D over all native shells (x padsc^2)
+    real             :: lambda            = 0.0 !< effective absolute coefficient used by apply_normal
+    real             :: lambda_rel        = 0.0 !< coefficient relative to the weighted data-operator scale
+    real             :: data_scale        = 0.0 !< deterministic scale derived from raw data-only D
+    real             :: realspace_diag    = 0.0 !< real-space diagonal of the data operator: mean of D over all native shells (x padsc^2)
     logical          :: l_lambda_relative = .false.
     ! ---- per-particle inputs, cached once by prep_particles ----
-    integer                       :: nptcls = 0
-    integer                       :: nsym   = 1   !< point-group order; 1 = c1 (no replication)
+    integer                       :: nptcls    = 0
+    integer                       :: nsym      = 1   !< point-group order; 1 = c1 (no replication)
     logical                       :: l_use_ctf = .false.
     real,            allocatable  :: rotmats(:,:,:)  !< (3,3,nptcls)
     real,            allocatable  :: symmats(:,:,:)  !< (3,3,nsym) point-group operators, symmats(:,:,1)=I
@@ -76,7 +76,7 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     real,    allocatable :: env(:,:,:)               !< measured KB instrument envelope, see build_env
     real,    allocatable :: invenv(:,:,:)            !< its guarded reciprocal, for deapodization
     type(image)          :: wimg                     !< persistent box^3 work image (keeps its FFTW plans)
-    logical              :: wimg_exists = .false.
+    logical              :: wimg_exists  = .false.
     integer              :: fft_nthreads = 1         !< threads owned by each persistent FFTW plan
     ! ---- streaming accumulation over particle batches ----
     ! the only particle-dependent state the solve needs; precond, Khat and the RHS derive from them
@@ -85,8 +85,8 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     complex, allocatable :: b_work(:,:,:)            !< RHS accumulator
     real,    allocatable :: b_rhs(:,:,:)             !< folded/deapodized/masked RHS, box^3
     real,    allocatable :: b_rhs_nosupp(:,:,:)      !< the RHS before the support, kept for regularize_finalized
-    logical              :: l_accum = .false.
-    logical              :: l_rhs   = .false.
+    logical              :: l_accum             = .false.
+    logical              :: l_rhs               = .false.
     integer              :: reduction_next_part = 1  !< fixed raw-artifact association order
     integer              :: reduction_nparts    = 0
     integer              :: reduction_state     = 0
@@ -95,67 +95,67 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     real,    allocatable :: precond(:,:,:)           !< 1/(rho+lambda) on wimg's cmat layout
     logical              :: l_precond = .false.
     ! ---- kernelized operator ----
-    integer              :: op_mode = PCG_OP_MATRIXFREE
+    integer              :: op_mode  = PCG_OP_MATRIXFREE
     real,    allocatable :: Khat(:,:,:)              !< Gram kernel on wimg's cmat layout, real
     logical              :: l_kernel = .false.
     ! ---- optional FSC/SSNR quadratic prior ----
     ! requested before D is finalized; the absolute scale is derived from D
     real, allocatable :: ml_fsc(:)                    !< independent-half FSC, shells 1:R
     real, allocatable :: ml_prior(:,:,:)              !< calibrated padded Fourier diagonal
-    real              :: ml_tau = 1.0                 !< established ML regularization fudge factor
-    real              :: ml_hp  = 100.0               !< low-frequency no-prior limit in Angstrom
+    real              :: ml_tau               = 1.0   !< established ML regularization fudge factor
+    real              :: ml_hp                = 100.0 !< low-frequency no-prior limit in Angstrom
     logical           :: l_ml_prior_requested = .false.
-    logical           :: l_ml_prior = .false.
-    real              :: precond_ridge = 0.0 !< atomicity ridge folded into the preconditioner
+    logical           :: l_ml_prior           = .false.
+    real              :: precond_ridge        = 0.0   !< atomicity ridge folded into the preconditioner
     ! ---- optional atomicity prior: lambda_A (I - P_G), P_G the projector onto atom kernels ----
     ! the prior object is shared by the two half operators and owned by the caller
-    class(pcg_atomic_prior), pointer :: atm => null()
-    real              :: atm_lambda     = 0.0 !< absolute lambda_A = atm_lambda_rel * realspace_diag
-    real              :: atm_lambda_rel = 0.0
-    logical           :: l_atm_prior    = .false.
+    class(pcg_atomic_prior), pointer :: atm            => null()
+    real                             :: atm_lambda     = 0.0 !< absolute lambda_A = atm_lambda_rel * realspace_diag
+    real                             :: atm_lambda_rel = 0.0
+    logical                          :: l_atm_prior    = .false.
     ! ---- per-phase profiling over a solve: particle loop vs FFT + lattice traffic ----
-    logical  :: l_profile = .false.
-    real(dp) :: t_setvol  = 0.0_dp  !< pad + forward FFT of the iterate
-    real(dp) :: t_cmatcp  = 0.0_dp  !< get_cmat/set_cmat bulk copies
-    real(dp) :: t_ploop   = 0.0_dp  !< the particle loop proper
-    real(dp) :: t_fold    = 0.0_dp  !< fold + inverse FFT + crop
-    real(dp) :: t_khat    = 0.0_dp  !< kernel pointwise multiply
-    real(dp) :: t_prec    = 0.0_dp  !< apply_precond, whole call
-    real(dp) :: t_fin_rhs = 0.0_dp  !< RHS fold, deapodization and support
-    real(dp) :: t_fin_rho = 0.0_dp  !< deterministic rho shell statistics
-    real(dp) :: t_fin_fold = 0.0_dp !< fused reciprocal and packed-Khat pass
+    logical  :: l_profile    = .false.
+    real(dp) :: t_setvol     = 0.0_dp !< pad + forward FFT of the iterate
+    real(dp) :: t_cmatcp     = 0.0_dp !< get_cmat/set_cmat bulk copies
+    real(dp) :: t_ploop      = 0.0_dp !< the particle loop proper
+    real(dp) :: t_fold       = 0.0_dp !< fold + inverse FFT + crop
+    real(dp) :: t_khat       = 0.0_dp !< kernel pointwise multiply
+    real(dp) :: t_prec       = 0.0_dp !< apply_precond, whole call
+    real(dp) :: t_fin_rhs    = 0.0_dp !< RHS fold, deapodization and support
+    real(dp) :: t_fin_rho    = 0.0_dp !< deterministic rho shell statistics
+    real(dp) :: t_fin_fold   = 0.0_dp !< fused reciprocal and packed-Khat pass
     real(dp) :: t_fin_kernel = 0.0_dp !< kernel correction, FFT and calibration
-    logical  :: exists = .false.
+    logical  :: exists       = .false.
   contains
     ! CONSTRUCTOR / DESTRUCTOR
     procedure :: new
     procedure :: kill
     ! SETUP
-    procedure :: prep_particles
-    procedure :: set_sym
+    procedure          :: prep_particles
+    procedure          :: set_sym
     procedure, private :: sym_rots
     ! STREAMING SETUP (batch at a time, see begin_accum)
-    procedure :: begin_accum
-    procedure :: begin_reduction
-    procedure :: accumulate_batch
-    procedure :: end_accum
-    procedure :: regularize_finalized
-    procedure :: write_raw_accum
-    procedure :: add_raw_accum
-    procedure :: add_raw_accum_weighted
-    procedure :: scale_raw_accum
+    procedure          :: begin_accum
+    procedure          :: begin_reduction
+    procedure          :: accumulate_batch
+    procedure          :: end_accum
+    procedure          :: regularize_finalized
+    procedure          :: write_raw_accum
+    procedure          :: add_raw_accum
+    procedure          :: add_raw_accum_weighted
+    procedure          :: scale_raw_accum
     procedure, private :: pack_half_slice
     procedure, private :: add_half_slice
     procedure, private :: accumulate_rhs_density
     procedure, private :: finalize_density_accum
     procedure, private :: finalize_khat
-    procedure :: set_lambda_relative
-    procedure :: set_ml_prior
-    procedure :: set_atomic_prior
-    procedure :: get_atomic_lambda
-    procedure :: fit_atom_amplitudes
-    procedure :: atomic_model_map
-    procedure :: get_solve_support
+    procedure          :: set_lambda_relative
+    procedure          :: set_ml_prior
+    procedure          :: set_atomic_prior
+    procedure          :: get_atomic_lambda
+    procedure          :: fit_atom_amplitudes
+    procedure          :: atomic_model_map
+    procedure          :: get_solve_support
     procedure, private :: add_ridge
     procedure, private :: build_env
     procedure, private :: build_hk_luts
@@ -163,7 +163,7 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     procedure, private :: window_mul
     procedure, private :: window_div
     procedure, private :: calibrate_kernel
-    procedure :: set_op_mode
+    procedure          :: set_op_mode
     ! LOW-LEVEL OPERATOR
     procedure :: set_volume
     procedure :: build_transfer
@@ -182,21 +182,21 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     procedure :: get_realspace_diagonal
     procedure :: get_effective_lambda
     ! SOLVER
-    procedure :: solve
-    procedure :: solve_accum
-    procedure :: shrink_by_ml_prior
-    procedure :: unshrink_by_ml_prior
+    procedure          :: solve
+    procedure          :: solve_accum
+    procedure          :: shrink_by_ml_prior
+    procedure          :: unshrink_by_ml_prior
     procedure, private :: ml_shrink_factor
-    procedure :: apply_ml_prior
-    procedure :: apply_preconditioner
-    procedure :: solve_with_cold_restart
-    procedure :: solve_regularized
+    procedure          :: apply_ml_prior
+    procedure          :: apply_preconditioner
+    procedure          :: solve_with_cold_restart
+    procedure          :: solve_regularized
     procedure, private :: solve_core
     ! PROFILING
-    procedure :: reset_profile
-    procedure :: report_profile
+    procedure          :: reset_profile
+    procedure          :: report_profile
     procedure, private :: reset_finalize_profile
-    procedure :: report_finalize_profile
+    procedure          :: report_finalize_profile
     ! PRIVATE HELPERS
     procedure, private :: absT2_plane
     procedure, private :: prepare_fused_planes
@@ -227,11 +227,11 @@ contains
     ! CONSTRUCTOR
 
     subroutine new( self, box, smpd, lambda, fft_nthreads )
-        class(reconstructor_pcg),           intent(inout) :: self
-        integer,                            intent(in)    :: box
-        real,                               intent(in)    :: smpd
-        real,                     optional, intent(in)    :: lambda
-        integer,                  optional, intent(in)    :: fft_nthreads
+        class(reconstructor_pcg),           intent(inout)        :: self
+        integer,                            intent(in)           :: box
+        real,                               intent(in)           :: smpd
+        real,                               optional, intent(in) :: lambda
+        integer,                            optional, intent(in) :: fft_nthreads
         call self%kill
         self%lambda = 0.0
         if( present(lambda) ) self%lambda = lambda
@@ -277,10 +277,10 @@ contains
     !! of the normalized origin stencil (not kbinterpol%instr), separable by construction.
     subroutine build_env( self )
         class(reconstructor_pcg), intent(inout) :: self
-        real, parameter :: EPS_DIV = 1.0e-8
+        real, parameter   :: EPS_DIV = 1.0e-8
         real, allocatable :: inv1d(:)
-        real    :: ctrval
-        integer :: c, i, j, k
+        real              :: ctrval
+        integer           :: c, i, j, k
         if( allocated(self%env)    ) deallocate(self%env)
         if( allocated(self%invenv) ) deallocate(self%invenv)
         call kb_stencil_centered_crop_inv_envelope_1d(self%kbwin,self%boxpd,self%box,inv1d)
@@ -308,9 +308,9 @@ contains
 
     !> copy of the open raw accumulators; test/diagnostic boundary only
     subroutine get_raw_accum( self, b, d )
-        class(reconstructor_pcg), intent(in)  :: self
-        complex, allocatable,     intent(out) :: b(:,:,:)
-        real, allocatable,        intent(out) :: d(:,:,:)
+        class(reconstructor_pcg), intent(in)                      :: self
+        complex,                  allocatable,     intent(out)    :: b(:,:,:)
+        real,                     allocatable,        intent(out) :: d(:,:,:)
         if( .not. self%l_accum ) THROW_HARD('raw PCG accumulator is not open')
         allocate(b(self%lims3(1,1):self%lims3(1,2), &
                    &self%lims3(2,1):self%lims3(2,2), &
@@ -404,9 +404,9 @@ contains
     !! P spans free atom amplitudes or the global scale of a fitted B/occupancy/intensity model.
     !! No ML prior beside it; call after end_accum
     subroutine set_atomic_prior( self, prior, lambda_rel )
-        class(reconstructor_pcg),        intent(inout) :: self
-        class(pcg_atomic_prior), target, intent(in)    :: prior
-        real,                            intent(in)    :: lambda_rel
+        class(reconstructor_pcg),        intent(inout)      :: self
+        class(pcg_atomic_prior),         target, intent(in) :: prior
+        real,                            intent(in)         :: lambda_rel
         if( .not. ieee_is_finite(lambda_rel) .or. lambda_rel < 0.0 ) THROW_HARD('relative atomicity lambda must be finite and non-negative')
         if( self%realspace_diag <= 0.0 ) THROW_HARD('atomicity prior requires the data scale; call after end_accum; set_atomic_prior')
         if( self%l_ml_prior_requested ) THROW_HARD('atomicity prior and ML prior are exclusive; set_atomic_prior')
@@ -434,15 +434,15 @@ contains
     !> Per-atom amplitudes fitted to this half's data through its normal operator, c = argmin |A G c - b|^2.
     !! With a fitted model these are diagnostics; the active prior spans that model's single global scale.
     subroutine fit_atom_amplitudes( self, prior, c, maxits, rtol, niters, rel_resid )
-        class(reconstructor_pcg), target, intent(inout) :: self
-        class(pcg_atomic_prior),          intent(in)    :: prior
-        real(dp), allocatable,            intent(out)   :: c(:)
-        integer,                          intent(in)    :: maxits
-        real,                             intent(in)    :: rtol
-        integer,                          intent(out)   :: niters
-        real,                             intent(out)   :: rel_resid
+        class(reconstructor_pcg),         target, intent(inout)               :: self
+        class(pcg_atomic_prior),          intent(in)                          :: prior
+        real(dp),                         allocatable,            intent(out) :: c(:)
+        integer,                          intent(in)                          :: maxits
+        real,                             intent(in)                          :: rtol
+        integer,                          intent(out)                         :: niters
+        real,                             intent(out)                         :: rel_resid
         type(reconstructor_pcg_adapter) :: op
-        real(dp), allocatable :: gb(:)
+        real(dp), allocatable           :: gb(:)
         if( .not. self%l_rhs ) THROW_HARD('end_accum has not been called; fit_atom_amplitudes')
         if( prior%get_box() /= self%box ) THROW_HARD('atomicity prior box differs from the solve box; fit_atom_amplitudes')
         gb = prior%gather(self%b_rhs)
@@ -462,8 +462,8 @@ contains
 
     !> the hard solve support (1 inside, 0 outside; all ones without a support)
     subroutine get_solve_support( self, supp )
-        class(reconstructor_pcg), intent(in)  :: self
-        real, allocatable,        intent(out) :: supp(:,:,:)
+        class(reconstructor_pcg), intent(in)                      :: self
+        real,                     allocatable,        intent(out) :: supp(:,:,:)
         if( self%l_mask )then
             allocate(supp(self%box,self%box,self%box), source=self%mask)
         else
@@ -563,7 +563,7 @@ contains
         class(reconstructor_pcg), intent(inout) :: self
         real,                     intent(in)    :: v(self%box,self%box,self%box)
         real(c_float), pointer :: rptr(:,:,:)
-        integer :: j, k, o, box, boxpd
+        integer                :: j, k, o, box, boxpd
         call self%ensure_wimg
         call self%wimg%get_rmat_ptr(rptr)
         o     = self%pad_off
@@ -591,7 +591,7 @@ contains
         class(reconstructor_pcg), intent(inout) :: self
         real,                     intent(out)   :: v(self%box,self%box,self%box)
         real(c_float), pointer :: rptr(:,:,:)
-        integer :: j, k, o, box
+        integer                :: j, k, o, box
         call self%wimg%ifft()
         call self%wimg%get_rmat_ptr(rptr)
         o   = self%pad_off
@@ -666,11 +666,11 @@ contains
     !! matrices, CTF parameters, shifts) and the noise model: the one spectrum sig2(0:) of the
     !! half all particles belong to, and a weight per particle, sigma2_i = sig2/weights(i)
     subroutine prep_particles( self, orientations, use_ctf, inv_sig2, weights )
-        class(reconstructor_pcg),           intent(inout) :: self
-        class(oris),                        intent(inout) :: orientations
-        logical,                  optional, intent(in)    :: use_ctf
-        real,                     optional, intent(in)    :: inv_sig2(0:)  !< 1/sigma2 of the particles' half at shells 0:
-        real,                     optional, intent(in)    :: weights(:)
+        class(reconstructor_pcg),           intent(inout)        :: self
+        class(oris),                        intent(inout)        :: orientations
+        logical,                            optional, intent(in) :: use_ctf
+        real,                               optional, intent(in) :: inv_sig2(0:) !< 1/sigma2 of the particles' half at shells 0:
+        real,                               optional, intent(in) :: weights(:)
         type(ori) :: e
         integer   :: i, R, rtop
         R = self%lims2(1,2)
@@ -761,10 +761,10 @@ contains
     !! rsqrt_sig2arr = 1/sqrt(sigma2_i) per shell; needed for the RHS only (absT2_plane serves
     !! the normal operator)
     function build_transfer( self, ctfparms, shift, rsqrt_sig2arr ) result( T )
-        class(reconstructor_pcg),           intent(in) :: self
-        type(ctfparams),                    intent(in) :: ctfparms
-        real,                               intent(in) :: shift(2)
-        real,                     optional, intent(in) :: rsqrt_sig2arr(0:)
+        class(reconstructor_pcg),           intent(in)           :: self
+        type(ctfparams),                    intent(in)           :: ctfparms
+        real,                               intent(in)           :: shift(2)
+        real,                               optional, intent(in) :: rsqrt_sig2arr(0:)
         complex       :: T(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
         type(ctf)     :: tfun
         type(ctfvars) :: ctfvals
@@ -863,9 +863,9 @@ contains
     function apply_normal_matrixfree( self, p ) result( hp )
         class(reconstructor_pcg), intent(inout) :: self
         real,                     intent(in)    :: p(self%box,self%box,self%box)
-        real,    allocatable :: hp(:,:,:), pd(:,:,:)
-        complex, allocatable :: vol_accum(:,:,:), cmat(:,:,:)
-        real,    allocatable :: absT2(:,:)
+        real,    allocatable    :: hp(:,:,:), pd(:,:,:)
+        complex, allocatable    :: vol_accum(:,:,:), cmat(:,:,:)
+        real,    allocatable    :: absT2(:,:)
         real                    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
         complex                 :: comp
         integer                 :: i, g, h, k, l, i0(3)
@@ -943,11 +943,11 @@ contains
     function apply_normal_kernel( self, p ) result( hp )
         class(reconstructor_pcg), intent(inout) :: self
         real,                     intent(in)    :: p(self%box,self%box,self%box)
-        real,    allocatable :: hp(:,:,:)
-        complex(c_float_complex), pointer :: cptr(:,:,:)
-        real                    :: kv
-        integer                 :: cdim(3), i, j, k
-        integer(timer_int_kind) :: tp
+        real,                     allocatable :: hp(:,:,:)
+        complex(c_float_complex), pointer     :: cptr(:,:,:)
+        real                                  :: kv
+        integer                               :: cdim(3), i, j, k
+        integer(timer_int_kind)               :: tp
         if( .not. self%l_kernel ) THROW_HARD('no kernel has been built; apply_normal_kernel')
         call self%ensure_wimg
         if( self%l_profile ) tp = clock_count()
@@ -984,9 +984,9 @@ contains
         class(reconstructor_pcg), intent(inout) :: self
         real,                     intent(in)    :: p(self%box,self%box,self%box)
         real,                     intent(in)    :: diag(:,:,:)
-        real,    allocatable :: q(:,:,:)
-        complex(c_float_complex), pointer :: cptr(:,:,:)
-        integer :: cdim(3), i, j, k
+        real,                     allocatable :: q(:,:,:)
+        complex(c_float_complex), pointer     :: cptr(:,:,:)
+        integer                               :: cdim(3), i, j, k
         call self%ensure_wimg
         cdim = self%wimg%get_array_shape()
         if( any(shape(diag) /= cdim) ) THROW_HARD('PCG Fourier diagonal shape mismatch')
@@ -1013,7 +1013,7 @@ contains
                                                            &self%lims2(2,1):self%lims2(2,2), *)
         real,    allocatable :: b(:,:,:)
         complex, allocatable :: vol_accum(:,:,:), weighted(:,:), T(:,:)
-        integer :: i, h, k, shell, R
+        integer              :: i, h, k, shell, R
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; apply_adjoint_all')
         R = self%lims2(1,2)
         allocate(vol_accum(self%lims3(1,1):self%lims3(1,2),&
@@ -1108,12 +1108,12 @@ contains
     !! (nptcls under hard labels) and wset_id the generation and layout digest of the state weight
     !! set (zero under hard labels)
     subroutine write_raw_accum( self, fname, state, eo, part, nparts, nptcls, provenance, mass, wset_id )
-        class(reconstructor_pcg),  intent(in) :: self
-        class(string),             intent(in) :: fname
-        integer,                   intent(in) :: state, eo, part, nparts, nptcls
-        character(len=*),          intent(in) :: provenance
-        real(dp),        optional, intent(in) :: mass
-        integer(int64),  optional, intent(in) :: wset_id(2)
+        class(reconstructor_pcg),  intent(in)           :: self
+        class(string),             intent(in)           :: fname
+        integer,                   intent(in)           :: state, eo, part, nparts, nptcls
+        character(len=*),          intent(in)           :: provenance
+        real(dp),                  optional, intent(in) :: mass
+        integer(int64),            optional, intent(in) :: wset_id(2)
         type(string)                    :: tmpfname
         character(len=PCG_RAW_PROV_LEN) :: prov_fixed
         complex, allocatable            :: bhalf(:,:)
@@ -1178,26 +1178,26 @@ contains
     !> adds one raw worker artifact to the open reduction; parts arrive in ascending
     !! order (reproducible association), slices are streamed
     subroutine add_raw_accum( self, fname, state, eo, part, nparts, provenance, nptcls, mass, wset_id, rt_sum )
-        class(reconstructor_pcg),  intent(inout) :: self
-        class(string),             intent(in)    :: fname
-        integer,                   intent(in)    :: state, eo, part, nparts
-        character(len=*),          intent(in)    :: provenance
-        integer,                   intent(out)   :: nptcls
-        real(dp),        optional, intent(out)   :: mass
-        integer(int64),  optional, intent(out)   :: wset_id(2)
-        real(dp),        optional, intent(out)   :: rt_sum !< seconds of the slice summation; the rest is read I/O
-        integer(timer_int_kind) :: tp
-        real(dp)       :: rt_here
-        real(dp)       :: mass_file
-        integer(int64) :: id_file(2)
+        class(reconstructor_pcg),  intent(inout)         :: self
+        class(string),             intent(in)            :: fname
+        integer,                   intent(in)            :: state, eo, part, nparts
+        character(len=*),          intent(in)            :: provenance
+        integer,                   intent(out)           :: nptcls
+        real(dp),                  optional, intent(out) :: mass
+        integer(int64),            optional, intent(out) :: wset_id(2)
+        real(dp),                  optional, intent(out) :: rt_sum !< seconds of the slice summation; the rest is read I/O
+        integer(timer_int_kind)         :: tp
+        real(dp)                        :: rt_here
+        real(dp)                        :: mass_file
+        integer(int64)                  :: id_file(2)
         character(len=16)               :: magic
         character(len=PCG_RAW_PROV_LEN) :: prov_file, prov_expected
-        complex, allocatable :: bslice(:,:)
-        real,    allocatable :: dslice(:,:)
-        integer        :: funit, ierr, m, version, state_file, eo_file, part_file
-        integer        :: nparts_file, box_file, boxpd_file, padf_file, lims_file(3,2)
-        real           :: smpd_file
-        integer(int64) :: file_size, stream_pos
+        complex, allocatable            :: bslice(:,:)
+        real,    allocatable            :: dslice(:,:)
+        integer                         :: funit, ierr, m, version, state_file, eo_file, part_file
+        integer                         :: nparts_file, box_file, boxpd_file, padf_file, lims_file(3,2)
+        real                            :: smpd_file
+        integer(int64)                  :: file_size, stream_pos
         if( .not. self%l_accum ) THROW_HARD('master PCG reduction is not open')
         if( part /= self%reduction_next_part ) THROW_HARD('raw PCG parts must be reduced in ascending order')
         if( .not. file_exists(fname) ) THROW_HARD('raw PCG accumulator artifact is missing')
@@ -1277,10 +1277,10 @@ contains
     !! Nyquist mate (stored at lims3(1,1), see fold_lattice_accum) as the last row. The row
     !! lims3(1,2) of the accumulators is never scattered into, so nothing is lost
     subroutine pack_half_slice( self, m, bhalf, dhalf )
-        class(reconstructor_pcg), intent(in)  :: self
-        integer,                  intent(in)  :: m
-        complex,        optional, intent(out) :: bhalf(0:self%lims3(1,2), self%lims3(2,1):self%lims3(2,2))
-        real,           optional, intent(out) :: dhalf(0:self%lims3(1,2), self%lims3(2,1):self%lims3(2,2))
+        class(reconstructor_pcg), intent(in)            :: self
+        integer,                  intent(in)            :: m
+        complex,                  optional, intent(out) :: bhalf(0:self%lims3(1,2), self%lims3(2,1):self%lims3(2,2))
+        real,                     optional, intent(out) :: dhalf(0:self%lims3(1,2), self%lims3(2,1):self%lims3(2,2))
         integer :: hlo, hhi
         hlo = self%lims3(1,1)
         hhi = self%lims3(1,2)
@@ -1297,11 +1297,11 @@ contains
     !> adds weight times the payload rows of one m-slice (pack_half_slice's layout, on the lattice
     !! lims of the artifact, nested in the current one) back into the open accumulators
     subroutine add_half_slice( self, m, weight, lims, bslice, dslice )
-        class(reconstructor_pcg), intent(inout) :: self
-        integer,                  intent(in)    :: m, lims(3,2)
-        real,                     intent(in)    :: weight
-        complex,        optional, intent(in)    :: bslice(0:lims(1,2), lims(2,1):lims(2,2))
-        real,           optional, intent(in)    :: dslice(0:lims(1,2), lims(2,1):lims(2,2))
+        class(reconstructor_pcg), intent(inout)        :: self
+        integer,                  intent(in)           :: m, lims(3,2)
+        real,                     intent(in)           :: weight
+        complex,                  optional, intent(in) :: bslice(0:lims(1,2), lims(2,1):lims(2,2))
+        real,                     optional, intent(in) :: dslice(0:lims(1,2), lims(2,1):lims(2,2))
         integer :: hlo, hhi, klo, khi
         hlo = lims(1,1)
         hhi = lims(1,2)
@@ -1377,18 +1377,18 @@ contains
     !! stays with the caller
     subroutine read_pcg_raw_accum_header( fname, state, eo, part, nparts, nptcls, box, smpd, provenance, status, &
         &mass, wset_id )
-        class(string),            intent(in)  :: fname
-        integer,                  intent(out) :: state, eo, part, nparts, nptcls, box
-        real,                     intent(out) :: smpd
-        character(len=*),         intent(out) :: provenance
-        integer,                  intent(out) :: status
-        real(dp),       optional, intent(out) :: mass
-        integer(int64), optional, intent(out) :: wset_id(2)
+        class(string),            intent(in)            :: fname
+        integer,                  intent(out)           :: state, eo, part, nparts, nptcls, box
+        real,                     intent(out)           :: smpd
+        character(len=*),         intent(out)           :: provenance
+        integer,                  intent(out)           :: status
+        real(dp),                 optional, intent(out) :: mass
+        integer(int64),           optional, intent(out) :: wset_id(2)
         character(len=16)               :: magic
         character(len=PCG_RAW_PROV_LEN) :: prov_file
-        integer        :: funit, version, boxpd_file, padf_file, lims_file(3,2)
-        real(dp)       :: mass_file
-        integer(int64) :: id_file(2)
+        integer                         :: funit, version, boxpd_file, padf_file, lims_file(3,2)
+        real(dp)                        :: mass_file
+        integer(int64)                  :: id_file(2)
         state = 0; eo = -1; part = 0; nparts = 0; nptcls = -1; box = 0; smpd = 0.
         mass_file = -1._dp; id_file = 0_int64
         provenance = ''
@@ -1419,26 +1419,26 @@ contains
     !! previous grid embeds exactly by index-aligned zero-extension (the old wrap rim
     !! carries aliased mass at/beyond the producing band, decaying as (1-u)^k)
     subroutine add_raw_accum_weighted( self, fname, state, eo, part, nparts, provenance, weight, nptcls, mass, rt_sum )
-        class(reconstructor_pcg), intent(inout) :: self
-        class(string),            intent(in)    :: fname
-        integer,                  intent(in)    :: state, eo, part, nparts
-        character(len=*),         intent(in)    :: provenance
-        real,                     intent(in)    :: weight
-        integer,                  intent(out)   :: nptcls
-        real(dp),       optional, intent(out)   :: mass
-        real(dp),       optional, intent(out)   :: rt_sum !< seconds of the weighted slice summation; the rest is read I/O
-        integer(timer_int_kind) :: tp
-        real(dp)       :: rt_here
-        real(dp)       :: mass_file
-        integer(int64) :: id_file(2)
+        class(reconstructor_pcg), intent(inout)         :: self
+        class(string),            intent(in)            :: fname
+        integer,                  intent(in)            :: state, eo, part, nparts
+        character(len=*),         intent(in)            :: provenance
+        real,                     intent(in)            :: weight
+        integer,                  intent(out)           :: nptcls
+        real(dp),                 optional, intent(out) :: mass
+        real(dp),                 optional, intent(out) :: rt_sum !< seconds of the weighted slice summation; the rest is read I/O
+        integer(timer_int_kind)         :: tp
+        real(dp)                        :: rt_here
+        real(dp)                        :: mass_file
+        integer(int64)                  :: id_file(2)
         character(len=16)               :: magic
         character(len=PCG_RAW_PROV_LEN) :: prov_file, prov_expected
-        complex, allocatable :: bslice(:,:)
-        real,    allocatable :: dslice(:,:)
-        integer        :: funit, ierr, m, version, state_file, eo_file, part_file
-        integer        :: nparts_file, box_file, boxpd_file, padf_file, lims_file(3,2)
-        real           :: smpd_file, fov_file, fov_self
-        integer(int64) :: file_size, stream_pos
+        complex, allocatable            :: bslice(:,:)
+        real,    allocatable            :: dslice(:,:)
+        integer                         :: funit, ierr, m, version, state_file, eo_file, part_file
+        integer                         :: nparts_file, box_file, boxpd_file, padf_file, lims_file(3,2)
+        real                            :: smpd_file, fov_file, fov_self
+        integer(int64)                  :: file_size, stream_pos
         if( .not. self%l_accum ) THROW_HARD('raw PCG accumulator is not open; add_raw_accum_weighted')
         if( .not. ieee_is_finite(weight) .or. weight < 0.0 ) THROW_HARD('invalid weighted raw PCG contribution')
         if( .not. file_exists(fname) ) THROW_HARD('weighted raw PCG accumulator artifact is missing')
@@ -1543,8 +1543,8 @@ contains
                                                        &self%lims3(3,1):self%lims3(3,2))
         complex, allocatable :: weighted(:,:)
         real,    allocatable :: absT2(:,:)
-        real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
-        integer :: ib, i, g, h, k, i0(3), nslab, nthr, ithr, iphase, islab, slo, shi, klo, khi
+        real                 :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
+        integer              :: ib, i, g, h, k, i0(3), nslab, nthr, ithr, iphase, islab, slo, shi, klo, khi
         if( nb < 1 ) return
         allocate(weighted(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
         allocate(absT2(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
@@ -1609,11 +1609,11 @@ contains
     !! with d_raw the raw density is handed out instead of freed and the RHS is also kept
     !! before the support, for regularize_finalized
     subroutine end_accum( self, l_kernel, d_raw )
-        class(reconstructor_pcg),    intent(inout) :: self
-        logical,                     intent(in)    :: l_kernel
-        real, allocatable, optional, intent(out)   :: d_raw(:,:,:)
-        complex, allocatable :: bwork(:,:,:)
-        real,    allocatable :: dwork(:,:,:)
+        class(reconstructor_pcg),    intent(inout)                      :: self
+        logical,                     intent(in)                         :: l_kernel
+        real,                        allocatable, optional, intent(out) :: d_raw(:,:,:)
+        complex, allocatable    :: bwork(:,:,:)
+        real,    allocatable    :: dwork(:,:,:)
         integer(timer_int_kind) :: tp
         if( .not. self%l_accum ) THROW_HARD('begin_accum has not been called; end_accum')
         if( self%reduction_nparts > 0 )then
@@ -1650,8 +1650,8 @@ contains
     !! solves are detached, and P_tau (set_ml_prior first) and the preconditioner are rebuilt from d.
     !! Equal to a new reduction of the same (B,D) finalized by end_accum(.true.)
     subroutine regularize_finalized( self, d )
-        class(reconstructor_pcg), intent(inout) :: self
-        real, allocatable,        intent(inout) :: d(:,:,:)
+        class(reconstructor_pcg), intent(inout)                     :: self
+        real,                     allocatable,        intent(inout) :: d(:,:,:)
         if( .not. self%l_rhs .or. .not. self%l_kernel .or. .not. allocated(self%b_rhs_nosupp) ) &
             &THROW_HARD('no operator was finalized for regularization; regularize_finalized')
         if( .not. self%l_ml_prior_requested ) THROW_HARD('set_ml_prior has not been called; regularize_finalized')
@@ -1682,13 +1682,13 @@ contains
         real,                     intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
                                                             &self%lims3(2,1):self%lims3(2,2),&
                                                             &self%lims3(3,1):self%lims3(3,2))
-        integer, parameter :: DATA_SCALE_NATIVE_SHELLS = 6
+        integer,  parameter   :: DATA_SCALE_NATIVE_SHELLS = 6
         real(dp), allocatable :: shell_sum(:), shell_sum_thr(:,:)
         integer,  allocatable :: shell_count(:), shell_count_thr(:,:)
-        real(dp) :: dsum
-        real     :: dval
-        integer  :: h, k, m, hh, nscale, base_shell, scale_shell, shell, rsq, rsq_lim, nthr, ithr
-        logical  :: l_invalid
+        real(dp)              :: dsum
+        real                  :: dval
+        integer               :: h, k, m, hh, nscale, base_shell, scale_shell, shell, rsq, rsq_lim, nthr, ithr
+        logical               :: l_invalid
         nthr = 1
         !$ nthr = omp_get_max_threads()
         allocate(shell_sum(0:self%Rnat), source=0.0_dp)
@@ -1769,9 +1769,9 @@ contains
                                                             &self%lims3(3,1):self%lims3(3,2))
         real(dp), allocatable :: shsum(:), shsum_thr(:,:)
         integer,  allocatable :: shcnt(:), shcnt_thr(:,:)
-        integer :: cdim(3), h, k, m, hh, phys(3), shpd, sh, sz
-        integer :: nthr, ithr, reslim_ind
-        real    :: rval, cc, ssnr, prior_raw
+        integer               :: cdim(3), h, k, m, hh, phys(3), shpd, sh, sz
+        integer               :: nthr, ithr, reslim_ind
+        real                  :: rval, cc, ssnr, prior_raw
         if( .not. self%l_ml_prior_requested ) return
         if( .not. allocated(self%ml_fsc) ) THROW_HARD('PCG ML FSC is not allocated')
         sz = min(size(self%ml_fsc), self%Rnat)
@@ -1847,9 +1847,9 @@ contains
                                                             &self%lims3(2,1):self%lims3(2,2),&
                                                             &self%lims3(3,1):self%lims3(3,2))
         logical,                  intent(in)    :: l_kernel
-        real(dp), allocatable :: shsum(:), shsum_thr(:,:)
-        integer,  allocatable :: shcnt(:), shcnt_thr(:,:)
-        real,     allocatable :: shfloor(:), shthr(:)
+        real(dp), allocatable   :: shsum(:), shsum_thr(:,:)
+        integer,  allocatable   :: shcnt(:), shcnt_thr(:,:)
+        real,     allocatable   :: shfloor(:), shthr(:)
         integer                 :: h, k, cdim(3), m, hh, phys(3), sh, rho_lim
         integer                 :: khat_lim, work_lim, nthr, ithr
         real                    :: denom, rval
@@ -1962,8 +1962,8 @@ contains
         class(reconstructor_pcg), intent(inout) :: self
         complex(c_float_complex), pointer :: cptr(:,:,:)
         real(c_float),            pointer :: rptr(:,:,:)
-        integer                 :: i, j, k, cdim(3)
-        integer(timer_int_kind) :: tp
+        integer                           :: i, j, k, cdim(3)
+        integer(timer_int_kind)           :: tp
         ! divide out the DEPOSITION envelope: scattering |T|^2 through the KB window
         ! multiplies the real-space kernel by the window's transform, a second
         ! envelope distinct from the gather's; separable exact stencil transform.
@@ -2165,7 +2165,7 @@ contains
         complex,                  intent(in)    :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
                                                             &self%lims3(2,1):self%lims3(2,2),&
                                                             &self%lims3(3,1):self%lims3(3,2))
-        real, allocatable :: z(:,:,:)
+        real, allocatable       :: z(:,:,:)
         integer(timer_int_kind) :: tp
         call self%ensure_wimg
         if( self%l_profile ) tp = clock_count()
@@ -2181,10 +2181,10 @@ contains
     function apply_precond( self, r ) result( z )
         class(reconstructor_pcg), intent(inout) :: self
         real,                     intent(in)    :: r(self%box,self%box,self%box)
-        real,    allocatable :: z(:,:,:), rw(:,:,:)
-        complex(c_float_complex), pointer :: cptr(:,:,:)
-        integer                 :: cdim(3), i, j, k
-        integer(timer_int_kind) :: tp
+        real,                     allocatable :: z(:,:,:), rw(:,:,:)
+        complex(c_float_complex), pointer     :: cptr(:,:,:)
+        integer                               :: cdim(3), i, j, k
+        integer(timer_int_kind)               :: tp
         if( .not. self%l_precond )then
             allocate(z(self%box,self%box,self%box), source=r)
             call self%mask_mul(z)
@@ -2257,12 +2257,12 @@ contains
         class(reconstructor_pcg),           intent(inout) :: self
         complex,                            intent(in)    :: y_planes(self%lims2(1,1):self%lims2(1,2),&
                                                                      &self%lims2(2,1):self%lims2(2,2), *)
-        real,                               intent(inout) :: x(self%box,self%box,self%box)
-        integer,                  optional, intent(in)    :: maxits
-        real,                     optional, intent(in)    :: rtol
-        real, allocatable,        optional, intent(out)   :: rel_res_hist(:)
-        integer,                  optional, intent(out)   :: niters
-        type(pcg_solver_outcome), optional, intent(out)   :: outcome
+        real,                               intent(inout)                             :: x(self%box,self%box,self%box)
+        integer,                            optional, intent(in)                      :: maxits
+        real,                               optional, intent(in)                      :: rtol
+        real,                               allocatable,        optional, intent(out) :: rel_res_hist(:)
+        integer,                            optional, intent(out)                     :: niters
+        type(pcg_solver_outcome),           optional, intent(out)                     :: outcome
         if( allocated(self%b_rhs) ) deallocate(self%b_rhs)
         self%b_rhs = self%apply_adjoint_all(y_planes)
         ! b' = P b, completing the (P H P) u = P b normal equations
@@ -2278,14 +2278,14 @@ contains
     !! exceeds it is discarded for a zero start before the first iteration
     !! (free: the zero start's residual is b itself, no operator application)
     subroutine solve_accum( self, x, maxits, rtol, rel_res_hist, niters, outcome, start_max_rel_resid )
-        class(reconstructor_pcg),           intent(inout) :: self
-        real,                               intent(inout) :: x(self%box,self%box,self%box)
-        integer,                  optional, intent(in)    :: maxits
-        real,                     optional, intent(in)    :: rtol
-        real, allocatable,        optional, intent(out)   :: rel_res_hist(:)
-        integer,                  optional, intent(out)   :: niters
-        type(pcg_solver_outcome), optional, intent(out)   :: outcome
-        real,                     optional, intent(in)    :: start_max_rel_resid
+        class(reconstructor_pcg),           intent(inout)                             :: self
+        real,                               intent(inout)                             :: x(self%box,self%box,self%box)
+        integer,                            optional, intent(in)                      :: maxits
+        real,                               optional, intent(in)                      :: rtol
+        real,                               allocatable,        optional, intent(out) :: rel_res_hist(:)
+        integer,                            optional, intent(out)                     :: niters
+        type(pcg_solver_outcome),           optional, intent(out)                     :: outcome
+        real,                               optional, intent(in)                      :: start_max_rel_resid
         if( .not. self%l_rhs ) THROW_HARD('end_accum has not been called; solve_accum')
         ! the initial guess arrives in the output space (a shipped half map is
         ! window*u): convert it to u rather than projecting again, the exit window defines the output
@@ -2296,18 +2296,18 @@ contains
     !> the solver proper. Reads the RHS from self%b_rhs: passing a component of
     !! intent(inout) self as a separate dummy is an aliasing hazard, copying it costs 67 MB at box 256
     subroutine solve_core( self, x, maxits, rtol, rel_res_hist, niters, outcome, start_max_rel_resid )
-        class(reconstructor_pcg), target,   intent(inout) :: self
-        real, target,                       intent(inout) :: x(self%box,self%box,self%box)
-        integer,                  optional, intent(in)    :: maxits
-        real,                     optional, intent(in)    :: rtol
-        real, allocatable,        optional, intent(out)   :: rel_res_hist(:)
-        integer,                  optional, intent(out)   :: niters
-        type(pcg_solver_outcome), optional, intent(out)   :: outcome
-        real,                     optional, intent(in)    :: start_max_rel_resid
-        real, contiguous, pointer :: x_flat(:), b_flat(:)
+        class(reconstructor_pcg), target,   intent(inout)                     :: self
+        real,                     target,                       intent(inout) :: x(self%box,self%box,self%box)
+        integer,                  optional, intent(in)                        :: maxits
+        real,                     optional, intent(in)                        :: rtol
+        real,                     allocatable,        optional, intent(out)   :: rel_res_hist(:)
+        integer,                  optional, intent(out)                       :: niters
+        type(pcg_solver_outcome), optional, intent(out)                       :: outcome
+        real,                     optional, intent(in)                        :: start_max_rel_resid
+        real, contiguous, pointer       :: x_flat(:), b_flat(:)
         type(reconstructor_pcg_adapter) :: op
-        type(pcg_solver_options) :: options
-        type(pcg_solver_outcome) :: result
+        type(pcg_solver_options)        :: options
+        type(pcg_solver_outcome)        :: result
         options%maxits = 50
         if( present(maxits) ) options%maxits = maxits
         options%rtol = 1.0e-4
@@ -2339,9 +2339,9 @@ contains
     end function reconstruction_vector_size
 
     subroutine reconstruction_vector_apply( self, x, y )
-        class(reconstructor_pcg_adapter), intent(inout) :: self
-        real, contiguous, target,         intent(in)    :: x(:)
-        real, contiguous, target,         intent(out)   :: y(:)
+        class(reconstructor_pcg_adapter), intent(inout)                           :: self
+        real,                             contiguous, target,         intent(in)  :: x(:)
+        real,                             contiguous, target,         intent(out) :: y(:)
         real, pointer :: x3(:,:,:), y3(:,:,:)
         x3(1:self%client%box,1:self%client%box,1:self%client%box) => x
         y3(1:self%client%box,1:self%client%box,1:self%client%box) => y
@@ -2349,9 +2349,9 @@ contains
     end subroutine reconstruction_vector_apply
 
     subroutine reconstruction_vector_precond( self, r, z )
-        class(reconstructor_pcg_adapter), intent(inout) :: self
-        real, contiguous, target,         intent(in)    :: r(:)
-        real, contiguous, target,         intent(out)   :: z(:)
+        class(reconstructor_pcg_adapter), intent(inout)                           :: self
+        real,                             contiguous, target,         intent(in)  :: r(:)
+        real,                             contiguous, target,         intent(out) :: z(:)
         real, pointer :: r3(:,:,:), z3(:,:,:)
         r3(1:self%client%box,1:self%client%box,1:self%client%box) => r
         z3(1:self%client%box,1:self%client%box,1:self%client%box) => z
@@ -2359,8 +2359,8 @@ contains
     end subroutine reconstruction_vector_precond
 
     real(dp) function reconstruction_vector_dot( self, a, b ) result(value)
-        class(reconstructor_pcg_adapter), intent(in) :: self
-        real, contiguous, target,         intent(in) :: a(:), b(:)
+        class(reconstructor_pcg_adapter), intent(in)                             :: self
+        real,                             contiguous, target,         intent(in) :: a(:), b(:)
         real, pointer :: a3(:,:,:), b3(:,:,:)
         a3(1:self%client%box,1:self%client%box,1:self%client%box) => a
         b3(1:self%client%box,1:self%client%box,1:self%client%box) => b
@@ -2375,7 +2375,7 @@ contains
         real,                     intent(inout) :: x(self%box,self%box,self%box)
         real,                     intent(out)   :: rel_resid_l2, rel_resid_m
         real, allocatable :: diag(:,:,:), u(:,:,:), r(:,:,:), z(:,:,:), bz(:,:,:)
-        real(dp) :: bnorm, rnorm, bm, rm
+        real(dp)          :: bnorm, rnorm, bm, rm
         if( .not. self%l_rhs      ) THROW_HARD('end_accum has not been called; shrink_by_ml_prior')
         diag = self%ml_shrink_factor()
         ! output space -> solve domain, shrink, and back (see window_div)
@@ -2406,7 +2406,7 @@ contains
     function ml_shrink_factor( self ) result( diag )
         class(reconstructor_pcg), intent(inout) :: self
         real, allocatable :: diag(:,:,:)
-        integer :: cdim(3), i, j, k, logi(3), rho_lim
+        integer           :: cdim(3), i, j, k, logi(3), rho_lim
         if( .not. self%l_ml_prior ) THROW_HARD('PCG ML prior has not been built; ml_shrink_factor')
         if( .not. self%l_precond  ) THROW_HARD('PCG preconditioner has not been built; ml_shrink_factor')
         call self%ensure_wimg
@@ -2446,7 +2446,7 @@ contains
         real,     allocatable :: diag(:,:,:)
         real(dp), allocatable :: fsum(:)
         integer,  allocatable :: fcnt(:)
-        integer :: cdim(3), i, j, k, logi(3), sh, nsh
+        integer               :: cdim(3), i, j, k, logi(3), sh, nsh
         diag = self%ml_shrink_factor()
         cdim = shape(diag)
         nsh  = nint(sqrt(3.) * real(self%boxpd)) + 1
@@ -2508,14 +2508,14 @@ contains
     !! Compute-only, so safe inside the concurrent half sections; reporting
     !! and fatal handling belong to handle_cold_restart_outcome.
     subroutine solve_with_cold_restart( pcgop, x, l_nonzero, maxits, rtol, rel_res_hist, niters, outcome )
-        class(reconstructor_pcg), intent(inout) :: pcgop
-        real,                     intent(inout) :: x(:,:,:)
-        logical,                  intent(in)    :: l_nonzero
-        integer,                  intent(in)    :: maxits
-        real,                     intent(in)    :: rtol
-        real, allocatable,        intent(out)   :: rel_res_hist(:)
-        integer,                  intent(out)   :: niters
-        type(pcg_solver_outcome), intent(out)   :: outcome
+        class(reconstructor_pcg), intent(inout)                   :: pcgop
+        real,                     intent(inout)                   :: x(:,:,:)
+        logical,                  intent(in)                      :: l_nonzero
+        integer,                  intent(in)                      :: maxits
+        real,                     intent(in)                      :: rtol
+        real,                     allocatable,        intent(out) :: rel_res_hist(:)
+        integer,                  intent(out)                     :: niters
+        type(pcg_solver_outcome), intent(out)                     :: outcome
         type(pcg_solver_outcome) :: first_failure
         if( l_nonzero )then
             call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, rel_res_hist=rel_res_hist, niters=niters, &
@@ -2542,13 +2542,13 @@ contains
     !! indefinite stop falls back to the closed form; maxits_ml=0 ships the
     !! closed form). x_cf receives the closed form when iterations ran.
     subroutine solve_regularized( pcgop, x, maxits_ml, rel_res_hist, niters, outcome, x_cf )
-        class(reconstructor_pcg), intent(inout) :: pcgop
-        real,                     intent(inout) :: x(:,:,:)
-        integer,                  intent(in)    :: maxits_ml
-        real, allocatable,        intent(out)   :: rel_res_hist(:)
-        integer,                  intent(out)   :: niters
-        type(pcg_solver_outcome), intent(out)   :: outcome
-        real, allocatable,        intent(out)   :: x_cf(:,:,:)
+        class(reconstructor_pcg), intent(inout)                   :: pcgop
+        real,                     intent(inout)                   :: x(:,:,:)
+        integer,                  intent(in)                      :: maxits_ml
+        real,                     allocatable,        intent(out) :: rel_res_hist(:)
+        integer,                  intent(out)                     :: niters
+        type(pcg_solver_outcome), intent(out)                     :: outcome
+        real,                     allocatable,        intent(out) :: x_cf(:,:,:)
         real    :: rel_l2, rel_m
         integer :: maxits_here
         maxits_here = maxits_ml
@@ -2732,8 +2732,8 @@ contains
     end subroutine reset_finalize_profile
 
     subroutine report_finalize_profile( self, funit )
-        class(reconstructor_pcg),           intent(in) :: self
-        integer,                  optional, intent(in) :: funit
+        class(reconstructor_pcg),           intent(in)           :: self
+        integer,                            optional, intent(in) :: funit
         real(dp) :: total
         integer  :: out_unit
         out_unit = logfhandle
@@ -2748,8 +2748,8 @@ contains
     end subroutine report_finalize_profile
 
     subroutine reset_profile( self, l_on )
-        class(reconstructor_pcg),           intent(inout) :: self
-        logical,                  optional, intent(in)    :: l_on
+        class(reconstructor_pcg),           intent(inout)        :: self
+        logical,                            optional, intent(in) :: l_on
         self%t_setvol = 0.0_dp
         self%t_cmatcp = 0.0_dp
         self%t_ploop  = 0.0_dp
@@ -2763,9 +2763,9 @@ contains
     !> per-iteration time split: particle loop (what the kernelized operator removes)
     !! vs FFT and lattice traffic (what only a Fourier-domain solve would remove)
     subroutine report_profile( self, niters, funit )
-        class(reconstructor_pcg),           intent(in) :: self
-        integer,                            intent(in) :: niters
-        integer,                  optional, intent(in) :: funit
+        class(reconstructor_pcg),           intent(in)           :: self
+        integer,                            intent(in)           :: niters
+        integer,                            optional, intent(in) :: funit
         real(dp) :: rn, tot, ffts
         integer  :: out_unit
         if( niters < 1 ) return

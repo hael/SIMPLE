@@ -12,7 +12,7 @@ contains
         character(len=*),  intent(in)    :: which
         real,    allocatable :: vals(:), vals4med(:)
         logical, allocatable :: incl(:)
-        real :: med
+        real                 :: med
         incl     = self%included()
         vals     = self%get_all(which)
         vals4med = pack(vals, incl)
@@ -34,15 +34,15 @@ contains
     end subroutine stats_all
 
     module subroutine stats_masked( self, which, statvars, mask, nozero )
-        class(oris),        intent(inout) :: self
-        character(len=*),   intent(in)    :: which
-        type(stats_struct), intent(inout) :: statvars
-        logical,            intent(in)    :: mask(self%n)
-        logical, optional,  intent(in)    :: nozero
+        class(oris),        intent(inout)         :: self
+        character(len=*),   intent(in)            :: which
+        type(stats_struct), intent(inout)         :: statvars
+        logical,            intent(in)            :: mask(self%n)
+        logical,            optional,  intent(in) :: nozero
         real,    allocatable :: vals(:)
         integer, allocatable :: states(:)
-        logical :: err, nnozero
-        real    :: var
+        logical              :: err, nnozero
+        real                 :: var
         nnozero = .false.
         if( present(nozero) ) nnozero = nozero
         vals          = self%get_all(which)
@@ -119,9 +119,9 @@ contains
         integer,     intent(in)    :: nsym
         real,        intent(in)    :: eullims(3,2)
         logical, allocatable :: avail(:)
-        type(oris) :: tmp
-        integer    :: cnt, i, n, nprojs, lim
-        real       :: e1lim, e2lim, frac, frac1, frac2
+        type(oris)           :: tmp
+        integer              :: cnt, i, n, nprojs, lim
+        real                 :: e1lim, e2lim, frac, frac1, frac2
         if( nsym == 1 )then
             call self%spiral_full
             return
@@ -183,7 +183,7 @@ contains
         class(oris), intent(inout) :: self
         real,    allocatable :: scores(:)
         integer, allocatable :: inds(:)
-        integer :: i
+        integer              :: i
         inds   = (/(i,i=1,self%n)/)
         scores = self%get_all('corr')
         call hpsort(scores, inds)
@@ -195,8 +195,8 @@ contains
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: ncls
         integer, allocatable :: inds(:)
-        real    :: classpops(ncls)
-        integer :: i
+        real                 :: classpops(ncls)
+        integer              :: i
         if(ncls <= 0) THROW_HARD('invalid number of classes; order_cls')
         allocate(inds(ncls))
         classpops = 0.0
@@ -214,8 +214,8 @@ contains
         real,        intent(in)    :: corrs(self%n)
         logical,     intent(inout) :: peaks(self%n)
         real, allocatable :: corrs_packed(:)
-        integer :: i, npeaks
-        real    :: corr_t
+        integer           :: i, npeaks
+        real              :: corr_t
         corr_t = 0.0
         do i = 1,self%n
             if( i /= nnmat(1,i) ) THROW_HARD('self is not set to the first entry of the 2nd dimension')
@@ -243,8 +243,8 @@ contains
         real,                    intent(in)    :: thresh
         real,    allocatable  :: scores(:), scores_incl(:)
         logical, allocatable  :: incl(:)
-        integer :: n_incl, thresh_ind
-        real    :: score_bound
+        integer               :: n_incl, thresh_ind
+        real                  :: score_bound
         if( .not.self%isthere('corr') )then
             THROW_HARD('Metric: corr is unpopulated; extremal_bound')
         endif
@@ -259,13 +259,13 @@ contains
     end function extremal_bound
 
     module subroutine set_extremal_vars( self, extr_init, extr_iter, iter, frac_srch_space, do_extr, iextr_lim, update_frac )
-        class(oris),       intent(in)  :: self
-        real,              intent(in)  :: extr_init
-        integer,           intent(in)  :: extr_iter, iter
-        real,              intent(in)  :: frac_srch_space
-        logical,           intent(out) :: do_extr
-        integer,           intent(out) :: iextr_lim
-        real,    optional, intent(in)  :: update_frac
+        class(oris),       intent(in)           :: self
+        real,              intent(in)           :: extr_init
+        integer,           intent(in)           :: extr_iter, iter
+        real,              intent(in)           :: frac_srch_space
+        logical,           intent(out)          :: do_extr
+        integer,           intent(out)          :: iextr_lim
+        real,              optional, intent(in) :: update_frac
         integer :: zero_pop
         logical :: l_update_frac
         do_extr           = .false.

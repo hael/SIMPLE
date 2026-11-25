@@ -16,10 +16,10 @@ integer, allocatable :: states(:)       !< states for all particles
 contains
 
     subroutine gen_labelling( os, nclasses, method, power)
-        type(oris),        intent(inout) :: os
-        integer,           intent(in)    :: nclasses
-        character(len=*),  intent(in)    :: method
-        real, optional,    intent(in)    :: power
+        type(oris),        intent(inout)           :: os
+        integer,           intent(in)              :: nclasses
+        character(len=*),  intent(in)              :: method
+        real,              optional,    intent(in) :: power
         character(len=STDLEN) :: method_here
         real                  :: power_here
         if(nclasses<=1) THROW_HARD('Inconsistent number of classes; gen_labelling')
@@ -229,7 +229,7 @@ contains
         integer, allocatable      :: order(:), config(:), projs(:), fen(:)
         integer, allocatable      :: bucket(:), bcount(:), boffset(:), cursor(:)
         real,    allocatable      :: corrs(:), projcorrs(:)
-        integer        :: iptcl, s, i, n95, ninproj, iproj, nprojs, ofs, navail
+        integer                   :: iptcl, s, i, n95, ninproj, iproj, nprojs, ofs, navail
         write(logfhandle,'(A)') '>>> MIXED SQUARED & UNIFORM PROJECTION DIRECTION SAMPLING'
         allocate(order(nptcls), config(nptcls), corrs(nptcls), projs(nptcls), projcorrs(nptcls), fen(nptcls))
         config = 0

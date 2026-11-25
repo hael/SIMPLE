@@ -4,35 +4,35 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('highlevel', 'High-level tests', 40)
-type(ui_program), target :: mini_stream
-type(ui_program), target :: simulated_workflow
-type(ui_program), target :: simulate_particles
-type(ui_program), target :: solve3D_addon
-type(ui_program), target :: solve3D_addon_snapshots
-type(ui_program), target :: cont_refine3D_1jxy
-type(ui_program), target :: cont_refine3D_bench
-type(ui_program), target :: pose_student
-type(ui_program), target :: pose_student_bench
-type(ui_program), target :: center_ptcls
-type(ui_program), target :: class_student
-type(ui_program), target :: particle_sieving_2
-type(ui_program), target :: polar_matching_bench
-type(ui_program), target :: multistate_workflows
-type(ui_program), target :: state_fixture
-type(ui_program), target :: pcg_recon
-type(ui_program), target :: pcg_frac_update
-type(ui_program), target :: rec3D_backends
-type(ui_program), target :: single_atoms_stats
-type(ui_program), target :: species_discovery
-type(ui_program), target :: single_workflow
-type(ui_program), target :: stream_preproc
-type(ui_program), target :: stream_chains
-type(ui_program), target :: flex_pca_blobs
-type(ui_program), target :: write_state_weights_labels
-type(ui_program), target :: write_state_weights_mixed
-type(ui_program), target :: nightly
-type(ui_program), target :: profile
-type(ui_program), target :: identity
+type(ui_program),          target    :: mini_stream
+type(ui_program),          target    :: simulated_workflow
+type(ui_program),          target    :: simulate_particles
+type(ui_program),          target    :: solve3D_addon
+type(ui_program),          target    :: solve3D_addon_snapshots
+type(ui_program),          target    :: cont_refine3D_1jxy
+type(ui_program),          target    :: cont_refine3D_bench
+type(ui_program),          target    :: pose_student
+type(ui_program),          target    :: pose_student_bench
+type(ui_program),          target    :: center_ptcls
+type(ui_program),          target    :: class_student
+type(ui_program),          target    :: particle_sieving_2
+type(ui_program),          target    :: polar_matching_bench
+type(ui_program),          target    :: multistate_workflows
+type(ui_program),          target    :: state_fixture
+type(ui_program),          target    :: pcg_recon
+type(ui_program),          target    :: pcg_frac_update
+type(ui_program),          target    :: rec3D_backends
+type(ui_program),          target    :: single_atoms_stats
+type(ui_program),          target    :: species_discovery
+type(ui_program),          target    :: single_workflow
+type(ui_program),          target    :: stream_preproc
+type(ui_program),          target    :: stream_chains
+type(ui_program),          target    :: flex_pca_blobs
+type(ui_program),          target    :: write_state_weights_labels
+type(ui_program),          target    :: write_state_weights_mixed
+type(ui_program),          target    :: nightly
+type(ui_program),          target    :: profile
+type(ui_program),          target    :: identity
 
 contains
 

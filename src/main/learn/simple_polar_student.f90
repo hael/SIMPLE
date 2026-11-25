@@ -33,22 +33,22 @@ real(sp), parameter :: WEIGHT_DECAY  = 1.e-5
 !! the network's own record (the gradients, the optimiser steps, the held-out evaluations) and the epochs
 type :: student_train_profile
     real(dp)            :: rt_assemble = 0.d0, rt_total = 0.d0
-    integer             :: epochs = 0, batch_size = 0, nbatches_epoch = 0
+    integer             :: epochs      = 0, batch_size = 0, nbatches_epoch = 0
     type(hhcnn_profile) :: net
 end type student_train_profile
 
 !> a model header's values: the core's keys, the shell weights, and the keys it does not know, for its owner
 type :: polar_student_header
-    integer  :: version = -1, pftsz = 0, nrots = 0, kfromto(2) = 0, box = 0, box_crop = 0, width = 0, nweights = 0
-    integer  :: nptcls_train = 0, nheldout = 0, batch_size = 0, epochs_run = 0, best_epoch = 0, nextra = 0
-    real(sp) :: lp = 0., smpd = 0., mskdiam = 0., prob_beta = 0., shift_aug_px = 0., side_mean = 0., side_sd = 1.
-    real(sp) :: loss_train = 0., loss_held = 0., mode_held = 0., time_train_s = 0.
-    real(sp) :: conf_threshold = 0., conf_fraction = 0., heldout_seeded = 0., heldout_recovered = 0.
-    integer(int64) :: seed = 0_int64, selection_hash = 0_int64
-    logical  :: with_ctf = .true.
+    integer                       :: version        = -1, pftsz = 0, nrots = 0, kfromto(2) = 0, box = 0, box_crop = 0, width = 0, nweights = 0
+    integer                       :: nptcls_train   = 0, nheldout = 0, batch_size = 0, epochs_run = 0, best_epoch = 0, nextra = 0
+    real(sp)                      :: lp             = 0., smpd = 0., mskdiam = 0., prob_beta = 0., shift_aug_px = 0., side_mean = 0., side_sd = 1.
+    real(sp)                      :: loss_train     = 0., loss_held = 0., mode_held = 0., time_train_s = 0.
+    real(sp)                      :: conf_threshold = 0., conf_fraction = 0., heldout_seeded = 0., heldout_recovered = 0.
+    integer(int64)                :: seed           = 0_int64, selection_hash = 0_int64
+    logical                       :: with_ctf       = .true.
     character(len=:), allocatable :: weights_file, holdout_rule, teacher_project, readout
-    real(sp),     allocatable :: wk(:,:)
-    type(string), allocatable :: keys(:), vals(:)
+    real(sp),         allocatable :: wk(:,:)
+    type(string),     allocatable :: keys(:), vals(:)
   contains
     procedure :: read => header_read
     procedure :: kill => header_kill
@@ -57,27 +57,27 @@ end type polar_student_header
 type :: polar_student
     private
     ! the geometry, the band, the classes
-    integer  :: pftsz = 0, pftsz_net = 0, nrots = 0, nk = 0, kfromto(2) = 0, box = 0, box_crop = 0, width = 0
-    integer  :: nclass = 0, nweights = 0
-    real(sp) :: lp = 0., smpd = 0., mskdiam = 0.
-    logical  :: with_ctf = .true.
-    logical  :: l_refl   = .true.               !< the classes score the reflected map too (the pose student's mirror pairs)
-    logical  :: l_lse    = .false.              !< the log-sum-exp readout: a class's logit is its in-plane marginal
-    real(sp), allocatable :: wk(:,:)             !< (kfromto(1):kfromto(2), 2) the frozen shell weights per half
+    integer                  :: pftsz    = 0, pftsz_net = 0, nrots = 0, nk = 0, kfromto(2) = 0, box = 0, box_crop = 0, width = 0
+    integer                  :: nclass   = 0, nweights = 0
+    real(sp)                 :: lp       = 0., smpd = 0., mskdiam = 0.
+    logical                  :: with_ctf = .true.
+    logical                  :: l_refl   = .true.  !< the classes score the reflected map too (the pose student's mirror pairs)
+    logical                  :: l_lse    = .false. !< the log-sum-exp readout: a class's logit is its in-plane marginal
+    real(sp),    allocatable :: wk(:,:)            !< (kfromto(1):kfromto(2), 2) the frozen shell weights per half
     type(polar_feats)        :: feats
     type(hhcnn), allocatable :: net
     ! the teacher and the training record
-    real(sp)       :: prob_beta     = 0.
-    real(sp)       :: shift_aug_px  = 0.
-    real(sp)       :: side_mean     = 0., side_sd = 1.  !< the side scalar's standardisation over the training rows
-    integer(int64) :: seed          = 0_int64
-    integer        :: nptcls_train  = 0, nheldout = 0, batch_size = 0, epochs_run = 0, best_epoch = 0
-    real(sp)       :: loss_train    = 0., loss_held = 0., mode_held = 0., time_train_s = 0.
-    real(dp)       :: rt_assemble   = 0.d0   !< the last training's batch assembly (wall seconds)
-    real(sp)       :: conf_threshold = 0., conf_fraction = 0., heldout_seeded = 0., heldout_recovered = 0. !< the confidence threshold (0: none), the declared fraction above it, the held-out fraction seeded and, of the seeded, recovered
-    integer(int64) :: selection_hash = 0_int64
+    real(sp)                      :: prob_beta      = 0.
+    real(sp)                      :: shift_aug_px   = 0.
+    real(sp)                      :: side_mean      = 0., side_sd = 1. !< the side scalar's standardisation over the training rows
+    integer(int64)                :: seed           = 0_int64
+    integer                       :: nptcls_train   = 0, nheldout = 0, batch_size = 0, epochs_run = 0, best_epoch = 0
+    real(sp)                      :: loss_train     = 0., loss_held = 0., mode_held = 0., time_train_s = 0.
+    real(dp)                      :: rt_assemble    = 0.d0 !< the last training's batch assembly (wall seconds)
+    real(sp)                      :: conf_threshold = 0., conf_fraction = 0., heldout_seeded = 0., heldout_recovered = 0. !< the confidence threshold (0: none), the declared fraction above it, the held-out fraction seeded and, of the seeded, recovered
+    integer(int64)                :: selection_hash = 0_int64
     character(len=:), allocatable :: teacher_project, holdout_rule
-    logical :: exists = .false.
+    logical                       :: exists         = .false.
   contains
     procedure :: new
     procedure :: init_templates
@@ -127,13 +127,13 @@ contains
     !! frozen shell weights wk, the CTF treatment, the classes, whether they score the reflected map, the network's width
     !! and seed, and the readout the owner chooses (lse: the log-sum-exp over the rotations; the maximum without it)
     subroutine new( self, pftsz, kfromto, box, box_crop, smpd, mskdiam, lp, wk, with_ctf, nclass, reflect, width, seed, lse )
-        class(polar_student), intent(inout) :: self
-        integer,              intent(in)    :: pftsz, kfromto(2), box, box_crop, nclass, width
-        real(sp),             intent(in)    :: smpd, mskdiam, lp
-        real(sp),             intent(in)    :: wk(kfromto(1):kfromto(2),2)
-        logical,              intent(in)    :: with_ctf, reflect
-        integer(int64),       intent(in)    :: seed
-        logical, optional,    intent(in)    :: lse
+        class(polar_student), intent(inout)           :: self
+        integer,              intent(in)              :: pftsz, kfromto(2), box, box_crop, nclass, width
+        real(sp),             intent(in)              :: smpd, mskdiam, lp
+        real(sp),             intent(in)              :: wk(kfromto(1):kfromto(2),2)
+        logical,              intent(in)              :: with_ctf, reflect
+        integer(int64),       intent(in)              :: seed
+        logical,              optional,    intent(in) :: lse
         call self%kill
         self%pftsz    = pftsz
         self%kfromto  = kfromto
@@ -232,8 +232,8 @@ contains
         integer,        intent(in)  :: epoch, isample
         real(dp),       intent(out) :: u1, u2
         integer(int64), parameter :: M = 2147483647_int64, A = 48271_int64
-        integer(int64) :: s
-        integer :: k
+        integer(int64)            :: s
+        integer                   :: k
         s = modulo(seed + 7919_int64 * int(epoch,int64) + 104729_int64 * int(isample,int64), M - 1_int64) + 1_int64
         do k = 1,4
             s = modulo(s * A, M)
@@ -264,8 +264,8 @@ contains
         integer,        intent(in)  :: epoch, n
         integer,        intent(out) :: perm(n)
         integer(int64), parameter :: M = 2147483647_int64, A = 48271_int64
-        integer(int64) :: s
-        integer :: i, j, tmp
+        integer(int64)            :: s
+        integer                   :: i, j, tmp
         s = modulo(seed + 15485863_int64 * int(epoch,int64), M - 1_int64) + 1_int64
         do i = 1,n
             perm(i) = i
@@ -288,22 +288,22 @@ contains
     !! rot_classes(kq, n) (0 for none) add their cross-entropy to the training loss
     subroutine train( self, n, x, ctf2, side, targets, held, prob_beta, shift_aug_px, max_epochs, patience, nthr, &
         &log_unit, rot_targets, rot_classes )
-        class(polar_student), intent(inout) :: self
-        integer,              intent(in)    :: n, max_epochs, patience, nthr, log_unit
-        real(sp),             intent(in)    :: x(self%pftsz_net, self%nk, 2, n), ctf2(self%nk, n), side(n)
-        real(sp),             intent(in)    :: targets(self%nclass, n), prob_beta, shift_aug_px
-        logical,              intent(in)    :: held(n)
-        real(sp), optional,   intent(in)    :: rot_targets(:,:,:)
-        integer,  optional,   intent(in)    :: rot_classes(:,:)
+        class(polar_student), intent(inout)          :: self
+        integer,              intent(in)             :: n, max_epochs, patience, nthr, log_unit
+        real(sp),             intent(in)             :: x(self%pftsz_net, self%nk, 2, n), ctf2(self%nk, n), side(n)
+        real(sp),             intent(in)             :: targets(self%nclass, n), prob_beta, shift_aug_px
+        logical,              intent(in)             :: held(n)
+        real(sp),             optional,   intent(in) :: rot_targets(:,:,:)
+        integer,              optional,   intent(in) :: rot_classes(:,:)
         type(hhcnn), allocatable :: best
-        real(sp), allocatable :: xb(:,:,:,:), gb(:,:), sb(:), tb(:,:), tqb(:,:,:)
-        integer,  allocatable :: tcb(:,:)
-        logical :: l_rot
-        integer,  allocatable :: train_inds(:), held_inds(:), perm(:)
-        real(sp) :: loss, fm, loss_held, fm_held, best_loss
-        real(dp) :: loss_sum, fm_sum
-        integer  :: ntr, nhe, epoch, ib, nb, i0, i1, nbatch, i, j, since_best, nthr_here, bsz
-        integer(timer_int_kind) :: t0, ta
+        real(sp),    allocatable :: xb(:,:,:,:), gb(:,:), sb(:), tb(:,:), tqb(:,:,:)
+        integer,     allocatable :: tcb(:,:)
+        logical                  :: l_rot
+        integer,     allocatable :: train_inds(:), held_inds(:), perm(:)
+        real(sp)                 :: loss, fm, loss_held, fm_held, best_loss
+        real(dp)                 :: loss_sum, fm_sum
+        integer                  :: ntr, nhe, epoch, ib, nb, i0, i1, nbatch, i, j, since_best, nthr_here, bsz
+        integer(timer_int_kind)  :: t0, ta
         if( .not. self%exists ) THROW_HARD('student not constructed; polar_student%train')
         self%rt_assemble = 0.d0
         call self%net%reset_profile
@@ -508,13 +508,13 @@ contains
     !> the header fname (key=value) and the weights beside it (<base>_weights.bin), named in the header by their file
     !! name alone: the title line, the version, the core's keys and shell weights, then the owner's keys
     subroutine write( self, fname, title, version, extra_keys, extra_vals )
-        class(polar_student),       intent(in) :: self
-        class(string),              intent(in) :: fname
-        character(len=*),           intent(in) :: title
-        integer,                    intent(in) :: version
-        character(len=*), optional, intent(in) :: extra_keys(:), extra_vals(:)
+        class(polar_student),       intent(in)           :: self
+        class(string),              intent(in)           :: fname
+        character(len=*),           intent(in)           :: title
+        integer,                    intent(in)           :: version
+        character(len=*),           optional, intent(in) :: extra_keys(:), extra_vals(:)
         type(string) :: wfile, wname
-        integer :: funit, io_stat, k, i
+        integer      :: funit, io_stat, k, i
         if( .not. self%exists ) THROW_HARD('student not constructed; polar_student%write')
         wfile = weights_fname(fname)
         wname = basename(wfile)
@@ -582,9 +582,9 @@ contains
     !> the weights file's name beside the header: <base>_weights.bin
     function weights_fname( fname ) result( wfile )
         class(string), intent(in) :: fname
-        type(string) :: wfile
+        type(string)                  :: wfile
         character(len=:), allocatable :: s
-        integer :: n
+        integer                       :: n
         s = fname%to_char()
         n = len_trim(s)
         if( n > 4 )then
@@ -596,10 +596,10 @@ contains
     !> the weights file a header fname names (wname, a file name without a directory), in the header's directory;
     !! msg says why the name is refused, empty otherwise
     subroutine header_weights_path( fname, wname, wfile, msg )
-        class(string),                 intent(in)  :: fname
-        character(len=*),              intent(in)  :: wname
-        type(string),                  intent(out) :: wfile
-        character(len=:), allocatable, intent(out) :: msg
+        class(string),                 intent(in)               :: fname
+        character(len=*),              intent(in)               :: wname
+        type(string),                  intent(out)              :: wfile
+        character(len=:),              allocatable, intent(out) :: msg
         type(string) :: dir
         msg = ''
         if( len_trim(wname) == 0 )then
@@ -620,7 +620,7 @@ contains
         integer,        intent(in) :: pftsz, nk, nclass, width, nweights
         integer(int64), intent(in) :: seed
         character(len=:), allocatable :: msg
-        integer :: pftsz_w, nk_w, nclass_w, width_w, nfeat_w
+        integer                       :: pftsz_w, nk_w, nclass_w, width_w, nfeat_w
         call net%get_shape(pftsz_w, nk_w, nclass_w, width_w, nfeat_w)
         msg = ''
         if( pftsz_w /= pftsz .or. nk_w /= nk .or. nclass_w /= nclass .or. width_w /= width )then
@@ -634,11 +634,11 @@ contains
 
     !> one record of a text file, of any length (the header's shell weights grow with the band)
     subroutine read_record( funit, line, io_stat )
-        integer,                       intent(in)  :: funit
-        character(len=:), allocatable, intent(out) :: line
-        integer,                       intent(out) :: io_stat
+        integer,                       intent(in)               :: funit
+        character(len=:),              allocatable, intent(out) :: line
+        integer,                       intent(out)              :: io_stat
         character(len=RECORD_CHUNK) :: chunk
-        integer :: got
+        integer                     :: got
         line = ''
         do
             read(funit, '(A)', advance='no', size=got, iostat=io_stat) chunk
@@ -655,8 +655,8 @@ contains
         class(polar_student_header), intent(inout) :: self
         class(string),               intent(in)    :: fname
         character(len=:), allocatable :: line, key, val
-        integer :: funit, io_stat, ieq, k, pass
-        logical :: l_wk_even, l_wk_odd
+        integer                       :: funit, io_stat, ieq, k, pass
+        logical                       :: l_wk_even, l_wk_odd
         call self%kill
         if( .not. file_exists(fname) ) THROW_HARD('no model file '//fname%to_char()//'; polar_student_header%read')
         self%weights_file = ''
@@ -763,7 +763,7 @@ contains
         type(polar_student_header), intent(in)    :: hdr
         class(string),              intent(in)    :: fname
         character(len=:), allocatable :: msg
-        type(string) :: wfile
+        type(string)                  :: wfile
         if( .not. self%exists ) THROW_HARD('student not constructed; polar_student%load')
         if( (hdr%readout == 'lse') .neqv. self%l_lse ) THROW_HARD('the model was trained with another readout; polar_student%load')
         call header_weights_path(fname, hdr%weights_file, wfile, msg)
@@ -864,8 +864,8 @@ contains
     end function get_with_ctf
 
     subroutine get_weights( self, wk )
-        class(polar_student),  intent(in)  :: self
-        real(sp), allocatable, intent(out) :: wk(:,:)
+        class(polar_student),  intent(in)               :: self
+        real(sp),              allocatable, intent(out) :: wk(:,:)
         allocate(wk(self%kfromto(1):self%kfromto(2),2), source=self%wk)
     end subroutine get_weights
 

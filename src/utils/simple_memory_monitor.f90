@@ -14,12 +14,12 @@ public :: mem_report
 
 integer, parameter :: DEFAULT_REPORT_INTERVAL_SECONDS = 30
 
-logical, save :: monitor_enabled = .false.
-integer, save :: report_interval_seconds = DEFAULT_REPORT_INTERVAL_SECONDS
-integer, save :: process_id = 0
-integer, save :: run_id = 0
-character(len=STDLEN), save :: program_label = ''
-character(len=STDLEN), save :: telemetry_filename = ''
+logical,               save :: monitor_enabled         = .false.
+integer,               save :: report_interval_seconds = DEFAULT_REPORT_INTERVAL_SECONDS
+integer,               save :: process_id              = 0
+integer,               save :: run_id                  = 0
+character(len=STDLEN), save :: program_label           = ''
+character(len=STDLEN), save :: telemetry_filename      = ''
 
 contains
 
@@ -29,9 +29,9 @@ contains
     subroutine mem_monitor_init( cline, label )
         class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: label
-        type(string) :: mode_arg
+        type(string)          :: mode_arg
         character(len=STDLEN) :: mode
-        integer :: requested_interval
+        integer               :: requested_interval
         if( monitor_enabled ) call mem_monitor_finish
         if( .not. cline%defined('memreport') ) return
         mode_arg = cline%get_carg('memreport')
@@ -61,8 +61,8 @@ contains
     subroutine mem_report( phase )
         character(len=*), intent(in) :: phase
         integer(c_int64_t) :: current_rss, peak_rss
-        integer(c_int) :: rc
-        real(c_double) :: elapsed
+        integer(c_int)     :: rc
+        real(c_double)     :: elapsed
         if( .not. monitor_enabled ) return
         rc = memory_monitor_report_c(trim(phase), int(len_trim(phase),c_int), &
             &elapsed, current_rss, peak_rss)
@@ -72,8 +72,8 @@ contains
     !> Stop periodic sampling, emit the final sample, and close telemetry.
     subroutine mem_monitor_finish
         integer(c_int64_t) :: current_rss, peak_rss
-        integer(c_int) :: rc
-        real(c_double) :: elapsed
+        integer(c_int)     :: rc
+        real(c_double)     :: elapsed
         if( .not. monitor_enabled ) return
         rc = memory_monitor_stop_c(elapsed, current_rss, peak_rss)
         if( rc == 0_c_int ) call log_sample('finish', elapsed, current_rss, peak_rss)
@@ -88,7 +88,7 @@ contains
         character(len=*), intent(in) :: label
         integer,          intent(in) :: interval_seconds
         integer(c_int64_t) :: current_rss, peak_rss
-        integer(c_int) :: rc
+        integer(c_int)     :: rc
         current_rss = get_current_rss_bytes()
         peak_rss    = get_peak_rss_bytes()
         if( current_rss < 0_c_int64_t .or. peak_rss < 0_c_int64_t )then
@@ -119,8 +119,8 @@ contains
     end subroutine start_monitor
 
     subroutine log_sample( phase, elapsed, current_rss, peak_rss )
-        character(len=*), intent(in) :: phase
-        real(c_double),   intent(in) :: elapsed
+        character(len=*),   intent(in) :: phase
+        real(c_double),     intent(in) :: elapsed
         integer(c_int64_t), intent(in) :: current_rss, peak_rss
         real(c_double) :: current_mib, peak_mib
         current_mib = real(current_rss, c_double) / 1048576.0_c_double

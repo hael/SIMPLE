@@ -30,12 +30,12 @@ public :: write_cavg_quality_feature_table
 contains
 
     subroutine prepare_cavg_quality( imgs, cls_oris, mskdiam, quality, quality_context, threshold_pop )
-        class(image),              intent(inout) :: imgs(:)
-        type(oris),                intent(in)    :: cls_oris
-        real,                      intent(in)    :: mskdiam
-        type(cavg_quality_result), intent(inout) :: quality
-        character(len=*), optional,intent(in)    :: quality_context
-        logical,          optional,intent(in)    :: threshold_pop
+        class(image),              intent(inout)       :: imgs(:)
+        type(oris),                intent(in)          :: cls_oris
+        real,                      intent(in)          :: mskdiam
+        type(cavg_quality_result), intent(inout)       :: quality
+        character(len=*),          optional,intent(in) :: quality_context
+        logical,                   optional,intent(in) :: threshold_pop
         character(len=32) :: context
         call quality%kill()
         context = 'chunk'
@@ -45,11 +45,11 @@ contains
     end subroutine prepare_cavg_quality
 
     subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, model, relation_params, relation_result, threshold_pop )
-        class(image),              intent(inout) :: imgs(:)
-        type(oris),                intent(in)    :: cls_oris
-        real,                      intent(in)    :: mskdiam
-        type(cavg_quality_result), intent(inout) :: quality
-        type(cavg_quality_model),  intent(in)    :: model
+        class(image),                         intent(inout)           :: imgs(:)
+        type(oris),                           intent(in)              :: cls_oris
+        real,                                 intent(in)              :: mskdiam
+        type(cavg_quality_result),            intent(inout)           :: quality
+        type(cavg_quality_model),             intent(in)              :: model
         type(parameters),                     optional, intent(in)    :: relation_params
         type(cavg_quality_relation_analysis), optional, intent(inout) :: relation_result
         logical,                              optional, intent(in)    :: threshold_pop
@@ -59,13 +59,13 @@ contains
 
     subroutine evaluate_cavg_quality_for_analysis( imgs, cls_oris, mskdiam, quality, model, quality_context, &
                                                    relation_params, relation_result )
-        class(image),              intent(inout) :: imgs(:)
-        type(oris),                intent(in)    :: cls_oris
-        real,                      intent(in)    :: mskdiam
-        type(cavg_quality_result), intent(inout) :: quality
-        type(cavg_quality_model),  intent(in)    :: model
-        character(len=*),          intent(in)    :: quality_context
-        type(parameters), optional,intent(in)    :: relation_params
+        class(image),                         intent(inout)           :: imgs(:)
+        type(oris),                           intent(in)              :: cls_oris
+        real,                                 intent(in)              :: mskdiam
+        type(cavg_quality_result),            intent(inout)           :: quality
+        type(cavg_quality_model),             intent(in)              :: model
+        character(len=*),                     intent(in)              :: quality_context
+        type(parameters),                     optional,intent(in)     :: relation_params
         type(cavg_quality_relation_analysis), optional, intent(inout) :: relation_result
         call evaluate_cavg_quality_in_context(imgs, cls_oris, mskdiam, quality, model, quality_context, &
             relation_params, relation_result)
@@ -73,12 +73,12 @@ contains
 
     subroutine evaluate_cavg_quality_in_context( imgs, cls_oris, mskdiam, quality, model, quality_context, &
                                                  relation_params, relation_result, threshold_pop )
-        class(image),              intent(inout) :: imgs(:)
-        type(oris),                intent(in)    :: cls_oris
-        real,                      intent(in)    :: mskdiam
-        type(cavg_quality_result), intent(inout) :: quality
-        type(cavg_quality_model),  intent(in)    :: model
-        character(len=*),          intent(in)    :: quality_context
+        class(image),                         intent(inout)           :: imgs(:)
+        type(oris),                           intent(in)              :: cls_oris
+        real,                                 intent(in)              :: mskdiam
+        type(cavg_quality_result),            intent(inout)           :: quality
+        type(cavg_quality_model),             intent(in)              :: model
+        character(len=*),                     intent(in)              :: quality_context
         type(parameters),                     optional, intent(in)    :: relation_params
         type(cavg_quality_relation_analysis), optional, intent(inout) :: relation_result
         logical,                              optional, intent(in)    :: threshold_pop
@@ -103,11 +103,11 @@ contains
     end subroutine evaluate_cavg_quality_in_context
 
     subroutine evaluate_cavg_quality_hard_reject( imgs, cls_oris, mskdiam, quality, quality_context )
-        class(image),              intent(inout) :: imgs(:)
-        type(oris),                intent(in)    :: cls_oris
-        real,                      intent(in)    :: mskdiam
-        type(cavg_quality_result), intent(inout) :: quality
-        character(len=*), optional,intent(in)    :: quality_context
+        class(image),              intent(inout)       :: imgs(:)
+        type(oris),                intent(in)          :: cls_oris
+        real,                      intent(in)          :: mskdiam
+        type(cavg_quality_result), intent(inout)       :: quality
+        character(len=*),          optional,intent(in) :: quality_context
         logical,                     allocatable :: standard_hard_reject(:)
         integer                                  :: icls, ncls
         character(len=32)                        :: context
@@ -151,20 +151,20 @@ contains
 
     subroutine write_cavg_quality_training_table( quality, reference_states, model, fname, dataset_id, quality_context, &
                                                   relation )
-        type(cavg_quality_result), intent(in) :: quality
-        integer,                   intent(in) :: reference_states(:)
-        type(cavg_quality_model),  intent(in) :: model
-        character(len=*),          intent(in) :: fname
-        character(len=*),          intent(in) :: dataset_id
-        character(len=*),          intent(in) :: quality_context
+        type(cavg_quality_result),            intent(in) :: quality
+        integer,                              intent(in) :: reference_states(:)
+        type(cavg_quality_model),             intent(in) :: model
+        character(len=*),                     intent(in) :: fname
+        character(len=*),                     intent(in) :: dataset_id
+        character(len=*),                     intent(in) :: quality_context
         type(cavg_quality_relation_analysis), intent(in) :: relation
-        logical, allocatable :: auto(:), ref(:)
-        real,    allocatable :: suggested_weights(:)
+        logical, allocatable      :: auto(:), ref(:)
+        real,    allocatable      :: suggested_weights(:)
         character(len=LONGSTRLEN) :: dataset
-        integer :: ncls, ifeat, icls, tp, fp, tn, fn, ngood, nbad, funit, nfeats
-        real    :: precision, recall, specificity, f1, balacc, accuracy
-        real    :: best_bal_thr, best_balacc, best_f1_thr, best_f1
-        real    :: auc, med_good, med_bad, mad_good, mad_bad, sep
+        integer                   :: ncls, ifeat, icls, tp, fp, tn, fn, ngood, nbad, funit, nfeats
+        real                      :: precision, recall, specificity, f1, balacc, accuracy
+        real                      :: best_bal_thr, best_balacc, best_f1_thr, best_f1
+        real                      :: auc, med_good, med_bad, mad_good, mad_bad, sep
         ncls   = size(reference_states)
         nfeats = cavg_quality_bank_size(quality_context)
         if( size(quality%states) /= ncls ) THROW_HARD('write_cavg_quality_training_table: state size mismatch')
@@ -266,11 +266,11 @@ contains
     end subroutine write_cavg_quality_training_table
 
     subroutine write_cavg_quality_feature_table( quality, model, fname, dataset_id, manual_states )
-        type(cavg_quality_result), intent(in) :: quality
-        type(cavg_quality_model),  intent(in) :: model
-        character(len=*),          intent(in) :: fname
-        character(len=*),          intent(in) :: dataset_id
-        integer, optional,         intent(in) :: manual_states(:)
+        type(cavg_quality_result), intent(in)                   :: quality
+        type(cavg_quality_model),  intent(in)                   :: model
+        character(len=*),          intent(in)                   :: fname
+        character(len=*),          intent(in)                   :: dataset_id
+        integer,                   optional,         intent(in) :: manual_states(:)
         integer :: funit, icls, ncls, manual_state, auto_match
         logical :: have_manual
         ncls = size(quality%states)
@@ -340,9 +340,9 @@ contains
     end subroutine write_model_as_analysis_comments
 
     subroutine write_analysis_class_header( funit, context, include_relation )
-        integer,           intent(in) :: funit
-        character(len=*),  intent(in) :: context
-        logical, optional, intent(in) :: include_relation
+        integer,           intent(in)           :: funit
+        character(len=*),  intent(in)           :: context
+        logical,           optional, intent(in) :: include_relation
         integer :: ifeat
         logical :: with_relation
         with_relation = .false.
@@ -361,12 +361,12 @@ contains
 
     subroutine write_analysis_class_row( funit, dataset_id, model, quality, manual_states, icls, &
                                          relational_raw, relational_feature )
-        integer,                   intent(in) :: funit, icls
-        character(len=*),          intent(in) :: dataset_id
-        type(cavg_quality_model),  intent(in) :: model
-        type(cavg_quality_result), intent(in) :: quality
-        integer,                   intent(in) :: manual_states(:)
-        real, optional,            intent(in) :: relational_raw, relational_feature
+        integer,                   intent(in)                      :: funit, icls
+        character(len=*),          intent(in)                      :: dataset_id
+        type(cavg_quality_model),  intent(in)                      :: model
+        type(cavg_quality_result), intent(in)                      :: quality
+        integer,                   intent(in)                      :: manual_states(:)
+        real,                      optional,            intent(in) :: relational_raw, relational_feature
         if( present(relational_raw) .and. present(relational_feature) )then
             call write_feature_table_class_row(funit, dataset_id, model, quality, icls, manual_states(icls), &
                 merge(1, 0, (manual_states(icls) > 0) .eqv. (quality%states(icls) > 0)), &
@@ -379,11 +379,11 @@ contains
 
     subroutine write_feature_table_class_row( funit, dataset_id, model, quality, icls, manual_state, auto_match, &
                                               relational_raw, relational_feature )
-        integer,                   intent(in) :: funit, icls, manual_state, auto_match
-        character(len=*),          intent(in) :: dataset_id
-        type(cavg_quality_model),  intent(in) :: model
-        type(cavg_quality_result), intent(in) :: quality
-        real, optional,            intent(in) :: relational_raw, relational_feature
+        integer,                   intent(in)                      :: funit, icls, manual_state, auto_match
+        character(len=*),          intent(in)                      :: dataset_id
+        type(cavg_quality_model),  intent(in)                      :: model
+        type(cavg_quality_result), intent(in)                      :: quality
+        real,                      optional,            intent(in) :: relational_raw, relational_feature
         integer :: ifeat
         write(funit,'(A,A,A,A,I0,A,I0,A,L1,A,I0,A,ES14.6,A,I0,A,I0)', advance='no') &
             trim(dataset_id), ',', trim(model%name), ',', &
@@ -417,8 +417,8 @@ contains
         real,    intent(in) :: scores(:)
         integer, intent(in) :: reference_states(:)
         logical, allocatable :: ref(:), pred(:)
-        integer :: i, tp, fp, tn, fn
-        real    :: threshold, precision, recall, specificity, f1, balacc, accuracy
+        integer              :: i, tp, fp, tn, fn
+        real                 :: threshold, precision, recall, specificity, f1, balacc, accuracy
         allocate(ref(size(reference_states)), source=(reference_states > 0))
         allocate(pred(size(scores)), source=.false.)
         write(funit,'(A)') '# threshold_scan_header=score_threshold,selected,tp,fp,tn,fn,precision,recall,specificity,f1,balanced_accuracy,accuracy'
@@ -449,8 +449,8 @@ contains
         integer, intent(in)  :: reference_states(:)
         real,    intent(out) :: best_bal_thr, best_balacc, best_f1_thr, best_f1
         logical, allocatable :: ref(:), pred(:)
-        integer :: i, tp, fp, tn, fn
-        real    :: threshold, precision, recall, specificity, f1, balacc, accuracy
+        integer              :: i, tp, fp, tn, fn
+        real                 :: threshold, precision, recall, specificity, f1, balacc, accuracy
         allocate(ref(size(reference_states)), source=(reference_states > 0))
         allocate(pred(size(scores)), source=.false.)
         best_bal_thr = 0.0

@@ -13,15 +13,15 @@ private
 
 type :: cavg_cnn_input
     private
-    integer :: n = 0, m = 0, box = 0
-    logical :: l_resample = .false.
+    integer               :: n          = 0, m = 0, box = 0
+    logical               :: l_resample = .false.
     real(dp), allocatable :: rr(:,:), ri(:,:)       !< (m, n) the operator R's real and imaginary parts
     real(dp), allocatable :: rrt(:,:), rit(:,:)     !< (n, m) their transposes
-    logical :: exists = .false.
+    logical               :: exists     = .false.
   contains
-    procedure :: new
-    procedure :: prepare
-    procedure :: kill
+    procedure          :: new
+    procedure          :: prepare
+    procedure          :: kill
     procedure, private :: resample
 end type cavg_cnn_input
 
@@ -85,8 +85,8 @@ contains
         real(sp),              intent(out) :: x(:,:,:)
         logical,               intent(out) :: empty
         real(dp), allocatable :: t(:,:,:)
-        real(dp) :: mean, sdev, r2, c
-        integer  :: ch, i, j, nin
+        real(dp)              :: mean, sdev, r2, c
+        integer               :: ch, i, j, nin
         if( .not. self%exists ) THROW_HARD('not constructed; cavg_cnn_input%prepare')
         if( size(raw,1) /= self%n .or. size(raw,2) /= self%n ) THROW_HARD('raw images of another size; cavg_cnn_input%prepare')
         if( size(x,1) /= self%box .or. size(x,2) /= self%box .or. size(x,3) /= size(raw,3) )&
@@ -145,7 +145,7 @@ contains
         real(dp),              intent(in)  :: img(:,:)
         real(dp),              intent(out) :: out(:,:)
         real(dp), allocatable :: t(:,:)
-        integer :: mm, a
+        integer               :: mm, a
         if( self%l_resample )then
             t = matmul(matmul(self%rr, img), self%rrt) - matmul(matmul(self%ri, img), self%rit)
         else

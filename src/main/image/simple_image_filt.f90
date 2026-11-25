@@ -6,9 +6,9 @@ implicit none
 contains
 
     module subroutine bp( self, hplim, lplim, width )
-        class(image), intent(inout) :: self
-        real, intent(in)            :: hplim, lplim
-        real, intent(in), optional  :: width
+        class(image), intent(inout)        :: self
+        real,         intent(in)           :: hplim, lplim
+        real,         intent(in), optional :: width
         integer :: h, k, l, lims(3,2), phys(3)
         logical :: didft, dohp, dolp
         real    :: freq, hplim_freq, lplim_freq, wwidth, w
@@ -206,11 +206,11 @@ contains
         class(image),   intent(inout) :: img_out
         real, parameter :: sigma_prefactor = sqrt(log(2.) / 2.) * 3. / PI
         type(image)     :: filt_even, filt_odd, response_even, response_odd, response_freq
-        integer :: h, k, ifreq, iang, nangs, lims(3,2), phys(2), freq_ind, nvalid_freqs
-        real    :: angle, theta, cang, sang, fpar, fperp, freq_shell, sig_shell
-        real    :: energy_even, energy_odd, weight, val_even, val_odd, wplus, wminus
-        real    :: response_median
-        logical :: didft, self_conjg
+        integer         :: h, k, ifreq, iang, nangs, lims(3,2), phys(2), freq_ind, nvalid_freqs
+        real            :: angle, theta, cang, sang, fpar, fperp, freq_shell, sig_shell
+        real            :: energy_even, energy_odd, weight, val_even, val_odd, wplus, wminus
+        real            :: response_median
+        logical         :: didft, self_conjg
         if( .not.self%existence ) THROW_HARD('image must exist; gabor_filter2D')
         if( .not.self%is_2d() )   THROW_HARD('2D images only; gabor_filter2D')
         if( size(freqs) == 0 )    THROW_HARD('empty frequency bank; gabor_filter2D')
@@ -316,9 +316,9 @@ contains
     end subroutine gabor_filter2D
 
     module subroutine tophat( self, shell, halfwidth )
-        class(image),   intent(inout) :: self
-        integer,        intent(in)    :: shell
-        real, optional, intent(in)    :: halfwidth
+        class(image),   intent(inout)        :: self
+        integer,        intent(in)           :: shell
+        real,           optional, intent(in) :: halfwidth
         integer :: h, k, l, lims(3,2), phys(3)
         logical :: didft
         real    :: freq, hplim_freq, lplim_freq, hwdth
@@ -404,7 +404,7 @@ contains
         class(image), intent(inout) :: self_even, self_odd
         logical,      intent(in)    :: is_ptcl
         real(dp) :: counts(fdim(self_even%ldim(1)) - 1)
-        real(dp) ::  dspec(fdim(self_even%ldim(1)) - 1)
+        real(dp) :: dspec(fdim(self_even%ldim(1)) - 1)
         complex  :: diff
         integer  :: filtsz, h, k, l, sh, lims(3,2), phys(3)
         filtsz = fdim(self_even%ldim(1)) - 1
@@ -612,8 +612,8 @@ contains
     end subroutine real_space_filter
 
     module function hannw( self, oshoot_in ) result( w )
-        class(image), intent(inout) :: self
-        real, intent(in), optional  :: oshoot_in
+        class(image), intent(inout)        :: self
+        real,         intent(in), optional :: oshoot_in
         integer                     :: lims(3,2), k, kmax, maxl
         type(winfuns)               :: wfuns
         character(len=STDLEN)       :: wstr
@@ -784,21 +784,21 @@ contains
 
     ! don't touch default parameters here. This routine is being actively used
     module subroutine NLmean2D( self, msk, sdev_noise, patch_size, search_radius, gaussian_patch )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: msk
-        integer, optional, intent(in) :: patch_size, search_radius
-        real, optional, intent(in)    :: sdev_noise
-        logical, optional, intent(in) :: gaussian_patch
-        real,  allocatable :: rmat_pad(:,:), rmat_filt(:,:), patch_means(:,:), patch_weights(:,:)
-        integer, parameter :: DEFAULT_PATCH_SIZE    = 3  ! current default
-        integer, parameter :: DEFAULT_SEARCH_RADIUS = 10 ! current default, gives a 21x21 search box
-        real,    parameter :: DEFAULT_WEIGHT_THRESH = 1.e-3
-        real,    parameter :: MEAN_GATE_NSIGMA      = 3.
-        real    :: z, sigma, h, h_sq, avg, mmsk, min_weight, mean_gate, noise_bias
-        real    :: patch_sigma, patch_weight_sum, patch_weight_sq_sum
-        real    :: ref_mean, dist, w
-        integer :: i, j, m, n, ii, jj, pad, patch_rad, patch_sz, search_rad, npatch
-        logical :: l_gaussian_patch
+        class(image),   intent(inout)        :: self
+        real,           optional, intent(in) :: msk
+        integer,        optional, intent(in) :: patch_size, search_radius
+        real,           optional, intent(in) :: sdev_noise
+        logical,        optional, intent(in) :: gaussian_patch
+        real,    allocatable :: rmat_pad(:,:), rmat_filt(:,:), patch_means(:,:), patch_weights(:,:)
+        integer, parameter   :: DEFAULT_PATCH_SIZE    = 3  ! current default
+        integer, parameter   :: DEFAULT_SEARCH_RADIUS = 10 ! current default, gives a 21x21 search box
+        real,    parameter   :: DEFAULT_WEIGHT_THRESH = 1.e-3
+        real,    parameter   :: MEAN_GATE_NSIGMA      = 3.
+        real                 :: z, sigma, h, h_sq, avg, mmsk, min_weight, mean_gate, noise_bias
+        real                 :: patch_sigma, patch_weight_sum, patch_weight_sq_sum
+        real                 :: ref_mean, dist, w
+        integer              :: i, j, m, n, ii, jj, pad, patch_rad, patch_sz, search_rad, npatch
+        logical              :: l_gaussian_patch
         if( self%is_3d() ) THROW_HARD('2D images only; NLmean2D')
         if( self%ft )      THROW_HARD('Real space only;NLmean2D')
         patch_sz  = DEFAULT_PATCH_SIZE
@@ -921,13 +921,13 @@ contains
 
     module subroutine NLmean2D_eo( even, odd, avg )
         class(image), intent(inout) :: even, odd, avg
-        type(image)        :: noise, noise_var
-        real,  allocatable :: rmat_pad(:,:), rmat_threads(:,:,:,:)
-        integer, parameter :: DIM_SW  = 1
-        integer, parameter :: CFR_BOX = 3
-        real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW)
-        real    :: z, pix_avg, sigma2t2
-        integer :: i, j, m, n, pad, ithr, nthr_team
+        type(image)          :: noise, noise_var
+        real,    allocatable :: rmat_pad(:,:), rmat_threads(:,:,:,:)
+        integer, parameter   :: DIM_SW  = 1
+        integer, parameter   :: CFR_BOX = 3
+        real                 :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW)
+        real                 :: z, pix_avg, sigma2t2
+        integer              :: i, j, m, n, pad, ithr, nthr_team
         if( even%is_3d() ) THROW_HARD('2D images only; NLmean2D_eo')
         if( even%ft )      THROW_HARD('Real space only;NLmean2D_eo')
         call noise%copy(even)
@@ -967,15 +967,15 @@ contains
     end subroutine NLmean2D_eo
 
     module subroutine NLmean3D( self, msk, sdev_noise )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: msk
-        real, optional, intent(in)    :: sdev_noise
-        real,  allocatable :: rmat_pad(:,:,:), rmat_threads(:,:,:,:)
-        integer, parameter :: DIM_SW  = 3
-        integer, parameter :: CFR_BOX = 10 ! as suggested in the paper, use a box 21x21
-        real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW,DIM_SW)
-        real    :: z, sigma, h, h_sq, mmsk, avg
-        integer :: i, j, k, m, n, o, pad, ithr, nthr_team
+        class(image),   intent(inout)        :: self
+        real,           optional, intent(in) :: msk
+        real,           optional, intent(in) :: sdev_noise
+        real,    allocatable :: rmat_pad(:,:,:), rmat_threads(:,:,:,:)
+        integer, parameter   :: DIM_SW  = 3
+        integer, parameter   :: CFR_BOX = 10 ! as suggested in the paper, use a box 21x21
+        real                 :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW,DIM_SW)
+        real                 :: z, sigma, h, h_sq, mmsk, avg
+        integer              :: i, j, k, m, n, o, pad, ithr, nthr_team
         if( self%is_2d() ) THROW_HARD('3D images only; NLmean3D')
         if( self%ft )      THROW_HARD('Real space only; 3DNLmean3D')
         mmsk = real(self%ldim(1)) / 2. - real(DIM_SW)
@@ -1026,13 +1026,13 @@ contains
 
     module subroutine NLmean3D_eo( even, odd, avg )
         class(image), intent(inout) :: even, odd, avg
-        real,  allocatable :: rmat_pad(:,:,:), rmat_threads(:,:,:,:)
-        integer, parameter :: DIM_SW  = 1
-        integer, parameter :: CFR_BOX = 3
-        type(image) :: noise, noise_var
-        real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW,DIM_SW)
-        real    :: z, sigma2t2, pixavg
-        integer :: i, j, k, m, n, o, pad, ithr, nthr_team
+        real,    allocatable :: rmat_pad(:,:,:), rmat_threads(:,:,:,:)
+        integer, parameter   :: DIM_SW  = 1
+        integer, parameter   :: CFR_BOX = 3
+        type(image)          :: noise, noise_var
+        real                 :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW,DIM_SW)
+        real                 :: z, sigma2t2, pixavg
+        integer              :: i, j, k, m, n, o, pad, ithr, nthr_team
         if( even%is_2d() ) THROW_HARD('3D images only; NLmean3D_eo')
         if( even%ft )      THROW_HARD('Real space only; 3DNLmean3D_eo')
         call noise%copy(even)
@@ -1077,15 +1077,15 @@ contains
     end subroutine NLmean3D_eo
 
     module subroutine ICM2D( self, lambda, verbose )
-        class(image),      intent(inout) :: self
-        real,              intent(in)    :: lambda
-        logical, optional, intent(in)    :: verbose
+        class(image),      intent(inout)        :: self
+        real,              intent(in)           :: lambda
+        logical,           optional, intent(in) :: verbose
         integer, parameter :: MAXITS    = 3
         integer, parameter :: NQUANTA   = 256
-        integer     :: n_8(3,8), nsz, i, j, k, m, n
-        real        :: pot_term, pix, min, proba, sigma2t2, x, xmin, transl_tab(NQUANTA), eucl, y, sy, syy, diff, rnsz
-        type(image) :: self_prev
-        logical     :: l_verbose
+        integer            :: n_8(3,8), nsz, i, j, k, m, n
+        real               :: pot_term, pix, min, proba, sigma2t2, x, xmin, transl_tab(NQUANTA), eucl, y, sy, syy, diff, rnsz
+        type(image)        :: self_prev
+        logical            :: l_verbose
         if( self%is_3d() ) THROW_HARD('2D images only; ICM')
         if( self%ft )      THROW_HARD('Real space only; ICM')
         l_verbose = .true.

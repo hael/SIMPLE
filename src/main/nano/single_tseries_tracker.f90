@@ -11,10 +11,10 @@ public :: tracker_get_nnfname, tracker_get_stkname, kill_tracker
 private
 #include "simple_local_flags.inc"
 
-real,    parameter :: SPECW    = 0.0001
-real,    parameter :: BSLAMBDA = 10.
-real,    parameter :: BFACTOR  = 5.
-integer, parameter :: NNN      = 8
+real,    parameter :: SPECW             = 0.0001
+real,    parameter :: BSLAMBDA          = 10.
+real,    parameter :: BFACTOR           = 5.
+integer, parameter :: NNN               = 8
 integer, parameter :: TESTER_WRITE_MULT = 5
 
 type(image),            allocatable :: ptcls(:), ptcls_saved(:)
@@ -35,12 +35,12 @@ logical                             :: l_neg
 contains
 
     subroutine init_tracker( params, boxcoord, intg_fnames, frame_fnames, dir_in, fbody_in )
-        class(parameters), target, intent(in) :: params
-        integer,                   intent(in) :: boxcoord(2)
-        class(string),     target, intent(in) :: intg_fnames(:), frame_fnames(:)
-        class(string),             intent(in) :: dir_in, fbody_in
+        class(parameters),         target, intent(in) :: params
+        integer,                   intent(in)         :: boxcoord(2)
+        class(string),             target, intent(in) :: intg_fnames(:), frame_fnames(:)
+        class(string),             intent(in)         :: dir_in, fbody_in
         type(string) :: fname
-        integer :: n, i
+        integer      :: n, i
         ! set parameters pointer
         p_ptr => params
         ! set constants
@@ -101,13 +101,13 @@ contains
 
     subroutine track_particle( fname_forctf, frame_start )
         use simple_motion_align_nano, only: motion_align_nano
-        class(string),     intent(inout) :: fname_forctf
-        integer, optional, intent(in)    :: frame_start
+        class(string),     intent(inout)        :: fname_forctf
+        integer,           optional, intent(in) :: frame_start
         type(motion_align_nano) :: aligner
         type(string)            :: fname
         real, allocatable       :: opt_shifts(:,:)
-        integer :: first_pos(3), funit2, funit, io_stat, iframe, xind,yind, i, last_frame, cnt, nrange, noutside, fstart
-        real    :: xyz(3), pos(2)
+        integer                 :: first_pos(3), funit2, funit, io_stat, iframe, xind,yind, i, last_frame, cnt, nrange, noutside, fstart
+        real                    :: xyz(3), pos(2)
         ! init neigh counter
         call frame_avg%zero_and_unflag_ft
         call reference%zero_and_flag_ft
@@ -289,7 +289,7 @@ contains
     subroutine write_tester_dump( iframe, fstart, nrange )
         integer, intent(in) :: iframe, fstart, nrange
         type(string) :: ref_name, stk_name
-        integer :: i
+        integer      :: i
         if( trim(p_ptr%tester) .ne. 'yes' ) return
         if( iframe /= fstart )then
             if( mod(iframe-fstart, TESTER_WRITE_MULT*track_freq) /= 0 .and. iframe+nrange-1 < nframes ) return

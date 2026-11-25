@@ -161,7 +161,7 @@ contains
 
     ! Return fitted axes and latest axis deltas for monitoring/logging.
     subroutine get_support_model_metrics( self, metrics )
-        class(class_compatibility), intent(in)  :: self
+        class(class_compatibility),  intent(in)  :: self
         type(support_model_metrics), intent(out) :: metrics
         metrics%axis_c      = self%support_model%axis_c
         metrics%axis_b      = self%support_model%axis_b
@@ -238,9 +238,9 @@ contains
         class(class_compatibility), intent(inout) :: self
         type(image),                intent(in)    :: imgs(:)
         integer,                    intent(in)    :: states(:)
-        type(support_model_training_set)          :: new_set
+        type(support_model_training_set)              :: new_set
         type(support_model_training_set), allocatable :: tmp(:)
-        integer                                   :: nset, iimg, idx
+        integer                                       :: nset, iimg, idx
         if( size(imgs) /= size(states) ) THROW_HARD('class_compatibility: training set size mismatch')
         nset = count(states > 0)
         if( nset < 3 ) then
@@ -381,21 +381,21 @@ contains
         integer,                    allocatable   :: batch_id(:), batch_counts(:)
         real,                       allocatable   :: mins(:), maxs(:), cands(:), mins_sup(:), maxs_sup(:), w_sup(:), sample_weights(:)
         logical,                    allocatable   :: tmp_support(:), support_cur(:)
-        integer :: nn, i, j, k, best_count
-        integer :: ir, iq, jq, final_count, best_final_count
-        integer :: nset, ntot, idx, nbatches
-        logical :: in_b, in_c, in_a, had_prev_fit
-        logical :: stable_a, stable_b, stable_c
-        real    :: b_cand, left, right
-        real    :: spread, best_spread, score, best_score
-        real    :: weighted_count, best_weighted_count, best_final_weighted_count
-        real    :: relax_cur, qlo_cur, qhi_cur
-        real    :: c_cur, b_cur, a_cur, c_soft, a_soft
-        real    :: c_best, b_best, a_best
-        real    :: relax_best, qlo_best, qhi_best
-        real    :: soft_frac, dc_norm, db_norm, da_norm, stability
-        real    :: c_prev, b_prev, a_prev
-        real    :: dc, db, da
+        integer                                   :: nn, i, j, k, best_count
+        integer                                   :: ir, iq, jq, final_count, best_final_count
+        integer                                   :: nset, ntot, idx, nbatches
+        logical                                   :: in_b, in_c, in_a, had_prev_fit
+        logical                                   :: stable_a, stable_b, stable_c
+        real                                      :: b_cand, left, right
+        real                                      :: spread, best_spread, score, best_score
+        real                                      :: weighted_count, best_weighted_count, best_final_weighted_count
+        real                                      :: relax_cur, qlo_cur, qhi_cur
+        real                                      :: c_cur, b_cur, a_cur, c_soft, a_soft
+        real                                      :: c_best, b_best, a_best
+        real                                      :: relax_best, qlo_best, qhi_best
+        real                                      :: soft_frac, dc_norm, db_norm, da_norm, stability
+        real                                      :: c_prev, b_prev, a_prev
+        real                                      :: dc, db, da
 
         had_prev_fit = self%support_model%valid
         c_prev = self%support_model%axis_c
@@ -638,7 +638,7 @@ contains
             real, intent(in) :: arr(:)
             real, intent(in) :: q
             real, allocatable :: sorted(:)
-            integer :: nvals, idx_local
+            integer           :: nvals, idx_local
 
             nvals = size(arr)
             if( nvals <= 0 )then
@@ -662,8 +662,8 @@ contains
             real, intent(in) :: warr(:)
             real, intent(in) :: q
             real, allocatable :: sorted(:), wsorted(:)
-            real :: wtot, wacc, qtarget, wtmp
-            integer :: nvals, ia, ib, kk
+            real              :: wtot, wacc, qtarget, wtmp
+            integer           :: nvals, ia, ib, kk
 
             nvals = size(arr)
             if( nvals <= 0 )then

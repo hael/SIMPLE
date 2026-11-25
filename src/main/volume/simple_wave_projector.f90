@@ -34,53 +34,53 @@ end type pass_work
 !! regions, results independent of the threads (wave_model_policy.md, sections 3, 5 and 7)
 type, extends(pcg_lattice) :: wave_projector
     private
-    integer :: model = 0
-    integer :: kappa = 0          !< -1, 0, +1 for ewald=neg, no, pos (projection: 0)
-    integer :: osf   = 2          !< oversampling of the image formation
-    real    :: gain  = 1.0        !< g = sqrt(dose a^2)
-    real    :: bfac  = 0.0        !< B-factor of the lens envelope (A^2), unless per particle
-    integer :: fft_nthreads = 1
+    integer              :: model        = 0
+    integer              :: kappa        = 0      !< -1, 0, +1 for ewald=neg, no, pos (projection: 0)
+    integer              :: osf          = 2      !< oversampling of the image formation
+    real                 :: gain         = 1.0    !< g = sqrt(dose a^2)
+    real                 :: bfac         = 0.0    !< B-factor of the lens envelope (A^2), unless per particle
+    integer              :: fft_nthreads = 1
     type(image)          :: wimg                  !< persistent padded work image (keeps its FFTW plans)
     complex, allocatable :: cmat_x(:,:,:)         !< packed transform of the current volume
     complex, allocatable :: cmat_d(:,:,:)         !< packed transform of the search direction
     real,    allocatable :: invenv(:,:,:)         !< KB deapodisation of the native box
-    integer              :: nsym = 1
+    integer              :: nsym         = 1
     real,    allocatable :: symmats(:,:,:)        !< (3,3,nsym), symmats(:,:,1) = I
     ! ---- particles ----
-    integer                      :: nptcls = 0
-    real,            allocatable :: rotmats(:,:,:)   !< (3,3,nptcls)
-    real,            allocatable :: shifts(:,:)      !< (2,nptcls), native pixels
-    real,            allocatable :: curvs(:)         !< (nptcls) paraboloid coefficient
-    type(ctfparams), allocatable :: ctfparms(:)      !< (nptcls), at the native sampling
-    real,            allocatable :: inv_sig2(:)      !< (0:R) 1/sigma2 of the selection's half (1 without)
-    real,            allocatable :: wts(:)           !< (nptcls) particle weights
-    real,            allocatable :: bfacs(:)         !< (nptcls) lens B-factors (A^2)
-    integer,         allocatable :: wshell(:,:)      !< (h,k) resolution shell, for the loss weights
-    type(wave_imaging), allocatable :: imgs(:)       !< one per thread (the single-scatter models)
-    type(wave_multislice), allocatable :: ms(:)      !< one per thread (multislice)
-    type(pass_work),       allocatable :: work(:)    !< one per thread
+    integer                            :: nptcls = 0
+    real,                  allocatable :: rotmats(:,:,:) !< (3,3,nptcls)
+    real,                  allocatable :: shifts(:,:)    !< (2,nptcls), native pixels
+    real,                  allocatable :: curvs(:)       !< (nptcls) paraboloid coefficient
+    type(ctfparams),       allocatable :: ctfparms(:)    !< (nptcls), at the native sampling
+    real,                  allocatable :: inv_sig2(:)    !< (0:R) 1/sigma2 of the selection's half (1 without)
+    real,                  allocatable :: wts(:)         !< (nptcls) particle weights
+    real,                  allocatable :: bfacs(:)       !< (nptcls) lens B-factors (A^2)
+    integer,               allocatable :: wshell(:,:)    !< (h,k) resolution shell, for the loss weights
+    type(wave_imaging),    allocatable :: imgs(:)        !< one per thread (the single-scatter models)
+    type(wave_multislice), allocatable :: ms(:)          !< one per thread (multislice)
+    type(pass_work),       allocatable :: work(:)        !< one per thread
     ! ---- gradient accumulator ----
     complex, allocatable :: gacc(:,:,:)
-    logical :: l_vol = .false., l_dir = .false., l_grad = .false., exists = .false.
+    logical              :: l_vol = .false., l_dir = .false., l_grad = .false., exists = .false.
   contains
-    procedure :: new
-    procedure :: set_sym
-    procedure :: prep_particles
-    procedure :: set_volume
-    procedure :: set_direction
-    procedure :: begin_grad
-    procedure :: get_grad
-    procedure :: predict
-    procedure :: loss_grad
+    procedure          :: new
+    procedure          :: set_sym
+    procedure          :: prep_particles
+    procedure          :: set_volume
+    procedure          :: set_direction
+    procedure          :: begin_grad
+    procedure          :: get_grad
+    procedure          :: predict
+    procedure          :: loss_grad
     procedure, private :: adjoint_planes
-    procedure :: curvature
+    procedure          :: curvature
     procedure, private :: linearize_planes
-    procedure :: line_losses
-    procedure :: gain_terms
-    procedure :: get_exit_wave
-    procedure :: plane_to_image
-    procedure :: get_nptcls
-    procedure :: get_model
+    procedure          :: line_losses
+    procedure          :: gain_terms
+    procedure          :: get_exit_wave
+    procedure          :: plane_to_image
+    procedure          :: get_nptcls
+    procedure          :: get_model
     procedure, private :: transform
     procedure, private :: spectrum
     procedure, private :: spectrum_cube
@@ -90,11 +90,11 @@ type, extends(pcg_lattice) :: wave_projector
     procedure, private :: ensure_cubes
     procedure, private :: shift_vectors
     procedure, private :: pass
-    procedure :: kill
+    procedure          :: kill
 end type wave_projector
 
 integer, parameter :: PASS_LOSS_GRAD = 1, PASS_ADJOINT = 2, PASS_CURVATURE = 3, PASS_PREDICT = 4, PASS_LINEAR = 5
-integer, parameter :: PASS_GAIN = 6
+integer, parameter :: PASS_GAIN      = 6
 
 interface
     !> white-box tests (submodule simple_wave_projector_tester, built only with BUILD_TESTS=ON)
@@ -109,13 +109,13 @@ contains
     !! bfac the lens B-factor (A^2, 0 by default)
     subroutine new( self, box, smpd, model, kappa, gain, osf, bfac, fft_nthreads, winsz )
         use simple_rnd, only: has_global_seed
-        class(wave_projector), intent(inout) :: self
-        integer,               intent(in)    :: box, model, kappa
-        real,                  intent(in)    :: smpd, gain
-        integer, optional,     intent(in)    :: osf, fft_nthreads
-        real,    optional,     intent(in)    :: bfac, winsz
+        class(wave_projector), intent(inout)            :: self
+        integer,               intent(in)               :: box, model, kappa
+        real,                  intent(in)               :: smpd, gain
+        integer,               optional,     intent(in) :: osf, fft_nthreads
+        real,                  optional,     intent(in) :: bfac, winsz
         real, allocatable :: inv1d(:)
-        integer :: i, j, k, h
+        integer           :: i, j, k, h
         call self%kill
         select case(model)
             case(WAVE_PROJECTION, WAVE_FIRST_BORN, WAVE_RYTOV, WAVE_MSLICE)
@@ -184,14 +184,14 @@ contains
     !! rec_obs_oris gives them; inv_sig2(0:) the selection's noise spectrum at the native shells, weights
     !! and bfacs (the lens B-factors, the operator's by default) one per particle
     subroutine prep_particles( self, os, inv_sig2, weights, bfacs )
-        class(wave_projector), intent(inout) :: self
-        class(oris),           intent(inout) :: os
-        real, optional,        intent(in)    :: inv_sig2(0:)
-        real, optional,        intent(in)    :: weights(:), bfacs(:)
+        class(wave_projector), intent(inout)               :: self
+        class(oris),           intent(inout)               :: os
+        real,                  optional,        intent(in) :: inv_sig2(0:)
+        real,                  optional,        intent(in) :: weights(:), bfacs(:)
         type(ori)     :: o
         type(ctf)     :: tfun
         type(ctfvars) :: vars
-        integer :: i, rtop
+        integer       :: i, rtop
         if( .not. self%exists ) THROW_HARD('new has not been called; wave_projector%prep_particles')
         self%nptcls = os%get_noris()
         if( allocated(self%rotmats)  ) deallocate(self%rotmats)
@@ -264,12 +264,12 @@ contains
     !! cmat. In place through the work image's pointers (image%get_cmat_ptr states the contract): the
     !! copies of set_rmat/get_cmat and the padded temporary cost more than the transform
     subroutine transform( self, v, cmat )
-        class(wave_projector), intent(inout) :: self
-        real,                  intent(in)    :: v(self%box,self%box,self%box)
-        complex, allocatable,  intent(inout) :: cmat(:,:,:)
+        class(wave_projector), intent(inout)               :: self
+        real,                  intent(in)                  :: v(self%box,self%box,self%box)
+        complex,               allocatable,  intent(inout) :: cmat(:,:,:)
         real(c_float),            pointer :: rptr(:,:,:)
         complex(c_float_complex), pointer :: cptr(:,:,:)
-        integer :: j, k, o, box, boxpd
+        integer                           :: j, k, o, box, boxpd
         call self%wimg%get_rmat_ptr(rptr)
         o     = self%pad_off
         box   = self%box
@@ -361,9 +361,9 @@ contains
                                                   &-(self%Rnat-1):self%Rnat-1)
         complex,               intent(in)  :: phh(self%lims2(1,1):self%lims2(1,2)), phk(self%lims2(2,1):self%lims2(2,2))
         complex, allocatable :: part(:,:,:)
-        complex :: ph
-        real    :: rot(3,3), scale
-        integer :: g, h, k
+        complex              :: ph
+        real                 :: rot(3,3), scale
+        integer              :: g, h, k
         ! the first rotation straight into the cube, a second buffer only for a point group
         rot = matmul(self%rotmats(:,:,i), self%symmats(:,:,1))
         if( l_dir )then
@@ -479,8 +479,8 @@ contains
         contains
 
             subroutine grow( c, l_need )
-                complex, allocatable, intent(inout) :: c(:,:,:)
-                logical,              intent(in)    :: l_need
+                complex,              allocatable, intent(inout) :: c(:,:,:)
+                logical,              intent(in)                 :: l_need
                 if( .not. l_need .or. size(c) > 0 ) return
                 deallocate(c)
                 allocate(c(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2), -rl:rl))
@@ -569,7 +569,7 @@ contains
         real(dp),              intent(in)    :: t(:)
         real(dp),              intent(out)   :: losses(:)
         real(dp), allocatable :: lossmat(:,:)
-        integer :: ib, i, ithr, j
+        integer               :: ib, i, ithr, j
         if( .not. (self%l_vol .and. self%l_dir) ) THROW_HARD('set_volume and set_direction first; line_losses')
         if( size(losses) /= size(t) ) THROW_HARD('one loss per step; line_losses')
         if( nb < 1 ) return
@@ -659,16 +659,16 @@ contains
     !! yin holds y (loss_grad) or q (adjoint), pout receives p (predict) or J d (linearize_planes); multislice runs
     !! chunks of one particle per thread, which bounds the gradient cubes held for the scatter
     subroutine pass( self, mode, nb, ifrom, vals, yin, pout, vals2 )
-        class(wave_projector), intent(inout) :: self
-        integer,               intent(in)    :: mode, nb, ifrom
-        real(dp),              intent(out)   :: vals(nb)
-        real(dp), optional,    intent(out)   :: vals2(nb)
-        complex, optional,     intent(in)    :: yin(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2),nb)
-        complex, optional,     intent(out)   :: pout(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2),nb)
+        class(wave_projector), intent(inout)             :: self
+        integer,               intent(in)                :: mode, nb, ifrom
+        real(dp),              intent(out)               :: vals(nb)
+        real(dp),              optional,    intent(out)  :: vals2(nb)
+        complex,               optional,     intent(in)  :: yin(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2),nb)
+        complex,               optional,     intent(out) :: pout(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2),nb)
         complex, allocatable :: gplanes(:,:,:), gcubes(:,:,:,:)
-        real    :: rots(3,3,self%nsym), pscale, scale
-        integer :: ib, ib0, ib1, i, ithr, h, k, g, nchunk, rl
-        logical :: l_ms, l_grad
+        real                 :: rots(3,3,self%nsym), pscale, scale
+        integer              :: ib, ib0, ib1, i, ithr, h, k, g, nchunk, rl
+        logical              :: l_ms, l_grad
         if( .not. self%l_vol ) THROW_HARD('set_volume has not been called; wave_projector pass')
         if( nb < 1 ) return
         if( ifrom < 1 .or. ifrom + nb - 1 > self%nptcls ) THROW_HARD('batch outside the particle selection')

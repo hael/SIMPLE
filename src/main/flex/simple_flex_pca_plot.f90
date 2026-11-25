@@ -29,14 +29,14 @@ contains
     !! 1..nlab coloured. All arrays are over the same n points. Points with a non-finite coordinate
     !! are skipped in that panel.
     subroutine flex_plot_latent_jpg( fname, x, y, z1, z2, n, labels, nlab )
-        character(len=*),  intent(in) :: fname
-        real,              intent(in) :: x(:), y(:), z1(:), z2(:)
-        integer,           intent(in) :: n
-        integer,           intent(in) :: labels(:)
-        integer, optional, intent(in) :: nlab
+        character(len=*),  intent(in)           :: fname
+        real,              intent(in)           :: x(:), y(:), z1(:), z2(:)
+        integer,           intent(in)           :: n
+        integer,           intent(in)           :: labels(:)
+        integer,           optional, intent(in) :: nlab
         real,    allocatable :: rgb(:,:,:)
         integer, allocatable :: lab(:)
-        integer :: W, H, nl, x0
+        integer              :: W, H, nl, x0
         if( n < 10 ) return
         allocate(lab(n), source=0)
         nl = 0
@@ -157,8 +157,8 @@ contains
         integer, intent(in)  :: n
         real,    intent(out) :: lo, hi
         real, allocatable :: w(:)
-        integer :: m, i, klo, khi
-        real    :: pad
+        integer           :: m, i, klo, khi
+        real              :: pad
         allocate(w(n)); m = 0
         do i = 1, n
             if( v(i) == v(i) )then; m = m + 1; w(m) = v(i); endif

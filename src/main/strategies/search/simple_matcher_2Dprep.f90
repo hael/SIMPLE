@@ -131,15 +131,15 @@ contains
     !! prepimg4align; THROW_HARD when they are absent.
     subroutine prepimg4align_cart(raw_img, noise_mask, work_img, mskrad, smpd_crop, &
         &shift_crop, taper, ctfparms_in, observed, ctfparms_out)
-        class(image), intent(inout) :: raw_img, work_img
-        logical, intent(in) :: noise_mask(:, :, :)
-        real, intent(in) :: mskrad, smpd_crop, shift_crop(2), taper(:)
-        type(ctfparams), intent(in) :: ctfparms_in
-        complex, allocatable, intent(out) :: observed(:, :)
-        type(ctfparams), intent(out) :: ctfparms_out
-        type(ctf) :: tfun
+        class(image),    intent(inout)            :: raw_img, work_img
+        logical,         intent(in)               :: noise_mask(:, :, :)
+        real,            intent(in)               :: mskrad, smpd_crop, shift_crop(2), taper(:)
+        type(ctfparams), intent(in)               :: ctfparms_in
+        complex,         allocatable, intent(out) :: observed(:, :)
+        type(ctfparams), intent(out)              :: ctfparms_out
+        type(ctf)     :: tfun
         real, pointer :: rmat(:, :, :)
-        integer :: ldim(3), i, j
+        integer       :: ldim(3), i, j
 
         ldim = work_img%get_ldim()
         if (ldim(3) /= 1 .or. ldim(1) < 2 .or. mod(ldim(1), 2) /= 0 .or. ldim(2) /= ldim(1)) &

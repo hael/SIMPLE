@@ -23,21 +23,21 @@ contains
     procedure :: execute => read_rho_into
 end type rho_reader
 
-integer, parameter :: BOX      = 16
-character(len=*), parameter :: RHO_FNAME = 'tmp_frozen_accum_tester_rho.mrc'
+integer,          parameter :: BOX            = 16
+character(len=*), parameter :: RHO_FNAME      = 'tmp_frozen_accum_tester_rho.mrc'
 character(len=*), parameter :: RHO_COPY_FNAME = 'tmp_frozen_accum_tester_rho_copy.mrc'
-integer, parameter :: NFROZEN  = 14   ! frozen planes (even/odd alternate)
-integer, parameter :: NCOHORT  = 10   ! cohort planes
-integer, parameter :: SEED     = 20260926
-real,    parameter :: SMPD     = 2.0
+integer,          parameter :: NFROZEN        = 14 ! frozen planes (even/odd alternate)
+integer,          parameter :: NCOHORT        = 10 ! cohort planes
+integer,          parameter :: SEED           = 20260926
+real,             parameter :: SMPD           = 2.0
 ! Single-precision sums of O(10) terms reassociated between F u C and F + C:
 ! relative differences of a few ulps (~1e-7) of the largest magnitude; the
 ! restored maps propagate them through linear operators of O(1) gain.
-real,    parameter :: RAW_RELTOL = 1.e-5
-real,    parameter :: MAP_RELTOL = 1.e-4
+real,             parameter :: RAW_RELTOL = 1.e-5
+real,             parameter :: MAP_RELTOL = 1.e-4
 character(len=*), parameter :: CTX_FNAME  = 'tmp_frozen_accum_tester_context.txt'
 character(len=*), parameter :: CTX_FNAME2 = 'tmp_frozen_accum_tester_context_2.txt'
-character(len=*), parameter :: RUN_ID    = 'tester_run_1'
+character(len=*), parameter :: RUN_ID     = 'tester_run_1'
 
 contains
 
@@ -89,7 +89,7 @@ contains
     logical function same_text( fname1, fname2 ) result( l_same )
         character(len=*), intent(in) :: fname1, fname2
         character(len=256) :: lines1(64), lines2(64)
-        integer :: n1, n2
+        integer            :: n1, n2
         call read_text(fname1, lines1, n1)
         call read_text(fname2, lines2, n2)
         l_same = n1 == n2 .and. n1 > 0
@@ -138,7 +138,7 @@ contains
     subroutine test_context_round_trip()
         type(frozen_accum)    :: ctx, back
         character(len=STDLEN) :: msg
-        integer :: status
+        integer               :: status
         write(*,'(A)') 'test_context_round_trip'
         call make_context(ctx, RUN_ID)
         call ctx%write(string(CTX_FNAME))
@@ -168,7 +168,7 @@ contains
         type(frozen_accum)    :: ctx
         character(len=STDLEN) :: msg
         character(len=64)     :: good(10)
-        integer :: status
+        integer               :: status
         write(*,'(A)') 'test_context_refusals'
         good = [character(len=64) :: 'solve3D_addon_frozen_context 4', 'run_id r1', 'backend gridding', &
             &'nstates 2', 'nrows 30', 'nrows_frozen 25', 'nfrozen 7', 'nfrozen_state 1 3', 'nfrozen_state 2 4', 'end']
@@ -209,23 +209,23 @@ contains
     ! ---- gridding -------------------------------------------------------------
 
     subroutine test_gridding_union_equals_sum()
-        type(parameters), target :: params
-        type(sp_project)         :: project
-        type(reconstructor)      :: f_even, f_odd, c_even, c_odd, u_even, u_odd, scratch_e, scratch_o
-        type(image)              :: map_c, map_u
-        type(frozen_accum)       :: ctx, other, weighted, recount
-        type(oris)               :: all_oris
-        type(ori)                :: o
-        type(sym)                :: c1sym
-        type(ctfparams)          :: ctfparms
-        type(fplane_type)        :: fplane
-        type(fplane_grid)        :: grid
-        type(image)              :: obs, obs_pad
-        real,    allocatable     :: imgs(:,:,:), rho_c(:,:,:), rho_u(:,:,:), rho_f(:,:,:), rmat_c(:,:,:), rmat_u(:,:,:)
-        complex, allocatable     :: cmat_c(:,:,:), cmat_u(:,:,:), cmat_f(:,:,:)
-        character(len=STDLEN)    :: msg
-        type(string)             :: fname
-        integer :: i, status
+        type(parameters), target      :: params
+        type(sp_project)              :: project
+        type(reconstructor)           :: f_even, f_odd, c_even, c_odd, u_even, u_odd, scratch_e, scratch_o
+        type(image)                   :: map_c, map_u
+        type(frozen_accum)            :: ctx, other, weighted, recount
+        type(oris)                    :: all_oris
+        type(ori)                     :: o
+        type(sym)                     :: c1sym
+        type(ctfparams)               :: ctfparms
+        type(fplane_type)             :: fplane
+        type(fplane_grid)             :: grid
+        type(image)                   :: obs, obs_pad
+        real,             allocatable :: imgs(:,:,:), rho_c(:,:,:), rho_u(:,:,:), rho_f(:,:,:), rmat_c(:,:,:), rmat_u(:,:,:)
+        complex,          allocatable :: cmat_c(:,:,:), cmat_u(:,:,:), cmat_f(:,:,:)
+        character(len=STDLEN)         :: msg
+        type(string)                  :: fname
+        integer                       :: i, status
         write(*,'(A)') 'test_gridding_union_equals_sum'
         params%box        = BOX
         params%box_crop   = BOX
@@ -396,25 +396,25 @@ contains
     !! half) within the reassociation tolerances; the bundle is refused when its run, a component,
     !! its membership, its route or its manifest is wrong.
     subroutine test_carried_chain()
-        type(parameters), target :: params
-        type(sp_project)         :: project
-        type(reconstructor)      :: g1_e, g1_o, g2_e, g2_o, g3_e, g3_o, u_e, u_o, scratch_e, scratch_o
-        type(image)              :: map_c, map_u
-        type(frozen_accum)       :: ctx_a, carrier, ctx_c, ctx_u, store
-        type(carried_bundle)     :: bundle, back
-        type(oris)               :: all_oris
-        type(ori)                :: o
-        type(sym)                :: c1sym
-        type(ctfparams)          :: ctfparms
-        type(fplane_type)        :: fplane
-        type(fplane_grid)        :: grid
-        type(image)              :: obs, obs_pad
-        real,    allocatable     :: imgs(:,:,:), rho_c(:,:,:), rho_u(:,:,:), rmat_c(:,:,:), rmat_u(:,:,:)
-        complex, allocatable     :: cmat_c(:,:,:), cmat_u(:,:,:)
-        integer, allocatable     :: members(:), back_members(:)
-        character(len=STDLEN)    :: msg
-        type(string)             :: dir, bundle_fname, members_fname, fname
-        integer :: i, status, n, ngroup
+        type(parameters), target      :: params
+        type(sp_project)              :: project
+        type(reconstructor)           :: g1_e, g1_o, g2_e, g2_o, g3_e, g3_o, u_e, u_o, scratch_e, scratch_o
+        type(image)                   :: map_c, map_u
+        type(frozen_accum)            :: ctx_a, carrier, ctx_c, ctx_u, store
+        type(carried_bundle)          :: bundle, back
+        type(oris)                    :: all_oris
+        type(ori)                     :: o
+        type(sym)                     :: c1sym
+        type(ctfparams)               :: ctfparms
+        type(fplane_type)             :: fplane
+        type(fplane_grid)             :: grid
+        type(image)                   :: obs, obs_pad
+        real,             allocatable :: imgs(:,:,:), rho_c(:,:,:), rho_u(:,:,:), rmat_c(:,:,:), rmat_u(:,:,:)
+        complex,          allocatable :: cmat_c(:,:,:), cmat_u(:,:,:)
+        integer,          allocatable :: members(:), back_members(:)
+        character(len=STDLEN)         :: msg
+        type(string)                  :: dir, bundle_fname, members_fname, fname
+        integer                       :: i, status, n, ngroup
         write(*,'(A)') 'test_carried_chain'
         n      = NFROZEN + NCOHORT
         ngroup = n / 3
@@ -601,11 +601,11 @@ contains
     !> a density file carries its box and sampling: a reader of another box, of another sampling or of a
     !! file without the header stops (the payload alone would be read as a prefix of the receiver's shape)
     subroutine test_rho_header()
-        type(parameters), target :: params
-        type(sp_project)         :: project
-        type(reconstructor)      :: rec_w, rec_r
-        type(rho_reader)         :: child
-        real, allocatable        :: rho_w(:,:,:), rho_r(:,:,:)
+        type(parameters), target      :: params
+        type(sp_project)              :: project
+        type(reconstructor)           :: rec_w, rec_r
+        type(rho_reader)              :: child
+        real,             allocatable :: rho_w(:,:,:), rho_r(:,:,:)
         write(*,'(A)') 'test_rho_header'
         call accumulator_params(params, BOX, SMPD)
         call rec_w%new_accumulator(params, project, expand=.false., wthreads=.false.)
@@ -678,8 +678,8 @@ contains
 
     !> the density of rec as its file holds it (write_rho), the payload after the header
     subroutine get_density( rec, rho )
-        class(reconstructor), intent(in)  :: rec
-        real, allocatable,    intent(out) :: rho(:,:,:)
+        class(reconstructor), intent(in)                  :: rec
+        real,                 allocatable,    intent(out) :: rho(:,:,:)
         type(string) :: fname
         real(dp)     :: smpd_file
         integer      :: funit, io_stat, ldim_file(3), rho_shape(3)

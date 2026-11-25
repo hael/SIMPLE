@@ -4,12 +4,12 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('solve3d', 'Solve 3D Map Determination', 50)
-type(ui_program), target :: solve3D
-type(ui_program), target :: solve3D_cavgs
-type(ui_program), target :: solve3D_addon
-type(ui_program), target :: solve3D_chunks
-type(ui_program), target :: noisevol
-type(ui_program), target :: validate_pose_student
+type(ui_program),          target    :: solve3D
+type(ui_program),          target    :: solve3D_cavgs
+type(ui_program),          target    :: solve3D_addon
+type(ui_program),          target    :: solve3D_chunks
+type(ui_program),          target    :: noisevol
+type(ui_program),          target    :: validate_pose_student
 
 contains
 

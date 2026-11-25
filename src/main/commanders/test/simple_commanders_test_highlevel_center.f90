@@ -21,24 +21,24 @@ contains
         use, intrinsic :: ieee_arithmetic,  only: ieee_is_finite
         class(commander_test_center_ptcls), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        integer, parameter :: NPTCLS      = 2000
-        real,    parameter :: SNR         = 0.5
-        real,    parameter :: SHERR_PX    = 6.    !< the planted shifts' range (pixels at 2.2 A): 13 A, the picking error's scale
-        real,    parameter :: SHIFT_SIGMA = 10.   !< center_ptcls' default prior (A), whose 3-sigma disk bounds every shift
+        integer,           parameter   :: NPTCLS      = 2000
+        real,              parameter   :: SNR         = 0.5
+        real,              parameter   :: SHERR_PX    = 6.  !< the planted shifts' range (pixels at 2.2 A): 13 A, the picking error's scale
+        real,              parameter   :: SHIFT_SIGMA = 10. !< center_ptcls' default prior (A), whose 3-sigma disk bounds every shift
         class(parameters), allocatable :: params
-        type(state_fixture)          :: fix
-        type(test_gate)              :: gate
-        type(sp_project)             :: proj
-        type(oris)                   :: truth
-        type(commander_center_ptcls) :: xcenter
-        type(cmdline)                :: cl
-        type(string)                 :: cwd_saved, root, projfile
-        integer(timer_int_kind)      :: t0
-        real,    allocatable :: e3_before(:), cls_before(:), dx(:), dy(:), rplant(:), rres(:), sorted(:)
-        integer, allocatable :: inds(:)
-        real    :: smpd, wall, mx, my, sh(2), sh3(2), tsh(2), bound_px, med_plant, med_res
-        integer :: i, status, n3, n5, nsent
-        logical :: l_centred, l_same, l_bound
+        type(state_fixture)            :: fix
+        type(test_gate)                :: gate
+        type(sp_project)               :: proj
+        type(oris)                     :: truth
+        type(commander_center_ptcls)   :: xcenter
+        type(cmdline)                  :: cl
+        type(string)                   :: cwd_saved, root, projfile
+        integer(timer_int_kind)        :: t0
+        real,              allocatable :: e3_before(:), cls_before(:), dx(:), dy(:), rplant(:), rres(:), sorted(:)
+        integer,           allocatable :: inds(:)
+        real                           :: smpd, wall, mx, my, sh(2), sh3(2), tsh(2), bound_px, med_plant, med_res
+        integer                        :: i, status, n3, n5, nsent
+        logical                        :: l_centred, l_same, l_bound
         allocate(params)
         call simple_getcwd(cwd_saved)
         root = filepath(cwd_saved, 'test_center_ptcls_'//int2str(get_process_id()))

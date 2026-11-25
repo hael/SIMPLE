@@ -54,33 +54,33 @@ contains
         use simple_reconstructor,       only: reconstructor, gridding_half_restore, RHO_HDR_BYTES, read_rho_header
         use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
             &write_halfmap_diagnostics, write_support_provenance
-        type(parameters),       intent(in)    :: params
-        type(builder),          intent(inout) :: build
-        class(cmdline),         intent(in)    :: cline
-        type(reconstructor),    intent(inout) :: even_rec, odd_rec, read_even_rec, read_odd_rec, sum_rec
-        integer,                intent(in)    :: state, numlen_part
-        real,                   intent(in)    :: update_frac_trail_rec !< applied map-update weight u (ufrac_trec override or realized)
-        real,                   intent(in)    :: realized_update_frac  !< realized fraction f that produced the current partials
-        real,                   intent(in)    :: trail_counts(TC_N)    !< TC_* populations of this state
-        integer(kind=8),        intent(in)    :: wset_id(2)            !< state weight set identity (0 under hard labels)
-        logical,                intent(in)    :: l_floor_rho           !< fractional weights: shell-floor the densities (D4)
-        logical,                intent(out)   :: l_carry_forward       !< no sample and no chain: carry the previous volume
-        type(image),            intent(inout) :: vol_nu_base_even, vol_nu_base_odd
-        type(image),            intent(inout) :: vol_nu_aux_even, vol_nu_aux_odd
-        type(string),           intent(inout) :: volname, eonames(2)
-        real,                   intent(out)   :: res05, res0143, cfar
-        type(restore_timings_t), intent(inout) :: timings
-        type(frozen_accum), optional, intent(in) :: frozen_rec  !< add-on consumer: frozen term summed into the union
-        type(frozen_accum), optional, intent(in) :: frozen_seed !< add-on producer: publish these accumulators as the frozen set
-        type(frozen_accum), optional, intent(in) :: frozen_carry !< add-on carrier: publish the union's sums (cohort + frozen term)
-        type(string) :: fsc_txt_file, trail_fbody
-        character(len=:), allocatable :: errmsg
+        type(parameters),        intent(in)           :: params
+        type(builder),           intent(inout)        :: build
+        class(cmdline),          intent(in)           :: cline
+        type(reconstructor),     intent(inout)        :: even_rec, odd_rec, read_even_rec, read_odd_rec, sum_rec
+        integer,                 intent(in)           :: state, numlen_part
+        real,                    intent(in)           :: update_frac_trail_rec !< applied map-update weight u (ufrac_trec override or realized)
+        real,                    intent(in)           :: realized_update_frac  !< realized fraction f that produced the current partials
+        real,                    intent(in)           :: trail_counts(TC_N)    !< TC_* populations of this state
+        integer(kind=8),         intent(in)           :: wset_id(2)            !< state weight set identity (0 under hard labels)
+        logical,                 intent(in)           :: l_floor_rho           !< fractional weights: shell-floor the densities (D4)
+        logical,                 intent(out)          :: l_carry_forward       !< no sample and no chain: carry the previous volume
+        type(image),             intent(inout)        :: vol_nu_base_even, vol_nu_base_odd
+        type(image),             intent(inout)        :: vol_nu_aux_even, vol_nu_aux_odd
+        type(string),            intent(inout)        :: volname, eonames(2)
+        real,                    intent(out)          :: res05, res0143, cfar
+        type(restore_timings_t), intent(inout)        :: timings
+        type(frozen_accum),      optional, intent(in) :: frozen_rec            !< add-on consumer: frozen term summed into the union
+        type(frozen_accum),      optional, intent(in) :: frozen_seed           !< add-on producer: publish these accumulators as the frozen set
+        type(frozen_accum),      optional, intent(in) :: frozen_carry          !< add-on carrier: publish the union's sums (cohort + frozen term)
+        type(string)                     :: fsc_txt_file, trail_fbody
+        character(len=:), allocatable    :: errmsg
         type(halfmap_diagnostics_result) :: pair_diagnostics
-        real    :: weight_prev, trail_chain_mrep, trail_mrep_new
-        integer :: trail_chain_gen, trail_ncontrib
-        logical :: l_trail_chain
-        integer(timer_int_kind) :: t_reduce_partials, t_restore_eos, t_restore_merged, t_sum_eos
-        integer(timer_int_kind) :: t_trail_blend
+        real                             :: weight_prev, trail_chain_mrep, trail_mrep_new
+        integer                          :: trail_chain_gen, trail_ncontrib
+        logical                          :: l_trail_chain
+        integer(timer_int_kind)          :: t_reduce_partials, t_restore_eos, t_restore_merged, t_sum_eos
+        integer(timer_int_kind)          :: t_trail_blend
         l_carry_forward = .false.
         call reduce_partials()
         call set_state_filenames()
@@ -314,9 +314,9 @@ contains
         !! remnants are rejected and discarded by the next validation.
         subroutine write_trail_chain_set()
             type(trail_chain_manifest) :: man
-            type(string)    :: manifest, files(5)
-            integer(kind=8) :: sizes(4)
-            integer         :: io_stat, ifile
+            type(string)               :: manifest, files(5)
+            integer(kind=8)            :: sizes(4)
+            integer                    :: io_stat, ifile
             manifest = refine3D_trail_manifest_fname(state)
             call del_file(manifest)
             call write_gridding_pair_accumulators(even_rec, odd_rec, trail_fbody)
@@ -346,10 +346,10 @@ contains
         !! discards the complete set and re-seeds instead of failing the run.
         logical function validate_trail_chain() result( l_valid )
             type(trail_chain_manifest) :: man
-            type(string) :: manifest
-            integer      :: status, ifile
-            integer(kind=8) :: actual_sizes(4)
-            character(len=256) :: message
+            type(string)               :: manifest
+            integer                    :: status, ifile
+            integer(kind=8)            :: actual_sizes(4)
+            character(len=256)         :: message
             l_valid  = .false.
             manifest = refine3D_trail_manifest_fname(state)
             call man%read(manifest, status)
@@ -485,20 +485,20 @@ contains
         !! caller marks the artifact required, in which case it is a hard error.
         subroutine read_gridding_pair_accumulators( params, even_rec, odd_rec, fbody, required )
             use simple_imgfile, only: imgfile
-            class(parameters),    intent(in)    :: params
-            class(reconstructor), intent(inout) :: even_rec, odd_rec
-            class(string),        intent(in)    :: fbody
-            logical, optional,    intent(in)    :: required
-            type(string)      :: even_vol, even_rho, odd_vol, odd_rho
-            type(image)       :: prev_vol_e, prev_vol_o
-            type(imgfile)     :: ioimg_e, ioimg_o
-            real, allocatable :: rho_e(:,:,:), rho_o(:,:,:)
-            integer :: current_ldim(3), cshape(3), prev_ldim(3)
-            integer :: fhandle_rho_e, fhandle_rho_o, i, ierr, dummy, hdr_ldim(3), hdr_shape(3)
-            real    :: current_smpd, prev_smpd
-            real(dp) :: hdr_smpd, extent_prev, extent_current
+            class(parameters),    intent(in)              :: params
+            class(reconstructor), intent(inout)           :: even_rec, odd_rec
+            class(string),        intent(in)              :: fbody
+            logical,              optional,    intent(in) :: required
+            type(string)                  :: even_vol, even_rho, odd_vol, odd_rho
+            type(image)                   :: prev_vol_e, prev_vol_o
+            type(imgfile)                 :: ioimg_e, ioimg_o
+            real,             allocatable :: rho_e(:,:,:), rho_o(:,:,:)
+            integer                       :: current_ldim(3), cshape(3), prev_ldim(3)
+            integer                       :: fhandle_rho_e, fhandle_rho_o, i, ierr, dummy, hdr_ldim(3), hdr_shape(3)
+            real                          :: current_smpd, prev_smpd
+            real(dp)                      :: hdr_smpd, extent_prev, extent_current
             character(len=:), allocatable :: errmsg
-            logical :: here(4), l_pad_with_zeros
+            logical                       :: here(4), l_pad_with_zeros
             current_ldim = even_rec%get_ldim()
             current_smpd = even_rec%get_smpd()
             if( any(odd_rec%get_ldim() /= current_ldim) )then
@@ -638,19 +638,19 @@ contains
         !! trailing-chain policy.
         subroutine restore_gridding_pair( params, even_rec, odd_rec, state, fname_even, fname_odd, &
             &diagnostics, base_even, base_odd, aux_even, aux_odd )
-            class(parameters),                intent(in)    :: params
-            class(reconstructor),             intent(inout) :: even_rec, odd_rec
-            integer,                          intent(in)    :: state
-            class(string),                    intent(in)    :: fname_even, fname_odd
-            type(halfmap_diagnostics_result), intent(out)   :: diagnostics
-            type(image), optional,            intent(inout) :: base_even, base_odd !< the unregularized halves as written
-            type(image), optional,            intent(inout) :: aux_even, aux_odd   !< the regularized halves as written (ml_reg)
+            class(parameters),                intent(in)                         :: params
+            class(reconstructor),             intent(inout)                      :: even_rec, odd_rec
+            integer,                          intent(in)                         :: state
+            class(string),                    intent(in)                         :: fname_even, fname_odd
+            type(halfmap_diagnostics_result), intent(out)                        :: diagnostics
+            type(image),                      optional,            intent(inout) :: base_even, base_odd !< the unregularized halves as written
+            type(image),                      optional,            intent(inout) :: aux_even, aux_odd   !< the regularized halves as written (ml_reg)
             type(gridding_half_restore) :: even_restore, odd_restore
-            type(string) :: fname_even_unfil, fname_odd_unfil
-            logical :: l_unmasked
-            real,     allocatable :: res(:)
-            real                  :: smpd, fny
-            integer               :: box, filtsz
+            type(string)                :: fname_even_unfil, fname_odd_unfil
+            logical                     :: l_unmasked
+            real,     allocatable       :: res(:)
+            real                        :: smpd, fny
+            integer                     :: box, filtsz
             box    = params%box_crop
             smpd   = params%smpd_crop
             filtsz = fdim(box) - 1
@@ -744,8 +744,8 @@ contains
 
         !> a restored half as a read of the file just written gives it: the box only, zero FFT padding
         subroutine keep_half( half, kept )
-            type(image), target, intent(in)    :: half
-            type(image),         intent(inout) :: kept
+            type(image),         target, intent(in) :: half
+            type(image),         intent(inout)      :: kept
             real(kind=c_float), pointer :: rmat_half(:,:,:), rmat_kept(:,:,:)
             call kept%new([params%box_crop, params%box_crop, params%box_crop], params%smpd_crop)
             call half%get_rmat_ptr(rmat_half)
@@ -811,16 +811,16 @@ contains
     !! _nu_filt products themselves are written by nonuniform_filter_state
     !! inside the PCG master (both backends run the same competition).
     subroutine filter_pcg_nonuniform_maps( params, build, nu_align_lps, write )
-        type(parameters),  intent(in)    :: params
-        type(builder),     intent(inout) :: build
-        real,    optional, intent(in)    :: nu_align_lps(:)
-        logical, optional, intent(in)    :: write   !< write the particle field to the project file{.true.}
-        integer, allocatable :: state_pops(:), rep_rows(:), smp_rows(:), rec_rows(:)
-        logical, allocatable :: l_included(:)
+        type(parameters),  intent(in)           :: params
+        type(builder),     intent(inout)        :: build
+        real,              optional, intent(in) :: nu_align_lps(:)
+        logical,           optional, intent(in) :: write !< write the particle field to the project file{.true.}
+        integer, allocatable   :: state_pops(:), rep_rows(:), smp_rows(:), rec_rows(:)
+        logical, allocatable   :: l_included(:)
         type(state_weight_set) :: wset
-        integer :: state
-        real    :: align_lp
-        logical :: l_write
+        integer                :: state
+        real                   :: align_lp
+        logical                :: l_write
         if( .not. params%l_nonuniform ) return
         l_write = .true.
         if( present(write) ) l_write = write
@@ -858,8 +858,8 @@ contains
     !> volume assembly on its own parameters and builder, built from cline; the names of the volumes each state ends
     !! with are returned as volassemble_exec returns them
     subroutine run_volassemble( cline, vols, vols_even, vols_odd )
-        class(cmdline),                      intent(inout) :: cline
-        type(string), allocatable, optional, intent(out)   :: vols(:), vols_even(:), vols_odd(:)
+        class(cmdline),                      intent(inout)                      :: cline
+        type(string),                        allocatable, optional, intent(out) :: vols(:), vols_even(:), vols_odd(:)
         type(parameters), target :: params
         type(builder)            :: build
         call build%init_params_and_build_general_tbox(cline, params)
@@ -880,40 +880,40 @@ contains
         use simple_nu_state_filter, only: nonuniform_filter_state, nu_state_filter_timings, &
             &nu_aux_member
         !$ use omp_lib,             only: omp_set_num_threads
-        type(parameters), target,  intent(inout) :: params
-        type(builder),    target,  intent(inout) :: build
-        class(cmdline),            intent(inout) :: cline
-        integer,                   intent(in)    :: nthr
-        type(string), allocatable, optional, intent(out) :: vols(:), vols_even(:), vols_odd(:)
-        logical,                   optional, intent(in)  :: write   !< write the particle field to the project file{.true.}
-        type(reconstructor)           :: even_rec, odd_rec, read_even_rec, read_odd_rec, sum_rec
-        type(image)                   :: vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd
-        type(string)                  :: volname, eonames(2)
-        type(restore_timings_t)       :: restore_timings
-        type(nu_state_filter_timings) :: nu_timings
-        logical                       :: l_nonuniform_mode, l_state_carried, l_write_project
-        integer, allocatable          :: state_pops(:)
-        logical, allocatable          :: l_state_dropped(:)
-        real, allocatable             :: res0143s(:), res05s(:), cfars(:)
-        real, allocatable             :: nu_align_lps(:)
-        real, allocatable             :: update_frac_trail_recs(:), realized_update_fracs(:)
-        real,    allocatable          :: trail_counts(:,:)
-        type(state_weight_set)        :: wset
-        integer(kind=8)               :: wset_id(2)
-        logical, allocatable          :: l_floor_rho(:)
-        logical                       :: l_weighted
-        type(frozen_accum)            :: frozen_ctx, carry_ctx
-        logical                       :: l_frozen_rec, l_frozen_seed, l_frozen_carry
-        integer                       :: state, numlen_part
-        integer(timer_int_kind)       :: t_tot
-        integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_upd_proj, t_cleanup
-        real(timer_int_kind)          :: rt_reduce_partials, rt_sum_eos
-        real(timer_int_kind)          :: rt_restore_eos_and_write_fsc, rt_restore_merged_volume
-        real(timer_int_kind)          :: rt_trail_blend_accums
-        real(timer_int_kind)          :: rt_nu_envmask, rt_nonuniform_filter, rt_tot
-        real(timer_int_kind)          :: rt_init_context, rt_trail_frac, rt_gridcorr, rt_upd_proj, rt_cleanup
+        type(parameters),          target,  intent(inout)             :: params
+        type(builder),             target,  intent(inout)             :: build
+        class(cmdline),            intent(inout)                      :: cline
+        integer,                   intent(in)                         :: nthr
+        type(string),              allocatable, optional, intent(out) :: vols(:), vols_even(:), vols_odd(:)
+        logical,                   optional, intent(in)               :: write !< write the particle field to the project file{.true.}
+        type(reconstructor)               :: even_rec, odd_rec, read_even_rec, read_odd_rec, sum_rec
+        type(image)                       :: vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd
+        type(string)                      :: volname, eonames(2)
+        type(restore_timings_t)           :: restore_timings
+        type(nu_state_filter_timings)     :: nu_timings
+        logical                           :: l_nonuniform_mode, l_state_carried, l_write_project
+        integer,              allocatable :: state_pops(:)
+        logical,              allocatable :: l_state_dropped(:)
+        real,                 allocatable :: res0143s(:), res05s(:), cfars(:)
+        real,                 allocatable :: nu_align_lps(:)
+        real,                 allocatable :: update_frac_trail_recs(:), realized_update_fracs(:)
+        real,                 allocatable :: trail_counts(:,:)
+        type(state_weight_set)            :: wset
+        integer(kind=8)                   :: wset_id(2)
+        logical,              allocatable :: l_floor_rho(:)
+        logical                           :: l_weighted
+        type(frozen_accum)                :: frozen_ctx, carry_ctx
+        logical                           :: l_frozen_rec, l_frozen_seed, l_frozen_carry
+        integer                           :: state, numlen_part
+        integer(timer_int_kind)           :: t_tot
+        integer(timer_int_kind)           :: t_init_context, t_trail_frac, t_upd_proj, t_cleanup
+        real(timer_int_kind)              :: rt_reduce_partials, rt_sum_eos
+        real(timer_int_kind)              :: rt_restore_eos_and_write_fsc, rt_restore_merged_volume
+        real(timer_int_kind)              :: rt_trail_blend_accums
+        real(timer_int_kind)              :: rt_nu_envmask, rt_nonuniform_filter, rt_tot
+        real(timer_int_kind)              :: rt_init_context, rt_trail_frac, rt_gridcorr, rt_upd_proj, rt_cleanup
         real(timer_int_kind), allocatable :: rt_state_restore(:), rt_state_nu(:)
-        integer(timer_int_kind)       :: t_state
+        integer(timer_int_kind)           :: t_state
         !$ call omp_set_num_threads(nthr)
         nthr_glob = nthr
         l_write_project = .true.
@@ -1026,7 +1026,7 @@ contains
 
         subroutine refresh_state_populations()
             integer, allocatable :: rep_rows(:), smp_rows(:), rec_rows(:)
-            integer :: istate
+            integer              :: istate
             if( .not. allocated(state_pops) ) return
             if( l_weighted ) call build%spproj_field%get_update_rows(rep_rows, smp_rows, rec_rows)
             do istate = 1,params%nstates
@@ -1111,7 +1111,7 @@ contains
         subroutine determine_trailing_update_fraction()
             integer, allocatable :: nrep(:), nsmp(:), nseed(:), rep_rows(:), smp_rows(:), rec_rows(:), members(:)
             real,    allocatable :: wmem(:)
-            integer :: istate, iptcl, sampled_max
+            integer              :: istate, iptcl, sampled_max
             update_frac_trail_recs = 1.0
             realized_update_fracs  = 1.0
             trail_counts           = 0.

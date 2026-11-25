@@ -107,7 +107,7 @@ contains
     function create_gen_pspecs_and_thumbs_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
         class(gen_pspecs_and_thumbs_strategy), allocatable :: strategy
-        logical :: is_master
+        logical                                            :: is_master
         ! Master heuristic: nparts defined, but no explicit worker range/part.
         is_master = cline%defined('nparts') .and. (.not.cline%defined('part')) &
                    .and. (.not.cline%defined('fromp')) .and. (.not.cline%defined('top'))
@@ -217,7 +217,7 @@ contains
     ! ====================================================================
 
     subroutine distr_initialize(self, params, cline)
-        class(gen_pspecs_and_thumbs_distr_strategy), intent(inout) :: self
+        class(gen_pspecs_and_thumbs_distr_strategy),  intent(inout) :: self
         type(parameters),                             intent(inout) :: params
         class(cmdline),                               intent(inout) :: cline
         integer :: nintgs
@@ -249,7 +249,7 @@ contains
     end subroutine distr_initialize
 
     subroutine distr_execute(self, params, cline)
-        class(gen_pspecs_and_thumbs_distr_strategy), intent(inout) :: self
+        class(gen_pspecs_and_thumbs_distr_strategy),  intent(inout) :: self
         type(parameters),                             intent(inout) :: params
         class(cmdline),                               intent(inout) :: cline
         ! schedule & clean
@@ -262,14 +262,14 @@ contains
     end subroutine distr_execute
 
     subroutine distr_finalize_run(self, params, cline)
-        class(gen_pspecs_and_thumbs_distr_strategy), intent(inout) :: self
+        class(gen_pspecs_and_thumbs_distr_strategy),  intent(inout) :: self
         type(parameters),                             intent(in)    :: params
         class(cmdline),                               intent(inout) :: cline
         ! No-op
     end subroutine distr_finalize_run
 
     subroutine distr_cleanup(self, params, cline)
-        class(gen_pspecs_and_thumbs_distr_strategy), intent(inout) :: self
+        class(gen_pspecs_and_thumbs_distr_strategy),  intent(inout) :: self
         type(parameters),                             intent(in)    :: params
         class(cmdline),                               intent(inout) :: cline
         call qsys_cleanup(params)

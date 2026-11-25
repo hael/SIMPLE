@@ -23,7 +23,7 @@ type picksegdiam
     real              :: smpd_raw = 0.   !< sampling of the micrograph the positions refer to (A)
     type(linked_list) :: diameters, xpos, ypos
 contains
-    generic            :: pick => pick_1, pick_2, pick_3 
+    generic            :: pick => pick_1, pick_2, pick_3
     procedure, private :: pick_1, pick_2, pick_3
     procedure          :: get_nboxes
     procedure          :: get_diameters
@@ -36,20 +36,20 @@ contains
 
     subroutine pick_1( self, micname, smpd, moldiam_max, pcontrast, denfname, topofname, binfname, empty, thumbfname )
         use simple_gui_utils, only: mic2thumb
-        class(picksegdiam),      intent(inout) :: self
-        class(string),           intent(in)    :: micname !< micrograph file name
-        real,                    intent(in)    :: smpd, moldiam_max
-        character(len=*),        intent(in)    :: pcontrast
-        class(string), optional, intent(in)    :: denfname, topofname, binfname
-        class(string), optional, intent(in)    :: thumbfname !< thumbnail of the denoised micrograph (particles black)
-        logical,       optional, intent(out)   :: empty
+        class(picksegdiam),      intent(inout)         :: self
+        class(string),           intent(in)            :: micname    !< micrograph file name
+        real,                    intent(in)            :: smpd, moldiam_max
+        character(len=*),        intent(in)            :: pcontrast
+        class(string),           optional, intent(in)  :: denfname, topofname, binfname
+        class(string),           optional, intent(in)  :: thumbfname !< thumbnail of the denoised micrograph (particles black)
+        logical,                 optional, intent(out) :: empty
         integer, allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
         logical, allocatable :: picking_mask(:,:)
-        type(image)     :: mic_raw, mic_den
-        type(image_bin) :: mic_shrink, mic_bin, img_cc
-        real            :: rpos(2), diam, scale
-        integer         :: ldim_raw(3), ldim(3), pos(2), icc, nccs, nmasked
-        logical         :: l_empty
+        type(image)          :: mic_raw, mic_den
+        type(image_bin)      :: mic_shrink, mic_bin, img_cc
+        real                 :: rpos(2), diam, scale
+        integer              :: ldim_raw(3), ldim(3), pos(2), icc, nccs, nmasked
+        logical              :: l_empty
         call self%kill
         self%moldiam_max = moldiam_max
         self%smpd_raw    = smpd
@@ -135,9 +135,9 @@ contains
         class(string),      intent(in)    :: binmicname !< binarized micrograph file name, smpd is SMPD_SHRINK1
         real,               intent(in)    :: diam_fromto(2)
         integer,  allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
-        type(image_bin) :: mic_bin, img_cc
-        real           :: rpos(2), diam, diam_adj, scale
-        integer        :: pos(2), icc, nccs, ldim(3), nframes
+        type(image_bin)       :: mic_bin, img_cc
+        real                  :: rpos(2), diam, diam_adj, scale
+        integer               :: pos(2), icc, nccs, ldim(3), nframes
         call self%kill
         self%smpd_raw = smpd_raw
         scale = smpd_raw / SMPD_SHRINK1
@@ -179,20 +179,20 @@ contains
     end subroutine pick_2
 
     subroutine pick_3( self, micname, smpd, moldiams, pcontrast, denfname, topofname, binfname, empty )
-        class(picksegdiam),      intent(inout) :: self
-        class(string),           intent(in)    :: micname !< micrograph file name
-        real,                    intent(in)    :: smpd
-        real,                    intent(in)    :: moldiams(:)
-        character(len=*),        intent(in)    :: pcontrast
-        class(string), optional, intent(in)    :: denfname, topofname, binfname
-        logical,       optional, intent(out)   :: empty
+        class(picksegdiam),      intent(inout)         :: self
+        class(string),           intent(in)            :: micname !< micrograph file name
+        real,                    intent(in)            :: smpd
+        real,                    intent(in)            :: moldiams(:)
+        character(len=*),        intent(in)            :: pcontrast
+        class(string),           optional, intent(in)  :: denfname, topofname, binfname
+        logical,                 optional, intent(out) :: empty
         integer, allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
         logical, allocatable :: picking_mask(:,:)
-        type(image)     :: mic_raw, mic_den
-        type(image_bin) :: mic_shrink, mic_bin, img_cc
-        real            :: rpos(2), diam, diam_adj, scale
-        integer         :: ldim_raw(3), ldim(3), pos(2), icc, nccs, nmasked
-        logical         :: l_empty
+        type(image)          :: mic_raw, mic_den
+        type(image_bin)      :: mic_shrink, mic_bin, img_cc
+        real                 :: rpos(2), diam, diam_adj, scale
+        integer              :: ldim_raw(3), ldim(3), pos(2), icc, nccs, nmasked
+        logical              :: l_empty
         call self%kill
         if( size(moldiams) == 0 )then
             if(present(empty)) empty = .true.
@@ -284,12 +284,12 @@ contains
     end function get_nboxes
 
     subroutine get_diameters( self, arr )
-        class(picksegdiam), intent(in) :: self
-        real, allocatable, intent(inout) :: arr(:)
+        class(picksegdiam), intent(in)                 :: self
+        real,               allocatable, intent(inout) :: arr(:)
         type(list_iterator)   :: diams_iter
         class(*), allocatable :: any
-        real    :: areal
-        integer :: i, n
+        real                  :: areal
+        integer               :: i, n
         if( allocated(arr) ) deallocate(arr)
         n = self%diameters%size()
         if( n == 0 ) return
@@ -314,8 +314,8 @@ contains
         type(nrtxtfile)       :: diamsfile
         class(*), allocatable :: any
         real,     allocatable :: arr(:)
-        real    :: areal
-        integer :: i, n
+        real                  :: areal
+        integer               :: i, n
         n = self%diameters%size()
         if( n == 0 ) return
         allocate(arr(n))
@@ -339,14 +339,14 @@ contains
 
     ! for writing coordinates & diameters
     subroutine write_pos_and_diams( self, fname, nptcls, box )
-        class(picksegdiam), intent(in)    :: self
-        class(string),      intent(in)    :: fname
-        integer,            intent(inout) :: nptcls
-        integer, optional,  intent(in)    :: box
+        class(picksegdiam), intent(in)            :: self
+        class(string),      intent(in)            :: fname
+        integer,            intent(inout)         :: nptcls
+        integer,            optional,  intent(in) :: box
         type(list_iterator)   :: xpos_iter, ypos_iter
         real,     allocatable :: diams(:)
         class(*), allocatable :: any
-        integer :: i, funit, iostat, x,y, box_here
+        integer               :: i, funit, iostat, x,y, box_here
         nptcls = self%diameters%size()
         if( nptcls == 0 ) return
         if( present(box) )then

@@ -13,12 +13,12 @@ private
 
 type(commander_trajectory_extract_substk)                 :: xtrajectory_extract_substk
 type(commander_trajectory_graphene_subtr)                 :: xtrajectory_graphene_subtr
-type(commander_trajectory_import)              :: xtrajectory_import
-type(commander_trajectory_denoise)             :: xden_traj
-type(commander_trajectory_make_projavgs)       :: xtrajectory_make_projavgs
-type(commander_trajectory_reconstruct3D_distr) :: xtrajectory_reconstruct3D
-type(commander_trajectory_swap_stack)          :: xtrajectory_swap_stack
-type(commander_trajectory_solve3D)             :: xtrajectory_solve3D
+type(commander_trajectory_import)                         :: xtrajectory_import
+type(commander_trajectory_denoise)                        :: xden_traj
+type(commander_trajectory_make_projavgs)                  :: xtrajectory_make_projavgs
+type(commander_trajectory_reconstruct3D_distr)            :: xtrajectory_reconstruct3D
+type(commander_trajectory_swap_stack)                     :: xtrajectory_swap_stack
+type(commander_trajectory_solve3D)                        :: xtrajectory_solve3D
 
 contains
 

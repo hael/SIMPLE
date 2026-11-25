@@ -85,7 +85,7 @@ contains
         integer, intent(in) :: it, maxits
         real, parameter :: NEIGH_FRAC_START = 0.95  ! 5% of refs searched at it=1
         real, parameter :: NEIGH_FRAC_STOP  = 0.3   ! 70% of refs searched at it=maxits
-        real :: t
+        real            :: t
         if( it <= maxits )then
             t = real(it - 1) / real(max(1, maxits - 1))
             extremal_decay = NEIGH_FRAC_STOP + (NEIGH_FRAC_START - NEIGH_FRAC_STOP) &

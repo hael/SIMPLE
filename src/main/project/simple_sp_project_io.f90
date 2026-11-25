@@ -11,8 +11,8 @@ contains
         class(string),         intent(in)    :: fname
         type(binoris_seginfo), allocatable   :: hinfo(:)
         integer,               allocatable   :: seginds(:)
-        type(string) :: projfile, record
-        integer :: i
+        type(string)                         :: projfile, record
+        integer                              :: i
         if( fname2format(fname) .ne. 'O' )then
             THROW_HARD('file format of: '//fname%to_char()//' not supported; sp_project :: print_info')
         endif
@@ -41,12 +41,12 @@ contains
         type(binoris_seginfo), allocatable :: hinfo(:)
         integer,               allocatable :: seginds(:)
         type(json_value),      pointer     :: json_root, json_seg, json_real_keys, json_char_keys
-        type(oris)      :: vol_oris
-        type(json_core) :: json
-        type(string)    :: projfile, record
-        type(ori)       :: seg_ori
-        logical         :: is_ptcl = .false.
-        integer         :: i, j, noris
+        type(oris)                         :: vol_oris
+        type(json_core)                    :: json
+        type(string)                       :: projfile, record
+        type(ori)                          :: seg_ori
+        logical                            :: is_ptcl = .false.
+        integer                            :: i, j, noris
         if( fname2format(fname) .ne. 'O' )then
             THROW_HARD('file format of: '//fname%to_char()//' not supported; sp_project :: print_info_json')
         endif
@@ -109,9 +109,9 @@ contains
     end subroutine print_info_json
 
     module subroutine print_segment( self, oritype, fromto )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: oritype
-        integer, optional, intent(in)    :: fromto(2)
+        class(sp_project), intent(inout)        :: self
+        character(len=*),  intent(in)           :: oritype
+        integer,           optional, intent(in) :: fromto(2)
         type(string) :: str
         integer      :: ffromto(2), iori, noris
         logical      :: fromto_present
@@ -256,12 +256,12 @@ contains
     end subroutine print_segment
 
     module subroutine print_segment_json( self, oritype, projfile, fromto, sort_key, sort_asc, hist, nran, boxes, plot_key )
-        class(sp_project),           intent(inout) :: self
-        character(len=*),            intent(in)    :: oritype
-        class(string),               intent(in)    :: projfile
-        character(len=*),  optional, intent(in)    :: sort_key, sort_asc, hist, plot_key
-        integer,           optional, intent(in)    :: fromto(2), nran
-        logical,           optional, intent(in)    :: boxes
+        class(sp_project),           intent(inout)        :: self
+        character(len=*),            intent(in)           :: oritype
+        class(string),               intent(in)           :: projfile
+        character(len=*),            optional, intent(in) :: sort_key, sort_asc, hist, plot_key
+        integer,                     optional, intent(in) :: fromto(2), nran
+        logical,                     optional, intent(in) :: boxes
         type(json_core)                            :: json
         type(json_value),  pointer                 :: json_root, json_data, json_hist, json_ori, json_pre, json_post, json_plot
         type(oris)                                 :: vol_oris, fsc_oris
@@ -661,7 +661,7 @@ contains
             subroutine add_fsc( iori_l )
                 integer,          intent(in)  :: iori_l
                 type(json_value), pointer     :: fsc_json, datasets, dataset, data, labels
-                type(string) :: fscfile
+                type(string)                  :: fscfile
                 real,             allocatable :: fsc(:), res(:)
                 real                          :: smpd_l, box_l, fsc05, fsc0143
                 integer                       :: ifsc, fsc05_crossed_bin, fsc0143_crossed_bin
@@ -727,9 +727,9 @@ contains
 
             subroutine add_oriplot( iori_l )
                 integer, intent(in)       :: iori_l
-                type(json_value), pointer :: oriplot_json, datasets, dataset, data, xy
-                integer, allocatable      :: projection_counts(:,:)
-                integer                   :: iptcl, state, proj, iproj, idataset, max(2)
+                type(json_value), pointer     :: oriplot_json, datasets, dataset, data, xy
+                integer,          allocatable :: projection_counts(:,:)
+                integer                       :: iptcl, state, proj, iproj, idataset, max(2)
                 if(.not. self%os_ptcl3D%isthere("state")) return
                 allocate(projection_counts(size(projections, 1), 2))
                 projection_counts = 0
@@ -828,11 +828,11 @@ contains
     ! Readers
 
     module subroutine read( self, fname, wthreads )
-        class(sp_project), intent(inout) :: self
-        class(string),     intent(in)    :: fname
-        logical, optional, intent(in)    :: wthreads
+        class(sp_project), intent(inout)        :: self
+        class(string),     intent(in)           :: fname
+        logical,           optional, intent(in) :: wthreads
         type(string) :: projfile
-        integer :: isegment
+        integer      :: isegment
         if( fname2format(fname) .ne. 'O' )then
             THROW_HARD('format of: '//fname%to_char()//' not supported; read')
         endif
@@ -855,7 +855,7 @@ contains
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: fname
         type(string) :: projfile
-        integer :: iseg
+        integer      :: iseg
         if( fname2format(fname) .ne. 'O' )then
             THROW_HARD('file format of: '//fname%to_char()//' not supported; read_non_data_segments')
         endif
@@ -890,9 +890,9 @@ contains
     end subroutine read_ctfparams_state_eo
 
     module subroutine read_mic_stk_ptcl2D_segments( self, fname, wthreads )
-        class(sp_project), intent(inout) :: self
-        class(string),     intent(in)    :: fname
-        logical, optional, intent(in)    :: wthreads
+        class(sp_project), intent(inout)        :: self
+        class(string),     intent(in)           :: fname
+        logical,           optional, intent(in) :: wthreads
         type(string) :: projfile
         if( fname2format(fname) .ne. 'O' )then
             THROW_HARD('format of: '//fname%to_char()//' not supported; read')
@@ -910,11 +910,11 @@ contains
     end subroutine read_mic_stk_ptcl2D_segments
 
     module subroutine read_segment( self, oritype, fname, fromto, wthreads )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: oritype
-        class(string),     intent(in)    :: fname
-        integer, optional, intent(in)    :: fromto(2)
-        logical, optional, intent(in)    :: wthreads
+        class(sp_project), intent(inout)        :: self
+        character(len=*),  intent(in)           :: oritype
+        class(string),     intent(in)           :: fname
+        integer,           optional, intent(in) :: fromto(2)
+        logical,           optional, intent(in) :: wthreads
         integer :: isegment
         if( .not. file_exists(fname) )then
             THROW_HARD('inputted file: '//fname%to_char()//' does not exist; read_segment')
@@ -968,10 +968,10 @@ contains
     end subroutine read_segment
 
     module subroutine segreader( self, isegment, fromto, only_ctfparams_state_eo, wthreads )
-        class(sp_project),          intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        integer, optional,          intent(in)    :: fromto(2)
-        logical, optional,          intent(in)    :: only_ctfparams_state_eo, wthreads
+        class(sp_project),          intent(inout)                 :: self
+        integer(kind(ENUM_ORISEG)), intent(in)                    :: isegment
+        integer,                    optional,          intent(in) :: fromto(2)
+        logical,                    optional,          intent(in) :: only_ctfparams_state_eo, wthreads
         integer :: n
         n = self%bos%get_n_records(isegment)
         ! a segment the file does not hold (empty, or past its last one) reads as empty; a row range keeps the
@@ -1014,10 +1014,10 @@ contains
     end subroutine segreader
 
     module subroutine read_segments_info( self, fname, seginds, seginfos )
-        class(sp_project),                  intent(inout) :: self
-        class(string),                      intent(in)  :: fname
-        type(binoris_seginfo), allocatable, intent(out) :: seginfos(:)
-        integer,               allocatable, intent(out) :: seginds(:)
+        class(sp_project),                  intent(inout)            :: self
+        class(string),                      intent(in)               :: fname
+        type(binoris_seginfo),              allocatable, intent(out) :: seginfos(:)
+        integer,                            allocatable, intent(out) :: seginds(:)
         type(string) :: projfile
         if( fname2format(fname) .ne. 'O' )then
             THROW_HARD('file format of: '//fname%to_char()//' not supported; sp_project :: read_segments_info')
@@ -1039,7 +1039,7 @@ contains
         integer,             intent(out)   :: nmics, nstks, nptcls
         type(binoris_seginfo), allocatable :: seginfos(:)
         integer,               allocatable :: seginds(:)
-        integer :: i,n2D, n3D
+        integer                            :: i,n2D, n3D
         call self%read_segments_info(fname, seginds, seginfos)
         nmics  = 0
         nstks  = 0
@@ -1063,14 +1063,14 @@ contains
     ! Writers
 
     module subroutine write( self, fname, fromto, isegment, tempfile )
-        class(sp_project),                    intent(inout) :: self
-        class(string),              optional, intent(in)    :: fname
-        integer,                    optional, intent(in)    :: fromto(2)
-        integer(kind(ENUM_ORISEG)), optional, intent(in)    :: isegment
-        logical,                    optional, intent(in)    :: tempfile
-        type(string) :: projfile, tmpfile
+        class(sp_project),                    intent(inout)        :: self
+        class(string),                        optional, intent(in) :: fname
+        integer,                              optional, intent(in) :: fromto(2)
+        integer(kind(ENUM_ORISEG)),           optional, intent(in) :: isegment
+        logical,                              optional, intent(in) :: tempfile
+        type(string)                  :: projfile, tmpfile
         integer(kind(ENUM_ORISEG))    :: iseg
-        logical :: l_tmp
+        logical                       :: l_tmp
         call ensure_phase_shift_fields(self)
         l_tmp = .false.
         if( present(tempfile) ) l_tmp = tempfile
@@ -1117,11 +1117,11 @@ contains
     end subroutine clear_segment_inside
 
     module subroutine write_segment_inside( self, oritype, fname, fromto )
-        class(sp_project),          intent(inout) :: self
-        character(len=*),           intent(in)    :: oritype
-        class(string),    optional, intent(in)    :: fname
-        integer,          optional, intent(in)    :: fromto(2)
-        type(string) :: projfile
+        class(sp_project),          intent(inout)        :: self
+        character(len=*),           intent(in)           :: oritype
+        class(string),              optional, intent(in) :: fname
+        integer,                    optional, intent(in) :: fromto(2)
+        type(string)               :: projfile
         integer(kind(ENUM_ORISEG)) :: iseg
         call ensure_phase_shift_fields(self)
         if( present(fname) )then
@@ -1177,7 +1177,7 @@ contains
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: fname
         type(string) :: projfile
-        integer :: iseg
+        integer      :: iseg
         if( fname2format(fname) .ne. 'O' )then
             THROW_HARD('file format of: '//fname%to_char()//' not supported; sp_project :: write_non_data_segments')
         endif
@@ -1197,9 +1197,9 @@ contains
     end subroutine write_non_data_segments
 
     module subroutine segwriter( self, isegment, fromto )
-        class(sp_project), intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        integer, optional, intent(in)    :: fromto(2)
+        class(sp_project),          intent(inout)        :: self
+        integer(kind(ENUM_ORISEG)), intent(in)           :: isegment
+        integer,                    optional, intent(in) :: fromto(2)
         select case(isegment)
             case(MIC_SEG)
                 call self%bos%write_segment(isegment, self%os_mic, fromto)
@@ -1227,9 +1227,9 @@ contains
     end subroutine segwriter
 
     module subroutine segwriter_inside( self, isegment, fromto )
-        class(sp_project),          intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        integer, optional,          intent(in)    :: fromto(2)
+        class(sp_project),          intent(inout)                 :: self
+        integer(kind(ENUM_ORISEG)), intent(in)                    :: isegment
+        integer,                    optional,          intent(in) :: fromto(2)
         select case(isegment)
             case(MIC_SEG)
                 call self%bos%write_segment_inside(isegment, self%os_mic, fromto)
@@ -1257,9 +1257,9 @@ contains
     end subroutine segwriter_inside
 
     module subroutine write_mics_star( self, fname, optics_offset )
-        class(sp_project),       intent(inout) :: self
-        class(string), optional, intent(in)    :: fname
-        integer,       optional, intent(in)    :: optics_offset
+        class(sp_project),       intent(inout)        :: self
+        class(string),           optional, intent(in) :: fname
+        integer,                 optional, intent(in) :: optics_offset
         type(starfile) :: star
         type(string)   :: l_fname
         integer        :: offset_optics
@@ -1279,9 +1279,9 @@ contains
     end subroutine write_mics_star
 
     module subroutine write_ptcl2D_star( self, fname, optics_offset )
-        class(sp_project),       intent(inout) :: self
-        class(string), optional, intent(in)    :: fname
-        integer,       optional, intent(in)    :: optics_offset
+        class(sp_project),       intent(inout)        :: self
+        class(string),           optional, intent(in) :: fname
+        integer,                 optional, intent(in) :: optics_offset
         type(starfile) :: star
         type(string)   :: l_fname
         integer        :: offset_optics, iptcl, stkind, indstk

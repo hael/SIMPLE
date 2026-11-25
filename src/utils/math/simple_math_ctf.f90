@@ -38,7 +38,7 @@ contains
         real(kind=8), parameter :: ELECTRON_MASS     = 9.1093837139d-31
         real(kind=8), parameter :: ELEMENTARY_CHARGE = 1.602176634d-19
         real(kind=8), parameter :: LIGHT_SPEED       = 2.99792458d8
-        real(kind=8) :: voltage, wavelength_m, relativistic_mass
+        real(kind=8)            :: voltage, wavelength_m, relativistic_mass
         voltage           = 1000.0d0 * real(kv, kind=8)
         wavelength_m      = 1.0d-10 * real(electron_wavelength(kv), kind=8)
         relativistic_mass = ELECTRON_MASS * (1.0d0 + ELEMENTARY_CHARGE * voltage / (ELECTRON_MASS * LIGHT_SPEED**2))

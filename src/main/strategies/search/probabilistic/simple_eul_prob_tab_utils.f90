@@ -86,7 +86,7 @@ integer, parameter :: PROB_NEFF_MIN_ROWS = 50    !< below which nothing is repor
 
 type :: prob_neff_readout
     private
-    integer :: stride = 1, nmax = 0, nmin = 2, nrows = 0, nvals = 0, rank0 = 0
+    integer              :: stride = 1, nmax = 0, nmin = 2, nrows = 0, nvals = 0, rank0 = 0
     integer, allocatable :: offs(:)
     real,    allocatable :: dists(:), temps(:)
 contains
@@ -106,26 +106,26 @@ end type prob_neff_readout
 !! Sums and counts, so the parts' records add in part order (doc/implementation_notes/planned/
 !! multistate_posterior_state_draw.md, section 7)
 type :: prob_state_readout
-    integer  :: nstates = 0              !< the requested states (indexed as the particles' labels); 0: no readout
-    integer  :: nrows   = 0              !< rows of the n_eff subsample offered
-    integer  :: ndraws  = 0              !< draws counted
-    integer  :: nmode   = 0              !< draws in the state of the row mode
-    real(dp) :: sum_neff_draw = 0.d0     !< sum over the rows of the state n_eff at the draw's factor
-    real(dp) :: sum_neff_phys = 0.d0     !< the same at factor 1
-    real(dp) :: sum_maxp      = 0.d0     !< sum over the rows of the largest state posterior at the draw's factor
-    real(dp), allocatable :: unref_sum(:) !< (nstates) the blocks' unrefined-mass shares summed over the rows
-    integer,  allocatable :: unref_n(:)   !< (nstates) the rows each sum holds
+    integer               :: nstates       = 0    !< the requested states (indexed as the particles' labels); 0: no readout
+    integer               :: nrows         = 0    !< rows of the n_eff subsample offered
+    integer               :: ndraws        = 0    !< draws counted
+    integer               :: nmode         = 0    !< draws in the state of the row mode
+    real(dp)              :: sum_neff_draw = 0.d0 !< sum over the rows of the state n_eff at the draw's factor
+    real(dp)              :: sum_neff_phys = 0.d0 !< the same at factor 1
+    real(dp)              :: sum_maxp      = 0.d0 !< sum over the rows of the largest state posterior at the draw's factor
+    real(dp), allocatable :: unref_sum(:)         !< (nstates) the blocks' unrefined-mass shares summed over the rows
+    integer,  allocatable :: unref_n(:)           !< (nstates) the rows each sum holds
 contains
-    procedure :: new        => state_readout_new
-    procedure :: offer      => state_readout_offer
-    procedure :: count_draw => state_readout_count_draw
-    procedure :: add        => state_readout_add
-    procedure :: neff_draw  => state_readout_neff_draw
-    procedure :: neff_phys  => state_readout_neff_phys
-    procedure :: mode_frac  => state_readout_mode_frac
+    procedure :: new         => state_readout_new
+    procedure :: offer       => state_readout_offer
+    procedure :: count_draw  => state_readout_count_draw
+    procedure :: add         => state_readout_add
+    procedure :: neff_draw   => state_readout_neff_draw
+    procedure :: neff_phys   => state_readout_neff_phys
+    procedure :: mode_frac   => state_readout_mode_frac
     procedure :: unref_share => state_readout_unref_share
-    procedure :: report     => state_readout_report
-    procedure :: kill       => state_readout_kill
+    procedure :: report      => state_readout_report
+    procedure :: kill        => state_readout_kill
 end type prob_state_readout
 
 !> the per-part publication of the readouts an assignment prints (plan section 5): the counts, the insert report's
@@ -133,31 +133,31 @@ end type prob_state_readout
 !! prob_readout_part<NN>.txt, read and summed by the master in part order, then reported as the owner reports its own
 integer, parameter :: PROB_READOUT_3D_DENSE = 1, PROB_READOUT_3D_NEIGH = 2, PROB_READOUT_2D_DENSE = 3, PROB_READOUT_2D_SPARSE = 4
 type :: prob_readout
-    integer        :: route = 0            !< PROB_READOUT_*
-    integer        :: nptcls = 0           !< particles assigned (3D: the part's sampled particles; 2D: assigned)
-    integer        :: nrefs  = 0           !< references or classes (the same on every part)
-    integer        :: nmode  = 0           !< draws that landed on the row mode
-    integer        :: ntemp_missing = 0    !< particles without a temperature
-    integer        :: nbad   = 0           !< rows without a valid distance (3D dense)
-    integer        :: nflat  = 0           !< rows with a flat distance (3D dense)
-    integer        :: nkept  = 0           !< particles without a valid candidate, orientation kept (neighbourhood)
-    integer        :: kmax   = 1           !< topk
-    logical        :: l_extras = .false.   !< the insertion table was filled (a cone was open)
-    integer        :: ins_nptcls = 0, ins_npose = 0, ins_ncapped = 0
-    integer(int64) :: ins_nelig = 0_int64
-    real(dp)       :: ins_wc_sum = 0.d0    !< the committed weights' sum
-    integer        :: view_nptcls = 0, view_npose = 0, view_nmerged = 0 !< cont_view's extras: particles, basins inserted, extras merged
-    real(dp)       :: view_wc_sum = 0.d0   !< the committed basins' weights' sum
-    integer        :: neff_nrows = 0
-    real(dp)       :: neff_sum_draw = 0.d0 !< sum over the kept rows of exp(entropy) at the draw's factor
-    real(dp)       :: neff_sum_phys = 0.d0 !< the same at factor 1
-    type(prob_state_readout) :: states     !< the dense 3D table's state readout (nstates 0: none)
-    integer        :: inpl_kmax     = 1        !< in-plane posterior quadrature budget (2D)
-    integer        :: inpl_mmax     = 0        !< the band's highest angular harmonic at the rim, pi mskdiam / lp
-    integer(int64) :: inpl_nptcls   = 0_int64  !< particles whose row was evaluated
-    integer(int64) :: inpl_npose    = 0_int64  !< entries inserted (a collapsed particle counts one)
-    integer(int64) :: inpl_nsingle  = 0_int64  !< particles whose quadrature collapsed to one angle
-    real(dp)       :: inpl_neff_sum = 0.d0     !< sum over those particles of exp(entropy) of the row
+    integer                  :: route         = 0                                   !< PROB_READOUT_*
+    integer                  :: nptcls        = 0                                   !< particles assigned (3D: the part's sampled particles; 2D: assigned)
+    integer                  :: nrefs         = 0                                   !< references or classes (the same on every part)
+    integer                  :: nmode         = 0                                   !< draws that landed on the row mode
+    integer                  :: ntemp_missing = 0                                   !< particles without a temperature
+    integer                  :: nbad          = 0                                   !< rows without a valid distance (3D dense)
+    integer                  :: nflat         = 0                                   !< rows with a flat distance (3D dense)
+    integer                  :: nkept         = 0                                   !< particles without a valid candidate, orientation kept (neighbourhood)
+    integer                  :: kmax          = 1                                   !< topk
+    logical                  :: l_extras      = .false.                             !< the insertion table was filled (a cone was open)
+    integer                  :: ins_nptcls    = 0, ins_npose = 0, ins_ncapped = 0
+    integer(int64)           :: ins_nelig     = 0_int64
+    real(dp)                 :: ins_wc_sum    = 0.d0                                !< the committed weights' sum
+    integer                  :: view_nptcls   = 0, view_npose = 0, view_nmerged = 0 !< cont_view's extras: particles, basins inserted, extras merged
+    real(dp)                 :: view_wc_sum   = 0.d0                                !< the committed basins' weights' sum
+    integer                  :: neff_nrows    = 0
+    real(dp)                 :: neff_sum_draw = 0.d0                                !< sum over the kept rows of exp(entropy) at the draw's factor
+    real(dp)                 :: neff_sum_phys = 0.d0                                !< the same at factor 1
+    type(prob_state_readout) :: states                                              !< the dense 3D table's state readout (nstates 0: none)
+    integer                  :: inpl_kmax     = 1                                   !< in-plane posterior quadrature budget (2D)
+    integer                  :: inpl_mmax     = 0                                   !< the band's highest angular harmonic at the rim, pi mskdiam / lp
+    integer(int64)           :: inpl_nptcls   = 0_int64                             !< particles whose row was evaluated
+    integer(int64)           :: inpl_npose    = 0_int64                             !< entries inserted (a collapsed particle counts one)
+    integer(int64)           :: inpl_nsingle  = 0_int64                             !< particles whose quadrature collapsed to one angle
+    real(dp)                 :: inpl_neff_sum = 0.d0                                !< sum over those particles of exp(entropy) of the row
 end type prob_readout
 
 !> One extra pose of a particle for the weighted insertion (topk > 1): the reference (the full index over the states), its in-plane index, its
@@ -165,7 +165,7 @@ end type prob_readout
 !! table keeps per particle
 type :: prob_insert_pose
     integer :: iref = 0, inpl = 0
-    real    :: x = 0., y = 0., w = 0.
+    real    :: x    = 0., y = 0., w = 0.
     real    :: sdev = -1. !< the shift's posterior width at the entry (px; below zero: none), for the dynamic centring
 end type prob_insert_pose
 
@@ -176,20 +176,20 @@ end type prob_insert_pose
 !! the cap kmax - 1 admits) for the POSES INSERTED line, published by a distributed part through its counts
 type :: prob_insert_table
     private
-    integer :: nptcls = 0, kmax = 1, npose = 0, ncapped = 0
-    integer(int64) :: nelig_sum = 0_int64
+    integer                             :: nptcls    = 0, kmax = 1, npose = 0, ncapped = 0
+    integer(int64)                      :: nelig_sum = 0_int64
     integer,                allocatable :: pinds(:), nextra(:), first(:)
     real,                   allocatable :: wc(:)
     type(prob_insert_pose), allocatable :: poses(:)
 contains
-    procedure :: new    => insert_table_new
-    procedure :: add    => insert_table_add
-    procedure :: report => insert_table_report
-    procedure :: counts => insert_table_counts
+    procedure :: new          => insert_table_new
+    procedure :: add          => insert_table_add
+    procedure :: report       => insert_table_report
+    procedure :: counts       => insert_table_counts
     procedure :: get_nptcls   => insert_table_get_nptcls
     procedure :: get_pind     => insert_table_get_pind
     procedure :: get_extra    => insert_table_get_extra
-    procedure :: kill   => insert_table_kill
+    procedure :: kill         => insert_table_kill
 end type prob_insert_table
 
 !> The weighted insertion's poses of one part's particles, resolved: per particle (by global index through loc)
@@ -221,9 +221,9 @@ end type prob_insert_poses
 !! batches of a pass for the readout
 type :: prob_insert_inpl
     private
-    integer        :: kmax = 1, nslots = 0
-    integer(int64) :: n_rows = 0_int64, n_pose = 0_int64, n_single = 0_int64
-    real(dp)       :: neff_sum = 0.d0
+    integer              :: kmax     = 1, nslots = 0
+    integer(int64)       :: n_rows   = 0_int64, n_pose = 0_int64, n_single = 0_int64
+    real(dp)             :: neff_sum = 0.d0
     integer, allocatable :: nent(:)    !< (nslots) entries of the slot's particle, 0: the committed pose alone
     integer, allocatable :: status(:)  !< (nslots) 0 no row, 1 spread over entries, 2 collapsed to one angle
     real,    allocatable :: e3(:,:)    !< (kmax,nslots) the entries' in-plane angles, degrees
@@ -256,18 +256,18 @@ type :: prob_insert_cone
     real, allocatable :: dmat(:,:,:)  !< (3,3,nspace) the directions' rotation matrices, in-plane angle zero
     real, allocatable :: rz(:,:,:)    !< (3,3,nrots) the rotation grid's in-plane matrices
     real, allocatable :: rsym(:,:,:)  !< (3,3,nsym) the point group's matrices
-    real    :: diam = 0.              !< the mask diameter, Angstrom
-    real    :: smpd = 0.              !< the sampling distance the stored shifts are measured in, Angstrom per pixel
-    integer :: nspace = 0, nrots = 0, nsym = 0
+    real              :: diam   = 0.  !< the mask diameter, Angstrom
+    real              :: smpd   = 0.  !< the sampling distance the stored shifts are measured in, Angstrom per pixel
+    integer           :: nspace = 0, nrots = 0, nsym = 0
 contains
-    procedure :: new       => insert_cone_new
-    procedure :: set_space => insert_cone_set_space
-    procedure :: is_open   => insert_cone_is_open
-    procedure :: has_space => insert_cone_has_space
-    procedure :: get_angle => insert_cone_get_angle
-    procedure :: within    => insert_cone_within
+    procedure :: new          => insert_cone_new
+    procedure :: set_space    => insert_cone_set_space
+    procedure :: is_open      => insert_cone_is_open
+    procedure :: has_space    => insert_cone_has_space
+    procedure :: get_angle    => insert_cone_get_angle
+    procedure :: within       => insert_cone_within
     procedure :: within_poses => insert_cone_within_poses
-    procedure :: kill      => insert_cone_kill
+    procedure :: kill         => insert_cone_kill
 end type prob_insert_cone
 
 ! One entry of the dense table, a particle and a reference: the distance and the in-plane index. No default values:
@@ -282,19 +282,19 @@ end type prob_dense_entry
 !! wtail (what the kept entries leave of the row), the row's statistics over every valid entry, the temperature the
 !! masses are taken at, and the mode's drawn in-plane rotation with the shift the fill refined it at when it did
 type :: prob_row_record
-    integer :: iptcl     = 0
-    integer :: nvalid    = 0
-    integer :: imin      = 0    !< the mode's compact reference
-    integer :: k99       = 0    !< the references holding 99% of the mass
-    integer :: nkept     = 0
-    integer :: inpl_mode = 0
-    real    :: temp      = 0.   !< the posterior's temperature (the tempering factor times the particle's own)
-    real    :: pmax      = 0.
-    real    :: neff      = 0.
-    real    :: wtail     = 0.
-    real    :: lmin      = 0.   !< the mode's loss
-    real    :: x_mode    = 0., y_mode = 0.
-    logical :: has_sh    = .false.
+    integer              :: iptcl     = 0
+    integer              :: nvalid    = 0
+    integer              :: imin      = 0  !< the mode's compact reference
+    integer              :: k99       = 0  !< the references holding 99% of the mass
+    integer              :: nkept     = 0
+    integer              :: inpl_mode = 0
+    real                 :: temp      = 0. !< the posterior's temperature (the tempering factor times the particle's own)
+    real                 :: pmax      = 0.
+    real                 :: neff      = 0.
+    real                 :: wtail     = 0.
+    real                 :: lmin      = 0. !< the mode's loss
+    real                 :: x_mode    = 0., y_mode = 0.
+    logical              :: has_sh    = .false.
     integer, allocatable :: inds(:)
     real,    allocatable :: w(:)
 contains
@@ -308,13 +308,13 @@ end type prob_row_record
 !! exp(lnz - temp dmin - pen) (inpl_view_weights; the marginal's loss is marginal_dist(lnz - pen, dmin, temp)), and the
 !! in-plane posteriors over the table's rotation grid of the nin references of largest marginal mass, in descending mass
 type :: prob_row_marginal
-    integer :: nrefs = 0, nrots = 0, nin = 0
-    real    :: temp = 0.                 !< the physical temperature (posterior_temperature; 0 for the argmin)
+    integer               :: nrefs = 0, nrots = 0, nin = 0
+    real                  :: temp  = 0.  !< the physical temperature (posterior_temperature; 0 for the argmin)
     real(dp), allocatable :: lnz(:)
     real(dp), allocatable :: pen(:)
     real,     allocatable :: dmin(:)
-    integer,  allocatable :: refs(:)    !< (nin) compact references
-    real,     allocatable :: rows(:,:)  !< (nrots, nin)
+    integer,  allocatable :: refs(:)     !< (nin) compact references
+    real,     allocatable :: rows(:,:)   !< (nrots, nin)
 contains
     procedure :: kill => row_marginal_kill
 end type prob_row_marginal
@@ -363,7 +363,7 @@ type :: prob_posterior_stat
     ! the production row (posterior-drawn in-plane, the best projs_ns shift-refined): mode, loss,
     ! temperature, mass, breadth and spread
     integer :: iptcl = 0, istate = 0, iproj = 0, k99 = 0, nvalid = 0
-    real    :: lmin = 0., temp = 0., pmax = 0., neff = 0., spread = 0.
+    real    :: lmin  = 0., temp = 0., pmax = 0., neff = 0., spread = 0.
     ! the identical-pose null test, in nats: the kernel re-scored at the production mode's exact (reference,
     ! shift, grid rotation) minus the stored loss. mode_src says where the stored value came from and what the
     ! two columns are: 1 the shift search (refined): null_a the shifted-reference kernel at the stored
@@ -372,57 +372,57 @@ type :: prob_posterior_stat
     ! kernel at the stored rotation (expected zero), null_b the shifted-reference kernel at the frame-converted
     ! seed (the two kernels differ by the angular Nyquist bin); 3 unshifted: both the kernel at zero shift
     integer :: mode_src = 0
-    real    :: null_a = 0., null_b = 0.
+    real    :: null_a   = 0., null_b = 0.
     ! the deterministic row on the matcher's references (best grid rotation at the particle-frame seed the
     ! production search scored at, through the seed bank when there is one, no sampling, no refinement): the
     ! search test against the production row; rank_d the production mode's rank in it, dist_d the angle
     ! between the two modes
     integer :: iproj_d = 0, k99_d = 0, rank_d = 0
-    real    :: lmin_d = 0., pmax_d = 0., neff_d = 0., spread_d = 0., dist_d = 0.
+    real    :: lmin_d  = 0., pmax_d = 0., neff_d = 0., spread_d = 0., dist_d = 0.
     ! the deterministic row on the particle's own real half (the diagnostic model of the independent
     ! even/odd maps, loaded beside the matcher's references): rank_h the matcher deterministic mode's rank
     ! in it, dist_h the angle between the two modes
     integer :: iproj_h = 0, k99_h = 0, rank_h = 0
-    real    :: lmin_h = 0., pmax_h = 0., neff_h = 0., spread_h = 0., dist_h = 0.
+    real    :: lmin_h  = 0., pmax_h = 0., neff_h = 0., spread_h = 0., dist_h = 0.
     ! the same deterministic row on the other real half: the reference test against the own-half row;
     ! rank_x the own-half mode's rank in it, dist_x the angle between the two modes
     integer :: iproj_x = 0, k99_x = 0, rank_x = 0
-    real    :: lmin_x = 0., pmax_x = 0., neff_x = 0., spread_x = 0., dist_x = 0.
+    real    :: lmin_x  = 0., pmax_x = 0., neff_x = 0., spread_x = 0., dist_x = 0.
     ! the self-reinforcement test, in nats, at the pose the particle went into its half with (its previous
     ! direction on the current grid, iproj_p, its previous in-plane rotation, zero residual shift): the
     ! other half's loss minus the own half's, T (L_other - L_own); positive when the own half, which holds
     ! the particle, favours that pose. ctrl_nats the same difference a half turn away in-plane, where the
     ! particle's own contribution does not correlate with it: the noise scale of self_nats. iproj_p 0: no
     ! previous pose (a virgin field, an invalid state)
-    integer :: iproj_p = 0
+    integer :: iproj_p   = 0
     real    :: self_nats = 0., ctrl_nats = 0.
 end type prob_posterior_stat
 
 ! Cost record of a partition's table fill for the bench file: wall time outside the parallel region,
 ! thread-seconds summed over threads.
 type :: prob_fill_profile
-    real(dp)       :: wall_region    = 0.d0   !< wall time of the parallel region, summed over batches
-    real(dp)       :: ts_seed        = 0.d0   !< thread-seconds in the shift-seed estimation
-    real(dp)       :: ts_score       = 0.d0   !< thread-seconds in the all-reference score loop
-    real(dp)       :: ts_refine      = 0.d0   !< thread-seconds in the refinement of the best references
-    integer        :: nthr           = 1      !< threads of the parallel region
-    integer        :: nrefs          = 0      !< references scored per particle
-    integer        :: projs_ns       = 0      !< references refined per particle (largest over batches)
-    integer(int64) :: nptcls         = 0_int64 !< particles filled
-    integer(int64) :: nrefined       = 0_int64 !< references handed to the shift search
-    integer(int64) :: objective_evals = 0_int64 !< objective evaluations of the search objects (rotations count nrots)
-    integer(int64) :: gradient_evals  = 0_int64 !< L-BFGS-B gradient evaluations, E
-    integer(int64) :: alternations    = 0_int64 !< L-BFGS-B / in-plane alternations
-    integer(int64) :: grid_points     = 0_int64 !< coarse-grid points scored
-    integer(int64) :: minimize_calls  = 0_int64 !< shift searches started
-    integer(int64) :: bank_builds     = 0_int64 !< shifted particle memos built
-    integer(int64) :: nscored         = 0_int64 !< references scored, summed over particles (neighbourhood tables; 0 in the full table, which scores nrefs per particle)
-    integer(int64) :: screens         = 0_int64 !< coarse maps over either search domain
-    integer(int64) :: disk_ptcls      = 0_int64 !< particles that searched the disk (shift_sigma > 0, the centring stage)
-    real(dp)       :: map_times(6)    = 0.d0   !< construction, two reserved slots, selection, posterior reduction, setup wall time
-    integer(int64) :: map_counts(8)   = 0_int64
-    integer        :: map_geometry(3,3) = 0   !< radius/direction/order counts of full/disk/window maps
-    integer(int64) :: fit_counts(0:5) = 0_int64 !< quadratic grid step: (0) fits kept, (1:5) fallbacks per reason; all zero in a single-state table
+    real(dp)       :: wall_region       = 0.d0    !< wall time of the parallel region, summed over batches
+    real(dp)       :: ts_seed           = 0.d0    !< thread-seconds in the shift-seed estimation
+    real(dp)       :: ts_score          = 0.d0    !< thread-seconds in the all-reference score loop
+    real(dp)       :: ts_refine         = 0.d0    !< thread-seconds in the refinement of the best references
+    integer        :: nthr              = 1       !< threads of the parallel region
+    integer        :: nrefs             = 0       !< references scored per particle
+    integer        :: projs_ns          = 0       !< references refined per particle (largest over batches)
+    integer(int64) :: nptcls            = 0_int64 !< particles filled
+    integer(int64) :: nrefined          = 0_int64 !< references handed to the shift search
+    integer(int64) :: objective_evals   = 0_int64 !< objective evaluations of the search objects (rotations count nrots)
+    integer(int64) :: gradient_evals    = 0_int64 !< L-BFGS-B gradient evaluations, E
+    integer(int64) :: alternations      = 0_int64 !< L-BFGS-B / in-plane alternations
+    integer(int64) :: grid_points       = 0_int64 !< coarse-grid points scored
+    integer(int64) :: minimize_calls    = 0_int64 !< shift searches started
+    integer(int64) :: bank_builds       = 0_int64 !< shifted particle memos built
+    integer(int64) :: nscored           = 0_int64 !< references scored, summed over particles (neighbourhood tables; 0 in the full table, which scores nrefs per particle)
+    integer(int64) :: screens           = 0_int64 !< coarse maps over either search domain
+    integer(int64) :: disk_ptcls        = 0_int64 !< particles that searched the disk (shift_sigma > 0, the centring stage)
+    real(dp)       :: map_times(6)      = 0.d0    !< construction, two reserved slots, selection, posterior reduction, setup wall time
+    integer(int64) :: map_counts(8)     = 0_int64
+    integer        :: map_geometry(3,3) = 0       !< radius/direction/order counts of full/disk/window maps
+    integer(int64) :: fit_counts(0:5)   = 0_int64 !< quadratic grid step: (0) fits kept, (1:5) fallbacks per reason; all zero in a single-state table
     !> Is the refinement budget binding? Per particle of the dense fill, the rank in the unrefined row of the entry
     !! that is lowest after the shift refinement: (0) rank 1, the unrefined argmin kept; (1:10) the rank by decile
     !! of the refined count projs_ns (rank 1 is in decile 1); (11) an unrefined entry below every refined one. Mass
@@ -434,7 +434,7 @@ end type prob_fill_profile
 ! Thread-owned append buffer used while candidate counts are not known in advance.
 ! Keeping this common and mode-independent avoids per-search table variants.
 type :: prob_candidate_buffer
-    integer, allocatable              :: particle_indices(:)
+    integer,              allocatable :: particle_indices(:)
     type(prob_candidate), allocatable :: candidates(:)
     integer                           :: nused = 0
 contains
@@ -451,9 +451,9 @@ type :: prob_candidate_store
     real,                    allocatable :: seed_shifts(:,:)
     logical,                 allocatable :: seed_has_sh(:)
 contains
-    procedure :: new_fixed => new_fixed_candidate_store
+    procedure :: new_fixed  => new_fixed_candidate_store
     procedure :: new_ragged => new_ragged_candidate_store
-    procedure :: kill      => kill_candidate_store
+    procedure :: kill       => kill_candidate_store
 end type prob_candidate_store
 
 interface angle_sampling
@@ -466,7 +466,7 @@ contains
     !> The best losses bound width readout only; final candidate ordering is unchanged.
     pure subroutine update_screen_best( loss, best_losses )
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-        real, intent(in) :: loss
+        real, intent(in)    :: loss
         real, intent(inout) :: best_losses(:)
         integer :: worst
         if( size(best_losses) < 1 ) return
@@ -479,9 +479,9 @@ contains
         class(prob_candidate_buffer), intent(inout) :: self
         integer,                      intent(in)    :: particle_index
         type(prob_candidate),         intent(in)    :: candidate
-        integer, allocatable :: particle_indices_tmp(:)
+        integer,              allocatable :: particle_indices_tmp(:)
         type(prob_candidate), allocatable :: candidates_tmp(:)
-        integer :: old_capacity, new_capacity
+        integer                           :: old_capacity, new_capacity
         if( .not. allocated(self%candidates) )then
             allocate(self%particle_indices(256), self%candidates(256))
         else if( self%nused == size(self%candidates) )then
@@ -515,7 +515,7 @@ contains
 
     integer function get_buffer_candidate_inpl( self, particle_index, full_ref ) result(inpl)
         class(prob_candidate_buffer), intent(in) :: self
-        integer, intent(in) :: particle_index, full_ref
+        integer,                      intent(in) :: particle_index, full_ref
         integer :: i
         inpl = 0
         do i = self%nused, 1, -1
@@ -538,7 +538,7 @@ contains
         class(prob_candidate_store), intent(inout) :: self
         integer,                     intent(in)    :: pinds(:)
         integer,                     intent(in)    :: ncandidates_per_particle
-        integer :: i, nptcls
+        integer        :: i, nptcls
         integer(int64) :: ntot
         call self%kill
         if( ncandidates_per_particle < 0 ) THROW_HARD('negative candidate count in new_fixed_candidate_store')
@@ -558,7 +558,7 @@ contains
     subroutine new_ragged_candidate_store( self, pinds, candidate_counts )
         class(prob_candidate_store), intent(inout) :: self
         integer,                     intent(in)    :: pinds(:), candidate_counts(:)
-        integer :: i, nptcls
+        integer        :: i, nptcls
         integer(int64) :: ntot
         call self%kill
         nptcls = size(pinds)
@@ -599,12 +599,12 @@ contains
     end subroutine record_seed_shift
 
     subroutine calc_num2sample( os, num_all, field_str, num_smpl, prob_athres, state)
-        class(oris),       intent(in)  :: os
-        integer,           intent(in)  :: num_all
-        character(len=*),  intent(in)  :: field_str
-        integer,           intent(out) :: num_smpl
-        real,              intent(in)  :: prob_athres
-        integer, optional, intent(in)  :: state
+        class(oris),       intent(in)           :: os
+        integer,           intent(in)           :: num_all
+        character(len=*),  intent(in)           :: field_str
+        integer,           intent(out)          :: num_smpl
+        real,              intent(in)           :: prob_athres
+        integer,           optional, intent(in) :: state
         real :: athres
         athres   = calc_athres(os, field_str, prob_athres, state=state)
         num_smpl = min(num_all,max(1,int(athres * real(num_all) / 180.)))
@@ -621,10 +621,10 @@ contains
     !> Cartesian width from all active stored increments in native pixels.
     real(dp) function cart_shift_prior_sigma2( os, lp_pix ) result( sigma2 )
         class(oris), intent(in) :: os
-        real(dp), intent(in) :: lp_pix
+        real(dp),    intent(in) :: lp_pix
         real, allocatable :: vals(:)
-        real :: increment
-        integer :: i, n
+        real              :: increment
+        integer           :: i, n
         if( .not. ieee_is_finite(lp_pix) .or. lp_pix <= 0._dp ) &
             &THROW_HARD('Cartesian shift prior requires a positive finite low-pass in pixels')
         allocate(vals(os%get_noris()))
@@ -659,7 +659,7 @@ contains
         class(oris), intent(in) :: os
         real,        intent(in) :: lp_pix
         real, allocatable :: vals(:)
-        real :: sigma_min
+        real              :: sigma_min
         sigma_min = max(SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC * lp_pix)
         sigma2    = sigma_min**2
         vals      = os%get_all_sampled('shincarg')
@@ -667,12 +667,12 @@ contains
     end function shift_prior_sigma2
 
     function calc_athres( os, field_str, prob_athres, state ) result( athres )
-        class(oris),       intent(in) :: os
-        character(len=*),  intent(in) :: field_str
-        real,              intent(in) :: prob_athres
-        integer, optional, intent(in) :: state
+        class(oris),       intent(in)           :: os
+        character(len=*),  intent(in)           :: field_str
+        real,              intent(in)           :: prob_athres
+        integer,           optional, intent(in) :: state
         real, allocatable :: vals(:)
-        real :: athres, dist_thres
+        real              :: athres, dist_thres
         vals = os%get_all_sampled(trim(field_str), state=state)
         dist_thres = sum(vals) / real(size(vals))
         athres     = prob_athres
@@ -767,7 +767,7 @@ contains
         class(prob_row_file), intent(inout) :: self
         class(string),        intent(in)    :: fname
         integer(int64) :: magic, version, nrecs, nrefs
-        integer :: io_stat
+        integer        :: io_stat
         if( self%l_open ) THROW_HARD('the rows file is open; prob_row_file%open_read')
         if( .not. file_exists(fname) ) THROW_HARD('no rows file '//fname%to_char()//'; prob_row_file%open_read')
         call fopen(self%funit, fname, 'old', 'read', iostat=io_stat, access='stream', form='unformatted')
@@ -784,10 +784,10 @@ contains
 
     !> one record and its whole row of losses appended, with the row's in-plane marginals when given
     subroutine row_file_put( self, rec, dists, marg )
-        class(prob_row_file),              intent(inout) :: self
-        type(prob_row_record),             intent(in)    :: rec
-        real,                              intent(in)    :: dists(:)
-        type(prob_row_marginal), optional, intent(in)    :: marg
+        class(prob_row_file),              intent(inout)        :: self
+        type(prob_row_record),             intent(in)           :: rec
+        real,                              intent(in)           :: dists(:)
+        type(prob_row_marginal),           optional, intent(in) :: marg
         integer :: ihas
         if( .not. (self%l_open .and. self%l_write) ) THROW_HARD('the rows file is not open for writing; prob_row_file%put')
         if( self%ndone >= self%nrecs ) THROW_HARD('more records than the header counts; prob_row_file%put')
@@ -874,9 +874,9 @@ contains
     !> nptcls is the global sample's size (the stride's), rank0 the rank in it of the row before this table's first
     !! (a part's offset; 0 for the owner's whole sample)
     subroutine neff_readout_new( self, nptcls, nmax, nmin, rank0 )
-        class(prob_neff_readout), intent(inout) :: self
-        integer,                  intent(in)    :: nptcls, nmax, nmin
-        integer,        optional, intent(in)    :: rank0
+        class(prob_neff_readout), intent(inout)        :: self
+        integer,                  intent(in)           :: nptcls, nmax, nmin
+        integer,                  optional, intent(in) :: rank0
         call self%kill
         self%nmax   = max(1, nmax)
         self%nmin   = max(2, nmin)
@@ -906,8 +906,8 @@ contains
         integer,                  intent(in)    :: n
         real,                     intent(in)    :: dists(n), temp
         real, allocatable :: tmp(:)
-        real    :: dmin, invalid
-        integer :: r, nvalid, need
+        real              :: dmin, invalid
+        integer           :: r, nvalid, need
         if( .not. (temp > 0.) ) return
         invalid = 0.1 * huge(invalid)
         nvalid  = 0
@@ -1154,7 +1154,7 @@ contains
         class(prob_state_readout), intent(in) :: self
         real,                      intent(in) :: beta_draw
         character(len=32) :: s_draw, s_phys, s_pct, s_maxp, s_beta, s_share
-        integer :: s
+        integer           :: s
         if( self%nstates < 2 .or. self%ndraws < 1 ) return
         write(s_pct,'(F32.1)') 100. * self%mode_frac()
         if( self%nrows >= PROB_NEFF_MIN_ROWS )then
@@ -1218,7 +1218,7 @@ contains
         type(prob_candidate),     intent(in)    :: cands(:)
         real,                     intent(in)    :: w(:)
         type(prob_insert_pose), allocatable :: tmp(:)
-        integer :: k
+        integer                             :: k
         if( i < 1 .or. i > self%nptcls ) THROW_HARD('particle index out of range; insert_table_add')
         if( self%nextra(i) > 0 ) THROW_HARD('a particle''s extra poses are added once; insert_table_add')
         self%wc(i)     = wc
@@ -1459,7 +1459,7 @@ contains
         type(prob_readout), intent(out) :: rec
         class(string),      intent(in)  :: fname
         character(len=64) :: line_value
-        integer :: funit, io_stat, nstates, istate
+        integer           :: funit, io_stat, nstates, istate
         if( .not. file_exists(fname) ) THROW_HARD('a part published no readout record: '//fname%to_char())
         call fopen(funit, fname, status='old', action='read', iostat=io_stat)
         call fileiochk('read_prob_readout; fopen '//fname%to_char(), io_stat)
@@ -1588,12 +1588,12 @@ contains
     !! (plan section 5: sums and counts, never means of means) and returned in merged; the records are deleted after
     !! the merge
     subroutine merge_prob_readouts( nparts, numlen, prob_beta, merged )
-        integer,                      intent(in)  :: nparts, numlen
-        real,                         intent(in)  :: prob_beta
-        type(prob_readout), optional, intent(out) :: merged
+        integer,                      intent(in)            :: nparts, numlen
+        real,                         intent(in)            :: prob_beta
+        type(prob_readout),           optional, intent(out) :: merged
         type(prob_readout) :: acc, rec
         type(string)       :: fname
-        integer :: ipart
+        integer            :: ipart
         do ipart = 1,nparts
             fname = prob_readout_fname(ipart, numlen)
             call read_prob_readout(rec, fname)
@@ -1610,9 +1610,9 @@ contains
     subroutine report_prob_readout( rec, prob_beta )
         type(prob_readout), intent(in) :: rec
         real,               intent(in) :: prob_beta
-        character(len=32) :: mode_pct
+        character(len=32)             :: mode_pct
         character(len=:), allocatable :: note
-        integer :: nassigned
+        integer                       :: nassigned
         select case(rec%route)
             case(PROB_READOUT_3D_DENSE, PROB_READOUT_3D_NEIGH)
                 nassigned = rec%nptcls
@@ -1835,14 +1835,14 @@ contains
     !! distance is valid; lnz (ln of the partition sum) and dmin (the minimum) give the row's in-plane marginal, post
     !! the row's posterior p_r over the rotations (zero where no mass)
     subroutine inpl_quadrature( n, dists, temp, k, v, nent, inds, w, neff, lnz, dmin, post )
-        integer,            intent(in)  :: n, k
-        real,               intent(in)  :: dists(n), temp
-        real(dp),           intent(in)  :: v
-        integer,            intent(out) :: nent, inds(k)
-        real,               intent(out) :: w(k), neff
-        real(dp), optional, intent(out) :: lnz
-        real,     optional, intent(out) :: dmin
-        real,     optional, intent(out) :: post(n)
+        integer,            intent(in)            :: n, k
+        real,               intent(in)            :: dists(n), temp
+        real(dp),           intent(in)            :: v
+        integer,            intent(out)           :: nent, inds(k)
+        real,               intent(out)           :: w(k), neff
+        real(dp),           optional, intent(out) :: lnz
+        real,               optional, intent(out) :: dmin
+        real,               optional, intent(out) :: post(n)
         real(dp) :: wsum, csum, tgt, arg, p, h
         real     :: dmin_row, invalid, wr(n)
         integer  :: cnt(k), r, j, imin, rlast
@@ -2032,9 +2032,9 @@ contains
     !> the batch's entries for the class sums: per slot the number of entries (0: the committed pose alone) and the
     !! entries' angles and weights; the pointers stay valid until the next new or kill
     subroutine inpl_insert_get_view( self, nent, e3, w )
-        class(prob_insert_inpl), target, intent(inout) :: self
-        integer, pointer,                intent(out)   :: nent(:)
-        real,    pointer,                intent(out)   :: e3(:,:), w(:,:)
+        class(prob_insert_inpl), target, intent(inout)               :: self
+        integer,                 pointer,                intent(out) :: nent(:)
+        real,                    pointer,                intent(out) :: e3(:,:), w(:,:)
         nent => self%nent
         e3   => self%e3
         w    => self%w
@@ -2541,7 +2541,7 @@ contains
         real,    intent(in)  :: prob_athres
         real,    allocatable :: pvec_sorted(:)
         integer, allocatable :: sorted_inds(:)
-        integer :: which, n
+        integer              :: which, n
         n = size(pvec)
         allocate(pvec_sorted(n),sorted_inds(n))
         which = angle_sampling_2(pvec, pvec_sorted, sorted_inds, athres_ub_in, prob_athres)
@@ -2859,16 +2859,16 @@ contains
     !! The rim limits are reported unless l_report is false (a distributed part, whose log the next schedule wipes;
     !! its master reports the same cone from the same files)
     function insert_cone_from_fsc( nstates, box, smpd, mskdiam, lp, l_report ) result( cone )
-        integer,           intent(in) :: nstates, box
-        real,              intent(in) :: smpd, mskdiam, lp
-        logical, optional, intent(in) :: l_report
-        type(prob_insert_cone) :: cone
-        real, allocatable :: res05(:), fsc(:), res(:)
-        type(string) :: fname
-        real    :: fsc05, fsc0143
-        integer :: s
-        logical :: ll_report
-        character(len=32) :: limit, angle, shift
+        integer,           intent(in)           :: nstates, box
+        real,              intent(in)           :: smpd, mskdiam, lp
+        logical,           optional, intent(in) :: l_report
+        type(prob_insert_cone)        :: cone
+        real,             allocatable :: res05(:), fsc(:), res(:)
+        type(string)                  :: fname
+        real                          :: fsc05, fsc0143
+        integer                       :: s
+        logical                       :: ll_report
+        character(len=32)             :: limit, angle, shift
         character(len=:), allocatable :: label
         ll_report = .true.
         if( present(l_report) ) ll_report = l_report
@@ -2910,9 +2910,9 @@ contains
         logical,     intent(in)    :: l_centring
         real,        intent(in)    :: trs
         integer,     intent(in)    :: pinds(:), nptcls
-        real, allocatable :: shsig(:), widths(:)
+        real,             allocatable :: shsig(:), widths(:)
         character(len=:), allocatable :: text
-        integer :: i, nnew, nwide, nw
+        integer                       :: i, nnew, nwide, nw
         if( .not. l_centring ) return
         if( nptcls < 1 ) return
         shsig = os%get_all('shsig')
@@ -2999,10 +2999,10 @@ contains
     !> per subspace, the largest view distance (degrees) from its representative (eulspace index sub_inds(isub)) to a
     !! member (full2sub, over the directions of eulspace)
     subroutine cone_cell_radii( eulspace, pgrpsyms, sub_inds, full2sub, radius )
-        class(oris),       intent(in)    :: eulspace
-        class(sym),        intent(in)    :: pgrpsyms
-        integer,           intent(in)    :: sub_inds(:), full2sub(:)
-        real, allocatable, intent(inout) :: radius(:)
+        class(oris),       intent(in)                 :: eulspace
+        class(sym),        intent(in)                 :: pgrpsyms
+        integer,           intent(in)                 :: sub_inds(:), full2sub(:)
+        real,              allocatable, intent(inout) :: radius(:)
         real    :: euls_rep(3)
         integer :: iproj, isub
         if( allocated(radius) ) deallocate(radius)
@@ -3026,7 +3026,7 @@ contains
         logical,     intent(in)  :: l_mirror
         logical,     intent(out) :: l_reach(:)
         real, parameter :: REACH_TOL = 1.e-3 ! degrees
-        integer :: isub
+        integer         :: isub
         do isub = 1, size(sub_inds)
             l_reach(isub) = cone_view_dist(pgrpsyms, euls_seed, euls_mirr, l_mirror, eulspace%get_euler(sub_inds(isub))) &
                 &<= cone + radius(isub) + REACH_TOL

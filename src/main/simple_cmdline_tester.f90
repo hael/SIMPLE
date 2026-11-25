@@ -132,7 +132,7 @@ contains
     ! 5. get_keys
     !-----------------------------------------
     subroutine test_get_keys()
-        type(cmdline)   :: cl
+        type(cmdline)             :: cl
         type(string), allocatable :: ks(:)
         write(*,'(A)') 'test_get_keys'
         call cl%kill()

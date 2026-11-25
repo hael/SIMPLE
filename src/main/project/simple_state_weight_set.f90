@@ -40,31 +40,31 @@ type :: state_weight_set
     integer(int8), allocatable   :: flags(:)
     logical                      :: exists = .false.
   contains
-    procedure :: new
-    procedure :: publish
-    procedure :: publish_work_state
-    procedure :: get_nstates
-    procedure :: get_nptcls
-    procedure :: get_kind
-    procedure :: get_producer
-    procedure :: get_generation
-    procedure :: get_layout_digest
-    procedure :: get_manifest_path
-    procedure :: get_parent_generation
-    procedure :: get_parent_layout_digest
-    procedure :: get_parent_state
-    procedure :: get_mass
-    procedure :: get_ess
-    procedure :: get_pop
-    procedure :: get_weights
-    procedure :: get_applied_weights
-    procedure :: get_labels
-    procedure :: get_selection
-    procedure :: applied_mass
-    procedure :: applied_ess
-    procedure :: get_members
-    procedure :: is_fractional
-    procedure :: kill
+    procedure          :: new
+    procedure          :: publish
+    procedure          :: publish_work_state
+    procedure          :: get_nstates
+    procedure          :: get_nptcls
+    procedure          :: get_kind
+    procedure          :: get_producer
+    procedure          :: get_generation
+    procedure          :: get_layout_digest
+    procedure          :: get_manifest_path
+    procedure          :: get_parent_generation
+    procedure          :: get_parent_layout_digest
+    procedure          :: get_parent_state
+    procedure          :: get_mass
+    procedure          :: get_ess
+    procedure          :: get_pop
+    procedure          :: get_weights
+    procedure          :: get_applied_weights
+    procedure          :: get_labels
+    procedure          :: get_selection
+    procedure          :: applied_mass
+    procedure          :: applied_ess
+    procedure          :: get_members
+    procedure          :: is_fractional
+    procedure          :: kill
     procedure, private :: load_state
 end type state_weight_set
 
@@ -80,11 +80,11 @@ contains
     !! particle field: manifest, file sizes and checksums, file headers, layout digest, populations.
     !! Without status, any failure stops the program.
     subroutine new( self, project, particles, status, message )
-        class(state_weight_set),    intent(inout) :: self
-        class(sp_project),          intent(in)    :: project
-        class(oris),                intent(in)    :: particles
-        integer,          optional, intent(out)   :: status
-        character(len=*), optional, intent(out)   :: message
+        class(state_weight_set),    intent(inout)         :: self
+        class(sp_project),          intent(in)            :: project
+        class(oris),                intent(in)            :: particles
+        integer,                    optional, intent(out) :: status
+        character(len=*),           optional, intent(out) :: message
         type(string)       :: path
         character(len=512) :: msg
         integer            :: stat
@@ -112,16 +112,16 @@ contains
     !! The kind is inferred from the rows unless given; a derived set records its parent's identity.
     subroutine publish( self, project, particles, projfile, pinds, weights_sel, labels_sel, producer, kind, &
         &parent_generation, parent_layout_digest, parent_state )
-        class(state_weight_set),  intent(inout) :: self
-        class(sp_project),        intent(inout) :: project
-        class(oris),              intent(in)    :: particles
-        class(string),            intent(in)    :: projfile
-        integer,                  intent(in)    :: pinds(:), labels_sel(:)
-        real,                     intent(in)    :: weights_sel(:,:)
-        character(len=*),         intent(in)    :: producer
-        integer,        optional, intent(in)    :: kind
-        integer(int64), optional, intent(in)    :: parent_generation, parent_layout_digest
-        integer,        optional, intent(in)    :: parent_state
+        class(state_weight_set),  intent(inout)        :: self
+        class(sp_project),        intent(inout)        :: project
+        class(oris),              intent(in)           :: particles
+        class(string),            intent(in)           :: projfile
+        integer,                  intent(in)           :: pinds(:), labels_sel(:)
+        real,                     intent(in)           :: weights_sel(:,:)
+        character(len=*),         intent(in)           :: producer
+        integer,                  optional, intent(in) :: kind
+        integer(int64),           optional, intent(in) :: parent_generation, parent_layout_digest
+        integer,                  optional, intent(in) :: parent_state
         type(state_weights_manifest)    :: manifest, previous
         type(state_weights_file_header) :: header
         type(string)                    :: prev_path, prev_dir, fname, manifest_path
@@ -129,10 +129,10 @@ contains
         integer(int8), allocatable      :: flags(:)
         real(real64),  allocatable      :: rowsum(:)
         logical,       allocatable      :: seen(:)
-        character(len=512) :: msg
-        integer(int64)     :: digest
-        integer            :: nptcls, nsel, nstates, i, s, stat
-        logical            :: l_prev, l_partition
+        character(len=512)              :: msg
+        integer(int64)                  :: digest
+        integer                         :: nptcls, nsel, nstates, i, s, stat
+        logical                         :: l_prev, l_partition
         call self%kill
         nptcls  = particles%get_noris()
         nsel    = size(pinds)
@@ -264,7 +264,7 @@ contains
         type(string)         :: target_path
         real,    allocatable :: weights(:,:)
         integer, allocatable :: labels(:), pinds(:)
-        integer :: nwork, i
+        integer              :: nwork, i
         call check_state(parent, state)
         nwork = size(parent_rows)
         if( nwork < 1 .or. nwork /= particles%get_noris() ) THROW_HARD('work rows and work particles disagree; publish_work_state')
@@ -372,27 +372,27 @@ contains
 
     !> raw weights of one state over every project row
     subroutine get_weights( self, state, weights )
-        class(state_weight_set),   intent(inout) :: self
-        integer,                   intent(in)    :: state
-        real(real32), allocatable, intent(out)   :: weights(:)
+        class(state_weight_set),   intent(inout)            :: self
+        integer,                   intent(in)               :: state
+        real(real32),              allocatable, intent(out) :: weights(:)
         call self%load_state(state)
         weights = self%column
     end subroutine get_weights
 
     !> weights of one state with every value at or below threshold set to zero
     subroutine get_applied_weights( self, state, threshold, weights )
-        class(state_weight_set),   intent(inout) :: self
-        integer,                   intent(in)    :: state
-        real,                      intent(in)    :: threshold
-        real(real32), allocatable, intent(out)   :: weights(:)
+        class(state_weight_set),   intent(inout)            :: self
+        integer,                   intent(in)               :: state
+        real,                      intent(in)               :: threshold
+        real(real32),              allocatable, intent(out) :: weights(:)
         call self%load_state(state)
         weights = merge(self%column, 0._real32, self%column > threshold)
     end subroutine get_applied_weights
 
     !> hard labels over every project row: the state whose flag is set, 0 for none
     subroutine get_labels( self, labels )
-        class(state_weight_set), intent(inout) :: self
-        integer, allocatable,    intent(out)   :: labels(:)
+        class(state_weight_set), intent(inout)               :: self
+        integer,                 allocatable,    intent(out) :: labels(:)
         integer :: s
         allocate(labels(self%manifest%nptcls), source=0)
         do s = 1, self%manifest%nstates
@@ -403,9 +403,9 @@ contains
 
     !> selected rows: those whose applied weights sum above zero
     subroutine get_selection( self, threshold, selected )
-        class(state_weight_set), intent(inout) :: self
-        real,                    intent(in)    :: threshold
-        logical, allocatable,    intent(out)   :: selected(:)
+        class(state_weight_set), intent(inout)               :: self
+        real,                    intent(in)                  :: threshold
+        logical,                 allocatable,    intent(out) :: selected(:)
         integer :: s
         allocate(selected(self%manifest%nptcls), source=.false.)
         do s = 1, self%manifest%nstates
@@ -440,14 +440,14 @@ contains
 
     !> The rows of a subset whose weight for state is above threshold, in subset order, and their weights
     subroutine get_members( self, state, threshold, rows, members, weights )
-        class(state_weight_set), intent(inout) :: self
-        integer,                 intent(in)    :: state
-        real,                    intent(in)    :: threshold
-        integer,                 intent(in)    :: rows(:)
-        integer, allocatable,    intent(out)   :: members(:)
-        real,    allocatable,    intent(out)   :: weights(:)
+        class(state_weight_set), intent(inout)               :: self
+        integer,                 intent(in)                  :: state
+        real,                    intent(in)                  :: threshold
+        integer,                 intent(in)                  :: rows(:)
+        integer,                 allocatable,    intent(out) :: members(:)
+        real,                    allocatable,    intent(out) :: weights(:)
         logical, allocatable :: l_member(:)
-        integer :: i
+        integer              :: i
         call self%load_state(state)
         allocate(l_member(size(rows)))
         do i = 1, size(rows)
@@ -494,10 +494,10 @@ contains
         class(sp_project), intent(inout) :: project
         class(string),     intent(in)    :: projfile
         type(state_weights_manifest) :: manifest
-        type(string)       :: path, dir
-        character(len=512) :: msg
-        integer            :: s, stat
-        logical            :: found
+        type(string)                 :: path, dir
+        character(len=512)           :: msg
+        integer                      :: s, stat
+        logical                      :: found
         call project%get_state_weights(path, found)
         if( .not. found ) return
         call project%remove_state_weights_from_osout
@@ -526,8 +526,8 @@ contains
         class(state_weight_set), intent(inout) :: self
         integer,                 intent(in)    :: state
         type(state_weights_file_header) :: header
-        character(len=512) :: msg
-        integer :: stat
+        character(len=512)              :: msg
+        integer                         :: stat
         call check_state(self, state)
         if( self%loaded == state ) return
         call state_weights_read_state_file(self%dir//self%manifest%fnames(state), header, self%column, &
@@ -553,14 +553,14 @@ contains
         integer,                 intent(out)   :: status
         character(len=*),        intent(out)   :: message
         type(state_weights_file_header) :: header
-        type(string)               :: fpath
-        real(real32),  allocatable :: column(:)
-        integer(int8), allocatable :: flags(:)
-        real(real64),  allocatable :: rowsum(:)
-        integer,       allocatable :: nflag(:)
-        real(real64)   :: mass, ess
-        integer(int64) :: digest, fsize
-        integer        :: s, pop, i
+        type(string)                    :: fpath
+        real(real32),  allocatable      :: column(:)
+        integer(int8), allocatable      :: flags(:)
+        real(real64),  allocatable      :: rowsum(:)
+        integer,       allocatable      :: nflag(:)
+        real(real64)                    :: mass, ess
+        integer(int64)                  :: digest, fsize
+        integer                         :: s, pop, i
         call self%kill
         call state_weights_read_manifest(path, self%manifest, status, message)
         if( status /= 0 ) return

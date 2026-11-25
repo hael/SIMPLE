@@ -8,14 +8,14 @@ private
 
 public :: umap_embed, umap_subsample
 
-integer, parameter :: NDIM       = 2      !< output dimensionality
-integer, parameter :: NNN        = 15     !< neighbourhood size
-integer, parameter :: SMALL_N    = 10000  !< below this, more epochs (UMAP's own heuristic)
+integer, parameter :: NDIM         = 2     !< output dimensionality
+integer, parameter :: NNN          = 15    !< neighbourhood size
+integer, parameter :: SMALL_N      = 10000 !< below this, more epochs (UMAP's own heuristic)
 integer, parameter :: NEPOCH_SMALL = 500, NEPOCH_LARGE = 200
-integer, parameter :: NBISECT    = 64     !< bandwidth bisection steps
-real,    parameter :: NEG_RATE   = 5.     !< negative samples per positive
-real,    parameter :: CLIP       = 4.     !< SGD displacement clamp; without it coincident pairs diverge
-real,    parameter :: INIT_SCALE = 10.    !< coordinate spread of the initialisation
+integer, parameter :: NBISECT      = 64    !< bandwidth bisection steps
+real,    parameter :: NEG_RATE     = 5.    !< negative samples per positive
+real,    parameter :: CLIP         = 4.    !< SGD displacement clamp; without it coincident pairs diverge
+real,    parameter :: INIT_SCALE   = 10.   !< coordinate spread of the initialisation
 !> a and b of the 1/(1 + a d^2b) output kernel, least-squares fitted to UMAP's defaults
 !! min_dist=0.1, spread=1.0. Constants because nothing here varies them.
 real,    parameter :: KERN_A = 1.577, KERN_B = 0.895
@@ -27,16 +27,16 @@ contains
     !!  repo's EXACT k-d tree, so only the SGD's negative samples carry randomness, and those come
     !!  from a stream local to this call -- a plot never perturbs the global one.
     subroutine umap_embed( X, seed, Y )
-        real,              intent(in)    :: X(:,:)
-        integer,           intent(in)    :: seed
-        real, allocatable, intent(inout) :: Y(:,:)
+        real,              intent(in)                 :: X(:,:)
+        integer,           intent(in)                 :: seed
+        real,              allocatable, intent(inout) :: Y(:,:)
         real,    allocatable :: W(:,:), feats(:,:), w_e(:), eps(:), next_smp(:), next_neg(:)
         integer, allocatable :: head(:), tail(:)
-        type(kd_tree)   :: tree
-        type(knn_table) :: knn
+        type(kd_tree)        :: tree
+        type(knn_table)      :: knn
         integer(kind=longer) :: rng
-        real    :: mu, sdev, wmax, alpha, d2, coeff, delta, ycur
-        integer :: n, d, i, j, k, e, t, kk, nits, knn_k, nedges, nneg, epoch, other
+        real                 :: mu, sdev, wmax, alpha, d2, coeff, delta, ycur
+        integer              :: n, d, i, j, k, e, t, kk, nits, knn_k, nedges, nneg, epoch, other
         n = size(X,1)
         d = size(X,2)
         if( n < 4 .or. d < NDIM + 1 ) THROW_HARD('UMAP needs >3 samples in >2 dimensions')
@@ -118,11 +118,11 @@ contains
 
     !>  Deterministic size-capped row subset, ascending. Depends only on (n, nsub, seed).
     subroutine umap_subsample( n, nsub, seed, inds )
-        integer,              intent(in)  :: n, nsub, seed
-        integer, allocatable, intent(out) :: inds(:)
+        integer,              intent(in)               :: n, nsub, seed
+        integer,              allocatable, intent(out) :: inds(:)
         integer, allocatable :: perm(:)
         integer(kind=longer) :: rng
-        integer :: i, j, tmp
+        integer              :: i, j, tmp
         if( n < 1 ) THROW_HARD('umap_subsample needs a positive population')
         if( nsub < 1 .or. n <= nsub )then
             allocate(inds(n))
@@ -145,14 +145,14 @@ contains
     !!  reverse membership is looked up directly in the neighbour's own list -- O(k) with k a
     !!  handful -- so the edge set needs no sort and no deduplication pass.
     subroutine fuzzy_graph( knn, n, head, tail, w_e, nedges )
-        type(knn_table),      intent(in)  :: knn
-        integer,              intent(in)  :: n
-        integer, allocatable, intent(out) :: head(:), tail(:)
-        real,    allocatable, intent(out) :: w_e(:)
-        integer,              intent(out) :: nedges
+        type(knn_table),      intent(in)               :: knn
+        integer,              intent(in)               :: n
+        integer,              allocatable, intent(out) :: head(:), tail(:)
+        real,                 allocatable, intent(out) :: w_e(:)
+        integer,              intent(out)              :: nedges
         real,    allocatable :: dists(:,:), wdir(:,:)
-        real    :: rho, sigma, lo, hi, tgt, s, dj, wij, wji
-        integer :: k, i, j, it, nb, pos
+        real                 :: rho, sigma, lo, hi, tgt, s, dj, wij, wji
+        integer              :: k, i, j, it, nb, pos
         k = knn%k
         allocate(dists(k,n), wdir(k,n), source=0.)
         dists = sqrt(max(knn%distance2, 0.))
@@ -232,11 +232,11 @@ contains
     !!  global arrangement than a random start, and reproducible. The d x d covariance route avoids
     !!  ever forming the n x n matrix; d is the latent rank, so it is small.
     subroutine pca_init( W, Y )
-        real,              intent(in)    :: W(:,:)
-        real, allocatable, intent(inout) :: Y(:,:)
+        real,              intent(in)                 :: W(:,:)
+        real,              allocatable, intent(inout) :: Y(:,:)
         real(dp), allocatable :: C(:,:), V(:,:), eigs(:)
-        real    :: sdev, smax
-        integer :: n, d, i, j, q, nrot
+        real                  :: sdev, smax
+        integer               :: n, d, i, j, q, nrot
         n = size(W,1)
         d = size(W,2)
         if( allocated(Y) ) deallocate(Y)

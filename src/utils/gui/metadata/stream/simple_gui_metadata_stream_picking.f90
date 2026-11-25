@@ -26,7 +26,7 @@ module simple_gui_metadata_stream_picking
     integer               :: last_micrograph_imported = 0  ! Unix timestamp of most recent import event
     integer               :: box_size                 = 0  ! particle box size in pixels
   contains
-    procedure :: kill => kill_override
+    procedure :: kill    => kill_override
     procedure :: set
     procedure :: get
     procedure :: jsonise => jsonise_override
@@ -38,7 +38,7 @@ contains
   ! automatically. Updates last_micrograph_imported only when the import
   ! count changes. Guards against division by zero when no mics are present.
   subroutine set( self, stage, micrographs_imported, micrographs_accepted, particles_extracted, box_size )
-    class(gui_metadata_stream_picking), intent(inout) :: self
+    class(gui_metadata_stream_picking),         intent(inout) :: self
     type(string),                               intent(in)    :: stage
     integer,                                    intent(in)    :: micrographs_imported, micrographs_accepted
     integer,                                    intent(in)    :: particles_extracted, box_size

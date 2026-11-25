@@ -73,11 +73,11 @@ contains
     end subroutine pad_imgfile
 
     subroutine scale_imgfile( fname2scale, fname, smpd, ldim_new, smpd_new, fromptop )
-        class(string),     intent(in)  :: fname2scale, fname
-        real,              intent(in)  :: smpd
-        integer,           intent(in)  :: ldim_new(3)
-        real,              intent(out) :: smpd_new
-        integer, optional, intent(in)  :: fromptop(2)
+        class(string),     intent(in)           :: fname2scale, fname
+        real,              intent(in)           :: smpd
+        integer,           intent(in)           :: ldim_new(3)
+        real,              intent(out)          :: smpd_new
+        integer,           optional, intent(in) :: fromptop(2)
         type(stack_io) :: stkio_r, stkio_w
         type(image)    :: img, img_scaled
         integer        :: n, i, ldim(3), prange(2), cnt, sz
@@ -206,12 +206,12 @@ contains
     end subroutine mirror_imgfile
 
     subroutine scale_and_clip_imgfile( fname2scale, fname, smpd, ldim_new, ldim_clip, smpd_new, fromptop )
-        class(string),     intent(in)  :: fname2scale, fname
-        real,              intent(in)  :: smpd
-        integer,           intent(in)  :: ldim_new(3)
-        integer,           intent(in)  :: ldim_clip(3)
-        real,              intent(out) :: smpd_new
-        integer, optional, intent(in)  :: fromptop(2)
+        class(string),     intent(in)           :: fname2scale, fname
+        real,              intent(in)           :: smpd
+        integer,           intent(in)           :: ldim_new(3)
+        integer,           intent(in)           :: ldim_clip(3)
+        real,              intent(out)          :: smpd_new
+        integer,           optional, intent(in) :: fromptop(2)
         type(stack_io) :: stkio_r, stkio_w
         type(image)    :: img, img_scaled, img_clip
         integer        :: n, i, ldim(3), prange(2), cnt, sz
@@ -360,10 +360,10 @@ contains
     end subroutine add_noise_imgfile
 
     subroutine noise_imgfile( fname, nimgs, box, smpd, snr )
-        class(string),    intent(in) :: fname
-        integer,          intent(in) :: nimgs, box
-        real,             intent(in) :: smpd
-        real,   optional, intent(in) :: snr
+        class(string),    intent(in)           :: fname
+        integer,          intent(in)           :: nimgs, box
+        real,             intent(in)           :: smpd
+        real,             optional, intent(in) :: snr
         type(stack_io)               :: stkio_w
         type(image)                  :: img
         integer                      :: i
@@ -384,9 +384,9 @@ contains
     end subroutine noise_imgfile
 
     subroutine bp_imgfile( fname2filter, fname, smpd, hp, lp, width )
-        class(string),  intent(in) :: fname2filter, fname
-        real,           intent(in) :: smpd, hp, lp
-        real, optional, intent(in) :: width
+        class(string),  intent(in)           :: fname2filter, fname
+        real,           intent(in)           :: smpd, hp, lp
+        real,           optional, intent(in) :: width
         type(stack_io)               :: stkio_r, stkio_w
         type(image)                  :: img
         integer                      :: n, i, ldim(3)
@@ -522,9 +522,9 @@ contains
     end subroutine icm_imgfile
 
     subroutine nlmean_imgfile( fname2process, fname, smpd, noise_sdev )
-        class(string),  intent(in) :: fname2process, fname
-        real,           intent(in) :: smpd
-        real, optional, intent(in) :: noise_sdev
+        class(string),  intent(in)           :: fname2process, fname
+        real,           intent(in)           :: smpd
+        real,           optional, intent(in) :: noise_sdev
         type(stack_io)               :: stkio_r, stkio_w
         type(image)                  :: img
         integer                      :: n, i, ldim(3)
@@ -695,10 +695,10 @@ contains
     end subroutine quantize_imgfile
 
     subroutine shift_imgfile( fname2shift, fname, o, smpd, mul )
-        class(string),     intent(in)    :: fname2shift, fname
-        class(oris),       intent(inout) :: o
-        real,              intent(in)    :: smpd
-        real,    optional, intent(in)    :: mul
+        class(string),     intent(in)           :: fname2shift, fname
+        class(oris),       intent(inout)        :: o
+        real,              intent(in)           :: smpd
+        real,              optional, intent(in) :: mul
         type(stack_io) :: stkio_r, stkio_w
         type(image)    :: img
         integer        :: n, i, ldim(3)
@@ -733,18 +733,18 @@ contains
 
     subroutine random_selection_from_imgfile( spproj, fname, box, nran, pinds )
         use simple_sp_project, only: sp_project
-        class(sp_project),  intent(inout) :: spproj
-        class(string),      intent(in)    :: fname
-        integer,            intent(in)    :: nran, box
-        integer, optional, allocatable, intent(out) :: pinds(:)
+        class(sp_project),  intent(inout)                      :: spproj
+        class(string),      intent(in)                         :: fname
+        integer,            intent(in)                         :: nran, box
+        integer,            optional, allocatable, intent(out) :: pinds(:)
         logical,           allocatable   :: mask(:)
-        type(string)   :: stkname
-        type(stack_io) :: stkio_w
-        type(ran_tabu) :: rt
-        type(image)    :: img, img_scaled
-        real           :: smpd
-        integer        :: nptcls, box_ori, ldim(3), i, ii, ldim_scaled(3), ind
-        logical        :: doscale
+        type(string)                     :: stkname
+        type(stack_io)                   :: stkio_w
+        type(ran_tabu)                   :: rt
+        type(image)                      :: img, img_scaled
+        real                             :: smpd
+        integer                          :: nptcls, box_ori, ldim(3), i, ii, ldim_scaled(3), ind
+        logical                          :: doscale
         ! dimensions
         nptcls      = spproj%get_nptcls()
         smpd        = spproj%os_stk%get(1,'smpd')

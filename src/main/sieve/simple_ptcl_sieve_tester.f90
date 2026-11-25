@@ -52,9 +52,9 @@ contains
         class(ptcl_sieve), allocatable :: sieve
         class(parameters), allocatable :: params_sieve
         class(cmdline),    allocatable :: cline_sieve
-        type(string), allocatable :: projnames(:)
-        integer,      allocatable :: micinds(:)
-        type(string) :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile
+        type(string),      allocatable :: projnames(:)
+        integer,           allocatable :: micinds(:)
+        type(string)                   :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile
         write(*,'(A)') 'test_rejected_chunk_keeps_its_lists'
         allocate(sieve, params_sieve, cline_sieve)
         call make_completed_coarse_chunk(string('keep_lists'), ws_dir, cwd_saved, chunk_dir, completed_path,&
@@ -106,9 +106,9 @@ contains
         class(cmdline),        intent(inout) :: cline
         class(ptcl_sieve), allocatable :: sieve
         class(parameters), allocatable :: params
-        type(rec_list)    :: project_list
-        type(project_rec) :: prec
-        integer :: i
+        type(rec_list)                 :: project_list
+        type(project_rec)              :: prec
+        integer                        :: i
         !$ call omp_set_num_threads(1)
         allocate(sieve, params)
         call init_test_params(params)
@@ -149,7 +149,7 @@ contains
     subroutine test_failed_chunk_retried_once()
         class(ptcl_sieve), allocatable :: sieve
         class(parameters), allocatable :: params
-        type(string)     :: ws_dir, cwd_saved, chunk_dir
+        type(string)                   :: ws_dir, cwd_saved, chunk_dir
         allocate(sieve)
         write(*,'(A)') 'test_failed_chunk_retried_once'
         call setup_workspace(string('failed_chunk_retry'), ws_dir, cwd_saved)
@@ -175,7 +175,7 @@ contains
     subroutine test_failed_chunk_dropped_after_retry()
         class(ptcl_sieve), allocatable :: sieve
         class(parameters), allocatable :: params
-        type(string)     :: ws_dir, cwd_saved, chunk_dir
+        type(string)                   :: ws_dir, cwd_saved, chunk_dir
         allocate(sieve)
         write(*,'(A)') 'test_failed_chunk_dropped_after_retry'
         call setup_workspace(string('failed_chunk_drop'), ws_dir, cwd_saved)
@@ -199,12 +199,12 @@ contains
 
     subroutine test_new_kill_and_empty_queries()
         class(ptcl_sieve), allocatable          :: sieve
-        class(parameters), allocatable :: params
-        type(string)              :: ws_dir, cwd_saved, jpeg, stk
-        integer, allocatable      :: inds(:), pops(:), sel(:)
-        real, allocatable         :: res(:)
-        integer                   :: xtiles, ytiles
-        logical                   :: ok
+        class(parameters), allocatable          :: params
+        type(string)                            :: ws_dir, cwd_saved, jpeg, stk
+        integer,           allocatable          :: inds(:), pops(:), sel(:)
+        real,              allocatable          :: res(:)
+        integer                                 :: xtiles, ytiles
+        logical                                 :: ok
 
         allocate(sieve)
         write(*,'(A)') 'test_new_kill_and_empty_queries'
@@ -233,7 +233,7 @@ contains
     subroutine test_import_existing_chunks_and_counts()
         class(ptcl_sieve), allocatable :: sieve
         class(parameters), allocatable :: params
-        type(string)     :: ws_dir, cwd_saved
+        type(string)                   :: ws_dir, cwd_saved
 
         allocate(sieve)
         write(*,'(A)') 'test_import_existing_chunks_and_counts'
@@ -281,7 +281,7 @@ contains
     subroutine test_restart_reconciles_and_counts()
         class(ptcl_sieve), allocatable :: sieve
         class(parameters), allocatable :: params
-        type(string)     :: ws_dir, cwd_saved
+        type(string)                   :: ws_dir, cwd_saved
         allocate(sieve)
         write(*,'(A)') 'test_restart_reconciles_and_counts'
         call setup_workspace(string('restart_reconcile'), ws_dir, cwd_saved)
@@ -329,7 +329,7 @@ contains
     subroutine test_rebuild_chunked_mics()
         type(string), allocatable :: projnames(:)
         integer,      allocatable :: micinds(:)
-        type(string) :: ws_dir, cwd_saved
+        type(string)              :: ws_dir, cwd_saved
         write(*,'(A)') 'test_rebuild_chunked_mics'
         call setup_workspace(string('rebuild_chunked'), ws_dir, cwd_saved)
         call make_chunk_project('coarse', 1, 4, 4, 1)
@@ -364,7 +364,7 @@ contains
     subroutine test_import_restores_final_ingestion_chunk()
         class(ptcl_sieve), allocatable :: sieve
         class(parameters), allocatable :: params
-        type(string)     :: ws_dir, cwd_saved
+        type(string)                   :: ws_dir, cwd_saved
 
         allocate(sieve)
         write(*,'(A)') 'test_import_restores_final_ingestion_chunk'
@@ -390,7 +390,7 @@ contains
     subroutine test_finished_semantics()
         class(ptcl_sieve), allocatable :: sieve
         class(parameters), allocatable :: params
-        type(string)     :: ws_dir, cwd_saved
+        type(string)                   :: ws_dir, cwd_saved
 
         allocate(sieve)
         write(*,'(A)') 'test_finished_semantics'
@@ -436,7 +436,7 @@ contains
     subroutine test_single_pass_ignores_incomplete_fine()
         class(ptcl_sieve), allocatable :: sieve
         class(parameters), allocatable :: params
-        type(string)     :: ws_dir, cwd_saved
+        type(string)                   :: ws_dir, cwd_saved
 
         allocate(sieve)
         write(*,'(A)') 'test_single_pass_ignores_incomplete_fine'
@@ -473,7 +473,7 @@ contains
     subroutine test_new_accepts_tuning_overrides()
         class(ptcl_sieve), allocatable :: sieve
         class(parameters), allocatable :: params
-        type(string)     :: ws_dir, cwd_saved
+        type(string)                   :: ws_dir, cwd_saved
 
         allocate(sieve)
         write(*,'(A)') 'test_new_accepts_tuning_overrides'
@@ -497,7 +497,7 @@ contains
     !! validation has lifted the unset value to Nyquist
     subroutine test_lpstart_given_or_derived()
         class(parameters), allocatable :: params
-        type(string)     :: ws_dir, cwd_saved
+        type(string)                   :: ws_dir, cwd_saved
 
         write(*,'(A)') 'test_lpstart_given_or_derived'
 
@@ -515,8 +515,8 @@ contains
     !! override, the population thresholds among them
     subroutine test_settings_from_params()
         class(parameters), allocatable :: params
-        type(ptcl_sieve_settings) :: settings
-        type(string)              :: ws_dir, cwd_saved
+        type(ptcl_sieve_settings)      :: settings
+        type(string)                   :: ws_dir, cwd_saved
         write(*,'(A)') 'test_settings_from_params'
         call setup_workspace(string('settings_rule'), ws_dir, cwd_saved)
         allocate(params)
@@ -543,8 +543,8 @@ contains
     subroutine test_cycle_empty_project_list()
         class(ptcl_sieve), allocatable :: sieve
         class(parameters), allocatable :: params
-        type(rec_list)   :: project_list
-        type(string)     :: ws_dir, cwd_saved
+        type(rec_list)                 :: project_list
+        type(string)                   :: ws_dir, cwd_saved
 
         allocate(sieve)
         write(*,'(A)') 'test_cycle_empty_project_list'
@@ -567,16 +567,16 @@ contains
     !! rejected, and the selection reaches particles, sentinels, export, previews and latest product
     subroutine test_collect_and_reject_hard_gates()
         class(ptcl_sieve), allocatable     :: sieve
-        class(parameters), allocatable :: params_sieve
-        class(cmdline), allocatable :: cline_sieve
-        type(sp_project)     :: result
-        type(string)         :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile
-        type(string)         :: completed_projfile, rejection_reason, latest_jpeg, latest_stk
-        type(string)         :: selected_jpeg, rejected_jpeg, reasons_jpeg, reasons_key
-        integer, allocatable :: latest_inds(:), latest_pops(:), latest_selection(:)
-        real,    allocatable :: latest_res(:)
-        integer              :: ldim(3), nimages, xtiles, ytiles
-        logical              :: has_latest
+        class(parameters), allocatable     :: params_sieve
+        class(cmdline),    allocatable     :: cline_sieve
+        type(sp_project)                   :: result
+        type(string)                       :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile
+        type(string)                       :: completed_projfile, rejection_reason, latest_jpeg, latest_stk
+        type(string)                       :: selected_jpeg, rejected_jpeg, reasons_jpeg, reasons_key
+        integer,           allocatable     :: latest_inds(:), latest_pops(:), latest_selection(:)
+        real,              allocatable     :: latest_res(:)
+        integer                            :: ldim(3), nimages, xtiles, ytiles
+        logical                            :: has_latest
 
         allocate(sieve)
         write(*,'(A)') 'test_collect_and_reject_hard_gates'
@@ -666,10 +666,10 @@ contains
     subroutine test_hand_off_applies_optics_map()
         class(ptcl_sieve), allocatable :: sieve
         class(parameters), allocatable :: params_sieve
-        class(cmdline), allocatable :: cline_sieve
-        type(sp_project) :: map_proj, exported, chunk_proj
-        type(string)     :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile, optics_dir, exported_projfile
-        integer          :: igroup
+        class(cmdline),    allocatable :: cline_sieve
+        type(sp_project)               :: map_proj, exported, chunk_proj
+        type(string)                   :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile, optics_dir, exported_projfile
+        integer                        :: igroup
 
         allocate(sieve)
         write(*,'(A)') 'test_hand_off_applies_optics_map'
@@ -721,10 +721,10 @@ contains
     ! stack, as chunks built from extracted micrographs have
     subroutine make_completed_coarse_chunk( tag, ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile,&
             &cline_sieve, l_extracted )
-        type(string),      intent(in)    :: tag
-        type(string),      intent(inout) :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile
-        type(cmdline),     intent(inout) :: cline_sieve
-        logical, optional, intent(in)    :: l_extracted
+        type(string),      intent(in)           :: tag
+        type(string),      intent(inout)        :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile
+        type(cmdline),     intent(inout)        :: cline_sieve
+        logical,           optional, intent(in) :: l_extracted
         type(image)      :: cavg_good, cavg_bad, feature
         type(sp_project) :: chunk_project
         type(string)     :: cavg_path
@@ -819,10 +819,10 @@ contains
 
     subroutine init_test_params(params, single_pass, lpstart, lpstop_coarse, lpstop_fine, box_coarse, box_fine, &
                                 nsample_coarse, nsample_fine, ncls_coarse, ncls_fine)
-        type(parameters), intent(inout) :: params
+        type(parameters), intent(inout)        :: params
         character(len=*), optional, intent(in) :: single_pass
-        real, optional, intent(in) :: lpstart, lpstop_coarse, lpstop_fine
-        integer, optional, intent(in) :: box_coarse, box_fine, nsample_coarse, nsample_fine, ncls_coarse, ncls_fine
+        real,             optional, intent(in) :: lpstart, lpstop_coarse, lpstop_fine
+        integer,          optional, intent(in) :: box_coarse, box_fine, nsample_coarse, nsample_fine, ncls_coarse, ncls_fine
         class(cmdline), allocatable :: cline
 
         allocate(cline)
@@ -874,8 +874,8 @@ contains
 
     !> up to two lines to @p fname
     subroutine write_text( fname, line1, line2 )
-        character(len=*),           intent(in) :: fname, line1
-        character(len=*), optional, intent(in) :: line2
+        character(len=*),           intent(in)           :: fname, line1
+        character(len=*),           optional, intent(in) :: line2
         integer :: funit, ios
         open(newunit=funit, file=fname, status='replace', action='write', iostat=ios)
         if( ios /= 0 ) return

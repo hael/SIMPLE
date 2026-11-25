@@ -59,9 +59,9 @@ contains
 
     function blob_map() result( rmat )
         real, allocatable :: rmat(:,:,:)
-        real, parameter :: CENTRES(3,3) = reshape([-4.,2.,1., 5.,-3.,0., 1.,5.,-4.], [3,3])
-        real    :: d2
-        integer :: i, j, k, b
+        real, parameter   :: CENTRES(3,3) = reshape([-4.,2.,1., 5.,-3.,0., 1.,5.,-4.], [3,3])
+        real              :: d2
+        integer           :: i, j, k, b
         allocate(rmat(BOX,BOX,BOX), source=0.)
         do k = 1, BOX
             do j = 1, BOX
@@ -99,8 +99,8 @@ contains
 
     subroutine test_identical_maps()
         real, allocatable :: fsc(:), res(:)
-        real    :: corr
-        logical :: ok
+        real              :: corr
+        logical           :: ok
         write(logfhandle,'(A)') '-- test_identical_maps'
         call compare_volpair(string(F_MAP), string(F_MAP), MSKDIAM, 0., corr, fsc, res, ok)
         call assert_true(ok, 'a map against itself is compared')
@@ -112,8 +112,8 @@ contains
 
     subroutine test_independent_maps()
         real, allocatable :: fsc(:), res(:)
-        real    :: corr
-        logical :: ok
+        real              :: corr
+        logical           :: ok
         write(logfhandle,'(A)') '-- test_independent_maps'
         call compare_volpair(string(F_MAP), string(F_NOISE), MSKDIAM, 0., corr, fsc, res, ok)
         call assert_true(ok, 'a map against independent noise is compared')
@@ -123,9 +123,9 @@ contains
 
     subroutine test_band_correlation()
         real, allocatable :: fsc(:), res(:)
-        real    :: corr_full, corr_band
-        logical :: ok
-        integer :: n
+        real              :: corr_full, corr_band
+        logical           :: ok
+        integer           :: n
         write(logfhandle,'(A)') '-- test_band_correlation'
         call compare_volpair(string(F_MAP), string(F_NOISY), MSKDIAM, 0.,  corr_full, fsc, res, ok)
         call assert_true(ok, 'the full band is compared')
@@ -139,8 +139,8 @@ contains
 
     subroutine test_mismatched_maps()
         real, allocatable :: fsc(:), res(:)
-        real    :: corr
-        logical :: ok
+        real              :: corr
+        logical           :: ok
         write(logfhandle,'(A)') '-- test_mismatched_maps'
         call compare_volpair(string(F_MAP), string(F_SMALL), MSKDIAM, 0., corr, fsc, res, ok)
         call assert_false(ok, 'maps of different boxes are refused')

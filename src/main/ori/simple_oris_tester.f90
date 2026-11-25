@@ -59,7 +59,7 @@ contains
     !> get_half returns a row's even/odd half and stops on a row in no half (eo = -1), which the half sums
     !! (class averages, 3D reconstruction) once put in the even half
     subroutine test_get_half()
-        type(oris) :: os
+        type(oris)             :: os
         type(half_of_unhalved) :: child
         write(*,'(A)') 'test_get_half'
         call os%new(2, is_ptcl=.true.)
@@ -87,11 +87,11 @@ contains
 
     !> Read a prescribed pairing without a polar calculator or parameter object.
     subroutine test_mirror_pairs()
-        integer, parameter :: PAIRS(6) = [6,4,5,2,3,1]
+        integer,     parameter   :: PAIRS(6) = [6,4,5,2,3,1]
         class(oris), allocatable :: os
-        integer, allocatable :: partners(:)
-        real, allocatable :: frame_angles(:)
-        integer :: i
+        integer,     allocatable :: partners(:)
+        real,        allocatable :: frame_angles(:)
+        integer                  :: i
         allocate(os)
         call os%new(6,is_ptcl=.false.)
         do i = 1,6
@@ -119,12 +119,12 @@ contains
     !! subset, the tier rules and counts hold as they do on the intrinsic stream, and without a key the
     !! intrinsic stream is used as before
     subroutine test_keyed_sampling()
-        type(oris) :: os
+        type(oris)                      :: os
         type(class_sample), allocatable :: clssmp(:)
-        integer, allocatable :: inds1(:), inds2(:), inds3(:)
-        type(rnd_key) :: key, key2
-        integer :: i, n, nsamp, nsamp2, nsamp3, nchanged, irep
-        real    :: r
+        integer,            allocatable :: inds1(:), inds2(:), inds3(:)
+        type(rnd_key)                   :: key, key2
+        integer                         :: i, n, nsamp, nsamp2, nsamp3, nchanged, irep
+        real                            :: r
         write(*,'(A)') 'test_keyed_sampling'
         n = 40
         key  = rnd_draw_key(rnd_scope_key(20261104_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 3), 0, RND_FAM_SAMPLE)
@@ -205,13 +205,13 @@ contains
 
     !> Reversing the particle scores preserves the sampling units and the fixed-key subset.
     subroutine test_sampling_ignores_scores()
-        integer, parameter :: NPTCLS = 12
-        class(oris), allocatable :: os
+        integer,            parameter   :: NPTCLS = 12
+        class(oris),        allocatable :: os
         type(class_sample), allocatable :: units(:)
-        integer, allocatable :: expected(:), inds(:)
-        type(rnd_key) :: key
-        integer :: variant, i, nsamp
-        real :: score
+        integer,            allocatable :: expected(:), inds(:)
+        type(rnd_key)                   :: key
+        integer                         :: variant, i, nsamp
+        real                            :: score
         write(*,'(A)') 'test_sampling_ignores_scores'
         allocate(os)
         key = rnd_draw_key(rnd_scope_key(20261111_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 5), 0, RND_FAM_SAMPLE)
@@ -248,9 +248,9 @@ contains
 
     subroutine test_ranked_balanced_sampling()
         use simple_type_defs, only: class_sample
-        class(oris), allocatable :: os
+        class(oris),        allocatable :: os
         type(class_sample), allocatable :: groups(:)
-        integer :: particle, flags(9)
+        integer                         :: particle, flags(9)
         allocate(os)
         call os%new(9,is_ptcl=.true.)
         do particle = 1,9
@@ -283,10 +283,10 @@ contains
     !> class populations counted in one pass (all, and per half) equal get_pop's counts class by class, at one thread
     !! and 20 times at every processor; state-0 records and labels above the class count are left out as get_pop does
     subroutine test_get_pops_halves()
-        integer, parameter :: NREC = 500, NCLS = 13
-        type(oris) :: os
+        integer, parameter   :: NREC = 500, NCLS = 13
+        type(oris)           :: os
         integer, allocatable :: pops(:), pe(:), po(:), pops1(:), pe1(:), po1(:)
-        integer :: i, icls, nwrong, irep, nthr_prev, nthr_full
+        integer              :: i, icls, nwrong, irep, nthr_prev, nthr_full
         write(*,'(A)') 'test_get_pops_halves'
         call os%new(NREC, is_ptcl=.true.)
         do i = 1, NREC
@@ -405,8 +405,8 @@ contains
     ! 3. extract_subset, copy, append, delete
     !---------------------------------------------------------------
     subroutine test_extract_and_copy()
-        type(oris) :: os, sub1, sub2, os_copy, os2
-        integer    :: n, i
+        type(oris)           :: os, sub1, sub2, os_copy, os2
+        integer              :: n, i
         integer, allocatable :: inds(:)
         write(*,'(A)') 'test_extract_and_copy'
         n = 6
@@ -446,11 +446,11 @@ contains
     ! 4. compress, masks, get_all, get_all_sampled, included
     !---------------------------------------------------------------
     subroutine test_compress_and_masks()
-        type(oris) :: os
+        type(oris)           :: os
         logical, allocatable :: mask(:), incl(:)
         real,    allocatable :: arr(:), arrs(:)
         integer, allocatable :: pinds(:)
-        integer :: n
+        integer              :: n
         write(*,'(A)') 'test_compress_and_masks'
         n = 5
         call os%new(n, .true.)
@@ -483,11 +483,11 @@ contains
     ! 5. Sampling and updatecnt / sampled related methods
     !---------------------------------------------------------------
     subroutine test_sampling_and_updatecnt()
-        type(oris) :: os
+        type(oris)                      :: os
         type(class_sample), allocatable :: clssmp(:)
-        integer, allocatable :: inds(:)
-        integer :: i, n, nsamp
-        real    :: frac, updfrac
+        integer,            allocatable :: inds(:)
+        integer                         :: i, n, nsamp
+        real                            :: frac, updfrac
         write(*,'(A)') 'test_sampling_and_updatecnt'
         n = 10
         call os%new(n, .true.)
@@ -616,8 +616,8 @@ contains
 
     ! units of consecutive particle indices with the given populations and group labels
     subroutine make_units( pops, groups, clssmp )
-        integer,                         intent(in)    :: pops(:), groups(:)
-        type(class_sample), allocatable, intent(inout) :: clssmp(:)
+        integer,                         intent(in)                 :: pops(:), groups(:)
+        type(class_sample),              allocatable, intent(inout) :: clssmp(:)
         integer :: i, j, first
         if( allocated(clssmp) ) call free_units(clssmp)
         allocate(clssmp(size(pops)))
@@ -662,7 +662,7 @@ contains
         type(oris)                      :: os
         type(class_sample), allocatable :: clssmp(:)
         integer,            allocatable :: inds(:)
-        integer :: nsamp, i, cnts3(3), cnts5(5)
+        integer                         :: nsamp, i, cnts3(3), cnts5(5)
         write(*,'(A)') 'test_nested_class_quota'
         ! class: pops 2, 5, 10; 9 of 17 -> the equal rounds stop at 4 per unit, the first capped at 2
         call os%new(17, .true.)
@@ -718,8 +718,8 @@ contains
         type(oris)                      :: os
         type(class_sample), allocatable :: clssmp(:)
         integer,            allocatable :: inds(:)
-        real    :: scores(16)
-        integer :: nsamp, i
+        real                            :: scores(16)
+        integer                         :: nsamp, i
         write(*,'(A)') 'test_best_first_draw'
         ! scores of rows 1-16: 5 10 15 3 8 13 1 6 | 11 16 4 9 14 2 7 12
         scores = [(real(mod(5*i, 17)), i=1,16)]
@@ -771,8 +771,8 @@ contains
         type(oris)                      :: os
         type(class_sample), allocatable :: clssmp(:)
         integer,            allocatable :: inds(:)
-        real    :: quotas(5)
-        integer :: nsamp, it, sweep, i
+        real                            :: quotas(5)
+        integer                         :: nsamp, it, sweep, i
         write(*,'(A)') 'test_class_sample_sweep'
         call make_units([2,6,6,3,20], [1,1,1,2,3], clssmp)
         call class_sample_quotas(clssmp, 19, quotas)
@@ -800,7 +800,7 @@ contains
         type(oris)                      :: os
         type(class_sample), allocatable :: clssmp(:)
         integer,            allocatable :: inds(:), inds2(:)
-        integer :: nsamp, i, ucnt_before(10), marker
+        integer                         :: nsamp, i, ucnt_before(10), marker
         write(*,'(A)') 'test_sticky_rescore'
         call os%new(10, .true.)
         call os%set_all2single('state',     1.0)
@@ -891,8 +891,8 @@ contains
     ! updated; state 1 = rows 1-4, state 2 = rows 5-8; current marker (2) on rows 1,2,3,8.
     ! Counted by hand: class N = [3, 3], n = [2, 1]; state N = [4, 2], n = [3, 0].
     subroutine test_group_update_counts()
-        integer, parameter :: NREP_CLS(2) = [3, 3], NSMP_CLS(2) = [2, 1]
-        integer, parameter :: NREP_ST(2)  = [4, 2], NSMP_ST(2)  = [3, 0]
+        integer, parameter   :: NREP_CLS(2) = [3, 3], NSMP_CLS(2) = [2, 1]
+        integer, parameter   :: NREP_ST(2)  = [4, 2], NSMP_ST(2)  = [3, 0]
         type(oris)           :: os
         integer, allocatable :: nrep(:), nsmp(:)
         real,    allocatable :: rho(:)
@@ -928,14 +928,14 @@ contains
     ! s = u/f, w = (1-u)*N/M, mass = s*n + w*M (note Section 4.1)
     subroutine test_blend_weight_cases()
         ! note Section 3.3 example: stored sums represent 100, 10 resampled + 30 first-time
-        real, parameter :: W_NOTE    = 0.9     ! (130-40)/100
+        real, parameter :: W_NOTE    = 0.9                      ! (130-40)/100
         real, parameter :: MASS_OLD  = 40. + (90./130.) * 100.  ! current rule, 109.23 (the note rounds to 109)
         ! ufrac override: N = M = 100, n = 10, u = 0.5 -> s = 5, w = 0.5, current share 50/100
         real, parameter :: S_UFRAC   = 5.0
         real, parameter :: W_UFRAC   = 0.5
         real, parameter :: TOL       = 1.e-5
-        real :: s, w, mnew, f
-        integer :: n
+        real            :: s, w, mnew, f
+        integer         :: n
         write(*,'(A)') 'test_blend_weight_cases'
         call population_blend_weights(130, 40, 100., s, w, mnew)
         call assert_real(1.0,    s,    TOL, 'note example: s = 1 by default')
@@ -995,12 +995,12 @@ contains
         ! control, group 1 by hand: round 1 mass 6; round 2 N = 5 (row 2 left), n = 1,
         ! mass 1 + (1 - 1/5)*6 = 5.8; round 3 N = 7 (first-time rows 13, 14), n = 3,
         ! mass 3 + (1 - 3/7)*5.8 = 6.314 < 7
-        real, parameter :: MASS_OLD_R3 = 3. + (1. - 3./7.) * (1. + (1. - 1./5.) * 6.)
-        real, parameter :: TOL         = 1.e-5
+        real,    parameter   :: MASS_OLD_R3 = 3. + (1. - 3./7.) * (1. + (1. - 1./5.) * 6.)
+        real,    parameter   :: TOL         = 1.e-5
         type(oris)           :: os
         integer, allocatable :: nrep(:), nsmp(:)
-        real    :: mstored(NG), mold(NG), s, w, mnew, f
-        integer :: round, g, i
+        real                 :: mstored(NG), mold(NG), s, w, mnew, f
+        integer              :: round, g, i
         write(*,'(A)') 'test_blend_mass_scripted'
         call os%new(12, .true.)
         call os%set_all2single('state',     1.0)
@@ -1072,13 +1072,13 @@ contains
     ! Large-population regression and timing test.
     !---------------------------------------------------------------
     subroutine test_sample4update_cnt_large()
-        integer, parameter :: n = 500001
-        real,    parameter :: update_frac = 0.005
-        real,    parameter :: zero_frac   = 0.9 * update_frac
-        type(oris) :: os
-        integer, allocatable :: candidate_inds(:), zero_inds(:), inds(:)
-        integer :: i, nzero, nsamples, nexpected
-        integer :: nzero_sampled, nselected_sampled
+        integer, parameter      :: n           = 500001
+        real,    parameter      :: update_frac = 0.005
+        real,    parameter      :: zero_frac   = 0.9 * update_frac
+        type(oris)              :: os
+        integer, allocatable    :: candidate_inds(:), zero_inds(:), inds(:)
+        integer                 :: i, nzero, nsamples, nexpected
+        integer                 :: nzero_sampled, nselected_sampled
         integer(timer_int_kind) :: tstart
         real(timer_int_kind)    :: elapsed
         write(*,'(A)') 'test_sample4update_cnt_large'
@@ -1160,8 +1160,8 @@ contains
     ! 7. Projection space, remap_projs, proj2class
     !---------------------------------------------------------------
     subroutine test_proj_space_and_remap()
-        type(oris) :: os_ptcl, e_space
-        integer    :: n, ne, i
+        type(oris)           :: os_ptcl, e_space
+        integer              :: n, ne, i
         integer, allocatable :: mapped(:)
         write(*,'(A)') 'test_proj_space_and_remap'
         n  = 6
@@ -1191,12 +1191,12 @@ contains
     ! (only using the simpler stats interface to avoid extra types)
     !---------------------------------------------------------------
     subroutine test_stats_and_ordering()
-        type(oris) :: os
-        real       :: ave, sdev, var
-        logical    :: err
+        type(oris)           :: os
+        real                 :: ave, sdev, var
+        logical              :: err
         integer, allocatable :: inds(:)
         integer, allocatable :: pops(:)
-        integer :: n, ncls
+        integer              :: n, ncls
         write(*,'(A)') 'test_stats_and_ordering'
         n = 5
         call os%new(n, .true.)
@@ -1280,10 +1280,10 @@ contains
     ! 11. reseed_classes (solve2D cls_init=prev seed partition)
     !---------------------------------------------------------------
     subroutine test_reseed_classes()
-        type(oris) :: os
+        type(oris)           :: os
         integer, allocatable :: parent_of_seed(:), seed_pops(:)
-        integer :: i, n, ndropped, icls, iseed
-        real    :: corr_mean_a, corr_mean_b
+        integer              :: i, n, ndropped, icls, iseed
+        real                 :: corr_mean_a, corr_mean_b
         write(*,'(A)') 'test_reseed_classes'
         ! parents: class 1 = 60 ptcls, class 2 = 30, class 3 = 10, class 4 = 4 (rejected),
         ! plus 6 state=0 particles in class 1 that must be ignored

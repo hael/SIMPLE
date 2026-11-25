@@ -35,8 +35,8 @@ contains
     subroutine make_signal( img )
         type(image), intent(inout) :: img
         real, allocatable :: rmat(:,:,:)
-        real    :: ctr, dx, dy, dz
-        integer :: i, j, k
+        real              :: ctr, dx, dy, dz
+        integer           :: i, j, k
         allocate(rmat(BOX,BOX,BOX))
         ctr = real(BOX)/2. + 0.5
         do k = 1, BOX
@@ -74,7 +74,7 @@ contains
 
     !> gauran fills the image with N(mean, sdev^2) samples
     subroutine test_gauran_moments()
-        type(image) :: img
+        type(image)       :: img
         real, allocatable :: x(:,:,:)
         write(*,'(A)') 'test_gauran_moments'
         call img%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
@@ -94,11 +94,11 @@ contains
 
     !> add_gauran adds zero-mean white noise of variance var(signal)/snr
     subroutine test_add_gauran_snr()
-        type(image) :: clean_img, noisy_img
+        type(image)       :: clean_img, noisy_img
         real, allocatable :: clean(:,:,:), noisy(:,:,:), noise(:,:,:)
-        real(dp) :: snr_realised
-        real     :: snr
-        integer  :: i
+        real(dp)          :: snr_realised
+        real              :: snr
+        integer           :: i
         write(*,'(A)') 'test_add_gauran_snr'
         call make_signal(clean_img)
         clean = clean_img%get_rmat()
@@ -133,7 +133,7 @@ contains
 
     !> the same seed reproduces a draw; consecutive draws are independent
     subroutine test_replay_and_independence()
-        type(image) :: clean_img, a_img, b_img, replay_img
+        type(image)       :: clean_img, a_img, b_img, replay_img
         real, allocatable :: clean(:,:,:), a(:,:,:), b(:,:,:), replay(:,:,:)
         write(*,'(A)') 'test_replay_and_independence'
         call make_signal(clean_img)

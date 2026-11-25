@@ -17,33 +17,33 @@ contains
     !! exact adjoint; (C) box <= 32: CG recovery from central-slice samples on a sphere; (D) band-list kernels and
     !! rhs vs the dense fold, bitwise; (E) operator symmetry; (F) unregularised PSD and ridge-regularised PD.
     module subroutine test_flex_pcg_operator( box, nsamples, l_pass, passes, sweep )
-        integer,           intent(in)  :: box, nsamples
-        logical,           intent(out) :: l_pass
-        logical, optional, intent(out) :: passes(6)
-        logical, optional, intent(in)  :: sweep       !< (C) over all twelve settings (default: the baseline)
-        type(flex_pcg_t) :: op
+        integer,           intent(in)            :: box, nsamples
+        logical,           intent(out)           :: l_pass
+        logical,           optional, intent(out) :: passes(6)
+        logical,           optional, intent(in)  :: sweep !< (C) over all twelve settings (default: the baseline)
+        type(flex_pcg_t)         :: op
         type(flex_pcg_outcome_t) :: out
-        real,    allocatable :: kacc(:,:), kpk(:,:), u(:,:,:,:), hu(:,:,:,:), eu4(:,:,:,:)
-        real,    allocatable :: v4(:,:,:,:), hv4(:,:,:,:), hy4(:,:,:,:), h0x4(:,:,:,:), h0y4(:,:,:,:)
-        real,    allocatable :: lam_save(:)
-        real,    allocatable :: kacc4(:,:,:,:), kpk4(:,:,:,:)
-        complex, allocatable :: racc4(:,:,:,:), rpk4(:,:,:,:)
-        real,    allocatable :: locs(:,:), wts(:), b4(:,:,:,:), x4(:,:,:,:), rho_t(:,:,:,:), ut(:,:,:)
-        complex, allocatable :: racc(:,:), rpk(:,:)
-        real(dp), allocatable :: be(:,:,:), eu(:,:,:), bx(:,:,:)
+        real,        allocatable :: kacc(:,:), kpk(:,:), u(:,:,:,:), hu(:,:,:,:), eu4(:,:,:,:)
+        real,        allocatable :: v4(:,:,:,:), hv4(:,:,:,:), hy4(:,:,:,:), h0x4(:,:,:,:), h0y4(:,:,:,:)
+        real,        allocatable :: lam_save(:)
+        real,        allocatable :: kacc4(:,:,:,:), kpk4(:,:,:,:)
+        complex,     allocatable :: racc4(:,:,:,:), rpk4(:,:,:,:)
+        real,        allocatable :: locs(:,:), wts(:), b4(:,:,:,:), x4(:,:,:,:), rho_t(:,:,:,:), ut(:,:,:)
+        complex,     allocatable :: racc(:,:), rpk(:,:)
+        real(dp),    allocatable :: be(:,:,:), eu(:,:,:), bx(:,:,:)
         complex(dp), allocatable :: ex(:), ey(:), ez(:), ysmp(:)
-        complex(dp) :: fval
-        complex     :: cv(1)
-        real(dp)    :: twopi_n, cc, scale, err, na, nb
-        real(dp)    :: xhy, hxy, xhx, yhy, xh0, yh0, sym_rel, sym_tol, lift_rel
-        real(dp)    :: xnorm, ynorm, h0xnorm, h0ynorm
-        real    :: w(3,3,3), loc(3), loc2(3), ctr, sig, dx, dy, dz, rotp(3,3), ang(3)
-        integer :: i, j, k, s, sgn, i0(3), wdim, iwinsz, nyq, nyqsq, ns, ip, h, kk, rho_lb(3), rho_ub(3)
-        integer :: c, np, isw
-        real    :: mfrac, nlev, lamv, lamr(3)
-        real(dp) :: yrms
-        logical :: pass_a, pass_b, pass_c, pass_d, pass_e, pass_f, l_sweep
-        integer :: tt, ijk(3), nmiss, nsw
+        complex(dp)              :: fval
+        complex                  :: cv(1)
+        real(dp)                 :: twopi_n, cc, scale, err, na, nb
+        real(dp)                 :: xhy, hxy, xhx, yhy, xh0, yh0, sym_rel, sym_tol, lift_rel
+        real(dp)                 :: xnorm, ynorm, h0xnorm, h0ynorm
+        real                     :: w(3,3,3), loc(3), loc2(3), ctr, sig, dx, dy, dz, rotp(3,3), ang(3)
+        integer                  :: i, j, k, s, sgn, i0(3), wdim, iwinsz, nyq, nyqsq, ns, ip, h, kk, rho_lb(3), rho_ub(3)
+        integer                  :: c, np, isw
+        real                     :: mfrac, nlev, lamv, lamr(3)
+        real(dp)                 :: yrms
+        logical                  :: pass_a, pass_b, pass_c, pass_d, pass_e, pass_f, l_sweep
+        integer                  :: tt, ijk(3), nmiss, nsw
         l_sweep = .false.
         if( present(sweep) ) l_sweep = sweep
         call op%new(box, 1.0, 1)
@@ -435,7 +435,7 @@ contains
             real,    intent(inout) :: v(:,:,:)
             integer, intent(in)    :: rmax
             real, pointer :: rp(:,:,:)
-            integer :: lims(3,2), hh, kh, mh, ph(3)
+            integer       :: lims(3,2), hh, kh, mh, ph(3)
             call op%nimg%set_rmat(v, .false.)
             call op%nimg%fft()
             lims = op%nimg%loop_lims(2)
@@ -552,9 +552,9 @@ contains
     end subroutine scatter_rhs_wrap_dense
 
     subroutine fold_accum_dense( self, kacc, kpk )
-        type(flex_pcg_t),  intent(inout) :: self
-        real, allocatable, intent(inout) :: kacc(:,:,:,:)
-        real,              intent(inout) :: kpk(:,:,:,:)
+        type(flex_pcg_t),  intent(inout)              :: self
+        real,              allocatable, intent(inout) :: kacc(:,:,:,:)
+        real,              intent(inout)              :: kpk(:,:,:,:)
         integer :: h, hh, k, m, phys(3), ih, ik, im
         if( .not. allocated(kacc) ) return
         if( size(kpk,1) /= self%npairs ) THROW_HARD('packed kernel set has the wrong leading extent; fold_accum')
@@ -576,9 +576,9 @@ contains
     end subroutine fold_accum_dense
 
     subroutine fold_rhs_dense( self, racc, rpk )
-        type(flex_pcg_t),     intent(inout) :: self
-        complex, allocatable, intent(inout) :: racc(:,:,:,:)
-        complex,              intent(inout) :: rpk(:,:,:,:)
+        type(flex_pcg_t),     intent(inout)              :: self
+        complex,              allocatable, intent(inout) :: racc(:,:,:,:)
+        complex,              intent(inout)              :: rpk(:,:,:,:)
         integer :: h, hh, k, m, phys(3), ih, ik, im
         if( .not. allocated(racc) ) return
         if( size(rpk,1) /= self%ncomp ) THROW_HARD('packed rhs set has the wrong leading extent; fold_rhs')

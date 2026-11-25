@@ -53,7 +53,7 @@ integer, parameter :: BOX = 24, R = BOX/2, NP = 4
 ! window (winsz 3): the parity campaign's 4.9e-4
 real,    parameter :: TOL_GOLDEN    = 1.10e-2
 real,    parameter :: TOL_GOLDEN_W3 = 6.1e-4
-real,    parameter :: SMPD = 1.0, KV = 300., GAIN = 6.0
+real,    parameter :: SMPD          = 1.0, KV = 300., GAIN = 6.0
 
 contains
 
@@ -88,12 +88,12 @@ contains
     subroutine test_adjoint_and_gradient( model, kappa )
         integer, intent(in) :: model, kappa
         class(wave_projector), allocatable :: wp
-        type(oris) :: os
-        type(sym)  :: c2
-        real,    allocatable :: v(:,:,:), dv(:,:,:), g(:,:,:)
-        complex, allocatable :: q(:,:,:), jdv(:,:,:), y(:,:,:)
-        real(dp) :: lhs, rhs, fd, an
-        real     :: hstep
+        type(oris)                         :: os
+        type(sym)                          :: c2
+        real,                  allocatable :: v(:,:,:), dv(:,:,:), g(:,:,:)
+        complex,               allocatable :: q(:,:,:), jdv(:,:,:), y(:,:,:)
+        real(dp)                           :: lhs, rhs, fd, an
+        real                               :: hstep
         allocate(wp)
         call wp%new(BOX, SMPD, model, kappa, GAIN)
         call c2%new('c2')
@@ -147,14 +147,14 @@ contains
     subroutine test_weak_phase_identity()
         class(wave_projector),    allocatable :: wp
         class(reconstructor_pcg), allocatable :: rp
-        type(oris)  :: os
-        type(ori)   :: o
-        type(image) :: padded
-        real,    allocatable :: v0(:,:,:), dv(:,:,:), inv1d(:), dvd(:,:,:)
-        complex, allocatable :: jdv(:,:,:), plane(:,:), tr(:,:), expected(:,:), cmat(:,:,:)
-        type(ctfparams)  :: cp
-        real    :: scale, err, errmax
-        integer :: i, j, k, model
+        type(oris)                            :: os
+        type(ori)                             :: o
+        type(image)                           :: padded
+        real,                     allocatable :: v0(:,:,:), dv(:,:,:), inv1d(:), dvd(:,:,:)
+        complex,                  allocatable :: jdv(:,:,:), plane(:,:), tr(:,:), expected(:,:), cmat(:,:,:)
+        type(ctfparams)                       :: cp
+        real                                  :: scale, err, errmax
+        integer                               :: i, j, k, model
         os = particles(NP)
         dv = blobs(1.0)
         allocate(v0(BOX,BOX,BOX), source=0.)
@@ -208,9 +208,9 @@ contains
 
     subroutine test_model_hierarchy()
         class(wave_projector), allocatable :: wr, wpj, wb
-        type(oris) :: os
-        real,    allocatable :: v(:,:,:), v0(:,:,:), dv(:,:,:)
-        complex, allocatable :: pr(:,:,:), pp(:,:,:), jr(:,:,:), jb(:,:,:)
+        type(oris)                         :: os
+        real,                  allocatable :: v(:,:,:), v0(:,:,:), dv(:,:,:)
+        complex,               allocatable :: pr(:,:,:), pp(:,:,:), jr(:,:,:), jb(:,:,:)
         os = particles(NP)
         v  = blobs(3.0)
         dv = blobs(1.0)
@@ -260,12 +260,12 @@ contains
 
     subroutine test_line_losses()
         class(wave_projector), allocatable :: wp
-        type(oris) :: os
-        real,    allocatable :: v(:,:,:), dv(:,:,:)
-        complex, allocatable :: y(:,:,:)
-        real(dp) :: t(3), losses(3), direct
-        real     :: err
-        integer  :: j
+        type(oris)                         :: os
+        real,                  allocatable :: v(:,:,:), dv(:,:,:)
+        complex,               allocatable :: y(:,:,:)
+        real(dp)                           :: t(3), losses(3), direct
+        real                               :: err
+        integer                            :: j
         os = particles(NP)
         v  = blobs(3.0)
         dv = blobs(1.0)
@@ -294,13 +294,13 @@ contains
     !> a point z0 voxels along the beam (identity pose, no shift): on the paraboloid, first Born, it
     !! images as the flat first Born at defocus df - kappa z0; the other sign is far off
     subroutine test_point_scatterer()
-        integer, parameter :: Z0 = 4
+        integer,               parameter   :: Z0 = 4
         class(wave_projector), allocatable :: wc, wf
-        type(oris) :: os, osf
-        real,    allocatable :: v(:,:,:)
-        complex, allocatable :: pc(:,:,:), pf(:,:,:)
-        real    :: err(2), dfz
-        integer :: is
+        type(oris)                         :: os, osf
+        real,                  allocatable :: v(:,:,:)
+        complex,               allocatable :: pc(:,:,:), pf(:,:,:)
+        real                               :: err(2), dfz
+        integer                            :: is
         allocate(v(BOX,BOX,BOX), source=0.)
         v(BOX/2+1, BOX/2+1, BOX/2+1+Z0) = 50.
         call os%new(1, .true.)
@@ -336,15 +336,15 @@ contains
 
     subroutine test_thread_identity( model )
         integer, intent(in) :: model
-        integer, parameter :: NTHR(4) = [1, 11, 16, 24]
+        integer,               parameter   :: NTHR(4) = [1, 11, 16, 24]
         class(wave_projector), allocatable :: wp
-        type(oris) :: os
-        real,    allocatable :: v(:,:,:), g(:,:,:), gref(:,:,:), ga(:,:,:), garef(:,:,:)
-        complex, allocatable :: y(:,:,:), p(:,:,:), pref(:,:,:), jd(:,:,:), jdref(:,:,:)
-        real,    allocatable :: dv(:,:,:)
-        real(dp) :: loss, lref, curv, cref, ll(2), llref(2), gnum(2*NP+3), gden(2*NP+3), gnref(2*NP+3), gdref(2*NP+3)
-        integer  :: it, irep, nthr0
-        logical  :: l_same
+        type(oris)                         :: os
+        real,                  allocatable :: v(:,:,:), g(:,:,:), gref(:,:,:), ga(:,:,:), garef(:,:,:)
+        complex,               allocatable :: y(:,:,:), p(:,:,:), pref(:,:,:), jd(:,:,:), jdref(:,:,:)
+        real,                  allocatable :: dv(:,:,:)
+        real(dp)                           :: loss, lref, curv, cref, ll(2), llref(2), gnum(2*NP+3), gden(2*NP+3), gnref(2*NP+3), gdref(2*NP+3)
+        integer                            :: it, irep, nthr0
+        logical                            :: l_same
         os = particles(2*NP+3)
         v  = blobs(3.0)
         dv = blobs(1.0)
@@ -398,12 +398,12 @@ contains
         ! a potential of a few volts: the test is of the transpose's structure on the coarse grid; at 300 V
         ! the unoversampled chain's single-precision rounding reaches 1.2e-5 (4e-7 at 30 V, 1.7e-7 at 3 V),
         ! a reason more to keep the oversampling at 2
-        real, parameter :: VAMP = 3.
+        real,                  parameter   :: VAMP = 3.
         class(wave_projector), allocatable :: wp
-        type(oris) :: os
-        real,    allocatable :: v(:,:,:), dv(:,:,:), g(:,:,:)
-        complex, allocatable :: q(:,:,:), jdv(:,:,:)
-        real(dp) :: lhs, rhs
+        type(oris)                         :: os
+        real,                  allocatable :: v(:,:,:), dv(:,:,:), g(:,:,:)
+        complex,               allocatable :: q(:,:,:), jdv(:,:,:)
+        real(dp)                           :: lhs, rhs
         os = particles(NP)
         v  = blobs(VAMP)
         dv = blobs(VAMP/3.)
@@ -455,15 +455,15 @@ contains
         real,    intent(in)  :: kv_case, centres(3,5), par(10,2), img(n,n,2)
         real,    intent(out) :: err
         class(wave_projector), allocatable :: wp
-        type(oris)      :: os
-        type(ori)       :: o
-        type(ctfparams) :: cp
-        type(image)     :: vol, pimg
-        real,    allocatable :: v(:,:,:), ours(:,:,:)
-        complex, allocatable :: p(:,:,:)
-        complex :: comp
-        real    :: x, y, z, r, lo, hi, t, ddf
-        integer :: i, j, k, b, h, l, m, rn, phys(3), ip
+        type(oris)                         :: os
+        type(ori)                          :: o
+        type(ctfparams)                    :: cp
+        type(image)                        :: vol, pimg
+        real,                  allocatable :: v(:,:,:), ours(:,:,:)
+        complex,               allocatable :: p(:,:,:)
+        complex                            :: comp
+        real                               :: x, y, z, r, lo, hi, t, ddf
+        integer                            :: i, j, k, b, h, l, m, rn, phys(3), ip
         ! the blobs, then the parity taper between 0.70 and 0.85 of the native Nyquist radius
         allocate(v(n,n,n), source=0.)
         do k = 1, n
@@ -555,10 +555,10 @@ contains
     subroutine test_pcg_scale()
         class(wave_projector),    allocatable :: wp
         class(reconstructor_pcg), allocatable :: rp
-        type(oris) :: os
-        real, allocatable :: v0(:,:,:), b1(:,:,:), b2(:,:,:), d(:,:,:), hd(:,:,:), inv1d(:), invenv(:,:,:)
-        real(dp) :: curv_wave, dhd, kappa, err
-        integer  :: i, j, k
+        type(oris)                            :: os
+        real,                     allocatable :: v0(:,:,:), b1(:,:,:), b2(:,:,:), d(:,:,:), hd(:,:,:), inv1d(:), invenv(:,:,:)
+        real(dp)                              :: curv_wave, dhd, kappa, err
+        integer                               :: i, j, k
         os = particles(NP)
         ! d with a zero sum of d E^-1: no section of it has a DC term (the wave misfit leaves the origin out)
         allocate(rp)
@@ -597,10 +597,10 @@ contains
     subroutine test_multislice_weak_limit( kappa )
         integer, intent(in) :: kappa
         class(wave_projector), allocatable :: wms, wfb
-        type(oris) :: os
-        complex, allocatable :: pms(:,:,:), pfb(:,:,:)
-        real,    allocatable :: v(:,:,:)
-        real :: err
+        type(oris)                         :: os
+        complex,               allocatable :: pms(:,:,:), pfb(:,:,:)
+        real,                  allocatable :: v(:,:,:)
+        real                               :: err
         os = particles(NP)
         ! a weak, smooth potential: about 1e-3 rad through a blob
         v = blobs(0.5, 2.0)
@@ -626,15 +626,15 @@ contains
     end subroutine test_multislice_weak_limit
 
     subroutine test_multislice_orientation()
-        real, parameter :: SMPD_O = 0.25, KV_O = 100.
+        real,                  parameter   :: SMPD_O = 0.25, KV_O = 100.
         class(wave_projector), allocatable :: wms, wfb
-        type(oris)      :: os
-        type(ori)       :: o
-        type(ctfparams) :: cp
-        complex, allocatable :: pms(:,:,:), pfb(:,:,:)
-        real,    allocatable :: v(:,:,:)
-        real    :: rnd(3), err_same, err_opp, d2
-        integer :: i, j, k, kappa
+        type(oris)                         :: os
+        type(ori)                          :: o
+        type(ctfparams)                    :: cp
+        complex,               allocatable :: pms(:,:,:), pfb(:,:,:)
+        real,                  allocatable :: v(:,:,:)
+        real                               :: rnd(3), err_same, err_opp, d2
+        integer                            :: i, j, k, kappa
         call os%new(NP, .true.)
         do i = 1, NP
             call random_number(rnd)
@@ -705,8 +705,8 @@ contains
     function particles( n ) result( os )
         integer, intent(in) :: n
         type(oris) :: os
-        real    :: r(6)
-        integer :: i
+        real       :: r(6)
+        integer    :: i
         call os%new(n, .true.)
         do i = 1, n
             call random_number(r)
@@ -740,11 +740,11 @@ contains
     !> five Gaussian blobs of the given peak (volts) and standard deviation (voxels, 1 by default) at random
     !! places within the central half
     function blobs( peak, sdev ) result( v )
-        real,           intent(in) :: peak
-        real, optional, intent(in) :: sdev
+        real,           intent(in)           :: peak
+        real,           optional, intent(in) :: sdev
         real, allocatable :: v(:,:,:)
-        real    :: c(3,5), d2, s2
-        integer :: i, j, k, b
+        real              :: c(3,5), d2, s2
+        integer           :: i, j, k, b
         s2 = 1.
         if( present(sdev) ) s2 = sdev**2
         call random_number(c)
@@ -766,7 +766,7 @@ contains
         integer, intent(in) :: n
         complex, allocatable :: q(:,:,:)
         real,    allocatable :: re(:,:,:), im(:,:,:)
-        integer :: h, k
+        integer              :: h, k
         allocate(re(-R:R,-R:R,n), im(-R:R,-R:R,n))
         call random_number(re)
         call random_number(im)

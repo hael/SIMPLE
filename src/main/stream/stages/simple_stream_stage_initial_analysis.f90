@@ -143,22 +143,22 @@ public :: run_all_stream_stage_initial_analysis_tests
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: NMICS_PLAN(2)       = [100, 500] ! micrographs of the init cycle, and of the "all" set
-integer, parameter :: MAX_PROJECTS_IMPORT = 50         ! completed upstream projects taken per pass
-integer, parameter :: NTHUMB_MAX          = 10         ! most recent micrograph thumbnails sent to the GUI
-integer, parameter :: NCLS_MIN = 10, NCLS_MAX = 100    ! solve2D class-count bounds
-integer, parameter :: NSAMPLE2D           = 2000       ! minimum solve2D sample
-real,    parameter :: LPSTOP2D            = 8.         ! solve2D low-pass stop (A)
-integer, parameter :: EXTRACT_NTHR        = 4          ! threads of each extraction (one per project, several at once)
+integer, parameter :: NMICS_PLAN(2)       = [100, 500]         ! micrographs of the init cycle, and of the "all" set
+integer, parameter :: MAX_PROJECTS_IMPORT = 50                 ! completed upstream projects taken per pass
+integer, parameter :: NTHUMB_MAX          = 10                 ! most recent micrograph thumbnails sent to the GUI
+integer, parameter :: NCLS_MIN            = 10, NCLS_MAX = 100 ! solve2D class-count bounds
+integer, parameter :: NSAMPLE2D           = 2000               ! minimum solve2D sample
+real,    parameter :: LPSTOP2D            = 8.                 ! solve2D low-pass stop (A)
+integer, parameter :: EXTRACT_NTHR        = 4                  ! threads of each extraction (one per project, several at once)
 ! the state choice's vetoes (follow-up plan, decisions 11-14), PROVISIONAL until a validation run on
 ! datasets with a known answer sets them: one object (its largest component holds this share of the
 ! foreground inside the mask), this share of the candidates' population, and an FSC 0.143
 ! resolution within this factor of the best candidate's
-real,    parameter :: STATE_DOMINANT_FRAC = 0.8
-real,    parameter :: STATE_POP_FLOOR     = 0.1
-real,    parameter :: STATE_RES_FACTOR    = 1.5
-integer, parameter :: TARGET_NCLS         = 501        ! rows after class balancing
-character(len=*), parameter :: PICKREFS_SELECTION = 'pickrefs_selection.mrcs' ! a GUI selection, written in full before it is published
+real,             parameter :: STATE_DOMINANT_FRAC = 0.8
+real,             parameter :: STATE_POP_FLOOR     = 0.1
+real,             parameter :: STATE_RES_FACTOR    = 1.5
+integer,          parameter :: TARGET_NCLS         = 501                       ! rows after class balancing
+character(len=*), parameter :: PICKREFS_SELECTION  = 'pickrefs_selection.mrcs' ! a GUI selection, written in full before it is published
 
 ! cycle 1 steps
 integer, parameter :: INIT_SETUP = 0, INIT_PICK = 1, INIT_EXTRACT = 2, INIT_CLASSIFY = 3, INIT_SELECT = 4
@@ -171,58 +171,58 @@ integer, parameter :: ALL_COLLECT = 0, ALL_SIEVE = 1, ALL_CLASSIFY = 2, ALL_SELE
 type :: stream_stage_initial_analysis
     type(parameters),      allocatable :: params
     ! allocatable (compile-time policy), allocated in init_params and released in kill
-    type(qsys_env),   allocatable       :: qenv
-    type(qsys_env),   allocatable       :: qenv_local              ! jobs that run on this machine (the reprojection)
-    type(sp_project), allocatable       :: spproj                  ! cycle 1 project
-    type(sp_project), allocatable       :: spproj_part             ! one project of the "all" set
-    type(sp_project), allocatable       :: spproj_all              ! cycle 2 project
-    type(stream_watcher)                :: project_buff
-    type(rec_list)                      :: project_list            ! one record per accepted imported micrograph
-    type(rec_list)                      :: extracted_project_list  ! one record per extracted micrograph of the "all" set
-    type(segdiam_bin_picker)            :: picker
-    type(ptcl_sieve),       allocatable :: sieve
-    type(qsys_async_job)                :: job                     ! the current cycle step's extraction, 2D or 3D run
-    type(qsys_async_job),   allocatable :: extract_jobs(:)         ! the "all" extractions, one per project
-    logical,                allocatable :: extract_collected(:)
-    type(stream_pipe)                   :: pipe
-    type(gui_metadata_stream_picking)   :: meta_picking
+    type(qsys_env),         allocatable        :: qenv
+    type(qsys_env),         allocatable        :: qenv_local             ! jobs that run on this machine (the reprojection)
+    type(sp_project),       allocatable        :: spproj                 ! cycle 1 project
+    type(sp_project),       allocatable        :: spproj_part            ! one project of the "all" set
+    type(sp_project),       allocatable        :: spproj_all             ! cycle 2 project
+    type(stream_watcher)                       :: project_buff
+    type(rec_list)                             :: project_list           ! one record per accepted imported micrograph
+    type(rec_list)                             :: extracted_project_list ! one record per extracted micrograph of the "all" set
+    type(segdiam_bin_picker)                   :: picker
+    type(ptcl_sieve),       allocatable        :: sieve
+    type(qsys_async_job)                       :: job                    ! the current cycle step's extraction, 2D or 3D run
+    type(qsys_async_job),   allocatable        :: extract_jobs(:)        ! the "all" extractions, one per project
+    logical,                allocatable        :: extract_collected(:)
+    type(stream_pipe)                          :: pipe
+    type(gui_metadata_stream_picking)          :: meta_picking
     type(gui_metadata_stream_initial_analysis) :: meta_initial_analysis
-    type(gui_metadata_micrograph)       :: meta_micrograph
-    type(gui_metadata_cavg2D)           :: meta_cavg2D, meta_pickrefs
-    type(string)                        :: cwd                     ! absolute stage directory
+    type(gui_metadata_micrograph)              :: meta_micrograph
+    type(gui_metadata_cavg2D)                  :: meta_cavg2D, meta_pickrefs
+    type(string)                               :: cwd                    ! absolute stage directory
     ! the reprojection of the chosen solve3D state: the volume, the directory of the 3D result,
     ! the state, and the particles' sampling and box the references are rescaled to
     type(string)                        :: reproj_vol, reproj_dir
     ! the automasking of the mask estimate: gen_pickrefs' amsklp, ngrow, winsz and edge
     type(automask2D_settings)           :: msk_settings
-    integer :: reproj_state      = 0
-    integer :: reproj_box_part   = 0
-    real    :: reproj_smpd_part  = 0.
-    integer :: icycle            = 1
-    integer :: step1             = INIT_SETUP
-    integer :: step2             = ALL_COLLECT
-    integer :: nmics_target      = NMICS_PLAN(1)
-    integer :: n_mics_imported   = 0
-    integer :: nmics_failed_pick = 0       ! micrographs imported when cycle 1's pick found no diameter bin
-    integer :: n_ptcls_imported  = 0
-    integer :: n_extract_started = 0
-    integer :: n_extract_done    = 0
-    integer :: box               = 0       ! picking and extraction box (px)
-    real    :: mskdiam_box       = 0.      ! the box's default mask diameter (A): cycle 1, the sieve and the 3D route
-    real    :: mskdiam           = 0.      ! mask diameter (A) of cycle 2, from cycle 1's selection
-    integer :: vis_cycle         = 0
-    logical :: l_attached        = .false.
-    logical :: l_restart         = .false. ! the output directory existed before params%new
-    logical :: l_waiting_logged  = .false.
-    logical :: l_sieve_active    = .false.
-    logical :: l_done            = .false.
-    logical :: l_exists          = .false.
+    integer                             :: reproj_state      = 0
+    integer                             :: reproj_box_part   = 0
+    real                                :: reproj_smpd_part  = 0.
+    integer                             :: icycle            = 1
+    integer                             :: step1             = INIT_SETUP
+    integer                             :: step2             = ALL_COLLECT
+    integer                             :: nmics_target      = NMICS_PLAN(1)
+    integer                             :: n_mics_imported   = 0
+    integer                             :: nmics_failed_pick = 0       ! micrographs imported when cycle 1's pick found no diameter bin
+    integer                             :: n_ptcls_imported  = 0
+    integer                             :: n_extract_started = 0
+    integer                             :: n_extract_done    = 0
+    integer                             :: box               = 0       ! picking and extraction box (px)
+    real                                :: mskdiam_box       = 0.      ! the box's default mask diameter (A): cycle 1, the sieve and the 3D route
+    real                                :: mskdiam           = 0.      ! mask diameter (A) of cycle 2, from cycle 1's selection
+    integer                             :: vis_cycle         = 0
+    logical                             :: l_attached        = .false.
+    logical                             :: l_restart         = .false. ! the output directory existed before params%new
+    logical                             :: l_waiting_logged  = .false.
+    logical                             :: l_sieve_active    = .false.
+    logical                             :: l_done            = .false.
+    logical                             :: l_exists          = .false.
     ! preprocessing idle or stopped: when first seen (0: it is not), the last watch, whether that
     ! watch was capped, and whether every micrograph it will hand on is imported
     integer :: upstream_done_since = 0
-    integer :: last_watch        = 0
-    logical :: l_watch_capped    = .false.
-    logical :: l_upstream_quiet  = .false.
+    integer :: last_watch          = 0
+    logical :: l_watch_capped      = .false.
+    logical :: l_upstream_quiet    = .false.
     logical :: l_final_wait_logged = .false.
     ! waits (s); tests set them to 0, and settle_s to -1 to take files written in the same second
     integer :: settle_s          = SHORTWAIT ! an upstream project is taken once untouched longer than this;
@@ -236,31 +236,31 @@ contains
     procedure :: kill
     ! the steps of new(), in order
     procedure, private :: init_params
-    procedure :: init_queue
+    procedure          :: init_queue
     procedure, private :: init_gui
     procedure, private :: restore_pickrefs
     procedure, private :: clear_previous_run
     ! the steps of iterate() and their helpers
     procedure, private :: attach_upstream
     procedure, private :: import_projects
-    procedure :: update_upstream_state
-    procedure :: pick_extract_all
-    procedure :: collect_extractions
-    procedure :: start_sieve
+    procedure          :: update_upstream_state
+    procedure          :: pick_extract_all
+    procedure          :: collect_extractions
+    procedure          :: start_sieve
     procedure, private :: run_cycle1
-    procedure :: run_cycle2
+    procedure          :: run_cycle2
     procedure, private :: rebuild_init_mics
-    procedure :: select_and_send
-    procedure :: finish_solve3D
-    procedure :: publish_reprojections
+    procedure          :: select_and_send
+    procedure          :: finish_solve3D
+    procedure          :: publish_reprojections
     procedure, private :: apply_gui_updates
-    procedure :: save_pickrefs_selection
+    procedure          :: save_pickrefs_selection
     procedure, private :: publish_pickrefs
-    procedure :: send_pickrefs
+    procedure          :: send_pickrefs
     procedure, private :: send_picking_status
     procedure, private :: send_initial_analysis_status
     procedure, private :: cycle_projfile
-    procedure :: balanced_projfile
+    procedure          :: balanced_projfile
     procedure, private :: all_projfile
     ! steps that use no stage state, bound so the tester can reach them
     procedure, nopass :: balance_classes
@@ -544,7 +544,7 @@ contains
     subroutine import_projects( self )
         class(stream_stage_initial_analysis), intent(inout) :: self
         type(string), allocatable :: projects(:)
-        integer :: nprojects
+        integer                   :: nprojects
         self%last_watch = simple_gettime()
         call self%project_buff%watch(nprojects, projects, max_nmovies=MAX_PROJECTS_IMPORT)
         self%l_watch_capped = nprojects == MAX_PROJECTS_IMPORT
@@ -914,7 +914,7 @@ contains
     subroutine rebuild_init_mics( self )
         class(stream_stage_initial_analysis), intent(inout) :: self
         type(string), allocatable :: fnames(:)
-        integer :: nappended
+        integer                   :: nappended
         fnames = unique_projnames(self%project_list)
         call self%spproj%os_mic%kill()
         call append_mics_from_projects(self%spproj%os_mic, fnames, .true., nappended)
@@ -959,8 +959,8 @@ contains
         integer, allocatable      :: nccs(:), nproj(:), pops(:)
         real,    allocatable      :: dominant(:), res(:)
         logical, allocatable      :: l_cand(:)
-        integer :: ldim(3), nuniq, ivol, bestvol, i, nstates
-        real    :: vol_smpd
+        integer                   :: ldim(3), nuniq, ivol, bestvol, i, nstates
+        real                      :: vol_smpd
         call simple_getcwd(cwd)
         call simple_chdir(outdir)
         call find_final_solve3D_cavgs_dir(final_dir)
@@ -1086,9 +1086,9 @@ contains
         class(string),                        intent(in)    :: projfile
         type(gui_metadata_vol3D) :: meta_vol3D
         type(string)             :: jobdir, reprojs, reprojs_jpg, reprojs_rescaled, empty_path
-        integer :: ldim(3), ldim_new(3), nuniq, xtiles, ytiles
-        real    :: vol_smpd, minval3D, maxval3D
-        logical :: l_published
+        integer                  :: ldim(3), ldim_new(3), nuniq, xtiles, ytiles
+        real                     :: vol_smpd, minval3D, maxval3D
+        logical                  :: l_published
         jobdir           = self%job%get_dir()
         reprojs          = jobdir//'/reprojs.mrcs'
         reprojs_jpg      = jobdir//'/reprojs'//JPG_EXT
@@ -1124,7 +1124,7 @@ contains
         class(stream_stage_initial_analysis), intent(inout) :: self
         type(gui_metadata_stream_update) :: update
         character(len=:), allocatable    :: buffer
-        logical :: l_published
+        logical                          :: l_published
         do while( self%pipe%receive(buffer) )
             update = transfer(buffer, update)
             if( update%get_pickrefs_cycle() > 0 .and. update%get_pickrefs_selection_length() > 0 )then
@@ -1430,23 +1430,23 @@ contains
     ! none.
     subroutine select_project_cavgs( spproj, projfile, outdir, mskdiam, n_selected, cavg_inds, cavgs_stk, xtiles, ytiles,&
             &mskdiam_est, msk_settings )
-        type(sp_project),     intent(inout) :: spproj
-        class(string),        intent(in)    :: projfile, outdir
-        real,                 intent(in)    :: mskdiam
-        integer,              intent(out)   :: n_selected, xtiles, ytiles
-        integer, allocatable, intent(inout) :: cavg_inds(:)
-        type(string),         intent(inout) :: cavgs_stk
-        real, optional,       intent(out)   :: mskdiam_est
-        type(automask2D_settings), optional, intent(in) :: msk_settings
+        type(sp_project),          intent(inout)               :: spproj
+        class(string),             intent(in)                  :: projfile, outdir
+        real,                      intent(in)                  :: mskdiam
+        integer,                   intent(out)                 :: n_selected, xtiles, ytiles
+        integer,                   allocatable, intent(inout)  :: cavg_inds(:)
+        type(string),              intent(inout)               :: cavgs_stk
+        real,                      optional,       intent(out) :: mskdiam_est
+        type(automask2D_settings), optional, intent(in)        :: msk_settings
         type(image), allocatable    :: cavg_imgs(:)
         type(cavg_quality_model)    :: model
         type(cavg_quality_result)   :: quality
         type(class_compatibility)   :: compatibility
         type(support_model_metrics) :: metrics
         type(string)                :: cwd
-        integer, allocatable        :: states(:), ptcl_states2D(:), ptcl_states3D(:)
-        integer :: ncls, nrejected
-        real    :: smpd
+        integer,     allocatable    :: states(:), ptcl_states2D(:), ptcl_states3D(:)
+        integer                     :: ncls, nrejected
+        real                        :: smpd
         n_selected = 0
         xtiles     = 0
         ytiles     = 0
@@ -1534,9 +1534,9 @@ contains
         type(automask2D_settings), intent(in) :: msk_settings
         type(automask2D_settings) :: settings
         type(image), allocatable  :: masks(:)
-        real,        allocatable :: diams(:), shifts(:,:)
-        integer :: icls, nsel, box, box_for_pick
-        real    :: smpd, diam_max, moldiam
+        real,        allocatable  :: diams(:), shifts(:,:)
+        integer                   :: icls, nsel, box, box_for_pick
+        real                      :: smpd, diam_max, moldiam
         mskdiam = mskdiam_box
         if( size(states) /= size(cavg_imgs) ) THROW_HARD('# states /= # class averages; estimate_mskdiam')
         nsel = count(states > 0)
@@ -1625,8 +1625,8 @@ contains
         integer,     allocatable  :: src_inds(:), pops(:), reps(:), extra(:)
         real,        allocatable  :: frac(:)
         logical,     allocatable  :: picked(:)
-        integer :: ncls_all, nsrc, total_pop, icls, j, out_ind, istk, rem, imax, n_balanced
-        real    :: smpd_dummy
+        integer                   :: ncls_all, nsrc, total_pop, icls, j, out_ind, istk, rem, imax, n_balanced
+        real                      :: smpd_dummy
         call simple_getcwd(cwd)
         call simple_mkdir('balance_classes')
         call simple_mkdir(outdir)
@@ -1729,7 +1729,7 @@ contains
         integer,      intent(in) :: ncls_all, nsrc
         integer,      intent(in) :: src_inds(:), reps(:)
         type(image), allocatable :: imgs_in(:)
-        integer :: ii, jj, kk
+        integer                  :: ii, jj, kk
         imgs_in = read_stk_into_imgarr(stk_in)
         if( size(imgs_in) /= ncls_all )then
             call dealloc_imgarr(imgs_in)
@@ -1770,7 +1770,7 @@ contains
     subroutine find_final_solve3D_cavgs_dir( final_dir )
         type(string), intent(out) :: final_dir
         character(len=STDLEN) :: line
-        integer :: funit, io_stat
+        integer               :: funit, io_stat
         final_dir = ''
         if( .not. file_exists(SOLVE3D_CAVGS_FINAL_DIR) ) return
         open(newunit=funit, file=SOLVE3D_CAVGS_FINAL_DIR, status='old', action='read', iostat=io_stat)
@@ -1787,8 +1787,8 @@ contains
     function unique_projnames( list ) result( fnames )
         type(rec_list), intent(inout) :: list
         type(string), allocatable :: fnames(:)
-        type(project_rec) :: prec
-        integer :: i
+        type(project_rec)         :: prec
+        integer                   :: i
         allocate(fnames(0))
         do i = 1, list%size()
             call list%at(i, prec)

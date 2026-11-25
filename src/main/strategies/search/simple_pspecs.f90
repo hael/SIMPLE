@@ -12,15 +12,15 @@ private
 
 type pspecs
     private
-    real, allocatable :: pspecs(:,:)  ! matrix of power spectra
-    real    :: smpd       = 0.        ! sampling distance
-    real    :: hp         = 0.        ! high-pass limit
-    real    :: lp         = 0.        ! low-pass limit
-    integer :: box        = 0         ! box size
-    integer :: kfromto(2) = [0,0]     ! Fourier index range
-    integer :: sz         = 0         ! size of spectrum 
-    integer :: nspecs     = 0         ! # of spectra
-    logical :: exists     = .false.   ! existence flag
+    real, allocatable :: pspecs(:,:)          ! matrix of power spectra
+    real              :: smpd       = 0.      ! sampling distance
+    real              :: hp         = 0.      ! high-pass limit
+    real              :: lp         = 0.      ! low-pass limit
+    integer           :: box        = 0       ! box size
+    integer           :: kfromto(2) = [0,0]   ! Fourier index range
+    integer           :: sz         = 0       ! size of spectrum
+    integer           :: nspecs     = 0       ! # of spectra
+    logical           :: exists     = .false. ! existence flag
 contains
     ! constructor
     procedure          :: new
@@ -41,9 +41,9 @@ contains
         class(pspecs), intent(inout) :: self
         class(image),  intent(inout) :: imgs(:)
         real,          intent(in)    :: msk, hp, lp
-        type(image), allocatable :: cavg_threads(:) 
+        type(image), allocatable :: cavg_threads(:)
         real,        allocatable :: pspec(:)
-        integer :: ldim(3), ispec, ithr, nthr_team
+        integer                  :: ldim(3), ispec, ithr, nthr_team
         call self%kill
         self%nspecs     = size(imgs)
         ldim            = imgs(1)%get_ldim()
@@ -97,7 +97,7 @@ contains
     function calc_distmat_1( self ) result( distmat )
         class(pspecs), intent(inout) :: self
         real, allocatable :: distmat(:,:)
-        integer :: i, j
+        integer           :: i, j
         allocate(distmat(self%nspecs,self%nspecs), source=0.)
         !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(dynamic)
         do i = 1, self%nspecs - 1
@@ -112,7 +112,7 @@ contains
     function calc_distmat_2( self1, self2 ) result( distmat )
         class(pspecs), intent(inout) :: self1, self2
         real, allocatable :: distmat(:,:)
-        integer :: i, j
+        integer           :: i, j
         allocate(distmat(self1%nspecs,self2%nspecs), source=0.)      
         !$omp parallel do default(shared) private(i,j) proc_bind(close) schedule(dynamic)
         do i = 1, self1%nspecs

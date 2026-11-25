@@ -54,9 +54,9 @@ contains
         real,              intent(in)    :: weights(:,:)   !< (size(pinds), nstates)
         character(len=*),  intent(in)    :: prefix
         type(rec3D_service), allocatable :: service
-        type(rec3D_request) :: request
-        type(cmdline)       :: cline_rec
-        integer :: nstates
+        type(rec3D_request)              :: request
+        type(cmdline)                    :: cline_rec
+        integer                          :: nstates
         nstates = size(weights,2)
         if( size(weights,1) /= size(pinds) .or. nstates < 1 ) THROW_HARD('state weight table shape; reconstruct_state_halves')
         ! an all-zero column would leave a state without half maps
@@ -147,12 +147,12 @@ contains
         real,     allocatable :: wbin(:,:), tgt_ev(:,:), tgt_od(:,:)
         real,     allocatable :: rmat(:,:,:), ev_flat(:), od_flat(:)
         real(dp), allocatable :: bins(:,:), hbin(:,:), err(:,:)
-        type(image)  :: ev, od
-        type(string) :: prefix
-        real(dp) :: h_used
-        real     :: neff_used
-        integer  :: state, ib, nvox, ldim(3), i
-        character(len=3) :: bstr
+        type(image)           :: ev, od
+        type(string)          :: prefix
+        real(dp)              :: h_used
+        real                  :: neff_used
+        integer               :: state, ib, nvox, ldim(3), i
+        character(len=3)      :: bstr
         allocate(wbin(sel%nptcls,states%nstates))
         allocate(bins(nbins,states%nstates), hbin(nbins,states%nstates), err(nbins,states%nstates), source=0.d0)
         call bandwidth_cv_grid(states, nbins, bins)
@@ -214,12 +214,12 @@ contains
     !! else from the embedding artifact the original run wrote) and replace z / precision by the
     !! posterior means / precisions under the deconvolved mixture prior.
     subroutine apply_latent_deconvolution( latent, model, sel, applied, labels, resume, adopted, srcfile )
-        type(flex_latent),    intent(inout) :: latent  !< z and precision deconvolved in place; zhalf consumed
-        type(flex_fit_model), intent(in)    :: model
-        type(flex_selection), intent(in)    :: sel
-        integer, allocatable, intent(inout) :: labels(:)   !< mixture component per particle
-        logical,              intent(in)    :: resume
-        logical,              intent(out)   :: adopted
+        type(flex_latent),    intent(inout)              :: latent    !< z and precision deconvolved in place; zhalf consumed
+        type(flex_fit_model), intent(in)                 :: model
+        type(flex_selection), intent(in)                 :: sel
+        integer,              allocatable, intent(inout) :: labels(:) !< mixture component per particle
+        logical,              intent(in)                 :: resume
+        logical,              intent(out)                :: adopted
         !> the embedding artifact a resume was given (infile): its deconvolution is adopted when present,
         !! so a states-only resume, also in a fresh directory, does not re-run the K ladder; else its
         !! noise scale is used
@@ -238,7 +238,7 @@ contains
                     block
                         real(dp), allocatable :: zb(:,:), pb(:,:,:)
                         integer,  allocatable :: lb(:)
-                        real(dp) :: nsb
+                        real(dp)              :: nsb
                         call read_deconv_block(srcfile, sel%nptcls, model%ncomp, zb, pb, lb, nsb, l_found)
                         if( l_found )then
                             latent%z(1:sel%nptcls,1:model%ncomp) = zb
@@ -302,9 +302,9 @@ contains
         real,     allocatable :: w2(:,:), t2(:,:), b2(:), n2(:)
         real(dp), allocatable :: d2(:,:), f2(:)
         real,     allocatable :: key(:)
-        real(dp) :: rowsum
-        integer  :: s, i, nkeep, ndrop, nlost, nrelabelled, snew
-        logical  :: l_partition
+        real(dp)              :: rowsum
+        integer               :: s, i, nkeep, ndrop, nlost, nrelabelled, snew
+        logical               :: l_partition
         nptcls = size(states%weights,1)
         if( states%nstates < 2 ) return
         allocate(keep(states%nstates), source=.true.)
@@ -417,22 +417,22 @@ contains
 
     subroutine place_states_with_population_floor( latent, model, nkern, axis, min_neff, min_state_frac, states, equal_occ )
         use simple_rnd, only: irnd_uni
-        type(flex_latent),    intent(in)    :: latent
-        type(flex_fit_model), intent(in)    :: model
-        type(flex_state_set), intent(inout) :: states  !< nstates in: the requested count; the delivered set out
-        logical, optional,    intent(in)    :: equal_occ
+        type(flex_latent),    intent(in)              :: latent
+        type(flex_fit_model), intent(in)              :: model
+        type(flex_state_set), intent(inout)           :: states !< nstates in: the requested count; the delivered set out
+        logical,              optional,    intent(in) :: equal_occ
         type(flex_latent)    :: lat_r
         type(flex_state_set) :: st_r
-        integer :: nptcls, ncomp, nstates_req
+        integer              :: nptcls, ncomp, nstates_req
         integer,              intent(in)    :: nkern, axis, min_neff
         real,                 intent(in)    :: min_state_frac
-        integer, parameter :: ROUND_CAP = 8
+        integer,  parameter   :: ROUND_CAP = 8
         real(dp), allocatable :: sdv(:)
         integer,  allocatable :: idx(:), occ(:), order(:), kept(:), deliver(:)
         logical,  allocatable :: retained(:), qualifies(:)
-        integer  :: nmin, K, round, nret, nk, i, q, s, t, nqual, nrand, nsurplus, kbest, itmp
-        real(dp) :: d2, dbest, zbar
-        logical  :: l_success
+        integer               :: nmin, K, round, nret, nk, i, q, s, t, nqual, nrand, nsurplus, kbest, itmp
+        real(dp)              :: d2, dbest, zbar
+        logical               :: l_success
         nptcls      = size(latent%z,1)
         ncomp       = size(latent%z,2)
         nstates_req = states%nstates

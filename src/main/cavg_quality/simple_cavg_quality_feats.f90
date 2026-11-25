@@ -53,22 +53,22 @@ public :: SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN
 real,    parameter :: LOG_EPS                   = 1.0e-12
 ! Low-pass scales used by the foreground and signal metrics documented in
 ! doc/policies/sieving_and_rejection/model_cavgs_rejection.md.
-real,    parameter :: FOREGROUND_SEG_LP         = 30.0
-real,    parameter :: SIGNAL_METRIC_LP          = 10.0
-real,    parameter :: OVERFIT_SIGNAL_BP_HP      = 100.0
-real,    parameter :: OVERFIT_SIGNAL_BP_LP      = 40.0
-real,    parameter :: CAVG_RES_HARD_REJECT_A    = 40.0
-real,    parameter :: POP_FRACTION_HARD_REJECT  = 0.0035
-real,    parameter :: BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 1.5
-real,    parameter :: FUZZY_BALL_SIGNAL_HARD_REJECT_MIN  = -0.5
+real,    parameter :: FOREGROUND_SEG_LP                        = 30.0
+real,    parameter :: SIGNAL_METRIC_LP                         = 10.0
+real,    parameter :: OVERFIT_SIGNAL_BP_HP                     = 100.0
+real,    parameter :: OVERFIT_SIGNAL_BP_LP                     = 40.0
+real,    parameter :: CAVG_RES_HARD_REJECT_A                   = 40.0
+real,    parameter :: POP_FRACTION_HARD_REJECT                 = 0.0035
+real,    parameter :: BP_CENTER_EDGE_VAR_HARD_REJECT_MIN       = 1.5
+real,    parameter :: FUZZY_BALL_SIGNAL_HARD_REJECT_MIN        = -0.5
 real,    parameter :: SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 4.0
-real,    parameter :: CHUNK_LOCVAR_FG_HARD_REJECT_MAX = exp(-4.5)
-real,    parameter :: POOL_RES_HARD_REJECT_A    = 25.0
-real,    parameter :: POOL_POP_FRACTION_HARD_REJECT = 5.0e-4
-real,    parameter :: POOL_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN = 10.0
-integer, parameter :: LOCVAR_WINDOW             = 10
-integer, parameter :: MASK_HARD_OUTSIDE_PIXELS  = 10
-integer, parameter :: ANALYSIS_BOXSIZE          = 128
+real,    parameter :: CHUNK_LOCVAR_FG_HARD_REJECT_MAX          = exp(-4.5)
+real,    parameter :: POOL_RES_HARD_REJECT_A                   = 25.0
+real,    parameter :: POOL_POP_FRACTION_HARD_REJECT            = 5.0e-4
+real,    parameter :: POOL_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN  = 10.0
+integer, parameter :: LOCVAR_WINDOW                            = 10
+integer, parameter :: MASK_HARD_OUTSIDE_PIXELS                 = 10
+integer, parameter :: ANALYSIS_BOXSIZE                         = 128
 
 integer, parameter :: I_LOG_POP                  = 1
 integer, parameter :: I_NEG_LOG_RES              = 2
@@ -159,7 +159,7 @@ contains
     function cavg_quality_feature_name( i, context ) result( name )
         integer,          intent(in) :: i
         character(len=*), intent(in) :: context
-        character(len=32)   :: name
+        character(len=32)              :: name
         type(cavg_quality_feature_def) :: def
         def  = feature_def(i, context)
         name = def%name
@@ -168,7 +168,7 @@ contains
     function cavg_quality_feature_description( i, context ) result( description )
         integer,          intent(in) :: i
         character(len=*), intent(in) :: context
-        character(len=160)  :: description
+        character(len=160)             :: description
         type(cavg_quality_feature_def) :: def
         def         = feature_def(i, context)
         description = def%description
@@ -177,7 +177,7 @@ contains
     function cavg_quality_feature_direction( i, context ) result( direction )
         integer,          intent(in) :: i
         character(len=*), intent(in) :: context
-        character(len=32)   :: direction
+        character(len=32)              :: direction
         type(cavg_quality_feature_def) :: def
         def       = feature_def(i, context)
         direction = def%direction
@@ -186,7 +186,7 @@ contains
     function cavg_quality_feature_family( i, context ) result( family )
         integer,          intent(in) :: i
         character(len=*), intent(in) :: context
-        character(len=32)   :: family
+        character(len=32)              :: family
         type(cavg_quality_feature_def) :: def
         def    = feature_def(i, context)
         family = def%family
@@ -196,7 +196,7 @@ contains
         integer,          intent(in) :: funit
         character(len=*), intent(in) :: context
         type(cavg_quality_feature_def) :: def
-        integer :: i
+        integer                        :: i
         write(funit,'(A)') '# feature_inventory_header=index,name,direction,family,description'
         do i = 1, cavg_quality_bank_size(context)
             def = feature_def(i, context)
@@ -206,26 +206,26 @@ contains
     end subroutine write_cavg_quality_feature_inventory
 
     subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, quality, quality_context, threshold_pop )
-        class(image),               intent(inout) :: imgs(:)
-        type(cavg_quality_result),  intent(inout) :: quality
-        type(oris),                 intent(in)    :: cls_oris
-        real,                       intent(in)    :: mskdiam
-        character(len=*), optional, intent(in)    :: quality_context
-        logical,          optional, intent(in)    :: threshold_pop
+        class(image),               intent(inout)        :: imgs(:)
+        type(cavg_quality_result),  intent(inout)        :: quality
+        type(oris),                 intent(in)           :: cls_oris
+        real,                       intent(in)           :: mskdiam
+        character(len=*),           optional, intent(in) :: quality_context
+        logical,                    optional, intent(in) :: threshold_pop
         type(image_bin),            allocatable   :: bin_img(:), cc_img(:), disc_img(:)
         integer,                    allocatable   :: pop(:), disc_area(:)
         real,                       allocatable   :: res(:), corr(:), corr_in(:)
         real,                       allocatable   :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
-        character(len=32) :: context
-        integer           :: ncls, i, ldim(3), pop_hard_threshold, pool_pop_hard_threshold, nworkers
-        real              :: smpd, rad_px
-        real              :: centroid_norm, locvar_fg, locvar_bg
-        real              :: cc_area_frac
-        real              :: center_edge_snr, presence_score, bp_center_edge_var
-        integer           :: ithr
-        logical           :: no_component, mask_hard_reject, bad_pixels, l_nano
-        type(cavg_quality_lattice) :: lattice
-        logical,          allocatable :: blank(:)
+        character(len=32)                         :: context
+        integer                                   :: ncls, i, ldim(3), pop_hard_threshold, pool_pop_hard_threshold, nworkers
+        real                                      :: smpd, rad_px
+        real                                      :: centroid_norm, locvar_fg, locvar_bg
+        real                                      :: cc_area_frac
+        real                                      :: center_edge_snr, presence_score, bp_center_edge_var
+        integer                                   :: ithr
+        logical                                   :: no_component, mask_hard_reject, bad_pixels, l_nano
+        type(cavg_quality_lattice)                :: lattice
+        logical,                    allocatable   :: blank(:)
         ncls = size(imgs)
         if( ncls == 0                    ) THROW_HARD('extract_cavg_quality_features: no class averages')
         if( cls_oris%get_noris() /= ncls ) THROW_HARD('extract_cavg_quality_features: # cls oris /= # cavgs')
@@ -463,9 +463,9 @@ contains
     end subroutine normalize_cavg_quality_features
 
     subroutine normalize_robust( raw, hard_reject, features )
-        real,                 intent(in)    :: raw(:,:)
-        logical,              intent(in)    :: hard_reject(:)
-        real,    allocatable, intent(inout) :: features(:,:)
+        real,                 intent(in)                 :: raw(:,:)
+        logical,              intent(in)                 :: hard_reject(:)
+        real,                 allocatable, intent(inout) :: features(:,:)
         real, allocatable :: vals(:)
         integer           :: ncls, nfeats, j
         real              :: med, dev

@@ -15,10 +15,10 @@ contains
         integer,      intent(in)    :: mskfromto(2)
         integer,      intent(out)   :: best_msk
         logical, allocatable :: lmask(:,:,:)
-        type(image) :: targ_copy, targ_msk
-        integer     :: box, ldim(3), imsk
-        real        :: smpd, cur_cost, best_cost
-        logical     :: is3d
+        type(image)          :: targ_copy, targ_msk
+        integer              :: box, ldim(3), imsk
+        real                 :: smpd, cur_cost, best_cost
+        logical              :: is3d
         if( mskfromto(1) == mskfromto(2) )then  
             best_msk = mskfromto(1)
             return

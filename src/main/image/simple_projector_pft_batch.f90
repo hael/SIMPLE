@@ -22,15 +22,15 @@ contains
         class(polarft_calc), intent(inout) :: pftc
         complex(sp),         intent(inout) :: refs_state(:,:,:)
         logical,             intent(in)    :: mirr_proj
-        integer,       parameter :: PAD_FAC         = OSMPL_PAD_FAC
-        real,          parameter :: PAD_FAC_SCALING = real(PAD_FAC**3)
-        type(kbinterpol)         :: kb
-        real,        allocatable :: rotmats(:,:,:),hkcoords(:,:,:), tmp(:,:)
-        integer,     allocatable :: partners(:)
-        real,        allocatable :: frame_angles(:)
-        real    :: rotmat(3,3)
-        integer :: clb(3), cub(3), cdim(3), kfromto(2)
-        integer :: kfrom, kto, iproj, pftsz, noris, iwinsz, wdim, nk, nproj
+        integer,       parameter   :: PAD_FAC         = OSMPL_PAD_FAC
+        real,          parameter   :: PAD_FAC_SCALING = real(PAD_FAC**3)
+        type(kbinterpol)           :: kb
+        real,          allocatable :: rotmats(:,:,:),hkcoords(:,:,:), tmp(:,:)
+        integer,       allocatable :: partners(:)
+        real,          allocatable :: frame_angles(:)
+        real                       :: rotmat(3,3)
+        integer                    :: clb(3), cub(3), cdim(3), kfromto(2)
+        integer                    :: kfrom, kto, iproj, pftsz, noris, iwinsz, wdim, nk, nproj
         ! Dimensions and boundaries
         pftsz   = pftc%get_pftsz()
         kfromto = pftc%get_kfromto()

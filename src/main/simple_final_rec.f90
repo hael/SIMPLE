@@ -208,11 +208,11 @@ contains
         procedure(addon_membership_switch)   :: switch_membership
         real,                  intent(in)    :: lp_snapshot
         type(sp_project), allocatable :: spproj    !< read from projfile after every membership switch
-        type(cmdline) :: cline_rec, cline_sigma
-        type(string), allocatable :: seed_vols(:)
-        type(string)  :: stkname
-        real          :: smpd
-        integer       :: ldim(3), nptcls, stkind, ind_in_stk, iter, state, pop
+        type(cmdline)                 :: cline_rec, cline_sigma
+        type(string),     allocatable :: seed_vols(:)
+        type(string)                  :: stkname
+        real                          :: smpd
+        integer                       :: ldim(3), nptcls, stkind, ind_in_stk, iter, state, pop
         if( trim(params%rec_backend) /= 'gridding' ) THROW_HARD('solve3D_addon reconstructs by gridding only')
         if( params%l_m_estimator_flex ) THROW_HARD('solve3D_addon carries hard-label sums only; no state weight set')
         if( .not. final_stage_uses_ml_reg(cline_refine) ) &
@@ -288,9 +288,9 @@ contains
 
         !> a euclid ML-regularized gridding reconstruct3D with the frozen term, and the carried sums
         subroutine set_addon_rec_cline( cline_here, iter_here, l_carry )
-            class(cmdline),    intent(inout) :: cline_here
-            integer,           intent(in)    :: iter_here
-            logical, optional, intent(in)    :: l_carry
+            class(cmdline),    intent(inout)        :: cline_here
+            integer,           intent(in)           :: iter_here
+            logical,           optional, intent(in) :: l_carry
             call cline_here%set('prg',         'reconstruct3D')
             call cline_here%set('oritype',     'ptcl3D')
             call cline_here%set('nstates',     params%nstates)
@@ -318,8 +318,8 @@ contains
         real,             intent(in)    :: smpd, mass, ess
         logical,          intent(in)    :: l_weighted
         type(string) :: str_state, vol_name, vol_envmsk, automsk
-        integer :: ldim(3)
-        logical :: l_mask_exists, l_mask_compatible, l_envfsc, l_nu_mask
+        integer      :: ldim(3)
+        logical      :: l_mask_exists, l_mask_compatible, l_envfsc, l_nu_mask
         ldim = box
         str_state = int2str_pad(state,2)
         vol_name  = refine3D_state_vol_fname(state)

@@ -24,15 +24,15 @@ contains
         use simple_sym,         only: sym
         use simple_ptcl_subset, only: select_ptcl_subset
         class(sp_project), allocatable :: project
-        class(oris), allocatable :: directions
-        type(sym) :: symmetry
-        real(dp), allocatable :: support(:,:), full_support(:,:)
-        real(dp) :: expected(16,3)
-        integer, allocatable :: populations(:), particle_mic(:)
-        logical, allocatable :: eligible(:), selected(:)
-        logical :: changed
-        integer :: i, bin, cell, half, status, stack, target, best(16), halves(6)
-        character(len=512) :: message
+        class(oris),       allocatable :: directions
+        type(sym)                      :: symmetry
+        real(dp),          allocatable :: support(:,:), full_support(:,:)
+        real(dp)                       :: expected(16,3)
+        integer,           allocatable :: populations(:), particle_mic(:)
+        logical,           allocatable :: eligible(:), selected(:)
+        logical                        :: changed
+        integer                        :: i, bin, cell, half, status, stack, target, best(16), halves(6)
+        character(len=512)             :: message
         allocate(project,directions)
         call fixture(project)
         call project%os_ptcl2D%set_all2single('state',1)
@@ -125,10 +125,10 @@ contains
     end subroutine test_shared_coverage
 
     subroutine test_counts_and_refusals()
-        real(dp) :: h(1,4), value, upper
+        real(dp)             :: h(1,4), value, upper
         logical, allocatable :: chosen(:)
-        logical :: proven
-        integer :: status, nodes
+        logical              :: proven
+        integer              :: status, nodes
         h(1,:) = [3._dp,6._dp,6._dp,0._dp]
         call select_mic_support(h,2,.true.,1,chosen,value,upper,proven,nodes,status)
         call assert_int(0,status,'count-mode selection succeeds')
@@ -155,10 +155,10 @@ contains
     end subroutine test_counts_and_refusals
 
     subroutine test_global_search()
-        real(dp) :: h(6,3), value, upper, scale, expected
+        real(dp)             :: h(6,3), value, upper, scale, expected
         logical, allocatable :: chosen(:)
-        logical :: proven
-        integer :: status, nodes
+        logical              :: proven
+        integer              :: status, nodes
         h = 0._dp
         h(1:4,1) = .9_dp
         h([1,2,5],2) = 1._dp
@@ -177,10 +177,10 @@ contains
     end subroutine test_global_search
 
     subroutine test_exhaustive_oracle()
-        real(dp) :: h(4,6), value, upper, scale, expected, score, total(4)
+        real(dp)             :: h(4,6), value, upper, scale, expected, score, total(4)
         logical, allocatable :: chosen(:)
-        logical :: proven
-        integer :: k, mask, m, status, nodes
+        logical              :: proven
+        integer              :: k, mask, m, status, nodes
         h = reshape([2._dp,0._dp,1._dp,0._dp, 0._dp,3._dp,0._dp,1._dp, &
                      1._dp,1._dp,1._dp,1._dp, 0._dp,0._dp,4._dp,2._dp, &
                      3._dp,0._dp,0._dp,2._dp, 0._dp,2._dp,2._dp,0._dp],shape(h))
@@ -245,14 +245,14 @@ contains
 
     subroutine test_project_mask()
         class(sp_project), allocatable :: project
-        real(dp), allocatable :: support(:,:)
-        integer, allocatable :: populations(:), particle_mic(:)
-        logical, allocatable :: eligible(:), chosen(:)
-        real(dp) :: value, upper
-        real :: euler(3)
-        integer :: status, nodes, half
-        logical :: proven, changed
-        character(len=512) :: message
+        real(dp),          allocatable :: support(:,:)
+        integer,           allocatable :: populations(:), particle_mic(:)
+        logical,           allocatable :: eligible(:), chosen(:)
+        real(dp)                       :: value, upper
+        real                           :: euler(3)
+        integer                        :: status, nodes, half
+        logical                        :: proven, changed
+        character(len=512)             :: message
         allocate(project)
         call fixture(project)
         call project%os_ptcl3D%set_all2single('updatecnt',0)

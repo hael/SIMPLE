@@ -16,7 +16,7 @@ private
 
 real,    parameter :: SMALLSHIFT    = 1.
 real,    parameter :: SRCH_TOL      = 1.e-2
-real,    parameter :: CFTOL=1e-4, CGTOL=1e-4
+real,    parameter :: CFTOL         = 1e-4, CGTOL=1e-4
 integer, parameter :: MINITS_DCORR  = 3, MAXITS_DCORR  = 10
 integer, parameter :: MINITS_CORR   = 2, MAXITS_CORR   = 5
 integer, parameter :: POLYDIM       = 4
@@ -25,43 +25,43 @@ integer, parameter :: LBFGSB_MAXITS = 60
 
 type :: motion_align_hybrid
     private
-    type(image),           pointer :: frames_orig(:)                    !< pointer to stack of frames
-    type(image),       allocatable :: frames(:)                         !< cropped frames
-    type(image),       allocatable :: frames_sh(:)                      !< shifted cropped frames
-    type(image)                    :: reference                         !< reference image
-    real,              allocatable :: weights(:,:)                      !< weight matrix (b-factor*band-pass)
-    type(ft_expanded), allocatable :: frames_ftexp(:)                   !< ft expanded of frames
-    type(ft_expanded), allocatable :: frames_ftexp_sh(:)                !< ft expanded of shifted frames
-    type(ft_expanded), allocatable :: references_ftexp(:)               !< ft expanded of references
-    real,              allocatable :: shifts_toplot(:,:)                !< for plotting
-    real,              allocatable :: opt_shifts(:,:)                   !< shifts identified
-    real,              allocatable :: frameweights(:)                   !< array of frameweights
-    real,              allocatable :: corrs(:)                          !< per-frame correlations
-    real(dp)                       :: polyx(POLYDIM), polyy(POLYDIM)    !< polynomial coefficients
-    real                           :: ftol=CFTOL, gtol=CGTOL            !< tolerance parameters for minimizer
-    real                           :: hp=-1.,      lp=-1.               !< high/low pass value
-    real                           :: lpstart=-1., lpstop=-1.           !< resolutions limits
-    real                           :: bfactor        = -1.              !< b-factor for alignment weights
-    real                           :: resstep        = 0.               !< resolution step
-    real                           :: corr           = -1.              !< correlation
-    real                           :: shsrch_tol     = SRCH_TOL         !< tolerance parameter for continuous srch update
-    real                           :: smpd = 0.                         !< sampling distance
-    real                           :: scale_factor   = 1.               !< local frame scaling
-    real                           :: scale_movies   = 1.               !< scaling of movies for shift search 
-    real                           :: trs            = 10.              !< half correlation disrete search bound
-    integer                        :: ldim(3) = 0, ldim_sc(3) = 0       !< frame dimensions
-    integer                        :: cdim(3)        = 0
-    integer                        :: iwcrit       = 0                  !< wcrit enumerator
-    integer                        :: maxits_dcorr   = MAXITS_DCORR     !< maximum number of iterations for discrete search
-    integer                        :: maxits_corr    = MAXITS_CORR      !< maximum number of iterations for continuous search
-    integer                        :: nframes        = 0                !< number of frames
-    integer                        :: fixed_frame    = 1                !< fixed (non-shifted) frame
-    integer                        :: px=0 , py=0                       !< patch x/y id
-    integer                        :: lp_updates       = 1              !< # of resolution updates performed [0;3]
-    logical                        :: l_bfac           = .false.        !< whether to use b-factor weights
-    logical                        :: fitshifts        = .false.        ! whether to perform iterative incremental shifts fitting
-    logical                        :: rand_init_shifts = .false.        !< randomize initial condition?
-    logical                        :: existence        = .false.
+    type(image),           pointer     :: frames_orig(:)                       !< pointer to stack of frames
+    type(image),           allocatable :: frames(:)                            !< cropped frames
+    type(image),           allocatable :: frames_sh(:)                         !< shifted cropped frames
+    type(image)                        :: reference                            !< reference image
+    real,                  allocatable :: weights(:,:)                         !< weight matrix (b-factor*band-pass)
+    type(ft_expanded),     allocatable :: frames_ftexp(:)                      !< ft expanded of frames
+    type(ft_expanded),     allocatable :: frames_ftexp_sh(:)                   !< ft expanded of shifted frames
+    type(ft_expanded),     allocatable :: references_ftexp(:)                  !< ft expanded of references
+    real,                  allocatable :: shifts_toplot(:,:)                   !< for plotting
+    real,                  allocatable :: opt_shifts(:,:)                      !< shifts identified
+    real,                  allocatable :: frameweights(:)                      !< array of frameweights
+    real,                  allocatable :: corrs(:)                             !< per-frame correlations
+    real(dp)                           :: polyx(POLYDIM), polyy(POLYDIM)       !< polynomial coefficients
+    real                               :: ftol             = CFTOL, gtol=CGTOL !< tolerance parameters for minimizer
+    real                               :: hp               = -1.,      lp=-1.  !< high/low pass value
+    real                               :: lpstart          = -1., lpstop=-1.   !< resolutions limits
+    real                               :: bfactor          = -1.               !< b-factor for alignment weights
+    real                               :: resstep          = 0.                !< resolution step
+    real                               :: corr             = -1.               !< correlation
+    real                               :: shsrch_tol       = SRCH_TOL          !< tolerance parameter for continuous srch update
+    real                               :: smpd             = 0.                !< sampling distance
+    real                               :: scale_factor     = 1.                !< local frame scaling
+    real                               :: scale_movies     = 1.                !< scaling of movies for shift search
+    real                               :: trs              = 10.               !< half correlation disrete search bound
+    integer                            :: ldim(3)          = 0, ldim_sc(3) = 0 !< frame dimensions
+    integer                            :: cdim(3)          = 0
+    integer                            :: iwcrit           = 0                 !< wcrit enumerator
+    integer                            :: maxits_dcorr     = MAXITS_DCORR      !< maximum number of iterations for discrete search
+    integer                            :: maxits_corr      = MAXITS_CORR       !< maximum number of iterations for continuous search
+    integer                            :: nframes          = 0                 !< number of frames
+    integer                            :: fixed_frame      = 1                 !< fixed (non-shifted) frame
+    integer                            :: px               = 0 , py=0          !< patch x/y id
+    integer                            :: lp_updates       = 1                 !< # of resolution updates performed [0;3]
+    logical                            :: l_bfac           = .false.           !< whether to use b-factor weights
+    logical                            :: fitshifts        = .false.           ! whether to perform iterative incremental shifts fitting
+    logical                            :: rand_init_shifts = .false.           !< randomize initial condition?
+    logical                            :: existence        = .false.
     ! benchmarking
     logical                 :: L_BENCH = .false.
     integer(timer_int_kind) :: t_init,   t_coarse,  t_cont,  t_tot, t_initftexp, t, t_minimize
@@ -110,9 +110,9 @@ end type motion_align_hybrid
 contains
 
     subroutine new( self, params, frames_ptr )
-        class(motion_align_hybrid),       intent(inout) :: self
-        class(parameters),                intent(in)    :: params
-        type(image), allocatable, target, intent(in)    :: frames_ptr(:)
+        class(motion_align_hybrid),       intent(inout)                   :: self
+        class(parameters),                intent(in)                      :: params
+        type(image),                      allocatable, target, intent(in) :: frames_ptr(:)
         call self%kill
         self%trs            = params%trs
         self%ftol           = CFTOL
@@ -243,8 +243,8 @@ contains
     ! Alignment routines
 
     subroutine align( self, ini_shifts, frameweights )
-        class(motion_align_hybrid), intent(inout) :: self
-        real,             optional, intent(in)    :: ini_shifts(self%nframes,2), frameweights(self%nframes)
+        class(motion_align_hybrid), intent(inout)        :: self
+        real,                       optional, intent(in) :: ini_shifts(self%nframes,2), frameweights(self%nframes)
         if( self%L_BENCH )then
             self%t_init = tic()
             self%t_tot  = self%t_init
@@ -297,8 +297,8 @@ contains
 
     ! Driver for Fourier correlation theorem based alignement
     subroutine align_discrete( self, ini_shifts, frameweights )
-        class(motion_align_hybrid), intent(inout) :: self
-        real,             optional, intent(in)    :: ini_shifts(self%nframes,2), frameweights(self%nframes)
+        class(motion_align_hybrid), intent(inout)        :: self
+        real,                       optional, intent(in) :: ini_shifts(self%nframes,2), frameweights(self%nframes)
         if ( .not. self%existence ) THROW_HARD('not instantiated; simple_motion_align_hybrid: align')
         if (( self%hp < 0. ) .or. ( self%lp < 0.))  THROW_HARD('hp or lp < 0; simple_motion_align_hybrid: align')
         ! deactivating polynomial fitting for low number of frames
@@ -312,9 +312,9 @@ contains
 
     ! Driver for Continuous refinement
     subroutine refine( self, ini_shifts, frameweights )
-        class(motion_align_hybrid), intent(inout) :: self
-        real,                       intent(in)    :: ini_shifts(self%nframes,2)
-        real,             optional, intent(in)    ::frameweights(self%nframes)
+        class(motion_align_hybrid), intent(inout)        :: self
+        real,                       intent(in)           :: ini_shifts(self%nframes,2)
+        real,                       optional, intent(in) :: frameweights(self%nframes)
         if ( .not. self%existence ) then
             THROW_HARD('not instantiated; simple_motion_align_hybrid: align')
         end if
@@ -331,8 +331,8 @@ contains
 
     ! semi-discrete correlation based alignment
     subroutine align_dcorr( self, ini_shifts, frameweights )
-        class(motion_align_hybrid), intent(inout) :: self
-        real,             optional, intent(in)    :: ini_shifts(self%nframes,2), frameweights(self%nframes)
+        class(motion_align_hybrid), intent(inout)        :: self
+        real,                       optional, intent(in) :: ini_shifts(self%nframes,2), frameweights(self%nframes)
         real    :: opt_shifts_prev(self%nframes, 2), rmsd
         integer :: iter, iframe
         logical :: l_calc_frameweights
@@ -420,14 +420,14 @@ contains
 
     ! continuous search
     subroutine align_corr( self, frameweights )
-        class(motion_align_hybrid), intent(inout) :: self
-        real, optional,             intent(in)    :: frameweights(self%nframes)
+        class(motion_align_hybrid), intent(inout)                    :: self
+        real,                       optional,             intent(in) :: frameweights(self%nframes)
         type(ftexp_shsrch), allocatable :: ftexp_srch(:)
-        complex, allocatable :: cmat_sum(:,:)
-        real    :: opt_shifts_saved(self%nframes,2), opt_shifts_prev(self%nframes, 2), corrfrac
-        real    :: frameweights_saved(self%nframes), cxy(3), rmsd, corr_prev, corr_saved, trs
-        integer :: flims(3,2), iter, iframe
-        logical :: l_calc_frameweights
+        complex,            allocatable :: cmat_sum(:,:)
+        real                            :: opt_shifts_saved(self%nframes,2), opt_shifts_prev(self%nframes, 2), corrfrac
+        real                            :: frameweights_saved(self%nframes), cxy(3), rmsd, corr_prev, corr_saved, trs
+        integer                         :: flims(3,2), iter, iframe
+        logical                         :: l_calc_frameweights
         ! frameweights
         if( present(frameweights) )then
             l_calc_frameweights = .false.
@@ -531,9 +531,9 @@ contains
         class(motion_align_hybrid), intent(inout) :: self
         integer,                    intent(in)    :: iframe
         real, pointer :: pcorrs(:,:,:)
-        real     :: sqsum_ref,sqsum_frame
-        real     :: dshift(2),alpha,beta,gamma,weight
-        integer  :: pos(2),center(2),trs
+        real          :: sqsum_ref,sqsum_frame
+        real          :: dshift(2),alpha,beta,gamma,weight
+        integer       :: pos(2),center(2),trs
         weight = self%frameweights(iframe)
         trs    = max(1, min(floor(self%trs),minval(self%ldim_sc(1:2)/2)))
         ! correlations
@@ -594,13 +594,13 @@ contains
 
     subroutine set_trs( self, trs )
         class(motion_align_hybrid), intent(inout) :: self
-        real,                    intent(in)    :: trs
+        real,                       intent(in)    :: trs
         self%trs = trs
     end subroutine set_trs
 
     subroutine set_weights( self, frameweights )
-        class(motion_align_hybrid), intent(inout) :: self
-        real, allocatable,          intent(in)    :: frameweights(:)
+        class(motion_align_hybrid), intent(inout)                    :: self
+        real,                       allocatable,          intent(in) :: frameweights(:)
         if (size(frameweights) /= self%nframes) then
             THROW_HARD('inconsistency; simple_motion_align_hybrid: set_weights')
         end if
@@ -608,8 +608,8 @@ contains
     end subroutine set_weights
 
     subroutine get_weights( self, frameweights )
-        class(motion_align_hybrid), intent(inout) :: self
-        real, allocatable,          intent(out)   :: frameweights(:)
+        class(motion_align_hybrid), intent(inout)                     :: self
+        real,                       allocatable,          intent(out) :: frameweights(:)
         allocate(frameweights(self%nframes), source=self%frameweights)
     end subroutine get_weights
 
@@ -625,20 +625,20 @@ contains
     end function get_corr
 
     subroutine get_corrs( self, corrs )
-        class(motion_align_hybrid), intent(inout) :: self
-        real, allocatable,          intent(out)   :: corrs(:)
+        class(motion_align_hybrid), intent(inout)                     :: self
+        real,                       allocatable,          intent(out) :: corrs(:)
         allocate( corrs(self%nframes), source=self%corrs )
     end subroutine get_corrs
 
     subroutine get_opt_shifts( self, opt_shifts )
-        class(motion_align_hybrid), intent(inout) :: self
-        real, allocatable,          intent(out)   :: opt_shifts(:,:)
+        class(motion_align_hybrid), intent(inout)                     :: self
+        real,                       allocatable,          intent(out) :: opt_shifts(:,:)
         allocate( opt_shifts(self%nframes, 2), source=self%opt_shifts )
     end subroutine get_opt_shifts
 
     subroutine get_shifts_toplot( self, shifts_toplot )
-        class(motion_align_hybrid), intent(inout) :: self
-        real, allocatable,          intent(out)   :: shifts_toplot(:,:)
+        class(motion_align_hybrid), intent(inout)                     :: self
+        real,                       allocatable,          intent(out) :: shifts_toplot(:,:)
         allocate( shifts_toplot(self%nframes, 2), source=self%shifts_toplot )
     end subroutine get_shifts_toplot
 
@@ -656,20 +656,20 @@ contains
 
     subroutine set_shsrch_tol( self, shsrch_tol )
         class(motion_align_hybrid), intent(inout) :: self
-        real, intent(in) :: shsrch_tol
+        real,                       intent(in)    :: shsrch_tol
         self%shsrch_tol = shsrch_tol
     end subroutine set_shsrch_tol
 
     subroutine set_coords( self, x, y )
         class(motion_align_hybrid), intent(inout) :: self
-        integer, intent(in) :: x, y
+        integer,                    intent(in)    :: x, y
         self%px = x
         self%py = y
     end subroutine set_coords
 
     subroutine get_coords(self, x, y )
         class(motion_align_hybrid), intent(inout) :: self
-        integer, intent(out) :: x, y
+        integer,                    intent(out)   :: x, y
         x = self%px
         y = self%py
     end subroutine get_coords

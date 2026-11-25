@@ -15,10 +15,10 @@ contains
 
     !> BENCH/<FAMILY>_BENCH.txt, or BENCH/<FAMILY>_BENCH_PARTppp.txt for the reports of one partition
     function bench_report_fname( family, part, numlen ) result( fname )
-        character(len=*),  intent(in) :: family
-        integer, optional, intent(in) :: part, numlen
+        character(len=*),  intent(in)           :: family
+        integer,           optional, intent(in) :: part, numlen
         type(string) :: fname
-        integer :: nlen
+        integer      :: nlen
         if( present(part) )then
             nlen = 1
             if( present(numlen) ) nlen = max(1, numlen)
@@ -32,9 +32,9 @@ contains
     !! the record header: the family, and the iteration and partition when given. Each partition has a file of
     !! its own, so concurrent workers never append to the same file.
     subroutine open_bench_report( fnr, family, iter, part, numlen )
-        integer,           intent(out) :: fnr
-        character(len=*),  intent(in)  :: family
-        integer, optional, intent(in)  :: iter, part, numlen
+        integer,           intent(out)          :: fnr
+        character(len=*),  intent(in)           :: family
+        integer,           optional, intent(in) :: iter, part, numlen
         type(string) :: fname
         logical      :: l_exists
         if( .not. dir_exists(BENCH_DIR) ) call simple_mkdir(BENCH_DIR, verbose=.false.)

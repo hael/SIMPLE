@@ -7,10 +7,10 @@ implicit none
 contains
 
     module subroutine new_seg_with_ptr( self, n, oritype, os_ptr )
-        class(sp_project), target, intent(inout) :: self
-        integer,                   intent(in)    :: n
-        character(len=*),          intent(in)    :: oritype
-        class(oris), pointer,      intent(inout) :: os_ptr
+        class(sp_project),         target, intent(inout)       :: self
+        integer,                   intent(in)                  :: n
+        character(len=*),          intent(in)                  :: oritype
+        class(oris),               pointer,      intent(inout) :: os_ptr
         select case(trim(oritype))
             case('mic')
                 call self%os_mic%new(n,    is_ptcl=.false.)
@@ -155,7 +155,7 @@ contains
     module subroutine set_sigma2_state_path( self, state_path )
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: state_path
-        type(string) :: absolute_path, project_dir, state_dir, state_name
+        type(string)                  :: absolute_path, project_dir, state_dir, state_name
         character(len=:), allocatable :: raw_path
         if( self%projinfo%get_noris() /= 1 ) call self%projinfo%new(1, is_ptcl=.false.)
         raw_path = trim(state_path%to_char())
@@ -224,9 +224,9 @@ contains
         class(sp_project), intent(in)    :: self
         type(string),      intent(inout) :: state_path
         logical,           intent(out)   :: found
-        type(string) :: registered, project_dir
+        type(string)                  :: registered, project_dir
         character(len=:), allocatable :: raw_path
-        logical :: l_absolute
+        logical                       :: l_absolute
         call state_path%kill
         found = self%projinfo%get_noris() == 1
         if( found ) found = self%projinfo%isthere(1, 'sigma2_state')
@@ -459,7 +459,7 @@ contains
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: projfile_src
         character(len=*),  intent(in)    :: oritype
-        type(string)    :: absstkname, absboxname, absmicname, absmovname, boxfname, stkfname, movfname, micfname, src_path
+        type(string)     :: absstkname, absboxname, absmicname, absmovname, boxfname, stkfname, movfname, micfname, src_path
         type(sp_project) :: self_src
         type(ori)        :: o, o_src
         integer          :: istk, nstks, imic, nmics, iptcl
@@ -591,18 +591,18 @@ contains
     !> for merging alignment documents from SIMPLE runs in distributed mode: each document carries
     !! its own particle range, whatever the partitioning, and together they must cover 1..nptcls once
     module subroutine merge_algndocs( self, nptcls, ndocs, oritype, fbody, numlen_in, write )
-        class(sp_project), intent(inout) :: self
-        integer,           intent(in)    :: nptcls, ndocs
-        character(len=*),  intent(in)    :: oritype, fbody
-        integer, optional, intent(in)    :: numlen_in
-        logical, optional, intent(in)    :: write     !< write the merged segment to the project file{.true.}
-        type(string)              :: fname, projfile
-        type(string), allocatable :: os_strings(:)
-        logical,      allocatable :: covered(:)
-        class(oris),      pointer :: os => null()
-        type(binoris) :: bos_doc
-        integer       :: i, numlen, isegment, strlen_max
-        logical       :: l_write
+        class(sp_project), intent(inout)        :: self
+        integer,           intent(in)           :: nptcls, ndocs
+        character(len=*),  intent(in)           :: oritype, fbody
+        integer,           optional, intent(in) :: numlen_in
+        logical,           optional, intent(in) :: write !< write the merged segment to the project file{.true.}
+        type(string)                  :: fname, projfile
+        type(string),     allocatable :: os_strings(:)
+        logical,          allocatable :: covered(:)
+        class(oris),      pointer     :: os => null()
+        type(binoris)                 :: bos_doc
+        integer                       :: i, numlen, isegment, strlen_max
+        logical                       :: l_write
         l_write = .true.
         if( present(write) ) l_write = write
         numlen = len(int2str(ndocs))
@@ -687,9 +687,9 @@ contains
         type(rec_iterator) :: it
         type(sp_project)   :: tmpproj
         type(string)       :: stack_name, projname, prev_projname
-        integer :: iptcl, fromp, ifromp, itop, jptcl, nptcls_tot
-        integer :: nrecs, nmics, nptcls, imic, micind
-        logical :: has_ptcl
+        integer            :: iptcl, fromp, ifromp, itop, jptcl, nptcls_tot
+        integer            :: nrecs, nmics, nptcls, imic, micind
+        logical            :: has_ptcl
         call spproj%os_mic%kill
         call spproj%os_stk%kill
         call spproj%os_ptcl2D%kill
@@ -758,9 +758,9 @@ contains
     ! Getters/Setters
 
     module subroutine ptr2oritype( self, oritype, os_ptr )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        class(oris),      pointer, intent(inout) :: os_ptr
+        class(sp_project),         target, intent(inout)  :: self
+        character(len=*),          intent(in)             :: oritype
+        class(oris),               pointer, intent(inout) :: os_ptr
         select case(trim(oritype))
             case('mic')
                 os_ptr => self%os_mic
@@ -800,13 +800,13 @@ contains
 
     ! static for OpenMP safety
     module function get_ctfflag( self, oritype, iptcl ) result( ctfflag )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,         optional, intent(in)    :: iptcl
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
+        integer,                   optional, intent(in)  :: iptcl
         character(len=STDLEN) :: ctfflag
         class(oris), pointer  :: ptcl_field
         type(string)          :: ctfflag_str
-        integer :: stkind, ind_in_stk, ind
+        integer               :: stkind, ind_in_stk, ind
         ctfflag = 'no'
         nullify(ptcl_field)
         ! set field pointer
@@ -836,9 +836,9 @@ contains
     end function get_ctfflag
 
     module integer(kind(ENUM_CTFFLAG)) function get_ctfflag_type( self, oritype, iptcl )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,         optional, intent(in)    :: iptcl
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
+        integer,                   optional, intent(in)  :: iptcl
         character(len=STDLEN) :: ctfflag
         ctfflag = self%get_ctfflag(oritype, iptcl=iptcl)
         select case(trim(ctfflag))
@@ -856,8 +856,8 @@ contains
     end function get_ctfflag_type
 
     module integer function get_n_insegment( self, oritype )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
         class(oris), pointer :: pos => NULL()
         get_n_insegment = 0
         select case(oritype)
@@ -878,9 +878,9 @@ contains
     end function get_n_insegment
 
     module integer function get_n_insegment_state( self, oritype, state )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,                   intent(in)    :: state
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
+        integer,                   intent(in)            :: state
         class(oris), pointer :: pos => NULL()
         integer              :: iori
         get_n_insegment_state = 0
@@ -905,9 +905,9 @@ contains
 
     ! static for OpenMP safety
     module function get_ctfparams( self, oritype, iptcl ) result( ctfvars )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,                   intent(in)    :: iptcl
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
+        integer,                   intent(in)            :: iptcl
         class(oris), pointer  :: ptcl_field
         character(len=STDLEN) :: ctfflag
         type(ctfparams)       :: ctfvars

@@ -20,11 +20,11 @@ private
 type, extends(strategy3D_pftc) :: strategy3D_prob
     logical :: assignment_valid = .false.
 contains
-    procedure :: new         => new_prob
-    procedure :: srch        => srch_prob
-    procedure :: kill        => kill_prob
-    procedure :: oris_assign => oris_assign_prob
-    procedure :: has_valid_assignment
+    procedure          :: new         => new_prob
+    procedure          :: srch        => srch_prob
+    procedure          :: kill        => kill_prob
+    procedure          :: oris_assign => oris_assign_prob
+    procedure          :: has_valid_assignment
     procedure, private :: resolve_extra_poses
     procedure, private :: resolve_extra_poses_view
     procedure, private :: commit_geom_view
@@ -123,8 +123,8 @@ contains
     subroutine commit_geom_view( self )
         class(strategy3D_prob), intent(inout) :: self
         type(view_solve) :: vs
-        real :: sh(2), euler(3), shvec(2), frac
-        integer :: i, k, j, inpl, iloc, ipose, ninserted
+        real             :: sh(2), euler(3), shvec(2), frac
+        integer          :: i, k, j, inpl, iloc, ipose, ninserted
         i = self%s%iptcl_map
         select type( tab => self%spec%eulprob_obj_part )
             type is(eul_prob_tab_neigh)
@@ -180,9 +180,9 @@ contains
         logical,                intent(in)    :: l_cont_refine
         type(prob_insert_pose) :: pose
         type(view_solve)       :: vs
-        integer :: iloc, k, ipose, inpl
-        real    :: euler(3), shvec(2), sh(2), corr, inpl_coord
-        logical :: inpl_valid
+        integer                :: iloc, k, ipose, inpl
+        real                   :: euler(3), shvec(2), sh(2), corr, inpl_coord
+        logical                :: inpl_valid
         iloc = self%spec%extra_poses%loc(self%s%iptcl)
         do k = 1,self%spec%extra_poses%nextra(iloc)
             pose       = self%spec%eulprob_obj_part%insert_tab%get_extra(iptcl_map, k)
@@ -219,12 +219,12 @@ contains
         type(view_solve), allocatable :: vs(:)
         type(view_solve)              :: vs_c
         type(ori)                     :: o
-        real,    allocatable :: rmats(:,:,:), eulers(:,:), shifts(:,:), scores(:), w(:), shincs(:,:), sdevs(:)
-        integer, allocatable :: basin(:)
-        logical, allocatable :: valid(:), best(:)
-        real    :: euler(3), shvec(2), sh(2), corr, inpl_coord, wc
-        integer :: iloc, nextra, k, ipose, inpl, istate, nbasins, kbest, ninserted, nmerged
-        logical :: inpl_valid
+        real,             allocatable :: rmats(:,:,:), eulers(:,:), shifts(:,:), scores(:), w(:), shincs(:,:), sdevs(:)
+        integer,          allocatable :: basin(:)
+        logical,          allocatable :: valid(:), best(:)
+        real                          :: euler(3), shvec(2), sh(2), corr, inpl_coord, wc
+        integer                       :: iloc, nextra, k, ipose, inpl, istate, nbasins, kbest, ninserted, nmerged
+        logical                       :: inpl_valid
         iloc   = self%spec%extra_poses%loc(self%s%iptcl)
         nextra = self%spec%extra_poses%nextra(iloc)
         allocate(vs(nextra), rmats(3,3,0:nextra), eulers(3,0:nextra), shifts(2,0:nextra), scores(0:nextra), w(0:nextra), &

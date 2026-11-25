@@ -98,7 +98,7 @@ contains
     procedure          :: add_single_stk
     procedure, private :: add_stktab_1
     procedure, private :: add_stktab_2
-    generic            :: add_stktab => add_stktab_1, add_stktab_2
+    generic            :: add_stktab   => add_stktab_1, add_stktab_2
     procedure          :: split_stk
     procedure, private :: write_substk_1, write_substk_2
     generic            :: write_substk => write_substk_1, write_substk_2
@@ -196,10 +196,10 @@ interface
     ! CORE
 
     module subroutine new_seg_with_ptr( self, n, oritype, os_ptr )
-        class(sp_project), target, intent(inout) :: self
-        integer,                   intent(in)    :: n
-        character(len=*),          intent(in)    :: oritype
-        class(oris), pointer,      intent(inout) :: os_ptr
+        class(sp_project),         target, intent(inout)       :: self
+        integer,                   intent(in)                  :: n
+        character(len=*),          intent(in)                  :: oritype
+        class(oris),               pointer,      intent(inout) :: os_ptr
     end subroutine new_seg_with_ptr
 
     module subroutine kill( self )
@@ -280,11 +280,11 @@ interface
 
     !> for merging alignment documents from SIMPLE runs in distributed mode
     module subroutine merge_algndocs( self, nptcls, ndocs, oritype, fbody, numlen_in, write )
-        class(sp_project), intent(inout) :: self
-        integer,           intent(in)    :: nptcls, ndocs
-        character(len=*),  intent(in)    :: oritype, fbody
-        integer, optional, intent(in)    :: numlen_in
-        logical, optional, intent(in)    :: write     !< write the merged segment to the project file{.true.}
+        class(sp_project), intent(inout)        :: self
+        integer,           intent(in)           :: nptcls, ndocs
+        character(len=*),  intent(in)           :: oritype, fbody
+        integer,           optional, intent(in) :: numlen_in
+        logical,           optional, intent(in) :: write !< write the merged segment to the project file{.true.}
     end subroutine merge_algndocs
 
     module subroutine projrecords2proj( spproj, project_list )
@@ -295,9 +295,9 @@ interface
     ! CORE - getters/setters
 
     module subroutine ptr2oritype( self, oritype, os_ptr )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        class(oris),      pointer, intent(inout) :: os_ptr
+        class(sp_project),         target, intent(inout)  :: self
+        character(len=*),          intent(in)             :: oritype
+        class(oris),               pointer, intent(inout) :: os_ptr
     end subroutine ptr2oritype
 
     module real function get_smpd( self )
@@ -305,36 +305,36 @@ interface
     end function get_smpd
 
     module function get_ctfflag( self, oritype, iptcl )result( ctfflag )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,         optional, intent(in)    :: iptcl
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
+        integer,                   optional, intent(in)  :: iptcl
         character(len=STDLEN) :: ctfflag
     end function get_ctfflag
 
     module integer(kind(ENUM_CTFFLAG)) function get_ctfflag_type( self, oritype, iptcl )    
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,         optional, intent(in)    :: iptcl
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
+        integer,                   optional, intent(in)  :: iptcl
     end function get_ctfflag_type
 
     module function get_ctfparams( self, oritype, iptcl ) result( ctfvars )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,                   intent(in)    :: iptcl
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
+        integer,                   intent(in)            :: iptcl
         class(oris), pointer  :: ptcl_field
         character(len=STDLEN) :: ctfflag
         type(ctfparams)       :: ctfvars
     end function get_ctfparams
 
     module integer function get_n_insegment( self, oritype )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
     end function get_n_insegment
 
     module integer function get_n_insegment_state( self, oritype, state )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,                   intent(in)    :: state
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
+        integer,                   intent(in)            :: state
     end function get_n_insegment_state
 
     module subroutine get_sp_oris( self, which_imgkind, os )
@@ -352,24 +352,24 @@ interface
     ! MIC
 
     module subroutine add_single_movie( self, moviename, ctfvars )
-        class(sp_project), target, intent(inout) :: self
-        class(string),             intent(in)    :: moviename
-        type(ctfparams),           intent(in)    :: ctfvars
+        class(sp_project),         target, intent(inout) :: self
+        class(string),             intent(in)            :: moviename
+        type(ctfparams),           intent(in)            :: ctfvars
     end subroutine add_single_movie
 
     module subroutine add_movies( self, movies_array, ctfvars, singleframe, verbose )
-        class(sp_project), target, intent(inout) :: self
-        type(string),              intent(in)    :: movies_array(:)
-        type(ctfparams),           intent(in)    :: ctfvars
-        logical,         optional, intent(in)    :: singleframe
-        logical,         optional, intent(in)    :: verbose
+        class(sp_project),         target, intent(inout) :: self
+        type(string),              intent(in)            :: movies_array(:)
+        type(ctfparams),           intent(in)            :: ctfvars
+        logical,                   optional, intent(in)  :: singleframe
+        logical,                   optional, intent(in)  :: verbose
     end subroutine add_movies
 
     module subroutine add_intgs( self, intgs_array, os, ctfvars )
-        class(sp_project), target, intent(inout) :: self
-        class(string),             intent(in)    :: intgs_array(:)
-        class(oris),               intent(in)    :: os
-        type(ctfparams),           intent(in)    :: ctfvars
+        class(sp_project),         target, intent(inout) :: self
+        class(string),             intent(in)            :: intgs_array(:)
+        class(oris),               intent(in)            :: os
+        type(ctfparams),           intent(in)            :: ctfvars
     end subroutine add_intgs
 
     module subroutine report_state2mic( self, states )
@@ -384,14 +384,14 @@ interface
     end function has_boxfile
 
     module subroutine get_movies_table( self, moviestab )
-        class(sp_project),         intent(inout) :: self
-        type(string), allocatable, intent(out)   :: moviestab(:)
+        class(sp_project),         intent(inout)            :: self
+        type(string),              allocatable, intent(out) :: moviestab(:)
     end subroutine get_movies_table
 
     module subroutine get_mics_table( self, micstab, orimap)
-        class(sp_project),         intent(inout) :: self
-        type(string), allocatable, intent(out)   :: micstab(:)
-        integer,      allocatable, intent(out)   :: orimap(:)
+        class(sp_project),         intent(inout)            :: self
+        type(string),              allocatable, intent(out) :: micstab(:)
+        integer,                   allocatable, intent(out) :: orimap(:)
     end subroutine get_mics_table
 
     module function get_micparams( self, imic ) result( ctfvars )
@@ -413,10 +413,10 @@ interface
     end function get_mic_kind
 
     module subroutine set_boxfile( self, i, boxfname, nptcls )
-        class(sp_project), intent(inout) :: self
-        integer,           intent(in)    :: i
-        class(string),     intent(in)    :: boxfname
-        integer, optional, intent(in)    :: nptcls
+        class(sp_project), intent(inout)        :: self
+        integer,           intent(in)           :: i
+        class(string),     intent(in)           :: boxfname
+        integer,           optional, intent(in) :: nptcls
     end subroutine set_boxfile
 
     module integer function get_nmovies( self )
@@ -432,8 +432,8 @@ interface
     end function get_nframes
 
     module subroutine get_mic2stk_inds( self, mic2stk_inds, stk2mic_inds )
-        class(sp_project),    intent(inout) :: self
-        integer, allocatable, intent(inout) :: mic2stk_inds(:), stk2mic_inds(:)
+        class(sp_project),    intent(inout)              :: self
+        integer,              allocatable, intent(inout) :: mic2stk_inds(:), stk2mic_inds(:)
     end subroutine get_mic2stk_inds
 
     ! STK
@@ -465,9 +465,9 @@ interface
     end subroutine add_stktab_2
 
     module subroutine split_stk( self, nparts, dir )
-        class(sp_project),       intent(inout) :: self
-        integer,                 intent(in)    :: nparts
-        class(string), optional, intent(in)    :: dir
+        class(sp_project),       intent(inout)        :: self
+        integer,                 intent(in)           :: nparts
+        class(string),           optional, intent(in) :: dir
     end subroutine split_stk
 
     module subroutine write_substk_1( self, fromp, top, stkout )
@@ -483,8 +483,8 @@ interface
     end subroutine write_substk_2
 
     module subroutine add_scale_tag( self, dir )
-        class(sp_project),       intent(inout) :: self
-        class(string), optional, intent(in)    :: dir
+        class(sp_project),       intent(inout)        :: self
+        class(string),           optional, intent(in) :: dir
     end subroutine add_scale_tag
 
     module subroutine report_state2stk( self, states )
@@ -505,11 +505,11 @@ interface
     end function get_stkname
 
     module subroutine get_stkname_and_ind( self, oritype, iptcl, stkname, ind_in_stk )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,                   intent(in)    :: iptcl
-        class(string),             intent(out)   :: stkname
-        integer,                   intent(out)   :: ind_in_stk
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
+        integer,                   intent(in)            :: iptcl
+        class(string),             intent(out)           :: stkname
+        integer,                   intent(out)           :: ind_in_stk
     end subroutine get_stkname_and_ind
 
     module function get_nstks( self ) result(nstks)
@@ -530,19 +530,19 @@ interface
     end subroutine set_cavgs_thumb
 
     module subroutine shape_ranked_cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles, mskdiam_px )
-        class(sp_project),    intent(inout) :: self
-        integer, allocatable, intent(inout) :: cavg_inds(:)
-        class(string),        intent(in)    :: jpgname
-        integer,              intent(out)   :: xtiles, ytiles
-        integer, optional,    intent(in)    :: mskdiam_px
+        class(sp_project),    intent(inout)              :: self
+        integer,              allocatable, intent(inout) :: cavg_inds(:)
+        class(string),        intent(in)                 :: jpgname
+        integer,              intent(out)                :: xtiles, ytiles
+        integer,              optional,    intent(in)    :: mskdiam_px
     end subroutine shape_ranked_cavgs2jpg
 
     module subroutine cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles, ignore_states, invert_states )
-        class(sp_project),    intent(inout) :: self
-        integer, allocatable, intent(inout) :: cavg_inds(:)
-        class(string),        intent(in)    :: jpgname
-        integer,              intent(out)   :: xtiles, ytiles
-        logical, optional,    intent(in)    :: ignore_states, invert_states
+        class(sp_project),    intent(inout)              :: self
+        integer,              allocatable, intent(inout) :: cavg_inds(:)
+        class(string),        intent(in)                 :: jpgname
+        integer,              intent(out)                :: xtiles, ytiles
+        logical,              optional,    intent(in)    :: ignore_states, invert_states
     end subroutine cavgs2jpg
 
     module subroutine cavgs2mrc( self )
@@ -552,11 +552,11 @@ interface
     ! PTCL2D/3D
 
     module subroutine map_ptcl_ind2stk_ind( self, oritype, iptcl, stkind, ind_in_stk )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,                   intent(in)    :: iptcl
-        integer,                   intent(out)   :: stkind
-        integer,                   intent(out)   :: ind_in_stk
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
+        integer,                   intent(in)            :: iptcl
+        integer,                   intent(out)           :: stkind
+        integer,                   intent(out)           :: ind_in_stk
     end subroutine map_ptcl_ind2stk_ind
 
     module subroutine map_cavgs_selection( self, states )
@@ -573,9 +573,9 @@ interface
     end subroutine map2ptcls
 
     module subroutine map2ptcls_state( self, append, maxpop )
-        class(sp_project), intent(inout) :: self
-        logical, optional, intent(in)    :: append
-        integer, optional, intent(in)    :: maxpop
+        class(sp_project), intent(inout)        :: self
+        logical,           optional, intent(in) :: append
+        integer,           optional, intent(in) :: maxpop
     end subroutine map2ptcls_state
 
     module subroutine map_cls2D_flag_to_ptcls( self, flag )
@@ -598,19 +598,19 @@ interface
 
     module subroutine scale_projfile( self, smpd_target, new_projfile, cline, cline_scale, dir )
         ! this probably needs an oritype input for dealing with scale class averages
-        class(sp_project),       intent(inout) :: self
-        real,                    intent(inout) :: smpd_target
-        class(string),           intent(out)   :: new_projfile
-        class(cmdline),          intent(inout) :: cline
-        class(cmdline),          intent(out)   :: cline_scale
-        class(string), optional, intent(in)    :: dir
+        class(sp_project),       intent(inout)        :: self
+        real,                    intent(inout)        :: smpd_target
+        class(string),           intent(out)          :: new_projfile
+        class(cmdline),          intent(inout)        :: cline
+        class(cmdline),          intent(out)          :: cline_scale
+        class(string),           optional, intent(in) :: dir
     end subroutine scale_projfile
 
     ! PTCL2D/3D - getters
 
     module logical function is_virgin_field( self, oritype )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
     end function is_virgin_field
 
     module logical function has_valid_ptcl3D_alignment( self )
@@ -633,9 +633,9 @@ interface
     end function get_nptcls
 
     module subroutine get_boxcoords( self, iptcl, coords )
-        class(sp_project), target, intent(in)  :: self
-        integer,                   intent(in)  :: iptcl
-        integer,                   intent(out) :: coords(2)
+        class(sp_project),         target, intent(in) :: self
+        integer,                   intent(in)         :: iptcl
+        integer,                   intent(out)        :: coords(2)
     end subroutine get_boxcoords
 
     module subroutine set_boxcoords( self, iptcl, coords )
@@ -646,12 +646,12 @@ interface
     ! OUT
 
     module subroutine add_cavgs2os_out( self, stk, smpd, imgkind, clspath, mskdiam )
-        class(sp_project),          intent(inout) :: self
-        class(string),              intent(in)    :: stk
-        real,                       intent(in)    :: smpd
-        character(len=*), optional, intent(in)    :: imgkind
-        logical,          optional, intent(in)    :: clspath
-        real,             optional, intent(in)    :: mskdiam
+        class(sp_project),          intent(inout)        :: self
+        class(string),              intent(in)           :: stk
+        real,                       intent(in)           :: smpd
+        character(len=*),           optional, intent(in) :: imgkind
+        logical,                    optional, intent(in) :: clspath
+        real,                       optional, intent(in) :: mskdiam
     end subroutine add_cavgs2os_out
 
     module subroutine add_frcs2os_out( self, frc, which_imgkind )
@@ -676,13 +676,13 @@ interface
     end subroutine add_state_weights2os_out
 
     module subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box, pop, mass, ess )
-        class(sp_project), intent(inout) :: self
-        class(string),     intent(in)    :: vol
-        character(len=*),  intent(in)    :: which_imgkind
-        real,              intent(in)    :: smpd
-        integer,           intent(in)    :: state
-        integer, optional, intent(in)    :: box, pop
-        real,    optional, intent(in)    :: mass, ess
+        class(sp_project), intent(inout)        :: self
+        class(string),     intent(in)           :: vol
+        character(len=*),  intent(in)           :: which_imgkind
+        real,              intent(in)           :: smpd
+        integer,           intent(in)           :: state
+        integer,           optional, intent(in) :: box, pop
+        real,              optional, intent(in) :: mass, ess
     end subroutine add_vol2os_out
 
     module subroutine add_entry2os_out( self, which_imgkind, ind )
@@ -692,9 +692,9 @@ interface
     end subroutine add_entry2os_out
 
     module integer function get_os_out_entry_index( self, which_imgkind, state )
-        class(sp_project), intent(in) :: self
-        character(len=*),  intent(in) :: which_imgkind
-        integer, optional, intent(in) :: state
+        class(sp_project), intent(in)           :: self
+        character(len=*),  intent(in)           :: which_imgkind
+        integer,           optional, intent(in) :: state
     end function get_os_out_entry_index
 
     module subroutine remove_entry_from_osout( self, which_imgkind, state )
@@ -717,14 +717,14 @@ interface
     end function isthere_in_osout
 
     module subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail, out_ind, box )
-        class(sp_project),          intent(inout) :: self
-        class(string),              intent(inout) :: stkname
-        integer,                    intent(out)   :: ncls
-        real,                       intent(out)   :: smpd
-        character(len=*), optional, intent(in)    :: imgkind
-        logical,          optional, intent(in)    :: fail
-        integer,          optional, intent(inout) :: out_ind
-        real,             optional, intent(inout) :: box
+        class(sp_project),          intent(inout)           :: self
+        class(string),              intent(inout)           :: stkname
+        integer,                    intent(out)             :: ncls
+        real,                       intent(out)             :: smpd
+        character(len=*),           optional, intent(in)    :: imgkind
+        logical,                    optional, intent(in)    :: fail
+        integer,                    optional, intent(inout) :: out_ind
+        real,                       optional, intent(inout) :: box
     end subroutine get_cavgs_stk
 
     module subroutine get_vol( self, imgkind, state, vol_fname, smpd, box )
@@ -760,10 +760,10 @@ interface
     end subroutine get_all_fscs
 
     module subroutine get_frcs( self, frcs, which_imgkind, fail )
-        class(sp_project), intent(in)    :: self
-        class(string),     intent(inout) :: frcs
-        character(len=*),  intent(in)    :: which_imgkind
-        logical, optional, intent(in)    :: fail
+        class(sp_project), intent(in)           :: self
+        class(string),     intent(inout)        :: frcs
+        character(len=*),  intent(in)           :: which_imgkind
+        logical,           optional, intent(in) :: fail
     end subroutine get_frcs
 
     module subroutine get_mskdiam( self, which_imgkind, mskdiam )
@@ -810,26 +810,26 @@ interface
     end subroutine print_info_json
 
     module subroutine print_segment( self, oritype, fromto )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: oritype
-        integer, optional, intent(in)    :: fromto(2)
+        class(sp_project), intent(inout)        :: self
+        character(len=*),  intent(in)           :: oritype
+        integer,           optional, intent(in) :: fromto(2)
     end subroutine print_segment
 
     module subroutine print_segment_json( self, oritype, projfile, fromto, sort_key, sort_asc, hist, nran, boxes, plot_key )
-        class(sp_project),           intent(inout) :: self
-        character(len=*),            intent(in)    :: oritype
-        class(string),               intent(in)    :: projfile
-        character(len=*),  optional, intent(in)    :: sort_key, sort_asc, hist, plot_key
-        integer,           optional, intent(in)    :: fromto(2), nran
-        logical,           optional, intent(in)    :: boxes
+        class(sp_project),           intent(inout)        :: self
+        character(len=*),            intent(in)           :: oritype
+        class(string),               intent(in)           :: projfile
+        character(len=*),            optional, intent(in) :: sort_key, sort_asc, hist, plot_key
+        integer,                     optional, intent(in) :: fromto(2), nran
+        logical,                     optional, intent(in) :: boxes
     end subroutine print_segment_json
 
     ! I/O - Readers
 
     module subroutine read( self, fname, wthreads )
-        class(sp_project), intent(inout) :: self
-        class(string),     intent(in)    :: fname
-        logical, optional, intent(in)    :: wthreads
+        class(sp_project), intent(inout)        :: self
+        class(string),     intent(in)           :: fname
+        logical,           optional, intent(in) :: wthreads
     end subroutine read
 
     module subroutine read_non_data_segments( self, fname )
@@ -843,31 +843,31 @@ interface
     end subroutine read_ctfparams_state_eo
 
     module subroutine read_mic_stk_ptcl2D_segments( self, fname, wthreads )
-        class(sp_project), intent(inout) :: self
-        class(string),     intent(in)    :: fname
-        logical, optional, intent(in)    :: wthreads
+        class(sp_project), intent(inout)        :: self
+        class(string),     intent(in)           :: fname
+        logical,           optional, intent(in) :: wthreads
     end subroutine read_mic_stk_ptcl2D_segments
 
     module subroutine read_segment( self, oritype, fname, fromto, wthreads )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: oritype
-        class(string),     intent(in)    :: fname
-        integer, optional, intent(in)    :: fromto(2)
-        logical, optional, intent(in)    :: wthreads
+        class(sp_project), intent(inout)        :: self
+        character(len=*),  intent(in)           :: oritype
+        class(string),     intent(in)           :: fname
+        integer,           optional, intent(in) :: fromto(2)
+        logical,           optional, intent(in) :: wthreads
     end subroutine read_segment
 
     module subroutine segreader( self, isegment, fromto, only_ctfparams_state_eo, wthreads )
-        class(sp_project),          intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        integer, optional,          intent(in)    :: fromto(2)
-        logical, optional,          intent(in)    :: only_ctfparams_state_eo, wthreads
+        class(sp_project),          intent(inout)                 :: self
+        integer(kind(ENUM_ORISEG)), intent(in)                    :: isegment
+        integer,                    optional,          intent(in) :: fromto(2)
+        logical,                    optional,          intent(in) :: only_ctfparams_state_eo, wthreads
     end subroutine segreader
 
     module subroutine read_segments_info( self, fname, seginds, seginfos )
-        class(sp_project),                  intent(inout) :: self
-        class(string),                      intent(in)  :: fname
-        type(binoris_seginfo), allocatable, intent(out) :: seginfos(:)
-        integer,               allocatable, intent(out) :: seginds(:)
+        class(sp_project),                  intent(inout)            :: self
+        class(string),                      intent(in)               :: fname
+        type(binoris_seginfo),              allocatable, intent(out) :: seginfos(:)
+        integer,                            allocatable, intent(out) :: seginds(:)
     end subroutine read_segments_info
 
     module subroutine read_data_info( self, fname, nmics, nstks, nptcls )
@@ -879,11 +879,11 @@ interface
     ! I/O - Writers
 
     module subroutine write( self, fname, fromto, isegment, tempfile )
-        class(sp_project),                    intent(inout) :: self
-        class(string),              optional, intent(in)    :: fname
-        integer,                    optional, intent(in)    :: fromto(2)
-        integer(kind(ENUM_ORISEG)), optional, intent(in)    :: isegment
-        logical,                    optional, intent(in)    :: tempfile
+        class(sp_project),                    intent(inout)        :: self
+        class(string),                        optional, intent(in) :: fname
+        integer,                              optional, intent(in) :: fromto(2)
+        integer(kind(ENUM_ORISEG)),           optional, intent(in) :: isegment
+        logical,                              optional, intent(in) :: tempfile
     end subroutine write
 
     module subroutine clear_segment_inside( self, oritype, fname )
@@ -893,10 +893,10 @@ interface
     end subroutine clear_segment_inside
 
     module subroutine write_segment_inside( self, oritype, fname, fromto )
-        class(sp_project),          intent(inout) :: self
-        character(len=*),           intent(in)    :: oritype
-        class(string),    optional, intent(in)    :: fname
-        integer,          optional, intent(in)    :: fromto(2)
+        class(sp_project),          intent(inout)        :: self
+        character(len=*),           intent(in)           :: oritype
+        class(string),              optional, intent(in) :: fname
+        integer,                    optional, intent(in) :: fromto(2)
     end subroutine write_segment_inside
 
     module subroutine write_non_data_segments( self, fname )
@@ -905,27 +905,27 @@ interface
     end subroutine write_non_data_segments
 
     module subroutine segwriter( self, isegment, fromto )
-        class(sp_project),          intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        integer, optional,         intent(in)     :: fromto(2)
+        class(sp_project),          intent(inout)                :: self
+        integer(kind(ENUM_ORISEG)), intent(in)                   :: isegment
+        integer,                    optional,         intent(in) :: fromto(2)
     end subroutine segwriter
 
     module subroutine segwriter_inside( self, isegment, fromto )
-        class(sp_project),          intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        integer, optional,          intent(in)    :: fromto(2)
+        class(sp_project),          intent(inout)                 :: self
+        integer(kind(ENUM_ORISEG)), intent(in)                    :: isegment
+        integer,                    optional,          intent(in) :: fromto(2)
     end subroutine segwriter_inside
 
     module subroutine write_mics_star( self, fname, optics_offset )
-        class(sp_project),       intent(inout) :: self
-        class(string), optional, intent(in)    :: fname
-        integer,       optional, intent(in)    :: optics_offset
+        class(sp_project),       intent(inout)        :: self
+        class(string),           optional, intent(in) :: fname
+        integer,                 optional, intent(in) :: optics_offset
     end subroutine write_mics_star
 
     module subroutine write_ptcl2D_star( self, fname, optics_offset )
-        class(sp_project),       intent(inout) :: self
-        class(string), optional, intent(in)    :: fname
-        integer,       optional, intent(in)    :: optics_offset
+        class(sp_project),       intent(inout)        :: self
+        class(string),           optional, intent(in) :: fname
+        integer,                 optional, intent(in) :: optics_offset
     end subroutine write_ptcl2D_star
 
     module subroutine write_optics_map( self, fname_prefix )

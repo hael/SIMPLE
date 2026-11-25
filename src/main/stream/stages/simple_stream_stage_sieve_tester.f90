@@ -41,9 +41,9 @@ contains
 
     subroutine test_init_params()
         class(stream_stage_sieve), allocatable :: stage
-        type(cmdline)            :: cline
-        type(string)             :: cwd_saved, root
-        integer                  :: nfail0
+        type(cmdline)                          :: cline
+        type(string)                           :: cwd_saved, root
+        integer                                :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_init_params'
         nfail0 = tests_failed
@@ -69,9 +69,9 @@ contains
     !! restarted stage runs
     subroutine test_restart_removes_term_stream()
         class(stream_stage_sieve), allocatable :: stage
-        type(cmdline)            :: cline
-        type(string)             :: cwd_saved, root
-        integer                  :: nfail0
+        type(cmdline)                          :: cline
+        type(string)                           :: cwd_saved, root
+        integer                                :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_restart_removes_term_stream'
         nfail0 = tests_failed
@@ -94,9 +94,9 @@ contains
     !! the watcher history once the upstream folder is attached
     subroutine test_restore_and_attach()
         class(stream_stage_sieve), allocatable :: stage
-        type(cmdline)            :: cline
-        type(string)             :: cwd_saved, root, set1, set2
-        integer                  :: nfail0
+        type(cmdline)                          :: cline
+        type(string)                           :: cwd_saved, root, set1, set2
+        integer                                :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_restore_and_attach'
         nfail0 = tests_failed
@@ -134,9 +134,9 @@ contains
     !! history, and nothing is imported again
     subroutine test_restore_after_rejected_chunk()
         class(stream_stage_sieve), allocatable :: stage
-        type(cmdline) :: cline
-        type(string)  :: cwd_saved, root, set1, set2
-        integer       :: nfail0, funit
+        type(cmdline)                          :: cline
+        type(string)                           :: cwd_saved, root, set1, set2
+        integer                                :: nfail0, funit
         allocate(stage)
         write(*,'(A)') 'test_restore_after_rejected_chunk'
         nfail0 = tests_failed
@@ -175,9 +175,9 @@ contains
     !> a restart with chunks to take up makes the sieve with nothing new to import
     subroutine test_restart_resumes_sieve()
         class(stream_stage_sieve), allocatable :: stage
-        type(cmdline)            :: cline
-        type(string)             :: cwd_saved, root
-        integer                  :: nfail0
+        type(cmdline)                          :: cline
+        type(string)                           :: cwd_saved, root
+        integer                                :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_restart_resumes_sieve'
         nfail0 = tests_failed
@@ -202,9 +202,9 @@ contains
     !> one record per micrograph of each newly completed set, each set once
     subroutine test_import_projects()
         class(stream_stage_sieve), allocatable :: stage
-        type(cmdline)            :: cline
-        type(string)             :: cwd_saved, root, set1, set2
-        integer                  :: nfail0
+        type(cmdline)                          :: cline
+        type(string)                           :: cwd_saved, root, set1, set2
+        integer                                :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_import_projects'
         nfail0 = tests_failed
@@ -229,9 +229,9 @@ contains
     !> the mask diameter is the one make_pickrefs wrote beside the picking references
     subroutine test_read_mask_diameter()
         class(stream_stage_sieve), allocatable :: stage
-        type(cmdline)            :: cline
-        type(string)             :: cwd_saved, root
-        integer                  :: nfail0
+        type(cmdline)                          :: cline
+        type(string)                           :: cwd_saved, root
+        integer                                :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_read_mask_diameter'
         nfail0 = tests_failed
@@ -251,9 +251,9 @@ contains
     !! its warm-up cycles; too few particles for a chunk, so none is generated
     subroutine test_start_sieve()
         class(stream_stage_sieve), allocatable :: stage
-        type(cmdline)            :: cline
-        type(string)             :: cwd_saved, root, set1
-        integer                  :: nfail0
+        type(cmdline)                          :: cline
+        type(string)                           :: cwd_saved, root, set1
+        integer                                :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_start_sieve'
         nfail0 = tests_failed
@@ -285,9 +285,9 @@ contains
     !! found nothing, and withdrawn when the marker goes
     subroutine test_final_ingestion_follows_marker()
         class(stream_stage_sieve), allocatable :: stage
-        type(cmdline)            :: cline
-        type(string)             :: cwd_saved, root, set1
-        integer                  :: nfail0
+        type(cmdline)                          :: cline
+        type(string)                           :: cwd_saved, root, set1
+        integer                                :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_final_ingestion_follows_marker'
         nfail0 = tests_failed
@@ -321,14 +321,14 @@ contains
     !> one status message per call, with the particle count and the classes the sieve selected
     subroutine test_send_status()
         class(stream_stage_sieve), allocatable                   :: stage
-        type(cmdline)                              :: cline
-        type(stream_pipe)                          :: reader
-        type(gui_metadata_stream_particle_sieving) :: status
-        character(len=:), allocatable              :: buffer
-        type(string)                               :: cwd_saved, root, stage_name
-        integer(c_int)                             :: fds(2)
-        integer                                    :: nfail0, meta_type, nimported, naccepted, nrejected, tlast
-        logical                                    :: l_assigned
+        type(cmdline)                                            :: cline
+        type(stream_pipe)                                        :: reader
+        type(gui_metadata_stream_particle_sieving)               :: status
+        character(len=:),          allocatable                   :: buffer
+        type(string)                                             :: cwd_saved, root, stage_name
+        integer(c_int)                                           :: fds(2)
+        integer                                                  :: nfail0, meta_type, nimported, naccepted, nrejected, tlast
+        logical                                                  :: l_assigned
         allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
@@ -367,9 +367,9 @@ contains
     !> the public loop waits for the upstream folder, then attaches; no sieve until a set arrives
     subroutine test_iterate_waits()
         class(stream_stage_sieve), allocatable :: stage
-        type(cmdline)            :: cline
-        type(string)             :: cwd_saved, root
-        integer                  :: nfail0
+        type(cmdline)                          :: cline
+        type(string)                           :: cwd_saved, root
+        integer                                :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_iterate_waits'
         nfail0 = tests_failed
@@ -391,9 +391,9 @@ contains
 
     subroutine test_finished()
         class(stream_stage_sieve), allocatable :: stage
-        type(cmdline)            :: cline
-        type(string)             :: cwd_saved, root
-        integer                  :: nfail0
+        type(cmdline)                          :: cline
+        type(string)                           :: cwd_saved, root
+        integer                                :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
@@ -433,7 +433,7 @@ contains
     ! takes files written in the same second
     subroutine make_test_stage( stage, cline )
         class(stream_stage_sieve), intent(inout) :: stage
-        type(cmdline),            intent(inout) :: cline
+        type(cmdline),             intent(inout) :: cline
         call stage%init_params(cline)
         call stage%init_gui(-1, -1)
         stage%settle_s = -1

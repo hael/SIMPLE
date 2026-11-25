@@ -29,10 +29,10 @@ contains
     end subroutine binread_oritab
 
     subroutine binread_ctfparams_state_eo( fname, spproj, a, fromto )
-        class(string),     intent(in)    :: fname
-        class(sp_project), intent(inout) :: spproj
-        class(oris),       intent(inout) :: a
-        integer, optional, intent(in)    :: fromto(2)
+        class(string),     intent(in)           :: fname
+        class(sp_project), intent(inout)        :: spproj
+        class(oris),       intent(inout)        :: a
+        integer,           optional, intent(in) :: fromto(2)
         if( .not. file_exists(fname) )then
             THROW_HARD('file: '//fname%to_char()//' does not exist in cwd')
         endif
@@ -68,10 +68,10 @@ contains
     end function binread_nlines
 
     subroutine binwrite_oritab( fname, spproj, a, fromto, isegment )
-        class(string),     intent(in)    :: fname
-        class(sp_project), intent(inout) :: spproj
-        class(oris),       intent(inout) :: a
-        integer,           intent(in)    :: fromto(2)
+        class(string),              intent(in)           :: fname
+        class(sp_project),          intent(inout)        :: spproj
+        class(oris),                intent(inout)        :: a
+        integer,                    intent(in)           :: fromto(2)
         integer(kind(ENUM_ORISEG)), optional, intent(in) :: isegment
         select case(fname2format(fname))
             case('O')

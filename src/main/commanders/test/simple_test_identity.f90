@@ -13,11 +13,11 @@ public :: compare_run_dirs, same_bytes, same_manifest, manifest_line_kept, SIGMA
 private
 #include "simple_local_flags.inc"
 
-character(len=*), parameter :: MANIFEST_FNAME = 'solve3D_manifest.txt'
-character(len=*), parameter :: SIGMA2_FNAME   = 'sigma2_state.bin'
-character(len=*), parameter :: SIGMA2_MAGIC   = 'SIMPLE_SIGMA2_V2'
-character(len=*), parameter :: RUN_ID_KEY     = 'solve3D_run_id' !< projinfo's copy of the manifest's run_id
-integer,          parameter :: SIGMA2_DIGEST_BYTES(2) = [121, 128] !< after the 16-byte magic, word 14 of 8 bytes
+character(len=*), parameter :: MANIFEST_FNAME         = 'solve3D_manifest.txt'
+character(len=*), parameter :: SIGMA2_FNAME           = 'sigma2_state.bin'
+character(len=*), parameter :: SIGMA2_MAGIC           = 'SIMPLE_SIGMA2_V2'
+character(len=*), parameter :: RUN_ID_KEY             = 'solve3D_run_id' !< projinfo's copy of the manifest's run_id
+integer,          parameter :: SIGMA2_DIGEST_BYTES(2) = [121, 128]       !< after the 16-byte magic, word 14 of 8 bytes
 
 contains
 
@@ -29,12 +29,12 @@ contains
         use simple_string_utils, only: parsestr
         character(len=*), intent(in)  :: dir1, dir2, patterns, report
         integer,          intent(out) :: nsame, ndiff
-        type(string), allocatable :: list1(:), list2(:)
-        character(len=512) :: pats(64)
-        character(len=len(patterns)) :: patcopy
+        type(string),     allocatable :: list1(:), list2(:)
+        character(len=512)            :: pats(64)
+        character(len=len(patterns))  :: patcopy
         character(len=:), allocatable :: rel
-        integer :: funit, npat, ipat, i
-        logical :: l_same
+        integer                       :: funit, npat, ipat, i
+        logical                       :: l_same
         nsame = 0
         ndiff = 0
         open(newunit=funit, file=report, action='write', status='replace')
@@ -103,7 +103,7 @@ contains
         use simple_fileio, only: basename
         character(len=*), intent(in) :: f1, f2, dir1, dir2
         type(string) :: bname
-        integer :: n
+        integer      :: n
         bname = basename(string(f1))
         n     = len_trim(f1)
         if( bname%to_char() == MANIFEST_FNAME )then
@@ -125,12 +125,12 @@ contains
 
     !> byte identity, bytes skip(1) to skip(2) (1-based) excepted
     logical function same_bytes( f1, f2, skip )
-        character(len=*),  intent(in) :: f1, f2
-        integer, optional, intent(in) :: skip(2)
-        integer, parameter :: CHUNK = 1048576
+        character(len=*),  intent(in)           :: f1, f2
+        integer,           optional, intent(in) :: skip(2)
+        integer,       parameter   :: CHUNK = 1048576
         integer(int8), allocatable :: b1(:), b2(:)
-        integer(int64) :: sz1, sz2, pos, nread, k
-        integer :: u1, u2, ios1, ios2
+        integer(int64)             :: sz1, sz2, pos, nread, k
+        integer                    :: u1, u2, ios1, ios2
         same_bytes = .false.
         inquire(file=f1, size=sz1)
         inquire(file=f2, size=sz2)
@@ -169,7 +169,7 @@ contains
     logical function same_manifest( f1, f2 )
         character(len=*), intent(in) :: f1, f2
         character(len=4096) :: l1, l2
-        integer :: u1, u2, ios1, ios2
+        integer             :: u1, u2, ios1, ios2
         same_manifest = .false.
         open(newunit=u1, file=f1, action='read', status='old', iostat=ios1)
         if( ios1 /= 0 ) return
@@ -208,7 +208,7 @@ contains
     logical function manifest_line_kept( line )
         character(len=*), intent(inout) :: line
         character(len=32) :: key
-        integer :: pos
+        integer           :: pos
         key = adjustl(line)
         pos = index(key, ' ')
         if( pos > 0 ) key = key(:pos-1)
@@ -227,7 +227,7 @@ contains
     logical function has_sigma2_magic( f )
         character(len=*), intent(in) :: f
         character(len=len(SIGMA2_MAGIC)) :: magic
-        integer :: u, ios
+        integer                          :: u, ios
         has_sigma2_magic = .false.
         open(newunit=u, file=f, access='stream', form='unformatted', action='read', status='old', iostat=ios)
         if( ios /= 0 ) return
@@ -242,10 +242,10 @@ contains
         use simple_sp_project, only: sp_project
         use simple_oris,       only: oris
         character(len=*), intent(in) :: f1, f2, dir1, dir2
-        integer, parameter :: NSEGS = 11
+        integer,           parameter   :: NSEGS = 11
         class(sp_project), allocatable :: p1, p2
-        type(string) :: pre1, pre2
-        integer :: iseg, i
+        type(string)                   :: pre1, pre2
+        integer                        :: iseg, i
         allocate(p1, p2)
         call p1%read(string(f1))
         call p2%read(string(f2))
@@ -310,8 +310,8 @@ contains
     logical function same_text_lines( f1, f2, dir1, dir2 )
         character(len=*), intent(in) :: f1, f2, dir1, dir2
         character(len=4096) :: l1, l2
-        type(string) :: s1, s2, pre1, pre2
-        integer :: u1, u2, ios1, ios2
+        type(string)        :: s1, s2, pre1, pre2
+        integer             :: u1, u2, ios1, ios2
         same_text_lines = .false.
         open(newunit=u1, file=f1, action='read', status='old', iostat=ios1)
         if( ios1 /= 0 ) return

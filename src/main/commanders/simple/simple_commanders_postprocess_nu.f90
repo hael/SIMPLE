@@ -24,16 +24,16 @@ contains
     subroutine exec_postprocess_nu( self, cline )
         class(commander_postprocess_nu), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters)        :: params
-        type(sp_project)        :: spproj
-        type(nu_evidence_state) :: evstate
-        type(image)             :: even, odd, vol_sharp
+        type(parameters)         :: params
+        type(sp_project)         :: spproj
+        type(nu_evidence_state)  :: evstate
+        type(image)              :: even, odd, vol_sharp
         type(image), allocatable :: aux_even(:), aux_odd(:)
-        type(string)            :: vol_out, fname, fname_vol, fname_even_unfil, fname_odd_unfil, fname_even, fname_odd
-        real, allocatable       :: corrs(:), res(:)
-        real                    :: fsc05, fsc0143, handoff_lp, populated_lp, raw_lp, smpd
-        integer                 :: n_signal, state, box, ldim(3), nptcls
-        logical                 :: l_aux
+        type(string)             :: vol_out, fname, fname_vol, fname_even_unfil, fname_odd_unfil, fname_even, fname_odd
+        real,        allocatable :: corrs(:), res(:)
+        real                     :: fsc05, fsc0143, handoff_lp, populated_lp, raw_lp, smpd
+        integer                  :: n_signal, state, box, ldim(3), nptcls
+        logical                  :: l_aux
         ! operates on the project like postprocess: the state's volume from
         ! the out segment, its unregularized pair (_even_unfil/_odd_unfil)
         ! as the evidence input and its regularized pair (_even/_odd) as the

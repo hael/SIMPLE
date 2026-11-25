@@ -20,9 +20,9 @@ contains
     end function nbackground
 
     module subroutine binarize_thres( self_in, thres, self_out )
-        class(image),           intent(inout) :: self_in
-        real,                   intent(in)    :: thres
-        class(image), optional, intent(inout) :: self_out
+        class(image),           intent(inout)           :: self_in
+        real,                   intent(in)              :: thres
+        class(image),           optional, intent(inout) :: self_out
         integer :: n_foreground
         n_foreground = count(self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3)) > thres)
         if( n_foreground < 1 ) THROW_HARD('Binarization produces empty image!')
@@ -47,8 +47,8 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: npix
         real, allocatable :: forsort(:)
-        real    :: thres
-        integer :: npixtot
+        real              :: thres
+        integer           :: npixtot
         if( self%ft ) THROW_HARD('only for real images')
         npixtot = product(self%ldim)
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
@@ -73,8 +73,8 @@ contains
     end subroutine binarize_thres_mask
 
     module subroutine cendist( self, c_point )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: c_point(3)
+        class(image),   intent(inout)        :: self
+        real,           optional, intent(in) :: c_point(3)
         real    :: centre(3)
         integer :: i
         if( self%ft ) THROW_HARD('real space only; cendist')
@@ -116,7 +116,7 @@ contains
     module subroutine distance_transform( self )
         class(image), intent(inout) :: self
         real, allocatable :: f(:), d(:)
-        integer :: i, j, k, nx, ny, nz
+        integer           :: i, j, k, nx, ny, nz
         if( self%ft ) THROW_HARD('real space only; distance_transform')
         nx = self%ldim(1); ny = self%ldim(2); nz = self%ldim(3)
         ! initialize: 0 at background, +inf at foreground
@@ -273,11 +273,11 @@ contains
     module subroutine calc_bin_thres( self, frac_fg_target, thres )
         class(image), intent(inout) :: self
         real,         intent(in)    :: frac_fg_target
-        real,         intent(out)   :: thres 
+        real,         intent(out)   :: thres
         integer, parameter   :: NQUANTA = 10
         real,    allocatable :: pixvals(:), means(:), pix_ts(:), frac_fgs(:)
         integer, allocatable :: labels(:)
-        integer :: iq, n_fg, npix, loc(1), cnt
+        integer              :: iq, n_fg, npix, loc(1), cnt
         allocate( means(NQUANTA), labels(NQUANTA), frac_fgs(NQUANTA), pix_ts(NQUANTA) )
         means   = 0.
         labels  = 0
@@ -303,8 +303,8 @@ contains
     end subroutine calc_bin_thres
     
     module subroutine memoize_mask_coords( self, box )
-        class(image),      intent(in) :: self
-        integer, optional, intent(in) :: box
+        class(image),      intent(in)           :: self
+        integer,           optional, intent(in) :: box
         integer :: i, box_here
         if( OMP_IN_PARALLEL() )then
             THROW_HARD('No memoization inside OpenMP regions')
@@ -349,11 +349,11 @@ contains
     module subroutine memoize_powspec_coords( self, mskrad )
         class(image), intent(in) :: self
         real,         intent(in) :: mskrad
-        integer :: box_here, n1, n2, filtsz, minlen
-        integer :: i, j, h, k, hp, kpi, sh, max_r2, r2
-        integer :: lims(3,2), abs_hmax, abs_kmax
+        integer              :: box_here, n1, n2, filtsz, minlen
+        integer              :: i, j, h, k, hp, kpi, sh, max_r2, r2
+        integer              :: lims(3,2), abs_hmax, abs_kmax
         integer, allocatable :: shell_lut(:)
-        real :: rad_sq, r2_real, cjs2
+        real                 :: rad_sq, r2_real, cjs2
         if( OMP_IN_PARALLEL() )then
             THROW_HARD('No power spectrum memoization inside OpenMP regions')
         endif
@@ -411,9 +411,9 @@ contains
     end subroutine memoize_powspec_coords
 
     module subroutine mask2D_soft(self, mskrad, backgr)
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: backgr
+        class(image),     intent(inout)          :: self
+        real,             intent(in)             :: mskrad
+        real,             optional,   intent(in) :: backgr
         real     :: r2, e, cjs2
         integer  :: minlen,  i, j, ir, jr, n1, n2, n3, h1, h2
         logical  :: l_jr
@@ -464,9 +464,9 @@ contains
     end subroutine mask2D_soft
 
     module subroutine mask2D_softavg(self, mskrad, backgr)
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: backgr
+        class(image),     intent(inout)          :: self
+        real,             intent(in)             :: mskrad
+        real,             optional,   intent(in) :: backgr
         real(dp) :: sumv, sv
         real     :: rad_sq, ave, r2, e, cjs2
         integer  :: minlen, npix, i, j, np
@@ -559,9 +559,9 @@ contains
     end subroutine mask2D_hard
 
     module subroutine mask3D_soft(self, mskrad, backgr)
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: backgr
+        class(image),     intent(inout)          :: self
+        real,             intent(in)             :: mskrad
+        real,             optional,   intent(in) :: backgr
         real     :: r2, e, cjs2, cks2
         integer  :: minlen, n1, n2, n3, i, j, k, ir, jr, kr, h1, h2, h3
         logical  :: l_jr, l_kr, l_ir
@@ -624,9 +624,9 @@ contains
     end subroutine mask3D_soft
 
     module subroutine mask3D_softavg(self, mskrad, backgr)
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: backgr
+        class(image),     intent(inout)          :: self
+        real,             intent(in)             :: mskrad
+        real,             optional,   intent(in) :: backgr
         real(dp) :: sumv, sv
         real     :: rad_sq, ave, r2, e, cjs2, cks2
         integer  :: minlen, npix,  i, j, k, n1, n2, n3, np, n1l, n2l, n3l
@@ -744,20 +744,20 @@ contains
     !!          I stole it from CTFFIND4 (thanks Alexis for the beautiful re-implementation)
     module subroutine taper_edges( self )
         class(image), intent(inout) :: self
-        real, allocatable  :: avg_curr_edge_start(:,:)
-        real, allocatable  :: avg_curr_edge_stop(:,:)
-        real, allocatable  :: avg_curr_edge_avg(:,:)
-        real, allocatable  :: smooth_avg_curr_edge_start(:,:)
-        real, allocatable  :: smooth_avg_curr_edge_stop(:,:)
-        integer            :: curr_dim, ndims
-        integer            :: dim2, dim3
-        integer            :: i,j,k
-        integer            :: j_shift,k_shift
-        integer            :: jj,kk
-        integer            :: nvals_runnavg
-        integer, parameter :: avg_strip_width(3)   = 100
-        integer, parameter :: taper_strip_width(3) = 500
-        integer, parameter :: smooth_half_width(3) = 1
+        real,    allocatable :: avg_curr_edge_start(:,:)
+        real,    allocatable :: avg_curr_edge_stop(:,:)
+        real,    allocatable :: avg_curr_edge_avg(:,:)
+        real,    allocatable :: smooth_avg_curr_edge_start(:,:)
+        real,    allocatable :: smooth_avg_curr_edge_stop(:,:)
+        integer              :: curr_dim, ndims
+        integer              :: dim2, dim3
+        integer              :: i,j,k
+        integer              :: j_shift,k_shift
+        integer              :: jj,kk
+        integer              :: nvals_runnavg
+        integer, parameter   :: avg_strip_width(3)   = 100
+        integer, parameter   :: taper_strip_width(3) = 500
+        integer, parameter   :: smooth_half_width(3) = 1
         ndims = 2
         ! initialise vars
         dim2 = 2;  dim3 = 3; nvals_runnavg = 0

@@ -37,27 +37,27 @@ private
 type :: matrix_ptrs
     real(kind=c_float),            pointer :: r(:,:) => null()
     complex(kind=c_float_complex), pointer :: c(:,:) => null()
-    logical                                :: ft =.false.
+    logical                                :: ft     = .false.
 end type matrix_ptrs
 
 ! To handle sets of cavgs Fourier images & CTF^2
 type :: stack
-    type(c_ptr)                            :: p           = c_null_ptr  ! allocation pointer
-    type(c_ptr)                            :: plan_fwd    = c_null_ptr  ! forward plan
-    type(c_ptr)                            :: plan_bwd    = c_null_ptr  ! backward plan
-    type(ftiter)                           :: fit                       ! convenience fourier iterator
-    type(kbinterpol)                       :: kbwin                     ! shared 2D KB interpolation kernel
-    real(kind=c_float),            pointer :: rmat(:,:,:) => null()     ! pointer to real cavgs array
-    complex(kind=c_float_complex), pointer :: cmat(:,:,:) => null()     ! pointer to complex cavgs array
-    type(matrix_ptrs),         allocatable :: slices(:)                 ! pointers to individual slices/cavgs
-    real,                      allocatable :: ctfsq(:,:,:)              ! CTF^2 array
-    real,                      allocatable :: soft_mask(:,:)            ! convenience soft mask
-    logical,                   allocatable :: nyq_mask(:,:)             ! convenience resolution mask
-    integer            :: ldim(2)    = 0                                ! slice dimension
-    integer            :: rshape(2)  = 0                                ! slice real space physical dimensions
-    integer            :: cshape(2)  = 0                                ! slice complex physical dimensions
-    integer            :: flims(3,2) = 0                                ! slice non-redundant Fourier limits
-    integer            :: nslices    = 0                                ! # of slices/cavgs
+    type(c_ptr)                                :: p           = c_null_ptr ! allocation pointer
+    type(c_ptr)                                :: plan_fwd    = c_null_ptr ! forward plan
+    type(c_ptr)                                :: plan_bwd    = c_null_ptr ! backward plan
+    type(ftiter)                               :: fit                      ! convenience fourier iterator
+    type(kbinterpol)                           :: kbwin                    ! shared 2D KB interpolation kernel
+    real(kind=c_float),            pointer     :: rmat(:,:,:) => null()    ! pointer to real cavgs array
+    complex(kind=c_float_complex), pointer     :: cmat(:,:,:) => null()    ! pointer to complex cavgs array
+    type(matrix_ptrs),             allocatable :: slices(:)                ! pointers to individual slices/cavgs
+    real,                          allocatable :: ctfsq(:,:,:)             ! CTF^2 array
+    real,                          allocatable :: soft_mask(:,:)           ! convenience soft mask
+    logical,                       allocatable :: nyq_mask(:,:)            ! convenience resolution mask
+    integer                                    :: ldim(2)     = 0          ! slice dimension
+    integer                                    :: rshape(2)   = 0          ! slice real space physical dimensions
+    integer                                    :: cshape(2)   = 0          ! slice complex physical dimensions
+    integer                                    :: flims(3,2)  = 0          ! slice non-redundant Fourier limits
+    integer                                    :: nslices     = 0          ! # of slices/cavgs
   contains
     procedure          :: new_stack
     procedure          :: zero, zero_slice
@@ -104,14 +104,14 @@ type ptcl_record
 end type ptcl_record
 
 ! Module constantsvariables
-integer,               parameter :: READBUFFSZ = 1024
+integer,               parameter :: READBUFFSZ   = 1024
 integer,               parameter :: CAVG_KB_WDIM = 2 * ceiling(KBWINSZ - 0.5) + 1
 
 ! Module variables (the restoration state lives in simple_classaverager_restore, its only user)
-type(image), target, allocatable :: cavgs_even(:)             !< Even class averages for reading
-type(image), target, allocatable :: cavgs_odd(:)              !< Odd class averages for reading
-type(image), target, allocatable :: cavgs_merged(:)           !< Merged class averages for reading
-class(parameters),    pointer    :: p_ptr => null()           !< active parameters instance
+type(image),          target, allocatable :: cavgs_even(:)    !< Even class averages for reading
+type(image),          target, allocatable :: cavgs_odd(:)     !< Odd class averages for reading
+type(image),          target, allocatable :: cavgs_merged(:)  !< Merged class averages for reading
+class(parameters),    pointer             :: p_ptr => null()  !< active parameters instance
 
 interface
 
@@ -121,7 +121,7 @@ interface
 
     module subroutine new_set( self, ldim, ncls )
         class(cavgs_set), intent(inout) :: self
-        integer,         intent(in)    :: ldim(2), ncls
+        integer,          intent(in)    :: ldim(2), ncls
     end subroutine new_set
 
     module subroutine zero_set( self, ft )
@@ -132,8 +132,8 @@ interface
     module subroutine copy_fast( self, self2copy, is, ft )
         class(cavgs_set), intent(inout) :: self
         class(cavgs_set), intent(in)    :: self2copy
-        integer,         intent(in)    :: is
-        logical,         intent(in)    :: ft
+        integer,          intent(in)    :: is
+        logical,          intent(in)    :: ft
     end subroutine
 
     module subroutine kill_set( self )
@@ -145,9 +145,9 @@ interface
     !
 
     module subroutine new_stack( self, ldim, nslices, alloc_ctfsq )
-        class(stack),      intent(inout) :: self
-        integer,           intent(in)    :: ldim(2), nslices
-        logical, optional, intent(in)    :: alloc_ctfsq
+        class(stack),      intent(inout)        :: self
+        integer,           intent(in)           :: ldim(2), nslices
+        logical,           optional, intent(in) :: alloc_ctfsq
     end subroutine new_stack
 
     module subroutine zero( self, ft )
@@ -246,11 +246,11 @@ interface
     end subroutine add_invnoisepower2rho
 
     module subroutine stack_accumulate_fplane( self, e3, fpl, islice, weight )
-        class(stack),      intent(inout) :: self
-        real,              intent(in)    :: e3
-        type(fplane_type), intent(in)    :: fpl
-        integer,           intent(in)    :: islice
-        real, optional,    intent(in)    :: weight
+        class(stack),      intent(inout)           :: self
+        real,              intent(in)              :: e3
+        type(fplane_type), intent(in)              :: fpl
+        integer,           intent(in)              :: islice
+        real,              optional,    intent(in) :: weight
     end subroutine stack_accumulate_fplane
 
     module subroutine kill_stack( self )
@@ -270,8 +270,8 @@ interface
 
     module subroutine cavger_transf_oridat( nptcls, pinds, updated_only )
         use simple_sp_project, only: sp_project
-        integer, intent(in) :: nptcls
-        integer, intent(in) :: pinds(nptcls)
+        integer, intent(in)           :: nptcls
+        integer, intent(in)           :: pinds(nptcls)
         logical, optional, intent(in) :: updated_only
     end subroutine cavger_transf_oridat
 
@@ -284,20 +284,20 @@ interface
     ! Restoration
 
     module subroutine cavger_init_online( maxbatchsz, cropped_ptcls )
-        integer,           intent(in) :: maxbatchsz
-        logical, optional, intent(in) :: cropped_ptcls
+        integer,           intent(in)           :: maxbatchsz
+        logical,           optional, intent(in) :: cropped_ptcls
     end subroutine cavger_init_online
 
     module subroutine cavger_dealloc_online()
     end subroutine cavger_dealloc_online
 
     module subroutine cavger_update_sums( nptcls, ptcl_imgs, ts_sum, wall_region, ent_n, ent_e3, ent_w )
-        integer,            intent(in)    :: nptcls
-        class(image),       intent(inout) :: ptcl_imgs(nptcls)
-        real(dp), optional, intent(inout) :: ts_sum, wall_region
-        integer,  optional, intent(in)    :: ent_n(:)    !< per batch particle the in-plane entries it is summed at (0: its committed pose)
-        real,     optional, intent(in)    :: ent_e3(:,:) !< (entry, batch particle) the entries' angles, degrees
-        real,     optional, intent(in)    :: ent_w(:,:)  !< (entry, batch particle) their weights, summing to 1 per particle
+        integer,            intent(in)              :: nptcls
+        class(image),       intent(inout)           :: ptcl_imgs(nptcls)
+        real(dp),           optional, intent(inout) :: ts_sum, wall_region
+        integer,            optional, intent(in)    :: ent_n(:)    !< per batch particle the in-plane entries it is summed at (0: its committed pose)
+        real,               optional, intent(in)    :: ent_e3(:,:) !< (entry, batch particle) the entries' angles, degrees
+        real,               optional, intent(in)    :: ent_w(:,:)  !< (entry, batch particle) their weights, summing to 1 per particle
     end subroutine cavger_update_sums
 
     module subroutine run_all_cavger_insert_tests()
@@ -366,19 +366,19 @@ interface
         &keep_ft, gridcorr)
         use simple_sp_project,          only: sp_project
         use simple_memoize_ft_maps
-        class(parameters), target,          intent(in)    :: params
-        class(builder),             target, intent(inout) :: build
-        class(sp_project),                  intent(inout) :: spproj
-        character(len=*),                   intent(in)    :: oritype
-        integer,                            intent(in)    :: icls
-        type(image),           allocatable, intent(inout) :: timgs(:)
-        integer,               allocatable, intent(inout) :: pinds(:)
-        logical,     optional,              intent(in)    :: phflip
-        type(image), optional,              intent(inout) :: cavg
-        type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
-        integer,     optional,              intent(in)    :: pinds_in(:)
-        logical,     optional,              intent(in)    :: keep_ft
-        type(image), optional,              intent(inout) :: gridcorr
+        class(parameters),                  target,          intent(in)          :: params
+        class(builder),                     target, intent(inout)                :: build
+        class(sp_project),                  intent(inout)                        :: spproj
+        character(len=*),                   intent(in)                           :: oritype
+        integer,                            intent(in)                           :: icls
+        type(image),                        allocatable, intent(inout)           :: timgs(:)
+        integer,                            allocatable, intent(inout)           :: pinds(:)
+        logical,                            optional,              intent(in)    :: phflip
+        type(image),                        optional,              intent(inout) :: cavg
+        type(image),                        optional, allocatable, intent(inout) :: imgs_ori(:)
+        integer,                            optional,              intent(in)    :: pinds_in(:)
+        logical,                            optional,              intent(in)    :: keep_ft
+        type(image),                        optional,              intent(inout) :: gridcorr
     end subroutine transform_ptcls
 
 end interface

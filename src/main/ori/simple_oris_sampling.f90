@@ -15,13 +15,13 @@ contains
     ! The coverage decision is global, so that all partitions of a distributed
     ! reconstruction select from the same population.
     module subroutine sample4rec( self, fromto, nsamples, inds )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
         integer, allocatable :: states(:), updatecnts(:)
-        integer :: i, cnt, nptcls
-        logical :: l_any_updated
+        integer              :: i, cnt, nptcls
+        logical              :: l_any_updated
         l_any_updated = any_active_updated(self)
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
@@ -45,9 +45,9 @@ contains
     ! Per-state populations of the rows sample4rec reconstructs over the whole
     ! project: the population a full reconstruction (a trailing-chain seed) represents
     module subroutine get_state_rec_pops( self, nstates, pops )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: nstates
-        integer, allocatable, intent(inout) :: pops(:)
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: nstates
+        integer,              allocatable, intent(inout) :: pops(:)
         integer :: i, s
         logical :: l_any_updated
         if( allocated(pops) ) deallocate(pops)
@@ -63,10 +63,10 @@ contains
 
     !> Population rule of one group with integer populations (row counts); see population_blend_weights_mass
     elemental module subroutine population_blend_weights_counts( nrep, nsmp, mrep, s, w, mnew, ufrac )
-        integer,        intent(in)  :: nrep, nsmp
-        real,           intent(in)  :: mrep
-        real,           intent(out) :: s, w, mnew
-        real, optional, intent(in)  :: ufrac
+        integer,        intent(in)           :: nrep, nsmp
+        real,           intent(in)           :: mrep
+        real,           intent(out)          :: s, w, mnew
+        real,           optional, intent(in) :: ufrac
         if( present(ufrac) )then
             call population_blend_weights_mass(real(nrep), real(nsmp), mrep, s, w, mnew, ufrac)
         else
@@ -79,10 +79,10 @@ contains
     !! (s = 0, w = N/M); N = 0 gives zeros. N = applied mass of the active updated rows (their count under
     !! hard labels), n = that of the sampled rows, mrep = M the mass the stored sums represent.
     elemental module subroutine population_blend_weights_mass( nrep, nsmp, mrep, s, w, mnew, ufrac )
-        real,           intent(in)  :: nrep, nsmp
-        real,           intent(in)  :: mrep
-        real,           intent(out) :: s, w, mnew
-        real, optional, intent(in)  :: ufrac
+        real,           intent(in)           :: nrep, nsmp
+        real,           intent(in)           :: mrep
+        real,           intent(out)          :: s, w, mnew
+        real,           optional, intent(in) :: ufrac
         real :: f, u
         s    = 0.
         w    = 0.
@@ -115,13 +115,13 @@ contains
     end function any_active_updated
 
     module subroutine sample4update_all( self, fromto, nsamples, inds, incr_sampled )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
+        logical,              intent(in)                 :: incr_sampled
         integer, allocatable :: states(:)
-        integer :: i, cnt, nptcls
+        integer              :: i, cnt, nptcls
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(states(nptcls), inds(nptcls), source=0)
@@ -138,15 +138,15 @@ contains
     end subroutine sample4update_all
 
     module subroutine sample4update_rnd( self, fromto, update_frac, nsamples, inds, incr_sampled, key )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        real,                 intent(in)    :: update_frac
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
-        type(rnd_key), optional, intent(in) :: key
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        real,                 intent(in)                 :: update_frac
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
+        logical,              intent(in)                 :: incr_sampled
+        type(rnd_key),        optional, intent(in)       :: key
         integer, allocatable :: states(:)
-        integer :: i, cnt, nptcls
+        integer              :: i, cnt, nptcls
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(states(nptcls), inds(nptcls), source=0)
@@ -170,9 +170,9 @@ contains
     !> the sampler's shuffle number ishuffle of arr's first nshuffle positions: keyed on the key's reference lane
     !! when a key is given, on the intrinsic stream otherwise
     subroutine keyed_or_intrinsic_partial_shuffle( arr, nshuffle, ishuffle, key )
-        integer,                 intent(inout) :: arr(:)
-        integer,                 intent(in)    :: nshuffle, ishuffle
-        type(rnd_key), optional, intent(in)    :: key
+        integer,                 intent(inout)        :: arr(:)
+        integer,                 intent(in)           :: nshuffle, ishuffle
+        type(rnd_key),           optional, intent(in) :: key
         type(rnd_key) :: k
         if( present(key) )then
             k           = key
@@ -197,19 +197,19 @@ contains
     !! scores (one per row of self, larger is better): the best-scoring active rows, whatever their update counts.
     module subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty, key, &
         &scores )
-        class(oris),             intent(inout) :: self
-        integer,                 intent(in)    :: fromto(2)
-        real,                    intent(in)    :: update_frac
-        integer,                 intent(inout) :: nsamples
-        integer, allocatable,    intent(inout) :: inds(:)
-        logical,                 intent(in)    :: incr_sampled
-        logical,       optional, intent(in)    :: allow_empty
-        type(rnd_key), optional, intent(in)    :: key
-        real,          optional, intent(in)    :: scores(:)
+        class(oris),             intent(inout)                 :: self
+        integer,                 intent(in)                    :: fromto(2)
+        real,                    intent(in)                    :: update_frac
+        integer,                 intent(inout)                 :: nsamples
+        integer,                 allocatable,    intent(inout) :: inds(:)
+        logical,                 intent(in)                    :: incr_sampled
+        logical,                 optional, intent(in)          :: allow_empty
+        type(rnd_key),           optional, intent(in)          :: key
+        real,                    optional, intent(in)          :: scores(:)
         integer, allocatable :: states(:), updatecnts(:), candidates(:), selected(:)
-        integer :: i, cnt, nptcls, ucnt
-        integer :: ncandidates, nfill, nselected
-        logical :: l_scores
+        integer              :: i, cnt, nptcls, ucnt
+        integer              :: ncandidates, nfill, nselected
+        logical              :: l_scores
         l_scores = present(scores)
         if( l_scores )then
             if( size(scores) /= self%n ) THROW_HARD('sample4update_cnt needs one score per row')
@@ -271,21 +271,21 @@ contains
     !! unit takes its best-scoring particles, whatever their update counts; the quotas are the same.
     module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, &
         &allow_empty, key, scores )
-        class(oris),             intent(inout) :: self
-        type(class_sample),      intent(inout) :: clssmp(:)
-        integer,                 intent(in)    :: fromto(2)
-        real,                    intent(in)    :: update_frac
-        integer,                 intent(inout) :: nsamples
-        integer, allocatable,    intent(inout) :: inds(:)
-        logical,                 intent(in)    :: incr_sampled
-        logical,       optional, intent(in)    :: allow_empty
-        type(rnd_key), optional, intent(in)    :: key
-        real,          optional, intent(in)    :: scores(:)
+        class(oris),             intent(inout)                 :: self
+        type(class_sample),      intent(inout)                 :: clssmp(:)
+        integer,                 intent(in)                    :: fromto(2)
+        real,                    intent(in)                    :: update_frac
+        integer,                 intent(inout)                 :: nsamples
+        integer,                 allocatable,    intent(inout) :: inds(:)
+        logical,                 intent(in)                    :: incr_sampled
+        logical,                 optional, intent(in)          :: allow_empty
+        type(rnd_key),           optional, intent(in)          :: key
+        real,                    optional, intent(in)          :: scores(:)
         integer, allocatable :: states(:), updatecnts(:), inds_pool(:), inds_fill(:)
         real,    allocatable :: rstates(:)
-        integer :: i, j, cnt, nptcls, nsamples_class, states_bal(self%n)
-        integer :: nfill, ucnt, ucnt_min, ucnt_max, ishuffle
-        logical :: l_scores
+        integer              :: i, j, cnt, nptcls, nsamples_class, states_bal(self%n)
+        integer              :: nfill, ucnt, ucnt_min, ucnt_max, ishuffle
+        logical              :: l_scores
         l_scores = present(scores)
         if( l_scores )then
             if( size(scores) /= self%n ) THROW_HARD('sample4update_class needs one score per row')
@@ -347,9 +347,9 @@ contains
     !> the sampler's full shuffle number ishuffle: keyed when a key is given (every position swapped, front to
     !! back), on the intrinsic stream otherwise
     subroutine keyed_or_intrinsic_shuffle( arr, ishuffle, key )
-        integer,                 intent(inout) :: arr(:)
-        integer,                 intent(in)    :: ishuffle
-        type(rnd_key), optional, intent(in)    :: key
+        integer,                 intent(inout)        :: arr(:)
+        integer,                 intent(in)           :: ishuffle
+        type(rnd_key),           optional, intent(in) :: key
         if( present(key) )then
             call keyed_or_intrinsic_partial_shuffle(arr, size(arr), ishuffle, key)
         else
@@ -367,7 +367,7 @@ contains
         integer, allocatable :: gquota(:), members(:), open_units(:)
         real,    allocatable :: ucnt_mean(:)
         logical, allocatable :: l_taken(:)
-        integer :: gind(size(clssmp)), ngroups, nunits, g, i, k, remaining, nopen, ibest
+        integer              :: gind(size(clssmp)), ngroups, nunits, g, i, k, remaining, nopen, ibest
         nunits = size(clssmp)
         clssmp(:)%nsample = 0
         if( nunits < 1 ) return
@@ -432,7 +432,7 @@ contains
         type(class_sample), intent(in)  :: clssmp(:)
         integer,            intent(out) :: gind(size(clssmp)), ngroups
         integer, allocatable :: labels(:)
-        integer :: i, k
+        integer              :: i, k
         allocate(labels(0))
         do i = 1, size(clssmp)
             k = 0
@@ -453,9 +453,9 @@ contains
     !> equal group quotas capped at the group populations; every open group gets one more particle
     !! per round, so the total may exceed ntarget by fewer than the number of groups
     subroutine group_quotas( clssmp, gind, ngroups, ntarget, gquota )
-        type(class_sample),   intent(in)    :: clssmp(:)
-        integer,              intent(in)    :: gind(:), ngroups, ntarget
-        integer, allocatable, intent(inout) :: gquota(:)
+        type(class_sample),   intent(in)                 :: clssmp(:)
+        integer,              intent(in)                 :: gind(:), ngroups, ntarget
+        integer,              allocatable, intent(inout) :: gquota(:)
         integer :: gpop(ngroups), g
         do g = 1, ngroups
             gpop(g) = sum(clssmp(:)%pop, mask=gind == g)
@@ -472,8 +472,8 @@ contains
         integer,            intent(in)  :: ntarget
         real,               intent(out) :: quotas(size(clssmp))
         integer, allocatable :: gquota(:), members(:), open_units(:), capped(:)
-        integer :: gind(size(clssmp)), ngroups, nunits, g, i
-        real    :: remaining, share
+        integer              :: gind(size(clssmp)), ngroups, nunits, g, i
+        real                 :: remaining, share
         nunits = size(clssmp)
         quotas = 0.
         if( nunits < 1 ) return
@@ -521,13 +521,13 @@ contains
     !! only, e.g. the frozen rows of solve3D_addon): nsamples is 0 and inds
     !! empty, for a caller that emits empty partition outputs
     module subroutine sample4update_reprod( self, fromto, nsamples, inds, allow_empty )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical, optional,    intent(in)    :: allow_empty
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
+        logical,              optional,    intent(in)    :: allow_empty
         integer, allocatable :: sampled(:)
-        integer :: i, cnt, nptcls, sample_ind
+        integer              :: i, cnt, nptcls, sample_ind
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), sampled(nptcls), source=0)
@@ -547,23 +547,23 @@ contains
     !> Sticky rescoring: the rows of fromto in the latest sampling round, as sample4update_reprod
     !! returns them, with sampled and updatecnt advanced once, so the next call finds the same set
     module subroutine sample4update_rescore( self, fromto, nsamples, inds, allow_empty )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical, optional,    intent(in)    :: allow_empty
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
+        logical,              optional,    intent(in)    :: allow_empty
         call self%sample4update_reprod(fromto, nsamples, inds, allow_empty)
         if( nsamples > 0 ) call self%incr_sampled_updatecnt(inds, .true.)
     end subroutine sample4update_rescore
 
     module subroutine sample4update_updated( self, fromto, nsamples, inds, incr_sampled )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
+        logical,              intent(in)                 :: incr_sampled
         integer, allocatable :: updatecnts(:)
-        integer :: i, cnt, nptcls
+        integer              :: i, cnt, nptcls
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), updatecnts(nptcls), source=0)
@@ -581,13 +581,13 @@ contains
     end subroutine sample4update_updated
 
     module subroutine sample4update_missing( self, fromto, nsamples, inds, incr_sampled )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
+        logical,              intent(in)                 :: incr_sampled
         integer, allocatable :: states(:), updatecnts(:)
-        integer :: i, cnt, nptcls
+        integer              :: i, cnt, nptcls
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), states(nptcls), updatecnts(nptcls), source=0)
@@ -604,15 +604,15 @@ contains
     end subroutine sample4update_missing
 
     module subroutine sample_balanced_mode( self, clssmp, nptcls, l_greedy, states, exact )
-        class(oris),        intent(in)    :: self
-        type(class_sample), intent(inout) :: clssmp(:)
-        integer,            intent(in)    :: nptcls
-        logical,            intent(in)    :: l_greedy
-        integer,            intent(inout) :: states(self%n)
-        logical, optional,  intent(in)    :: exact
+        class(oris),        intent(in)            :: self
+        type(class_sample), intent(inout)         :: clssmp(:)
+        integer,            intent(in)            :: nptcls
+        logical,            intent(in)            :: l_greedy
+        integer,            intent(inout)         :: states(self%n)
+        logical,            optional,  intent(in) :: exact
         integer,            allocatable   :: pinds_left(:)
-        integer        :: i, j, level, weakest
-        logical        :: l_exact
+        integer                           :: i, j, level, weakest
+        logical                           :: l_exact
         l_exact = .false.
         if( present(exact) ) l_exact = exact
         if( l_exact )then
@@ -667,7 +667,7 @@ contains
         real,               intent(in)    :: frac_best
         integer,            intent(inout) :: states(self%n)
         integer,            allocatable   :: pinds2sample(:)
-        integer        :: i, j, nbest
+        integer                           :: i, j, nbest
         clssmp(:)%nsample = 0
         do while( sum(clssmp(:)%nsample) < nptcls )
             where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
@@ -697,7 +697,7 @@ contains
         real,               intent(in)    :: frac_worst
         integer,            intent(inout) :: states(self%n)
         integer,            allocatable   :: pinds_rev(:), pinds2sample(:)
-        integer        :: i, j, nworst
+        integer                           :: i, j, nworst
         clssmp(:)%nsample = 0
         do while( sum(clssmp(:)%nsample) < nptcls )
             where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
@@ -723,11 +723,11 @@ contains
     end subroutine sample_balanced_inv
 
     module subroutine sample_balanced_parts( self, clssmp, nparts, states, nptcls_per_part )
-        class(oris),        intent(inout) :: self
-        type(class_sample), intent(inout) :: clssmp(:)
-        integer,            intent(in)    :: nparts
-        integer,            intent(inout) :: states(self%n)
-        integer, optional,  intent(in)    :: nptcls_per_part
+        class(oris),        intent(inout)         :: self
+        type(class_sample), intent(inout)         :: clssmp(:)
+        integer,            intent(in)            :: nparts
+        integer,            intent(inout)         :: states(self%n)
+        integer,            optional,  intent(in) :: nptcls_per_part
         integer :: nptcls, i, j, k, nptcls_eff
         nptcls_eff = self%count_state_gt_zero() 
         if( present(nptcls_per_part) )then
@@ -754,13 +754,13 @@ contains
 
     module subroutine sample_ranked_parts( self, clssmp, nparts, states, nptcls_per_part )
         use simple_map_reduce, only: split_nobjs_even
-        class(oris),        intent(inout) :: self
-        type(class_sample), intent(inout) :: clssmp(:)
-        integer,            intent(in)    :: nparts
-        integer,            intent(inout) :: states(self%n)
-        integer, optional,  intent(in)    :: nptcls_per_part
+        class(oris),        intent(inout)         :: self
+        type(class_sample), intent(inout)         :: clssmp(:)
+        integer,            intent(in)            :: nparts
+        integer,            intent(inout)         :: states(self%n)
+        integer,            optional,  intent(in) :: nptcls_per_part
         integer, allocatable :: parts(:,:)
-        integer :: nptcls, i, j, nptcls_eff, ipart
+        integer              :: nptcls, i, j, nptcls_eff, ipart
         nptcls_eff = self%count_state_gt_zero() 
         if( present(nptcls_per_part) )then
             nptcls = min(nptcls_eff, nparts * nptcls_per_part)
@@ -840,9 +840,9 @@ contains
     end subroutine set_updatecnt
 
     module subroutine clean_entry( self, varflag1, varflag2 )
-        class(oris),                 intent(inout) :: self
-        character (len=*),           intent(in)    :: varflag1
-        character (len=*), optional, intent(in)    :: varflag2
+        class(oris),                 intent(inout)        :: self
+        character (len=*),           intent(in)           :: varflag1
+        character (len=*),           optional, intent(in) :: varflag2
         logical :: varflag2_present
         integer :: i
         varflag2_present = present(varflag2)

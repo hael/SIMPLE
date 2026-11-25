@@ -23,19 +23,19 @@ module simple_gui_metadata_stream_solve3D_multistate
   type, extends(gui_metadata_base) :: gui_metadata_stream_solve3D_multistate
     private
 
-    character(len=STDLEN)  :: stage                     = 'unknown'
-    integer                :: solve3D_stage             = 0       ! internal solve3D progress: 0=not started, 1=running, 2=complete
-    integer                :: refine_iteration          = 0       ! solve3D_addon passes started
-    integer                :: nstates                   = 0       ! number of states being resolved
-    integer                :: particles_imported        = 0       ! particles selected now
-    integer                :: particles_at_last_refine  = 0       ! particles the latest run (solve3D, addon or final) took
-    integer                :: last_import_time          = 0       ! Unix timestamp of most recent import event
-    real                   :: resolution                = 0.0     ! overall current low-pass/resolution estimate
+    character(len=STDLEN)  :: stage                                            = 'unknown'
+    integer                :: solve3D_stage                                    = 0       ! internal solve3D progress: 0=not started, 1=running, 2=complete
+    integer                :: refine_iteration                                 = 0       ! solve3D_addon passes started
+    integer                :: nstates                                          = 0       ! number of states being resolved
+    integer                :: particles_imported                               = 0       ! particles selected now
+    integer                :: particles_at_last_refine                         = 0       ! particles the latest run (solve3D, addon or final) took
+    integer                :: last_import_time                                 = 0       ! Unix timestamp of most recent import event
+    real                   :: resolution                                       = 0.0     ! overall current low-pass/resolution estimate
     integer                :: state_populations(MAX_STATES_SOLVE3D_MULTISTATE) = 0
     real                   :: state_resolutions(MAX_STATES_SOLVE3D_MULTISTATE) = 0.0
-    logical                :: l_states                  = .false. ! set_state_stats has set the per-state stats
+    logical                :: l_states                                         = .false. ! set_state_stats has set the per-state stats
   contains
-    procedure :: kill => kill_override
+    procedure :: kill    => kill_override
     procedure :: set
     procedure :: set_state_stats
     procedure :: get
@@ -48,10 +48,10 @@ contains
   ! resolution. Updates last_import_time only when the pool size changes.
   subroutine set( self, stage, solve3D_stage, refine_iteration, nstates, particles_imported, particles_at_last_refine, resolution )
     class(gui_metadata_stream_solve3D_multistate), intent(inout) :: self
-    type(string), intent(in) :: stage
-    integer,      intent(in) :: solve3D_stage, refine_iteration, nstates
-    integer,      intent(in) :: particles_imported, particles_at_last_refine
-    real,         intent(in) :: resolution
+    type(string),                                  intent(in)    :: stage
+    integer,                                       intent(in)    :: solve3D_stage, refine_iteration, nstates
+    integer,                                       intent(in)    :: particles_imported, particles_at_last_refine
+    real,                                          intent(in)    :: resolution
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( nstates > MAX_STATES_SOLVE3D_MULTISTATE ) THROW_HARD('nstates exceeds MAX_STATES_SOLVE3D_MULTISTATE')
     self%l_assigned                = .true.
@@ -68,7 +68,7 @@ contains
 
   ! Assign the population and resolution of one state in the latest result.
   subroutine set_state_stats( self, state, population, resolution )
-    class(gui_metadata_stream_solve3D_multistate), intent(inout) :: self
+    class(gui_metadata_stream_solve3D_multistate),    intent(inout) :: self
     integer,                                          intent(in)    :: state, population
     real,                                             intent(in)    :: resolution
     if( .not.self%l_initialized )                          THROW_HARD('gui metadata object is uninitialised')
@@ -84,11 +84,11 @@ contains
   ! has been assigned.
   function get( self, stage, solve3D_stage, refine_iteration, nstates, particles_imported, particles_at_last_refine, last_import_time, resolution ) result( l_assigned )
     class(gui_metadata_stream_solve3D_multistate), intent(in)     :: self
-    type(string), intent(out) :: stage
-    integer,      intent(out) :: solve3D_stage, refine_iteration, nstates
-    integer,      intent(out) :: particles_imported, particles_at_last_refine
-    integer,      intent(out) :: last_import_time
-    real,         intent(out) :: resolution
+    type(string),                                  intent(out)    :: stage
+    integer,                                       intent(out)    :: solve3D_stage, refine_iteration, nstates
+    integer,                                       intent(out)    :: particles_imported, particles_at_last_refine
+    integer,                                       intent(out)    :: last_import_time
+    real,                                          intent(out)    :: resolution
     logical                   :: l_assigned
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned                = self%l_assigned
@@ -106,8 +106,8 @@ contains
   ! the object has not yet been assigned.
   function jsonise_override( self ) result( json_ptr )
     class(gui_metadata_stream_solve3D_multistate), intent(in)    :: self
-    type(json_core)                                   :: json
-    type(json_value), pointer                         :: json_ptr, json_states_ptr => null(), json_state_ptr => null()
+    type(json_core)                                    :: json
+    type(json_value), pointer                          :: json_ptr, json_states_ptr => null(), json_state_ptr => null()
     integer                                            :: i_state
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( self%l_assigned ) then

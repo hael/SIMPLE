@@ -20,15 +20,15 @@ integer, parameter :: TEST_SEED = 20260923 ! the SIMPLE_SEED of every simple_tes
 ! A seed offset moves every base by a large odd stride: the bases of the tests lie a few apart
 ! (dates), so an offset added to one would land on another's, and adjacent draws would correlate
 integer(int64), parameter :: SEED_STRIDE = 2654435761_int64
-integer            :: seed_offset = 0       ! seed_offset= of simple_test_exec, added to every fixed seed
+integer                   :: seed_offset = 0 ! seed_offset= of simple_test_exec, added to every fixed seed
 
 type :: test_suite_result
-    character(len=STDLEN) :: name = ''
-    integer :: checks   = 0
-    integer :: failures = 0
-    logical :: completed = .false.
-    integer(longer) :: t_start = 0_longer   ! system_clock count at begin_test_suite
-    real    :: seconds = 0.         ! wall time from begin to end of the suite
+    character(len=STDLEN) :: name      = ''
+    integer               :: checks    = 0
+    integer               :: failures  = 0
+    logical               :: completed = .false.
+    integer(longer)       :: t_start   = 0_longer ! system_clock count at begin_test_suite
+    real                  :: seconds   = 0.       ! wall time from begin to end of the suite
 end type test_suite_result
 
 type :: test_failure
@@ -36,10 +36,10 @@ type :: test_failure
     character(len=STDLEN) :: message = ''
 end type test_failure
 
-integer :: tests_run       = 0
-integer :: tests_failed    = 0
-integer :: active_suite    = 0
-character(len=STDLEN) :: report_path = ''
+integer                              :: tests_run       = 0
+integer                              :: tests_failed    = 0
+integer                              :: active_suite    = 0
+character(len=STDLEN)                :: report_path     = ''
 type(test_suite_result), allocatable :: suites(:)
 type(test_failure),      allocatable :: failures(:)
 
@@ -53,8 +53,8 @@ contains
 
     ! Delegate local and propagated seeding to the library RNG, moved by the seed offset.
     subroutine set_fixed_seed( base_seed, propagate )
-        integer,           intent(in) :: base_seed
-        logical, optional, intent(in) :: propagate
+        integer,           intent(in)           :: base_seed
+        logical,           optional, intent(in) :: propagate
         call seed_rnd_fixed(offset_seed(base_seed), propagate)
     end subroutine set_fixed_seed
 
@@ -101,8 +101,8 @@ contains
     subroutine end_test_suite
         character(len=STDLEN) :: name
         character(len=32)     :: tstr
-        integer     :: checks, nfailed
-        integer(longer) :: t_end, rate
+        integer               :: checks, nfailed
+        integer(longer)       :: t_end, rate
         if( active_suite == 0 ) return
         call system_clock(t_end, rate)
         if( rate > 0_longer ) suites(active_suite)%seconds = real(t_end - suites(active_suite)%t_start) / real(rate)
@@ -179,10 +179,10 @@ contains
     end subroutine assert_string_eq
 
     subroutine assert_double( expected, actual, msg, ulp_tol )
-        real(dp),         intent(in) :: expected, actual
-        character(len=*), intent(in) :: msg
-        real(dp), optional, intent(in) :: ulp_tol
-        real(dp) :: tol
+        real(dp),         intent(in)           :: expected, actual
+        character(len=*), intent(in)           :: msg
+        real(dp),         optional, intent(in) :: ulp_tol
+        real(dp)              :: tol
         character(len=STDLEN) :: detail
         if( present(ulp_tol) )then
             tol = ulp_tol * epsilon(1.0_dp)
@@ -199,8 +199,8 @@ contains
     end subroutine assert_double
 
     subroutine assert_false( condition, message )
-        logical,                    intent(in) :: condition
-        character(len=*), optional, intent(in) :: message
+        logical,                    intent(in)           :: condition
+        character(len=*),           optional, intent(in) :: message
         if( present(message) )then
             call record_assertion(.not. condition, message)
         else
@@ -275,7 +275,7 @@ contains
     subroutine write_summary( unit, list_groups )
         integer, intent(in) :: unit
         logical, intent(in) :: list_groups
-        integer :: i, nsuites, passed_suites, failed_suites, incomplete_suites
+        integer           :: i, nsuites, passed_suites, failed_suites, incomplete_suites
         character(len=10) :: suite_status
         nsuites = 0
         passed_suites = 0

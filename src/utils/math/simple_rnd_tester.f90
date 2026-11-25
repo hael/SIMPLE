@@ -67,8 +67,8 @@ contains
     !! stream as if it had not run: the next draw and the reseed count are the caller's
     subroutine test_rnd_state_restore()
         integer, allocatable :: seed(:)
-        integer :: ncalls
-        real    :: r_ref, r_after
+        integer              :: ncalls
+        real                 :: r_ref, r_after
         write(*,'(A)') 'test_rnd_state_restore'
         call seed_rnd_fixed(31337)
         r_ref = ran3()
@@ -83,7 +83,7 @@ contains
 
     !> Library reseeding and intrinsic draws must replay from the propagated root seed.
     subroutine test_global_seed()
-        real :: first(16), replay(16), next(16), changed(16)
+        real              :: first(16), replay(16), next(16), changed(16)
         character(len=64) :: seed_value
         call seed_rnd_fixed(1729, propagate=.true.)
         call assert_true(has_global_seed(), 'propagated seed enables reproducible library mode')
@@ -118,13 +118,13 @@ contains
     !! Check bounds around 2**23 and 2**24, and huge(0), by comparing each sampled index with
     !! the probability interval containing the same underlying double-precision random draw.
     subroutine test_irnd_uni()
-        integer, parameter :: BOUNDS(7) = [2**23-1, 2**23, 2**23+1, 2**24-1, 2**24, 2**24+1, huge(0)]
-        integer, parameter :: NBOUND_DRAWS = 256
+        integer, parameter   :: BOUNDS(7)    = [2**23-1, 2**23, 2**23+1, 2**24-1, 2**24, 2**24+1, huge(0)]
+        integer, parameter   :: NBOUND_DRAWS = 256
         integer, allocatable :: seed(:)
-        integer :: nseed, ibound, idraw, np, which
-        real(dp) :: harvest, lower, upper
-        logical :: in_range, correct_bins
-        character(len=128) :: msg
+        integer              :: nseed, ibound, idraw, np, which
+        real(dp)             :: harvest, lower, upper
+        logical              :: in_range, correct_bins
+        character(len=128)   :: msg
         write(*,'(A)') 'test_irnd_uni'
         call set_fixed_seed(20261002)
         call assert_int(1, irnd_uni(1), 'a singleton integer range returns one')
@@ -247,11 +247,11 @@ contains
     !! draws within four standard errors of the mean (sqrt(mu/n) for the mean, about mu sqrt(2/n) for
     !! the variance) on both branches, multiplication below 30 and the transformed rejection above
     subroutine test_poisson()
-        integer, parameter :: NPOIS = 20000
+        integer, parameter :: NPOIS    = 20000
         real,    parameter :: MEANS(2) = [4.0, 250.0]
-        real(dp) :: s1, s2, smean, svar
-        real     :: tol
-        integer  :: i, j, k, nneg
+        real(dp)           :: s1, s2, smean, svar
+        real               :: tol
+        integer            :: i, j, k, nneg
         call fix_test_seed()
         call assert_int(0, poisson_rnd(0.0), 'a Poisson deviate of mean zero is zero')
         do j = 1, size(MEANS)
@@ -278,10 +278,10 @@ contains
     !! reference (scratch/keep/rnd/rnd_keyed_ref.py of the run prob_pipeline, phase 0, 2026-11-04). The words
     !! are printed so that a build's values can be recorded; Debug and Release of GCC 15.2 on the Dell agree.
     subroutine test_keyed_vectors()
-        type(rnd_key)  :: key
-        integer(int64) :: word
-        real(dp)       :: u
-        integer        :: i
+        type(rnd_key)      :: key
+        integer(int64)     :: word
+        real(dp)           :: u
+        integer            :: i
         character(len=256) :: line
         write(*,'(A)') 'test_keyed_vectors'
         write(*,'(A)') '  seed version scope iteration particle family reference ordinal | word | unit variate'
@@ -344,10 +344,10 @@ contains
     !! interleaved with intrinsic draws and reseeds; the keyed draws leave the intrinsic stream untouched
     subroutine test_keyed_order()
         integer, parameter :: NKEYS = 200
-        type(rnd_key) :: key
-        real(dp) :: inorder(NKEYS), reversed(NKEYS), interleaved(NKEYS)
-        real     :: before(8), after(8), replay(8)
-        integer  :: i
+        type(rnd_key)      :: key
+        real(dp)           :: inorder(NKEYS), reversed(NKEYS), interleaved(NKEYS)
+        real               :: before(8), after(8), replay(8)
+        integer            :: i
         write(*,'(A)') 'test_keyed_order'
         key%seed = 20261104_int64; key%scope = rnd_scope(RND_PROG_REFINE2D, RND_PASS_ALIGN); key%iteration = 2
         key%family = RND_FAM_ASSIGN
@@ -389,10 +389,10 @@ contains
     !! error is 0.003)
     subroutine test_keyed_sensitivity()
         integer, parameter :: NBASE = 20, NRUN = 100000, NBINS = 64
-        type(rnd_key)  :: key, kmod
-        integer(int64) :: word, words(NRUN)
-        integer        :: i, ifield, nsame, keys31(NRUN), inds(NRUN), counts(NBINS), ndup
-        real(dp)       :: u(NRUN), mean, num, den, chi2, expected
+        type(rnd_key)      :: key, kmod
+        integer(int64)     :: word, words(NRUN)
+        integer            :: i, ifield, nsame, keys31(NRUN), inds(NRUN), counts(NBINS), ndup
+        real(dp)           :: u(NRUN), mean, num, den, chi2, expected
         write(*,'(A)') 'test_keyed_sensitivity'
         nsame = 0
         key%seed = 20261103_int64; key%scope = rnd_scope(RND_PROG_REFINE3D, RND_PASS_ALIGN); key%iteration = 1
@@ -451,10 +451,10 @@ contains
     !> The keyed integer draw stays in range and follows the variate's equal-width bin, around 2^24 and at huge
     subroutine test_keyed_int()
         integer, parameter :: BOUNDS(5) = [2**23, 2**24-1, 2**24+1, 2**30, huge(0)]
-        type(rnd_key) :: key
-        integer  :: ibound, i, np, which
-        real(dp) :: u
-        logical  :: in_range, correct_bins
+        type(rnd_key)      :: key
+        integer            :: ibound, i, np, which
+        real(dp)           :: u
+        logical            :: in_range, correct_bins
         write(*,'(A)') 'test_keyed_int'
         key%seed = 1_int64; key%family = RND_FAM_CAND
         call assert_int(1, rnd_keyed_int(key, 1), 'a singleton keyed integer range returns one')
@@ -480,9 +480,9 @@ contains
     !! uniform source exceeds either bound with probability below 1e-5)
     subroutine test_keyed_partial_shuffle()
         integer, parameter :: NSUB = 20000, NPERM = 24000
-        type(rnd_key) :: key
-        integer :: arr(N), copy(N), expected(N), six(6), four(4), i, k, code, counts(20), perms(24), nchanged
-        real(dp) :: chi2
+        type(rnd_key)      :: key
+        integer            :: arr(N), copy(N), expected(N), six(6), four(4), i, k, code, counts(20), perms(24), nchanged
+        real(dp)           :: chi2
         write(*,'(A)') 'test_keyed_partial_shuffle'
         expected = [(i, i=1,N)]
         key%seed = 20261103_int64; key%scope = rnd_scope(RND_PROG_REFINE2D, RND_PASS_ALIGN); key%iteration = 4

@@ -4,11 +4,11 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('print', 'Print Information', 120)
-type(ui_program), target :: info_image
-type(ui_program), target :: info_stktab
-type(ui_program), target :: print_dose_weights
-type(ui_program), target :: print_fsc
-type(ui_program), target :: print_magic_boxes
+type(ui_program),          target    :: info_image
+type(ui_program),          target    :: info_stktab
+type(ui_program),          target    :: print_dose_weights
+type(ui_program),          target    :: print_fsc
+type(ui_program),          target    :: print_magic_boxes
 
 contains
 

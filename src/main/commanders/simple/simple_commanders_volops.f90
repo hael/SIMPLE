@@ -69,7 +69,7 @@ contains
     !> centers a 3D volume and associated particle document
     subroutine exec_centervol( self, cline )
         class(commander_centervol), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
+        class(cmdline),             intent(inout) :: cline
         type(parameters)  :: params
         type(builder)     :: build
         real, allocatable :: shvec(:,:)
@@ -160,20 +160,20 @@ contains
         use simple_atoms,        only: atoms
         use simple_segmentation, only: otsu_img
         class(commander_postprocess_pdb), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+        class(cmdline),                   intent(inout) :: cline
         real,             allocatable :: fsc(:), optlp(:), res(:)
-        type(string)          :: fname_vol, fname_even, fname_odd, fname_pdb, fname_pdb_docked
-        type(string)          :: fname_pproc, fname_lp, fname_mirr, pdbout_fname, fname_fsc
-        type(parameters)      :: params
-        type(image)           :: vol_bfac, vol_no_bfac, vol_pdb, cos_img, vol_even, vol_odd
-        type(image_bin)       :: vol_pdbin
-        type(atoms)           :: pdb
-        type(dock_vols)        :: docker
-        real    :: fsc0143, fsc05, lplim, lp_min=0., lp_max=20.
-        real    :: dock_eul(3), dock_shift(3), dock_cc
-        real, parameter :: DOCK_HP=100.
-        integer :: ldim(3), ldim_half(3), ifoo
-        integer, parameter :: EDGE=6
+        type(string)                  :: fname_vol, fname_even, fname_odd, fname_pdb, fname_pdb_docked
+        type(string)                  :: fname_pproc, fname_lp, fname_mirr, pdbout_fname, fname_fsc
+        type(parameters)              :: params
+        type(image)                   :: vol_bfac, vol_no_bfac, vol_pdb, cos_img, vol_even, vol_odd
+        type(image_bin)               :: vol_pdbin
+        type(atoms)                   :: pdb
+        type(dock_vols)               :: docker
+        real                          :: fsc0143, fsc05, lplim, lp_min=0., lp_max=20.
+        real                          :: dock_eul(3), dock_shift(3), dock_cc
+        real,             parameter   :: DOCK_HP = 100.
+        integer                       :: ldim(3), ldim_half(3), ifoo
+        integer,          parameter   :: EDGE    = 6
         ! set defaults
         if( .not. cline%defined('mirr') ) call cline%set('mirr', 'x')
         ! parse command-line
@@ -455,7 +455,7 @@ contains
         type(cmdline)             :: cline_reproject
         type(parameters)          :: params
         type(image)               :: noisevol
-        integer :: s
+        integer                   :: s
         call params%new(cline)
         call noisevol%new([params%box,params%box,params%box], params%smpd)
         if( cline%defined('nspace') )then
@@ -537,14 +537,14 @@ contains
         class(cmdline),                  intent(inout) :: cline
         character(len=*), parameter :: SYMSHTAB   = 'sym_3dshift'//TXT_EXT
         character(len=*), parameter :: SYMAXISTAB = 'sym_axis'//TXT_EXT
-        type(parameters)      :: params
-        type(builder)         :: build
-        type(ori)             :: symaxis
-        type(oris)            :: symaxis4write
-        type(sym)             :: syme
-        type(string)          :: fbody
-        real                  :: shvec(3)
-        integer               :: box
+        type(parameters)            :: params
+        type(builder)               :: build
+        type(ori)                   :: symaxis
+        type(oris)                  :: symaxis4write
+        type(sym)                   :: syme
+        type(string)                :: fbody
+        real                        :: shvec(3)
+        integer                     :: box
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp', 20.)
         if( .not. cline%defined('center')  ) call cline%set('center', 'yes')

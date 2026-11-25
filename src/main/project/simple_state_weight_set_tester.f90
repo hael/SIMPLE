@@ -43,15 +43,15 @@ contains
 
     subroutine test_round_trip_partition()
         class(sp_project), allocatable :: project
-        type(state_weight_set)    :: wset, wread
-        integer,      allocatable :: pinds(:), labels(:), labels_read(:)
-        real,         allocatable :: weights(:,:)
-        real(real32), allocatable :: column(:)
-        logical,      allocatable :: selected(:)
-        real(real64) :: mass
-        integer      :: s, i, status
-        logical      :: l_exact
-        character(len=256) :: message
+        type(state_weight_set)         :: wset, wread
+        integer,           allocatable :: pinds(:), labels(:), labels_read(:)
+        real,              allocatable :: weights(:,:)
+        real(real32),      allocatable :: column(:)
+        logical,           allocatable :: selected(:)
+        real(real64)                   :: mass
+        integer                        :: s, i, status
+        logical                        :: l_exact
+        character(len=256)             :: message
         write(*,'(A)') 'test_round_trip_partition'
         allocate(project)
         call make_project(project, 'swset_particles')
@@ -100,11 +100,11 @@ contains
 
     subroutine test_round_trip_kernel()
         class(sp_project), allocatable :: project
-        type(state_weight_set) :: wset
-        integer, allocatable   :: pinds(:), labels(:)
-        real,    allocatable   :: weights(:,:)
-        integer :: status
-        character(len=256) :: message
+        type(state_weight_set)         :: wset
+        integer,           allocatable :: pinds(:), labels(:)
+        real,              allocatable :: weights(:,:)
+        integer                        :: status
+        character(len=256)             :: message
         write(*,'(A)') 'test_round_trip_kernel'
         allocate(project)
         call make_project(project, 'swset_particles')
@@ -122,14 +122,14 @@ contains
 
     subroutine test_refusals()
         class(sp_project), allocatable :: project, other
-        type(state_weight_set) :: wset
-        type(string)           :: manifest, fname
-        integer, allocatable   :: pinds(:), labels(:)
-        real,    allocatable   :: weights(:,:)
-        integer(int8) :: byte
-        integer       :: status, funit
-        logical       :: found
-        character(len=256) :: message
+        type(state_weight_set)         :: wset
+        type(string)                   :: manifest, fname
+        integer,           allocatable :: pinds(:), labels(:)
+        real,              allocatable :: weights(:,:)
+        integer(int8)                  :: byte
+        integer                        :: status, funit
+        logical                        :: found
+        character(len=256)             :: message
         write(*,'(A)') 'test_refusals'
         allocate(project, other)
         call make_project(project, 'swset_particles')
@@ -176,16 +176,16 @@ contains
 
     !> files of a new generation published without their manifest leave the previous generation selected
     subroutine test_crash_between_files_and_manifest()
-        class(sp_project), allocatable :: project
+        class(sp_project), allocatable  :: project
         type(state_weight_set)          :: wset
         type(state_weights_file_header) :: header
-        integer,       allocatable :: pinds(:), labels(:)
-        real,          allocatable :: weights(:,:)
-        real(real32),  allocatable :: column(:)
-        integer(int8), allocatable :: flags(:)
-        integer(int64) :: gen
-        integer        :: status, s
-        character(len=256) :: message
+        integer,           allocatable  :: pinds(:), labels(:)
+        real,              allocatable  :: weights(:,:)
+        real(real32),      allocatable  :: column(:)
+        integer(int8),     allocatable  :: flags(:)
+        integer(int64)                  :: gen
+        integer                         :: status, s
+        character(len=256)              :: message
         write(*,'(A)') 'test_crash_between_files_and_manifest'
         allocate(project)
         call make_project(project, 'swset_particles')
@@ -224,13 +224,13 @@ contains
     !> a withdrawn set leaves the project (in memory and on disk) and its manifest and state files are deleted
     subroutine test_discard()
         class(sp_project), allocatable :: project
-        type(state_weight_set) :: wset
-        type(string)           :: manifest
-        integer, allocatable   :: pinds(:), labels(:)
-        real,    allocatable   :: weights(:,:)
-        integer(int64)         :: generation
-        logical                :: found, l_files_gone
-        integer                :: s
+        type(state_weight_set)         :: wset
+        type(string)                   :: manifest
+        integer,           allocatable :: pinds(:), labels(:)
+        real,              allocatable :: weights(:,:)
+        integer(int64)                 :: generation
+        logical                        :: found, l_files_gone
+        integer                        :: s
         write(*,'(A)') 'test_discard'
         allocate(project)
         call make_project(project, 'discard_particles')
@@ -258,9 +258,9 @@ contains
 
     subroutine test_earlier_release_entries()
         class(sp_project), allocatable :: project
-        type(string) :: manifest
-        logical      :: found
-        integer      :: n
+        type(string)                   :: manifest
+        logical                        :: found
+        integer                        :: n
         write(*,'(A)') 'test_earlier_release_entries'
         allocate(project)
         call make_project(project, 'old_particles')
@@ -282,16 +282,16 @@ contains
     !> One state of a PARTITION parent published for a work project of some of its rows (in its own
     !! directory, as refine3D_auto state=X does): one column, rows remapped, kind and identity kept
     subroutine test_work_state()
-        integer, parameter :: STATE = 2
+        integer,           parameter   :: STATE = 2
         class(sp_project), allocatable :: parent, work
-        type(state_weight_set)    :: pset, wset, wread
-        type(string)              :: root
-        integer,      allocatable :: pinds(:), labels(:), labels_read(:), parent_rows(:)
-        real,         allocatable :: weights(:,:)
-        real(real32), allocatable :: column(:)
-        integer(int64) :: pgen, pdigest
-        integer        :: i, status, nwork
-        character(len=256) :: message
+        type(state_weight_set)         :: pset, wset, wread
+        type(string)                   :: root
+        integer,           allocatable :: pinds(:), labels(:), labels_read(:), parent_rows(:)
+        real,              allocatable :: weights(:,:)
+        real(real32),      allocatable :: column(:)
+        integer(int64)                 :: pgen, pdigest
+        integer                        :: i, status, nwork
+        character(len=256)             :: message
         write(*,'(A)') 'test_work_state'
         allocate(parent, work)
         call make_project(parent, 'swset_particles')
@@ -338,11 +338,11 @@ contains
 
     !> an in-memory project of n particle rows over one stack, written to PROJ (whose name is the lineage)
     subroutine make_project( project, stkname, n )
-        class(sp_project), intent(inout) :: project
-        character(len=*),  intent(in)    :: stkname
-        integer, optional, intent(in)    :: n
+        class(sp_project), intent(inout)        :: project
+        character(len=*),  intent(in)           :: stkname
+        integer,           optional, intent(in) :: n
         type(string) :: cwd
-        integer :: i, np_here
+        integer      :: i, np_here
         np_here = NP
         if( present(n) ) np_here = n
         call project%kill

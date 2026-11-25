@@ -26,14 +26,14 @@ contains
     end subroutine run_all_project_merge_tests
 
     subroutine test_merge_pruned_stack_indexing_heterogeneous_ctf()
-        type(sp_project) :: proj1, proj2, merged, reread
+        type(sp_project)          :: proj1, proj2, merged, reread
         type(string), allocatable :: project_files(:)
-        type(string) :: projfile1, projfile2, merged_file
-        integer, parameter :: NPTCLS1 = 3, NPTCLS2 = 2, NCLS = 2
-        integer, parameter :: NPTCLS_STK1 = 6, NPTCLS_STK2 = 4
-        integer, parameter :: INDSTKS1(NPTCLS1) = [1, 4, 6]
-        integer, parameter :: INDSTKS2(NPTCLS2) = [4, 2]
-        integer :: i, stkind, ind_in_stk
+        type(string)              :: projfile1, projfile2, merged_file
+        integer,      parameter   :: NPTCLS1           = 3, NPTCLS2 = 2, NCLS = 2
+        integer,      parameter   :: NPTCLS_STK1       = 6, NPTCLS_STK2 = 4
+        integer,      parameter   :: INDSTKS1(NPTCLS1) = [1, 4, 6]
+        integer,      parameter   :: INDSTKS2(NPTCLS2) = [4, 2]
+        integer                   :: i, stkind, ind_in_stk
         write(*,'(A)') 'test_merge_pruned_stack_indexing_heterogeneous_ctf'
         projfile1   = 'merge_project_src1.simple'
         projfile2   = 'merge_project_src2.simple'
@@ -122,12 +122,12 @@ contains
         ! row, so fix_projfile can prove the physical indices: nptcls_stk comes from
         ! the header and indstk from the project rows.
         use simple_image, only: image
-        type(sp_project) :: proj, fixed
-        type(image)      :: img
-        type(string)     :: projfile, fixed_file, stkfile, staged_file
-        integer, parameter :: NPTCLS = 3, NCLS = 2
+        type(sp_project)   :: proj, fixed
+        type(image)        :: img
+        type(string)       :: projfile, fixed_file, stkfile, staged_file
+        integer, parameter :: NPTCLS                 = 3, NCLS = 2
         integer, parameter :: LEGACY_INDSTKS(NPTCLS) = [99, 0, 3]
-        integer :: i, stkind, ind_in_stk
+        integer            :: i, stkind, ind_in_stk
         write(*,'(A)') 'test_fix_projfile_repairs_unpruned_legacy_stack'
         projfile   = 'fix_project_src.simple'
         fixed_file = 'fix_project_src_fixed.simple'
@@ -183,11 +183,11 @@ contains
         ! row. fix_projfile must replace it by the owning stack before deriving
         ! indstk, so that both segments agree and both map.
         use simple_image, only: image
-        type(sp_project) :: proj, fixed
-        type(image)      :: img
-        type(string)     :: projfile, fixed_file, staged_file, stkfiles(2)
+        type(sp_project)   :: proj, fixed
+        type(image)        :: img
+        type(string)       :: projfile, fixed_file, staged_file, stkfiles(2)
         integer, parameter :: NSTK = 2, NPER = 2, NPTCLS = NSTK*NPER
-        integer :: i, istk, stkind, ind_in_stk, nerrors
+        integer            :: i, istk, stkind, ind_in_stk, nerrors
         write(*,'(A)') 'test_fix_projfile_repairs_wrong_segment_stkind'
         projfile    = 'fix_project_two_stacks.simple'
         fixed_file  = 'fix_project_two_stacks_fixed.simple'
@@ -259,7 +259,7 @@ contains
         ! fix_projfile reports the error and leaves the input unchanged.
         type(sp_project) :: proj
         type(string)     :: projfile, fixed_file, staged_file
-        integer :: i, nerrors
+        integer          :: i, nerrors
         write(*,'(A)') 'test_fix_projfile_refuses_particles_without_stacks'
         projfile   = 'fix_project_no_stacks.simple'
         fixed_file = 'fix_project_no_stacks_fixed.simple'
@@ -286,8 +286,8 @@ contains
 
     subroutine test_remap_project_paths()
         type(sp_project) :: proj
-        type(string) :: old_root, new_root, movie_file, intg_file, stk_file, box_file
-        integer :: nremapped, status
+        type(string)     :: old_root, new_root, movie_file, intg_file, stk_file, box_file
+        integer          :: nremapped, status
         write(*,'(A)') 'test_remap_project_paths'
         old_root = '/retired/dataset/'
         new_root = 'remap_project_paths_target/'
@@ -328,8 +328,8 @@ contains
 
     subroutine test_remap_project_paths_allows_unmatched_scope()
         type(sp_project) :: proj
-        type(string) :: new_root
-        integer :: nremapped, status
+        type(string)     :: new_root
+        integer          :: nremapped, status
         write(*,'(A)') 'test_remap_project_paths_allows_unmatched_scope'
         new_root = 'remap_project_paths_unmatched_target/'
         call simple_rmdir(new_root, status)
@@ -348,11 +348,11 @@ contains
 
     subroutine test_remap_project_paths_scoped_roots()
         type(sp_project) :: proj
-        type(string) :: root, mic_root, ptcl_root, cavg_root, cavg_path, vol_root
-        type(string) :: movie_file, intg_file, mic_box_file
-        type(string) :: stk_file, stk_box_file
-        type(string) :: cavg_file, frcs2D_file, sigma2_file, vol_file, fsc_file, frcs3D_file
-        integer :: nremapped, status
+        type(string)     :: root, mic_root, ptcl_root, cavg_root, cavg_path, vol_root
+        type(string)     :: movie_file, intg_file, mic_box_file
+        type(string)     :: stk_file, stk_box_file
+        type(string)     :: cavg_file, frcs2D_file, sigma2_file, vol_file, fsc_file, frcs3D_file
+        integer          :: nremapped, status
         write(*,'(A)') 'test_remap_project_paths_scoped_roots'
         root      = 'remap_project_paths_scoped_target/'
         mic_root  = root//'mic/'
@@ -435,8 +435,8 @@ contains
 
     subroutine test_sigma2_state_path_registration()
         type(sp_project) :: proj
-        type(string) :: requested, registered, cwd, expected
-        logical :: found
+        type(string)     :: requested, registered, cwd, expected
+        logical          :: found
         write(*,'(A)') 'test_sigma2_state_path_registration'
         requested = 'sigma2_state.bin'
         call simple_getcwd(cwd)

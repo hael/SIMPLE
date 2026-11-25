@@ -68,11 +68,11 @@ type :: stream_master_meta_store
     type(gui_metadata_stream_optics_assignment)     :: optics_assignment
     type(gui_metadata_optics_group),    allocatable :: optics_groups(:)
     ! initial analysis: picking and initial analysis
-    type(gui_metadata_stream_picking)               :: initial_picking
-    type(gui_metadata_micrograph),      allocatable :: initial_picking_micrographs(:)
+    type(gui_metadata_stream_picking)                      :: initial_picking
+    type(gui_metadata_micrograph),      allocatable        :: initial_picking_micrographs(:)
     type(gui_metadata_stream_initial_analysis)             :: initial_analysis
-    type(gui_metadata_cavg2D),          allocatable :: initial_analysis_cavgs(:), initial_analysis_final_cavgs(:)
-    type(gui_metadata_vol3D)                        :: initial_analysis_vol3D
+    type(gui_metadata_cavg2D),          allocatable        :: initial_analysis_cavgs(:), initial_analysis_final_cavgs(:)
+    type(gui_metadata_vol3D)                               :: initial_analysis_vol3D
     ! reference picking
     type(gui_metadata_stream_picking)               :: reference_picking
     type(gui_metadata_micrograph),      allocatable :: reference_picking_micrographs(:)
@@ -83,14 +83,14 @@ type :: stream_master_meta_store
     ! pool 2D
     type(gui_metadata_stream_pool2D)                :: pool2D
     type(gui_metadata_cavg2D),          allocatable :: pool2D_cavgs(:)
-    type(gui_metadata_stream_snapshot)       :: pool2D_snapshot
+    type(gui_metadata_stream_snapshot)              :: pool2D_snapshot
     type(gui_metadata_cavg2D),          allocatable :: pool2D_snapshot_cavgs(:)
     ! multistate 3D
-    type(gui_metadata_stream_solve3D_multistate) :: solve3D
+    type(gui_metadata_stream_solve3D_multistate)    :: solve3D
     type(gui_metadata_vol3D),           allocatable :: solve3D_vols(:)
     type(gui_metadata_cavg2D),          allocatable :: solve3D_reprojtiles(:)
     type(gui_metadata_stream_snapshot)              :: solve3D_snapshot
-    logical :: l_exists = .false.
+    logical                                         :: l_exists = .false.
 contains
     procedure :: new
     procedure :: store
@@ -131,7 +131,7 @@ contains
     !> Keeps one message; one of an unknown type is ignored.
     subroutine store( self, buffer )
         class(stream_master_meta_store), intent(inout) :: self
-        character(len=*),         intent(in)    :: buffer
+        character(len=*),                intent(in)    :: buffer
         integer :: meta_type
         meta_type = transfer(buffer, meta_type)
         select case(meta_type)
@@ -203,7 +203,7 @@ contains
     !> Everything stored, to the assembler for the next heartbeat.
     subroutine assemble( self, assembler )
         class(stream_master_meta_store), intent(inout) :: self
-        type(gui_assembler),      intent(inout) :: assembler
+        type(gui_assembler),             intent(inout) :: assembler
         call assembler%assemble_stream_preprocess(self%preprocess, self%preprocess_micrographs,&
             &self%preprocess_histograms, self%preprocess_timeplots)
         call assembler%assemble_stream_optics_assignment(self%optics_assignment, self%optics_groups)
@@ -257,7 +257,7 @@ contains
     !> The list sizes and @p pending_bytes (unparsed bytes in the pipes), for the memory log.
     subroutine log_state( self, pending_bytes )
         class(stream_master_meta_store), intent(in) :: self
-        integer,                  intent(in) :: pending_bytes
+        integer,                         intent(in) :: pending_bytes
         write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0)')&
             &'>>> MASTER META STATE: pending_bytes=', pending_bytes,&
             &' preprocess_mics=',   nmic(self%preprocess_micrographs),&
@@ -321,11 +321,11 @@ contains
     ! reported and dropped.
 
     subroutine place_micrograph( arr, buffer, meta_type )
-        type(gui_metadata_micrograph), allocatable, intent(inout) :: arr(:)
-        character(len=*),                           intent(in)    :: buffer
-        integer,                                    intent(in)    :: meta_type
+        type(gui_metadata_micrograph),              allocatable, intent(inout) :: arr(:)
+        character(len=*),                           intent(in)                 :: buffer
+        integer,                                    intent(in)                 :: meta_type
         type(gui_metadata_micrograph) :: item
-        integer :: i
+        integer                       :: i
         if( .not. frame_fits(buffer, sizeof(item), meta_type) ) return
         item = transfer(buffer, item)
         if( .not. fits(item%get_i(), item%get_i_max()) ) return
@@ -342,11 +342,11 @@ contains
     end subroutine place_micrograph
 
     subroutine place_optics_group( arr, buffer, meta_type )
-        type(gui_metadata_optics_group), allocatable, intent(inout) :: arr(:)
-        character(len=*),                             intent(in)    :: buffer
-        integer,                                      intent(in)    :: meta_type
+        type(gui_metadata_optics_group),              allocatable, intent(inout) :: arr(:)
+        character(len=*),                             intent(in)                 :: buffer
+        integer,                                      intent(in)                 :: meta_type
         type(gui_metadata_optics_group) :: item
-        integer :: i
+        integer                         :: i
         if( .not. frame_fits(buffer, sizeof(item), meta_type) ) return
         item = transfer(buffer, item)
         if( .not. fits(item%get_i(), item%get_i_max()) ) return
@@ -363,11 +363,11 @@ contains
     end subroutine place_optics_group
 
     subroutine place_cavg2D( arr, buffer, meta_type )
-        type(gui_metadata_cavg2D), allocatable, intent(inout) :: arr(:)
-        character(len=*),                       intent(in)    :: buffer
-        integer,                                intent(in)    :: meta_type
+        type(gui_metadata_cavg2D),              allocatable, intent(inout) :: arr(:)
+        character(len=*),                       intent(in)                 :: buffer
+        integer,                                intent(in)                 :: meta_type
         type(gui_metadata_cavg2D) :: item
-        integer :: i
+        integer                   :: i
         if( .not. frame_fits(buffer, sizeof(item), meta_type) ) return
         item = transfer(buffer, item)
         if( .not. fits(item%get_i(), item%get_i_max()) ) return
@@ -386,11 +386,11 @@ contains
     ! The volumes' sender never includes their reprojection tiles (gui_metadata_vol3D%serialise),
     ! so the allocatable component arrives unallocated.
     subroutine place_vol3D( arr, buffer, meta_type )
-        type(gui_metadata_vol3D), allocatable, intent(inout) :: arr(:)
-        character(len=*),                      intent(in)    :: buffer
-        integer,                               intent(in)    :: meta_type
+        type(gui_metadata_vol3D),              allocatable, intent(inout) :: arr(:)
+        character(len=*),                      intent(in)                 :: buffer
+        integer,                               intent(in)                 :: meta_type
         type(gui_metadata_vol3D) :: item
-        integer :: i
+        integer                  :: i
         if( .not. frame_fits(buffer, sizeof(item), meta_type) ) return
         item = transfer(buffer, item)
         if( .not. fits(item%get_i(), item%get_i_max()) ) return

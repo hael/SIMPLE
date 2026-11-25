@@ -58,43 +58,43 @@ abstract interface
 
     subroutine nlcg_eval_i( self, x, loss, g )
         import :: dp, nlcg_objective
-        class(nlcg_objective),    intent(inout) :: self
-        real, contiguous, target, intent(in)    :: x(:)
-        real(dp),                 intent(out)   :: loss
-        real, contiguous, target, intent(out)   :: g(:)
+        class(nlcg_objective),    intent(inout)                   :: self
+        real,                     contiguous, target, intent(in)  :: x(:)
+        real(dp),                 intent(out)                     :: loss
+        real,                     contiguous, target, intent(out) :: g(:)
     end subroutine nlcg_eval_i
 
     real(dp) function nlcg_curvature_i( self, x, d ) result( curv )
         import :: dp, nlcg_objective
-        class(nlcg_objective),    intent(inout) :: self
-        real, contiguous, target, intent(in)    :: x(:), d(:)
+        class(nlcg_objective),    intent(inout)                  :: self
+        real,                     contiguous, target, intent(in) :: x(:), d(:)
     end function nlcg_curvature_i
 
     subroutine nlcg_line_losses_i( self, x, d, t, losses )
         import :: dp, nlcg_objective
-        class(nlcg_objective),    intent(inout) :: self
-        real, contiguous, target, intent(in)    :: x(:), d(:)
-        real(dp),                 intent(in)    :: t(:)
-        real(dp),                 intent(out)   :: losses(:)
+        class(nlcg_objective),    intent(inout)                  :: self
+        real,                     contiguous, target, intent(in) :: x(:), d(:)
+        real(dp),                 intent(in)                     :: t(:)
+        real(dp),                 intent(out)                    :: losses(:)
     end subroutine nlcg_line_losses_i
 
     subroutine nlcg_precond_i( self, r, z )
         import :: nlcg_objective
-        class(nlcg_objective),    intent(inout) :: self
-        real, contiguous, target, intent(in)    :: r(:)
-        real, contiguous, target, intent(out)   :: z(:)
+        class(nlcg_objective),    intent(inout)                   :: self
+        real,                     contiguous, target, intent(in)  :: r(:)
+        real,                     contiguous, target, intent(out) :: z(:)
     end subroutine nlcg_precond_i
 
     real(dp) function nlcg_dot_i( self, a, b ) result( value )
         import :: dp, nlcg_objective
-        class(nlcg_objective),    intent(in) :: self
-        real, contiguous, target, intent(in) :: a(:), b(:)
+        class(nlcg_objective),    intent(in)                     :: self
+        real,                     contiguous, target, intent(in) :: a(:), b(:)
     end function nlcg_dot_i
 
     subroutine nlcg_project_i( self, v )
         import :: nlcg_objective
-        class(nlcg_objective),    intent(inout) :: self
-        real, contiguous, target, intent(inout) :: v(:)
+        class(nlcg_objective),    intent(inout)                     :: self
+        real,                     contiguous, target, intent(inout) :: v(:)
     end subroutine nlcg_project_i
 end interface
 
@@ -104,16 +104,16 @@ contains
     !! -<g,d> / curvature(d), optionally refined by a parabola, halving steps that raise the loss and
     !! restarting from steepest descent (the algorithm: wave_model_policy.md, section 6.1)
     subroutine nlcg_solve( obj, x, options, outcome )
-        class(nlcg_objective),     intent(inout) :: obj
-        real, contiguous,          intent(inout) :: x(:)
-        type(nlcg_solver_options), intent(in)    :: options
-        type(nlcg_solver_outcome), intent(out)   :: outcome
+        class(nlcg_objective),     intent(inout)                      :: obj
+        real,                      contiguous,          intent(inout) :: x(:)
+        type(nlcg_solver_options), intent(in)                         :: options
+        type(nlcg_solver_outcome), intent(out)                        :: outcome
         real,     allocatable :: g(:), gnew(:), r(:), rnew(:), z(:), znew(:), d(:), x_old(:)
         real(dp), allocatable :: lhist(:), thist(:), t0hist(:), ghist(:)
-        real(dp) :: loss, loss_new, slope, curv, t0, t, rz, rznew, rold_znew, beta, g0norm
-        real(dp) :: phis(3), den
-        integer  :: n, iter, nb
-        logical  :: l_sd
+        real(dp)              :: loss, loss_new, slope, curv, t0, t, rz, rznew, rold_znew, beta, g0norm
+        real(dp)              :: phis(3), den
+        integer               :: n, iter, nb
+        logical               :: l_sd
         n = obj%size()
         if( n < 1 .or. size(x) /= n ) THROW_HARD('NLCG vector size differs from the objective contract')
         if( options%maxits < 1 ) THROW_HARD('NLCG maxits must be at least 1')

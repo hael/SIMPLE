@@ -57,10 +57,10 @@ contains
     !> Independent half-map noise around a common compact phantom is reduced.  The
     !! test expectations come from that construction, not from the implementation.
     subroutine test_noisy_blob_pair()
-        real, allocatable :: truth(:,:,:), even(:,:,:), odd(:,:,:), raw(:,:,:)
-        real, allocatable :: enhanced(:,:,:), confidence(:,:,:), locres(:,:,:), envelope(:,:,:)
+        real,    allocatable :: truth(:,:,:), even(:,:,:), odd(:,:,:), raw(:,:,:)
+        real,    allocatable :: enhanced(:,:,:), confidence(:,:,:), locres(:,:,:), envelope(:,:,:)
         logical, allocatable :: core(:,:,:), solvent(:,:,:)
-        real :: corr_raw, corr_enhanced, core_confidence, solvent_confidence
+        real                 :: corr_raw, corr_enhanced, core_confidence, solvent_confidence
         write(logfhandle,'(A)') '-- test_noisy_blob_pair'
         call set_fixed_seed(SEED)
         truth = blob_map()
@@ -93,10 +93,10 @@ contains
     !! expand the molecular envelope across the box.  This emulates archived
     !! half-maps whose outer regions retain correlated processing background.
     subroutine test_correlated_background_pair()
-        real, allocatable :: truth(:,:,:), shared(:,:,:), even(:,:,:), odd(:,:,:)
-        real, allocatable :: enhanced(:,:,:), confidence(:,:,:), locres(:,:,:), envelope(:,:,:)
+        real,    allocatable :: truth(:,:,:), shared(:,:,:), even(:,:,:), odd(:,:,:)
+        real,    allocatable :: enhanced(:,:,:), confidence(:,:,:), locres(:,:,:), envelope(:,:,:)
         logical, allocatable :: core(:,:,:), solvent(:,:,:)
-        real :: core_envelope, solvent_envelope
+        real                 :: core_envelope, solvent_envelope
         write(logfhandle,'(A)') '-- test_correlated_background_pair'
         call set_fixed_seed(SEED + 1)
         truth  = blob_map()
@@ -117,10 +117,10 @@ contains
     end subroutine test_correlated_background_pair
 
     subroutine run_enhancer( even_r, odd_r, enhanced_r, confidence_r, locres_r, envelope_r )
-        real, intent(in) :: even_r(:,:,:), odd_r(:,:,:)
+        real, intent(in)               :: even_r(:,:,:), odd_r(:,:,:)
         real, allocatable, intent(out) :: enhanced_r(:,:,:), confidence_r(:,:,:)
         real, allocatable, intent(out) :: locres_r(:,:,:), envelope_r(:,:,:)
-        type(image) :: even, odd, enhanced, confidence, locres, envelope
+        type(image)                          :: even, odd, enhanced, confidence, locres, envelope
         class(halfmap_enhancer), allocatable :: enhancer
         allocate(enhancer)
         call even%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
@@ -145,9 +145,9 @@ contains
 
     function blob_map() result( rmat )
         real, allocatable :: rmat(:,:,:)
-        real, parameter :: CENTRES(3,3) = reshape([-4.,2.,1., 5.,-3.,0., 1.,5.,-4.], [3,3])
-        real :: d2
-        integer :: i, j, k, b
+        real, parameter   :: CENTRES(3,3) = reshape([-4.,2.,1., 5.,-3.,0., 1.,5.,-4.], [3,3])
+        real              :: d2
+        integer           :: i, j, k, b
         allocate(rmat(BOX,BOX,BOX), source=0.)
         do k = 1, BOX
             do j = 1, BOX
@@ -172,7 +172,7 @@ contains
 
     function radius_sq() result( r2 )
         real, allocatable :: r2(:,:,:)
-        integer :: i, j, k
+        integer           :: i, j, k
         allocate(r2(BOX,BOX,BOX))
         do k = 1, BOX
             do j = 1, BOX
@@ -187,7 +187,7 @@ contains
         real,    intent(in) :: a(:,:,:), b(:,:,:)
         logical, intent(in) :: mask(:,:,:)
         real(DP) :: amean, bmean, numer, aden, bden
-        integer :: n
+        integer  :: n
         n = count(mask)
         amean = sum(real(a,DP), mask=mask) / real(n,DP)
         bmean = sum(real(b,DP), mask=mask) / real(n,DP)

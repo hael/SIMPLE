@@ -23,8 +23,8 @@ private
 public :: run_all_simulator_tests
 #include "simple_local_flags.inc"
 
-integer, parameter :: BOX = 64
-real,    parameter :: SMPD = 1.0, KV = 300., CS = 2.7, FRACA = 0.1, DOSE = 40.
+integer, parameter :: BOX    = 64
+real,    parameter :: SMPD   = 1.0, KV = 300., CS = 2.7, FRACA = 0.1, DOSE = 40.
 real,    parameter :: S_BLOB = 2.0
 ! the lattice's interpolation error against an exact reference (TOL_GOLDEN of the wave projector tests)
 real,    parameter :: TOL_LATTICE = 1.10e-2
@@ -43,10 +43,10 @@ contains
     subroutine blob_map( vol, amp )
         class(image), intent(inout) :: vol
         real,         intent(in)    :: amp
-        real, parameter :: CEN(3,3) = reshape([3.,-2.,1., -3.,2.,-2., 1.,3.,3.], [3,3])
+        real, parameter   :: CEN(3,3) = reshape([3.,-2.,1., -3.,2.,-2., 1.,3.,3.], [3,3])
         real, allocatable :: rmat(:,:,:)
-        integer :: i, j, k, b
-        real    :: r2
+        integer           :: i, j, k, b
+        real              :: r2
         call vol%new([BOX,BOX,BOX], SMPD)
         allocate(rmat(BOX,BOX,BOX), source=0.)
         do k = 1, BOX
@@ -115,9 +115,9 @@ contains
         class(ori),   intent(inout) :: o
         integer,      intent(in)    :: model
         class(wave_projector), allocatable :: wproj
-        type(oris)           :: os
-        complex, allocatable :: plane(:,:,:)
-        real,    allocatable :: volts(:,:,:)
+        type(oris)                         :: os
+        complex,               allocatable :: plane(:,:,:)
+        real,                  allocatable :: volts(:,:,:)
         call os%new(1, is_ptcl=.true.)
         call os%set_ori(1, o)
         volts = vol%get_rmat() / electron_scale_link(DOSE, KV, SMPD, BOX)
@@ -139,12 +139,12 @@ contains
     !! deapodisation: fed the deapodised map, twice its particle is PCG's forward model, the scale link's reference
     subroutine test_weak_limit( model )
         integer, intent(in) :: model
-        real, parameter :: AMP_LIN = 0.02, AMP_SO = 0.8
-        type(image) :: vol, vol_deapod, flat
-        type(ori)   :: o
+        real, parameter   :: AMP_LIN = 0.02, AMP_SO = 0.8
+        type(image)       :: vol, vol_deapod, flat
+        type(ori)         :: o
         real, allocatable :: f(:,:,:), odd(:,:,:), even(:,:,:), deapod(:,:,:)
-        real :: err_lin, ratio_even(2), phi_lin, phi_so
-        integer :: iamp
+        real              :: err_lin, ratio_even(2), phi_lin, phi_so
+        integer           :: iamp
         write(*,'(A,I0)') 'test_weak_limit model ', model
         call test_particle(o)
         call blob_map(vol, AMP_LIN)
@@ -183,11 +183,11 @@ contains
 
     ! the parts of the wave particle odd and even in the map's sign
     subroutine odd_even( vol, o, model, odd, even )
-        class(image),      intent(inout) :: vol
-        class(ori),        intent(inout) :: o
-        integer,           intent(in)    :: model
-        real, allocatable, intent(out)   :: odd(:,:,:), even(:,:,:)
-        type(image) :: wplus, wminus
+        class(image),      intent(inout)            :: vol
+        class(ori),        intent(inout)            :: o
+        integer,           intent(in)               :: model
+        real,              allocatable, intent(out) :: odd(:,:,:), even(:,:,:)
+        type(image)       :: wplus, wminus
         real, allocatable :: p(:,:,:), m(:,:,:)
         call wave_particle(vol, o, model, wplus)
         call vol%mul(-1.)
@@ -204,7 +204,7 @@ contains
     function deapod_envelope() result( env )
         real, allocatable :: env(:,:,:), inv1d(:)
         type(kbinterpol)  :: kbwin
-        integer :: i, j, k
+        integer           :: i, j, k
         kbwin = kbinterpol(KBWINSZ, KBALPHA)
         call kb_stencil_centered_crop_inv_envelope_1d(kbwin, 2*BOX, BOX, inv1d)
         allocate(env(BOX,BOX,BOX))
@@ -220,13 +220,13 @@ contains
     !> per-particle B-factors: particle 2 of a pair with B-factors 0 and B predicts bitwise as an operator of
     !! B-factor B for every particle, and differs from particle 1 at the same pose
     subroutine test_bfac_per_particle()
-        real, parameter :: BFAC = 80.
+        real,                  parameter   :: BFAC = 80.
         class(wave_projector), allocatable :: wp_pp, wp_one
-        type(image)          :: vol
-        type(ori)            :: o
-        type(oris)           :: os2, os1
-        complex, allocatable :: planes2(:,:,:), plane1(:,:,:)
-        real,    allocatable :: volts(:,:,:)
+        type(image)                        :: vol
+        type(ori)                          :: o
+        type(oris)                         :: os2, os1
+        complex,               allocatable :: planes2(:,:,:), plane1(:,:,:)
+        real,                  allocatable :: volts(:,:,:)
         write(*,'(A)') 'test_bfac_per_particle'
         call test_particle(o)
         call os2%new(2, is_ptcl=.true.)
@@ -254,12 +254,12 @@ contains
     !> simimg_wave in an empty region: before the normalisation the counts have mean D a^2 and variance
     !! D a^2 + sdev^2, sdev^2 = var(E) / snr; checked to four standard errors over NIMG images
     subroutine test_detector_noise()
-        integer, parameter :: NIMG = 60, NB = 64, NC = 12
-        real,    parameter :: SNR = 0.5
-        type(image) :: img
-        real, allocatable :: rmat(:,:,:), corner(:)
-        real(dp) :: s1, s2, mean_c, var_c, dose_px, sdev2, var_i, var_exp
-        integer  :: n, iimg, i, j
+        integer, parameter   :: NIMG = 60, NB = 64, NC = 12
+        real,    parameter   :: SNR  = 0.5
+        type(image)          :: img
+        real,    allocatable :: rmat(:,:,:), corner(:)
+        real(dp)             :: s1, s2, mean_c, var_c, dose_px, sdev2, var_i, var_exp
+        integer              :: n, iimg, i, j
         write(*,'(A)') 'test_detector_noise'
         call set_fixed_seed(20261024)
         dose_px = real(DOSE, dp) * real(SMPD, dp)**2

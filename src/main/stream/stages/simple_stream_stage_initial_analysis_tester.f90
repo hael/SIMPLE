@@ -16,13 +16,13 @@ use simple_commanders_stream_p03_initial_analysis, only: set_initial_analysis_cl
 use simple_default_clines,                only: AUTOMASK2D_NGROW, AUTOMASK2D_WINSZ, AUTOMASK2D_AMSKLP, AUTOMASK2D_EDGE
 implicit none
 
-character(len=*), parameter :: TEST_PROJFILE  = 'test_initial_analysis.simple'
-character(len=*), parameter :: UPSTREAM       = 'preproc'   ! the preprocessing stage directory (dir_target)
-real,             parameter :: SMPD           = 1.3
-integer,          parameter :: NPTCLS_PER_MIC = 10
-integer,          parameter :: BOX_CAVG       = 16
-real,             parameter :: GRADIENT       = 0.001  ! per pixel along x, so no image is constant
-real,             parameter :: PIXEL_TOL      = 0.01   ! pixel (1,1) is the class value + GRADIENT
+character(len=*), parameter :: TEST_PROJFILE                  = 'test_initial_analysis.simple'
+character(len=*), parameter :: UPSTREAM                       = 'preproc' ! the preprocessing stage directory (dir_target)
+real,             parameter :: SMPD                           = 1.3
+integer,          parameter :: NPTCLS_PER_MIC                 = 10
+integer,          parameter :: BOX_CAVG                       = 16
+real,             parameter :: GRADIENT                       = 0.001     ! per pixel along x, so no image is constant
+real,             parameter :: PIXEL_TOL                      = 0.01      ! pixel (1,1) is the class value + GRADIENT
 integer,          parameter :: ALL_ACCEPTED(STREAM_NMOVS_SET) = 1
 
 contains
@@ -55,8 +55,8 @@ contains
     subroutine test_segdiam_bins_count_erosion()
         class(segdiam_bin_picker), allocatable :: picker
         class(sp_project),         allocatable :: proj
-        type(string) :: cwd_saved, root
-        integer      :: nfail0
+        type(string)                           :: cwd_saved, root
+        integer                                :: nfail0
         write(*,'(A)') 'test_segdiam_bins_count_erosion'
         nfail0 = tests_failed
         call enter_fixture('ia_segdiam_bins', cwd_saved, root)
@@ -86,10 +86,10 @@ contains
     !! working directory
     subroutine test_init_params()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(cmdline)                       :: cline
-        type(sp_project)                    :: proj
-        type(string)                        :: cwd_saved, root, cwd, qsys
-        integer                             :: nfail0
+        type(cmdline)                                     :: cline
+        type(sp_project)                                  :: proj
+        type(string)                                      :: cwd_saved, root, cwd, qsys
+        integer                                           :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_init_params'
         nfail0 = tests_failed
@@ -126,9 +126,9 @@ contains
 
     subroutine test_paths()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(cmdline)                       :: cline
-        type(string)                        :: cwd_saved, root, cwd, fname, expected
-        integer                             :: nfail0
+        type(cmdline)                                     :: cline
+        type(string)                                      :: cwd_saved, root, cwd, fname, expected
+        integer                                           :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_paths'
         nfail0 = tests_failed
@@ -153,9 +153,9 @@ contains
     !> the stage waits, logging once, until preprocessing has made its completed-projects folder
     subroutine test_attach_upstream_waits()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(cmdline)                       :: cline
-        type(string)                        :: cwd_saved, root
-        integer                             :: nfail0
+        type(cmdline)                                     :: cline
+        type(string)                                      :: cwd_saved, root
+        integer                                           :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_attach_upstream_waits'
         nfail0 = tests_failed
@@ -177,9 +177,9 @@ contains
     !> one record per accepted micrograph of each newly completed project, each project once
     subroutine test_import_projects()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(cmdline)                       :: cline
-        type(string)                        :: cwd_saved, root
-        integer                             :: nfail0
+        type(cmdline)                                     :: cline
+        type(string)                                      :: cwd_saved, root
+        integer                                           :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_import_projects'
         nfail0 = tests_failed
@@ -205,9 +205,9 @@ contains
     !! replaces them rather than appending
     subroutine test_rebuild_init_mics()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(cmdline)                       :: cline
-        type(string)                        :: cwd_saved, root
-        integer                             :: nfail0
+        type(cmdline)                                     :: cline
+        type(string)                                      :: cwd_saved, root
+        integer                                           :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_rebuild_init_mics'
         nfail0 = tests_failed
@@ -233,12 +233,12 @@ contains
     !! starting a job or sending anything more
     subroutine test_cycle1_setup_waits()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(cmdline)                       :: cline
-        type(stream_pipe)                   :: reader
-        character(len=:), allocatable       :: buffer
-        type(string)                        :: cwd_saved, root
-        integer(c_int)                      :: fds(2)
-        integer                             :: nfail0
+        type(cmdline)                                     :: cline
+        type(stream_pipe)                                 :: reader
+        character(len=:),                     allocatable :: buffer
+        type(string)                                      :: cwd_saved, root
+        integer(c_int)                                    :: fds(2)
+        integer                                           :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_cycle1_setup_waits'
         nfail0 = tests_failed
@@ -272,9 +272,9 @@ contains
     !! imports and sets cycle 1 up
     subroutine test_iterate_passes()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(cmdline)                       :: cline
-        type(string)                        :: cwd_saved, root
-        integer                             :: nfail0
+        type(cmdline)                                     :: cline
+        type(string)                                      :: cwd_saved, root
+        integer                                           :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_iterate_passes'
         nfail0 = tests_failed
@@ -308,15 +308,15 @@ contains
     !! range are ignored
     subroutine test_gui_selection_ends_stage()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(cmdline)                       :: cline
-        type(stream_pipe)                   :: writer, reader
-        type(gui_metadata_stream_update)    :: update
-        type(gui_metadata_cavg2D)           :: cavg
-        type(image)                         :: img
-        character(len=:), allocatable       :: buffer
-        type(string)                        :: cwd_saved, root, cwd, refs
-        integer(c_int)                      :: gui_in(2), gui_out(2)
-        integer                             :: nfail0, ldim(3), nrefs, imsg
+        type(cmdline)                                     :: cline
+        type(stream_pipe)                                 :: writer, reader
+        type(gui_metadata_stream_update)                  :: update
+        type(gui_metadata_cavg2D)                         :: cavg
+        type(image)                                       :: img
+        character(len=:),                     allocatable :: buffer
+        type(string)                                      :: cwd_saved, root, cwd, refs
+        integer(c_int)                                    :: gui_in(2), gui_out(2)
+        integer                                           :: nfail0, ldim(3), nrefs, imsg
         allocate(stage)
         write(*,'(A)') 'test_gui_selection_ends_stage'
         nfail0 = tests_failed
@@ -412,14 +412,14 @@ contains
     !! finished at once, and nothing publishes over them
     subroutine test_published_pickrefs_are_final()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(cmdline)                       :: cline
-        type(stream_pipe)                   :: reader
-        type(gui_metadata_cavg2D)           :: cavg
-        character(len=:), allocatable       :: buffer
-        type(string)                        :: cwd_saved, root, refs, later
-        integer(c_int)                      :: gui_out(2)
-        integer                             :: nfail0, ldim(3), nrefs, imsg
-        logical                             :: l_published
+        type(cmdline)                                     :: cline
+        type(stream_pipe)                                 :: reader
+        type(gui_metadata_cavg2D)                         :: cavg
+        character(len=:),                     allocatable :: buffer
+        type(string)                                      :: cwd_saved, root, refs, later
+        integer(c_int)                                    :: gui_out(2)
+        integer                                           :: nfail0, ldim(3), nrefs, imsg
+        logical                                           :: l_published
         allocate(stage)
         write(*,'(A)') 'test_published_pickrefs_are_final'
         nfail0 = tests_failed
@@ -465,15 +465,15 @@ contains
     !> one message per status call, carrying the stage's counts
     subroutine test_status_messages()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(cmdline)                       :: cline
-        type(stream_pipe)                   :: reader
-        type(gui_metadata_stream_picking)   :: picking
-        type(gui_metadata_stream_initial_analysis) :: initial_analysis
-        character(len=:), allocatable       :: buffer
-        type(string)                        :: cwd_saved, root, stage_name
-        integer(c_int)                      :: fds(2)
-        integer                             :: nfail0, nimported, naccepted, nrejected, nptcls, nppm, tlast, box
-        logical                             :: l_assigned
+        type(cmdline)                                     :: cline
+        type(stream_pipe)                                 :: reader
+        type(gui_metadata_stream_picking)                 :: picking
+        type(gui_metadata_stream_initial_analysis)        :: initial_analysis
+        character(len=:),                     allocatable :: buffer
+        type(string)                                      :: cwd_saved, root, stage_name
+        integer(c_int)                                    :: fds(2)
+        integer                                           :: nfail0, nimported, naccepted, nrejected, nptcls, nppm, tlast, box
+        logical                                           :: l_assigned
         allocate(stage)
         write(*,'(A)') 'test_status_messages'
         nfail0 = tests_failed
@@ -531,14 +531,14 @@ contains
     !! remainder going to the largest fractions; the rejected class is left out, and the even/odd
     !! stacks, the cls3D segment, the output entry and the project follow
     subroutine test_balance_classes()
-        integer, parameter :: STATES(4) = [1, 0, 1, 1]
-        integer, parameter :: POPS(4)   = [1, 5, 3, 6]
+        integer,                              parameter   :: STATES(4) = [1, 0, 1, 1]
+        integer,                              parameter   :: POPS(4)   = [1, 5, 3, 6]
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(sp_project)                    :: proj, written
-        type(image)                         :: img
-        type(string)                        :: cwd_saved, root, cwd, projfile, projfile_bal, balanced, stk
-        integer                             :: nfail0, ldim(3), n, ncls
-        real                                :: smpd_here
+        type(sp_project)                                  :: proj, written
+        type(image)                                       :: img
+        type(string)                                      :: cwd_saved, root, cwd, projfile, projfile_bal, balanced, stk
+        integer                                           :: nfail0, ldim(3), n, ncls
+        real                                              :: smpd_here
         allocate(stage)
         write(*,'(A)') 'test_balance_classes'
         nfail0 = tests_failed
@@ -599,9 +599,9 @@ contains
     !> a restart before publication clears the previous run's working folders, and only those
     subroutine test_clear_previous_run()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(cmdline)                       :: cline
-        type(string)                        :: cwd_saved, root
-        integer                             :: nfail0
+        type(cmdline)                                     :: cline
+        type(string)                                      :: cwd_saved, root
+        integer                                           :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_clear_previous_run'
         nfail0 = tests_failed
@@ -628,8 +628,8 @@ contains
     !> the result of solve3D_cavgs is in the highest-numbered '<n>_solve3D_cavgs' directory
     subroutine test_find_final_solve3D_dir()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(string)                        :: cwd_saved, root, final_dir
-        integer                             :: nfail0
+        type(string)                                      :: cwd_saved, root, final_dir
+        integer                                           :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_find_final_solve3D_dir'
         nfail0 = tests_failed
@@ -689,8 +689,8 @@ contains
     !! then the largest population; when none passes, the same order over every candidate
     subroutine test_choose_state()
         class(stream_stage_initial_analysis), allocatable :: stage
-        logical, parameter :: ALL3(3) = .true.
-        real,    parameter :: NORES(3) = 0.
+        logical,                              parameter   :: ALL3(3)  = .true.
+        real,                                 parameter   :: NORES(3) = 0.
         allocate(stage)
         write(*,'(A)') 'test_choose_state'
         ! dominant fraction, resolution, directions, population
@@ -721,14 +721,14 @@ contains
     !! rule applied to the particle's true diameter, never larger than the box's default, and the
     !! default when no class is selected
     subroutine test_estimate_mskdiam()
-        integer, parameter :: BOX = 64, RAD_SMALL = 8, RAD_LARGE = 20 ! disc radii (px)
-        real,    parameter :: SMPD_CAVG = 2.0
+        integer, parameter                  :: BOX       = 64, RAD_SMALL = 8, RAD_LARGE = 20 ! disc radii (px)
+        real,    parameter                  :: SMPD_CAVG = 2.0
         type(stream_stage_initial_analysis) :: stage
         type(image)                         :: cavgs(3)
         type(string)                        :: cwd_saved, root
         type(automask2D_settings)           :: msk_settings
-        real    :: mskdiam_box, mskdiam_small, mskdiam_all, mskdiam_none, rule_small
-        integer :: nfail0, i
+        real                                :: mskdiam_box, mskdiam_small, mskdiam_all, mskdiam_none, rule_small
+        integer                             :: nfail0, i
         write(*,'(A)') 'test_estimate_mskdiam'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_estimate_mskdiam', cwd_saved, root)
@@ -762,13 +762,13 @@ contains
     !! puts back the particles' states from before the selection, then maps the model's. A
     !! particle deselected before then stays so
     subroutine test_restore_cavgs_selection()
-        integer, parameter :: NCLS = 3, NPTCLS = 6
-        integer, parameter :: CLASSES(NPTCLS) = [1, 1, 2, 2, 3, 3]
-        integer, parameter :: QUALITY(NCLS)   = [1, 1, 0]
+        integer,                              parameter   :: NCLS            = 3, NPTCLS = 6
+        integer,                              parameter   :: CLASSES(NPTCLS) = [1, 1, 2, 2, 3, 3]
+        integer,                              parameter   :: QUALITY(NCLS)   = [1, 1, 0]
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(sp_project)     :: proj
-        integer, allocatable :: states2D(:), states3D(:)
-        integer :: icls, iptcl
+        type(sp_project)                                  :: proj
+        integer,                              allocatable :: states2D(:), states3D(:)
+        integer                                           :: icls, iptcl
         allocate(stage)
         write(*,'(A)') 'test_restore_cavgs_selection'
         call proj%os_cls2D%new(NCLS, is_ptcl=.false.)
@@ -806,9 +806,9 @@ contains
 
     subroutine test_finished()
         class(stream_stage_initial_analysis), allocatable :: stage
-        type(cmdline)                       :: cline
-        type(string)                        :: cwd_saved, root
-        integer                             :: nfail0
+        type(cmdline)                                     :: cline
+        type(string)                                      :: cwd_saved, root
+        integer                                           :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
@@ -859,7 +859,7 @@ contains
     ! that takes files written in the same second
     subroutine make_test_stage( stage, cline )
         class(stream_stage_initial_analysis), intent(inout) :: stage
-        type(cmdline),                       intent(inout) :: cline
+        type(cmdline),                        intent(inout) :: cline
         call stage%init_params(cline)
         call stage%init_gui(-1, -1)
         stage%settle_s = -1
@@ -916,9 +916,9 @@ contains
     ! a project with a class-average stack (image i is i plus a small gradient), and optionally its
     ! even (10+i) and odd (20+i) stacks, and a cls2D segment with the given states and populations
     subroutine write_cavgs_project( projfile, stk, states, pops, l_evenodd )
-        class(string),     intent(in) :: projfile, stk
-        integer,           intent(in) :: states(:), pops(:)
-        logical, optional, intent(in) :: l_evenodd
+        class(string),     intent(in)           :: projfile, stk
+        integer,           intent(in)           :: states(:), pops(:)
+        logical,           optional, intent(in) :: l_evenodd
         type(sp_project) :: proj
         integer          :: icls, ncls
         ncls = size(states)
@@ -965,7 +965,7 @@ contains
     function swap_ext( fname, ext ) result( swapped )
         class(string),    intent(in) :: fname
         character(len=*), intent(in) :: ext
-        type(string) :: swapped
+        type(string)                  :: swapped
         character(len=:), allocatable :: f
         f       = fname%to_char()
         swapped = f(1:len(f) - len(MRC_EXT))//ext

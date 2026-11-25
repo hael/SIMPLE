@@ -44,10 +44,10 @@ contains
     !---------------- lifecycle / count ----------------
 
     subroutine test_init_clear_destroy_and_count()
-        type(vrefhash) :: h
-        integer, target :: i
+        type(vrefhash)    :: h
+        integer,  target  :: i
         class(*), pointer :: p
-        logical :: ok
+        logical           :: ok
         write(*,'(A)') 'test_init_clear_destroy_and_count'
         call h%init(16)
         call assert_int(0, h%count(), 'count() after init == 0')
@@ -65,11 +65,11 @@ contains
     !---------------- set/get/has_key with char + string keys ----------------
 
     subroutine test_set_get_has_key_with_char_and_string_keys()
-        type(vrefhash) :: h
-        integer, target :: i
+        type(vrefhash)    :: h
+        integer,  target  :: i
         class(*), pointer :: p
-        logical :: ok
-        type(string) :: skey
+        logical           :: ok
+        type(string)      :: skey
         write(*,'(A)') 'test_set_get_has_key_with_char_and_string_keys'
         call h%init(32)
         i = 42
@@ -101,10 +101,10 @@ contains
     !---------------- reference semantics: updates visible ----------------
 
     subroutine test_reference_semantics_updates_visible()
-        type(vrefhash) :: h
-        type(my_cfg), target :: cfg
-        class(*), pointer :: p
-        logical :: ok
+        type(vrefhash)        :: h
+        type(my_cfg), target  :: cfg
+        class(*),     pointer :: p
+        logical               :: ok
         write(*,'(A)') 'test_reference_semantics_updates_visible'
         call h%init(64)
         cfg%n = 1
@@ -129,10 +129,10 @@ contains
     !---------------- replace pointer on same key ----------------
 
     subroutine test_replace_pointer_on_same_key()
-        type(vrefhash) :: h
-        integer, target :: a, b
+        type(vrefhash)    :: h
+        integer,  target  :: a, b
         class(*), pointer :: p
-        logical :: ok
+        logical           :: ok
         write(*,'(A)') 'test_replace_pointer_on_same_key'
         call h%init(32)
         a = 1
@@ -173,14 +173,14 @@ contains
     !---------------- store multiple dynamic types ----------------
 
     subroutine test_store_multiple_dynamic_types()
-        type(vrefhash) :: h
-        integer,  target :: i
-        real,     target :: r
-        logical,  target :: l
+        type(vrefhash)                    :: h
+        integer,      target              :: i
+        real,         target              :: r
+        logical,      target              :: l
         character(:), allocatable, target :: s
-        type(my_obj), target :: o
-        class(*), pointer :: p
-        logical :: ok
+        type(my_obj), target              :: o
+        class(*),     pointer             :: p
+        logical                           :: ok
         write(*,'(A)') 'test_store_multiple_dynamic_types'
         call h%init(128)
         i = 10
@@ -222,10 +222,10 @@ contains
     !---------------- delete ----------------
 
     subroutine test_delete()
-        type(vrefhash) :: h
-        integer, target :: a, b
+        type(vrefhash)    :: h
+        integer,  target  :: a, b
         class(*), pointer :: p
-        logical :: ok
+        logical           :: ok
         write(*,'(A)') 'test_delete'
         call h%init(32)
         a = 1; b = 2
@@ -246,9 +246,9 @@ contains
     !---------------- missing key behavior ----------------
 
     subroutine test_missing_key_get_ref_returns_null()
-        type(vrefhash) :: h
+        type(vrefhash)    :: h
         class(*), pointer :: p
-        logical :: ok
+        logical           :: ok
         write(*,'(A)') 'test_missing_key_get_ref_returns_null'
         call h%init(16)
         call h%get_ref('nope', p, ok)
@@ -260,13 +260,13 @@ contains
     !---------------- collision sanity (many keys) ----------------
 
     subroutine test_collision_sanity_many_keys()
-        type(vrefhash) :: h
-        integer, parameter :: nkeys = 200
-        integer :: i
-        integer, target :: vals(nkeys)
-        character(len=32) :: k
-        class(*), pointer :: p
-        logical :: ok
+        type(vrefhash)      :: h
+        integer,  parameter :: nkeys = 200
+        integer             :: i
+        integer,  target    :: vals(nkeys)
+        character(len=32)   :: k
+        class(*), pointer   :: p
+        logical             :: ok
         write(*,'(A)') 'test_collision_sanity_many_keys'
         ! small bucket count forces collisions
         call h%init(8)
@@ -294,11 +294,11 @@ contains
     !---------------- keys() ----------------
 
     subroutine test_keys_returns_all_keys()
-        type(vrefhash) :: h
-        integer, target :: a, b, c
+        type(vrefhash)            :: h
+        integer,      target      :: a, b, c
         type(string), allocatable :: ks(:)
-        logical :: fa, fb, fc
-        integer :: i
+        logical                   :: fa, fb, fc
+        integer                   :: i
         write(*,'(A)') 'test_keys_returns_all_keys'
         call h%init(32)
         a = 1; b = 2; c = 3
@@ -322,8 +322,8 @@ contains
     !---------------- keys_sorted() ----------------
 
     subroutine test_keys_sorted_returns_sorted_keys()
-        type(vrefhash) :: h
-        integer, target :: a, b, c
+        type(vrefhash)            :: h
+        integer,      target      :: a, b, c
         type(string), allocatable :: ks(:)
         write(*,'(A)') 'test_keys_sorted_returns_sorted_keys'
         call h%init(32)

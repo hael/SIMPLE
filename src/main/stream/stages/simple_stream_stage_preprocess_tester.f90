@@ -14,8 +14,8 @@ use simple_gui_metadata_types,         only: GUI_METADATA_STREAM_UPDATE_TYPE
 implicit none
 
 character(len=*), parameter :: TEST_PROJFILE = 'test_preprocess_stage.simple'
-real,             parameter :: SMPD = 1.3, CS = 2.7, KV = 300.0, FRACA = 0.1
-real,             parameter :: CTFRES_THRES = 10.0, ICEFRAC_THRES = 1.0, ASTIG_THRES = 10.0
+real,             parameter :: SMPD          = 1.3, CS = 2.7, KV = 300.0, FRACA = 0.1
+real,             parameter :: CTFRES_THRES  = 10.0, ICEFRAC_THRES = 1.0, ASTIG_THRES = 10.0
 
 contains
 
@@ -37,9 +37,9 @@ contains
     !! queue gets one partition for ncunits computing units (out-of-bounds jobs_done)
     subroutine test_init_params_split_mode()
         class(stream_stage_preprocess), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(string)                  :: cwd_saved, root
-        integer                       :: nfail0
+        type(cmdline)                               :: cline
+        type(string)                                :: cwd_saved, root
+        integer                                     :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_init_params_split_mode'
         nfail0 = tests_failed
@@ -60,10 +60,10 @@ contains
     !! micrographs moves to the completed folder
     subroutine test_import_completed()
         class(stream_stage_preprocess), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(sp_project)              :: job
-        type(string)                  :: cwd_saved, root, job_dir, done(2), partial(1)
-        integer                       :: nfail0, n_imported
+        type(cmdline)                               :: cline
+        type(sp_project)                            :: job
+        type(string)                                :: cwd_saved, root, job_dir, done(2), partial(1)
+        integer                                     :: nfail0, n_imported
         allocate(stage)
         write(*,'(A)') 'test_import_completed'
         nfail0 = tests_failed
@@ -104,10 +104,10 @@ contains
     !! micrographs the STAR file is written on every import
     subroutine test_process_imports()
         class(stream_stage_preprocess), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(string)                  :: cwd_saved, root
-        real,    parameter            :: CTFRES(5) = [4., 15., 4., 4., 4.]
-        integer                       :: nfail0, imic
+        type(cmdline)                               :: cline
+        type(string)                                :: cwd_saved, root
+        real,                           parameter   :: CTFRES(5) = [4., 15., 4., 4., 4.]
+        integer                                     :: nfail0, imic
         allocate(stage)
         write(*,'(A)') 'test_process_imports'
         nfail0 = tests_failed
@@ -134,9 +134,9 @@ contains
     !! too, goes into the history, and import indices continue after the highest given
     subroutine test_import_previous_projects()
         class(stream_stage_preprocess), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(string)                  :: cwd_saved, root
-        integer                       :: nfail0, imic
+        type(cmdline)                               :: cline
+        type(string)                                :: cwd_saved, root
+        integer                                     :: nfail0, imic
         allocate(stage)
         write(*,'(A)') 'test_import_previous_projects'
         nfail0 = tests_failed
@@ -169,10 +169,10 @@ contains
     !! XML metadata path without the _fractions suffix, and the worker command line pointed at it
     subroutine test_create_movies_set_project()
         class(stream_stage_preprocess), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(sp_project)              :: set_proj
-        type(string)                  :: cwd_saved, root, cwd, movies(STREAM_NMOVS_SET), meta, projfile
-        integer                       :: nfail0, imov
+        type(cmdline)                               :: cline
+        type(sp_project)                            :: set_proj
+        type(string)                                :: cwd_saved, root, cwd, movies(STREAM_NMOVS_SET), meta, projfile
+        integer                                     :: nfail0, imov
         allocate(stage)
         write(*,'(A)') 'test_create_movies_set_project'
         nfail0 = tests_failed
@@ -224,8 +224,8 @@ contains
     !! reference as resolved and no further flipping
     subroutine test_build_worker_cline()
         class(stream_stage_preprocess), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(string)                  :: val
+        type(cmdline)                               :: cline
+        type(string)                                :: val
         allocate(stage)
         write(*,'(A)') 'test_build_worker_cline'
         call cline%set('prg',      'preprocess_stream')
@@ -252,9 +252,9 @@ contains
     !! written and both the parameters and the command line point to it
     subroutine test_resolve_gain_static_flip()
         class(stream_stage_preprocess), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(string)                  :: cwd_saved, root, gainref
-        integer                       :: nfail0
+        type(cmdline)                               :: cline
+        type(string)                                :: cwd_saved, root, gainref
+        integer                                     :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_resolve_gain_static_flip'
         nfail0 = tests_failed
@@ -279,13 +279,13 @@ contains
     !! the worker command line; a field left at 0 (unset) changes nothing
     subroutine test_apply_gui_updates()
         class(stream_stage_preprocess), allocatable    :: stage
-        type(cmdline)                    :: cline
-        type(stream_pipe)                :: writer
-        type(gui_metadata_stream_update) :: update
-        character(len=:), allocatable    :: buffer
-        type(string)                     :: cwd_saved, root
-        integer(c_int)                   :: fds(2)
-        integer                          :: nfail0
+        type(cmdline)                                  :: cline
+        type(stream_pipe)                              :: writer
+        type(gui_metadata_stream_update)               :: update
+        character(len=:),               allocatable    :: buffer
+        type(string)                                   :: cwd_saved, root
+        integer(c_int)                                 :: fds(2)
+        integer                                        :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_apply_gui_updates'
         nfail0 = tests_failed
@@ -321,12 +321,12 @@ contains
     !> one status message per call, of the preprocessing status type
     subroutine test_send_status()
         class(stream_stage_preprocess), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(stream_pipe)             :: reader
-        character(len=:), allocatable :: buffer
-        type(string)                  :: cwd_saved, root
-        integer(c_int)                :: fds(2)
-        integer                       :: nfail0, imic, meta_type
+        type(cmdline)                               :: cline
+        type(stream_pipe)                           :: reader
+        character(len=:),               allocatable :: buffer
+        type(string)                                :: cwd_saved, root
+        integer(c_int)                              :: fds(2)
+        integer                                     :: nfail0, imic, meta_type
         allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
@@ -358,9 +358,9 @@ contains
     !> the stage finishes on the stream's termination file or once enough micrographs are imported
     subroutine test_finished()
         class(stream_stage_preprocess), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(string)                  :: cwd_saved, root
-        integer                       :: nfail0
+        type(cmdline)                               :: cline
+        type(string)                                :: cwd_saved, root
+        integer                                     :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
@@ -404,7 +404,7 @@ contains
     ! a stage with parameters, job directories, GUI metadata on no pipe, and no waits
     subroutine make_test_stage( stage, cline )
         class(stream_stage_preprocess), intent(inout) :: stage
-        type(cmdline),                 intent(inout) :: cline
+        type(cmdline),                  intent(inout) :: cline
         type(sp_project) :: proj
         call simple_mkdir('movies')
         ! an existing project file, so init_params does not build one from the environment
@@ -423,13 +423,13 @@ contains
 
     ! a project of micrographs with the given states and ctfres; movies are <prefix><i>.mrcs
     subroutine write_mic_project( fname, states, ctfres, prefix, importind0 )
-        class(string),     intent(in) :: fname
-        integer,           intent(in) :: states(:)
-        real,              intent(in) :: ctfres(:)
-        character(len=*),  intent(in) :: prefix
-        integer, optional, intent(in) :: importind0 ! the first micrograph's import index
+        class(string),     intent(in)           :: fname
+        integer,           intent(in)           :: states(:)
+        real,              intent(in)           :: ctfres(:)
+        character(len=*),  intent(in)           :: prefix
+        integer,           optional, intent(in) :: importind0 ! the first micrograph's import index
         type(sp_project) :: proj
-        integer :: imic
+        integer          :: imic
         call proj%os_mic%new(size(states), is_ptcl=.false.)
         do imic = 1,size(states)
             call set_mic(proj%os_mic, imic, states(imic), ctfres(imic), string(prefix//int2str(imic)//'.mrcs'))

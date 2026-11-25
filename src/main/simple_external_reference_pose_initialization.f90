@@ -22,26 +22,26 @@ contains
     subroutine initialize_poses_against_external_references( params, parent_cline, xrefine3D, xrec3D, &
         &nactive, reference_vols, checkpoint_vols, pose_init_iter, lp_init, l_all_rows, l_poseless )
         use simple_default_clines, only: strip_sigma2_anneal_args
-        class(parameters),     intent(in)    :: params
-        class(cmdline),        intent(inout) :: parent_cline
-        class(commander_base), intent(inout) :: xrefine3D, xrec3D
-        integer,               intent(in)    :: nactive
-        type(string),          intent(in)    :: reference_vols(:)
-        type(string),          intent(out)   :: checkpoint_vols(:)
-        integer,               intent(in)    :: pose_init_iter
-        real,        optional, intent(in)    :: lp_init
-        logical,     optional, intent(in)    :: l_all_rows
-        logical,     optional, intent(in)    :: l_poseless
-        integer, parameter :: NSAMPLE_POSE_INIT_CAP = 100000
-        integer, parameter :: NSPACE_POSE_INIT       = 2500
-        real,    parameter :: LP_POSE_INIT           = 15.0
+        class(parameters),     intent(in)           :: params
+        class(cmdline),        intent(inout)        :: parent_cline
+        class(commander_base), intent(inout)        :: xrefine3D, xrec3D
+        integer,               intent(in)           :: nactive
+        type(string),          intent(in)           :: reference_vols(:)
+        type(string),          intent(out)          :: checkpoint_vols(:)
+        integer,               intent(in)           :: pose_init_iter
+        real,                  optional, intent(in) :: lp_init
+        logical,               optional, intent(in) :: l_all_rows
+        logical,               optional, intent(in) :: l_poseless
+        integer, parameter         :: NSAMPLE_POSE_INIT_CAP  = 100000
+        integer, parameter         :: NSPACE_POSE_INIT       = 2500
+        real,    parameter         :: LP_POSE_INIT           = 15.0
         type(commander_calc_pspec) :: xcalc_pspec
-        type(cmdline) :: cline_sigma_bootstrap, cline_pose_init, cline_checkpoint
-        type(lp_crop_inf) :: lpinfo_pose_init(1)
-        type(string)      :: startvol
-        integer :: state, nsample_pose_init
-        real    :: ufrac_pose_init, lp
-        logical :: l_all
+        type(cmdline)              :: cline_sigma_bootstrap, cline_pose_init, cline_checkpoint
+        type(lp_crop_inf)          :: lpinfo_pose_init(1)
+        type(string)               :: startvol
+        integer                    :: state, nsample_pose_init
+        real                       :: ufrac_pose_init, lp
+        logical                    :: l_all
         if( nactive < 1 ) THROW_HARD('external-reference pose initialization requires active particles')
         if( size(reference_vols) < 1 ) THROW_HARD('external-reference pose initialization requires references')
         if( size(checkpoint_vols) /= size(reference_vols) )then
@@ -165,9 +165,9 @@ contains
         type(string), intent(in) :: projfile
         integer,      intent(in) :: nstates, nsample_expected
         logical,      intent(in) :: l_all
-        type(sp_project) :: pose_proj
+        type(sp_project)     :: pose_proj
         integer, allocatable :: states(:), updatecnts(:)
-        integer :: state, nupdated, state_pop, nexpected
+        integer              :: state, nupdated, state_pop, nexpected
         call pose_proj%read_segment('ptcl3D', projfile)
         if( .not. pose_proj%os_ptcl3D%isthere('updatecnt') )then
             call pose_proj%kill

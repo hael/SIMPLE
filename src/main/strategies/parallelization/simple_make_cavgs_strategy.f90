@@ -42,8 +42,8 @@ end type make_cavgs_hooks
 ! --------------------------------------------------------------------
 type, abstract :: make_cavgs_strategy
     type(make_cavgs_hooks) :: hooks
-    logical :: l_from_distr_cmd = .false.  ! entrypoint was exec_make_cavgs_distr
-    logical :: l_touch_async    = .false.  ! touch MAKECAVGS_FINISHED when async=yes
+    logical                :: l_from_distr_cmd = .false. ! entrypoint was exec_make_cavgs_distr
+    logical                :: l_touch_async    = .false. ! touch MAKECAVGS_FINISHED when async=yes
 contains
     procedure(apply_defaults_interface), deferred :: apply_defaults
     procedure(init_interface),           deferred :: initialize
@@ -51,7 +51,7 @@ contains
     procedure(finalize_interface),       deferred :: finalize_run
     procedure(cleanup_interface),        deferred :: cleanup
     procedure(endmsg_interface),         deferred :: end_message
-    procedure :: after_end => base_after_end
+    procedure                                     :: after_end => base_after_end
 end type make_cavgs_strategy
 
 type, extends(make_cavgs_strategy) :: make_cavgs_shmem_strategy
@@ -149,12 +149,12 @@ contains
     ! Factory
     ! ====================================================================
     function create_make_cavgs_strategy(cline, hooks, from_distr_cmd) result(strategy)
-        class(cmdline),         intent(in) :: cline
-        type(make_cavgs_hooks), intent(in) :: hooks
-        logical, optional,      intent(in) :: from_distr_cmd
+        class(cmdline),         intent(in)                :: cline
+        type(make_cavgs_hooks), intent(in)                :: hooks
+        logical,                optional,      intent(in) :: from_distr_cmd
         class(make_cavgs_strategy), allocatable :: strategy
-        integer :: nparts
-        logical :: is_worker, is_master, l_from
+        integer                                 :: nparts
+        logical                                 :: is_worker, is_master, l_from
         l_from = .false.
         if( present(from_distr_cmd) ) l_from = from_distr_cmd
         if( cline%defined('nparts') )then

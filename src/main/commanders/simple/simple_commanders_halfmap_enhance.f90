@@ -27,13 +27,13 @@ contains
     subroutine exec_enhance( self, cline )
         class(commander_enhance), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(parameters) :: params
-        type(image) :: even, odd, enhanced, confidence, local_resolution, envelope
+        type(parameters)       :: params
+        type(image)            :: even, odd, enhanced, confidence, local_resolution, envelope
         type(halfmap_enhancer) :: enhancer
-        type(string) :: ext, confidence_file, locres_file, envelope_file
-        integer :: ldim_even(3), ldim_odd(3), nsections
-        real :: smpd, smpd_even, smpd_odd, noise_mean, noise_sdev
-        logical :: smpd_override
+        type(string)           :: ext, confidence_file, locres_file, envelope_file
+        integer                :: ldim_even(3), ldim_odd(3), nsections
+        real                   :: smpd, smpd_even, smpd_odd, noise_mean, noise_sdev
+        logical                :: smpd_override
         smpd_override = cline%defined('smpd')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)

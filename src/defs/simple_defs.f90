@@ -11,7 +11,7 @@ integer,     parameter :: STDLEN       = 512  !< standard string length
 integer,     parameter :: LONGSTRLEN   = 1024 !< longer string length
 integer,     parameter :: XLONGSTRLEN  = 8192 !< extra longer string length
 ! GLOBAL REAL CONSTANTS
-integer,     parameter :: MAXS         = 99 !< maximum number of states
+integer,     parameter :: MAXS         = 99                    !< maximum number of states
 integer,     parameter :: short        = selected_int_kind(4)
 integer,     parameter :: long         = selected_int_kind(9)
 integer,     parameter :: longer       = selected_int_kind(16)
@@ -25,7 +25,7 @@ integer,     parameter :: DOUBLE       = kind(1.0d0)
 integer,     parameter :: SPC          = kind((1.0,1.0))
 integer,     parameter :: DPC          = kind((1.0d0,1.0d0))
 integer,     parameter :: LGT          = kind(.true.)
-integer,     parameter :: JPEG_DIM     = 100                 ! dimension of jpeg thumbnails
+integer,     parameter :: JPEG_DIM     = 100                   ! dimension of jpeg thumbnails
 real(sp),    parameter :: PI           = acos(-1.)
 real(dp),    parameter :: DPI          = acos(-1.d0)
 real(sp),    parameter :: PIO2         = acos(-1.)/2.
@@ -47,9 +47,9 @@ complex(dp), parameter :: DCMPLX_ZERO  = cmplx(0.d0,0.d0, kind=dp)
 character(len=:), allocatable :: CWD_GLOB_ORIG, CWD_GLOB
 character(len=*), parameter   :: LOGFNAME   = 'simple.log'        !< log file name
 integer                       :: logfhandle = OUTPUT_UNIT         !< log file handle, default to STDOUT
-logical, parameter            :: STDOUT2LOG = .false.
+logical,          parameter   :: STDOUT2LOG = .false.
 ! other global variables
-integer                       :: nthr_glob = 1                    !< number of threads global variable
+integer                       :: nthr_glob            = 1         !< number of threads global variable
 logical                       :: l_distr_worker_glob              !< global distributed worker mode execution flag
 character(len=:), allocatable :: worker_projfile_glob             !< a partition worker's input project, which it never writes
 integer                       :: part_glob                        !< global part index
@@ -82,8 +82,8 @@ real,    parameter    :: ENVMSKLP_DEFAULT          = 20.0      !< envfsc density
 ! minimum density-envelope dilation (in A): 7 layers at 1.075 A/pixel, the
 ! former solve3D default, now shared by every envelope route
 real,    parameter    :: ENVMSKWIDTH_A_MIN         = 7.5
-real,    parameter    :: KBWINSZ                   = 1.5       !< interpolation window size
-integer, parameter    :: OSMPL_PAD_FAC             = 2         !< factor by which to pad for oversampled gridding
+real,    parameter    :: KBWINSZ                   = 1.5                 !< interpolation window size
+integer, parameter    :: OSMPL_PAD_FAC             = 2                   !< factor by which to pad for oversampled gridding
 real,    parameter    :: KBALPHA                   = real(OSMPL_PAD_FAC) !< interpolation alpha (oversampling constant)
 real,    parameter    :: KB_BETA_KB15_A2           = PI * sqrt(((2.0 * KBWINSZ)**2.0 / KBALPHA**2.0) * &
                                                             &(KBALPHA - 0.5)**2.0 - 0.8)
@@ -113,18 +113,18 @@ real,    parameter    :: MAXCENTHRESH2D            = 3.0       ! max threshold f
 real,    parameter    :: EXTR_POWER                = 2.0       ! Exponent of the sampling function during extremal stochastic phase of 2D analysis
 real,    parameter    :: POST_EXTR_POWER           = 4.0       ! Exponent of the sampling function after the extremal stochastic phase
 ! preprocessing constants
-real,    parameter    :: FRACTION_DOSE_TARGET_DEFAULT=1.0      !< EER target fraction dose in e/A2
-real,    parameter    :: DFMAX_DEFAULT             = 5.0       !< Default maximum bound for defocus search (microns)
-real,    parameter    :: DFMIN_DEFAULT             = 0.2       !< Default minimum bound for defocus search (microns)
-real,    parameter    :: LP_CTF_ESTIMATE           = 5.0       !< Default low-pass limit for defocus search (Angstroms)
-real,    parameter    :: HP_CTF_ESTIMATE           = 30.0      !< Default high-pass limit for defocus search (Angstroms)
-real,    parameter    :: HP_BACKGR_SUBTR           = 400.0     !< High-pass frequency for micrograph background subtraction (Angstroms)
-real,    parameter    :: CTFRES_THRESHOLD          = 50.0      !< Ctfres rejection threshold (Angstroms)
-real,    parameter    :: ICEFRAC_THRESHOLD         = 1.0       !< Icefrac rejection threshold
-real,    parameter    :: ASTIG_THRESHOLD           = 10.0      !< Astigmatism rejection threshold
-real,    parameter    :: PICK_LP_DEFAULT           = 20.       !< Picking resolution limit
-real,    parameter    :: BOX_EXP_FAC               = 1.0       !< Multiplication factor box = (moldiam + moldiam * BOXFAC)/smpd
-real,    parameter    :: MSK_EXP_FAC               = 1.2       !< Multiplication factor mskdiam  = smpd * box_for_pick * MSK_EXP_FAC
+real,    parameter    :: FRACTION_DOSE_TARGET_DEFAULT = 1.0    !< EER target fraction dose in e/A2
+real,    parameter    :: DFMAX_DEFAULT                = 5.0    !< Default maximum bound for defocus search (microns)
+real,    parameter    :: DFMIN_DEFAULT                = 0.2    !< Default minimum bound for defocus search (microns)
+real,    parameter    :: LP_CTF_ESTIMATE              = 5.0    !< Default low-pass limit for defocus search (Angstroms)
+real,    parameter    :: HP_CTF_ESTIMATE              = 30.0   !< Default high-pass limit for defocus search (Angstroms)
+real,    parameter    :: HP_BACKGR_SUBTR              = 400.0  !< High-pass frequency for micrograph background subtraction (Angstroms)
+real,    parameter    :: CTFRES_THRESHOLD             = 50.0   !< Ctfres rejection threshold (Angstroms)
+real,    parameter    :: ICEFRAC_THRESHOLD            = 1.0    !< Icefrac rejection threshold
+real,    parameter    :: ASTIG_THRESHOLD              = 10.0   !< Astigmatism rejection threshold
+real,    parameter    :: PICK_LP_DEFAULT              = 20.    !< Picking resolution limit
+real,    parameter    :: BOX_EXP_FAC                  = 1.0    !< Multiplication factor box = (moldiam + moldiam * BOXFAC)/smpd
+real,    parameter    :: MSK_EXP_FAC                  = 1.2    !< Multiplication factor mskdiam  = smpd * box_for_pick * MSK_EXP_FAC
 ! integer #/threshold constants
 integer, parameter    :: LPLIM1ITERBOUND           = 5              !< # iteration bound lplim stage 1 (PRIME2D)
 integer, parameter    :: LPLIM3ITERBOUND           = 7              !< # iteration bound lplim stage 2 (PRIME2D)

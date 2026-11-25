@@ -44,7 +44,7 @@ type :: gain_flip_analyzer
     real         :: prev_smooth_delta_r   = 0.
 
 contains
-    procedure :: new => analyzer_new
+    procedure :: new  => analyzer_new
     procedure :: analyze_if_due
     procedure :: get_converged
     procedure :: get_flip_mode
@@ -102,9 +102,9 @@ contains
         integer,                   intent(in)    :: part_movies
         logical,                   intent(out)   :: ran_analysis
         type(image) :: tmp_avg, tmp_gain
-        integer :: iori
-        integer :: ldim_sum(3), ldim_sum_part(3)
-        logical :: idx_stable
+        integer     :: iori
+        integer     :: ldim_sum(3), ldim_sum_part(3)
+        logical     :: idx_stable
 
         ran_analysis = .false.
         if( .not. self%initialized )then

@@ -63,11 +63,11 @@ contains
         type(string),            allocatable :: lines(:)
         type(chash),             allocatable :: parms(:)
         character(len=STDLEN),   allocatable :: vals(:), pairs(:)
-        type(cmdline)             :: cline_screen
-        type(string)              :: cmd, str, fname, key, val
-        type(chash)               :: job_descr
-        character(len=LONGSTRLEN) :: line
-        integer  :: nrepeats, i, j, irepeat, nvals, npairs, njobs, n
+        type(cmdline)                        :: cline_screen
+        type(string)                         :: cmd, str, fname, key, val
+        type(chash)                          :: job_descr
+        character(len=LONGSTRLEN)            :: line
+        integer                              :: nrepeats, i, j, irepeat, nvals, npairs, njobs, n
         if( .not. cline%defined('projfile') )then
             THROW_HARD('projfile needs to be defined on command line for exec_screens')
         endif
@@ -168,9 +168,9 @@ contains
     end subroutine async_exec
 
     function gen_exec_cmd( cline, executable, output ) result( cmd )
-        class(cmdline),          intent(inout) :: cline
-        class(string),           intent(in)    :: executable
-        class(string), optional, intent(in)    :: output
+        class(cmdline),          intent(inout)        :: cline
+        class(string),           intent(in)           :: executable
+        class(string),           optional, intent(in) :: output
         type(string)  :: cmd
         type(chash)   :: job_descr
         call cline%gen_job_descr(job_descr)
@@ -184,7 +184,7 @@ contains
 
     subroutine script_exec( cline, prg, executable )
         class(cmdline), intent(inout) :: cline
-        class(string),  intent(in)    :: prg, executable 
+        class(string),  intent(in)    :: prg, executable
         type(string)     :: projfile
         type(qsys_env)   :: qenv
         type(parameters) :: params
@@ -235,7 +235,7 @@ contains
         class(parameters), intent(inout) :: params
         class(cmdline),    intent(in)    :: cline
         type(string) :: exec
-        logical :: tests(3)
+        logical      :: tests(3)
         if( .not. associated(params%ptr2prg) ) return
         exec = params%ptr2prg%get_executable()
         if( exec == 'simple_private_exec' ) return

@@ -28,87 +28,87 @@ public :: PMB_NDIFF, PMB_DIFF_NAMES, pmb_route_name, kill_fill_result, compare_f
 public :: polar_neigh_bench, pnb_pass, PNB_PATH_REPS, PNB_PATH_MEMBERS, PNB_PATH_CONE, PNB_NPATHS
 private
 
-integer, parameter :: PMB_PER_PAIR     = 1   !< layout 1: production gen_posterior_val, particle against every reference
-integer, parameter :: PMB_REPLICA      = 2   !< layout 1's sums and FFT on the benchmark memo (the identity baseline)
-integer, parameter :: PMB_BLOCKED      = 3   !< layout 2: B particles x R references per tile, same per-pair sums
-integer, parameter :: PMB_STATES_INNER = 4   !< layout 3: every state of a direction, one batched inverse FFT
-integer, parameter :: PMB_MATRIX       = 5   !< layout 4: cgemm per angular bin over a tile, batched inverse FFT
-integer, parameter :: PMB_MATRIX_T     = 6   !< layout 4 with the products transposed to contiguous FFT input
-integer, parameter :: PMB_PER_PAIR_CC  = 7   !< layout 1 with objfun=cc (gen_corrs)
-integer, parameter :: PMB_BLOCK_PROD   = 8   !< production's block kernel (score_block_posterior) on blocks of B particles
-integer, parameter :: PMB_NKINDS       = 4   !< production kernels of prod_kernels: unshifted, shifted, bank row, bank values
-real(sp), parameter :: PMB_SHIFT(2)    = [1.3, -0.7]  !< the shift of the shifted and bank kernels (pixels)
-integer, parameter :: PMB_BOX      = 180           !< native box (pixels)
-integer, parameter :: PMB_BOX_CROP = 160
-real,    parameter :: PMB_SMPD     = 2.055         !< native sampling (A)
-real,    parameter :: PMB_MSKDIAM  = 270.          !< A
-real,    parameter :: PMB_LP       = 6.            !< matching limit (A)
-real,    parameter :: PMB_FALLOFF  = 40.           !< e-fold of the synthetic spectra's radial amplitude (shells)
-real,    parameter :: PMB_KV = 300., PMB_CS = 2.7, PMB_FRACA = 0.1
-integer, parameter :: PMB_SEED     = 20261021
+integer,  parameter :: PMB_PER_PAIR     = 1           !< layout 1: production gen_posterior_val, particle against every reference
+integer,  parameter :: PMB_REPLICA      = 2           !< layout 1's sums and FFT on the benchmark memo (the identity baseline)
+integer,  parameter :: PMB_BLOCKED      = 3           !< layout 2: B particles x R references per tile, same per-pair sums
+integer,  parameter :: PMB_STATES_INNER = 4           !< layout 3: every state of a direction, one batched inverse FFT
+integer,  parameter :: PMB_MATRIX       = 5           !< layout 4: cgemm per angular bin over a tile, batched inverse FFT
+integer,  parameter :: PMB_MATRIX_T     = 6           !< layout 4 with the products transposed to contiguous FFT input
+integer,  parameter :: PMB_PER_PAIR_CC  = 7           !< layout 1 with objfun=cc (gen_corrs)
+integer,  parameter :: PMB_BLOCK_PROD   = 8           !< production's block kernel (score_block_posterior) on blocks of B particles
+integer,  parameter :: PMB_NKINDS       = 4           !< production kernels of prod_kernels: unshifted, shifted, bank row, bank values
+real(sp), parameter :: PMB_SHIFT(2)     = [1.3, -0.7] !< the shift of the shifted and bank kernels (pixels)
+integer,  parameter :: PMB_BOX          = 180         !< native box (pixels)
+integer,  parameter :: PMB_BOX_CROP     = 160
+real,     parameter :: PMB_SMPD         = 2.055       !< native sampling (A)
+real,     parameter :: PMB_MSKDIAM      = 270.        !< A
+real,     parameter :: PMB_LP           = 6.          !< matching limit (A)
+real,     parameter :: PMB_FALLOFF      = 40.         !< e-fold of the synthetic spectra's radial amplitude (shells)
+real,     parameter :: PMB_KV           = 300., PMB_CS = 2.7, PMB_FRACA = 0.1
+integer,  parameter :: PMB_SEED         = 20261021
 ! the fill harness (suite=fills of polar_matching_bench; prob_align_batch_pipeline.md, level 2 of section 8): each
 ! probabilistic route's batch pipeline (the fill, the selection and the extras of the matchers) on the synthetic
 ! data, in parts as the distributed parts run it, compared by particle and reference identity between thread
 ! counts, batch sizes and part counts
-integer, parameter :: PMB_ROUTE_3D_DENSE  = 1   !< refine=prob on ptcl3D: the dense table (eul_prob_tab)
-integer, parameter :: PMB_ROUTE_3D_NEIGH  = 2   !< refine=prob_neigh prob_neigh_mode=snhc on ptcl3D (eul_prob_tab_neigh)
-integer, parameter :: PMB_ROUTE_2D_DENSE  = 3   !< refine=prob on ptcl2D: the dense rows (eul_prob_tab2D)
-integer, parameter :: PMB_ROUTE_2D_SPARSE = 4   !< refine=prob_neigh on ptcl2D: the candidate stream (eul_prob_tab2D)
-integer, parameter :: PMB_ROUTE_3D_SEEDED  = 5   !< the dense table without the polar shift map (shift_sigma=0): the seed and its bank
-integer, parameter :: PMB_ROUTE_3D_NOSHIFT = 6   !< the dense table without shifts (trs=0)
-integer, parameter :: PMB_ROUTE_3D_STATE   = 7   !< refine=prob_neigh prob_neigh_mode=state: the representatives, the peaks, the pooled cells
-integer, parameter :: PMB_ROUTE_3D_GEOM    = 8   !< refine=prob_neigh prob_neigh_mode=geom: the cones about the previous direction
-integer, parameter :: PMB_NROUTES         = 8
-real,    parameter :: PMB_TRS   = 3.            !< the fills' shift window (pixels); the polar shift map is on, as in production
-real,    parameter :: PMB_RES05 = 300.          !< the insertion cone's FSC=0.5 resolution of every state (A): above the mask diameter, so that every refined entry is an eligible extra on random rows (the extras path is exercised)
-integer, parameter :: PMB_NDIFF = 7             !< the categories compare_fill_results counts
+integer, parameter :: PMB_ROUTE_3D_DENSE   = 1    !< refine=prob on ptcl3D: the dense table (eul_prob_tab)
+integer, parameter :: PMB_ROUTE_3D_NEIGH   = 2    !< refine=prob_neigh prob_neigh_mode=snhc on ptcl3D (eul_prob_tab_neigh)
+integer, parameter :: PMB_ROUTE_2D_DENSE   = 3    !< refine=prob on ptcl2D: the dense rows (eul_prob_tab2D)
+integer, parameter :: PMB_ROUTE_2D_SPARSE  = 4    !< refine=prob_neigh on ptcl2D: the candidate stream (eul_prob_tab2D)
+integer, parameter :: PMB_ROUTE_3D_SEEDED  = 5    !< the dense table without the polar shift map (shift_sigma=0): the seed and its bank
+integer, parameter :: PMB_ROUTE_3D_NOSHIFT = 6    !< the dense table without shifts (trs=0)
+integer, parameter :: PMB_ROUTE_3D_STATE   = 7    !< refine=prob_neigh prob_neigh_mode=state: the representatives, the peaks, the pooled cells
+integer, parameter :: PMB_ROUTE_3D_GEOM    = 8    !< refine=prob_neigh prob_neigh_mode=geom: the cones about the previous direction
+integer, parameter :: PMB_NROUTES          = 8
+real,    parameter :: PMB_TRS              = 3.   !< the fills' shift window (pixels); the polar shift map is on, as in production
+real,    parameter :: PMB_RES05            = 300. !< the insertion cone's FSC=0.5 resolution of every state (A): above the mask diameter, so that every refined entry is an eligible extra on random rows (the extras path is exercised)
+integer, parameter :: PMB_NDIFF            = 7    !< the categories compare_fill_results counts
 ! the neighbourhood route (decision 19): bgal's late stages (stage 8 of solve3D: box 256 at 1.275 A cropped to 162,
 ! mask 180 A, lp 4.03 A, shells 2-81)
 integer, parameter :: PNB_PATH_REPS    = 1     !< (a) state's coarse pass: a block against every state's representatives
 integer, parameter :: PNB_PATH_MEMBERS = 2     !< (b) state's member pass: a pooled cell's members against its sub-block
 integer, parameter :: PNB_PATH_CONE    = 3     !< (c) geom's cones: a reachable cell's members against its sub-block
 integer, parameter :: PNB_NPATHS       = 3
-integer, parameter :: PNB_BOX      = 256
-integer, parameter :: PNB_BOX_CROP = 162
-real,    parameter :: PNB_SMPD     = 1.275
-real,    parameter :: PNB_MSKDIAM  = 180.
-real,    parameter :: PNB_LP       = 4.03
-real,    parameter :: PNB_SMOOTH_CUT  = 2.5    !< the references' smoothing reaches this many cell spacings
-real,    parameter :: PNB_STATE_CORR  = 0.9    !< a second state's anchors: this share of the first's
-real,    parameter :: PNB_NOISE       = 1.     !< the particles' noise amplitude relative to the references' (per shell)
+integer, parameter :: PNB_BOX          = 256
+integer, parameter :: PNB_BOX_CROP     = 162
+real,    parameter :: PNB_SMPD         = 1.275
+real,    parameter :: PNB_MSKDIAM      = 180.
+real,    parameter :: PNB_LP           = 4.03
+real,    parameter :: PNB_SMOOTH_CUT   = 2.5   !< the references' smoothing reaches this many cell spacings
+real,    parameter :: PNB_STATE_CORR   = 0.9   !< a second state's anchors: this share of the first's
+real,    parameter :: PNB_NOISE        = 1.    !< the particles' noise amplitude relative to the references' (per shell)
 character(len=*), parameter :: PMB_DIFF_NAMES(PMB_NDIFF) = [character(len=10) :: 'dists', 'inpls', 'shifts', 'temps',&
     &'seeds', 'assignment', 'extras']
 
 !> the outputs of one fill-and-select run (run_fill), by particle and full reference identity ((state-1)*nspace+proj
 !! in 3D, the class in 2D); huge, zero or false where a row holds no entry (the sparse routes' candidate lists)
 type :: pmb_fill_result
-    real(sp), allocatable :: dists(:,:)       !< (nrefs, nptcls) the rows' distances
-    integer,  allocatable :: inpls(:,:)       !< (nrefs, nptcls) the drawn in-plane indices
-    real(sp), allocatable :: shifts(:,:,:)    !< (2, nrefs, nptcls) the refined entries' shifts
-    real(sp), allocatable :: temps(:)         !< (nptcls) the particle temperatures, which no draw enters
-    real(sp), allocatable :: seed_shifts(:,:) !< (2, nptcls) the seeded shifts
-    logical,  allocatable :: seed_has_sh(:)   !< (nptcls) their flags
-    integer,  allocatable :: assign_ref(:)    !< (nptcls) the assigned reference
-    integer,  allocatable :: assign_inpl(:)   !< (nptcls) its in-plane index
-    real(sp), allocatable :: assign_vals(:,:) !< (4, nptcls) its distance, shift and posterior shift width
-    real(sp), allocatable :: extras(:,:,:)    !< (5, topk, nptcls) the weighted insertion's extras: reference, in-plane, shift, weight (3D)
-    integer :: nptcls = 0, nrefs = 0, nentries = 0 !< entries of the rows (dense: references x particles; sparse: the candidates)
-    integer :: projs_ns = 0                         !< the dense 3D fill's refined-reference budget (the iteration's model)
+    real(sp), allocatable :: dists(:,:)                            !< (nrefs, nptcls) the rows' distances
+    integer,  allocatable :: inpls(:,:)                            !< (nrefs, nptcls) the drawn in-plane indices
+    real(sp), allocatable :: shifts(:,:,:)                         !< (2, nrefs, nptcls) the refined entries' shifts
+    real(sp), allocatable :: temps(:)                              !< (nptcls) the particle temperatures, which no draw enters
+    real(sp), allocatable :: seed_shifts(:,:)                      !< (2, nptcls) the seeded shifts
+    logical,  allocatable :: seed_has_sh(:)                        !< (nptcls) their flags
+    integer,  allocatable :: assign_ref(:)                         !< (nptcls) the assigned reference
+    integer,  allocatable :: assign_inpl(:)                        !< (nptcls) its in-plane index
+    real(sp), allocatable :: assign_vals(:,:)                      !< (4, nptcls) its distance, shift and posterior shift width
+    real(sp), allocatable :: extras(:,:,:)                         !< (5, topk, nptcls) the weighted insertion's extras: reference, in-plane, shift, weight (3D)
+    integer               :: nptcls   = 0, nrefs = 0, nentries = 0 !< entries of the rows (dense: references x particles; sparse: the candidates)
+    integer               :: projs_ns = 0                          !< the dense 3D fill's refined-reference budget (the iteration's model)
 end type pmb_fill_result
 
 !> one thread's FFT buffers and draw work arrays
 type :: pmb_buf
-    type(c_ptr) :: p_vec = c_null_ptr, p_bat = c_null_ptr, p_bins = c_null_ptr, p_out = c_null_ptr, p_ct = c_null_ptr
-    complex(c_float_complex), pointer :: cvec(:)     => null()   !< (pftsz+1), in place with rvec
-    real(c_float),            pointer :: rvec(:)     => null()   !< (nrots+2)
-    complex(c_float_complex), pointer :: cbat(:,:)   => null()   !< (pftsz+1, nstates), in place with rbat
-    real(c_float),            pointer :: rbat(:,:)   => null()   !< (nrots+2, nstates)
-    complex(c_float_complex), pointer :: cbins(:,:,:) => null()  !< (R, B, pftsz+1) cgemm output
-    real(c_float),            pointer :: rout(:,:)   => null()   !< (nrots, R*B)
-    complex(c_float_complex), pointer :: ct(:,:)     => null()   !< (pftsz+1, R*B) transposed products
-    complex(sp), allocatable :: q(:,:,:)                         !< (2nk, B, pftsz+1) weighted particle block
-    real(sp),    allocatable :: dists(:), w(:)                   !< one row over the rotations, the draw's weights
-    real(dp) :: t_parts(3) = 0._dp                               !< thread seconds: sums, inverse FFTs, distances and draw
+    type(c_ptr)                           :: p_vec        = c_null_ptr, p_bat = c_null_ptr, p_bins = c_null_ptr, p_out = c_null_ptr, p_ct = c_null_ptr
+    complex(c_float_complex), pointer     :: cvec(:)      => null() !< (pftsz+1), in place with rvec
+    real(c_float),            pointer     :: rvec(:)      => null() !< (nrots+2)
+    complex(c_float_complex), pointer     :: cbat(:,:)    => null() !< (pftsz+1, nstates), in place with rbat
+    real(c_float),            pointer     :: rbat(:,:)    => null() !< (nrots+2, nstates)
+    complex(c_float_complex), pointer     :: cbins(:,:,:) => null() !< (R, B, pftsz+1) cgemm output
+    real(c_float),            pointer     :: rout(:,:)    => null() !< (nrots, R*B)
+    complex(c_float_complex), pointer     :: ct(:,:)      => null() !< (pftsz+1, R*B) transposed products
+    complex(sp),              allocatable :: q(:,:,:)               !< (2nk, B, pftsz+1) weighted particle block
+    real(sp),                 allocatable :: dists(:), w(:)         !< one row over the rotations, the draw's weights
+    real(dp)                              :: t_parts(3)   = 0._dp   !< thread seconds: sums, inverse FFTs, distances and draw
 end type pmb_buf
 
 type :: polar_matching_bench
@@ -121,51 +121,51 @@ type :: polar_matching_bench
     ! the benchmark memo: production's arrays rebuilt (first index the angular bin, shells kfromto(1):kfromto(2))
     complex(sp),         allocatable :: ft_ref(:,:,:,:), ft_ref2(:,:,:,:)   !< (pftsz+1, k, nrefs, half)
     complex(sp),         allocatable :: ft_ptcl_ctf(:,:,:), ft_ctf2(:,:,:)  !< (pftsz+1, k, nptcls)
-    complex(sp),         allocatable :: gmat(:,:,:,:)        !< layout 4 bin-major (2nk, nrefs, pftsz+1, half)
-    real(dp),            allocatable :: wk8(:,:)             !< k/sigma2 (shell, half)
-    real(dp),            allocatable :: norms(:)             !< wsqsum * 2 nrots per particle
-    real(sp),            allocatable :: temps(:)             !< the temperature of every draw (ptcl_posterior_temp)
+    complex(sp),         allocatable :: gmat(:,:,:,:)                       !< layout 4 bin-major (2nk, nrefs, pftsz+1, half)
+    real(dp),            allocatable :: wk8(:,:)                            !< k/sigma2 (shell, half)
+    real(dp),            allocatable :: norms(:)                            !< wsqsum * 2 nrots per particle
+    real(sp),            allocatable :: temps(:)                            !< the temperature of every draw (ptcl_posterior_temp)
     logical,             allocatable :: iseven(:)
     ! check records of particles 1..nkeep: the full rows over the rotations (the distances; the correlations with cc)
-    real(sp),            allocatable :: vecs(:,:,:)          !< (nrots, nrefs, nkeep)
-    type(c_ptr) :: plan_c2r = c_null_ptr, plan_bat = c_null_ptr, plan_bins = c_null_ptr
-    integer :: plan_bins_shape(3) = 0                      !< R, B and layout the plan was made for
-    integer :: nspace = 0, nstates = 0, nrefs = 0, nptcls = 0, nthr_max = 0, nkeep = 0
-    integer :: pftsz = 0, nrots = 0, kfromto(2) = 0, nk = 0, interpklim = 0
-    real(dp) :: t_gmat = 0._dp                                !< seconds spent building gmat
-    real(dp) :: t_parts(3) = 0._dp                            !< last score's thread seconds per part (replica, matrix)
-    logical :: with_prod_refs = .false., with_memo = .false., with_gmat = .false., l_cc = .false.
-    logical :: with_ref_bins = .false.   !< the calculator's bin-major memo is made (layout PMB_BLOCK_PROD)
-    logical :: exists = .false.
-    class(builder), allocatable :: build  !< the fill harness's toolbox (fill_route > 0): the same references and particles in build%pftc, the particle field of previous poses, the direction space
-    integer :: fill_route = 0            !< the harness's route (PMB_ROUTE_*; 0: no harness)
+    real(sp),            allocatable :: vecs(:,:,:)                  !< (nrots, nrefs, nkeep)
+    type(c_ptr)                      :: plan_c2r           = c_null_ptr, plan_bat = c_null_ptr, plan_bins = c_null_ptr
+    integer                          :: plan_bins_shape(3) = 0       !< R, B and layout the plan was made for
+    integer                          :: nspace             = 0, nstates = 0, nrefs = 0, nptcls = 0, nthr_max = 0, nkeep = 0
+    integer                          :: pftsz              = 0, nrots = 0, kfromto(2) = 0, nk = 0, interpklim = 0
+    real(dp)                         :: t_gmat             = 0._dp   !< seconds spent building gmat
+    real(dp)                         :: t_parts(3)         = 0._dp   !< last score's thread seconds per part (replica, matrix)
+    logical                          :: with_prod_refs     = .false., with_memo = .false., with_gmat = .false., l_cc = .false.
+    logical                          :: with_ref_bins      = .false. !< the calculator's bin-major memo is made (layout PMB_BLOCK_PROD)
+    logical                          :: exists             = .false.
+    class(builder),      allocatable :: build                        !< the fill harness's toolbox (fill_route > 0): the same references and particles in build%pftc, the particle field of previous poses, the direction space
+    integer                          :: fill_route         = 0       !< the harness's route (PMB_ROUTE_*; 0: no harness)
     ! the shift maps (score_maps): the dense fill's screen and window maps on the production calculator
-    real(dp), allocatable :: map_temps(:)        !< the maps' tempered temperature per particle (the fill's temp_s)
-    real(dp), allocatable :: map_res(:,:,:)      !< last score_maps (5, ncand, nptcls_use): loss, width, rotation, radius, direction
-    real(dp) :: map_prior_w  = 0._dp             !< the prior's weight on the squared shift (the screen's)
-    real(dp) :: map_parts(3) = 0._dp             !< last score_maps' thread seconds: construction, selection, reduction
-    integer  :: map_kscreen  = 0                 !< the maps' last shell
-    logical  :: with_maps    = .false.
+    real(dp), allocatable :: map_temps(:)         !< the maps' tempered temperature per particle (the fill's temp_s)
+    real(dp), allocatable :: map_res(:,:,:)       !< last score_maps (5, ncand, nptcls_use): loss, width, rotation, radius, direction
+    real(dp)              :: map_prior_w  = 0._dp !< the prior's weight on the squared shift (the screen's)
+    real(dp)              :: map_parts(3) = 0._dp !< last score_maps' thread seconds: construction, selection, reduction
+    integer               :: map_kscreen  = 0     !< the maps' last shell
+    logical               :: with_maps    = .false.
 contains
-    procedure :: new
-    procedure :: run_fill
-    procedure :: kill
-    procedure :: score
-    procedure :: score_maps
+    procedure          :: new
+    procedure          :: run_fill
+    procedure          :: kill
+    procedure          :: score
+    procedure          :: score_maps
     procedure, private :: setup_maps
-    procedure :: get_sizes
-    procedure :: get_map_geometry
-    procedure :: get_map_parts
-    procedure :: get_map_results
-    procedure :: get_vecs
-    procedure :: get_entries
-    procedure :: get_temps
-    procedure :: scale_temps
-    procedure :: get_gmat_build_time
-    procedure :: get_parts
-    procedure :: ref_bytes_per_pair
-    procedure :: memo_gbytes
-    procedure :: prod_kernels
+    procedure          :: get_sizes
+    procedure          :: get_map_geometry
+    procedure          :: get_map_parts
+    procedure          :: get_map_results
+    procedure          :: get_vecs
+    procedure          :: get_entries
+    procedure          :: get_temps
+    procedure          :: scale_temps
+    procedure          :: get_gmat_build_time
+    procedure          :: get_parts
+    procedure          :: ref_bytes_per_pair
+    procedure          :: memo_gbytes
+    procedure          :: prod_kernels
 end type polar_matching_bench
 
 !> one pass of the neighbourhood route: the entries of the path's pairs (npairs, in the order of production's fill)
@@ -173,14 +173,14 @@ end type polar_matching_bench
 type :: pnb_pass
     real(sp), allocatable :: dists(:)
     integer,  allocatable :: irots(:)
-    real(dp) :: wall = 0._dp, tsec = 0._dp   !< the region's wall time; the threads' time in the scoring, summed
-    integer(int64) :: nscored = 0_int64      !< pairs scored (the path's needed pairs and its wasted ones)
-    integer(int64) :: nwasted = 0_int64      !< pairs scored outside the particle's cone (path c)
-    integer(int64) :: ncalls  = 0_int64      !< block kernel calls
-    integer(int64) :: nrows   = 0_int64      !< their particles, summed
-    integer(int64) :: ncols   = 0_int64      !< their references, summed
-    integer(int64) :: nslots  = 0_int64      !< the pairs their products computed (16 x 32 per tile)
-    integer :: bsz(2) = 0                    !< the blocks of the halves (decision 3)
+    real(dp)              :: wall    = 0._dp, tsec = 0._dp !< the region's wall time; the threads' time in the scoring, summed
+    integer(int64)        :: nscored = 0_int64             !< pairs scored (the path's needed pairs and its wasted ones)
+    integer(int64)        :: nwasted = 0_int64             !< pairs scored outside the particle's cone (path c)
+    integer(int64)        :: ncalls  = 0_int64             !< block kernel calls
+    integer(int64)        :: nrows   = 0_int64             !< their particles, summed
+    integer(int64)        :: ncols   = 0_int64             !< their references, summed
+    integer(int64)        :: nslots  = 0_int64             !< the pairs their products computed (16 x 32 per tile)
+    integer               :: bsz(2)  = 0                   !< the blocks of the halves (decision 3)
 end type pnb_pass
 
 !> The neighbourhood route (decision 19 of prob_table_matrix_scoring.md): the candidates of fill_tab_subspace_range's
@@ -195,25 +195,25 @@ type :: polar_neigh_bench
     private
     class(parameters),   allocatable :: params
     class(polarft_calc), allocatable :: pftc
-    type(oris) :: eulspace                              !< the direction space (the point group's spiral)
-    type(sym)  :: pgrpsyms
-    real,     allocatable :: sigma2(:,:)
-    real(sp), allocatable :: temps(:)                   !< the particles' posterior temperatures
-    logical,  allocatable :: iseven(:)
-    integer,  allocatable :: prev_proj(:)               !< the particles' previous directions
-    integer,  allocatable :: sub_inds(:), full2sub(:)   !< the representatives' directions; every direction's cell
-    integer,  allocatable :: cell_off(:), cell_proj(:)  !< the cells' member directions, ascending (CSR over cells)
-    real,     allocatable :: cell_radius(:)             !< geom's cell radii (degrees)
-    integer,  allocatable :: rep_refs(:)                !< (a) every state's representatives, state-major in subspace order
-    integer,  allocatable :: npooled(:), pooled(:,:)    !< state mode: the particles' pooled cells (ncap, nptcls)
-    integer,  allocatable :: mem_off(:), mem_ref(:)     !< (b) the members each particle scores (CSR, production's order)
-    integer,  allocatable :: mem_cell(:,:,:)            !< (b) where a pooled cell's members of a state start (ncap, nstates, nptcls)
-    logical,  allocatable :: reach(:,:)                 !< geom: the cells each particle's cone reaches (nsubs, nptcls)
-    integer,  allocatable :: cone_off(:), cone_ref(:)   !< (c) the references inside each particle's cone (CSR, ascending)
-    integer :: nspace = 0, nstates = 0, nrefs = 0, nptcls = 0, nsubs = 0, npeak = 0, ncap = 0, nthr_max = 0
-    integer :: pftsz = 0, nrots = 0, kfromto(2) = 0, maxcell = 0
-    real    :: cone = 0.
-    logical :: exists = .false.
+    type(oris)                       :: eulspace                  !< the direction space (the point group's spiral)
+    type(sym)                        :: pgrpsyms
+    real,                allocatable :: sigma2(:,:)
+    real(sp),            allocatable :: temps(:)                  !< the particles' posterior temperatures
+    logical,             allocatable :: iseven(:)
+    integer,             allocatable :: prev_proj(:)              !< the particles' previous directions
+    integer,             allocatable :: sub_inds(:), full2sub(:)  !< the representatives' directions; every direction's cell
+    integer,             allocatable :: cell_off(:), cell_proj(:) !< the cells' member directions, ascending (CSR over cells)
+    real,                allocatable :: cell_radius(:)            !< geom's cell radii (degrees)
+    integer,             allocatable :: rep_refs(:)               !< (a) every state's representatives, state-major in subspace order
+    integer,             allocatable :: npooled(:), pooled(:,:)   !< state mode: the particles' pooled cells (ncap, nptcls)
+    integer,             allocatable :: mem_off(:), mem_ref(:)    !< (b) the members each particle scores (CSR, production's order)
+    integer,             allocatable :: mem_cell(:,:,:)           !< (b) where a pooled cell's members of a state start (ncap, nstates, nptcls)
+    logical,             allocatable :: reach(:,:)                !< geom: the cells each particle's cone reaches (nsubs, nptcls)
+    integer,             allocatable :: cone_off(:), cone_ref(:)  !< (c) the references inside each particle's cone (CSR, ascending)
+    integer                          :: nspace = 0, nstates = 0, nrefs = 0, nptcls = 0, nsubs = 0, npeak = 0, ncap = 0, nthr_max = 0
+    integer                          :: pftsz  = 0, nrots = 0, kfromto(2) = 0, maxcell = 0
+    real                             :: cone   = 0.
+    logical                          :: exists = .false.
 contains
     procedure :: new  => new_neigh
     procedure :: kill => kill_neigh
@@ -239,21 +239,21 @@ contains
         use simple_fftw3,      only: fftwf_alloc_complex, fftwf_free, fftwf_plan_many_dft, fftwf_plan_many_dft_r2c,&
             &fftwf_execute_dft, fftwf_execute_dft_r2c, fftwf_destroy_plan, FFTW_FORWARD, FFTW_ESTIMATE
         use, intrinsic :: iso_c_binding, only: c_f_pointer, c_int, c_size_t
-        class(polar_matching_bench), target, intent(inout) :: self
-        integer,                             intent(in)    :: nspace, nstates, nptcls, nthr_max, nkeep
-        logical,                             intent(in)    :: prod_refs, memo, gmat
-        character(len=*), optional,          intent(in)    :: objfun
-        integer,          optional,          intent(in)    :: fills_route
-        logical,          optional,          intent(in)    :: fftw_measure
-        class(cmdline),    allocatable :: cline
-        class(sp_project), allocatable :: spproj
-        complex(sp),       allocatable :: pft(:,:)
-        real,              allocatable :: dfxs(:), dfys(:), angasts(:)
-        complex(c_float_complex), pointer :: cmat(:,:), cmat_out(:,:), crc(:,:)
-        real(c_float),            pointer :: crr(:,:)
-        type(c_ptr) :: p_cmat, p_crmat, plan_fwd, plan_r2c
-        real(dp)    :: t0
-        integer     :: pdim(3), iref, ieo, i, k
+        class(polar_matching_bench),         target, intent(inout)         :: self
+        integer,                             intent(in)                    :: nspace, nstates, nptcls, nthr_max, nkeep
+        logical,                             intent(in)                    :: prod_refs, memo, gmat
+        character(len=*),                    optional,          intent(in) :: objfun
+        integer,                             optional,          intent(in) :: fills_route
+        logical,                             optional,          intent(in) :: fftw_measure
+        class(cmdline),           allocatable :: cline
+        class(sp_project),        allocatable :: spproj
+        complex(sp),              allocatable :: pft(:,:)
+        real,                     allocatable :: dfxs(:), dfys(:), angasts(:)
+        complex(c_float_complex), pointer     :: cmat(:,:), cmat_out(:,:), crc(:,:)
+        real(c_float),            pointer     :: crr(:,:)
+        type(c_ptr)                           :: p_cmat, p_crmat, plan_fwd, plan_r2c
+        real(dp)                              :: t0
+        integer                               :: pdim(3), iref, ieo, i, k
         call self%kill
         if( nspace < 1 .or. nstates < 1 .or. nptcls < 1 .or. nthr_max < 1 ) THROW_HARD('invalid benchmark case')
         if( nkeep < 0 .or. nkeep > nptcls ) THROW_HARD('invalid number of kept particles')
@@ -503,11 +503,11 @@ contains
         ! from create_polar_absctfmats' CTF matrices, recomputed here
         subroutine memoize_ptcls_here
             use simple_ctf, only: ctf
-            type(ctf) :: tfun
-            real(sp), allocatable :: px(:,:), py(:,:), spafreqsq(:,:), angs(:,:), ctfmat(:,:)
+            type(ctf)                :: tfun
+            real(sp),    allocatable :: px(:,:), py(:,:), spafreqsq(:,:), angs(:,:), ctfmat(:,:)
             complex(sp), allocatable :: bank(:,:)
-            real    :: hinv, kinv
-            integer :: irot, kh, kk, k0, ip
+            real                     :: hinv, kinv
+            integer                  :: irot, kh, kk, k0, ip
             k0 = self%kfromto(1)
             allocate(self%ft_ptcl_ctf(self%pftsz+1,self%kfromto(1):self%kfromto(2),nptcls),&
                     &self%ft_ctf2(self%pftsz+1,self%kfromto(1):self%kfromto(2),nptcls))
@@ -645,9 +645,9 @@ contains
     function score( self, layout, nthr, nptcls_use, bsz, rsz ) result( wall )
         class(polar_matching_bench), intent(inout) :: self
         integer,                     intent(in)    :: layout, nthr, nptcls_use, bsz, rsz
-        real(dp) :: wall
+        real(dp)                   :: wall
         type(pmb_buf), allocatable :: bufs(:)
-        integer :: nteam, it
+        integer                    :: nteam, it
         if( .not. self%exists ) THROW_HARD('polar_matching_bench: score before new')
         if( nthr < 1 .or. nthr > self%nthr_max ) THROW_HARD('polar_matching_bench: team larger than the calculator')
         if( nptcls_use < 1 .or. nptcls_use > self%nptcls ) THROW_HARD('polar_matching_bench: invalid particle count')
@@ -706,9 +706,9 @@ contains
         use simple_fftw3, only: fftwf_alloc_complex, fftwf_plan_dft_c2r_1d, fftwf_plan_many_dft_c2r,&
             &fftwf_destroy_plan, FFTW_ESTIMATE
         use, intrinsic :: iso_c_binding, only: c_f_pointer, c_int, c_size_t
-        class(polar_matching_bench), intent(inout) :: self
-        integer,                     intent(in)    :: layout, nteam, bsz, rsz
-        type(pmb_buf), allocatable,  intent(inout) :: bufs(:)
+        class(polar_matching_bench), intent(inout)               :: self
+        integer,                     intent(in)                  :: layout, nteam, bsz, rsz
+        type(pmb_buf),               allocatable,  intent(inout) :: bufs(:)
         integer :: ithr, n1, nst
         allocate(bufs(nteam))
         n1  = self%pftsz + 1
@@ -785,10 +785,10 @@ contains
     function score_per_pair( self, nptcls_use ) result( wall )
         class(polar_matching_bench), intent(inout) :: self
         integer,                     intent(in)    :: nptcls_use
-        real(dp) :: wall
+        real(dp)              :: wall
         real(sp), allocatable :: row(:,:)
-        real(sp) :: dist
-        integer  :: nteam, i, ithr, iref, irot
+        real(sp)              :: dist
+        integer               :: nteam, i, ithr, iref, irot
         nteam = 1
         !$ nteam = omp_get_max_threads()
         allocate(row(self%nrots,nteam), source=0._sp)
@@ -856,9 +856,9 @@ contains
         class(polar_matching_bench), intent(inout) :: self
         integer,                     intent(in)    :: nptcls_use, bsz, rsz
         type(pmb_buf),               intent(inout) :: bufs(:)
-        real(dp) :: wall
+        real(dp)             :: wall
         integer, allocatable :: porder(:), blocks(:,:)
-        integer  :: ib, ithr, r0, iref, jj, i
+        integer              :: ib, ithr, r0, iref, jj, i
         call make_blocks(self, nptcls_use, bsz, porder, blocks)
         wall = 0._dp
         !$ wall = omp_get_wtime()
@@ -919,12 +919,12 @@ contains
         integer,                     intent(in)    :: nptcls_use, bsz, rsz
         type(pmb_buf),               intent(inout) :: bufs(:)
         logical,                     intent(in)    :: l_transpose
-        real(dp) :: wall
-        complex(sp), parameter :: ONE = cmplx(1.,0.,kind=sp), ZERO = cmplx(0.,0.,kind=sp)
-        integer, allocatable :: porder(:), blocks(:,:)
-        integer  :: ib, ithr, r0, nr, nb, j, ih, b, ir, i, kk, kh, n2k
-        real(sp) :: wk
-        real(dp) :: t0, t1, t2, t3
+        real(dp)                 :: wall
+        complex(sp), parameter   :: ONE = cmplx(1.,0.,kind=sp), ZERO = cmplx(0.,0.,kind=sp)
+        integer,     allocatable :: porder(:), blocks(:,:)
+        integer                  :: ib, ithr, r0, nr, nb, j, ih, b, ir, i, kk, kh, n2k
+        real(sp)                 :: wk
+        real(dp)                 :: t0, t1, t2, t3
         call make_blocks(self, nptcls_use, bsz, porder, blocks)
         n2k  = 2 * self%nk
         wall = 0._dp
@@ -996,10 +996,10 @@ contains
     function score_block_prod( self, nptcls_use, bsz, nteam ) result( wall )
         class(polar_matching_bench), intent(inout) :: self
         integer,                     intent(in)    :: nptcls_use, bsz, nteam
-        real(dp) :: wall
+        real(dp)              :: wall
         integer,  allocatable :: porder(:), blocks(:,:), irefs(:), irots_t(:,:)
         real(sp), allocatable :: temps_po(:), dists_t(:,:)
-        integer  :: ib, ithr, nb, b, ir, i, j0, j
+        integer               :: ib, ithr, nb, b, ir, i, j0, j
         call make_blocks(self, nptcls_use, bsz, porder, blocks)
         irefs    = [(j, j=1,self%nrefs)]
         temps_po = self%temps(porder)
@@ -1029,9 +1029,9 @@ contains
 
     !> particles 1..nptcls_use ordered even half first, cut into blocks of at most bsz that never mix halves
     subroutine make_blocks( self, nptcls_use, bsz, porder, blocks )
-        class(polar_matching_bench), intent(in)    :: self
-        integer,                     intent(in)    :: nptcls_use, bsz
-        integer, allocatable,        intent(inout) :: porder(:), blocks(:,:)
+        class(polar_matching_bench), intent(in)                        :: self
+        integer,                     intent(in)                        :: nptcls_use, bsz
+        integer,                     allocatable,        intent(inout) :: porder(:), blocks(:,:)
         integer :: i, n, neven, nblk, j0
         allocate(porder(nptcls_use))
         n = 0
@@ -1156,8 +1156,8 @@ contains
     !> the last score_maps' result of every candidate and particle: loss, physical width, the mode's rotation,
     !! radius and direction (5, ncand, nptcls_use; integers held exactly)
     subroutine get_map_results( self, res )
-        class(polar_matching_bench), intent(in)    :: self
-        real(dp), allocatable,       intent(inout) :: res(:,:,:)
+        class(polar_matching_bench), intent(in)                       :: self
+        real(dp),                    allocatable,       intent(inout) :: res(:,:,:)
         if( .not. allocated(self%map_res) ) THROW_HARD('polar_matching_bench: no shift-map results; score_maps first')
         res = self%map_res
     end subroutine get_map_results
@@ -1230,12 +1230,12 @@ contains
     !! gen_euclid_dists_bank give the losses the posterior draws run over, gen_objfun_vals_bank exp(-loss). cc:
     !! gen_objfun_vals and gen_objfun_vals_bank give the correlations (kinds 1-3; kind 4 stays zero).
     subroutine prod_kernels( self, nthr, nptcls_use, vecs, best_d, best_i )
-        class(polar_matching_bench), intent(inout) :: self
-        integer,                     intent(in)    :: nthr, nptcls_use
-        real(sp), allocatable,       intent(inout) :: vecs(:,:,:,:), best_d(:,:)
-        integer,  allocatable,       intent(inout) :: best_i(:,:)
+        class(polar_matching_bench), intent(inout)                    :: self
+        integer,                     intent(in)                       :: nthr, nptcls_use
+        real(sp),                    allocatable,       intent(inout) :: vecs(:,:,:,:), best_d(:,:)
+        integer,                     allocatable,       intent(inout) :: best_i(:,:)
         complex(sp), allocatable :: bank(:,:,:)
-        integer  :: nteam, i, ithr, iref
+        integer                  :: nteam, i, ithr, iref
         if( .not. self%with_prod_refs ) THROW_HARD('polar_matching_bench: prod_kernels needs production references')
         if( nthr < 1 .or. nthr > self%nthr_max ) THROW_HARD('polar_matching_bench: team larger than the calculator')
         if( nptcls_use < 1 .or. nptcls_use > self%nptcls ) THROW_HARD('polar_matching_bench: invalid particle count')
@@ -1285,17 +1285,17 @@ contains
 
     !> the rows of the kept particles from the last score
     subroutine get_vecs( self, vecs )
-        class(polar_matching_bench), intent(in)    :: self
-        real(sp), allocatable,       intent(inout) :: vecs(:,:,:)
+        class(polar_matching_bench), intent(in)                       :: self
+        real(sp),                    allocatable,       intent(inout) :: vecs(:,:,:)
         if( .not. allocated(self%vecs) ) THROW_HARD('polar_matching_bench: no kept particles')
         vecs = self%vecs
     end subroutine get_vecs
 
     !> the table entries of the last score: the drawn distance and in-plane index of every reference and particle
     subroutine get_entries( self, dists, irots )
-        class(polar_matching_bench), intent(in)    :: self
-        real(sp), allocatable,       intent(inout) :: dists(:,:)
-        integer,  allocatable,       intent(inout) :: irots(:,:)
+        class(polar_matching_bench), intent(in)                       :: self
+        real(sp),                    allocatable,       intent(inout) :: dists(:,:)
+        integer,                     allocatable,       intent(inout) :: irots(:,:)
         dists = self%dists
         irots = self%irots
     end subroutine get_entries
@@ -1365,19 +1365,19 @@ contains
         use simple_map_reduce,         only: split_nobjs_even
         use simple_test_utils,         only: set_fixed_seed
         use simple_oris,               only: oris
-        class(polar_matching_bench), target, intent(inout) :: self
-        integer,                             intent(in)    :: nthr, batchsz, nparts
-        type(pmb_fill_result),               intent(inout) :: res
-        logical, optional,                   intent(in)    :: l_perturb
+        class(polar_matching_bench),         target, intent(inout)                  :: self
+        integer,                             intent(in)                             :: nthr, batchsz, nparts
+        type(pmb_fill_result),               intent(inout)                          :: res
+        logical,                             optional,                   intent(in) :: l_perturb
         type(eul_prob_tab),       allocatable :: tab3D
         type(eul_prob_tab_neigh), allocatable :: tabnb
         type(eul_prob_tab2D),     allocatable :: tab2D
-        type(prob_insert_cone) :: cone
-        type(oris)             :: field_saved
-        integer,  allocatable  :: parts(:,:), pinds(:)
-        integer :: ipart, nloc, first, last, i, ioff, projs_ns_model
-        real    :: sigma2_model
-        logical :: l_pert
+        type(prob_insert_cone)                :: cone
+        type(oris)                            :: field_saved
+        integer,                  allocatable :: parts(:,:), pinds(:)
+        integer                               :: ipart, nloc, first, last, i, ioff, projs_ns_model
+        real                                  :: sigma2_model
+        logical                               :: l_pert
         l_pert = .false.
         if( present(l_perturb) ) l_pert = l_perturb
         if( self%fill_route < 1 ) THROW_HARD('polar_matching_bench: no fill harness (new with fills_route)')
@@ -1520,7 +1520,7 @@ contains
             class(eul_prob_tab), intent(in) :: tab
             type(prob_insert_pose)  :: pose
             type(prob_insert_poses) :: poses
-            integer :: k
+            integer                 :: k
             do i = 1,nloc
                 res%temps(ioff+i)         = tab%temps(i)
                 res%seed_shifts(:,ioff+i) = tab%seed_shifts(:,i)
@@ -1691,15 +1691,15 @@ contains
         character(len=*),         intent(in)    :: pgrp
         class(cmdline),    allocatable :: cline
         class(sp_project), allocatable :: spproj
-        type(oris)          :: eulspace_sub
-        type(srchspace_map) :: sub_mapper
-        type(pnb_pass)      :: reps
-        complex(sp), allocatable :: anchors(:,:,:,:), band(:,:,:), refb(:,:), ptclb(:,:), ring(:)
-        real,        allocatable :: sub_distmat(:,:), ctfmat(:,:)
-        logical,     allocatable :: cone_in(:,:)
-        integer,     allocatable :: nfill(:)
-        real    :: sigma_deg, euls(3), dfx
-        integer :: pdim(3), interpklim, i, k, p, s, c, a, ithr, nteam, istate, irot0, q, n, isub
+        type(oris)                     :: eulspace_sub
+        type(srchspace_map)            :: sub_mapper
+        type(pnb_pass)                 :: reps
+        complex(sp),       allocatable :: anchors(:,:,:,:), band(:,:,:), refb(:,:), ptclb(:,:), ring(:)
+        real,              allocatable :: sub_distmat(:,:), ctfmat(:,:)
+        logical,           allocatable :: cone_in(:,:)
+        integer,           allocatable :: nfill(:)
+        real                           :: sigma_deg, euls(3), dfx
+        integer                        :: pdim(3), interpklim, i, k, p, s, c, a, ithr, nteam, istate, irot0, q, n, isub
         call self%kill
         if( nspace < 1 .or. nstates < 1 .or. nsubs < 1 .or. nsubs > nspace .or. nptcls < 1 .or. nthr_max < 1 )&
             &THROW_HARD('invalid neighbourhood case')
@@ -2050,7 +2050,7 @@ contains
         class(polar_neigh_bench), intent(in) :: self
         real(sp),                 intent(in) :: rep_dists(:)
         integer, allocatable :: npooled(:), pooled(:,:)
-        integer :: i
+        integer              :: i
         allocate(npooled(self%nptcls), pooled(self%ncap,self%nptcls))
         call pool_particles(self, rep_dists, npooled, pooled)
         pooled_changes = 0
@@ -2139,10 +2139,10 @@ contains
     !> decision 18's order (by half, even first, then by the cell of the previous direction, then by index) cut into
     !! decision 3's blocks per half, B = min(PFTC_BLOCK_NB, max(4, n_half / (2 nteam)))
     subroutine neigh_blocks( self, nteam, porder, blocks, bsz )
-        class(polar_neigh_bench), intent(in)    :: self
-        integer,                  intent(in)    :: nteam
-        integer, allocatable,     intent(inout) :: porder(:), blocks(:,:)
-        integer,                  intent(out)   :: bsz(2)
+        class(polar_neigh_bench), intent(in)                     :: self
+        integer,                  intent(in)                     :: nteam
+        integer,                  allocatable,     intent(inout) :: porder(:), blocks(:,:)
+        integer,                  intent(out)                    :: bsz(2)
         integer :: nhalf(2), ih, c, i, n, nblk, j0, jstart
         allocate(porder(self%nptcls))
         n = 0
@@ -2179,19 +2179,19 @@ contains
     !! With l_cellorder the per-pair routine takes the blocks of decision 18's order instead of single particles, as a
     !! fill in blocks would score a path left on it (reported, not judged)
     subroutine score_path( self, path, l_block, nthr, tscale, res, l_cellorder )
-        class(polar_neigh_bench), intent(inout) :: self
-        integer,                  intent(in)    :: path, nthr
-        logical,                  intent(in)    :: l_block
-        real,                     intent(in)    :: tscale
-        type(pnb_pass),           intent(out)   :: res
-        logical, optional,        intent(in)    :: l_cellorder
+        class(polar_neigh_bench), intent(inout)               :: self
+        integer,                  intent(in)                  :: path, nthr
+        logical,                  intent(in)                  :: l_block
+        real,                     intent(in)                  :: tscale
+        type(pnb_pass),           intent(out)                 :: res
+        logical,                  optional,        intent(in) :: l_cellorder
         integer,        allocatable :: porder(:), blocks(:,:), wlist(:,:), wsub(:,:), wslot(:,:), wirot(:,:)
         real(sp),       allocatable :: temps(:), wdist(:,:), wtemp(:,:)
         real(dp),       allocatable :: tthr(:)
         integer(int64), allocatable :: cnt(:,:)
-        real(dp) :: t0
-        integer  :: nteam, ib, i, ithr, nwork, j
-        logical  :: l_order
+        real(dp)                    :: t0
+        integer                     :: nteam, ib, i, ithr, nwork, j
+        logical                     :: l_order
         if( .not. self%exists ) THROW_HARD('polar_neigh_bench: score_path before new')
         if( nthr < 1 .or. nthr > self%nthr_max ) THROW_HARD('polar_neigh_bench: team larger than the calculator')
         if( path < 1 .or. path > PNB_NPATHS ) THROW_HARD('polar_neigh_bench: unknown path')

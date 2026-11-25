@@ -6,9 +6,9 @@ use simple_test_utils      ! assertions etc.
 !$ use omp_lib,         only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
 implicit none
 
-integer,  parameter :: NSH = 24, NPERSH = 256
-real(dp), parameter :: SMPD = 1.5_dp
-integer,  parameter :: BOX  = 2*NSH
+integer,  parameter :: NSH       = 24, NPERSH = 256
+real(dp), parameter :: SMPD      = 1.5_dp
+integer,  parameter :: BOX       = 2*NSH
 real(dp), parameter :: TOL_LOOSE = 0.15_dp
 
 contains
@@ -43,20 +43,20 @@ contains
     !> The FSC between windows follows a_w a_v P / sqrt((a_w^2 P + s_w^2)(a_v^2 P + s_v^2)) for windows with
     !! independent noise; it is symmetric, its diagonal is each window's own FSC, and the table holds every pair
     subroutine test_window_fsc()
-        integer,          parameter :: NW = 3
+        integer,          parameter :: NW    = 3
         character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_window_fsc.txt'
         ! expected |error| of an FSC from NPERSH complex coefficients, sqrt(2/pi) (1 - fsc^2) / sqrt(2 NPERSH),
         ! at its largest (fsc = 0); every shell's mean error lies below it
-        real(dp),         parameter :: TOL_FSC_MEAN = 1._dp / sqrt(DPI * real(NPERSH, dp))
-        type(dose_series)        :: ds
-        complex(sp), allocatable :: em(:,:), om(:,:)
-        integer,     allocatable :: shell(:)
-        real(dp),    allocatable :: kfreq(:)
-        real(dp)        :: cw(NW), bw(NW), sigma(NW), a(NW), pwr, truth, dev
-        integer(kind=8) :: seed
-        integer         :: w, v, sh, funit, ios
-        character(len=512) :: text
-        logical         :: l_sym, l_diag
+        real(dp),         parameter   :: TOL_FSC_MEAN = 1._dp / sqrt(DPI * real(NPERSH, dp))
+        type(dose_series)             :: ds
+        complex(sp),      allocatable :: em(:,:), om(:,:)
+        integer,          allocatable :: shell(:)
+        real(dp),         allocatable :: kfreq(:)
+        real(dp)                      :: cw(NW), bw(NW), sigma(NW), a(NW), pwr, truth, dev
+        integer(kind=8)               :: seed
+        integer                       :: w, v, sh, funit, ios
+        character(len=512)            :: text
+        logical                       :: l_sym, l_diag
         write(*,'(A)') 'test_window_fsc'
         call shell_grid(shell, kfreq)
         cw    = 1._dp
@@ -102,16 +102,16 @@ contains
     !> A window sharper than window 1 becomes the reference of the model table: it reads c = 1 and B = 0, window 1
     !! reads the positive difference, no B is negative, and the dose slope is the fit's
     subroutine test_reports_against_the_sharpest()
-        integer,          parameter :: NW = 5
-        character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_sharpest.txt'
-        type(dose_series)        :: ds
-        complex(sp), allocatable :: em(:,:), om(:,:)
-        integer,     allocatable :: shell(:)
-        real(dp),    allocatable :: kfreq(:)
-        real(dp)        :: cw(NW), bw(NW), sigma(NW), rows(10,NW), line(4), beta
-        character(len=512) :: text
-        integer(kind=8) :: seed
-        integer         :: w, funit, ios
+        integer,          parameter   :: NW    = 5
+        character(len=*), parameter   :: FNAME = 'tmp_dose_series_tester_sharpest.txt'
+        type(dose_series)             :: ds
+        complex(sp),      allocatable :: em(:,:), om(:,:)
+        integer,          allocatable :: shell(:)
+        real(dp),         allocatable :: kfreq(:)
+        real(dp)                      :: cw(NW), bw(NW), sigma(NW), rows(10,NW), line(4), beta
+        character(len=512)            :: text
+        integer(kind=8)               :: seed
+        integer                       :: w, funit, ios
         write(*,'(A)') 'test_reports_against_the_sharpest'
         call shell_grid(shell, kfreq)
         bw    = [0._dp, -6._dp, 10._dp, 30._dp, 50._dp]
@@ -155,17 +155,17 @@ contains
     !! neighbouring windows falls along the series as 2/(b2 k^2 (D_w + D_{w+1} - 2 D_1)). The per-window model
     !! read by the measured estimator still matches the measured critical exposure; the lines' slope does not.
     subroutine test_step_exposure()
-        integer,          parameter :: NW = 5
-        character(len=*), parameter :: STEPS_FNAME = 'tmp_dose_series_tester_steps.txt'
-        character(len=*), parameter :: DECAY_FNAME = 'tmp_dose_series_tester_steps_decay.txt'
-        real(dp),         parameter :: B2 = 1._dp, RES(2) = [12._dp, 6._dp]
-        type(dose_series)        :: ds
-        complex(sp), allocatable :: em(:,:), om(:,:)
-        integer,     allocatable :: shell(:)
-        real(dp),    allocatable :: kfreq(:)
-        real(dp)        :: cw(NW), bw(NW), sigma(NW), dose(NW), row(2+3*size(RES)), vals(7), truth, err, err_est, gap
-        integer(kind=8) :: seed
-        integer         :: w, i, s, funit, ios, nfinite, nrow
+        integer,          parameter   :: NW          = 5
+        character(len=*), parameter   :: STEPS_FNAME = 'tmp_dose_series_tester_steps.txt'
+        character(len=*), parameter   :: DECAY_FNAME = 'tmp_dose_series_tester_steps_decay.txt'
+        real(dp),         parameter   :: B2          = 1._dp, RES(2) = [12._dp, 6._dp]
+        type(dose_series)             :: ds
+        complex(sp),      allocatable :: em(:,:), om(:,:)
+        integer,          allocatable :: shell(:)
+        real(dp),         allocatable :: kfreq(:)
+        real(dp)                      :: cw(NW), bw(NW), sigma(NW), dose(NW), row(2+3*size(RES)), vals(7), truth, err, err_est, gap
+        integer(kind=8)               :: seed
+        integer                       :: w, i, s, funit, ios, nfinite, nrow
         write(*,'(A)') 'test_step_exposure'
         call shell_grid(shell, kfreq)
         do w = 1, NW
@@ -233,20 +233,20 @@ contains
     !! in dose: read back per movie fraction from the file reextract reads. The decay table's model critical
     !! exposure fades by both lines, 1/(2 gamma + beta k^2/2).
     subroutine test_exports_the_dose_curve()
-        integer,          parameter :: NW = 5, NFRAC = 14
-        character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_curve.txt'
-        character(len=*), parameter :: DECAY_FNAME = 'tmp_dose_series_tester_curve_decay.txt'
-        real(dp),         parameter :: BETA_TRUE = 4._dp, GAMMA_TRUE = 0.02_dp
-        type(dose_series)        :: ds
-        type(dose_curve)         :: curve, readback
-        type(string)             :: message
-        complex(sp), allocatable :: em(:,:), om(:,:)
-        integer,     allocatable :: shell(:)
-        real(dp),    allocatable :: kfreq(:), c(:), b(:), c2(:), b2(:)
-        real(dp)        :: cw(NW), bw(NW), sigma(NW), dose(NW), x, err_c, err_b, vals(7), truth, err_ne, err_est
-        integer(kind=8) :: seed
-        integer         :: w, f, ffrom(NW), fto(NW), funit, ios, nrow
-        logical         :: ok
+        integer,          parameter   :: NW          = 5, NFRAC = 14
+        character(len=*), parameter   :: FNAME       = 'tmp_dose_series_tester_curve.txt'
+        character(len=*), parameter   :: DECAY_FNAME = 'tmp_dose_series_tester_curve_decay.txt'
+        real(dp),         parameter   :: BETA_TRUE   = 4._dp, GAMMA_TRUE = 0.02_dp
+        type(dose_series)             :: ds
+        type(dose_curve)              :: curve, readback
+        type(string)                  :: message
+        complex(sp),      allocatable :: em(:,:), om(:,:)
+        integer,          allocatable :: shell(:)
+        real(dp),         allocatable :: kfreq(:), c(:), b(:), c2(:), b2(:)
+        real(dp)                      :: cw(NW), bw(NW), sigma(NW), dose(NW), x, err_c, err_b, vals(7), truth, err_ne, err_est
+        integer(kind=8)               :: seed
+        integer                       :: w, f, ffrom(NW), fto(NW), funit, ios, nrow
+        logical                       :: ok
         write(*,'(A)') 'test_exports_the_dose_curve'
         call shell_grid(shell, kfreq)
         ! windows of two fractions of 1 e/A^2 at 300 kV, centred at 1, 3, 5, 7 and 9
@@ -322,15 +322,15 @@ contains
     !> The per-shell critical exposure assumes no model: on a series faded by Grant and Grigorieff's curve, which
     !! is not one B-factor, it recovers their Ne(k), read back from the decay table the program writes
     subroutine test_shell_exposure()
-        integer, parameter :: NW = 5
-        character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_decay.txt'
-        type(dose_series)        :: ds
-        complex(sp), allocatable :: em(:,:), om(:,:)
-        integer,     allocatable :: shell(:)
-        real(dp),    allocatable :: kfreq(:)
-        real(dp)        :: atten(NW,NSH), sigma(NW), dose(NW), vals(6+4*NW), dev(NSH)
-        integer(kind=8) :: seed
-        integer         :: w, s, funit, ios, nrow, ngg
+        integer,          parameter   :: NW    = 5
+        character(len=*), parameter   :: FNAME = 'tmp_dose_series_tester_decay.txt'
+        type(dose_series)             :: ds
+        complex(sp),      allocatable :: em(:,:), om(:,:)
+        integer,          allocatable :: shell(:)
+        real(dp),         allocatable :: kfreq(:)
+        real(dp)                      :: atten(NW,NSH), sigma(NW), dose(NW), vals(6+4*NW), dev(NSH)
+        integer(kind=8)               :: seed
+        integer                       :: w, s, funit, ios, nrow, ngg
         write(*,'(A)') 'test_shell_exposure'
         call shell_grid(shell, kfreq)
         do w = 1, NW
@@ -415,15 +415,15 @@ contains
     !! diverge (B near -2000) and hand it the whole band edge. A window that is genuinely sharper than
     !! window 1 is a good fit and keeps its weight.
     subroutine test_failed_fits_are_rejected()
-        integer, parameter :: NREP = 10
+        integer,     parameter   :: NREP = 10
         type(dose_series)        :: ds
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:), w(:,:)
-        real(dp)        :: atten(5,NSH), sigma(5), wdead, wsharp
-        integer(kind=8) :: seed
-        integer         :: irep, iw, klo, khi, kind, s
-        logical         :: l_finite
+        real(dp)                 :: atten(5,NSH), sigma(5), wdead, wsharp
+        integer(kind=8)          :: seed
+        integer                  :: irep, iw, klo, khi, kind, s
+        logical                  :: l_finite
         write(*,'(A)') 'test_failed_fits_are_rejected'
         call shell_grid(shell, kfreq)
         sigma = 0.15_dp
@@ -473,15 +473,15 @@ contains
     !! the cross products would add the structure's own power fluctuation (errors too large by about the
     !! amplitude SNR); weights alone would miss the noise every pair of a window shares (too small).
     subroutine test_errors_are_calibrated()
-        integer,  parameter :: NREP = 24, NW = 4, KB = 20, NSIG = 2
-        real(dp), parameter :: SIGS(NSIG) = [0.02_dp, 0.3_dp]
+        integer,     parameter   :: NREP       = 24, NW = 4, KB = 20, NSIG = 2
+        real(dp),    parameter   :: SIGS(NSIG) = [0.02_dp, 0.3_dp]
         type(dose_series)        :: ds
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:), a(:,:), se(:,:), grms(:)
-        real(dp) :: cw(NW), bw(NW), sigma(NW), sa(NW,KB), sa2(NW,KB), sse(NW,KB), sg(NW), ratio(KB), sd
-        integer(kind=8) :: seed
-        integer  :: isig, irep, w, s
+        real(dp)                 :: cw(NW), bw(NW), sigma(NW), sa(NW,KB), sa2(NW,KB), sse(NW,KB), sg(NW), ratio(KB), sd
+        integer(kind=8)          :: seed
+        integer                  :: isig, irep, w, s
         write(*,'(A)') 'test_errors_are_calibrated'
         call shell_grid(shell, kfreq)
         cw = 1._dp
@@ -525,9 +525,9 @@ contains
     !! thickness t, whose projections are a constant along its normal and a slab across it
     subroutine test_shell_independence()
         integer, parameter :: N = 16, T = 4
-        real    :: m(N,N,N)
-        real(dp) :: ball, fvol
-        integer :: i, j, k
+        real               :: m(N,N,N)
+        real(dp)           :: ball, fvol
+        integer            :: i, j, k
         write(*,'(A)') 'test_shell_independence'
         m = 1.
         call assert_true(abs(shell_independence(m) - 1._dp) < 1.e-12_dp, 'no mask leaves every coefficient independent')
@@ -563,16 +563,16 @@ contains
     !> A weak reference correlates every relative attenuation: exposure errors must match independent seeds.
     subroutine test_exposure_errors_share_the_reference()
         use simple_syslib, only: del_file
-        integer, parameter :: NW = 10, NREP = 64, KSHELL = 18
-        character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_exposure_errors.txt'
-        character(len=*), parameter :: STEPS = 'tmp_dose_series_tester_step_errors.txt'
-        type(dose_series) :: ds
-        complex(sp), allocatable :: em(:,:), om(:,:)
-        integer, allocatable :: shell(:)
-        real(dp), allocatable :: kfreq(:)
-        real(dp) :: cw(NW), bw(NW), sigma(NW), row(7), values(NREP), errors(NREP), step_values(NREP), step_errors(NREP), truth, ratio
-        integer(kind=8) :: seed
-        integer :: rep, w, u, s
+        integer,          parameter   :: NW    = 10, NREP = 64, KSHELL = 18
+        character(len=*), parameter   :: FNAME = 'tmp_dose_series_tester_exposure_errors.txt'
+        character(len=*), parameter   :: STEPS = 'tmp_dose_series_tester_step_errors.txt'
+        type(dose_series)             :: ds
+        complex(sp),      allocatable :: em(:,:), om(:,:)
+        integer,          allocatable :: shell(:)
+        real(dp),         allocatable :: kfreq(:)
+        real(dp)                      :: cw(NW), bw(NW), sigma(NW), row(7), values(NREP), errors(NREP), step_values(NREP), step_errors(NREP), truth, ratio
+        integer(kind=8)               :: seed
+        integer                       :: rep, w, u, s
         write(*,'(A)') 'test_exposure_errors_share_the_reference'
         call shell_grid(shell, kfreq)
         cw = 1._dp
@@ -625,15 +625,15 @@ contains
     !> Differences of free B-factors cancel the common reference noise; compare with independent realizations.
     subroutine test_relative_b_errors_share_the_reference()
         use simple_syslib, only: del_file
-        integer, parameter :: NW = 5, NREP = 48
-        character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_b_errors.txt'
-        type(dose_series) :: ds
-        complex(sp), allocatable :: em(:,:), om(:,:)
-        integer, allocatable :: shell(:)
-        real(dp), allocatable :: kfreq(:)
-        real(dp) :: cw(NW), bw(NW), sigma(NW), row(10), values(NREP), errors(NREP), ratio
-        integer(kind=8) :: seed
-        integer :: rep, w, u
+        integer,          parameter   :: NW    = 5, NREP = 48
+        character(len=*), parameter   :: FNAME = 'tmp_dose_series_tester_b_errors.txt'
+        type(dose_series)             :: ds
+        complex(sp),      allocatable :: em(:,:), om(:,:)
+        integer,          allocatable :: shell(:)
+        real(dp),         allocatable :: kfreq(:)
+        real(dp)                      :: cw(NW), bw(NW), sigma(NW), row(10), values(NREP), errors(NREP), ratio
+        integer(kind=8)               :: seed
+        integer                       :: rep, w, u
         write(*,'(A)') 'test_relative_b_errors_share_the_reference'
         call shell_grid(shell, kfreq)
         cw = 1._dp
@@ -673,8 +673,8 @@ contains
         use simple_syslib, only: del_file
         class(dose_series), intent(in) :: ds
         character(len=*), parameter :: FNAME = 'tmp_dose_series_tester_cv.txt'
-        character(len=512) :: text
-        integer :: u
+        character(len=512)          :: text
+        integer                     :: u
         call ds%write_cv_table(string(FNAME))
         open(newunit=u, file=FNAME, status='old', action='read')
         read(u,'(A)') text
@@ -746,11 +746,11 @@ contains
 
     !> generate a series under the B-factor model, with independent half noise
     subroutine synth( nwin, cw, bw, sigma, kfreq, shell, seed, em, om )
-        integer,                  intent(in)    :: nwin
-        real(dp),                 intent(in)    :: cw(:), bw(:), sigma(:), kfreq(:)
-        integer,                  intent(in)    :: shell(:)
-        integer(kind=8),          intent(inout) :: seed
-        complex(sp), allocatable, intent(inout) :: em(:,:), om(:,:)
+        integer,                  intent(in)                 :: nwin
+        real(dp),                 intent(in)                 :: cw(:), bw(:), sigma(:), kfreq(:)
+        integer,                  intent(in)                 :: shell(:)
+        integer(kind=8),          intent(inout)              :: seed
+        complex(sp),              allocatable, intent(inout) :: em(:,:), om(:,:)
         real(dp) :: atten(nwin,size(kfreq))
         integer  :: w, s
         do s = 1, size(kfreq)
@@ -763,11 +763,11 @@ contains
 
     !> generate a series under any attenuation, with independent half noise
     subroutine synth_atten( nwin, atten, sigma, shell, seed, em, om )
-        integer,                  intent(in)    :: nwin
-        real(dp),                 intent(in)    :: atten(:,:), sigma(:)
-        integer,                  intent(in)    :: shell(:)
-        integer(kind=8),          intent(inout) :: seed
-        complex(sp), allocatable, intent(inout) :: em(:,:), om(:,:)
+        integer,                  intent(in)                 :: nwin
+        real(dp),                 intent(in)                 :: atten(:,:), sigma(:)
+        integer,                  intent(in)                 :: shell(:)
+        integer(kind=8),          intent(inout)              :: seed
+        complex(sp),              allocatable, intent(inout) :: em(:,:), om(:,:)
         complex(dp) :: sig
         real(dp)    :: pwr
         integer     :: i, w, s, ncoeff
@@ -793,9 +793,9 @@ contains
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:), w(:,:)
-        real(dp)        :: cw(3), bw(3), sigma(3), truth, got
-        integer(kind=8) :: seed
-        integer         :: s, klo, khi
+        real(dp)                 :: cw(3), bw(3), sigma(3), truth, got
+        integer(kind=8)          :: seed
+        integer                  :: s, klo, khi
         write(*,'(A)') 'test_noise_free_attenuation'
         call shell_grid(shell, kfreq)
         cw    = [1._dp, 1._dp, 1._dp]
@@ -830,9 +830,9 @@ contains
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:)
-        real(dp)        :: cw(5), bw(5), sigma(5), dose(5), beta_true
-        integer(kind=8) :: seed
-        integer         :: w
+        real(dp)                 :: cw(5), bw(5), sigma(5), dose(5), beta_true
+        integer(kind=8)          :: seed
+        integer                  :: w
         write(*,'(A)') 'test_recovers_the_dose_curve'
         call shell_grid(shell, kfreq)
         beta_true = 4._dp
@@ -862,9 +862,9 @@ contains
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:), w(:,:)
-        real(dp)        :: cw(3), bw(3), sigma(3), expect, den
-        integer(kind=8) :: seed
-        integer         :: s, klo, khi, v
+        real(dp)                 :: cw(3), bw(3), sigma(3), expect, den
+        integer(kind=8)          :: seed
+        integer                  :: s, klo, khi, v
         write(*,'(A)') 'test_no_damage_gives_precision_weights'
         call shell_grid(shell, kfreq)
         cw    = 1._dp
@@ -899,8 +899,8 @@ contains
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:)
-        real(dp)        :: cw(2), bw(2), sigma(2)
-        integer(kind=8) :: seed
+        real(dp)                 :: cw(2), bw(2), sigma(2)
+        integer(kind=8)          :: seed
         write(*,'(A)') 'test_two_windows_are_identifiable'
         call shell_grid(shell, kfreq)
         cw    = 1._dp
@@ -926,10 +926,10 @@ contains
         complex(sp), allocatable :: em(:,:), om(:,:), ae(:), ao(:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:), w(:,:)
-        real(dp)        :: cw(3), bw(3), sigma(3)
-        complex(dp)     :: expect
-        integer(kind=8) :: seed
-        integer         :: i, v
+        real(dp)                 :: cw(3), bw(3), sigma(3)
+        complex(dp)              :: expect
+        integer(kind=8)          :: seed
+        integer                  :: i, v
         write(*,'(A)') 'test_accumulation_is_a_weighted_mean'
         call shell_grid(shell, kfreq)
         cw    = 1._dp
@@ -966,9 +966,9 @@ contains
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:)
-        real(dp)        :: cw(3), bw(3), sigma(3)
-        integer(kind=8) :: seed
-        integer         :: klo, khi, klo2, khi2
+        real(dp)                 :: cw(3), bw(3), sigma(3)
+        integer(kind=8)          :: seed
+        integer                  :: klo, khi, klo2, khi2
         write(*,'(A)') 'test_band_follows_the_best_window'
         call shell_grid(shell, kfreq)
         cw    = 1._dp
@@ -1004,10 +1004,10 @@ contains
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:), w1(:,:), w2(:,:)
-        real(dp)        :: cw(4), bw(4), sigma(4)
-        real(sp), parameter :: SCALE = 1.e-4
-        integer(kind=8) :: seed
-        integer         :: klo1, khi1, klo2, khi2, w
+        real(dp)                 :: cw(4), bw(4), sigma(4)
+        real(sp),    parameter   :: SCALE = 1.e-4
+        integer(kind=8)          :: seed
+        integer                  :: klo1, khi1, klo2, khi2, w
         write(*,'(A)') 'test_statistics_are_scale_free'
         call shell_grid(shell, kfreq)
         cw    = 1._dp
@@ -1047,9 +1047,9 @@ contains
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:), wc(:,:), wf(:,:)
-        real(dp)        :: cw(3), bw(3), sigma(3), dose(3), ratio, truth
-        integer(kind=8) :: seed
-        integer         :: s, w, klo, khi
+        real(dp)                 :: cw(3), bw(3), sigma(3), dose(3), ratio, truth
+        integer(kind=8)          :: seed
+        integer                  :: s, w, klo, khi
         write(*,'(A)') 'test_control_and_flat_weights'
         call shell_grid(shell, kfreq)
         cw    = 1._dp
@@ -1088,10 +1088,10 @@ contains
         complex(sp), allocatable :: em(:,:), om(:,:), s0(:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:)
-        real(dp)        :: cw(3), bw(3), sigma(3), fac(NSH), r
-        logical         :: l_const, l_held, l_near_one
-        integer(kind=8) :: seed
-        integer         :: i, s, klo, khi
+        real(dp)                 :: cw(3), bw(3), sigma(3), fac(NSH), r
+        logical                  :: l_const, l_held, l_near_one
+        integer(kind=8)          :: seed
+        integer                  :: i, s, klo, khi
         write(*,'(A)') 'test_zerodose_rescaling'
         call shell_grid(shell, kfreq)
         cw    = 1._dp
@@ -1143,9 +1143,9 @@ contains
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:), cv(:,:), delta(:)
-        real(dp)        :: cw(5), bw(5), sigma(5), cvm, cvc
-        integer(kind=8) :: seed
-        integer         :: w, s, klo, khi, nwin_model, nupper
+        real(dp)                 :: cw(5), bw(5), sigma(5), cvm, cvc
+        integer(kind=8)          :: seed
+        integer                  :: w, s, klo, khi, nwin_model, nupper
         write(*,'(A)') 'test_paired_cv_rejects_a_wrong_control'
         call shell_grid(shell, kfreq)
         cw    = 1._dp
@@ -1186,9 +1186,9 @@ contains
         complex(sp), allocatable :: em(:,:), om(:,:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:), cv(:,:), delta(:)
-        real(dp)        :: atten(5,NSH), sigma(5), dose(5), cvm, cvc
-        integer(kind=8) :: seed
-        integer         :: w, s, klo, khi
+        real(dp)                 :: atten(5,NSH), sigma(5), dose(5), cvm, cvc
+        integer(kind=8)          :: seed
+        integer                  :: w, s, klo, khi
         write(*,'(A)') 'test_paired_cv_keeps_a_true_control'
         call shell_grid(shell, kfreq)
         do w = 1, 5
@@ -1224,9 +1224,9 @@ contains
         complex(sp), allocatable :: em(:,:), om(:,:), ae1(:), ao1(:), ae2(:), ao2(:), s01(:), s02(:)
         integer,     allocatable :: shell(:)
         real(dp),    allocatable :: kfreq(:), w1(:,:), w2(:,:), cv1(:,:), cv2(:,:), delta1(:), delta2(:)
-        real(dp)        :: cw(4), bw(4), sigma(4)
-        integer(kind=8) :: seed
-        integer         :: nthr_prev, nteam
+        real(dp)                 :: cw(4), bw(4), sigma(4)
+        integer(kind=8)          :: seed
+        integer                  :: nthr_prev, nteam
         write(*,'(A)') 'test_parallel_matches_serial'
         call shell_grid(shell, kfreq)
         cw    = 1._dp
@@ -1252,13 +1252,13 @@ contains
     end subroutine test_parallel_matches_serial
 
     subroutine run_pipeline( em, om, shell, kfreq, w, cv, delta, ae, ao, s0 )
-        complex(sp),              intent(in)    :: em(:,:), om(:,:)
-        integer,                  intent(in)    :: shell(:)
-        real(dp),                 intent(in)    :: kfreq(:)
-        real(dp),    allocatable, intent(inout) :: w(:,:), cv(:,:), delta(:)
-        complex(sp), allocatable, intent(inout) :: ae(:), ao(:), s0(:)
+        complex(sp),              intent(in)                 :: em(:,:), om(:,:)
+        integer,                  intent(in)                 :: shell(:)
+        real(dp),                 intent(in)                 :: kfreq(:)
+        real(dp),                 allocatable, intent(inout) :: w(:,:), cv(:,:), delta(:)
+        complex(sp),              allocatable, intent(inout) :: ae(:), ao(:), s0(:)
         type(dose_series) :: ds
-        integer :: iw
+        integer           :: iw
         call ds%new(size(em,2), kfreq, 300._dp, .true.)
         do iw = 1, size(em,2)
             call ds%set_window(iw, real(iw-1,dp), real(iw,dp))

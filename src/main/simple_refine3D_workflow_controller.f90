@@ -10,17 +10,17 @@ type :: refine3D_workflow_controller
     private
     type(string)              :: source_ref_vol, source_fsc_fname, source_sigma_state
     type(refine3D_provenance) :: source_reference
-    character(len=14)         :: workflow_label = ''
-    logical                   :: l_local = .false.
-    logical                   :: l_external_input = .false.
+    character(len=14)         :: workflow_label            = ''
+    logical                   :: l_local                   = .false.
+    logical                   :: l_external_input          = .false.
     logical                   :: l_source_support_verified = .false.
   contains
-    procedure :: new
-    procedure :: kill
-    procedure :: preflight
-    procedure :: load_project
-    procedure :: publish_project
-    procedure :: prepare_startup
+    procedure          :: new
+    procedure          :: kill
+    procedure          :: preflight
+    procedure          :: load_project
+    procedure          :: publish_project
+    procedure          :: prepare_startup
     procedure, private :: preflight_cont_startup
     procedure, private :: stage_local_trailing_chain
     procedure, private :: prepare_external_init_vol
@@ -30,8 +30,8 @@ contains
 
     subroutine new( self, l_local, l_external_input )
         class(refine3D_workflow_controller), intent(inout) :: self
-        logical, intent(in)                                :: l_local
-        logical, intent(in)                                :: l_external_input
+        logical,                             intent(in)    :: l_local
+        logical,                             intent(in)    :: l_external_input
 
         call self%kill
         self%l_local = l_local
@@ -56,7 +56,7 @@ contains
     subroutine preflight( self, cline )
         use simple_cmdline, only: cmdline
         class(refine3D_workflow_controller), intent(inout) :: self
-        class(cmdline), intent(inout)                      :: cline
+        class(cmdline),                      intent(inout) :: cline
 
         self%l_source_support_verified = .false.
         if( self%l_local ) call self%preflight_cont_startup(cline)
@@ -66,8 +66,8 @@ contains
         use simple_parameters, only: parameters
         use simple_sp_project, only: sp_project
         class(refine3D_workflow_controller), intent(inout) :: self
-        class(parameters), intent(inout)                   :: params
-        class(sp_project), intent(inout)                   :: spproj
+        class(parameters),                   intent(inout) :: params
+        class(sp_project),                   intent(inout) :: spproj
 
         call spproj%read( params%projfile )
         call self%publish_project(params, spproj)
@@ -78,8 +78,8 @@ contains
         use simple_parameters,        only: parameters
         use simple_sp_project,        only: sp_project
         class(refine3D_workflow_controller), intent(inout) :: self
-        class(parameters), intent(inout)                   :: params
-        class(sp_project), intent(inout)                   :: spproj
+        class(parameters),                   intent(inout) :: params
+        class(sp_project),                   intent(inout) :: spproj
 
         call spproj%update_projinfo(params%projfile)
         if( self%l_local ) call stage_refine3D_local_sigma2(params, spproj, self%source_sigma_state)
@@ -97,13 +97,13 @@ contains
         use simple_defs_fname,        only: MRC_EXT
         use simple_error,             only: simple_exception
         class(refine3D_workflow_controller), intent(inout) :: self
-        class(parameters), intent(inout)                   :: params
-        class(cmdline), intent(inout)                      :: cline
-        class(sp_project), intent(inout)                   :: spproj
-        type(string), intent(inout)                        :: init_vol
-        logical, intent(out)                               :: l_have_init_vol
-        integer, intent(in)                                :: box_crop
-        real, intent(in)                                   :: smpd_crop
+        class(parameters),                   intent(inout) :: params
+        class(cmdline),                      intent(inout) :: cline
+        class(sp_project),                   intent(inout) :: spproj
+        type(string),                        intent(inout) :: init_vol
+        logical,                             intent(out)   :: l_have_init_vol
+        integer,                             intent(in)    :: box_crop
+        real,                                intent(in)    :: smpd_crop
         real    :: init_smpd
         integer :: init_box
         logical :: l_reused_derivatives
@@ -179,15 +179,15 @@ contains
         use simple_defs_fname,          only: MRC_EXT
         use simple_error,               only: simple_exception
         class(refine3D_workflow_controller), intent(inout) :: self
-        class(cmdline), intent(inout)                      :: cline
-        class(sp_project), allocatable       :: source
+        class(cmdline),                      intent(inout) :: cline
+        class(sp_project),       allocatable :: source
         class(state_weight_set), allocatable :: weights
-        logical, allocatable                 :: selected(:)
+        logical,                 allocatable :: selected(:)
         logical                              :: use_flex, source_sigma_found
         type(string)                         :: project_file, previous_dir, volume, names(3), project_dir, relative_volume
-        class(oris), pointer                 :: source_os
+        class(oris),             pointer     :: source_os
         character(len=STDLEN)                :: validation_message
-        type(string), allocatable            :: projects(:)
+        type(string),            allocatable :: projects(:)
         integer                              :: next_dir, eo, state, i, dims(3,3), native_box, registered_box, halves(0:1), particle_state
         integer                              :: provenance_status
         real                                 :: sampling(3), native_smpd, registered_smpd
@@ -297,12 +297,12 @@ contains
         use simple_cmdline,           only: cmdline
         use simple_defs,              only: logfhandle
         class(refine3D_workflow_controller), intent(inout) :: self
-        class(parameters), intent(in)                      :: params
-        class(cmdline), intent(inout)                      :: cline
-        class(sp_project), intent(inout)                   :: project
-        integer, intent(in)                                :: box_crop
-        real, intent(in)                                   :: smpd_crop
-        type(string), intent(in)                           :: source_vol
+        class(parameters),                   intent(in)    :: params
+        class(cmdline),                      intent(inout) :: cline
+        class(sp_project),                   intent(inout) :: project
+        integer,                             intent(in)    :: box_crop
+        real,                                intent(in)    :: smpd_crop
+        type(string),                        intent(in)    :: source_vol
         logical :: valid
 
         if( .not. params%l_update_frac .or. .not. params%l_trail_rec ) return
@@ -330,9 +330,9 @@ contains
         use simple_defs_fname,          only: MRC_EXT
         use simple_error,               only: simple_exception
         class(refine3D_workflow_controller), intent(inout) :: self
-        class(parameters), intent(in)                      :: params
-        class(sp_project), intent(inout)                   :: spproj
-        type(string), intent(inout)                        :: init_vol
+        class(parameters),                   intent(in)    :: params
+        class(sp_project),                   intent(inout) :: spproj
+        type(string),                        intent(inout) :: init_vol
         type(string)      :: init_even, init_odd, new_vol, new_even, new_odd
         type(image)       :: vol, vol_even, vol_odd
         real, allocatable :: fsc(:)
@@ -408,8 +408,8 @@ contains
         use simple_parameters, only: parameters
         use simple_defs,       only: TINY
         class(parameters), intent(in) :: params
-        integer, intent(in)           :: box
-        real, intent(in)              :: smpd
+        integer,           intent(in) :: box
+        real,              intent(in) :: smpd
         compatible = box == params%box .and. smpd > TINY .and. abs(smpd - params%smpd) <= 1.e-6
     end function reference_grid_matches
 

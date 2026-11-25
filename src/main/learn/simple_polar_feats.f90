@@ -26,8 +26,8 @@ integer(int64), parameter :: FEATS_CACHE_VERSION = 2_int64   !< 2: the tensors o
 integer, parameter :: IH_MAGIC = 1, IH_VERSION = 2, IH_PATH = 3, IH_MTIME = 4, IH_ROWS = 5, IH_BOX = 6, IH_BOXCROP = 7, &
     &IH_SMPD = 8, IH_NSEL = 9, IH_SELHASH = 10, IH_HIGHROW = 11, IH_PFTSZ = 12, IH_KFROM = 13, IH_KTO = 14, IH_WHASH = 15, &
     &IH_CTF = 16
-integer(int64), parameter :: FREE_SPACE_DENOM = 4_int64  !< the cache takes at most a quarter of the free space
-real(dp),       parameter :: NET_ANGLE_OVERSAMPLING = 2._dp !< the network's half ring holds at most this many times pi k_max angles, the outer ring's sampling limit
+integer(int64), parameter :: FREE_SPACE_DENOM       = 4_int64 !< the cache takes at most a quarter of the free space
+real(dp),       parameter :: NET_ANGLE_OVERSAMPLING = 2._dp   !< the network's half ring holds at most this many times pi k_max angles, the outer ring's sampling limit
 ! the overflow-safe rolling hashes of the selection and the weights: two Lehmer generators on primes below 2^31
 integer(int64), parameter :: HASH_M1 = 2147483647_int64, HASH_A1 = 48271_int64
 integer(int64), parameter :: HASH_M2 = 2147483629_int64, HASH_A2 = 16807_int64
@@ -59,15 +59,15 @@ end type polar_feat_work
 !! the calculator's shift arguments for the augmentation
 type :: polar_feats
     private
-    integer               :: pftsz = 0, pftsz_in = 0, nrots = 0, box = 0, nk = 0
+    integer               :: pftsz      = 0, pftsz_in = 0, nrots = 0, box = 0, nk = 0
     integer               :: kfromto(2) = 0
-    real(sp), allocatable :: wk(:,:)        !< (kfromto(1):kfromto(2), 2) the shell weights k/sigma2(k) per half
-    real(sp), allocatable :: sqw(:,:)       !< their square roots
+    real(sp), allocatable :: wk(:,:)                !< (kfromto(1):kfromto(2), 2) the shell weights k/sigma2(k) per half
+    real(sp), allocatable :: sqw(:,:)               !< their square roots
     real(dp), allocatable :: ax(:,:), ay(:,:)       !< (pftsz, kfromto(1):kfromto(2)) the phase ramp's shift arguments on the network's half ring
     real(dp), allocatable :: ax_in(:,:), ay_in(:,:) !< (pftsz_in, kfromto(1):kfromto(2)) the same on the calculator's half ring
     real(sp), allocatable :: rs_re(:,:), rs_im(:,:) !< (pftsz, pftsz_in) the band-limited resampling of the real and imaginary channels
     logical               :: l_resample = .false.
-    logical               :: exists = .false.
+    logical               :: exists     = .false.
   contains
     procedure :: new
     procedure :: get_pftsz
@@ -90,9 +90,9 @@ end type polar_feats
 type :: polar_feats_cache
     private
     type(string)   :: fname, tmpname
-    integer        :: funit   = -1
-    integer        :: pftsz   = 0, nk = 0, kfrom = 0, reclen = 0
-    integer(int64) :: highrow = 0_int64
+    integer        :: funit     = -1
+    integer        :: pftsz     = 0, nk = 0, kfrom = 0, reclen = 0
+    integer(int64) :: highrow   = 0_int64
     logical        :: l_open    = .false.
     logical        :: l_writing = .false.
   contains
@@ -143,8 +143,8 @@ contains
         !> the calculator's shift arguments (argtransf) on a half ring of n angles: 2 pi / box times the polar
         !! coordinate (h, k) of each sample, h = k sin(theta_p), kc = -k cos(theta_p), theta_p = (p-1) pi / n
         subroutine ramp_args( n, ax, ay )
-            integer,               intent(in)  :: n
-            real(dp), allocatable, intent(out) :: ax(:,:), ay(:,:)
+            integer,               intent(in)               :: n
+            real(dp),              allocatable, intent(out) :: ax(:,:), ay(:,:)
             real(dp) :: theta, a
             integer  :: p, k
             allocate(ax(n,kfromto(1):kfromto(2)), ay(n,kfromto(1):kfromto(2)))
@@ -173,8 +173,8 @@ contains
     !! angular harmonics |j| < m kept, as the Dirichlet kernel D. With f(theta + pi) = conj(f(theta)), entry q is
     !! sum_p (D(dq_p) + D(dq_p - pi)) Re f_p / 2n for the real channel and (D(dq_p) - D(dq_p - pi)) for the imaginary
     subroutine resampling_matrices( n, m, rs_re, rs_im )
-        integer,               intent(in)  :: n, m
-        real(sp), allocatable, intent(out) :: rs_re(:,:), rs_im(:,:)
+        integer,               intent(in)               :: n, m
+        real(sp),              allocatable, intent(out) :: rs_re(:,:), rs_im(:,:)
         real(dp) :: d0, d1, phi
         integer  :: p, q
         allocate(rs_re(m,n), rs_im(m,n))
@@ -254,12 +254,12 @@ contains
     !> the particle's tensor from the calculator: its half ring over the band, its CTF matrix and its half, read
     !! through the calculator's getters into work; the one routine training and prediction build their input with
     subroutine build( self, pftc, iptcl, feat, work, normalise )
-        class(polar_feats),    intent(in)    :: self
-        class(polarft_calc),   intent(in)    :: pftc
-        integer,               intent(in)    :: iptcl
-        type(polar_feat),      intent(inout) :: feat
-        type(polar_feat_work), intent(inout) :: work
-        logical, optional,     intent(in)    :: normalise
+        class(polar_feats),    intent(in)               :: self
+        class(polarft_calc),   intent(in)               :: pftc
+        integer,               intent(in)               :: iptcl
+        type(polar_feat),      intent(inout)            :: feat
+        type(polar_feat_work), intent(inout)            :: work
+        logical,               optional,     intent(in) :: normalise
         integer :: kfromto(2), nk
         logical :: l_fits
         if( .not. self%exists ) THROW_HARD('polar_feats not constructed; build')
@@ -291,12 +291,12 @@ contains
     !! norm; the ring mean of the CTF squared and its azimuthal variation beside it; the log of the weighted power
     !! as the side scalar
     subroutine build_from_pft( self, pft, ctfmat, iseven, feat, normalise )
-        class(polar_feats), intent(in)    :: self
-        complex(sp),        intent(in)    :: pft(self%pftsz_in,self%kfromto(1):self%kfromto(2))
-        real(sp),           intent(in)    :: ctfmat(self%pftsz_in,self%kfromto(1):self%kfromto(2))
-        logical,            intent(in)    :: iseven
-        type(polar_feat),   intent(inout) :: feat
-        logical, optional,  intent(in)    :: normalise
+        class(polar_feats), intent(in)            :: self
+        complex(sp),        intent(in)            :: pft(self%pftsz_in,self%kfromto(1):self%kfromto(2))
+        real(sp),           intent(in)            :: ctfmat(self%pftsz_in,self%kfromto(1):self%kfromto(2))
+        logical,            intent(in)            :: iseven
+        type(polar_feat),   intent(inout)         :: feat
+        logical,            optional,  intent(in) :: normalise
         complex(sp) :: c(self%pftsz_in)
         real(sp)    :: xin(self%pftsz_in,self%kfromto(1):self%kfromto(2),2)
         real(dp)    :: wsq, scale, sk, t2(self%pftsz_in), tm, tv, taz, s
@@ -471,7 +471,7 @@ contains
     pure function polar_feats_hash_ints( vals ) result( h )
         integer,        intent(in) :: vals(:)
         integer(int64) :: h, h1, h2
-        integer :: i
+        integer        :: i
         h1 = 1_int64
         h2 = 1_int64
         call hash_step(h1, h2, int(size(vals),int64))
@@ -486,7 +486,7 @@ contains
         real(sp),       intent(in) :: vals(:)
         integer(int64) :: h, h1, h2
         integer(int32) :: bits
-        integer :: i
+        integer        :: i
         h1 = 1_int64
         h2 = 1_int64
         call hash_step(h1, h2, int(size(vals),int64))

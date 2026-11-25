@@ -8,7 +8,7 @@ contains
         use simple_cmdline,          only: cmdline
         use simple_parameters,       only: parameters
         use simple_test_utils,       only: assert_true, assert_false, assert_real, assert_int
-        class(cmdline), allocatable    :: cline
+        class(cmdline),    allocatable :: cline
         class(parameters), allocatable :: params
         type(refine3D_startup)         :: producer, consumer
         integer                        :: mode

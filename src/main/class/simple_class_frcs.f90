@@ -55,11 +55,11 @@ contains
     ! constructor
 
     subroutine new( self, ncls, box4frc_calc, smpd, nstates )
-        class(class_frcs), intent(inout) :: self
-        integer,           intent(in)    :: ncls
-        integer,           intent(in)    :: box4frc_calc
-        real,              intent(in)    :: smpd
-        integer, optional, intent(in)    :: nstates
+        class(class_frcs), intent(inout)        :: self
+        integer,           intent(in)           :: ncls
+        integer,           intent(in)           :: box4frc_calc
+        real,              intent(in)           :: smpd
+        integer,           optional, intent(in) :: nstates
         ! init
         call self%kill
         self%ncls         = ncls
@@ -151,10 +151,10 @@ contains
     end function get_box
 
     subroutine set_frc( self, cls, frc, state )
-        class(class_frcs), intent(inout) :: self
-        integer,           intent(in)    :: cls
-        real,              intent(in)    :: frc(:)
-        integer, optional, intent(in)    :: state
+        class(class_frcs), intent(inout)        :: self
+        integer,           intent(in)           :: cls
+        real,              intent(in)           :: frc(:)
+        integer,           optional, intent(in) :: state
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
@@ -170,8 +170,8 @@ contains
     function resample_filter( filt_orig, res_orig, res_new ) result( filt_resamp )
         real, intent(in)  :: filt_orig(:), res_orig(:), res_new(:)
         real, allocatable :: filt_resamp(:) !< output filter array
-        integer :: filtsz_orig, filtsz_resamp, k, ind
-        real    :: dist
+        integer           :: filtsz_orig, filtsz_resamp, k, ind
+        real              :: dist
         filtsz_orig   = size(filt_orig)
         filtsz_resamp = size(res_new)
         allocate(filt_resamp(filtsz_resamp))
@@ -183,12 +183,12 @@ contains
 
     !>  getter for values interepreted as FRCs
     function get_frc( self, cls, box, state ) result( frc )
-        class(class_frcs), intent(in) :: self
-        integer,           intent(in) :: cls, box
-        integer, optional, intent(in) :: state
+        class(class_frcs), intent(in)           :: self
+        integer,           intent(in)           :: cls, box
+        integer,           optional, intent(in) :: state
         real, allocatable :: frc(:)
         real, allocatable :: res(:)
-        integer :: sstate
+        integer           :: sstate
         sstate = 1
         if( present(state) ) sstate = state
         call self%raise_exception( cls, sstate, 'ERROR, out of bounds in get_frc')
@@ -202,10 +202,10 @@ contains
 
     !>  getter for values interepreted as FRCs
     subroutine frc_getter( self, cls, frc, state )
-        class(class_frcs), intent(in)  :: self
-        integer,           intent(in)  :: cls
-        real,              intent(out) :: frc(self%filtsz)
-        integer, optional, intent(in)  :: state
+        class(class_frcs), intent(in)           :: self
+        integer,           intent(in)           :: cls
+        real,              intent(out)          :: frc(self%filtsz)
+        integer,           optional, intent(in) :: state
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
@@ -214,10 +214,10 @@ contains
     end subroutine frc_getter
 
     subroutine avg_frc_getter( self, frcs_avg, states, state )
-        class(class_frcs),    intent(in)    :: self
-        real,                 intent(out)   :: frcs_avg(self%filtsz)
-        integer,              intent(in)    :: states(self%ncls)
-        integer,    optional, intent(in)    :: state
+        class(class_frcs),    intent(in)           :: self
+        real,                 intent(out)          :: frcs_avg(self%filtsz)
+        integer,              intent(in)           :: states(self%ncls)
+        integer,              optional, intent(in) :: state
         integer :: sstate, k
         sstate = 1
         if( present(state) ) sstate = state
@@ -229,10 +229,10 @@ contains
 
     !>  getter for raw values
     subroutine getter( self, cls, frc, state )
-        class(class_frcs), intent(in)  :: self
-        integer,           intent(in)  :: cls
-        real,              intent(out) :: frc(self%filtsz)
-        integer, optional, intent(in)  :: state
+        class(class_frcs), intent(in)           :: self
+        integer,           intent(in)           :: cls
+        real,              intent(out)          :: frc(self%filtsz)
+        integer,           optional, intent(in) :: state
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
@@ -241,10 +241,10 @@ contains
     end subroutine getter
 
     subroutine estimate_res( self, cls, res_frc05, res_frc0143, state )
-        class(class_frcs), intent(in)  :: self
-        integer,           intent(in)  :: cls
-        real,              intent(out) :: res_frc05, res_frc0143
-        integer, optional, intent(in)  :: state
+        class(class_frcs), intent(in)           :: self
+        integer,           intent(in)           :: cls
+        real,              intent(out)          :: res_frc05, res_frc0143
+        integer,           optional, intent(in) :: state
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
@@ -254,10 +254,10 @@ contains
     end subroutine estimate_res
 
     function estimate_find_for_eoavg( self, cls, state, frc4eoavg ) result( find )
-        class(class_frcs), intent(in)  :: self
-        integer,           intent(in)  :: cls
-        integer, optional, intent(in)  :: state
-        real,    optional, intent(in)  :: frc4eoavg
+        class(class_frcs), intent(in)           :: self
+        integer,           intent(in)           :: cls
+        integer,           optional, intent(in) :: state
+        real,              optional, intent(in) :: frc4eoavg
         real    :: frcval
         integer :: sstate, find
         sstate = 1
@@ -269,9 +269,9 @@ contains
     end function estimate_find_for_eoavg
 
     function estimate_lp_for_align( self, state, crit0143 ) result( lp )
-        class(class_frcs), intent(in) :: self
-        integer, optional, intent(in) :: state
-        logical, optional, intent(in) :: crit0143
+        class(class_frcs), intent(in)           :: self
+        integer,           optional, intent(in) :: state
+        logical,           optional, intent(in) :: crit0143
         real    :: lplims(self%ncls),lp3(3)
         real    :: lp, res_frc05, res_frc0143
         integer :: sstate, icls
@@ -297,10 +297,10 @@ contains
 
     ! Zero-padding of FRC vectors given new signal size
     subroutine pad( self, newsmpd, newbox, self_out )
-        class(class_frcs),           intent(inout) :: self
-        real,                        intent(in)    :: newsmpd
-        integer,                     intent(in)    :: newbox
-        type(class_frcs),  optional, intent(out)   :: self_out ! in/out-of-place
+        class(class_frcs),           intent(inout)         :: self
+        real,                        intent(in)            :: newsmpd
+        integer,                     intent(in)            :: newbox
+        type(class_frcs),            optional, intent(out) :: self_out ! in/out-of-place
         type(class_frcs) :: tmp
         if( newbox < self%box4frc_calc )then
             THROW_HARD('New < old filter size; pad')
@@ -338,10 +338,10 @@ contains
 
     ! Zero-padding of FRC vectors given new signal size
     subroutine crop( self, newsmpd, newbox, self_out )
-        class(class_frcs),           intent(inout) :: self
-        real,                        intent(in)    :: newsmpd
-        integer,                     intent(in)    :: newbox
-        type(class_frcs),  optional, intent(out)   :: self_out ! in/out-of-place
+        class(class_frcs),           intent(inout)         :: self
+        real,                        intent(in)            :: newsmpd
+        integer,                     intent(in)            :: newbox
+        type(class_frcs),            optional, intent(out) :: self_out ! in/out-of-place
         type(class_frcs) :: tmp
         if( newbox < self%box4frc_calc )then
             if( present(self_out) )then
@@ -402,11 +402,11 @@ contains
     end subroutine write
 
     subroutine print_frcs( self, fname, state )
-        class(class_frcs), intent(inout) :: self
-        class(string),     intent(in)    :: fname
-        integer, optional, intent(in)    :: state
+        class(class_frcs), intent(inout)        :: self
+        class(string),     intent(in)           :: fname
+        integer,           optional, intent(in) :: state
         real, allocatable :: res(:)
-        integer :: j, sstate, icls
+        integer           :: j, sstate, icls
         sstate = 1
         if( present(state) ) sstate = state
         call self%read(fname)
@@ -427,8 +427,8 @@ contains
         class(string),     intent(in)    :: tmpl_fname
         character(len=:), allocatable :: tmp, all_pdfs, cmd
         real,             allocatable :: frc(:)
-        type(string) :: fname
-        integer      :: s, icls
+        type(string)                  :: fname
+        integer                       :: s, icls
         allocate(frc(self%filtsz))
         all_pdfs = ''
         do s = 1,self%nstates

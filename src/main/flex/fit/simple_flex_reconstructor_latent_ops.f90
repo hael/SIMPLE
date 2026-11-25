@@ -43,7 +43,7 @@ contains
         logical,             intent(in)    :: apply_ctf_amp
         type(exp_samples)    :: samples
         complex, allocatable :: vals(:)
-        integer :: q, ncomp
+        integer              :: q, ncomp
         if( .not. allocated(mean_rec%cmat_exp) )then
             THROW_HARD('expanded mean matrix does not exist; project_fplanes_mean_basis')
         endif
@@ -216,17 +216,17 @@ contains
 
     !> Serve a batch from the resident store when possible; otherwise read, prepare and retain it.
     subroutine planes_batch_load( plane_store, params, build, n, pinds, batchlims, fpls, cached, reads, sec_read, sec_prep )
-        class(flex_plane_store),        intent(inout) :: plane_store
-        class(parameters),              intent(in)    :: params
-        class(builder),                 intent(inout) :: build
-        integer,                        intent(in)    :: n, pinds(n), batchlims(2)
-        type(fplane_type),              intent(inout) :: fpls(:)
-        logical,                        intent(in)    :: cached
-        class(ptcl_read_session),       intent(inout) :: reads   !< the read session of the pass
-        real(timer_int_kind), optional, intent(inout) :: sec_read, sec_prep
+        class(flex_plane_store),        intent(inout)           :: plane_store
+        class(parameters),              intent(in)              :: params
+        class(builder),                 intent(inout)           :: build
+        integer,                        intent(in)              :: n, pinds(n), batchlims(2)
+        type(fplane_type),              intent(inout)           :: fpls(:)
+        logical,                        intent(in)              :: cached
+        class(ptcl_read_session),       intent(inout)           :: reads !< the read session of the pass
+        real(timer_int_kind),           optional, intent(inout) :: sec_read, sec_prep
         integer(timer_int_kind) :: t
-        integer :: batchsz
-        logical :: found
+        integer                 :: batchsz
+        logical                 :: found
         batchsz = batchlims(2) - batchlims(1) + 1
         call plane_store%fetch(pinds(batchlims(1):batchlims(2)), fpls(:batchsz), cached, found, sec_read)
         if( found ) return
@@ -250,17 +250,17 @@ contains
     !! holds the full-box preparation's padded transform on the box_crop grid, so only the plane generation
     !! (gen_rec_plane) runs, on the cropped grid.
     subroutine prep_imgs4projected_model( params, build, nptcls, ptcl_imgs, pinds, fplanes, cached, plane_store )
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: nptcls
-        class(image),      intent(inout) :: ptcl_imgs(nptcls)
-        integer,           intent(in)    :: pinds(nptcls)
-        type(fplane_type), intent(inout) :: fplanes(nptcls)
-        logical, optional, intent(in)    :: cached      !< serve reads from the downscaled cache
+        class(parameters),       intent(in)           :: params
+        class(builder),          intent(inout)        :: build
+        integer,                 intent(in)           :: nptcls
+        class(image),            intent(inout)        :: ptcl_imgs(nptcls)
+        integer,                 intent(in)           :: pinds(nptcls)
+        type(fplane_type),       intent(inout)        :: fplanes(nptcls)
+        logical,                 optional, intent(in) :: cached !< serve reads from the downscaled cache
         class(flex_plane_store), optional, intent(in) :: plane_store
         type(fplane_grid) :: grid
-        integer :: i, ithr, kfromto(2)
-        logical :: l_cached
+        integer           :: i, ithr, kfromto(2)
+        logical           :: l_cached
         l_cached = .false.
         if( present(cached) ) l_cached = cached
         kfromto = projected_model_kfromto(params%box_crop, params%smpd_crop, params%lp)

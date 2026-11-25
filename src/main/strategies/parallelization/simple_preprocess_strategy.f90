@@ -102,7 +102,7 @@ contains
     function create_preprocess_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
         class(preprocess_strategy), allocatable :: strategy
-        logical :: is_master
+        logical                                 :: is_master
         ! Master heuristic: nparts is defined, but no explicit worker range/part.
         is_master = cline%defined('nparts') .and. (.not.cline%defined('part')) &
                    .and. (.not.cline%defined('fromp')) .and. (.not.cline%defined('top'))
@@ -182,14 +182,14 @@ contains
         type(motion_correct_iter)     :: mciter
         type(sp_project)              :: spproj
         type(ctfparams)               :: ctfvars
-        type(string) :: imgkind, moviename, fbody
-        type(string) :: moviename_forctf, output_dir_motion_correct
-        type(string) :: output_dir_ctf_estimate, output_dir_inipick_preproc, micname_intg
-        type(string) :: eputiltgroup, str_meta
-        type(string) :: cwd, gain_thumb_abspath
-        integer      :: nmovies, fromto(2), imovie, ntot, frame_counter
-        real         :: shiftx, shifty
-        logical      :: l_del_forctf, l_gen_thumb, l_beamshift
+        type(string)                  :: imgkind, moviename, fbody
+        type(string)                  :: moviename_forctf, output_dir_motion_correct
+        type(string)                  :: output_dir_ctf_estimate, output_dir_inipick_preproc, micname_intg
+        type(string)                  :: eputiltgroup, str_meta
+        type(string)                  :: cwd, gain_thumb_abspath
+        integer                       :: nmovies, fromto(2), imovie, ntot, frame_counter
+        real                          :: shiftx, shifty
+        logical                       :: l_del_forctf, l_gen_thumb, l_beamshift
         ! gain reference thumbnail
         if( cline%defined('gainref') )then
             if(.not.file_exists(params%gainref) )then
@@ -374,7 +374,7 @@ contains
         type(parameters),                 intent(inout) :: params
         class(cmdline),                   intent(inout) :: cline
         type(string)                                    :: cwd, gain_thumb_abspath
-        integer :: nmovies
+        integer                                         :: nmovies
         call set_preprocess_defaults(cline)
         ! Parse parameters
         call params%new(cline)

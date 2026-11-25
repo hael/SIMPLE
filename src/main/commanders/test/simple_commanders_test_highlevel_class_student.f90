@@ -17,13 +17,13 @@ contains
         use, intrinsic :: ieee_arithmetic,   only: ieee_is_finite
         class(commander_test_class_student), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        integer, parameter :: NPTCLS   = 2000
-        integer, parameter :: NTRAIN   = 1000
-        integer, parameter :: NCLS     = 10
-        real,    parameter :: SNR      = 0.5
-        real,    parameter :: SHERR_PX = 6.    !< the planted shifts' range (pixels at 2.2 A): the center_ptcls test's
-        integer, parameter :: NREADS   = 18
-        integer, parameter :: READ_TOP1 = 11  !< the read of the most likely class's agreement with the reference
+        integer, parameter :: NPTCLS    = 2000
+        integer, parameter :: NTRAIN    = 1000
+        integer, parameter :: NCLS      = 10
+        real,    parameter :: SNR       = 0.5
+        real,    parameter :: SHERR_PX  = 6.   !< the planted shifts' range (pixels at 2.2 A): the center_ptcls test's
+        integer, parameter :: NREADS    = 18
+        integer, parameter :: READ_TOP1 = 11   !< the read of the most likely class's agreement with the reference
         ! each read: its file (1 the report, 2 the diagnostics), its row's label and the column of its number
         integer,          parameter :: READ_FILE(NREADS) = [1,1,1,1,1,1,1,1,1,1, 2,2,2,2,2,2,2,2]
         integer,          parameter :: READ_COL(NREADS)  = [1,1,1,1,2,1,2,1,1,1, 1,2,1,1,1,1,1,1]
@@ -42,18 +42,18 @@ contains
             &'student_cost_ms', 'full_search_cost_ms', 'reference_shifts_shortlist_has_class_pct', 'predict_wall_s', &
             &'full_search_wall_s', 'same_class_pct', 'reference_shifts_same_class_pct', 'list_has_class_pct', &
             &'aligned_same_class_pct', 'inpl_error_deg', 'shift_error_A', 'picking_error_A', 'alignment_cost_ms']
-        class(parameters), allocatable :: params
-        type(state_fixture)   :: fix
-        type(test_gate)       :: gate
-        type(sp_project)      :: proj
-        type(class_student)   :: student
+        class(parameters), allocatable         :: params
+        type(state_fixture)                    :: fix
+        type(test_gate)                        :: gate
+        type(sp_project)                       :: proj
+        type(class_student)                    :: student
         type(commander_validate_class_student) :: xvalidate
-        type(cmdline)         :: cl
-        type(string)          :: cwd_saved, root, projfile, edir
-        integer(timer_int_kind) :: t0
-        real    :: wall, vals(NREADS), sh(2), e3, pconf, top1
-        integer :: i, status, npred, ntrain_pred, cls, rte
-        logical :: l_records, l_found(NREADS), l_mtable, l_mcands, l_mrecords, l_mclean, l_empty
+        type(cmdline)                          :: cl
+        type(string)                           :: cwd_saved, root, projfile, edir
+        integer(timer_int_kind)                :: t0
+        real                                   :: wall, vals(NREADS), sh(2), e3, pconf, top1
+        integer                                :: i, status, npred, ntrain_pred, cls, rte
+        logical                                :: l_records, l_found(NREADS), l_mtable, l_mcands, l_mrecords, l_mclean, l_empty
         allocate(params)
         call simple_getcwd(cwd_saved)
         root = filepath(cwd_saved, 'test_class_student_'//int2str(get_process_id()))
@@ -156,11 +156,11 @@ contains
                 &'class_student_part2_cands.bin', 'algndoc_1.simple', 'JOB_FINISHED_2', 'distr_simple_script_1']
             type(commander_predict_classes) :: xpredict
             class(sp_project), allocatable  :: input, runs(:)
-            type(string) :: model_abs, cavgs, sigma2_src, sigma2_base, cands_fname, here
-            integer :: irun, ncls_c, irow, u, ios, nlines
-            real    :: smpd_c
-            character(len=512) :: line
-            logical :: l_sigma2
+            type(string)                    :: model_abs, cavgs, sigma2_src, sigma2_base, cands_fname, here
+            integer                         :: irun, ncls_c, irow, u, ios, nlines
+            real                            :: smpd_c
+            character(len=512)              :: line
+            logical                         :: l_sigma2
             allocate(input, runs(2))
             call simple_getcwd(here)
             call input%read(string('predict/'//STUDENT_UNSEEN_PROJ))
@@ -251,8 +251,8 @@ contains
             logical, intent(out) :: found(NREADS)
             character(len=512) :: line, rest
             character(len=64)  :: tok
-            real    :: x
-            integer :: u, ios, j, ifile, nnum, k, ios_tok
+            real               :: x
+            integer            :: u, ios, j, ifile, nnum, k, ios_tok
             v     = -1.
             found = .false.
             do ifile = 1,2

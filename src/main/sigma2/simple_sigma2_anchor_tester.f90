@@ -13,13 +13,13 @@ implicit none
 private
 public :: run_all_sigma2_anchor_tests
 character(len=*), parameter :: STORE = 'sigma2_state.bin'
-integer, parameter :: NSH = 16
+integer,          parameter :: NSH   = 16
 
 contains
 
     subroutine run_all_sigma2_anchor_tests()
         type(string) :: saved, root
-        integer :: nfail0
+        integer      :: nfail0
         nfail0 = tests_failed
         call enter_fixture('sigma2_anchor', saved, root)
         call test_smoothing_and_persistence()
@@ -38,7 +38,7 @@ contains
 
     subroutine test_log_blend()
         real(real32) :: anchor(2,2), measured(2,2), blended(2,2)
-        integer :: status
+        integer      :: status
         write(*,'(A)') 'test_log_blend'
         anchor   = reshape([1.,16.,81.,256.],[2,2])
         measured = reshape([16.,1.,256.,81.],[2,2])
@@ -78,14 +78,14 @@ contains
         use simple_polarft_calc, only: polarft_calc
         use simple_euclid_sigma2, only: euclid_sigma2
         character(len=*), intent(in) :: oritype
-        class(parameters), allocatable, target :: params
-        class(polarft_calc), allocatable :: calc
+        class(parameters),    allocatable, target :: params
+        class(polarft_calc),  allocatable         :: calc
         class(euclid_sigma2), allocatable, target :: esig
-        real(real32), allocatable :: anchor(:,:), wk(:,:)
-        real :: bootstrap(NSH,2), measured(NSH,2), expected(NSH,2), flat(2), weight, denom
-        complex :: particle(12,2:NSH), reference(12,2:NSH)
-        integer :: half, k, status, step
-        character(len=512) :: message
+        real(real32),         allocatable         :: anchor(:,:), wk(:,:)
+        real                                      :: bootstrap(NSH,2), measured(NSH,2), expected(NSH,2), flat(2), weight, denom
+        complex                                   :: particle(12,2:NSH), reference(12,2:NSH)
+        integer                                   :: half, k, status, step
+        character(len=512)                        :: message
         write(*,'(A)') 'test_flat_start_scoring'
         allocate(params, calc, esig)
         params%box = 2*NSH
@@ -150,14 +150,14 @@ contains
     end subroutine test_flat_start_scoring
 
     subroutine write_store(spectra, generation, provenance, digest)
-        real(real32), intent(in) :: spectra(:,:)
-        integer(int64), intent(in) :: generation
-        integer, intent(in) :: provenance
+        real(real32),   intent(in)           :: spectra(:,:)
+        integer(int64), intent(in)           :: generation
+        integer,        intent(in)           :: provenance
         integer(int64), optional, intent(in) :: digest
         type(sigma2_state_header) :: header
-        integer(int64) :: layout
-        integer :: status
-        character(len=512) :: message
+        integer(int64)            :: layout
+        integer                   :: status
+        character(len=512)        :: message
         layout = 123_int64
         if( present(digest) ) layout = digest
         call sigma2_state_init_header(header, 1, size(spectra,1), 2, 2*size(spectra,1), 1., &
@@ -173,10 +173,10 @@ contains
     end subroutine write_store
 
     subroutine test_smoothing_and_persistence()
-        real(real32) :: input(NSH,2), expected(NSH)
+        real(real32)              :: input(NSH,2), expected(NSH)
         real(real32), allocatable :: anchor(:,:), measured(:,:), again(:,:)
-        integer :: k, status
-        character(len=512) :: message
+        integer                   :: k, status
+        character(len=512)        :: message
         input(:,1) = 1.
         input(8,1) = exp(1.)
         input(:,2) = [(exp(-2.+0.1*k+0.002*k*k), k=1,NSH)]
@@ -210,10 +210,10 @@ contains
 
     !> A refinement controller's start smooths the committed spectra of any provenance and replaces the companion.
     subroutine test_current_anchor()
-        real(real32) :: input(NSH,2)
+        real(real32)              :: input(NSH,2)
         real(real32), allocatable :: anchor(:,:)
-        integer :: k, status
-        character(len=512) :: message
+        integer                   :: k, status
+        character(len=512)        :: message
         write(*,'(A)') 'test_current_anchor'
         input(:,1) = [(exp(-1.+0.05*k-0.001*k*k), k=1,NSH)]
         input(:,2) = [(exp(-2.+0.1*k+0.002*k*k), k=1,NSH)]
@@ -237,10 +237,10 @@ contains
     end subroutine test_current_anchor
 
     subroutine test_invalid_companions()
-        real(real32) :: input(NSH,2)
+        real(real32)              :: input(NSH,2)
         real(real32), allocatable :: anchor(:,:)
-        integer :: status, unit
-        character(len=512) :: message
+        integer                   :: status, unit
+        character(len=512)        :: message
         input = 1.
         call write_store(input, 4_int64, SIGMA2_PROV_RESIDUAL, 456_int64)
         call read_sigma2_anchor(STORE, anchor, status, message)
@@ -272,9 +272,9 @@ contains
     end subroutine test_invalid_companions
 
     subroutine test_band_readout()
-        real(real32) :: input(NSH,2)
-        real(real64) :: mean_log(2), edge_log(2)
-        integer :: k, status, nabove(2)
+        real(real32)       :: input(NSH,2)
+        real(real64)       :: mean_log(2), edge_log(2)
+        integer            :: k, status, nabove(2)
         character(len=512) :: message
         input(:,1) = 2.; input(:,2) = 5.
         call write_store(input, 1_int64, SIGMA2_PROV_PSPEC)
@@ -305,15 +305,15 @@ contains
         use simple_euclid_sigma2, only: euclid_sigma2
         use simple_ori, only: ori
         character(len=*), intent(in) :: oritype
-        class(parameters), allocatable, target :: params
-        class(polarft_calc), allocatable :: calc
+        class(parameters),    allocatable, target :: params
+        class(polarft_calc),  allocatable         :: calc
         class(euclid_sigma2), allocatable, target :: esig
-        type(ori) :: pose
-        real :: bootstrap(NSH,2), measured(NSH,2), expected(NSH,2), dists(24), weight, denom, loss
-        real, allocatable :: plane_before(:,:), residual_before(:), residual_after(:)
-        complex :: particle(12,2:NSH), reference(12,2:NSH)
-        integer :: stage, half, k, status, last, blend_step
-        character(len=512) :: message
+        type(ori)                                 :: pose
+        real                                      :: bootstrap(NSH,2), measured(NSH,2), expected(NSH,2), dists(24), weight, denom, loss
+        real,                 allocatable         :: plane_before(:,:), residual_before(:), residual_after(:)
+        complex                                   :: particle(12,2:NSH), reference(12,2:NSH)
+        integer                                   :: stage, half, k, status, last, blend_step
+        character(len=512)                        :: message
         allocate(params, calc, esig)
         params%box = 2*NSH
         params%box_crop = 2*NSH
@@ -417,17 +417,17 @@ contains
         use simple_euclid_sigma2, only: euclid_sigma2
         use simple_ori, only: ori
         use simple_oris, only: oris
-        integer, parameter :: NPFT = 12
-        real, parameter :: RESID_TOL = 1.e-6 ! single-precision angular fields and shell sums
-        class(parameters), allocatable, target :: params
-        class(polarft_calc), allocatable :: calc
+        integer,              parameter           :: NPFT      = 12
+        real,                 parameter           :: RESID_TOL = 1.e-6 ! single-precision angular fields and shell sums
+        class(parameters),    allocatable, target :: params
+        class(polarft_calc),  allocatable         :: calc
         class(euclid_sigma2), allocatable, target :: esig
-        type(ori) :: pose
-        type(oris) :: directions
-        complex :: particle(NPFT,2:NSH), reference(NPFT,2:NSH)
-        real :: spectra(NSH,2), amplitude, euls(3), theta
-        real, allocatable :: residual(:)
-        integer :: half, r, iproj
+        type(ori)                                 :: pose
+        type(oris)                                :: directions
+        complex                                   :: particle(NPFT,2:NSH), reference(NPFT,2:NSH)
+        real                                      :: spectra(NSH,2), amplitude, euls(3), theta
+        real,                 allocatable         :: residual(:)
+        integer                                   :: half, r, iproj
         write(*,'(A)') 'test_pole_residuals'
         allocate(params, calc, esig)
         params%box = 2*NSH
@@ -501,17 +501,17 @@ contains
         use simple_polarft_calc, only: polarft_calc, shift_ptcl2ref
         use simple_euclid_sigma2, only: euclid_sigma2
         use simple_ori, only: ori
-        integer, parameter :: NPFT = 12, IROT = 4
-        real,    parameter :: SH_STORED(2) = [1.3, -0.7]
-        class(parameters), allocatable, target :: params
-        class(polarft_calc), allocatable :: calc
+        integer,              parameter           :: NPFT         = 12, IROT = 4
+        real,                 parameter           :: SH_STORED(2) = [1.3, -0.7]
+        class(parameters),    allocatable, target :: params
+        class(polarft_calc),  allocatable         :: calc
         class(euclid_sigma2), allocatable, target :: esig
-        type(ori) :: pose
-        complex :: particle(NPFT,2:NSH), reference(NPFT,2:NSH)
-        real :: spectra(NSH,2), theta, sh_ref(2)
-        real :: c_ref(2:NSH), c_unrot(2:NSH)
-        real, allocatable :: residual(:)
-        integer :: r, k
+        type(ori)                                 :: pose
+        complex                                   :: particle(NPFT,2:NSH), reference(NPFT,2:NSH)
+        real                                      :: spectra(NSH,2), theta, sh_ref(2)
+        real                                      :: c_ref(2:NSH), c_unrot(2:NSH)
+        real,                 allocatable         :: residual(:)
+        integer                                   :: r, k
         write(*,'(A)') 'test_shift_frame'
         allocate(params, calc, esig)
         params%box = 2*NSH

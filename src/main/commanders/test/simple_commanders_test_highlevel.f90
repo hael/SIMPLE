@@ -140,122 +140,122 @@ interface
 
     module subroutine exec_test_nightly( self, cline )
         class(commander_test_nightly), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                intent(inout) :: cline
     end subroutine exec_test_nightly
 
     module subroutine exec_test_profile( self, cline )
         class(commander_test_profile), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                intent(inout) :: cline
     end subroutine exec_test_profile
 
     module subroutine exec_test_state_fixture( self, cline )
         class(commander_test_state_fixture), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                      intent(inout) :: cline
     end subroutine exec_test_state_fixture
 
     module subroutine exec_test_multistate_workflows( self, cline )
         class(commander_test_multistate_workflows), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                             intent(inout) :: cline
     end subroutine exec_test_multistate_workflows
 
     module subroutine exec_test_identity( self, cline )
         class(commander_test_identity), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                 intent(inout) :: cline
     end subroutine exec_test_identity
 
     module subroutine exec_test_mini_stream_quantitative( self, cline )
         class(commander_test_mini_stream), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                    intent(inout) :: cline
     end subroutine exec_test_mini_stream_quantitative
 
     module subroutine exec_test_simulate_particles( self, cline )
         class(commander_test_simulate_particles), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                           intent(inout) :: cline
     end subroutine exec_test_simulate_particles
 
     module subroutine exec_test_simulated_workflow( self, cline )
         class(commander_test_simulated_workflow), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                           intent(inout) :: cline
     end subroutine exec_test_simulated_workflow
 
     module subroutine exec_test_pcg_recon( self, cline )
         class(commander_test_pcg_recon), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                  intent(inout) :: cline
     end subroutine exec_test_pcg_recon
 
     module subroutine exec_test_pcg_frac_update( self, cline )
         class(commander_test_pcg_frac_update), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                        intent(inout) :: cline
     end subroutine exec_test_pcg_frac_update
 
     module subroutine exec_test_rec3D_backends( self, cline )
         class(commander_test_rec3D_backends), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                       intent(inout) :: cline
     end subroutine exec_test_rec3D_backends
 
     module subroutine exec_test_solve3D_addon( self, cline )
         class(commander_test_solve3D_addon), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                      intent(inout) :: cline
     end subroutine exec_test_solve3D_addon
 
     module subroutine exec_generate_solve3D_addon_snapshots( self, cline )
         class(commander_generate_solve3D_addon_snapshots), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                                    intent(inout) :: cline
     end subroutine exec_generate_solve3D_addon_snapshots
 
     module subroutine exec_test_cont_refine3D_1jxy( self, cline )
         class(commander_test_cont_refine3D_1jxy), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                           intent(inout) :: cline
     end subroutine exec_test_cont_refine3D_1jxy
 
     module subroutine exec_test_cont_refine3D_bench( self, cline )
         class(commander_test_cont_refine3D_bench), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                            intent(inout) :: cline
     end subroutine exec_test_cont_refine3D_bench
 
     module subroutine exec_test_pose_student( self, cline )
         class(commander_test_pose_student), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                     intent(inout) :: cline
     end subroutine exec_test_pose_student
 
     module subroutine exec_test_pose_student_bench( self, cline )
         class(commander_test_pose_student_bench), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                           intent(inout) :: cline
     end subroutine exec_test_pose_student_bench
 
     module subroutine exec_test_center_ptcls( self, cline )
         class(commander_test_center_ptcls), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                     intent(inout) :: cline
     end subroutine exec_test_center_ptcls
 
     module subroutine exec_test_class_student( self, cline )
         class(commander_test_class_student), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                      intent(inout) :: cline
     end subroutine exec_test_class_student
 
     module subroutine exec_test_particle_sieving_2( self, cline )
         class(commander_test_particle_sieving_2), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                           intent(inout) :: cline
     end subroutine exec_test_particle_sieving_2
 
     module subroutine exec_test_polar_matching_bench( self, cline )
         class(commander_test_polar_matching_bench), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                             intent(inout) :: cline
     end subroutine exec_test_polar_matching_bench
 
     module subroutine exec_test_flex_pca_blobs( self, cline )
         class(commander_test_flex_pca_blobs), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                       intent(inout) :: cline
     end subroutine exec_test_flex_pca_blobs
 
     module subroutine exec_test_write_state_weights_labels( self, cline )
         class(commander_test_write_state_weights_labels), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                                   intent(inout) :: cline
     end subroutine exec_test_write_state_weights_labels
 
     module subroutine exec_test_write_state_weights_mixed( self, cline )
         class(commander_test_write_state_weights_mixed), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                                  intent(inout) :: cline
     end subroutine exec_test_write_state_weights_mixed
 
 end interface

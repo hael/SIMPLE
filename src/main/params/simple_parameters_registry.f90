@@ -9,9 +9,9 @@ private
 public :: param_registry
 
 type :: char_binding
-    character(len=KEYLEN) :: key = ''
-    character(len=:), pointer :: var => null()
-    logical :: yesno = .false.   !< a yes/no key: any other value stops
+    character(len=KEYLEN)     :: key   = ''
+    character(len=:), pointer :: var   => null()
+    logical                   :: yesno = .false. !< a yes/no key: any other value stops
 end type char_binding
 
 type :: string_binding
@@ -21,24 +21,24 @@ end type string_binding
 
 type :: int_binding
     character(len=KEYLEN) :: key = ''
-    integer, pointer :: var => null()
+    integer, pointer      :: var => null()
 end type int_binding
 
 type :: real_binding
     character(len=KEYLEN) :: key = ''
-    real, pointer :: var => null()
+    real, pointer         :: var => null()
 end type real_binding
 
 type :: file_binding
-    character(len=KEYLEN) :: key = ''
-    type(string), pointer :: var => null()
-    character(len=1)      :: allowed1 = ' '
-    character(len=1)      :: allowed2 = ' '
-    character(len=1)      :: allowed3 = ' '
-    character(len=1)      :: not_allowed = ' '
-    logical               :: has_allowed1 = .false.
-    logical               :: has_allowed2 = .false.
-    logical               :: has_allowed3 = .false.
+    character(len=KEYLEN) :: key             = ''
+    type(string), pointer :: var             => null()
+    character(len=1)      :: allowed1        = ' '
+    character(len=1)      :: allowed2        = ' '
+    character(len=1)      :: allowed3        = ' '
+    character(len=1)      :: not_allowed     = ' '
+    logical               :: has_allowed1    = .false.
+    logical               :: has_allowed2    = .false.
+    logical               :: has_allowed3    = .false.
     logical               :: has_not_allowed = .false.
 end type file_binding
 
@@ -49,12 +49,12 @@ end type dir_binding
 
 type :: param_registry
     private
-    integer :: nchars = 0
-    integer :: nstrings = 0
-    integer :: nints = 0
-    integer :: nreals = 0
-    integer :: nfiles = 0
-    integer :: ndirs = 0
+    integer                           :: nchars   = 0
+    integer                           :: nstrings = 0
+    integer                           :: nints    = 0
+    integer                           :: nreals   = 0
+    integer                           :: nfiles   = 0
+    integer                           :: ndirs    = 0
     type(char_binding),   allocatable :: char_bindings(:)
     type(string_binding), allocatable :: string_bindings(:)
     type(int_binding),    allocatable :: int_bindings(:)
@@ -62,7 +62,7 @@ type :: param_registry
     type(file_binding),   allocatable :: file_bindings(:)
     type(dir_binding),    allocatable :: dir_bindings(:)
 contains
-    procedure :: clear
+    procedure          :: clear
     procedure, private :: add_char_fixed
     procedure, private :: add_char_string
     procedure, private :: ensure_char_capacity
@@ -71,13 +71,13 @@ contains
     procedure, private :: ensure_real_capacity
     procedure, private :: ensure_file_capacity
     procedure, private :: ensure_dir_capacity
-    generic   :: add_char => add_char_fixed, add_char_string
-    procedure :: add_yesno
-    procedure :: add_int
-    procedure :: add_real
-    procedure :: add_file
-    procedure :: add_dir
-    procedure :: apply_cmdline
+    generic            :: add_char => add_char_fixed, add_char_string
+    procedure          :: add_yesno
+    procedure          :: add_int
+    procedure          :: add_real
+    procedure          :: add_file
+    procedure          :: add_dir
+    procedure          :: apply_cmdline
 end type param_registry
 
 contains
@@ -99,9 +99,9 @@ contains
     end subroutine clear
 
     subroutine add_char_fixed(self, key, var)
-        class(param_registry), intent(inout) :: self
-        character(len=*),      intent(in)    :: key
-        character(len=*), target, intent(inout) :: var
+        class(param_registry), intent(inout)         :: self
+        character(len=*),      intent(in)            :: key
+        character(len=*),      target, intent(inout) :: var
         self%nchars = self%nchars + 1
         call self%ensure_char_capacity(self%nchars)
         self%char_bindings(self%nchars)%key = trim(key)
@@ -111,17 +111,17 @@ contains
     !> a key declared with the choices (yes|no): apply_cmdline refuses any other value
     !! (scripts/check_cli_chain.py requires this binding for every such key)
     subroutine add_yesno(self, key, var)
-        class(param_registry),    intent(inout) :: self
-        character(len=*),         intent(in)    :: key
-        character(len=*), target, intent(inout) :: var
+        class(param_registry),    intent(inout)         :: self
+        character(len=*),         intent(in)            :: key
+        character(len=*),         target, intent(inout) :: var
         call self%add_char_fixed(key, var)
         self%char_bindings(self%nchars)%yesno = .true.
     end subroutine add_yesno
 
     subroutine add_char_string(self, key, var)
-        class(param_registry), intent(inout) :: self
-        character(len=*),      intent(in)    :: key
-        type(string), target,  intent(inout) :: var
+        class(param_registry), intent(inout)          :: self
+        character(len=*),      intent(in)             :: key
+        type(string),          target,  intent(inout) :: var
         self%nstrings = self%nstrings + 1
         call self%ensure_string_capacity(self%nstrings)
         self%string_bindings(self%nstrings)%key = trim(key)
@@ -129,9 +129,9 @@ contains
     end subroutine add_char_string
 
     subroutine add_int(self, key, var)
-        class(param_registry), intent(inout) :: self
-        character(len=*),      intent(in)    :: key
-        integer, target,       intent(inout) :: var
+        class(param_registry), intent(inout)               :: self
+        character(len=*),      intent(in)                  :: key
+        integer,               target,       intent(inout) :: var
         self%nints = self%nints + 1
         call self%ensure_int_capacity(self%nints)
         self%int_bindings(self%nints)%key = trim(key)
@@ -139,9 +139,9 @@ contains
     end subroutine add_int
 
     subroutine add_real(self, key, var)
-        class(param_registry), intent(inout) :: self
-        character(len=*),      intent(in)    :: key
-        real, target,          intent(inout) :: var
+        class(param_registry), intent(inout)                  :: self
+        character(len=*),      intent(in)                     :: key
+        real,                  target,          intent(inout) :: var
         self%nreals = self%nreals + 1
         call self%ensure_real_capacity(self%nreals)
         self%real_bindings(self%nreals)%key = trim(key)
@@ -149,10 +149,10 @@ contains
     end subroutine add_real
 
     subroutine add_file(self, key, var, allowed1, allowed2, allowed3, notAllowed)
-        class(param_registry), intent(inout) :: self
-        character(len=*),      intent(in)    :: key
-        type(string), target,  intent(inout) :: var
-        character(len=1), optional, intent(in) :: allowed1, allowed2, allowed3, notAllowed
+        class(param_registry), intent(inout)          :: self
+        character(len=*),      intent(in)             :: key
+        type(string),          target,  intent(inout) :: var
+        character(len=1),      optional, intent(in)   :: allowed1, allowed2, allowed3, notAllowed
         self%nfiles = self%nfiles + 1
         call self%ensure_file_capacity(self%nfiles)
         self%file_bindings(self%nfiles)%key = trim(key)
@@ -176,9 +176,9 @@ contains
     end subroutine add_file
 
     subroutine add_dir(self, key, var)
-        class(param_registry), intent(inout) :: self
-        character(len=*),      intent(in)    :: key
-        type(string), target,  intent(inout) :: var
+        class(param_registry), intent(inout)          :: self
+        character(len=*),      intent(in)             :: key
+        type(string),          target,  intent(inout) :: var
         self%ndirs = self%ndirs + 1
         call self%ensure_dir_capacity(self%ndirs)
         self%dir_bindings(self%ndirs)%key = trim(key)
@@ -189,7 +189,7 @@ contains
         class(param_registry), intent(inout) :: self
         integer,               intent(in)    :: needed
         type(char_binding), allocatable :: tmp(:)
-        integer :: new_size, old_size
+        integer                         :: new_size, old_size
         if( allocated(self%char_bindings) )then
             old_size = size(self%char_bindings)
         else
@@ -206,7 +206,7 @@ contains
         class(param_registry), intent(inout) :: self
         integer,               intent(in)    :: needed
         type(string_binding), allocatable :: tmp(:)
-        integer :: new_size, old_size
+        integer                           :: new_size, old_size
         if( allocated(self%string_bindings) )then
             old_size = size(self%string_bindings)
         else
@@ -223,7 +223,7 @@ contains
         class(param_registry), intent(inout) :: self
         integer,               intent(in)    :: needed
         type(int_binding), allocatable :: tmp(:)
-        integer :: new_size, old_size
+        integer                        :: new_size, old_size
         if( allocated(self%int_bindings) )then
             old_size = size(self%int_bindings)
         else
@@ -240,7 +240,7 @@ contains
         class(param_registry), intent(inout) :: self
         integer,               intent(in)    :: needed
         type(real_binding), allocatable :: tmp(:)
-        integer :: new_size, old_size
+        integer                         :: new_size, old_size
         if( allocated(self%real_bindings) )then
             old_size = size(self%real_bindings)
         else
@@ -257,7 +257,7 @@ contains
         class(param_registry), intent(inout) :: self
         integer,               intent(in)    :: needed
         type(file_binding), allocatable :: tmp(:)
-        integer :: new_size, old_size
+        integer                         :: new_size, old_size
         if( allocated(self%file_bindings) )then
             old_size = size(self%file_bindings)
         else
@@ -274,7 +274,7 @@ contains
         class(param_registry), intent(inout) :: self
         integer,               intent(in)    :: needed
         type(dir_binding), allocatable :: tmp(:)
-        integer :: new_size, old_size
+        integer                        :: new_size, old_size
         if( allocated(self%dir_bindings) )then
             old_size = size(self%dir_bindings)
         else
@@ -288,10 +288,10 @@ contains
     end subroutine ensure_dir_capacity
 
     subroutine apply_cmdline(self, cline, cntfile, checkupfile)
-        class(param_registry), intent(inout) :: self
-        class(cmdline),        intent(inout) :: cline
-        integer, optional,     intent(inout) :: cntfile
-        character(len=1), optional, intent(inout) :: checkupfile(:)
+        class(param_registry), intent(inout)               :: self
+        class(cmdline),        intent(inout)               :: cline
+        integer,               optional,     intent(inout) :: cntfile
+        character(len=1),      optional, intent(inout)     :: checkupfile(:)
         type(string)     :: str, abspath_name, errmsg
         character(len=1) :: file_descr
         logical          :: raise_exception

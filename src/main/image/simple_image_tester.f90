@@ -30,8 +30,8 @@ contains
     procedure :: execute => apply_ctf_other_box
 end type ctf_box_mismatch
 
-integer, parameter :: BOX  = 64
-real,    parameter :: SMPD = 1.0
+integer,          parameter :: BOX      = 64
+real,             parameter :: SMPD     = 1.0
 character(len=*), parameter :: STK_SPI  = 'tmp_image_tester_squares.spi'
 character(len=*), parameter :: STK_MRC  = 'tmp_image_tester_squares.mrc'
 character(len=*), parameter :: STK_SPI2 = 'tmp_image_tester_squares_converted.spi'
@@ -39,7 +39,7 @@ character(len=*), parameter :: STK_MRC2 = 'tmp_image_tester_squares_converted.mr
 character(len=*), parameter :: VOL_SPI  = 'tmp_image_tester_cube.spi'
 character(len=*), parameter :: VOL_MRC  = 'tmp_image_tester_cube.mrc'
 ! the padding tests: two 2D and two 3D boxes, even (two padding rows) and odd (one padding row)
-integer, parameter :: NPAD2D = 2, NPAD3D = 2
+integer, parameter :: NPAD2D               = 2, NPAD3D = 2
 integer, parameter :: PAD_DIMS2D(3,NPAD2D) = reshape([64,64,1, 63,63,1],     [3,NPAD2D])
 integer, parameter :: PAD_DIMS3D(3,NPAD3D) = reshape([24,24,24, 23,23,23], [3,NPAD3D])
 
@@ -149,9 +149,9 @@ contains
 
     subroutine test_construct_and_access()
         integer, parameter :: B3 = 24
-        type(image) :: img, vol
-        integer :: i, j, k, cnt
-        logical :: ok2, ok3
+        type(image)        :: img, vol
+        integer            :: i, j, k, cnt
+        logical            :: ok2, ok3
         write(*,'(A)') 'test_construct_and_access'
         call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
         call vol%new([B3,B3,B3], SMPD, wthreads=.false.)
@@ -188,12 +188,12 @@ contains
 
     ! Copying clones the source policy; fast copies and in-place replacements keep the receiver policy.
     subroutine test_copy_and_inplace_threading()
-        integer, parameter :: COPY_DIMS(3) = [8,6,1]
-        logical, parameter :: THREAD_MODES(2) = [.false., .true.]
-        type(image) :: threaded, serial, dest, assigned, padded, filtered, upsampled
+        integer, parameter   :: COPY_DIMS(3)    = [8,6,1]
+        logical, parameter   :: THREAD_MODES(2) = [.false., .true.]
+        type(image)          :: threaded, serial, dest, assigned, padded, filtered, upsampled
         real,    allocatable :: input(:,:,:), output(:,:,:)
         complex, allocatable :: source_ft(:,:,:), dest_ft(:,:,:)
-        integer :: i, imode, nthr_saved
+        integer              :: i, imode, nthr_saved
         write(*,'(A)') 'test_copy_and_inplace_threading'
         nthr_saved = nthr_glob
         nthr_glob  = 2
@@ -270,8 +270,8 @@ contains
     ! mean and median are within 1 of 5 and the standard deviation within 1 of 15 (5 standard errors)
     subroutine test_checkups_and_stats()
         integer, parameter :: BOXS = 100
-        type(image) :: img, img2, rect
-        real :: ave, sdev, maxv, minv, med
+        type(image)        :: img, img2, rect
+        real               :: ave, sdev, maxv, minv, med
         write(*,'(A)') 'test_checkups_and_stats'
         call img%new([BOXS,BOXS,1], SMPD, wthreads=.false.)
         call img2%copy(img)
@@ -298,7 +298,7 @@ contains
     !---------------- FFT round trip, Nyquist ----------------
 
     subroutine test_fft_roundtrip_and_nyquist()
-        type(image) :: img, odd
+        type(image)       :: img, odd
         real, allocatable :: before(:,:,:), after(:,:,:)
         write(*,'(A)') 'test_fft_roundtrip_and_nyquist'
         call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
@@ -323,9 +323,9 @@ contains
     ! switches its side off without a division by zero in get_find(0.)
     subroutine test_bandpass()
         real,    parameter :: LP = 4., HP = 8., WIDTH = 10.
-        type(image) :: img
-        logical     :: flag
-        integer     :: lpf, hpf
+        type(image)        :: img
+        logical            :: flag
+        integer            :: lpf, hpf
         write(*,'(A)') 'test_bandpass'
         call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
         lpf = img%get_find(LP)
@@ -352,12 +352,12 @@ contains
 
     ! every component 1, filtered by 1/shell: DC stays 1, shell s becomes 1/s, beyond the filter 0
     subroutine test_apply_filter()
-        integer, parameter :: B3 = 32
-        type(image)       :: vol
-        real, allocatable :: filter(:)
-        integer :: h, k, l, sh, sz, lims(3,2), phys(3)
-        complex :: expected
-        logical :: ok
+        integer, parameter   :: B3 = 32
+        type(image)          :: vol
+        real,    allocatable :: filter(:)
+        integer              :: h, k, l, sh, sz, lims(3,2), phys(3)
+        complex              :: expected
+        logical              :: ok
         write(*,'(A)') 'test_apply_filter'
         call vol%new([B3,B3,B3], SMPD, wthreads=.false.)
         call vol%set_ft(.true.)
@@ -392,26 +392,26 @@ contains
 
     ! Closed-form weights pin the legacy GG branch and the normalized CryoSPARC curve.
     subroutine test_dose_weighing_modes()
-        integer, parameter :: NFRAMES = 5
-        integer, parameter :: NVOLTAGES = 3
-        integer, parameter :: LDIM(3) = [8,6,1]
-        integer, parameter :: FRANGE(2) = [2,4]
-        real,    parameter :: PIXEL_SIZE = 1.25
-        real,    parameter :: TOTAL_DOSE = 25.
-        real,    parameter :: VOLTAGES(NVOLTAGES) = [100.,200.,300.]
-        character(len=2), parameter :: CS_MODES(NVOLTAGES) = ['CS','cs','CS']
-        real(dp), parameter :: DOSE_DIVISORS(NVOLTAGES) = [0.64d0,0.8d0,1.0d0]
-        real(dp), parameter :: A = 0.245d0, B = -1.665d0, C = 2.81d0
-        complex, parameter :: BASE = cmplx(1.25,-0.75)
-        type(image) :: gg_upper(NFRAMES,NVOLTAGES), gg_lower(NFRAMES,NVOLTAGES)
-        type(image) :: cs(NFRAMES,NVOLTAGES)
-        real(dp) :: s, freq, twoNe, critical_exposure, dose_per_frame
-        real(dp) :: r_gg, r_cs, gg_sumsq, cs_sum, expected_gg, expected_cs
-        real     :: max_gg_error, max_gg_case_error, max_gg_norm_error
-        real     :: max_cs_error, max_cs_norm_error, actual_gg_sumsq, actual_cs_sum
-        integer  :: array_shape(3), hphys, kphys, h, k, iframe, ivoltage, j
-        integer  :: ldimx_half, ldimy_half, nsel
-        complex  :: actual_gg, actual_gg_lower, actual_cs
+        integer,          parameter :: NFRAMES                  = 5
+        integer,          parameter :: NVOLTAGES                = 3
+        integer,          parameter :: LDIM(3)                  = [8,6,1]
+        integer,          parameter :: FRANGE(2)                = [2,4]
+        real,             parameter :: PIXEL_SIZE               = 1.25
+        real,             parameter :: TOTAL_DOSE               = 25.
+        real,             parameter :: VOLTAGES(NVOLTAGES)      = [100.,200.,300.]
+        character(len=2), parameter :: CS_MODES(NVOLTAGES)      = ['CS','cs','CS']
+        real(dp),         parameter :: DOSE_DIVISORS(NVOLTAGES) = [0.64d0,0.8d0,1.0d0]
+        real(dp),         parameter :: A                        = 0.245d0, B = -1.665d0, C = 2.81d0
+        complex,          parameter :: BASE                     = cmplx(1.25,-0.75)
+        type(image)                 :: gg_upper(NFRAMES,NVOLTAGES), gg_lower(NFRAMES,NVOLTAGES)
+        type(image)                 :: cs(NFRAMES,NVOLTAGES)
+        real(dp)                    :: s, freq, twoNe, critical_exposure, dose_per_frame
+        real(dp)                    :: r_gg, r_cs, gg_sumsq, cs_sum, expected_gg, expected_cs
+        real                        :: max_gg_error, max_gg_case_error, max_gg_norm_error
+        real                        :: max_cs_error, max_cs_norm_error, actual_gg_sumsq, actual_cs_sum
+        integer                     :: array_shape(3), hphys, kphys, h, k, iframe, ivoltage, j
+        integer                     :: ldimx_half, ldimy_half, nsel
+        complex                     :: actual_gg, actual_gg_lower, actual_cs
         write(*,'(A)') 'test_dose_weighing_modes'
         do ivoltage = 1,NVOLTAGES
             do iframe = 1,NFRAMES
@@ -507,18 +507,18 @@ contains
     ! are untouched, and a thread team gives the serial result bit for bit.
     subroutine test_frame_bfactor_weights()
         !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
-        integer,  parameter :: NFRAMES = 5
-        integer,  parameter :: LDIM(3) = [10,6,1]
-        integer,  parameter :: FRANGE(2) = [2,4]
-        real,     parameter :: PIXEL_SIZE = 1.25
+        integer,  parameter :: NFRAMES        = 5
+        integer,  parameter :: LDIM(3)        = [10,6,1]
+        integer,  parameter :: FRANGE(2)      = [2,4]
+        real,     parameter :: PIXEL_SIZE     = 1.25
         real(dp), parameter :: CFRAC(NFRAMES) = [1.0_dp, 0.9_dp, 0.8_dp, 0.6_dp, 0.5_dp]
         real(dp), parameter :: BFRAC(NFRAMES) = [0._dp, 5._dp, 20._dp, 60._dp, 90._dp]
-        complex,  parameter :: BASE = cmplx(1.25,-0.75)
-        type(image) :: serial(NFRAMES), team(NFRAMES)
-        real(dp) :: s, e(NFRAMES), sumsq, expected
-        real     :: max_error, max_norm_error, max_team_diff, actual_sumsq
-        integer  :: array_shape(3), hphys, kphys, h, k, iframe
-        complex  :: actual
+        complex,  parameter :: BASE           = cmplx(1.25,-0.75)
+        type(image)         :: serial(NFRAMES), team(NFRAMES)
+        real(dp)            :: s, e(NFRAMES), sumsq, expected
+        real                :: max_error, max_norm_error, max_team_diff, actual_sumsq
+        integer             :: array_shape(3), hphys, kphys, h, k, iframe
+        complex             :: actual
         !$ integer :: nthr_saved
         write(*,'(A)') 'test_frame_bfactor_weights'
         do iframe = 1,NFRAMES
@@ -570,11 +570,11 @@ contains
 
     ! a plane wave cos(2 pi K0 x / box) has its power in shell K0 only
     subroutine test_power_spectrum()
-        integer, parameter :: K0 = 5
-        type(image)       :: img
-        real, allocatable :: rmat(:,:,:)
-        real    :: spec(BOX/2)
-        integer :: i
+        integer, parameter   :: K0 = 5
+        type(image)          :: img
+        real,    allocatable :: rmat(:,:,:)
+        real                 :: spec(BOX/2)
+        integer              :: i
         write(*,'(A)') 'test_power_spectrum'
         call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
         allocate(rmat(BOX,BOX,1))
@@ -595,10 +595,10 @@ contains
     ! the in-place and out-of-place serial Fourier shifts agree with the general image%shift; an
     ! integer shift is an exact circular shift of the pixels
     subroutine test_shifts()
-        real, parameter :: SH(2) = [2.5, -1.25]
+        real, parameter   :: SH(2) = [2.5, -1.25]
         type(image)       :: orig, a, b, c
         real, allocatable :: r0(:,:,:), ra(:,:,:), rb(:,:,:), rc(:,:,:)
-        real    :: err_plus, err_minus, amax
+        real              :: err_plus, err_minus, amax
         write(*,'(A)') 'test_shifts'
         call smooth_noise(orig, 20260925)
         r0    = orig%get_rmat()
@@ -638,12 +638,12 @@ contains
     ! and a parabolic offset of 1/4. Test below, at and above TINY on every 2D/3D axis.
     subroutine test_fcorr_shift_cutoff()
         class(image), allocatable :: corr, ref
-        complex, pointer :: cmat(:,:,:)
-        real, pointer :: rmat(:,:,:)
-        real, parameter :: OFFSET_TOL = 1.e-6
-        real :: a, shift(3), expected, alpha, beta, gamma
-        integer :: ndim, axis, iscale, dims(3), cen(3), lo(3), hi(3), freq(3)
-        character(len=48) :: label
+        complex,      pointer     :: cmat(:,:,:)
+        real,         pointer     :: rmat(:,:,:)
+        real,         parameter   :: OFFSET_TOL = 1.e-6
+        real                      :: a, shift(3), expected, alpha, beta, gamma
+        integer                   :: ndim, axis, iscale, dims(3), cen(3), lo(3), hi(3), freq(3)
+        character(len=48)         :: label
         write(*,'(A)') 'test_fcorr_shift_cutoff'
         allocate(corr, ref)
         do ndim = 2, 3
@@ -709,7 +709,7 @@ contains
     subroutine test_acf()
         type(image)       :: a, b
         real, allocatable :: ra(:,:,:), rb(:,:,:)
-        integer :: loc(3)
+        integer           :: loc(3)
         write(*,'(A)') 'test_acf'
         call a%new([BOX,BOX,1], SMPD, wthreads=.false.)
         call draw_square(a, 10)
@@ -730,13 +730,13 @@ contains
     ! Exact array sections are the oracle; copying integer-valued pixels needs no tolerance.
     subroutine test_flip()
         !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
-        integer, parameter :: NDIMS = 5
-        integer, parameter :: DIMS(3,NDIMS) = reshape([6,4,1, 4,6,1, 2,2,1, 2,6,1, 6,2,1], [3,NDIMS])
-        character(len=2), parameter :: MODES(8) = ['X ', 'Y ', 'XY', 'YX', 'x ', 'y ', 'xy', 'yx']
-        type(image) :: img
-        real, allocatable :: original(:,:,:), expected(:,:,:)
+        integer,          parameter   :: NDIMS         = 5
+        integer,          parameter   :: DIMS(3,NDIMS) = reshape([6,4,1, 4,6,1, 2,2,1, 2,6,1, 6,2,1], [3,NDIMS])
+        character(len=2), parameter   :: MODES(8)      = ['X ', 'Y ', 'XY', 'YX', 'x ', 'y ', 'xy', 'yx']
+        type(image)                   :: img
+        real,             allocatable :: original(:,:,:), expected(:,:,:)
         character(len=:), allocatable :: tag
-        integer :: id, imode, i, nx, ny
+        integer                       :: id, imode, i, nx, ny
         !$ integer :: nthr_saved
         write(*,'(A)') 'test_flip'
         !$ nthr_saved = omp_get_max_threads()
@@ -771,12 +771,12 @@ contains
     !---------------- rotations, rotational average ----------------
 
     subroutine test_rotations_and_roavg()
-        integer, parameter :: C = BOX/2 + 1, RAD = 24
-        type(image)       :: orig, rot, back, gau, avg, sq
-        real, allocatable :: r0(:,:,:), r1(:,:,:), r2(:,:,:)
-        real    :: err_ccw, err_cw, amax
-        integer :: i, j, r
-        logical :: sym_ok
+        integer, parameter   :: C = BOX/2 + 1, RAD = 24
+        type(image)          :: orig, rot, back, gau, avg, sq
+        real,    allocatable :: r0(:,:,:), r1(:,:,:), r2(:,:,:)
+        real                 :: err_ccw, err_cw, amax
+        integer              :: i, j, r
+        logical              :: sym_ok
         write(*,'(A)') 'test_rotations_and_roavg'
         ! a smooth image confined to a disc, so that a rotation keeps it inside the box
         call smooth_noise(orig, 20260926)
@@ -863,11 +863,11 @@ contains
 
     ! masscen reports positions relative to the centre pixel box/2+1: pixel i sits at i-1-box/2
     subroutine test_masscen()
-        integer, parameter :: B3 = 24
+        integer, parameter   :: B3 = 24
         type(image)          :: img, vol
         real,    allocatable :: rmat(:,:,:), vmat(:,:,:)
         logical, allocatable :: msk(:,:,:)
-        real :: xyz(3)
+        real                 :: xyz(3)
         write(*,'(A)') 'test_masscen'
         call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
         allocate(rmat(BOX,BOX,1), source=0.)
@@ -903,8 +903,8 @@ contains
     ! Low-passed at 20 A the value depends on where loop_lims starts h, hence the wider bound
     subroutine test_corr()
         integer, parameter :: BOXC = 100
-        type(image) :: g1, g2, g3
-        real :: cc, cc_lp, cc_sym
+        type(image)        :: g1, g2, g3
+        real               :: cc, cc_lp, cc_sym
         write(*,'(A)') 'test_corr'
         call g1%new([BOXC,BOXC,1], 2., wthreads=.false.)
         call g2%new([BOXC,BOXC,1], 2., wthreads=.false.)
@@ -929,11 +929,11 @@ contains
     ! counting), the values are the image's, and nothing of an earlier call leaks in. Before 2026-10-26 the count was
     ! one too many, so every per-atom valid_corr of detect_atoms carried one stale pixel
     subroutine test_win2arr_rad()
-        integer, parameter :: B3 = 16, C = B3/2 + 1, WINSZ = 3
-        real,    parameter :: MAXRAD = 2.5
-        type(image)       :: vol, img
-        real, allocatable :: vmat(:,:,:), pix(:)
-        integer :: i, j, k, npix_in, npix_out, nball, ndisc, nmismatch
+        integer, parameter   :: B3     = 16, C = B3/2 + 1, WINSZ = 3
+        real,    parameter   :: MAXRAD = 2.5
+        type(image)          :: vol, img
+        real,    allocatable :: vmat(:,:,:), pix(:)
+        integer              :: i, j, k, npix_in, npix_out, nball, ndisc, nmismatch
         write(*,'(A)') 'test_win2arr_rad'
         ! every voxel its own value, so a wrong pixel is seen
         allocate(vmat(B3,B3,B3))
@@ -1004,11 +1004,11 @@ contains
     ! five images through SPIDER and MRC stacks and their conversions, and a volume through both
     ! formats, come back bit for bit
     subroutine test_file_roundtrip()
-        integer, parameter :: NIMGS = 5, B3 = 32
-        type(image)       :: img, back, vol, vback
-        real, allocatable :: ref(:,:,:), got(:,:,:)
-        integer :: i
-        logical :: ok
+        integer, parameter   :: NIMGS = 5, B3 = 32
+        type(image)          :: img, back, vol, vback
+        real,    allocatable :: ref(:,:,:), got(:,:,:)
+        integer              :: i
+        logical              :: ok
         write(*,'(A)') 'test_file_roundtrip'
         call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
         call back%new([BOX,BOX,1], SMPD, wthreads=.false.)
@@ -1080,14 +1080,14 @@ contains
     ! The pixel values are integers below 2**24, exact in single precision and distinct per pixel
     ! and per image, so a transposition or a swapped image shows
     subroutine test_file_roundtrip_sizes()
-        integer, parameter :: N2 = 6, N3 = 3, NSTK = 3
-        integer, parameter :: DIMS2(2,N2) = reshape([5,5, 13,13, 42,42, 43,43, 43,17, 257,9], [2,N2])
-        integer, parameter :: DIMS3(3,N3) = reshape([5,5,5, 13,17,5, 43,43,43], [3,N3])
-        character(len=4), parameter :: EXTS(2) = ['.mrc', '.spi']
-        type(image) :: img, back
+        integer,          parameter   :: N2          = 6, N3 = 3, NSTK = 3
+        integer,          parameter   :: DIMS2(2,N2) = reshape([5,5, 13,13, 42,42, 43,43, 43,17, 257,9], [2,N2])
+        integer,          parameter   :: DIMS3(3,N3) = reshape([5,5,5, 13,17,5, 43,43,43], [3,N3])
+        character(len=4), parameter   :: EXTS(2)     = ['.mrc', '.spi']
+        type(image)                   :: img, back
         character(len=:), allocatable :: fname, tag
-        integer :: id, ie, i, ldim(3)
-        logical :: ok
+        integer                       :: id, ie, i, ldim(3)
+        logical                       :: ok
         write(*,'(A)') 'test_file_roundtrip_sizes'
         do ie = 1,size(EXTS)
             fname = 'tmp_image_tester_sizes'//EXTS(ie)
@@ -1146,15 +1146,15 @@ contains
     ! projections of a centred isotropic Gaussian: the threaded fproject and fproject_serial give the
     ! same plane, every orientation gives the same projection, and the projection is centred
     subroutine test_fproject()
-        integer, parameter :: B3 = 32, NORIS = 4
-        real,    parameter :: SIGMA = 3., EULS(3,NORIS) = reshape([0.,0.,0., 30.,40.,50., 123.,77.,200., 250.,160.,15.], [3,NORIS])
-        type(image)       :: vol, plane_ser, plane_par, proj2d
-        type(projector)   :: vproj
-        type(ori)         :: e
-        real, allocatable :: vmat(:,:,:), p0(:,:,:), p(:,:,:)
-        real    :: xyz(3), dsq
-        integer :: i, j, k, iori, c
-        logical :: same_plane
+        integer, parameter   :: B3    = 32, NORIS = 4
+        real,    parameter   :: SIGMA = 3., EULS(3,NORIS) = reshape([0.,0.,0., 30.,40.,50., 123.,77.,200., 250.,160.,15.], [3,NORIS])
+        type(image)          :: vol, plane_ser, plane_par, proj2d
+        type(projector)      :: vproj
+        type(ori)            :: e
+        real,    allocatable :: vmat(:,:,:), p0(:,:,:), p(:,:,:)
+        real                 :: xyz(3), dsq
+        integer              :: i, j, k, iori, c
+        logical              :: same_plane
         write(*,'(A)') 'test_fproject'
         c = B3/2 + 1
         allocate(vmat(B3,B3,B3))
@@ -1211,11 +1211,11 @@ contains
 
     ! max_abs_padding on a planted value (set_rmat_at is not box-bounded) and, as a control, in Fourier space
     subroutine test_padding_query()
-        real, parameter :: PLANTED = -3.
-        type(image) :: img
+        real,             parameter   :: PLANTED = -3.
+        type(image)                   :: img
         character(len=:), allocatable :: tag
-        integer :: id, ldim(3), ilast
-        real    :: val
+        integer                       :: id, ldim(3), ilast
+        real                          :: val
         write(*,'(A)') 'test_padding_query'
         do id = 1,NPAD2D + NPAD3D
             ldim = pad_dims(id)
@@ -1241,10 +1241,10 @@ contains
     ! complex-to-real output undefined, so ifft (even boxes, 2D and 3D) and ifft_mask_pad_fft
     ! (for self; 2D, even and odd: it shifts the origin itself) clear it
     subroutine test_padding_after_transforms()
-        real, parameter :: MSKRAD = 20.
-        type(image) :: img, img_pd
+        real,             parameter   :: MSKRAD = 20.
+        type(image)                   :: img, img_pd
         character(len=:), allocatable :: tag
-        integer :: id, ldim(3)
+        integer                       :: id, ldim(3)
         write(*,'(A)') 'test_padding_after_transforms'
         do id = 1,NPAD2D + NPAD3D
             ldim = pad_dims(id)
@@ -1279,11 +1279,11 @@ contains
     ! into real space without a transform: a read fills the box, and ran, gauran and gauimg write
     ! the box, of a buffer that held Fourier coefficients
     subroutine test_padding_after_entering_real_space()
-        character(len=4), parameter :: EXTS(2) = ['.mrc', '.spi']
-        type(image) :: img, back
+        character(len=4), parameter   :: EXTS(2) = ['.mrc', '.spi']
+        type(image)                   :: img, back
         character(len=:), allocatable :: tag, fname
-        real, allocatable :: ref(:,:,:)
-        integer :: id, ie, ldim(3)
+        real,             allocatable :: ref(:,:,:)
+        integer                       :: id, ie, ldim(3)
         write(*,'(A)') 'test_padding_after_entering_real_space'
         do id = 1,NPAD2D + NPAD3D
             ldim = pad_dims(id)
@@ -1333,9 +1333,9 @@ contains
     ! subtracting a constant, the mean subtraction of norm, and an image division (0/0 in the
     ! padding when the whole buffer is divided)
     subroutine test_padding_after_arithmetic()
-        type(image) :: img, img2, img3
+        type(image)                   :: img, img2, img3
         character(len=:), allocatable :: tag
-        integer :: id, ldim(3)
+        integer                       :: id, ldim(3)
         write(*,'(A)') 'test_padding_after_arithmetic'
         do id = 1,NPAD2D + NPAD3D
             ldim = pad_dims(id)
@@ -1373,12 +1373,12 @@ contains
     ! binarize at a threshold of zero and ring with an inner radius of zero. The number of pixels
     ! of the ring is counted here by brute force over the box, with the centre n/2+1 of cendist
     subroutine test_padding_after_binary_ops()
-        real, parameter :: OUTER_RADIUS = 10., INNER_RADIUS = 0.
-        type(image) :: img, img2
+        real,             parameter   :: OUTER_RADIUS = 10., INNER_RADIUS = 0.
+        type(image)                   :: img, img2
         character(len=:), allocatable :: tag
-        real, allocatable :: rmat(:,:,:)
-        integer :: id, ldim(3), npix, npix_expected, i, j, k
-        real    :: centre(3), d
+        real,             allocatable :: rmat(:,:,:)
+        integer                       :: id, ldim(3), npix, npix_expected, i, j, k
+        real                          :: centre(3), d
         write(*,'(A)') 'test_padding_after_binary_ops'
         do id = 1,NPAD2D + NPAD3D
             ldim = pad_dims(id)
@@ -1423,10 +1423,10 @@ contains
 
     ! background fills: pad with a background value, and collage, which fills with 128
     subroutine test_padding_after_pad_and_collage()
-        real, parameter :: BACKGR = 5.
-        type(image) :: img, img2, img_pd, img_col
+        real,             parameter   :: BACKGR = 5.
+        type(image)                   :: img, img2, img_pd, img_col
         character(len=:), allocatable :: tag
-        integer :: id, ldim(3), ldim_pd(3)
+        integer                       :: id, ldim(3), ldim_pd(3)
         write(*,'(A)') 'test_padding_after_pad_and_collage'
         do id = 1,NPAD2D + NPAD3D
             ldim    = pad_dims(id)
@@ -1465,12 +1465,12 @@ contains
     ! box and leaves the padding at zero, a whole-array sum over it is the sum over the box
     ! (2 x the number of pixels here, exact in single precision), and it is the image, not a copy
     subroutine test_rmat_ptr_is_box()
-        real, parameter :: FILL = 2., MARK = 7.
-        type(image)   :: img
-        real, pointer :: rmat(:,:,:)
-        real, allocatable :: ref(:,:,:)
+        real,             parameter   :: FILL = 2., MARK = 7.
+        type(image)                   :: img
+        real,             pointer     :: rmat(:,:,:)
+        real,             allocatable :: ref(:,:,:)
         character(len=:), allocatable :: tag
-        integer :: id, ldim(3)
+        integer                       :: id, ldim(3)
         write(*,'(A)') 'test_rmat_ptr_is_box'
         do id = 1,NPAD2D + NPAD3D
             ldim = pad_dims(id)

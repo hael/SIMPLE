@@ -9,40 +9,40 @@ use simple_polarft_calc,         only: SHIFTMAP_SCREEN, SHIFTMAP_WINDOW
 implicit none
 #include "simple_local_flags.inc"
 
-character(len=*), parameter :: MATCHBENCH_TSV   = 'polar_matching_bench.tsv'
-character(len=*), parameter :: MATCHCHECK_TSV   = 'polar_matching_check.tsv'
-character(len=*), parameter :: BLOCKCHECK_TSV   = 'polar_block_check.tsv'
-character(len=*), parameter :: IDENTITY_TSV     = 'polar_kernel_identity.tsv'
-character(len=*), parameter :: FILLS_TSV        = 'polar_fill_identity.tsv'
-character(len=*), parameter :: NEIGH_TSV        = 'polar_neigh_bench.tsv'
-character(len=*), parameter :: NEIGHCHECK_TSV   = 'polar_neigh_check.tsv'
-character(len=*), parameter :: SHIFTMAP_TSV     = 'polar_shiftmap_bench.tsv'
-integer,          parameter :: NSPACE_FILLS     = 200    !< directions of suite fills unless nspace is given
-integer,          parameter :: NSTATES_FILLS(2) = [1, 2] !< its states unless nstates is given
-integer,          parameter :: NPTCLS_FILLS     = 64     !< its particles unless nptcls is given
-integer,          parameter :: NKEEP_IDENTITY   = 32     !< particles of suite identity unless nptcls is given
-integer,          parameter :: NREPS            = 3      !< timing: best of three after one warm-up
-integer,          parameter :: NREPS_CHECK      = 5      !< identity: repeats at the full team
+character(len=*), parameter :: MATCHBENCH_TSV    = 'polar_matching_bench.tsv'
+character(len=*), parameter :: MATCHCHECK_TSV    = 'polar_matching_check.tsv'
+character(len=*), parameter :: BLOCKCHECK_TSV    = 'polar_block_check.tsv'
+character(len=*), parameter :: IDENTITY_TSV      = 'polar_kernel_identity.tsv'
+character(len=*), parameter :: FILLS_TSV         = 'polar_fill_identity.tsv'
+character(len=*), parameter :: NEIGH_TSV         = 'polar_neigh_bench.tsv'
+character(len=*), parameter :: NEIGHCHECK_TSV    = 'polar_neigh_check.tsv'
+character(len=*), parameter :: SHIFTMAP_TSV      = 'polar_shiftmap_bench.tsv'
+integer,          parameter :: NSPACE_FILLS      = 200          !< directions of suite fills unless nspace is given
+integer,          parameter :: NSTATES_FILLS(2)  = [1, 2]       !< its states unless nstates is given
+integer,          parameter :: NPTCLS_FILLS      = 64           !< its particles unless nptcls is given
+integer,          parameter :: NKEEP_IDENTITY    = 32           !< particles of suite identity unless nptcls is given
+integer,          parameter :: NREPS             = 3            !< timing: best of three after one warm-up
+integer,          parameter :: NREPS_CHECK       = 5            !< identity: repeats at the full team
 integer,          parameter :: NPTCLS_ONE_THREAD = 200
-integer,          parameter :: BLOCKED_BSZ(4)   = [4, 8, 16, 32]
-integer,          parameter :: BLOCKED_RSZ      = 8      !< 8 references of one half: 1.4 MB, within a performance core's share of L2
-integer,          parameter :: MATRIX_RSZ(3)    = [32, 64, 128]
-integer,          parameter :: MATRIX_BSZ(4)    = [4, 8, 16, 32]
-integer,          parameter :: BLOCK_BSZ(3)     = [4, 8, 16]  !< the block kernel's blocks (at most PFTC_BLOCK_NB)
-integer,          parameter :: BLOCK_RSZ        = 32          !< its tile (PFTC_BLOCK_NR, fixed in the kernel)
-real,             parameter :: BLOCK_FLIP_RATE  = 2.e-5       !< its drawn rotations may differ in max(1, this share) of pairs
-real,             parameter :: BLOCK_RTOL       = 1.e-6       !< its drawn losses within this relative difference
-real,             parameter :: BLOCK_TSCALES(2) = [1.e25, 0.1] !< the draws' temperature scales of the sensitivity check
-integer,          parameter :: BLOCK_BSZ_SENS = 16       !< the block of the sensitivity check
-integer,          parameter :: NSPACE_NEIGH     = 5000        !< suite neigh: the late stages' directions unless nspace is given
-integer,          parameter :: NSTATES_NEIGH(2) = [1, 2]      !< its states unless nstates is given
-character(len=2), parameter :: NEIGH_PGRPS(2)   = ['c1', 'd2']
-integer,          parameter :: NEIGH_NREPS      = 2           !< timed repeats per team
-integer,          parameter :: NEIGH_TEAM_ID    = 4           !< the team of the identity pass
-integer,          parameter :: NSPACE_MAPS      = 2500        !< suite shiftmap: directions unless nspace is given (block_prod's largest case)
-integer,          parameter :: NSTATES_MAPS(1)  = [4]         !< its states unless nstates is given
-integer,          parameter :: NCAND_MAPS       = 16          !< its candidate references per particle (at most nrefs)
-integer,          parameter :: NCHECK_MAPS      = 64          !< its team identity: particles compared at one thread and the full team
+integer,          parameter :: BLOCKED_BSZ(4)    = [4, 8, 16, 32]
+integer,          parameter :: BLOCKED_RSZ       = 8            !< 8 references of one half: 1.4 MB, within a performance core's share of L2
+integer,          parameter :: MATRIX_RSZ(3)     = [32, 64, 128]
+integer,          parameter :: MATRIX_BSZ(4)     = [4, 8, 16, 32]
+integer,          parameter :: BLOCK_BSZ(3)      = [4, 8, 16]   !< the block kernel's blocks (at most PFTC_BLOCK_NB)
+integer,          parameter :: BLOCK_RSZ         = 32           !< its tile (PFTC_BLOCK_NR, fixed in the kernel)
+real,             parameter :: BLOCK_FLIP_RATE   = 2.e-5        !< its drawn rotations may differ in max(1, this share) of pairs
+real,             parameter :: BLOCK_RTOL        = 1.e-6        !< its drawn losses within this relative difference
+real,             parameter :: BLOCK_TSCALES(2)  = [1.e25, 0.1] !< the draws' temperature scales of the sensitivity check
+integer,          parameter :: BLOCK_BSZ_SENS    = 16           !< the block of the sensitivity check
+integer,          parameter :: NSPACE_NEIGH      = 5000         !< suite neigh: the late stages' directions unless nspace is given
+integer,          parameter :: NSTATES_NEIGH(2)  = [1, 2]       !< its states unless nstates is given
+character(len=2), parameter :: NEIGH_PGRPS(2)    = ['c1', 'd2']
+integer,          parameter :: NEIGH_NREPS       = 2            !< timed repeats per team
+integer,          parameter :: NEIGH_TEAM_ID     = 4            !< the team of the identity pass
+integer,          parameter :: NSPACE_MAPS       = 2500         !< suite shiftmap: directions unless nspace is given (block_prod's largest case)
+integer,          parameter :: NSTATES_MAPS(1)   = [4]          !< its states unless nstates is given
+integer,          parameter :: NCAND_MAPS        = 16           !< its candidate references per particle (at most nrefs)
+integer,          parameter :: NCHECK_MAPS       = 64           !< its team identity: particles compared at one thread and the full team
 
 contains
 
@@ -50,12 +50,12 @@ module subroutine exec_test_polar_matching_bench( self, cline )
     !$ use omp_lib, only: omp_get_num_procs
     class(commander_test_polar_matching_bench), intent(inout) :: self
     class(cmdline),                             intent(inout) :: cline
-    integer, parameter :: NSPACE_ALL(2) = [1000, 2500], NSTATES_ALL(3) = [1, 2, 4]
+    integer, parameter   :: NSPACE_ALL(2) = [1000, 2500], NSTATES_ALL(3) = [1, 2, 4]
     integer, allocatable :: nspaces(:), nstates_list(:), nthrs(:), layouts(:)
-    type(string) :: suite, fftw_plans
-    integer      :: nptcls, nthr_max, ispace, istate
-    logical      :: l_check, l_identity, l_fills, l_neigh, l_maps, l_measure, l_planner
-    integer      :: ipg
+    type(string)         :: suite, fftw_plans
+    integer              :: nptcls, nthr_max, ispace, istate
+    logical              :: l_check, l_identity, l_fills, l_neigh, l_maps, l_measure, l_planner
+    integer              :: ipg
     suite    = ''
     nptcls   = 2000
     nthr_max = 1
@@ -177,11 +177,11 @@ subroutine time_case( nspace, nstates, nptcls, nthrs, layouts, l_measure )
     integer, intent(in) :: nspace, nstates, nptcls, nthrs(:), layouts(:)
     logical, intent(in) :: l_measure
     class(polar_matching_bench), allocatable, target :: bench
-    character(len=:), allocatable :: plans
-    integer, allocatable :: bszs(:), rszs(:)
-    real(dp) :: wall, wall_best
-    integer  :: ilay, it, nt, best_b, best_r, ib, ir
-    logical  :: l_prod, l_memo, l_gmat, l_cc
+    character(len=:),            allocatable         :: plans
+    integer,                     allocatable         :: bszs(:), rszs(:)
+    real(dp)                                         :: wall, wall_best
+    integer                                          :: ilay, it, nt, best_b, best_r, ib, ir
+    logical                                          :: l_prod, l_memo, l_gmat, l_cc
     ! the planner of the calculator's FFTs, for the TSV
     plans = 'measure'
     if( has_global_seed() .and. .not. l_measure ) plans = 'estimate'
@@ -290,11 +290,11 @@ subroutine shiftmap_case( nspace, nstates, nptcls, nthrs, l_measure )
     integer, intent(in) :: nspace, nstates, nptcls, nthrs(:)
     logical, intent(in) :: l_measure
     class(polar_matching_bench), allocatable, target :: bench
-    integer,          parameter :: MAPS(2) = [SHIFTMAP_WINDOW, SHIFTMAP_SCREEN]
-    character(len=6), parameter :: MAPNAMES(2) = ['window', 'screen']
-    real(dp), allocatable :: res_one(:,:,:), res_team(:,:,:)
-    real(dp) :: wall
-    integer  :: imap, it, pftsz, nrots, kfromto(2), nrefs, ncand, nchk, ndiff, funit
+    integer,                     parameter           :: MAPS(2)     = [SHIFTMAP_WINDOW, SHIFTMAP_SCREEN]
+    character(len=6),            parameter           :: MAPNAMES(2) = ['window', 'screen']
+    real(dp),                    allocatable         :: res_one(:,:,:), res_team(:,:,:)
+    real(dp)                                         :: wall
+    integer                                          :: imap, it, pftsz, nrots, kfromto(2), nrefs, ncand, nchk, ndiff, funit
     allocate(bench)
     call bench%new(nspace, nstates, nptcls, maxval(nthrs), .true., .false., .false., 0, fftw_measure=l_measure)
     call report_case(bench, nspace, nstates)
@@ -338,10 +338,10 @@ subroutine time_maps( bench, imap, nspace, nstates, nptcls, nthr, l_measure )
     integer,                     intent(in)    :: imap, nspace, nstates, nptcls, nthr
     logical,                     intent(in)    :: l_measure
     character(len=:), allocatable :: mapname, plans
-    real(dp) :: walls(NREPS), wall_best, nmaps, us_map, maps_per_s, parts(3), rho_max, prior_w
-    real     :: load1
-    integer  :: nptcls_use, nwarm, ncand, irep, funit, pftsz, nrots, kfromto(2), nrefs, geom(4)
-    logical  :: l_new
+    real(dp)                      :: walls(NREPS), wall_best, nmaps, us_map, maps_per_s, parts(3), rho_max, prior_w
+    real                          :: load1
+    integer                       :: nptcls_use, nwarm, ncand, irep, funit, pftsz, nrots, kfromto(2), nrefs, geom(4)
+    logical                       :: l_new
     call bench%get_sizes(pftsz, nrots, kfromto, nrefs)
     mapname = 'window'
     if( imap == SHIFTMAP_SCREEN ) mapname = 'screen'
@@ -392,10 +392,10 @@ end subroutine time_maps
 subroutine check_case( nspace, nstates, nthr_max )
     integer, intent(in) :: nspace, nstates, nthr_max
     class(polar_matching_bench), allocatable, target :: bench
-    real(sp), allocatable :: vecs_prod(:,:,:), vecs_ref(:,:,:), vecs_one(:,:,:), dists_pp(:,:), dists_first(:,:), temps(:)
-    integer,  allocatable :: irots_pp(:,:), irots_first(:,:)
-    real(dp) :: wall_pp
-    integer  :: nkeep, irep, ib, itemp
+    real(sp),                    allocatable         :: vecs_prod(:,:,:), vecs_ref(:,:,:), vecs_one(:,:,:), dists_pp(:,:), dists_first(:,:), temps(:)
+    integer,                     allocatable         :: irots_pp(:,:), irots_first(:,:)
+    real(dp)                                         :: wall_pp
+    integer                                          :: nkeep, irep, ib, itemp
     nkeep = 64
     if( nspace * nstates > 5000 ) nkeep = 32
     allocate(bench)
@@ -467,10 +467,10 @@ subroutine check_case( nspace, nstates, nthr_max )
         integer, intent(in) :: layout, nthr, irep, bsz, rsz
         logical, intent(in) :: l_make_ref
         real(sp), allocatable :: vecs(:,:,:)
-        real(dp) :: wall, max_abs, max_rel, d, max_prod_abs
-        integer  :: nrefs, p, iref, i, n_vec_diff, n_argmin_diff, n_prod_diff, n_prod_ptcls, n_vec_diff_one, funit
-        logical  :: l_ptcl_diff
-        logical  :: l_new
+        real(dp)              :: wall, max_abs, max_rel, d, max_prod_abs
+        integer               :: nrefs, p, iref, i, n_vec_diff, n_argmin_diff, n_prod_diff, n_prod_ptcls, n_vec_diff_one, funit
+        logical               :: l_ptcl_diff
+        logical               :: l_new
         wall = bench%score(layout, nthr, nkeep, bsz, rsz)
         call bench%get_vecs(vecs)
         nrefs = size(vecs,2)
@@ -556,9 +556,9 @@ subroutine check_case( nspace, nstates, nthr_max )
         real,    intent(in) :: tscale
         real(sp), allocatable :: dists(:,:)
         integer,  allocatable :: irots(:,:)
-        real(dp) :: wall, max_rel, d
-        integer  :: nrefs, iref, i, nrot_diff, ninvalid, ndiff_first, nallowed, funit
-        logical  :: l_new, l_ok
+        real(dp)              :: wall, max_rel, d
+        integer               :: nrefs, iref, i, nrot_diff, ninvalid, ndiff_first, nallowed, funit
+        logical               :: l_new, l_ok
         wall = bench%score(PMB_BLOCK_PROD, nthr, nkeep, bsz, BLOCK_RSZ)
         call bench%get_entries(dists, irots)
         nrefs     = size(dists,1)
@@ -612,16 +612,16 @@ end subroutine check_case
 subroutine identity_case( nspace, nstates, nkeep, nthr_max )
     !$ use omp_lib, only: omp_get_wtime
     integer, intent(in) :: nspace, nstates, nkeep, nthr_max
-    character(len=*), parameter :: OBJFUNS(2) = ['euclid', 'cc    ']
+    character(len=*),            parameter           :: OBJFUNS(2) = ['euclid', 'cc    ']
     class(polar_matching_bench), allocatable, target :: bench
-    real(sp), allocatable :: v1(:,:,:,:), bd1(:,:), v(:,:,:,:), bd(:,:)
-    integer,  allocatable :: bi1(:,:), bi(:,:)
-    character(len=:), allocatable :: fname
-    character(len=32) :: casestr
-    real(dp) :: wall
-    integer  :: iobj, irep, funit, ikind, iref, i, ndiff(PMB_NKINDS), ndiff_best
-    integer  :: pftsz, nrots, kfromto(2), nrefs
-    logical  :: l_new
+    real(sp),                    allocatable         :: v1(:,:,:,:), bd1(:,:), v(:,:,:,:), bd(:,:)
+    integer,                     allocatable         :: bi1(:,:), bi(:,:)
+    character(len=:),            allocatable         :: fname
+    character(len=32)                                :: casestr
+    real(dp)                                         :: wall
+    integer                                          :: iobj, irep, funit, ikind, iref, i, ndiff(PMB_NKINDS), ndiff_best
+    integer                                          :: pftsz, nrots, kfromto(2), nrefs
+    logical                                          :: l_new
     allocate(bench)
     write(casestr,'(i0,a,i0)') nspace, 'x', nstates
     do iobj = 1,size(OBJFUNS)
@@ -682,15 +682,15 @@ end subroutine identity_case
 subroutine fills_case( nspace, nstates, nptcls, nthr_max )
     !$ use omp_lib, only: omp_get_wtime
     integer, intent(in) :: nspace, nstates, nptcls, nthr_max
-    integer, parameter :: NCONF = 6
+    integer,                     parameter           :: NCONF = 6
     class(polar_matching_bench), allocatable, target :: bench
-    type(pmb_fill_result) :: ref, res
-    character(len=:), allocatable :: route
-    integer  :: conf_nthr(NCONF), conf_bsz(NCONF), conf_nparts(NCONF)
-    logical  :: conf_pert(NCONF)
-    integer  :: iroute, iconf, ndiff(PMB_NDIFF), nfail, funit, bsz3, nparts3, idiff
-    real(dp) :: wall
-    logical  :: l_new
+    type(pmb_fill_result)                            :: ref, res
+    character(len=:),            allocatable         :: route
+    integer                                          :: conf_nthr(NCONF), conf_bsz(NCONF), conf_nparts(NCONF)
+    logical                                          :: conf_pert(NCONF)
+    integer                                          :: iroute, iconf, ndiff(PMB_NDIFF), nfail, funit, bsz3, nparts3, idiff
+    real(dp)                                         :: wall
+    logical                                          :: l_new
     bsz3        = max(1, (nptcls + 2) / 3)
     nparts3     = min(3, nptcls)
     ! the pipeline at one and nthr_max threads, two batch sizes, one and three parts, the earlier parts perturbed
@@ -794,13 +794,13 @@ subroutine neigh_case( nspace, nstates, pgrp, nptcls, nthr_max )
     integer,          intent(in) :: nspace, nstates, nptcls, nthr_max
     character(len=*), intent(in) :: pgrp
     class(polar_neigh_bench), allocatable :: bench
-    type(pnb_pass), allocatable :: pp, bk, po, pp_first, bk_first, bk_team, pp_best, bk_best
-    integer, allocatable :: teams(:)
-    real(dp) :: best_rel, drawn_rel
-    real     :: cone, load
-    integer  :: nsubs, path, it, irep, pftsz, nrots, kfromto(2), ncap, maxcell, ndiff_pp, ndiff_bk, ndiff_team
-    integer  :: best_rot, drawn_rot, nallowed, npooled_diff, funit, npairs
-    logical  :: l_new, l_ok, l_ident
+    type(pnb_pass),           allocatable :: pp, bk, po, pp_first, bk_first, bk_team, pp_best, bk_best
+    integer,                  allocatable :: teams(:)
+    real(dp)                              :: best_rel, drawn_rel
+    real                                  :: cone, load
+    integer                               :: nsubs, path, it, irep, pftsz, nrots, kfromto(2), ncap, maxcell, ndiff_pp, ndiff_bk, ndiff_team
+    integer                               :: best_rot, drawn_rot, nallowed, npooled_diff, funit, npairs
+    logical                               :: l_new, l_ok, l_ident
     ! solve3D's subspace: 126 representatives per 2,500 directions, even
     nsubs = max(2, round2even(real(nint(126. * real(nspace) / 2500.))))
     allocate(bench, pp, bk, po, pp_first, bk_first, bk_team, pp_best, bk_best)

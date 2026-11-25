@@ -8,7 +8,7 @@ public :: write_variance_mask, variance_mask_groups
 private
 
 integer, parameter :: VARMASK_NGROUPS = 10, VARMASK_PERBIN = 1300, VARMASK_NBIN_MIN = 20, VARMASK_KM_ITS = 40
-real, parameter :: VARMASK_FRAC = 0.2, VARMASK_SUPPORT = 0.1, VARMASK_DIL = 3., VARMASK_FALL = 6., VARMASK_LP = 15., VARMASK_SIG = 1.5
+real,    parameter :: VARMASK_FRAC    = 0.2, VARMASK_SUPPORT = 0.1, VARMASK_DIL = 3., VARMASK_FALL = 6., VARMASK_LP = 15., VARMASK_SIG = 1.5
 
 contains
 
@@ -20,8 +20,8 @@ contains
         type(image)          :: img
         real,    allocatable :: vs(:,:,:), m(:,:,:)
         logical, allocatable :: sph(:,:,:), sup(:,:,:), core(:,:,:)
-        integer :: n
-        real    :: smpd
+        integer              :: n
+        real                 :: smpd
         call half_variance(evens, odds, w, mskdiam, n, smpd, sph, sup, vs)
         core = vs > VARMASK_FRAC * maxval(vs)
         if( .not. any(core) )then
@@ -49,8 +49,8 @@ contains
         integer, allocatable :: labels(:)
         real,    allocatable :: zc(:,:), y(:), cen(:,:), bm(:,:), cov(:,:), vals(:), evec(:,:), acc(:,:)
         integer, allocatable :: lab(:), bins(:), nbin(:), inds(:), sel(:), cnt(:)
-        real    :: ev(1)
-        integer :: n, q, nb, it, j, b, k, nsel, r, t
+        real                 :: ev(1)
+        integer              :: n, q, nb, it, j, b, k, nsel, r, t
         n  = size(z,1)
         q  = size(z,2)
         nb = max(VARMASK_NBIN_MIN, nint(real(n) / real(VARMASK_PERBIN)))
@@ -124,17 +124,17 @@ contains
     end function variance_mask_groups
 
     subroutine half_variance( evens, odds, w, mskdiam, n, smpd, sph, sup, vs )
-        type(string),         intent(in)  :: evens(:), odds(:)
-        real(dp),             intent(in)  :: w(:)
-        real,                 intent(in)  :: mskdiam
-        integer,              intent(out) :: n
-        real,                 intent(out) :: smpd
-        logical, allocatable, intent(out) :: sph(:,:,:), sup(:,:,:)
-        real,    allocatable, intent(out) :: vs(:,:,:)
+        type(string),         intent(in)               :: evens(:), odds(:)
+        real(dp),             intent(in)               :: w(:)
+        real,                 intent(in)               :: mskdiam
+        integer,              intent(out)              :: n
+        real,                 intent(out)              :: smpd
+        logical,              allocatable, intent(out) :: sph(:,:,:), sup(:,:,:)
+        real,                 allocatable, intent(out) :: vs(:,:,:)
         real,     allocatable :: e(:,:,:,:), o(:,:,:,:), em(:,:,:), om(:,:,:), v(:,:,:)
         real(dp), allocatable :: wn(:)
-        integer :: ldim(3), nm, j, ifoo
-        real    :: sc, fwhm
+        integer               :: ldim(3), nm, j, ifoo
+        real                  :: sc, fwhm
         call find_ldim_nptcls(evens(1), ldim, ifoo)
         n    = ldim(1)
         nm   = size(evens)
@@ -170,7 +170,7 @@ contains
         function wsum( x ) result( s )
             real, intent(in)  :: x(:,:,:,:)
             real, allocatable :: s(:,:,:)
-            integer :: jj
+            integer           :: jj
             allocate(s(n,n,n), source=0.)
             do jj = 1, nm
                 s = s + real(wn(jj)) * x(:,:,:,jj)
@@ -184,7 +184,7 @@ contains
         integer,      intent(in) :: n
         real,         intent(in) :: smpd, fwhm
         real, allocatable :: x(:,:,:)
-        type(image) :: vol
+        type(image)       :: vol
         call vol%new([n,n,n], smpd)
         call vol%read(fname)
         call vol%fft
@@ -198,7 +198,7 @@ contains
         real,    intent(in) :: x(:,:,:), smpd, fwhm
         integer, intent(in) :: n
         real, allocatable :: y(:,:,:)
-        type(image) :: vol
+        type(image)       :: vol
         call vol%new([n,n,n], smpd)
         call vol%set_rmat(x, .false.)
         call vol%fft
@@ -213,7 +213,7 @@ contains
         integer, intent(in) :: n
         real,    intent(in) :: smpd
         real, allocatable :: d(:,:,:)
-        type(image) :: vol
+        type(image)       :: vol
         call vol%new([n,n,n], smpd)
         call vol%set_rmat(merge(0., 1., mk), .false.)
         call vol%distance_transform
@@ -225,7 +225,7 @@ contains
         integer, intent(in) :: n
         real,    intent(in) :: rad
         logical, allocatable :: sph(:,:,:)
-        integer :: i, j, k, c
+        integer              :: i, j, k, c
         c = n / 2 + 1
         allocate(sph(n,n,n))
         do k = 1, n

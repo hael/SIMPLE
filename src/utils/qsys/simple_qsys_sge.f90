@@ -49,12 +49,12 @@ contains
 
     !> \brief  writes the header instructions
     subroutine write_sge_header( self, q_descr, fhandle )
-        class(qsys_sge), intent(in)   :: self
-        class(chash),      intent(in) :: q_descr
-        integer, optional, intent(in) :: fhandle
+        class(qsys_sge),   intent(in)           :: self
+        class(chash),      intent(in)           :: q_descr
+        integer,           optional, intent(in) :: fhandle
         type(string) :: key, qsub_cmd, qsub_val, bind2socket, addon_line
-        integer :: i, which
-        logical :: write2file
+        integer      :: i, which
+        logical      :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
         do i=1,q_descr%size_of()
@@ -111,10 +111,10 @@ contains
 
     !> \brief  writes the array header instructions
     subroutine write_sge_array_header( self, q_descr, parts_fromto, fhandle, nactive )
-        class(qsys_sge),   intent(in) :: self
-        class(chash),      intent(in) :: q_descr
-        integer,           intent(in) :: parts_fromto(2)
-        integer, optional, intent(in) :: fhandle, nactive
+        class(qsys_sge),   intent(in)           :: self
+        class(chash),      intent(in)           :: q_descr
+        integer,           intent(in)           :: parts_fromto(2)
+        integer,           optional, intent(in) :: fhandle, nactive
     end subroutine write_sge_array_header
 
     !> \brief  is a destructor

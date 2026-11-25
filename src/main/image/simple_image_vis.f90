@@ -16,9 +16,9 @@ contains
     end subroutine print_rmat
 
     module subroutine vis( self, sect, geomorsphr )
-        class(image),      intent(in) :: self
-        integer, optional, intent(in) :: sect
-        logical, optional, intent(in) :: geomorsphr !< geometrical or spherical complex format
+        class(image),      intent(in)           :: self
+        integer,           optional, intent(in) :: sect
+        logical,           optional, intent(in) :: geomorsphr !< geometrical or spherical complex format
         complex, allocatable :: fplane(:,:)
         integer              :: sect_here
         logical              :: geomorsphr_here
@@ -44,9 +44,9 @@ contains
     end subroutine vis
 
     module subroutine before_after( left, right, ba, mask )
-        class(image),      intent(in)    :: left, right
-        type(image),       intent(inout) :: ba
-        logical, optional, intent(in)    :: mask(left%ldim(1),left%ldim(2),left%ldim(3))
+        class(image),      intent(in)           :: left, right
+        type(image),       intent(inout)        :: ba
+        logical,           optional, intent(in) :: mask(left%ldim(1),left%ldim(2),left%ldim(3))
         integer     :: ldim(3), i, j
         if( left.eqdims.right )then
             if( left.eqsmpd.right )then
@@ -77,8 +77,8 @@ contains
     end subroutine before_after
 
     module subroutine scale_pspec4viz( self, rsmpd4viz )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: rsmpd4viz
+        class(image),   intent(inout)        :: self
+        real,           optional, intent(in) :: rsmpd4viz
         type(image) :: tmp
         real        :: scale4viz, smpd4viz_here
         integer     :: box4clip
@@ -105,8 +105,8 @@ contains
         class(image), intent(in)    :: self
         class(image), intent(inout) :: reprojs
         integer, parameter :: b=3
-        type(image) :: reproj
-        integer     :: ldim_reproj(3),ldim_reprojs(3)
+        type(image)        :: reproj
+        integer            :: ldim_reproj(3),ldim_reprojs(3)
         if( self%is_ft() )      THROW_HARD('Real space only; generate_orthogonal_reprojs')
         if( .not.self%is_3d() ) THROW_HARD('Volumes only; generate_orthogonal_reprojs')
         ldim_reproj(1:2) = self%ldim(1:2)

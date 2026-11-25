@@ -22,9 +22,9 @@ public :: SPAN_GAP_BUDGET, SPAN_SCRATCH_CAP, PREFETCH_WINDOW_BYTES, PREFETCH_MAX
 private
 #include "simple_local_flags.inc"
 
-integer(int64), parameter :: SPAN_GAP_BUDGET       = 2_int64   * 1024_int64**2 !< file bytes a span may bridge between needed images
-integer(int64), parameter :: SPAN_SCRATCH_CAP      = 64_int64  * 1024_int64**2 !< raw span scratch of a session, all streams
-integer(int64), parameter :: PREFETCH_WINDOW_BYTES = 128_int64 * 1024_int64**2 !< bytes read ahead into the window
+integer(int64), parameter :: SPAN_GAP_BUDGET       = 2_int64   * 1024_int64**2  !< file bytes a span may bridge between needed images
+integer(int64), parameter :: SPAN_SCRATCH_CAP      = 64_int64  * 1024_int64**2  !< raw span scratch of a session, all streams
+integer(int64), parameter :: PREFETCH_WINDOW_BYTES = 128_int64 * 1024_int64**2  !< bytes read ahead into the window
 integer,        parameter :: PREFETCH_MAX_STACKS   = 64                         !< stacks held open for the next batch
 ! outcomes of opening and reading a stack, reported after the parallel region
 integer, parameter :: ST_OK = 0, ST_OPEN = 1, ST_HEADER = 2, ST_DIMS = 3, ST_INDEX = 4, ST_SHORT = 5, ST_READ = 6
@@ -42,7 +42,7 @@ end type stack_read_counts
 !> an MRC stack open on a plain descriptor, with what its header says
 type :: open_stack
     type(string)   :: name
-    integer        :: fd = -1, nimgs = 0, mode = -1
+    integer        :: fd       = -1, nimgs = 0, mode = -1
     integer(int64) :: data_off = 0_int64, ibytes = 0_int64 !< file offset of image 1, bytes per image
     logical        :: l_signed = .true.
 end type open_stack
@@ -59,21 +59,21 @@ end type raw_scratch
 
 type :: stack_read_session
     private
-    type(open_stack),  allocatable :: held(:)      !< stacks kept open: the boundary stack and the window's
-    type(window_span), allocatable :: wspans(:)    !< the spans in the window
-    type(raw_scratch), allocatable :: bufs(:)      !< raw span scratch, one per stream
-    integer(kind=1),   pointer     :: wbuf(:) => null() !< the window, owned by the producer
-    type(stack_read_counts) :: counts
-    type(c_ptr) :: producer = c_null_ptr
-    real    :: smpd = 0.
-    integer :: box = 0, nstreams = 0, nheld = 0, nwsp = 0
-    logical :: l_report = .false., exists = .false.
+    type(open_stack),  allocatable :: held(:)            !< stacks kept open: the boundary stack and the window's
+    type(window_span), allocatable :: wspans(:)          !< the spans in the window
+    type(raw_scratch), allocatable :: bufs(:)            !< raw span scratch, one per stream
+    integer(kind=1),   pointer     :: wbuf(:)  => null() !< the window, owned by the producer
+    type(stack_read_counts)        :: counts
+    type(c_ptr)                    :: producer = c_null_ptr
+    real                           :: smpd     = 0.
+    integer                        :: box      = 0, nstreams = 0, nheld = 0, nwsp = 0
+    logical                        :: l_report = .false., exists = .false.
 contains
-    procedure :: new
-    procedure :: read
-    procedure :: prefetch
-    procedure :: get_counts
-    procedure :: kill
+    procedure          :: new
+    procedure          :: read
+    procedure          :: prefetch
+    procedure          :: get_counts
+    procedure          :: kill
     procedure, private :: setup_streams
     procedure, private :: span_cap
     procedure, private :: find_held
@@ -126,11 +126,11 @@ contains
 
     !> Closes the held stacks, all but the one named keep (when given)
     subroutine release_held( self, keep )
-        class(stack_read_session), intent(inout) :: self
-        type(string), optional,    intent(in)    :: keep
+        class(stack_read_session), intent(inout)           :: self
+        type(string),              optional,    intent(in) :: keep
         type(open_stack) :: kept
-        integer :: i, rc
-        logical :: l_kept
+        integer          :: i, rc
+        logical          :: l_kept
         l_kept = .false.
         do i = 1, self%nheld
             if( present(keep) .and. .not. l_kept )then
@@ -152,21 +152,21 @@ contains
 
     !> imgs(i) receives image inds(i) of stack stknames(i), byte for byte as a single read of it
     subroutine read( self, stknames, inds, imgs )
-        class(stack_read_session), target, intent(inout) :: self
-        type(string),                      intent(in)    :: stknames(:)
-        integer,                           intent(in)    :: inds(:)
-        class(image),                      intent(inout) :: imgs(:)
+        class(stack_read_session),         target, intent(inout) :: self
+        type(string),                      intent(in)            :: stknames(:)
+        integer,                           intent(in)            :: inds(:)
+        class(image),                      intent(inout)         :: imgs(:)
         type(string),      allocatable :: gname(:)
         type(open_stack),  allocatable :: gst(:)
         integer,           allocatable :: grp(:), gptr(:), members(:), gheld(:), gstat(:), gerr(:)
         integer,           allocatable :: sp_first(:), sp_last(:), sp_mfrom(:), sp_mto(:)
         logical,           allocatable :: l_fallback(:), l_wok(:)
-        type(open_stack) :: st
-        type(dstack_io)  :: fallback_reader
-        type(c_ptr)      :: src
-        character(len=:), allocatable :: what
-        integer(int64)   :: nopens, nreq, breq, bread, bused, r, nb, woff
-        integer :: n, ng, i, g, k, glast, ldim(3), nthr, j, nsp, isp, iw, m, first, last, rc
+        type(open_stack)               :: st
+        type(dstack_io)                :: fallback_reader
+        type(c_ptr)                    :: src
+        character(len=:),  allocatable :: what
+        integer(int64)                 :: nopens, nreq, breq, bread, bused, r, nb, woff
+        integer                        :: n, ng, i, g, k, glast, ldim(3), nthr, j, nsp, isp, iw, m, first, last, rc
         n = size(inds)
         if( n < 1 ) return
         if( .not. self%exists ) THROW_HARD('session not created; read')
@@ -333,17 +333,17 @@ contains
     !! spans into the window (WILLNEED hints beyond it) while the caller computes. A wrong guess costs reads,
     !! never bytes: read only serves spans the window covers.
     subroutine prefetch( self, stknames, inds )
-        class(stack_read_session), target, intent(inout) :: self
-        type(string),                      intent(in)    :: stknames(:)
-        integer,                           intent(in)    :: inds(:)
+        class(stack_read_session),         target, intent(inout) :: self
+        type(string),                      intent(in)            :: stknames(:)
+        integer,                           intent(in)            :: inds(:)
         type(string),      allocatable :: gname(:)
         type(open_stack),  allocatable :: gst(:)
         type(window_span), allocatable :: wsp(:)
         integer,           allocatable :: grp(:), gptr(:), members(:), gheld(:), gstat(:), gerr(:), gopen(:)
         integer,           allocatable :: sp_first(:), sp_last(:), sp_mfrom(:), sp_mto(:)
-        type(c_ptr)    :: wptr
-        integer(int64) :: off, nb, need, boff
-        integer :: n, ng, g, nopen, io, nsp, isp, m, rc, job, nw
+        type(c_ptr)                    :: wptr
+        integer(int64)                 :: off, nb, need, boff
+        integer                        :: n, ng, g, nopen, io, nsp, isp, m, rc, job, nw
         n = size(inds)
         if( n < 1 .or. .not. allocated(self%bufs) ) return
         if( size(stknames) /= n ) THROW_HARD('stack names and indices differ in number; prefetch')
@@ -435,13 +435,13 @@ contains
     !> Groups a request by stack file in order of first appearance (stack rows sharing a file share a group);
     !! members(gptr(g):gptr(g+1)-1) are group g's requests by index in the stack; grp(i) is request i's group
     subroutine group_requests( stknames, inds, ng, gname, grp, gptr, members )
-        type(string),              intent(in)  :: stknames(:)
-        integer,                   intent(in)  :: inds(:)
-        integer,                   intent(out) :: ng
-        type(string), allocatable, intent(out) :: gname(:)
-        integer,      allocatable, intent(out) :: grp(:), gptr(:), members(:)
+        type(string),              intent(in)               :: stknames(:)
+        integer,                   intent(in)               :: inds(:)
+        integer,                   intent(out)              :: ng
+        type(string),              allocatable, intent(out) :: gname(:)
+        integer,                   allocatable, intent(out) :: grp(:), gptr(:), members(:)
         integer, allocatable :: gfill(:)
-        integer :: n, i, g, k, k2, mtmp
+        integer              :: n, i, g, k, k2, mtmp
         n = size(inds)
         allocate(grp(n), gname(n))
         ng = 0
@@ -508,9 +508,9 @@ contains
         type(open_stack), intent(out) :: st
         integer,          intent(out) :: stat, err
         integer(kind=1), target :: hbytes(MRCHEADSZ)
-        type(MrcImgHead) :: hed
-        integer(int64)   :: r
-        integer          :: dims(3)
+        type(MrcImgHead)        :: hed
+        integer(int64)          :: r
+        integer                 :: dims(3)
         stat    = ST_OK
         err     = 0
         st%name = name
@@ -553,7 +553,7 @@ contains
         real(c_float),      pointer :: rmat(:,:,:), f32(:,:)
         integer(c_int16_t), pointer :: i16(:,:)
         integer(c_int8_t),  pointer :: i8(:,:)
-        integer :: j
+        integer                     :: j
         call img%get_rmat_ptr_padded(rmat)
         select case(st%mode)
             case(2)

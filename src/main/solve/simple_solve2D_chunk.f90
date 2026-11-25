@@ -18,18 +18,18 @@ type solve2D_chunk
     private
     class(parameters), pointer :: p_ptr => null()       ! parameters pointer
     ! allocatable (compile-time policy), allocated in init_chunk and released in kill
-    type(sp_project), allocatable :: spproj             ! master project
-    type(qsys_env),   allocatable :: qenv               ! submission handler
-    type(cmdline),    allocatable :: cline              ! command line
-    type(string), allocatable  :: orig_stks(:)          ! list of stacks
-    type(string)               :: path, projfile_out    ! physical location
-    integer                    :: id                    ! unique id
-    integer                    :: it                    ! # of iterations performed
-    integer                    :: nmics                 ! # of micrographs
-    integer                    :: nptcls                ! # number of particles
-    logical                    :: toanalyze2D = .true.  ! whether to perform 2D analysis or only calculate sigmas2
-    logical                    :: converged   = .false. ! whether 2D analysis is over
-    logical                    :: available   = .true.  ! has been initialized but no 2D analysis peformed
+    type(sp_project), allocatable :: spproj                ! master project
+    type(qsys_env),   allocatable :: qenv                  ! submission handler
+    type(cmdline),    allocatable :: cline                 ! command line
+    type(string),     allocatable :: orig_stks(:)          ! list of stacks
+    type(string)                  :: path, projfile_out    ! physical location
+    integer                       :: id                    ! unique id
+    integer                       :: it                    ! # of iterations performed
+    integer                       :: nmics                 ! # of micrographs
+    integer                       :: nptcls                ! # number of particles
+    logical                       :: toanalyze2D = .true.  ! whether to perform 2D analysis or only calculate sigmas2
+    logical                       :: converged   = .false. ! whether 2D analysis is over
+    logical                       :: available   = .true.  ! has been initialized but no 2D analysis peformed
   contains
     procedure          :: init_chunk
     procedure, private :: copy
@@ -63,11 +63,11 @@ contains
 
     !>  Instantiator
     subroutine init_chunk( self, params, cline, id, master_spproj )
-        class(solve2D_chunk),       intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(cmdline),            intent(in)    :: cline
-        integer,                   intent(in)    :: id
-        class(sp_project),         intent(in)    :: master_spproj
+        class(solve2D_chunk),       intent(inout)      :: self
+        class(parameters),          target, intent(in) :: params
+        class(cmdline),             intent(in)         :: cline
+        integer,                    intent(in)         :: id
+        class(sp_project),          intent(in)         :: master_spproj
         type(string)          :: exec
         character(len=STDLEN) :: chunk_part_env
         integer               :: envlen
@@ -152,7 +152,7 @@ contains
 
     subroutine generate( self, project_list )
         class(solve2D_chunk), intent(inout) :: self
-        class(rec_list),     intent(inout) :: project_list
+        class(rec_list),      intent(inout) :: project_list
         integer :: istk, sz
         if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
         sz = project_list%size()
@@ -182,14 +182,14 @@ contains
 
     ! Initiates 2D analysis
     subroutine analyze2D( self, makecavgs )
-        class(solve2D_chunk), intent(inout) :: self
-        logical,   optional, intent(in)    :: makecavgs
+        class(solve2D_chunk), intent(inout)        :: self
+        logical,              optional, intent(in) :: makecavgs
         type(string),  allocatable :: bins(:)
         type(cmdline), allocatable :: clines(:)
-        type(cmdline) :: cline_pspec
-        type(string)  :: cwd
-        integer       :: nptcls_sel, nclines
-        logical       :: l_makecavgs
+        type(cmdline)              :: cline_pspec
+        type(string)               :: cwd
+        integer                    :: nptcls_sel, nclines
+        logical                    :: l_makecavgs
         call debug_print('in chunk%analyze2D '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
@@ -242,12 +242,12 @@ contains
     ! To calculate noise power estimates only
     subroutine calc_sigma2( self, cline_analyze2D, need_sigma )
         class(solve2D_chunk), intent(inout) :: self
-        class(cmdline),      intent(in)    :: cline_analyze2D
-        logical,             intent(in)    :: need_sigma
+        class(cmdline),       intent(in)    :: cline_analyze2D
+        logical,              intent(in)    :: need_sigma
         type(cmdline) :: cline_pspec
         type(string)  :: cwd
         type(string)  :: exec
-        integer :: nptcls_sel
+        integer       :: nptcls_sel
         call debug_print('in calc_sigma2 '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
@@ -294,12 +294,12 @@ contains
 
     ! classes generation at original sampling
     subroutine gen_final_cavgs( self, clines )
-        class(solve2D_chunk),         intent(in)    :: self
-        type(cmdline),  allocatable, intent(inout) :: clines(:)
+        class(solve2D_chunk),         intent(in)                 :: self
+        type(cmdline),                allocatable, intent(inout) :: clines(:)
         type(cmdline),    allocatable :: tmp(:)
         type(cmdline)                 :: cline_make_cavgs
-        type(string) :: finalcavgs
-        integer :: n, i
+        type(string)                  :: finalcavgs
+        integer                       :: n, i
         if( .not.allocated(clines) ) THROW_HARD('Fatal error gen_final_cavgs')
         finalcavgs = 'final_cavgs.mrc'
         call cline_make_cavgs%set('prg',        'make_cavgs')

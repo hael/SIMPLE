@@ -10,67 +10,67 @@ public :: run_all_convergence_tests
 public :: cont_particle_stable
 private
 
-integer, parameter :: STAGE_PLATEAU_PATIENCE = 3    !< solve3D stage plateau exit: iterations without gain on the stage's best
-real,    parameter :: STAGE_PLATEAU_MI_GAIN  = 0.02 !< accumulated orientation-overlap gain above the last accepted high
+integer, parameter :: STAGE_PLATEAU_PATIENCE = 3      !< solve3D stage plateau exit: iterations without gain on the stage's best
+real,    parameter :: STAGE_PLATEAU_MI_GAIN  = 0.02   !< accumulated orientation-overlap gain above the last accepted high
 real,    parameter :: FRAC_SRCH_FULL         = 99.999 !< % search space scanned at which every particle saw every reference (the row is then not printed)
 
 type convergence
     private
-    type(stats_struct) :: score            !< objective function stats
-    type(stats_struct) :: dist             !< angular distance stats
-    type(stats_struct) :: dist_inpl        !< in-plane angular distance stats
-    type(stats_struct) :: frac_srch        !< fraction of search space scanned stats
-    type(stats_struct) :: shincarg         !< shift increment
-    type(stats_struct) :: lp               !< low-pass limit
-    type(stats_struct) :: lp_est           !< low-pass limit, estimated
-    type(stats_struct) :: res              !< resolution @ FSC=0.143
-    type(stats_struct) :: res05            !< resolution @ FSC=0.5
-    integer :: iteration              = 0  !< current interation
-    real    :: mi_class               = 0. !< class parameter distribution overlap
-    real    :: mi_proj                = 0. !< projection parameter distribution overlap
-    real    :: mi_state               = 0. !< state parameter distribution overlap
-    real    :: frac_greedy            = 0. !< fraction of greedy searches
-    real    :: cont_inpl_improved_pct = 0. !< continuous in-plane runs that improved (%)
-    integer :: cont_inpl_attempts     = 0  !< continuous in-plane runs attempted
-    real    :: pose_cont_improved_pct = 0. !< continuous pose runs that improved (%)
-    integer :: pose_cont_attempts     = 0  !< continuous pose runs attempted
-    integer :: cont_streak_g0         = 0  !< refine=cont: sample generation the passing streak began with (0: none)
-    real    :: cont_stable_pct        = 0. !< refine=cont: stable particles of the least stable state (%)
-    real    :: cont_coverage_pct      = 0. !< refine=cont: active particles sampled during the streak (%)
-    real    :: progress               = 0. !< progress estimation
-    integer :: prob_beta_tail_start   = 0  !< the probability tables' annealing tail to prob_beta_end: its first iteration (0: the run still searches at prob_beta); set when the resolution stops gaining or at the budget's end
-    integer :: res_hist_iter(2)       = 0  !< the iterations of the last two checks (the latest first; 0: none), for the gain test two iterations back
-    real    :: res05_hist(2)          = 0. !< their FSC=0.5 resolutions
-    real    :: res143_hist(2)         = 0. !< their FSC=0.143 resolutions
-    integer :: res_best_startit       = 0  !< startit of the stage the bests belong to (0: none)
-    integer :: res_best_iter          = 0  !< the iteration that last improved either best
-    real    :: res05_best             = 0. !< the stage's finest FSC=0.5 resolution so far
-    real    :: res143_best            = 0. !< the stage's finest FSC=0.143 resolution so far
-    integer :: mi_gain_startit        = 0  !< stage owning the overlap progress
-    integer :: mi_gain_iter           = 0  !< last significant overlap gain in this stage
-    real    :: mi_proj_anchor         = 0. !< overlap at the last significant gain
-    real, allocatable :: res05_hist_s(:,:)    !< (2, nstates) per state FSC=0.5 of the same two checks (nstates > 1)
-    real, allocatable :: res143_hist_s(:,:)   !< (2, nstates) per state FSC=0.143
+    type(stats_struct) :: score                       !< objective function stats
+    type(stats_struct) :: dist                        !< angular distance stats
+    type(stats_struct) :: dist_inpl                   !< in-plane angular distance stats
+    type(stats_struct) :: frac_srch                   !< fraction of search space scanned stats
+    type(stats_struct) :: shincarg                    !< shift increment
+    type(stats_struct) :: lp                          !< low-pass limit
+    type(stats_struct) :: lp_est                      !< low-pass limit, estimated
+    type(stats_struct) :: res                         !< resolution @ FSC=0.143
+    type(stats_struct) :: res05                       !< resolution @ FSC=0.5
+    integer            :: iteration              = 0  !< current interation
+    real               :: mi_class               = 0. !< class parameter distribution overlap
+    real               :: mi_proj                = 0. !< projection parameter distribution overlap
+    real               :: mi_state               = 0. !< state parameter distribution overlap
+    real               :: frac_greedy            = 0. !< fraction of greedy searches
+    real               :: cont_inpl_improved_pct = 0. !< continuous in-plane runs that improved (%)
+    integer            :: cont_inpl_attempts     = 0  !< continuous in-plane runs attempted
+    real               :: pose_cont_improved_pct = 0. !< continuous pose runs that improved (%)
+    integer            :: pose_cont_attempts     = 0  !< continuous pose runs attempted
+    integer            :: cont_streak_g0         = 0  !< refine=cont: sample generation the passing streak began with (0: none)
+    real               :: cont_stable_pct        = 0. !< refine=cont: stable particles of the least stable state (%)
+    real               :: cont_coverage_pct      = 0. !< refine=cont: active particles sampled during the streak (%)
+    real               :: progress               = 0. !< progress estimation
+    integer            :: prob_beta_tail_start   = 0  !< the probability tables' annealing tail to prob_beta_end: its first iteration (0: the run still searches at prob_beta); set when the resolution stops gaining or at the budget's end
+    integer            :: res_hist_iter(2)       = 0  !< the iterations of the last two checks (the latest first; 0: none), for the gain test two iterations back
+    real               :: res05_hist(2)          = 0. !< their FSC=0.5 resolutions
+    real               :: res143_hist(2)         = 0. !< their FSC=0.143 resolutions
+    integer            :: res_best_startit       = 0  !< startit of the stage the bests belong to (0: none)
+    integer            :: res_best_iter          = 0  !< the iteration that last improved either best
+    real               :: res05_best             = 0. !< the stage's finest FSC=0.5 resolution so far
+    real               :: res143_best            = 0. !< the stage's finest FSC=0.143 resolution so far
+    integer            :: mi_gain_startit        = 0  !< stage owning the overlap progress
+    integer            :: mi_gain_iter           = 0  !< last significant overlap gain in this stage
+    real               :: mi_proj_anchor         = 0. !< overlap at the last significant gain
+    real, allocatable  :: res05_hist_s(:,:)           !< (2, nstates) per state FSC=0.5 of the same two checks (nstates > 1)
+    real, allocatable  :: res143_hist_s(:,:)          !< (2, nstates) per state FSC=0.143
     ! the state readout of the probabilistic assignment's joint draw over states and directions (set_state_readout),
     ! written to STATS_FILE by the next check_conv3D and cleared there
-    logical :: l_state_readout        = .false.
-    real    :: state_neff_draw        = 0. !< mean effective number of states at the draw's factor
-    real    :: state_neff_phys        = 0. !< the same at factor 1
-    real    :: state_mode_frac        = 0. !< fraction of the draws in the row mode's state
-    real, allocatable :: state_mass_unref(:) !< per state its block's tempered mass share on unrefined entries (< 0: none)
+    logical           :: l_state_readout        = .false.
+    real              :: state_neff_draw        = 0. !< mean effective number of states at the draw's factor
+    real              :: state_neff_phys        = 0. !< the same at factor 1
+    real              :: state_mode_frac        = 0. !< fraction of the draws in the row mode's state
+    real, allocatable :: state_mass_unref(:)         !< per state its block's tempered mass share on unrefined entries (< 0: none)
   contains
-    procedure :: check_conv2D
-    procedure, nopass :: print_verdict
-    procedure :: check_conv3D
-    procedure :: print_iteration
-    procedure :: append_stats
-    procedure :: plot_projdirs
-    procedure :: calc_pass_scores
-    procedure :: calc_cont_pose_stats
-    procedure :: check_cont_conv
-    procedure :: get
-    procedure :: anneal_tail_start
-    procedure :: set_state_readout
+    procedure          :: check_conv2D
+    procedure, nopass  :: print_verdict
+    procedure          :: check_conv3D
+    procedure          :: print_iteration
+    procedure          :: append_stats
+    procedure          :: plot_projdirs
+    procedure          :: calc_pass_scores
+    procedure          :: calc_cont_pose_stats
+    procedure          :: check_cont_conv
+    procedure          :: get
+    procedure          :: anneal_tail_start
+    procedure          :: set_state_readout
     procedure, private :: res_two_back
     procedure, private :: res_two_back_state
     procedure, private :: states_stalled
@@ -106,14 +106,14 @@ contains
         integer,            intent(in)    :: ncls
         real,               intent(in)    :: msk
         type(oris)           :: ostats
-        type(string) :: s_ratio, cont_ratio, numstr
+        type(string)         :: s_ratio, cont_ratio, numstr
         real,    allocatable :: updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
-        character(len=96) :: beta_str
-        integer :: n, nptcls, nsampled, nactive
-        real    :: overlap_lim, fracsrch_lim, realized_update_frac
-        real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
-        logical :: converged, chk4conv, cont_stats_available, l_tail_run
+        character(len=96)    :: beta_str
+        integer              :: n, nptcls, nsampled, nactive
+        real                 :: overlap_lim, fracsrch_lim, realized_update_frac
+        real                 :: percen_sampled, percen_updated, percen_avg, sampled_lb
+        logical              :: converged, chk4conv, cont_stats_available, l_tail_run
         601 format(A,1X,F12.3)
         602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
@@ -339,24 +339,24 @@ contains
         class(cmdline),     intent(inout) :: cline
         class(oris),        intent(inout) :: os
         real,               intent(in)    :: msk
-        type(oris)           :: ostats
-        type(string)         :: s_ratio, cont_ratio
-        type(stats_struct)   :: res_state, res05_state
-        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
-        real,    allocatable :: res_state_avg(:), res05_state_avg(:), state_update_fracs(:)
-        logical, allocatable :: mask(:), state_mask(:)
-        integer, allocatable :: state_samples(:)
-        real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
-        real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
-        type(string) :: numstr
-        character(len=KEYLEN) :: res_key
+        type(oris)                                                           :: ostats
+        type(string)                                                         :: s_ratio, cont_ratio
+        type(stats_struct)                                                   :: res_state, res05_state
+        real,    allocatable                                                 :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
+        real,    allocatable                                                 :: res_state_avg(:), res05_state_avg(:), state_update_fracs(:)
+        logical, allocatable                                                 :: mask(:), state_mask(:)
+        integer, allocatable                                                 :: state_samples(:)
+        real                                                                 :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
+        real                                                                 :: percen_sampled, percen_updated, percen_avg, sampled_lb
+        type(string)                                                         :: numstr
+        character(len=KEYLEN)                                                :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX ')) :: res_state_label
-        character(len=96) :: beta_str
-        real    :: res05_now, res05_prev, res143_now, res143_prev, res05_prev2, res143_prev2, lpexit_eff, res_tol
-        logical :: converged, cont_stats_available, pose_stats_available, l_stalled, l_margin, l_states_checked, l_pose_stalled
-        logical :: l_overlap_reached, l_neigh_climb, l_minits_reached
-        integer :: iptcl, istate, n, nptcls, nsampled, nactive
-        integer :: nupdated_state, nsampled_state
+        character(len=96)                                                    :: beta_str
+        real                                                                 :: res05_now, res05_prev, res143_now, res143_prev, res05_prev2, res143_prev2, lpexit_eff, res_tol
+        logical                                                              :: converged, cont_stats_available, pose_stats_available, l_stalled, l_margin, l_states_checked, l_pose_stalled
+        logical                                                              :: l_overlap_reached, l_neigh_climb, l_minits_reached
+        integer                                                              :: iptcl, istate, n, nptcls, nsampled, nactive
+        integer                                                              :: nupdated_state, nsampled_state
         601 format(A,1X,F12.3)
         602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
@@ -968,9 +968,9 @@ contains
         logical,            intent(in)  :: l_margin
         logical,            intent(out) :: l_checked
         real, allocatable :: prev05(:), prev143(:)
-        real    :: prev05_2, prev143_2
-        integer :: s
-        logical :: l_flat
+        real              :: prev05_2, prev143_2
+        integer           :: s
+        logical           :: l_flat
         prev05  = prev_iter_res_states(params, 'RESOLUTION_FSC05_STATE', size(res05_states))
         prev143 = prev_iter_res_states(params, 'RESOLUTION_STATE',       size(res143_states))
         l_checked = .false.
@@ -999,8 +999,8 @@ contains
         character(len=*),  intent(in) :: key_prefix
         type(oris)            :: ostats
         character(len=KEYLEN) :: res_key
-        real    :: res05
-        integer :: istate, iter_prev
+        real                  :: res05
+        integer               :: istate, iter_prev
         res05_prev = 0.
         if( .not. file_exists(STATS_FILE) ) return
         call ostats%new(1, is_ptcl=.false.)
@@ -1027,10 +1027,10 @@ contains
         class(parameters), intent(in) :: params
         character(len=*),  intent(in) :: key_prefix
         integer,           intent(in) :: nstates
-        real :: res_prev(nstates)
+        real                  :: res_prev(nstates)
         type(oris)            :: ostats
         character(len=KEYLEN) :: res_key
-        integer :: istate, iter_prev
+        integer               :: istate, iter_prev
         res_prev = 0.
         if( .not. file_exists(STATS_FILE) ) return
         call ostats%new(1, is_ptcl=.false.)
@@ -1060,9 +1060,9 @@ contains
         real,               intent(in)    :: states(:), sampled(:)
         real,    allocatable :: status(:), dist(:), dist_inpl(:), shincarg(:)
         logical, allocatable :: stable(:)
-        real    :: frac, frac_min, coverage
-        integer :: i, istate, n, nstate, nactive, generation
-        logical :: l_pass
+        real                 :: frac, frac_min, coverage
+        integer              :: i, istate, n, nstate, nactive, generation
+        logical              :: l_pass
         n         = size(states)
         status    = os%get_all('pose_cont_status')
         dist      = os%get_all('dist')
@@ -1126,7 +1126,7 @@ contains
         logical,            intent(in)    :: mask(:)
         logical,            intent(out)   :: available
         real, allocatable :: attempted(:), improved(:)
-        integer :: nimproved
+        integer           :: nimproved
 
         self%cont_inpl_improved_pct = 0.
         self%cont_inpl_attempts     = 0
@@ -1192,7 +1192,7 @@ contains
         type(string)      :: fname
         real, allocatable :: iter(:), inpl_dist(:), proj_dist(:)
         real, allocatable :: score(:), proj_overlap(:)
-        integer    :: i,nl
+        integer           :: i,nl
         if( trim(params%iterstats).ne.'yes' ) return
         fname = ITERSTATS_FILE
         if( file_exists(fname) )then
@@ -1231,10 +1231,10 @@ contains
     subroutine plot_projdirs( self, params, os_in, ptcl_mask )
         use CPlot2D_wrapper_module
         use simple_parameters, only: parameters
-        class(convergence),   intent(in) :: self
-        class(parameters),    intent(in) :: params
-        class(oris),          intent(inout) :: os_in
-        logical, allocatable, intent(in) :: ptcl_mask(:)
+        class(convergence),   intent(in)              :: self
+        class(parameters),    intent(in)              :: params
+        class(oris),          intent(inout)           :: os_in
+        logical,              allocatable, intent(in) :: ptcl_mask(:)
         type(string)                  :: title
         type(CPlot2D_type)            :: figure
         type(CDataSet_type)           :: center, axis
@@ -1243,8 +1243,8 @@ contains
         type(string)                  :: fname_eps, fname_pdf, ps2pdf_cmd
         real,             allocatable :: phi(:), psi(:), logpops(:)
         integer,          allocatable :: pops(:), projs(:), inds(:)
-        real(dp) :: color, x,y, sz
-        integer  :: iptcl, nptcls, nprojs, proj, l, iostat, ind
+        real(dp)                      :: color, x,y, sz
+        integer                       :: iptcl, nptcls, nprojs, proj, l, iostat, ind
         if( trim(params%iterstats).ne.'yes' ) return
         nptcls = size(ptcl_mask)
         projs  = nint(os_in%get_all('proj'))

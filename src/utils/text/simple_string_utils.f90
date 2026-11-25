@@ -73,10 +73,10 @@ contains
 
     !> \brief  assesses whether a string represents a filename
     subroutine str2format_real( str, format, rvar, ivar )
-        character(len=*),              intent(in)  :: str
-        character(len=:), allocatable, intent(out) :: format
-        real,                          intent(out) :: rvar
-        integer,                       intent(out) :: ivar
+        character(len=*),              intent(in)               :: str
+        character(len=:),              allocatable, intent(out) :: format
+        real,                          intent(out)              :: rvar
+        integer,                       intent(out)              :: ivar
         real(dp) :: rvar_dp
         call str2format_dp( str, format, rvar_dp, ivar )
         rvar = real(rvar_dp)
@@ -84,10 +84,10 @@ contains
 
     !> \brief  assesses whether a string represents a filename
     subroutine str2format_dp( str, format, rvar, ivar )
-        character(len=*),              intent(in)  :: str
-        character(len=:), allocatable, intent(out) :: format
-        real(kind=dp),                 intent(out) :: rvar
-        integer,                       intent(out) :: ivar
+        character(len=*),              intent(in)               :: str
+        character(len=:),              allocatable, intent(out) :: format
+        real(kind=dp),                 intent(out)              :: rvar
+        integer,                       intent(out)              :: ivar
         integer :: iostat, i
         logical :: str_is_file
         i = index(str, '.')
@@ -169,9 +169,9 @@ contains
     !!         deletes control characters; removes initial spaces.
     subroutine compact( str )
         character(len=*), intent(inout) :: str
-        character(len=1):: ch
-        character(len=len_trim(str)):: outstr
-        integer :: lenstr, isp, k, i, ich
+        character(len=1)             :: ch
+        character(len=len_trim(str)) :: outstr
+        integer                      :: lenstr, isp, k, i, ich
         str=adjustl(str)
         lenstr=len_trim(str)
         outstr=''
@@ -302,7 +302,7 @@ contains
     function list_of_ints2arr( listofints ) result( iarr )
         character(len=*), intent(in) :: listofints
         integer, allocatable :: iarr(:)
-        integer :: i, first
+        integer              :: i, first
         allocate(iarr(0))
         first = 1
         do i = 1, len(listofints)
@@ -329,7 +329,7 @@ contains
     function list_of_strs2arr( listofstrs ) result( sarr )
         character(len=*), intent(in) :: listofstrs
         character(len=len(listofstrs)), allocatable :: sarr(:)
-        integer :: i, first
+        integer                                     :: i, first
         allocate(sarr(0))
         first = 1
         do i = 1, len(listofstrs)
@@ -354,9 +354,9 @@ contains
     !> \brief  removes punctuation (except comma) characters in string str
     subroutine removepunct( str )
         character(len=*), intent(inout) :: str
-        character(len=1):: ch
-        character(len=len_trim(str))::outstr
-        integer :: lenstr, k, i, ich
+        character(len=1)             :: ch
+        character(len=len_trim(str)) :: outstr
+        integer                      :: lenstr, k, i, ich
         str = adjustl(str)
         lenstr = len_trim(str)
         outstr = ''
@@ -386,9 +386,9 @@ contains
     !> \brief  removes spaces, tabs, and control characters in string str
     pure subroutine removesp( str )
         character(len=*), intent(inout) :: str
-        character(len=1):: ch
-        character(len=len_trim(str))::outstr
-        integer :: lenstr, k, i, ich
+        character(len=1)             :: ch
+        character(len=len_trim(str)) :: outstr
+        integer                      :: lenstr, k, i, ich
         str = adjustl(str)
         lenstr = len_trim(str)
         outstr = ''
@@ -447,8 +447,8 @@ contains
         real,    intent(in) :: rval
         integer, intent(in) :: ndec
         character(len=:), allocatable :: str
-        character(len=48) :: buf
-        character(len=16) :: fmt
+        character(len=48)             :: buf
+        character(len=16)             :: fmt
         if( ndec <= 0 )then
             ! the F edit keeps the decimal point at zero decimals (7.)
             write(buf,'(I0)') nint(rval)
@@ -470,7 +470,7 @@ contains
     function int2str( intg ) result( str )
         integer, intent(in) :: intg
         character(len=:), allocatable :: str
-        type(string) :: str_cast
+        type(string)                  :: str_cast
         str_cast = string(intg)
         str = str_cast%to_char()
         call str_cast%kill
@@ -480,7 +480,7 @@ contains
     function int2str_pad( intg, numlen ) result( str )
         integer, intent(in)           :: intg, numlen
         character(len=:), allocatable :: str, str_tmp, str_tmp2
-        integer :: slen
+        integer                       :: slen
         if( numlen == 0 )then
             str = int2str(intg)
             return
@@ -535,7 +535,7 @@ contains
         character(len=*), intent(in)  :: str_in
         integer,          intent(in)  :: len_padded
         character(len=:), allocatable :: str_out
-        integer :: slen
+        integer                       :: slen
         slen = len(str_in)
         if( slen >= len_padded )then
             str_out = str_in
@@ -549,7 +549,7 @@ contains
     function map_str_nrs( str ) result( map )
         character(len=*), intent(in) :: str
         logical, allocatable :: map(:)
-        integer :: lstr, i, j, ind
+        integer              :: lstr, i, j, ind
         lstr = len(str)
         allocate(map(lstr))
         map = .false.
@@ -576,7 +576,7 @@ contains
     pure function lowercase( str )
         character(len=*), intent(in) :: str
         character(len=(len(str)))    :: lowercase
-        integer :: i, n
+        integer                      :: i, n
         lowercase = str
         do i = 1, len(str)
             n = index(UPPER_CASE_LETTERS,lowercase(i:i))
@@ -588,7 +588,7 @@ contains
     pure function uppercase( str )
         character(len=*), intent(in)  ::  str
         character(len=len(str))       :: uppercase
-        integer :: i, n
+        integer                       :: i, n
         uppercase = str
         do i=1,len(str)
             n = index(LOWER_CASE_LETTERS,uppercase(i:i))
@@ -600,10 +600,10 @@ contains
         character(len=*), intent(in)           :: str
         character(len=*), intent(in), optional :: fallback, prefix_if_invalid_start
         integer,          intent(in), optional :: max_symbol_len
-        character(len=64) :: symbol
+        character(len=64)         :: symbol
         character(len=LONGSTRLEN) :: lower_name, fallback_name, invalid_start_prefix
-        character(len=1) :: ch
-        integer :: i, n, symbol_max
+        character(len=1)          :: ch
+        integer                   :: i, n, symbol_max
         lower_name           = lowercase(adjustl(trim(str)))
         fallback_name        = 'symbol'
         invalid_start_prefix = 'symbol_'
@@ -656,7 +656,7 @@ contains
     pure function posix_quote( str ) result( quoted )
         character(len=*), intent(in)  :: str
         character(len=:), allocatable :: quoted
-        integer :: i
+        integer                       :: i
         quoted = "'"
         do i = 1, len_trim(str)
             if( str(i:i) == "'" )then
@@ -671,7 +671,7 @@ contains
     pure function fortran_quote( str ) result( quoted )
         character(len=*), intent(in) :: str
         character(len=XLONGSTRLEN) :: quoted
-        integer :: i, n
+        integer                    :: i, n
         quoted = ''
         n = 1
         quoted(n:n) = ''''
@@ -740,7 +740,7 @@ contains
         character(len=*), intent(in) :: line
         integer,          intent(in) :: ifield
         character(len=LONGSTRLEN) :: field
-        integer :: i, start, finish, nfield, llen
+        integer                   :: i, start, finish, nfield, llen
         field = ''
         if( ifield < 1 ) return
         start  = 1
@@ -761,8 +761,8 @@ contains
 
     !>  \brief  Find the first non-blank character in a string and return its position.
     pure integer function first_non_blank( str, back )
-        character(len=*), intent(in)  :: str !< input string
-        logical, optional, intent(in) :: back !<  if .true., we'll look for the last non-blank character in the string
+        character(len=*), intent(in)           :: str  !< input string
+        logical,          optional, intent(in) :: back !<  if .true., we'll look for the last non-blank character in the string
         logical ::  bback
         ! reverse?
         bback = .false.
@@ -772,8 +772,8 @@ contains
 
     !>  \brief  find the first blank character in a string and return its position.
     pure integer function first_blank( str, back )
-        character(len=*), intent(in)  :: str !< input string
-        logical, optional, intent(in) :: back !<  if .true., we'll look for the last blank character in the string
+        character(len=*), intent(in)           :: str  !< input string
+        logical,          optional, intent(in) :: back !<  if .true., we'll look for the last blank character in the string
         logical ::  bback
         ! reverse?
         if (present(back)) then
@@ -786,13 +786,13 @@ contains
 
     !>  \brief  test whether two strings are equal, ignoring blank characters
     logical function strings_are_equal( instr1, instr2, case_sensitive )
-        character(len=*), intent(in)  :: instr1 !< input string
-        character(len=*), intent(in)  :: instr2 !< input string
-        logical, optional, intent(in) :: case_sensitive  !< is the comparison case-sensitive
-        integer :: first_non_blank_1, first_non_blank_2
-        integer :: last_non_blank_1, last_non_blank_2
-        logical :: ccase_sensitive
-        character(len=:), allocatable ::  local_str1, local_str2
+        character(len=*), intent(in)           :: instr1         !< input string
+        character(len=*), intent(in)           :: instr2         !< input string
+        logical,          optional, intent(in) :: case_sensitive !< is the comparison case-sensitive
+        integer                       :: first_non_blank_1, first_non_blank_2
+        integer                       :: last_non_blank_1, last_non_blank_2
+        logical                       :: ccase_sensitive
+        character(len=:), allocatable :: local_str1, local_str2
         ! Will we be case sensitive?
         ccase_sensitive = .true.
         if( present(case_sensitive) ) ccase_sensitive = case_sensitive
@@ -830,8 +830,8 @@ contains
     function cnt_recs_per_line( line, separators ) result( nrecs )
         character(len=*)            :: line        !<  line to be split
         character(len=*), optional  :: separators  !<  characters which separate words, if not present, default is blank characters (space, tabs...)
-        character(len=XLONGSTRLEN) :: buffer
-        integer :: nrecs, pos1, pos2
+        character(len=XLONGSTRLEN)  :: buffer
+        integer                     :: nrecs, pos1, pos2
         if (str_is_blank(line) .or. str_is_comment(line)) then
             nrecs = 0
         else
@@ -867,7 +867,7 @@ contains
 
     pure function findloc_str_str( str_arr, str ) result( pos )
         class(string), intent(in) :: str_arr(:)
-        class(string), intent(in) :: str 
+        class(string), intent(in) :: str
         integer :: i, pos
         pos = 0
         do i = 1, size(str_arr)
@@ -880,7 +880,7 @@ contains
 
     pure function findloc_str_char( str_arr, str ) result( pos )
         class(string),    intent(in) :: str_arr(:)
-        character(len=*), intent(in) :: str 
+        character(len=*), intent(in) :: str
         integer :: i, pos
         pos = 0
         do i = 1, size(str_arr)
@@ -897,10 +897,10 @@ contains
     !>  - stable (preserves original order for equal keys)
     subroutine lex_sort_char( strArr, inds )
         implicit none
-        character(len=*),               intent(inout) :: strArr(:)
-        integer, optional, allocatable, intent(out)   :: inds(:)
+        character(len=*),               intent(inout)                      :: strArr(:)
+        integer,                        optional, allocatable, intent(out) :: inds(:)
         integer, allocatable :: idx(:), tmp(:)
-        integer :: n, i
+        integer              :: n, i
         n = size(strArr)
         if (n <= 1) then
             if (present(inds)) then
@@ -978,7 +978,7 @@ contains
             character(len=*), intent(in)  :: s
             character(len=:), allocatable :: out
             character(len=:), allocatable :: t
-            integer :: k, c
+            integer                       :: k, c
             ! trim leading/trailing spaces
             t = trim(adjustl(s))
             allocate(character(len(t)) :: out)
@@ -1000,10 +1000,10 @@ contains
     !>  - ignores leading/trailing spaces
     !>  - stable
     subroutine lex_sort_str( strArr, inds )
-        type(string),                  intent(inout) :: strArr(:)
-        integer, optional, allocatable, intent(out)  :: inds(:)
+        type(string),                  intent(inout)                      :: strArr(:)
+        integer,                       optional, allocatable, intent(out) :: inds(:)
         integer, allocatable :: idx(:), tmp(:)
-        integer :: n, i
+        integer              :: n, i
         n = size(strArr)
         if (n <= 1) then
             if (present(inds)) then
@@ -1080,7 +1080,7 @@ contains
         logical function norm_less( a, b ) result( tf )
             type(string), intent(in) :: a, b
             character(len=:), allocatable :: sa, sb
-            integer :: la, lb, k, ca, cb, ncmp
+            integer                       :: la, lb, k, ca, cb, ncmp
             sa = trim(adjustl(a%to_char()))
             sb = trim(adjustl(b%to_char()))
             la = len(sa)
@@ -1110,7 +1110,7 @@ contains
     pure function to_cstring( f_string )result( c_string )
         character(len=*),intent(in)  :: f_string
         character(len=1,kind=c_char) :: c_string(len_trim(f_string)+1)
-        integer :: i, n
+        integer                      :: i, n
         n = len_trim(f_string)
         do i=1,n
             c_string(i) = f_string(i:i)

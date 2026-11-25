@@ -72,10 +72,10 @@ contains
     !! share below zero, is not); the next check without a new readout writes none of them
     subroutine test_state_readout_keys()
         class(parameters), allocatable :: params
-        type(convergence) :: conv
-        type(cmdline)     :: cline
-        type(oris)        :: os, ostats
-        logical :: l_conv
+        type(convergence)              :: conv
+        type(cmdline)                  :: cline
+        type(oris)                     :: os, ostats
+        logical                        :: l_conv
         call del_file(STATS_FILE)
         allocate(params)
         params%nstates           = 1
@@ -130,11 +130,11 @@ contains
     !! a flat run has no tail and converges as before
     subroutine test_posterior_anneal_tail2D()
         class(parameters), allocatable :: params
-        type(convergence) :: conv, conv_short, conv_flat
-        type(cmdline)     :: cline
-        type(oris)        :: os
-        logical :: conv_at(10)
-        integer :: it
+        type(convergence)              :: conv, conv_short, conv_flat
+        type(cmdline)                  :: cline
+        type(oris)                     :: os
+        logical                        :: conv_at(10)
+        integer                        :: it
         call del_file(STATS_FILE)
         allocate(params)
         params%refine            = 'prob'
@@ -224,12 +224,12 @@ contains
     !! tail's last iteration, PROB_BETA_TAIL after its start; a run without prob_beta_end never starts a tail
     subroutine test_posterior_anneal_tail()
         class(parameters), allocatable :: params
-        type(convergence) :: conv, conv_short, conv_flat
-        type(cmdline)     :: cline
-        type(oris)        :: os
-        real    :: res05(8), res143(8)
-        logical :: conv_at(8)
-        integer :: it
+        type(convergence)              :: conv, conv_short, conv_flat
+        type(cmdline)                  :: cline
+        type(oris)                     :: os
+        real                           :: res05(8), res143(8)
+        logical                        :: conv_at(8)
+        integer                        :: it
         call del_file(STATS_FILE)
         res05  = [7.5, 7.0, 7.0, 6.9, 6.9, 6.9, 6.9, 6.9]  ! gain at 2, flat at 3 (stall), a late gain inside the tail
         res143 = [6.5, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0]
@@ -296,12 +296,12 @@ contains
     !! (state 2 alone at iteration 1, state 1 alone at 2, 8.5 / 7.5 A not finer than 8.0 / 7.0 A: the tail at 3)
     subroutine test_posterior_anneal_tail_states()
         class(parameters), allocatable :: params
-        type(convergence) :: conv
-        type(cmdline)     :: cline
-        type(oris)        :: os
-        real    :: s1(2,4), s2(2,4)
-        logical :: l_conv
-        integer :: it
+        type(convergence)              :: conv
+        type(cmdline)                  :: cline
+        type(oris)                     :: os
+        real                           :: s1(2,4), s2(2,4)
+        logical                        :: l_conv
+        integer                        :: it
         allocate(params)
         params%nstates           = 2
         params%trs               = 5.
@@ -411,12 +411,12 @@ contains
     !! tail at the fourth iteration under the single draw and at the fifth under topk 2
     subroutine test_posterior_exits_weighted_insertion()
         class(parameters), allocatable :: params
-        type(convergence) :: conv1, conv2, conv_shell1, conv_shell2, tail1, tail2
-        type(cmdline)     :: cline
-        type(oris)        :: os
-        real    :: res05(6), res143(6)
-        logical :: at1(6), at2(6)
-        integer :: it
+        type(convergence)              :: conv1, conv2, conv_shell1, conv_shell2, tail1, tail2
+        type(cmdline)                  :: cline
+        type(oris)                     :: os
+        real                           :: res05(6), res143(6)
+        logical                        :: at1(6), at2(6)
+        integer                        :: it
         call del_file(STATS_FILE)
         allocate(params)
         params%nstates           = 1
@@ -487,12 +487,12 @@ contains
     !! count; a new startit starts new bests
     subroutine test_stage_plateau_exit()
         class(parameters), allocatable :: params
-        type(convergence) :: conv_flat, conv_gain05, conv_gain143, conv_mi
-        real, parameter   :: MI_RISE(6) = [0.1, 0.2, 0.3, 0.31, 0.32, 0.33]
-        type(cmdline)     :: cline
-        type(oris)        :: os
-        logical :: at(6)
-        integer :: it
+        type(convergence)              :: conv_flat, conv_gain05, conv_gain143, conv_mi
+        real,              parameter   :: MI_RISE(6) = [0.1, 0.2, 0.3, 0.31, 0.32, 0.33]
+        type(cmdline)                  :: cline
+        type(oris)                     :: os
+        logical                        :: at(6)
+        integer                        :: it
         allocate(params)
         params%nstates           = 1
         params%trs               = 5.
@@ -559,13 +559,13 @@ contains
     !> A flat FSC crossing cannot terminate progress in the other crossing or the poses.
     !! Small overlap gains accumulate; falling and returning to the same overlap is not a gain.
     subroutine test_stage_exit_progress()
-        class(parameters), allocatable :: params
+        class(parameters),  allocatable :: params
         class(cmdline),     allocatable :: cline
         class(oris),        allocatable :: os
-        type(convergence) :: conv_res, conv_pose, conv_tail, conv_plateau, conv_rebound, conv_budget
-        real, parameter :: MI_RISE(10) = [0.100, 0.111, 0.122, 0.133, 0.144, 0.155, 0.166, 0.177, 0.177, 0.177]
-        logical :: at(10)
-        integer :: it, saved_log, scratch_log
+        type(convergence)               :: conv_res, conv_pose, conv_tail, conv_plateau, conv_rebound, conv_budget
+        real,               parameter   :: MI_RISE(10) = [0.100, 0.111, 0.122, 0.133, 0.144, 0.155, 0.166, 0.177, 0.177, 0.177]
+        logical                         :: at(10)
+        integer                         :: it, saved_log, scratch_log
         allocate(params, cline, os)
         saved_log = logfhandle
         open(newunit=scratch_log, status='scratch')
@@ -630,12 +630,12 @@ contains
 
     !> 300 * 1.035 / 23 = 13.5 A: the weighted margin is the same shell as the measured FSC.
     subroutine test_stage_exit_shell_boundary()
-        class(parameters), allocatable :: params
+        class(parameters),  allocatable :: params
         class(cmdline),     allocatable :: cline
         class(oris),        allocatable :: os
-        type(convergence) :: conv_equal, conv_finer
-        logical :: at_equal(3), at_finer(3)
-        integer :: it
+        type(convergence)               :: conv_equal, conv_finer
+        logical                         :: at_equal(3), at_finer(3)
+        integer                         :: it
         allocate(params, cline, os)
         params%nstates           = 1
         params%trs               = 5.
@@ -681,11 +681,11 @@ contains
     !! which then ends the stage at its last iteration
     subroutine test_posterior_overlap_rule()
         class(parameters), allocatable :: params
-        type(convergence) :: conv
-        type(cmdline)     :: cline
-        type(oris)        :: os
-        logical :: conv_at(PROB_BETA_TAIL+1)
-        integer :: it
+        type(convergence)              :: conv
+        type(cmdline)                  :: cline
+        type(oris)                     :: os
+        logical                        :: conv_at(PROB_BETA_TAIL+1)
+        integer                        :: it
         call del_file(STATS_FILE)
         call assert_true(frozen_converged('shc', 0., 1, 1), 'the regular rule did not converge on a frozen shc assignment')
         call assert_true(frozen_converged('prob', 0., 1, 1), 'a dense-table stage ignored overlap 1')
@@ -735,11 +735,11 @@ contains
     !! measured stages exit as any stage does.
     subroutine test_sigma2_annealing_convergence()
         class(parameters), allocatable :: params
-        class(cmdline), allocatable :: cline
-        type(convergence) :: conv(3), conv_stage
-        type(oris) :: os
-        integer :: phase, it
-        logical :: done
+        class(cmdline),    allocatable :: cline
+        type(convergence)              :: conv(3), conv_stage
+        type(oris)                     :: os
+        integer                        :: phase, it
+        logical                        :: done
         write(*,'(A)') 'test_sigma2_annealing_convergence'
         allocate(params, cline)
         params%nstates = 1
@@ -790,7 +790,7 @@ contains
 
     !> Two populated states and one empty slot: current joint observations alone determine the minimum overlap.
     subroutine test_posterior_multistate_overlap()
-        integer, parameter :: NROWS = 400
+        integer,           parameter :: NROWS    = 400
         character(len=10), parameter :: MODES(2) = [character(len=10) :: 'prob', 'prob_neigh']
         character(len=64), parameter :: CASES(10) = [character(len=64) :: &
             &'unstable sample, stable history', 'stable sample, unstable history', 'half the labels change', &
@@ -798,10 +798,10 @@ contains
             &'dropped state does not block', 'the least stable state controls', 'overlap exactly at the limit', &
             &'overlap just above the limit']
         class(parameters), allocatable :: params
-        class(cmdline), allocatable :: cline
-        type(oris) :: os
-        integer :: imode, icase, i
-        logical :: expected
+        class(cmdline),    allocatable :: cline
+        type(oris)                     :: os
+        integer                        :: imode, icase, i
+        logical                        :: expected
         allocate(params, cline)
         params%nstates = 3
         params%trs = 5.
@@ -873,13 +873,13 @@ contains
 
     subroutine check_multistate_overlap( params, cline, os, expected, tail_start, message )
         class(parameters), intent(inout) :: params
-        class(cmdline), intent(inout) :: cline
-        class(oris), intent(inout) :: os
-        logical, intent(in) :: expected
-        integer, intent(in) :: tail_start
-        character(len=*), intent(in) :: message
+        class(cmdline),    intent(inout) :: cline
+        class(oris),       intent(inout) :: os
+        logical,           intent(in)    :: expected
+        integer,           intent(in)    :: tail_start
+        character(len=*),  intent(in)    :: message
         type(convergence) :: conv
-        logical :: converged
+        logical           :: converged
         call del_file(STATS_FILE)
         converged = conv%check_conv3D(params, cline, os, 40.)
         call assert_true(converged .eqv. expected, message)
@@ -890,10 +890,10 @@ contains
     !> A full-budget stage cannot exit early or begin its tail early; a shorter minimum still allows overlap exits.
     subroutine test_posterior_minimum_iterations()
         class(parameters), allocatable :: params
-        class(cmdline), allocatable :: cline
-        type(oris) :: os
-        integer :: route, it, tail_expected
-        logical :: converged
+        class(cmdline),    allocatable :: cline
+        type(oris)                     :: os
+        integer                        :: route, it, tail_expected
+        logical                        :: converged
         allocate(params, cline)
         params%nstates = 1
         params%trs = 5.
@@ -938,16 +938,16 @@ contains
     !! 7.5 A, iteration which_iter of a stage from startit, with the refine mode, lpexit and, for prob_neigh, the
     !! neighbourhood mode as given, at the cline overlap 0.99 or overlap
     logical function frozen_converged( refine, lpexit, which_iter, startit, neigh_mode, mi, frac, overlap ) result( converged )
-        character(len=*),           intent(in) :: refine
-        real,                       intent(in) :: lpexit
-        integer,                    intent(in) :: which_iter, startit
-        character(len=*), optional, intent(in) :: neigh_mode
-        real,             optional, intent(in) :: mi, frac, overlap
+        character(len=*),           intent(in)           :: refine
+        real,                       intent(in)           :: lpexit
+        integer,                    intent(in)           :: which_iter, startit
+        character(len=*),           optional, intent(in) :: neigh_mode
+        real,                       optional, intent(in) :: mi, frac, overlap
         class(parameters), allocatable :: params
-        type(convergence) :: conv
-        type(cmdline)     :: cline
-        type(oris)        :: os
-        integer :: i
+        type(convergence)              :: conv
+        type(cmdline)                  :: cline
+        type(oris)                     :: os
+        integer                        :: i
         call os%new(NPTCLS, is_ptcl=.true.)
         do i = 1, NPTCLS
             call os%set_state(i, 1)
@@ -997,7 +997,7 @@ contains
     subroutine test_cartesian_pass_scores()
         type(convergence) :: conv
         type(oris)        :: os
-        logical :: mask(NPTCLS), cart_stats
+        logical           :: mask(NPTCLS), cart_stats
         call make_field(os, mask)
         call conv%calc_pass_scores(os, mask, .true., cart_stats)
         call assert_true(cart_stats, 'a Cartesian pass reports pose statistics')
@@ -1012,7 +1012,7 @@ contains
     subroutine test_polar_pass_scores()
         type(convergence) :: conv
         type(oris)        :: os
-        logical :: mask(NPTCLS), cart_stats
+        logical           :: mask(NPTCLS), cart_stats
         call make_field(os, mask)
         call conv%calc_pass_scores(os, mask, .true., cart_stats)
         call conv%calc_pass_scores(os, mask, .false., cart_stats)
@@ -1032,9 +1032,9 @@ contains
         type(parameters)  :: params
         type(cmdline)     :: cline
         type(oris)        :: os
-        integer :: i, ilim
-        real    :: limits(2,3)
-        logical :: converged
+        integer           :: i, ilim
+        real              :: limits(2,3)
+        logical           :: converged
         ! (overlap, fracsrch): the defaults, permissive and impossible-to-miss limits
         limits = reshape([0.99, 99., 0.5, 50., 0., 0.], [2,3])
         call os%new(NPTCLS, is_ptcl=.true.)
@@ -1127,8 +1127,8 @@ contains
         real,       intent(in)    :: fracsrch
         logical,    intent(in)    :: l_scan_exit
         class(parameters), allocatable :: params
-        type(convergence) :: conv
-        type(cmdline)     :: cline
+        type(convergence)              :: conv
+        type(cmdline)                  :: cline
         allocate(params)
         params%nstates     = 3
         params%trs         = 5.
@@ -1171,10 +1171,10 @@ contains
         real,    intent(in) :: res05(:), lpexit
         integer, intent(in) :: which_iter, startit
         class(parameters), allocatable :: params
-        type(convergence) :: conv
-        type(cmdline)     :: cline
-        type(oris)        :: os
-        integer :: i, istate
+        type(convergence)              :: conv
+        type(cmdline)                  :: cline
+        type(oris)                     :: os
+        integer                        :: i, istate
         call os%new(NPTCLS, is_ptcl=.true.)
         do i = 1, NPTCLS
             istate = (i - 1)*size(res05)/NPTCLS + 1
@@ -1300,7 +1300,7 @@ contains
     !! and the tight tomography bounds (0.05 deg, 0.1 A) accept only small pose update; fresh histories
     subroutine test_cont_rule_tunable()
         class(parameters), allocatable :: defaults
-        type(oris) :: os
+        type(oris)                     :: os
         allocate(defaults)
         call assert_true(defaults%cont_conv_rot == CONT_CONV_ROT_DEG .and. defaults%cont_conv_shift == CONT_CONV_SHIFT_A &
             &.and. defaults%cont_conv_frac == CONT_CONV_FRAC, 'the parameter defaults are not the simple_defs_conv constants')
@@ -1323,8 +1323,8 @@ contains
 
     !> check_conv3D of a refine=cont pass at smpd 1 with a fresh history and optional bounds
     logical function fresh_cont_converged( os, rot_lim, shift_lim, frac_lim ) result( converged )
-        type(oris),     intent(inout) :: os
-        real, optional, intent(in)    :: rot_lim, shift_lim, frac_lim
+        type(oris),     intent(inout)        :: os
+        real,           optional, intent(in) :: rot_lim, shift_lim, frac_lim
         type(convergence) :: conv
         converged = cont_converged(conv, os, 1., 1, .false., rot_lim=rot_lim, shift_lim=shift_lim, frac_lim=frac_lim)
     end function fresh_cont_converged
@@ -1332,9 +1332,9 @@ contains
     !> NCONT particles of state 1, all sampled in generation 1, every transaction ending with status
     !! (default accepted), rotation rot/2 + rot/2 deg (default 0.2 + 0.2) and shift sh px (default 0.5)
     subroutine make_cont_field( os, status, rot, sh )
-        type(oris),        intent(inout) :: os
-        integer, optional, intent(in)    :: status
-        real,    optional, intent(in)    :: rot, sh
+        type(oris),        intent(inout)        :: os
+        integer,           optional, intent(in) :: status
+        real,              optional, intent(in) :: rot, sh
         integer :: i, istatus
         real    :: rot_here, sh_here
         istatus  = CARTFT_ACCEPTED
@@ -1382,15 +1382,15 @@ contains
 
     !> check_conv3D of a refine=cont pass on os, with the history conv carries
     logical function cont_converged( conv, os, smpd, nstates, l_frac, minits, rot_lim, shift_lim, frac_lim ) result( converged )
-        type(convergence), intent(inout) :: conv
-        type(oris),        intent(inout) :: os
-        real,              intent(in)    :: smpd
-        integer,           intent(in)    :: nstates
-        logical,           intent(in)    :: l_frac
-        integer, optional, intent(in)    :: minits
-        real,    optional, intent(in)    :: rot_lim, shift_lim, frac_lim
+        type(convergence), intent(inout)        :: conv
+        type(oris),        intent(inout)        :: os
+        real,              intent(in)           :: smpd
+        integer,           intent(in)           :: nstates
+        logical,           intent(in)           :: l_frac
+        integer,           optional, intent(in) :: minits
+        real,              optional, intent(in) :: rot_lim, shift_lim, frac_lim
         class(parameters), allocatable :: params
-        type(cmdline) :: cline
+        type(cmdline)                  :: cline
         allocate(params)
         params%nstates       = nstates
         params%smpd          = smpd

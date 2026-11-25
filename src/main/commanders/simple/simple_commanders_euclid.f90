@@ -21,9 +21,9 @@ contains
     subroutine exec_calc_pspec( self,cline )
         use simple_calc_pspec_strategy, only: calc_pspec_strategy, create_calc_pspec_strategy
         class(commander_calc_pspec), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
+        class(cmdline),              intent(inout) :: cline
+        type(parameters)                        :: params
+        type(builder)                           :: build
         class(calc_pspec_strategy), allocatable :: strategy
         call cline%set('stream','no')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',  'yes')

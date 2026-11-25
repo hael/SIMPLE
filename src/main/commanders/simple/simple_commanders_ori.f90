@@ -106,7 +106,7 @@ contains
     end subroutine exec_make_oris
 
     subroutine exec_oriops( self, cline )
-        class(commander_oriops), intent(inout) :: self
+        class(commander_oriops),  intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -167,22 +167,22 @@ contains
     subroutine exec_oristats( self, cline )
         class(commander_oristats), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(parameters)     :: params
-        type(builder)        :: build
-        type(sp_project)     :: spproj
-        class(oris), pointer :: o => null()
-        type(oris)           :: osubspace
-        type(ori)            :: o_single
-        real                 :: mind, maxd, avgd, sdevd, sumd, vard, scale
-        real                 :: mind2, maxd2, avgd2, sdevd2, vard2
-        real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated
-        real                 :: resmin, resmax, resmed, resave, ressdev, resvar, nr, nr_tot
-        integer              :: nprojs, iptcl, icls, j, noris, ncls, pop
-        real,    allocatable :: clustszs(:), pops(:), res(:), df(:), vals(:)
-        integer, allocatable :: clustering(:), tmp(:), states(:), cls(:)
-        logical, allocatable :: ptcl_mask(:)
-        integer, parameter   :: hlen=50, NSPACE_REDUCED = 600
-        logical              :: err
+        type(parameters)         :: params
+        type(builder)            :: build
+        type(sp_project)         :: spproj
+        class(oris), pointer     :: o    => null()
+        type(oris)               :: osubspace
+        type(ori)                :: o_single
+        real                     :: mind, maxd, avgd, sdevd, sumd, vard, scale
+        real                     :: mind2, maxd2, avgd2, sdevd2, vard2
+        real                     :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated
+        real                     :: resmin, resmax, resmed, resave, ressdev, resvar, nr, nr_tot
+        integer                  :: nprojs, iptcl, icls, j, noris, ncls, pop
+        real,        allocatable :: clustszs(:), pops(:), res(:), df(:), vals(:)
+        integer,     allocatable :: clustering(:), tmp(:), states(:), cls(:)
+        logical,     allocatable :: ptcl_mask(:)
+        integer,     parameter   :: hlen = 50, NSPACE_REDUCED = 600
+        logical                  :: err
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         if( cline%defined('oritab2') )then
             ! Comparison
@@ -371,11 +371,11 @@ contains
         class(commander_oriconsensus), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(sp_project),          allocatable :: spprojs(:)
-        type(string), allocatable :: projfnames(:)
-        integer,      allocatable :: states(:,:), states_consensus(:)
-        type(parameters) :: params
-        integer          :: nprojs, iproj, noris1, noris2, ngood, nbad, iori
-        real             :: overlap
+        type(string),              allocatable :: projfnames(:)
+        integer,                   allocatable :: states(:,:), states_consensus(:)
+        type(parameters)                       :: params
+        integer                                :: nprojs, iproj, noris1, noris2, ngood, nbad, iori
+        real                                   :: overlap
         if( .not. cline%defined('oritab') ) THROW_HARD('Need list of project files (oritab) to analyze!')
         call params%new(cline)
         call read_filetable(params%oritab, projfnames)
@@ -437,11 +437,11 @@ contains
         class(commander_rotmats2oris),  intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters) :: params
-        type(nrtxtfile) :: rotmats
-        type(ori)       :: o
-        type(oris)      :: os_out
-        integer         :: nrecs_per_line, iline, ndatlines
-        real            :: rline(9), rmat(3,3)
+        type(nrtxtfile)  :: rotmats
+        type(ori)        :: o
+        type(oris)       :: os_out
+        integer          :: nrecs_per_line, iline, ndatlines
+        real             :: rline(9), rmat(3,3)
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
         call params%new(cline)
         if( cline%defined('infile') )then
@@ -768,8 +768,8 @@ contains
             class(string), intent(in)  :: fname
             integer,       intent(out) :: order(nstates)
             character(len=100)  :: io_message
-            type(string) :: line
-            integer :: file_stat, fnr, i, io_stat
+            type(string)        :: line
+            integer             :: file_stat, fnr, i, io_stat
             if( .not. file_exists(fname) )then
                 THROW_HARD("the file you are trying to read: "//fname%to_char()//' does not exist in cwd' )
             endif

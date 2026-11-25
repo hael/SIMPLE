@@ -19,8 +19,8 @@ implicit none
 private
 public :: run_all_nlcg_solver_tests
 
-integer, parameter :: NQ = 24          !< size of the quadratic
-integer, parameter :: NL = 16          !< size of the nonlinear least squares
+integer, parameter :: NQ  = 24         !< size of the quadratic
+integer, parameter :: NL  = 16         !< size of the nonlinear least squares
 real,    parameter :: CPL = 0.3        !< coupling of the nonlinear residuals
 
 !> 1/2 x'Ax - b'x with a Jacobi preconditioner
@@ -71,16 +71,16 @@ contains
     end subroutine run_all_nlcg_solver_tests
 
     subroutine test_quadratic_is_linear_pcg()
-        integer, parameter :: K = 6
+        integer,         parameter   :: K = 6
         class(quad_obj), allocatable :: obj
         class(quad_op),  allocatable :: op
-        type(nlcg_solver_options) :: nopts
-        type(nlcg_solver_outcome) :: nout
-        type(pcg_solver_options)  :: lopts
-        type(pcg_solver_outcome)  :: lout
-        real(dp) :: bmat(NQ,NQ), resid(NQ)
-        real     :: x_lin(NQ), x_nl(NQ), x_ref(NQ), rb(NQ), rbm(NQ,NQ)
-        integer  :: i
+        type(nlcg_solver_options)    :: nopts
+        type(nlcg_solver_outcome)    :: nout
+        type(pcg_solver_options)     :: lopts
+        type(pcg_solver_outcome)     :: lout
+        real(dp)                     :: bmat(NQ,NQ), resid(NQ)
+        real                         :: x_lin(NQ), x_nl(NQ), x_ref(NQ), rb(NQ), rbm(NQ,NQ)
+        integer                      :: i
         allocate(obj, op)
         call random_number(rbm)
         bmat = real(rbm - 0.5, dp)
@@ -144,10 +144,10 @@ contains
 
     subroutine test_nonconvex_least_squares()
         class(lsq_obj), allocatable :: obj
-        type(nlcg_solver_options) :: opts
-        type(nlcg_solver_outcome) :: out
-        real     :: xstar(NL), x(NL), pert(NL)
-        integer  :: i, nit
+        type(nlcg_solver_options)   :: opts
+        type(nlcg_solver_outcome)   :: out
+        real                        :: xstar(NL), x(NL), pert(NL)
+        integer                     :: i, nit
         allocate(obj)
         do i = 1, NL
             xstar(i) = 1.0 + 0.5 * sin(real(i))
@@ -198,10 +198,10 @@ contains
     end function quad_size
 
     subroutine quad_eval( self, x, loss, g )
-        class(quad_obj),          intent(inout) :: self
-        real, contiguous, target, intent(in)    :: x(:)
-        real(dp),                 intent(out)   :: loss
-        real, contiguous, target, intent(out)   :: g(:)
+        class(quad_obj),          intent(inout)                   :: self
+        real,                     contiguous, target, intent(in)  :: x(:)
+        real(dp),                 intent(out)                     :: loss
+        real,                     contiguous, target, intent(out) :: g(:)
         real(dp) :: ax(NQ)
         ax   = matmul(self%a, real(x,dp))
         loss = 0.5_dp * dot_product(real(x,dp), ax) - dot_product(self%b, real(x,dp))
@@ -209,16 +209,16 @@ contains
     end subroutine quad_eval
 
     real(dp) function quad_curvature( self, x, d ) result( curv )
-        class(quad_obj),          intent(inout) :: self
-        real, contiguous, target, intent(in)    :: x(:), d(:)
+        class(quad_obj),          intent(inout)                  :: self
+        real,                     contiguous, target, intent(in) :: x(:), d(:)
         curv = dot_product(real(d,dp), matmul(self%a, real(d,dp)))
     end function quad_curvature
 
     subroutine quad_line_losses( self, x, d, t, losses )
-        class(quad_obj),          intent(inout) :: self
-        real, contiguous, target, intent(in)    :: x(:), d(:)
-        real(dp),                 intent(in)    :: t(:)
-        real(dp),                 intent(out)   :: losses(:)
+        class(quad_obj),          intent(inout)                  :: self
+        real,                     contiguous, target, intent(in) :: x(:), d(:)
+        real(dp),                 intent(in)                     :: t(:)
+        real(dp),                 intent(out)                    :: losses(:)
         real(dp) :: xt(NQ)
         integer  :: j
         do j = 1, size(t)
@@ -228,9 +228,9 @@ contains
     end subroutine quad_line_losses
 
     subroutine quad_precond( self, r, z )
-        class(quad_obj),          intent(inout) :: self
-        real, contiguous, target, intent(in)    :: r(:)
-        real, contiguous, target, intent(out)   :: z(:)
+        class(quad_obj),          intent(inout)                   :: self
+        real,                     contiguous, target, intent(in)  :: r(:)
+        real,                     contiguous, target, intent(out) :: z(:)
         integer :: i
         do i = 1, NQ
             z(i) = r(i) / real(self%a(i,i))
@@ -238,14 +238,14 @@ contains
     end subroutine quad_precond
 
     real(dp) function quad_dot( self, a, b ) result( value )
-        class(quad_obj),          intent(in) :: self
-        real, contiguous, target, intent(in) :: a(:), b(:)
+        class(quad_obj),          intent(in)                     :: self
+        real,                     contiguous, target, intent(in) :: a(:), b(:)
         value = sum(real(a,dp) * real(b,dp))
     end function quad_dot
 
     subroutine quad_project( self, v )
-        class(quad_obj),          intent(inout) :: self
-        real, contiguous, target, intent(inout) :: v(:)
+        class(quad_obj),          intent(inout)                     :: self
+        real,                     contiguous, target, intent(inout) :: v(:)
         v = merge(v, 0.0, self%supp)
     end subroutine quad_project
 
@@ -255,16 +255,16 @@ contains
     end function qop_size
 
     subroutine qop_apply( self, x, y )
-        class(quad_op),           intent(inout) :: self
-        real, contiguous, target, intent(in)    :: x(:)
-        real, contiguous, target, intent(out)   :: y(:)
+        class(quad_op),           intent(inout)                   :: self
+        real,                     contiguous, target, intent(in)  :: x(:)
+        real,                     contiguous, target, intent(out) :: y(:)
         y = real(matmul(self%a, real(x,dp)))
     end subroutine qop_apply
 
     subroutine qop_precond( self, r, z )
-        class(quad_op),           intent(inout) :: self
-        real, contiguous, target, intent(in)    :: r(:)
-        real, contiguous, target, intent(out)   :: z(:)
+        class(quad_op),           intent(inout)                   :: self
+        real,                     contiguous, target, intent(in)  :: r(:)
+        real,                     contiguous, target, intent(out) :: z(:)
         integer :: i
         do i = 1, NQ
             z(i) = r(i) / real(self%a(i,i))
@@ -272,8 +272,8 @@ contains
     end subroutine qop_precond
 
     real(dp) function qop_dot( self, a, b ) result( value )
-        class(quad_op),           intent(in) :: self
-        real, contiguous, target, intent(in) :: a(:), b(:)
+        class(quad_op),           intent(in)                     :: self
+        real,                     contiguous, target, intent(in) :: a(:), b(:)
         value = sum(real(a,dp) * real(b,dp))
     end function qop_dot
 
@@ -295,10 +295,10 @@ contains
     end function lsq_resid
 
     subroutine lsq_eval( self, x, loss, g )
-        class(lsq_obj),           intent(inout) :: self
-        real, contiguous, target, intent(in)    :: x(:)
-        real(dp),                 intent(out)   :: loss
-        real, contiguous, target, intent(out)   :: g(:)
+        class(lsq_obj),           intent(inout)                   :: self
+        real,                     contiguous, target, intent(in)  :: x(:)
+        real(dp),                 intent(out)                     :: loss
+        real,                     contiguous, target, intent(out) :: g(:)
         real(dp) :: r(NL), gd(NL)
         integer  :: j
         r    = lsq_resid(self%a, real(x,dp))
@@ -312,8 +312,8 @@ contains
     end subroutine lsq_eval
 
     real(dp) function lsq_curvature( self, x, d ) result( curv )
-        class(lsq_obj),           intent(inout) :: self
-        real, contiguous, target, intent(in)    :: x(:), d(:)
+        class(lsq_obj),           intent(inout)                  :: self
+        real,                     contiguous, target, intent(in) :: x(:), d(:)
         real(dp) :: jd
         integer  :: i
         curv = 0.0_dp
@@ -326,10 +326,10 @@ contains
     end function lsq_curvature
 
     subroutine lsq_line_losses( self, x, d, t, losses )
-        class(lsq_obj),           intent(inout) :: self
-        real, contiguous, target, intent(in)    :: x(:), d(:)
-        real(dp),                 intent(in)    :: t(:)
-        real(dp),                 intent(out)   :: losses(:)
+        class(lsq_obj),           intent(inout)                  :: self
+        real,                     contiguous, target, intent(in) :: x(:), d(:)
+        real(dp),                 intent(in)                     :: t(:)
+        real(dp),                 intent(out)                    :: losses(:)
         integer :: j
         do j = 1, size(t)
             losses(j) = 0.5_dp * sum(lsq_resid(self%a, real(x,dp) + t(j) * real(d,dp))**2)
@@ -337,21 +337,21 @@ contains
     end subroutine lsq_line_losses
 
     subroutine lsq_precond( self, r, z )
-        class(lsq_obj),           intent(inout) :: self
-        real, contiguous, target, intent(in)    :: r(:)
-        real, contiguous, target, intent(out)   :: z(:)
+        class(lsq_obj),           intent(inout)                   :: self
+        real,                     contiguous, target, intent(in)  :: r(:)
+        real,                     contiguous, target, intent(out) :: z(:)
         z = r
     end subroutine lsq_precond
 
     real(dp) function lsq_dot( self, a, b ) result( value )
-        class(lsq_obj),           intent(in) :: self
-        real, contiguous, target, intent(in) :: a(:), b(:)
+        class(lsq_obj),           intent(in)                     :: self
+        real,                     contiguous, target, intent(in) :: a(:), b(:)
         value = sum(real(a,dp) * real(b,dp))
     end function lsq_dot
 
     subroutine lsq_project( self, v )
-        class(lsq_obj),           intent(inout) :: self
-        real, contiguous, target, intent(inout) :: v(:)
+        class(lsq_obj),           intent(inout)                     :: self
+        real,                     contiguous, target, intent(inout) :: v(:)
     end subroutine lsq_project
 
 end module simple_nlcg_solver_tester

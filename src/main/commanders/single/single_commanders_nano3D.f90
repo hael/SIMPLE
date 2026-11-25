@@ -35,7 +35,7 @@ contains
 
     subroutine exec_solve3D_nano( self, cline )
         use simple_commanders_solve3D, only: commander_solve3D
-        class(commander_solve3D_nano), intent(inout) :: self
+        class(commander_solve3D_nano),    intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(commander_solve3D) :: xsolve3D
         call cline%set('prg',     'solve3D')
@@ -62,7 +62,7 @@ contains
         type(commander_vizoris)       :: xvizoris
         type(cmdline)                 :: cline_refine3D_nano, cline_detect_atms, cline_reproject
         type(cmdline)                 :: cline_vizoris, cline_refine3D_cavgs
-        type(image), allocatable      :: imgs(:)
+        type(image),      allocatable :: imgs(:)
         type(sp_project)              :: spproj
         character(len=*), parameter   :: SPLITTED   = 'split_ccs.mrc'
         character(len=*), parameter   :: FINAL_MAPS = './final_results/'
@@ -70,14 +70,14 @@ contains
         type(string)                  :: iter_dir, cavgs_stk, fname
         real,             allocatable :: rstates(:), corrs(:)
         logical,          allocatable :: state_mask(:)
-        type(string) :: fbody, fbody_split, fname_recvol, fname_even, fname_odd, fname_simvol
-        type(string) :: fname_recvol_base, fname_even_base, fname_odd_base, fname_res, fname_atmprior
-        type(string) :: fname_atoms, fname_binary, fname_ccs, fname_reprojs, fname_reprojs_fit
-        type(string) :: fname_fit, fname_resmap, fname_atoms_csv, fname_model_txt, fname_extrema, fname_transfer
-        type(string) :: fname_cvags_vs_reprojs, fname_atoms_iter
-        integer      :: i, iter, cnt, cnt2, funit, io_stat, ncavgs
-        real         :: smpd
-        logical      :: fall_over, l_atm_stage
+        type(string)                  :: fbody, fbody_split, fname_recvol, fname_even, fname_odd, fname_simvol
+        type(string)                  :: fname_recvol_base, fname_even_base, fname_odd_base, fname_res, fname_atmprior
+        type(string)                  :: fname_atoms, fname_binary, fname_ccs, fname_reprojs, fname_reprojs_fit
+        type(string)                  :: fname_fit, fname_resmap, fname_atoms_csv, fname_model_txt, fname_extrema, fname_transfer
+        type(string)                  :: fname_cvags_vs_reprojs, fname_atoms_iter
+        integer                       :: i, iter, cnt, cnt2, funit, io_stat, ncavgs
+        real                          :: smpd
+        logical                       :: fall_over, l_atm_stage
         fbody       = refine3D_state_vol_fbody(1)
         fbody_split = get_fbody(SPLITTED, 'mrc')
         fname_recvol = refine3D_state_vol_fname(1)
@@ -423,21 +423,21 @@ contains
 
     subroutine exec_commander_trajectory_reconstruct3D_distr( self, cline )
         real, parameter :: LP_LIST(4) = [1.5,2.0,2.5,3.0]
-        real, parameter :: HP_LIM = 5.0 ! no information at lower res for these kind of data
+        real, parameter :: HP_LIM     = 5.0 ! no information at lower res for these kind of data
         class(commander_trajectory_reconstruct3D_distr), intent(inout) :: self
         class(cmdline),                                  intent(inout) :: cline
         type(string),          allocatable :: vol_fnames(:)
         real,                  allocatable :: ccs(:,:,:), fsc(:), rstates(:), rad_cc(:), rad_dists(:)
         integer,               allocatable :: parts(:,:)
-        type(string)          :: recname, fname, str_state, recname_even, res_fname
-        type(string)          :: recname_odd, vol_fname_even, vol_fname_odd
-        type(commander_rec3D) :: xrec3D
-        type(parameters)      :: params
-        type(sp_project)      :: spproj
-        type(cmdline)         :: cline_rec
-        type(image)           :: vol1, vol2
-        integer :: state, ipart, istate, nptcls, frame_start, frame_end
-        integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind, lifetime
+        type(string)                       :: recname, fname, str_state, recname_even, res_fname
+        type(string)                       :: recname_odd, vol_fname_even, vol_fname_odd
+        type(commander_rec3D)              :: xrec3D
+        type(parameters)                   :: params
+        type(sp_project)                   :: spproj
+        type(cmdline)                      :: cline_rec
+        type(image)                        :: vol1, vol2
+        integer                            :: state, ipart, istate, nptcls, frame_start, frame_end
+        integer                            :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind, lifetime
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
         if( .not. cline%defined('stepsz')  ) call cline%set('stepsz',      500.)

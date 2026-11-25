@@ -11,11 +11,11 @@ private
 
 type, extends(optimizer) :: opt_simplex
     private
-    real, allocatable :: p(:,:)         !< vertices of the simplex
-    real, allocatable :: y(:)           !< cost function vals
-    real, allocatable :: pb(:)          !< best point
-    real              :: yb=0.          !< best cost function value
-    logical           :: exists=.false. !< to indicate existence
+    real, allocatable :: p(:,:)           !< vertices of the simplex
+    real, allocatable :: y(:)             !< cost function vals
+    real, allocatable :: pb(:)            !< best point
+    real              :: yb     = 0.      !< best cost function value
+    logical           :: exists = .false. !< to indicate existence
   contains
     procedure :: new      => new_opt_simplex
     procedure :: minimize => simplex_minimize

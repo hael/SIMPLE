@@ -58,24 +58,24 @@ real, parameter :: CAVG_QUALITY_LOGISTIC_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     7.142857E-02, 7.142857E-02 ]
 
 type :: cavg_quality_model
-    character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
-    character(len=32) :: context                 = 'chunk'
-    character(len=64) :: feature_policy          = CHUNK100MICS_FEATURE_POLICY
-    real              :: weights(CAVG_QUALITY_NFEATS) = CAVG_QUALITY_LOGISTIC_WEIGHTS
-    real              :: intercept               = 0.0
-    real              :: linear_coefficients(CAVG_QUALITY_NFEATS) = 0.0
-    integer           :: n_interactions          = 0
-    integer           :: interaction_terms(CAVG_QUALITY_MAX_INTERACTIONS,2) = 0
+    character(len=64) :: name                                                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
+    character(len=32) :: context                                                 = 'chunk'
+    character(len=64) :: feature_policy                                          = CHUNK100MICS_FEATURE_POLICY
+    real              :: weights(CAVG_QUALITY_NFEATS)                            = CAVG_QUALITY_LOGISTIC_WEIGHTS
+    real              :: intercept                                               = 0.0
+    real              :: linear_coefficients(CAVG_QUALITY_NFEATS)                = 0.0
+    integer           :: n_interactions                                          = 0
+    integer           :: interaction_terms(CAVG_QUALITY_MAX_INTERACTIONS,2)      = 0
     real              :: interaction_coefficients(CAVG_QUALITY_MAX_INTERACTIONS) = 0.0
-    real              :: prob_threshold          = 0.5
-    real              :: regularization_lambda   = 0.0
-    real              :: calibration_temperature = 1.0
-    character(len=64) :: relational_feature_schema = CAVG_RELATIONAL_SCHEMA_NONE
-    integer           :: relational_knn            = 0
-    real              :: relational_corr_hp        = 0.0
-    real              :: relational_corr_lp        = 0.0
-    real              :: relational_corr_trs       = 0.0
-    real              :: relational_coefficient    = 0.0
+    real              :: prob_threshold                                          = 0.5
+    real              :: regularization_lambda                                   = 0.0
+    real              :: calibration_temperature                                 = 1.0
+    character(len=64) :: relational_feature_schema                               = CAVG_RELATIONAL_SCHEMA_NONE
+    integer           :: relational_knn                                          = 0
+    real              :: relational_corr_hp                                      = 0.0
+    real              :: relational_corr_lp                                      = 0.0
+    real              :: relational_corr_trs                                     = 0.0
+    real              :: relational_coefficient                                  = 0.0
 contains
     procedure :: init_preset
     procedure :: set_nano_threshold
@@ -104,7 +104,7 @@ contains
     function builtin_spec( preset_name ) result( spec )
         character(len=*), intent(in) :: preset_name
         type(cavg_quality_model_spec) :: spec
-        character(len=LONGSTRLEN) :: errmsg
+        character(len=LONGSTRLEN)     :: errmsg
         select case(trim(preset_name))
             case(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
                 spec = chunk100mics_model_spec()
@@ -727,9 +727,9 @@ contains
     end function supports_relational
 
     subroutine classify( self, quality, relational_feature )
-        class(cavg_quality_model), intent(in)    :: self
-        type(cavg_quality_result), intent(inout) :: quality
-        real, optional,            intent(in)    :: relational_feature(:)
+        class(cavg_quality_model), intent(in)                      :: self
+        type(cavg_quality_result), intent(inout)                   :: quality
+        real,                      optional,            intent(in) :: relational_feature(:)
         if( .not. allocated(quality%features)    ) THROW_HARD('classify: missing features')
         if( .not. allocated(quality%hard_reject) ) THROW_HARD('classify: missing hard-reject mask')
         quality%model_name     = self%name
@@ -779,7 +779,7 @@ contains
         character(len=*),         intent(in) :: fname
         character(len=64)  :: symbol, func_name
         character(len=128) :: const_name
-        integer :: funit
+        integer            :: funit
         symbol     = fortran_symbol_from_string(model%name, fallback='quality_model', &
             prefix_if_invalid_start='model_', max_symbol_len=40)
         func_name  = trim(symbol)//'_model_spec'
@@ -827,7 +827,7 @@ contains
     subroutine write_logistic_spec_assignments( funit, model )
         integer,                  intent(in) :: funit
         type(cavg_quality_model), intent(in) :: model
-        integer :: iterm, nfeats
+        integer           :: iterm, nfeats
         character(len=64) :: lhs
         nfeats = cavg_quality_bank_size(model%context)
         write(funit,'(A,ES14.6)') '        spec%intercept               = ', model%intercept
@@ -897,10 +897,10 @@ contains
     end subroutine write_real_array_assignment
 
     subroutine write_model_real_list( funit, key, vals, nvals )
-        integer,          intent(in) :: funit
-        character(len=*), intent(in) :: key
-        real,             intent(in) :: vals(:)
-        integer, optional,intent(in) :: nvals
+        integer,          intent(in)          :: funit
+        character(len=*), intent(in)          :: key
+        real,             intent(in)          :: vals(:)
+        integer,          optional,intent(in) :: nvals
         integer :: i, nwrite
         nwrite = size(vals)
         if( present(nvals) ) nwrite = nvals
@@ -941,8 +941,8 @@ contains
         character(len=XLONGSTRLEN) :: val
         character(len=32)          :: file_context
         character(len=LONGSTRLEN)  :: errmsg_len
-        integer :: funit, ios, parse_ios, model_version, n_interaction_coefficients, n_linear_coefficients, nfeats
-        logical :: have_relational_schema, have_preset, ok_line, have_terms, have_coefficients
+        integer                    :: funit, ios, parse_ios, model_version, n_interaction_coefficients, n_linear_coefficients, nfeats
+        logical                    :: have_relational_schema, have_preset, ok_line, have_terms, have_coefficients
         ! Model files are complete model definitions. Start from chunk defaults,
         ! apply any preset found in the file, then apply explicit key overrides.
         call self%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
@@ -1075,8 +1075,8 @@ contains
         real,             intent(inout) :: weights(CAVG_QUALITY_NFEATS)
         integer,          intent(in)    :: nfeats
         character(len=LONGSTRLEN) :: errmsg
-        integer :: nvals
-        real    :: parsed(CAVG_QUALITY_NFEATS)
+        integer                   :: nvals
+        real                      :: parsed(CAVG_QUALITY_NFEATS)
         call parse_feature_weight_values(val, parsed, nvals)
         if( nvals == 0 ) THROW_HARD('read_model: feature_weights has no values')
         ! one weight per feature of the bank, in bank order: a short list would zero-fill the rest
@@ -1089,12 +1089,12 @@ contains
     end subroutine read_feature_weights
 
     subroutine read_real_values_keyed( val, values, maxvals, key, nvals_out )
-        character(len=*), intent(in)    :: val, key
-        real,             intent(inout) :: values(:)
-        integer,          intent(in)    :: maxvals
-        integer, optional,intent(out)   :: nvals_out
+        character(len=*), intent(in)           :: val, key
+        real,             intent(inout)        :: values(:)
+        integer,          intent(in)           :: maxvals
+        integer,          optional,intent(out) :: nvals_out
         character(len=LONGSTRLEN) :: errmsg
-        integer :: nvals
+        integer                   :: nvals
         values = 0.0
         call parse_real_values(val, values, nvals)
         if( nvals > maxvals .or. nvals > size(values) )then
@@ -1110,7 +1110,7 @@ contains
         real,             intent(out) :: values(:)
         integer,          intent(out) :: nvals
         character(len=XLONGSTRLEN) :: work, token
-        integer :: isep, ios
+        integer                    :: isep, ios
         values = 0.0
         nvals  = 0
         work   = adjustl(trim(val))
@@ -1140,7 +1140,7 @@ contains
         integer,          intent(out) :: nterms
         character(len=XLONGSTRLEN) :: work, token
         character(len=LONGSTRLEN)  :: lhs, rhs, errmsg
-        integer :: isep, icolon, ifeat, jfeat
+        integer                    :: isep, icolon, ifeat, jfeat
         terms  = 0
         nterms = 0
         work   = adjustl(trim(val))
@@ -1180,7 +1180,7 @@ contains
     integer function feature_index_from_token( token, context )
         character(len=*), intent(in) :: token, context
         character(len=LONGSTRLEN) :: work
-        integer :: ifeat, ios, nfeats
+        integer                   :: ifeat, ios, nfeats
         feature_index_from_token = 0
         nfeats = cavg_quality_bank_size(context)
         work = adjustl(trim(token))
@@ -1203,7 +1203,7 @@ contains
         real,             intent(out) :: weights(CAVG_QUALITY_NFEATS)
         integer,          intent(out) :: nvals
         character(len=XLONGSTRLEN) :: work, token
-        integer :: isep, ios
+        integer                    :: isep, ios
         weights = 0.0
         nvals   = 0
         work    = adjustl(trim(val))
@@ -1232,7 +1232,7 @@ contains
         character(len=*), intent(out) :: key, val
         logical,          intent(out) :: ok
         character(len=XLONGSTRLEN) :: tmp
-        integer :: ieq
+        integer                    :: ieq
         key = ''
         val = ''
         ok  = .false.
@@ -1269,9 +1269,9 @@ contains
     end subroutine kill_model
 
     subroutine apply_pairwise_logistic( quality, model, relational_feature )
-        type(cavg_quality_result), intent(inout) :: quality
-        class(cavg_quality_model), intent(in)    :: model
-        real, optional,            intent(in)    :: relational_feature(:)
+        type(cavg_quality_result), intent(inout)                   :: quality
+        class(cavg_quality_model), intent(in)                      :: model
+        real,                      optional,            intent(in) :: relational_feature(:)
         integer :: ncls, icls
         real    :: prob
         if( .not. allocated(quality%features)    ) THROW_HARD('apply_pairwise_logistic: missing features')
@@ -1341,9 +1341,9 @@ contains
     end subroutine apply_pairwise_logistic
 
     real function pairwise_logistic_probability( model, feat, relational_feature )
-        class(cavg_quality_model), intent(in) :: model
-        real,                      intent(in) :: feat(:)
-        real, optional,            intent(in) :: relational_feature
+        class(cavg_quality_model), intent(in)                      :: model
+        real,                      intent(in)                      :: feat(:)
+        real,                      optional,            intent(in) :: relational_feature
         integer :: iterm, ifeat, jfeat, nfeats
         real    :: eta
         nfeats = size(feat)

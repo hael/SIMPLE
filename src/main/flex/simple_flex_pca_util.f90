@@ -131,10 +131,10 @@ contains
     subroutine dilation_template( img, box )
         class(image), intent(inout) :: img
         integer,      intent(in)    :: box
-        real, pointer :: r(:,:,:)
+        real, pointer     :: r(:,:,:)
         real, allocatable :: d(:,:,:)
-        real    :: c, gx, gy, gz
-        integer :: i, j, k
+        real              :: c, gx, gy, gz
+        integer           :: i, j, k
         call img%get_rmat_ptr(r)
         allocate(d(box,box,box), source=0.)
         c = real(box/2 + 1)
@@ -183,11 +183,11 @@ contains
     ! WITHIN each halfset instead. `maxtot` is a total across processes, so only a WORKER passes
     ! nparts -- the master holds every particle and dividing there inflates the stride by nparts.
     subroutine cov_stage_subsample( proj_field, pinds, nptcls, nparts, maxtot, label, spinds, nsel )
-        class(oris),          intent(in)  :: proj_field
-        integer,              intent(in)  :: pinds(:), nptcls, nparts, maxtot
-        character(len=*),     intent(in)  :: label
-        integer, allocatable, intent(out) :: spinds(:)
-        integer,              intent(out) :: nsel
+        class(oris),          intent(in)               :: proj_field
+        integer,              intent(in)               :: pinds(:), nptcls, nparts, maxtot
+        character(len=*),     intent(in)               :: label
+        integer,              allocatable, intent(out) :: spinds(:)
+        integer,              intent(out)              :: nsel
         integer :: nmax_tot, nmax_part, ihalf, i, nkept, n_half, ntgt
         nmax_tot = maxtot
         ! cap off (the default): hand back every particle, in project order

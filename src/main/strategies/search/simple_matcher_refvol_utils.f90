@@ -96,7 +96,7 @@ contains
     !! model (both files, the same header: a stale pair of another stage is refused, not loaded)
     logical function reprojection_model_diag_available( header ) result( l_available )
         integer, intent(in) :: header(4) !< the matcher's model header
-        integer :: even_header(4), odd_header(4)
+        integer      :: even_header(4), odd_header(4)
         type(string) :: refs_even, refs_odd
         l_available = .false.
         refs_even = refine3D_reproj_model_diag_fname('even')
@@ -133,12 +133,12 @@ contains
     !! in nrefs+1..2*nrefs, so that the diagnostic can re-score a pose against the half the particle
     !! did not enter.
     subroutine read_reprojection_model( params, build, batchsz, diag_halves )
-        class(parameters), intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: batchsz
-        logical, optional, intent(in)    :: diag_halves
-        integer :: nrefs, header(4)
-        logical :: l_diag_halves
+        class(parameters), intent(inout)        :: params
+        class(builder),    intent(inout)        :: build
+        integer,           intent(in)           :: batchsz
+        logical,           optional, intent(in) :: diag_halves
+        integer      :: nrefs, header(4)
+        logical      :: l_diag_halves
         type(string) :: refs_even, refs_odd
         if( params%l_cart_refine )then
             call read_cart_refvols(params, build)
@@ -207,9 +207,9 @@ contains
     !! (build_batch_particles3D); their band must be the polar model's (adopted at entry). build%pcont on pftc and them.
     subroutine read_cart_refvols_view( params, build, cftc_view )
         use simple_cartft_calc, only: cartft_calc
-        class(parameters),          intent(inout) :: params
-        class(builder),     target, intent(inout) :: build
-        class(cartft_calc), target, intent(inout) :: cftc_view
+        class(parameters),          intent(inout)         :: params
+        class(builder),             target, intent(inout) :: build
+        class(cartft_calc),         target, intent(inout) :: cftc_view
         type(string) :: refs_even, refs_odd
         integer      :: kfromto(2)
         refs_even = refine3D_cart_refvols_fname('even')
@@ -240,11 +240,11 @@ contains
     !! every state and half when a Cartesian pass reads them (l_cart_refine or the in-matcher
     !! follow-up pose_cont=yes), with the band limit of the iteration in their header (6.6).
     subroutine materialize_reprojection_model_from_volumes( params, build, cline, cleanup_pftc )
-        class(parameters), intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        class(cmdline),    intent(in)    :: cline
-        logical, optional, intent(in)    :: cleanup_pftc
-        logical :: l_cleanup
+        class(parameters), intent(inout)        :: params
+        class(builder),    intent(inout)        :: build
+        class(cmdline),    intent(in)           :: cline
+        logical,           optional, intent(in) :: cleanup_pftc
+        logical      :: l_cleanup
         type(string) :: refs_even, refs_odd
         call read_mask_filter_reproject_refvols(params, build, cline, map_shift=.true.)
         ! Replace the derived files only after their in-memory successors have been
@@ -285,7 +285,7 @@ contains
 
     subroutine read_reprojection_model_header( header )
         integer, intent(out) :: header(4)
-        integer :: even_header(4), odd_header(4)
+        integer      :: even_header(4), odd_header(4)
         type(string) :: refs_even, refs_odd
         refs_even = refine3D_reproj_model_fname('even')
         refs_odd  = refine3D_reproj_model_fname('odd')
@@ -370,15 +370,15 @@ contains
     !! regularized, masked and filtered. With diag_halves the independent even/odd maps are
     !! used for the pose-posterior diagnostic, bypassing merged LP-set and NU references.
     subroutine read_mask_filter_refvols( params, build, s, diag_halves )
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: s
-        logical, optional, intent(in)    :: diag_halves
+        class(parameters), intent(in)           :: params
+        class(builder),    intent(inout)        :: build
+        integer,           intent(in)           :: s
+        logical,           optional, intent(in) :: diag_halves
         type(string)      :: vol_even, vol_odd, vol_avg
         real, allocatable :: opt_filter(:)
-        integer :: filtsz
-        logical :: have_even, have_odd, have_avg, l_nonuniform_mode, l_use_merged_nu_ref
-        logical :: l_nu_refs_missing, l_diag_halves
+        integer           :: filtsz
+        logical           :: have_even, have_odd, have_avg, l_nonuniform_mode, l_use_merged_nu_ref
+        logical           :: l_nu_refs_missing, l_diag_halves
         l_diag_halves = .false.
         if( present(diag_halves) ) l_diag_halves = diag_halves
         l_nonuniform_mode    = params%l_nonuniform
@@ -605,9 +605,9 @@ contains
         class(parameters), intent(in)  :: params
         class(builder),    intent(in)  :: build
         integer,           intent(out) :: state
-        integer :: s
-        real    :: res_avg(params%nstates)
-        integer :: n_particles
+        integer              :: s
+        real                 :: res_avg(params%nstates)
+        integer              :: n_particles
         logical, allocatable :: mask(:)
         integer, allocatable :: states(:)
         res_avg = huge(res_avg(1))
@@ -634,9 +634,9 @@ contains
         real,              intent(in)    :: lpstart, lpstop
         integer,           intent(in)    :: state
         type(string)       :: vol_even, vol_odd
-        type(image) :: mskvol
-        integer     :: npix
-        real        :: lpopt
+        type(image)        :: mskvol
+        integer            :: npix
+        real               :: lpopt
         if( lpstart < lpstop )then
             THROW_HARD('Invalid low-pass range ordering: lpstart must be >= lpstop')
         endif
@@ -665,11 +665,11 @@ contains
     !! pose-posterior diagnostic: no band-limit estimation, no shift mapping, no Cartesian volumes.
     subroutine read_mask_filter_reproject_refvols( params, build, cline, map_shift, diag_halves )
         use simple_polarft_calc, only: vol_pad2ref_pfts_opt
-        class(parameters), intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        class(cmdline),    intent(in)    :: cline
-        logical, optional, intent(in)    :: map_shift
-        logical, optional, intent(in)    :: diag_halves
+        class(parameters), intent(inout)        :: params
+        class(builder),    intent(inout)        :: build
+        class(cmdline),    intent(in)           :: cline
+        logical,           optional, intent(in) :: map_shift
+        logical,           optional, intent(in) :: diag_halves
         real      :: xyz(3)
         integer   :: s, nrefs, state
         logical   :: do_center, l_map_shift, l_cartesian_only, l_cart_refs, l_diag_halves

@@ -38,11 +38,11 @@ integer, parameter :: FLEX_MOD4_PAIRING = 1
 !> One round's control state. Constructed with keywords at the call site; every field has the
 !! value a round without that piece of state always carried.
 type :: flex_stage_request
-    integer :: stage      = 0            !< PCA_STAGE_*
-    integer :: which_iter = 0            !< the global EM iteration (0 when the stage has none)
-    integer :: maxits     = 0            !< the iteration budget (0 when the stage has none)
-    integer :: nfits      = 1            !< 1 single fit, 2 paired halves in one part
-    character(len=64) :: label = ''      !< what the log calls the round
+    integer           :: stage      = 0  !< PCA_STAGE_*
+    integer           :: which_iter = 0  !< the global EM iteration (0 when the stage has none)
+    integer           :: maxits     = 0  !< the iteration budget (0 when the stage has none)
+    integer           :: nfits      = 1  !< 1 single fit, 2 paired halves in one part
+    character(len=64) :: label      = '' !< what the log calls the round
 end type flex_stage_request
 
 contains

@@ -215,18 +215,18 @@ contains
     !! best draws as yes but takes the particles with the best 2D objective values, whatever their update counts,
     !! within the same quotas in each balance mode; the rescoring and the later free draws use no score.
     subroutine sample_ptcls4update3D( params, build, pfromto, l_incr_sampl, nptcls2update, pinds, allow_empty )
-        class(parameters),    intent(in)    :: params
-        class(builder),       intent(inout) :: build
-        integer,              intent(in)    :: pfromto(2)
-        logical,              intent(in)    :: l_incr_sampl
-        integer,              intent(inout) :: nptcls2update
-        integer, allocatable, intent(inout) :: pinds(:)
-        logical, optional,    intent(in)    :: allow_empty  !< a distributed partition may sample nothing
+        class(parameters),    intent(in)                 :: params
+        class(builder),       intent(inout)              :: build
+        integer,              intent(in)                 :: pfromto(2)
+        logical,              intent(in)                 :: l_incr_sampl
+        integer,              intent(inout)              :: nptcls2update
+        integer,              allocatable, intent(inout) :: pinds(:)
+        logical,              optional,    intent(in)    :: allow_empty !< a distributed partition may sample nothing
         type(class_sample),   allocatable   :: clssmp(:)
         type(rnd_key),        allocatable   :: key
         real,                 allocatable   :: scores(:)
-        type(string) :: fname
-        logical      :: l_best
+        type(string)                        :: fname
+        logical                             :: l_best
         if( .not. params%l_update_frac )then
             ! we sample all state > 0
             call build%spproj_field%sample4update_all(pfromto, nptcls2update, pinds, l_incr_sampl)
@@ -271,9 +271,9 @@ contains
     !! subset's best-first draw. Without 2D scores for these particles (no 2D solution) the subset is drawn at
     !! random, and the log says so.
     subroutine sticky_draw_scores( build, scores, l_have )
-        class(builder),    intent(inout) :: build
-        real, allocatable, intent(inout) :: scores(:)
-        logical,           intent(out)   :: l_have
+        class(builder),    intent(inout)              :: build
+        real,              allocatable, intent(inout) :: scores(:)
+        logical,           intent(out)                :: l_have
         l_have = build%spproj%os_ptcl2D%get_noris() == build%spproj_field%get_noris()
         if( l_have ) l_have = build%spproj%os_ptcl2D%isthere('corr')
         if( l_have )then
@@ -291,9 +291,9 @@ contains
     subroutine adopt_run_seed( params, build )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
-        integer(int64) :: seed
-        integer        :: version
-        logical        :: found
+        integer(int64)    :: seed
+        integer           :: version
+        logical           :: found
         character(len=96) :: msg
         found = .false.
         if( trim(params%continue) == 'yes' ) call build%spproj%get_rnd_seed(seed, version, found)
@@ -323,12 +323,12 @@ contains
     !> The particle sample of one refine3D search iteration over pfromto, advancing sampled and updatecnt:
     !! the missing-update pass or the fractional-update policy of sample_ptcls4update3D
     subroutine sample_ptcls4iter3D( params, build, pfromto, nptcls2update, pinds, allow_empty )
-        class(parameters),    intent(in)    :: params
-        class(builder),       intent(inout) :: build
-        integer,              intent(in)    :: pfromto(2)
-        integer,              intent(inout) :: nptcls2update
-        integer, allocatable, intent(inout) :: pinds(:)
-        logical, optional,    intent(in)    :: allow_empty  !< a distributed partition may sample nothing
+        class(parameters),    intent(in)                 :: params
+        class(builder),       intent(inout)              :: build
+        integer,              intent(in)                 :: pfromto(2)
+        integer,              intent(inout)              :: nptcls2update
+        integer,              allocatable, intent(inout) :: pinds(:)
+        logical,              optional,    intent(in)    :: allow_empty !< a distributed partition may sample nothing
         if( params%l_update_missing )then
             call sample_ptcls4missing3D(build, pfromto, .true., nptcls2update, pinds)
         else
@@ -383,10 +383,10 @@ contains
     !! readout, whose inputs are the owner's
     subroutine sample_ptcls4prob3D( params, build, nptcls2update, pinds )
         use simple_eul_prob_tab_utils, only: print_disk_set
-        class(parameters),    intent(in)    :: params
-        class(builder),       intent(inout) :: build
-        integer,              intent(out)   :: nptcls2update
-        integer, allocatable, intent(inout) :: pinds(:)
+        class(parameters),    intent(in)                 :: params
+        class(builder),       intent(inout)              :: build
+        integer,              intent(out)                :: nptcls2update
+        integer,              allocatable, intent(inout) :: pinds(:)
         if( params%startit == 1 .and. params%which_iter == params%startit )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
         endif
@@ -398,11 +398,11 @@ contains
     !! (l_updatefrac the strategy's rule: false on a full update), the disk-set readout
     subroutine sample_ptcls4prob2D( params, build, l_updatefrac, nptcls2update, pinds )
         use simple_eul_prob_tab_utils, only: print_disk_set
-        class(parameters),    intent(in)    :: params
-        class(builder),       intent(inout) :: build
-        logical,              intent(in)    :: l_updatefrac
-        integer,              intent(out)   :: nptcls2update
-        integer, allocatable, intent(inout) :: pinds(:)
+        class(parameters),    intent(in)                 :: params
+        class(builder),       intent(inout)              :: build
+        logical,              intent(in)                 :: l_updatefrac
+        integer,              intent(out)                :: nptcls2update
+        integer,              allocatable, intent(inout) :: pinds(:)
         if( params%startit == 1 .and. params%which_iter == params%startit )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
         endif
@@ -411,23 +411,23 @@ contains
     end subroutine sample_ptcls4prob2D
 
     subroutine sample_ptcls4missing3D( build, pfromto, l_incr_sampl, nptcls2update, pinds )
-        class(builder),       intent(inout) :: build
-        integer,              intent(in)    :: pfromto(2)
-        logical,              intent(in)    :: l_incr_sampl
-        integer,              intent(inout) :: nptcls2update
-        integer, allocatable, intent(inout) :: pinds(:)
+        class(builder),       intent(inout)              :: build
+        integer,              intent(in)                 :: pfromto(2)
+        logical,              intent(in)                 :: l_incr_sampl
+        integer,              intent(inout)              :: nptcls2update
+        integer,              allocatable, intent(inout) :: pinds(:)
         call build%spproj_field%sample4update_missing(pfromto, nptcls2update, pinds, l_incr_sampl)
     end subroutine sample_ptcls4missing3D
 
     subroutine sample_ptcls4update2D( params, build, pfromto, l_updatefrac, nptcls, pinds )
-        class(parameters),    intent(in)    :: params
-        class(builder),       intent(inout) :: build
-        logical,              intent(in)    :: l_updatefrac
-        integer,              intent(in)    :: pfromto(2)
-        integer,              intent(inout) :: nptcls
-        integer, allocatable, intent(inout) :: pinds(:)
+        class(parameters),    intent(in)                 :: params
+        class(builder),       intent(inout)              :: build
+        logical,              intent(in)                 :: l_updatefrac
+        integer,              intent(in)                 :: pfromto(2)
+        integer,              intent(inout)              :: nptcls
+        integer,              allocatable, intent(inout) :: pinds(:)
         type(rnd_key), allocatable :: key
-        logical :: l_has_been_sampled
+        logical                    :: l_has_been_sampled
         l_has_been_sampled = build%spproj_field%has_been_sampled()
         if( params%l_prob_align_mode ) key = sample_rnd_key(params, RND_PROG_REFINE2D)
         if( l_updatefrac )then
@@ -473,9 +473,9 @@ contains
     end function refine2D_requires_full_assignment
 
     logical function all_active_ptcls_2D_assigned( os, pfromto, n_missing ) result( l_assigned )
-        class(oris),       intent(in)  :: os
-        integer,           intent(in)  :: pfromto(2)
-        integer, optional, intent(out) :: n_missing
+        class(oris),       intent(in)            :: os
+        integer,           intent(in)            :: pfromto(2)
+        integer,           optional, intent(out) :: n_missing
         integer :: iptcl, missing
         missing = 0
         do iptcl = pfromto(1), pfromto(2)

@@ -4,11 +4,11 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('filter', 'Filtering', 80)
-type(ui_program), target :: filter
-type(ui_program), target :: uniform_filter2D
-type(ui_program), target :: uniform_filter3D
-type(ui_program), target :: nu_filt3D
-type(ui_program), target :: dose_filter3D
+type(ui_program),          target    :: filter
+type(ui_program),          target    :: uniform_filter2D
+type(ui_program),          target    :: uniform_filter3D
+type(ui_program),          target    :: nu_filt3D
+type(ui_program),          target    :: dose_filter3D
 
 contains
 

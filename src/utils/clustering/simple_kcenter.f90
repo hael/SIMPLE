@@ -15,7 +15,7 @@ private
 
 type kcenter
     private
-    integer               :: n = 0, d = 0, k = 0
+    integer               :: n      = 0, d = 0, k = 0
     real(dp), allocatable :: X(:,:)          !< (n,d) points
     logical               :: exists = .false.
   contains
@@ -48,8 +48,8 @@ contains
         integer,        intent(out)   :: labels(:)  !< (n) cluster labels, 1 the most populated
         real(dp), allocatable :: xbar(:)
         integer,  allocatable :: seeds(:), memb(:), cnt(:), first_member(:), order(:), newlab(:)
-        real(dp) :: d2, best
-        integer  :: i, q, c, ibest, j, tmp
+        real(dp)              :: d2, best
+        integer               :: i, q, c, ibest, j, tmp
         if( .not. self%exists ) THROW_HARD('object does not exist; cluster')
         if( size(centers) /= self%k ) THROW_HARD('centers must have k entries; cluster')
         if( size(labels)  /= self%n ) THROW_HARD('labels must have one entry per point; cluster')

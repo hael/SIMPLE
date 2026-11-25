@@ -53,16 +53,16 @@ end type halfless_selection
 ! the continuous view refinement's recovery fixture (polar_continuous_view.md, Phase 2): the 4-blob phantom of
 ! simple_pftc_inplane_tester (box 64, 1.3 A), the nearest of 1,000 cells, a particle 3 deg off in view, 17.3 deg in-plane
 ! and (1.4, -0.6) px; the floor 0.25 deg in view is the plan's (guessed), the band fixed before the first run
-character(len=*), parameter :: VIEW_PHANTOM   = 'tmp_strategy3D_view_phantom.mrc'
-integer,          parameter :: VIEW_BOX       = 64
-integer,          parameter :: VIEW_NSPACE    = 1000
-integer,          parameter :: VIEW_CELL      = 500
-real,             parameter :: VIEW_LP        = 6.
-real,             parameter :: VIEW_OFF_DEG   = 3.
-real,             parameter :: VIEW_DIR_STEP  = 30.   !< the tilt direction: the first multiple whose truth keeps the cell nearest
-real,             parameter :: VIEW_PSI_DEG   = 17.3
-real,             parameter :: VIEW_SHIFT(2)  = [1.4, -0.6]
-real(dp),         parameter :: VIEW_FLOOR_DEG = 0.25d0
+character(len=*), parameter :: VIEW_PHANTOM     = 'tmp_strategy3D_view_phantom.mrc'
+integer,          parameter :: VIEW_BOX         = 64
+integer,          parameter :: VIEW_NSPACE      = 1000
+integer,          parameter :: VIEW_CELL        = 500
+real,             parameter :: VIEW_LP          = 6.
+real,             parameter :: VIEW_OFF_DEG     = 3.
+real,             parameter :: VIEW_DIR_STEP    = 30.    !< the tilt direction: the first multiple whose truth keeps the cell nearest
+real,             parameter :: VIEW_PSI_DEG     = 17.3
+real,             parameter :: VIEW_SHIFT(2)    = [1.4, -0.6]
+real(dp),         parameter :: VIEW_FLOOR_DEG   = 0.25d0
 real(dp),         parameter :: VIEW_OFF_TOL_DEG = 0.1d0  !< "keeps its 3 deg": within 0.1 deg of the offset
 real(dp),         parameter :: VIEW_SIGMA_RTOL  = 1.d-4
 ! the pftc keeps a reference to the sigma2 array it is given: module lifetime
@@ -98,8 +98,8 @@ contains
     !! through get_half: a used particle with eo=-1 stops; a rejected one (state 0) is not looked at
     subroutine test_rec_state_half_stops_on_eo()
         class(builder), allocatable, target :: build
-        type(halfless_selection) :: child
-        integer, allocatable :: selected(:)
+        type(halfless_selection)            :: child
+        integer,        allocatable         :: selected(:)
         write(*,'(A)') 'test_rec_state_half_stops_on_eo'
         allocate(build)
         call make_half_field(build, 0)
@@ -114,9 +114,9 @@ contains
 
     !> four particles, eo [0,1,-1,0]; particle 3 has state @p state3, the others state 1
     subroutine make_half_field( build, state3 )
-        class(builder), target, intent(inout) :: build
-        integer,                intent(in)    :: state3
-        integer :: i
+        class(builder),         target, intent(inout) :: build
+        integer,                intent(in)            :: state3
+        integer            :: i
         integer, parameter :: EOS(4) = [0, 1, -1, 0]
         call build%spproj%os_ptcl3D%new(4, is_ptcl=.true.)
         do i = 1, 4
@@ -131,7 +131,7 @@ contains
         class(halfless_selection), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         class(builder), allocatable, target :: build
-        integer, allocatable :: selected(:)
+        integer,        allocatable         :: selected(:)
         allocate(build)
         call make_half_field(build, 1)
         call rec_state_half(build, 1, 0, [1,2,3,4], selected)
@@ -143,8 +143,8 @@ contains
         class(parameters), allocatable :: params
         class(builder),    allocatable :: build
         type(image),       allocatable :: ptcl_imgs(:), ptcl_imgs_pad(:)
-        integer :: nthr_saved, nteam_saved, i
-        logical :: l_omp
+        integer                        :: nthr_saved, nteam_saved, i
+        logical                        :: l_omp
         write(*,'(A)') 'test_pass_state_team_sized'
         l_omp = .false.
         !$ l_omp = .true.
@@ -177,8 +177,8 @@ contains
     !> a team of at most nthr_glob passes; a larger one stops (in a child; OpenMP builds only)
     subroutine test_pass_team_check()
         type(oversized_team_pass) :: child
-        integer :: nthr_saved, nteam_saved
-        logical :: l_omp
+        integer                   :: nthr_saved, nteam_saved
+        logical                   :: l_omp
         write(*,'(A)') 'test_pass_team_check'
         l_omp = .false.
         !$ l_omp = .true.
@@ -296,7 +296,7 @@ contains
     !! no-improvement result stores the selected seed and is not continuous-valid
     subroutine test_discrete_seed_storage_and_invalid_predicate()
         type(strategy3D_srch) :: srch
-        real, parameter :: SEED_SHIFT(2) = [1.25, -0.75]
+        real, parameter       :: SEED_SHIFT(2) = [1.25, -0.75]
         write(*,'(A)') 'test_discrete_seed_storage_and_invalid_predicate'
         srch%continuous_active = .true.
         call assert_false(srch%joint_evaluation_invalid(.true.), 'a valid joint no-improvement result is not invalid')
@@ -357,7 +357,7 @@ contains
     !! with pose_cont=yes; a discrete mode keeps the internal default
     subroutine test_inpl_cont_derivation()
         class(parameters), allocatable :: params
-        type(cmdline) :: cline
+        type(cmdline)                  :: cline
         write(*,'(A)') 'test_inpl_cont_derivation'
         call cline%set('smpd',    1.5)
         call cline%set('box',     32)
@@ -391,9 +391,9 @@ contains
     !! gives the legacy prior back, as the stage controllers pass it
     subroutine test_key_derivation()
         class(parameters), allocatable :: params
-        type(cmdline) :: cline
-        character(len=12) :: modes(4) = [character(len=12) :: 'shc', 'neigh', 'prob', 'greedy']
-        integer :: i
+        type(cmdline)                  :: cline
+        character(len=12)              :: modes(4) = [character(len=12) :: 'shc', 'neigh', 'prob', 'greedy']
+        integer                        :: i
         write(*,'(A)') 'test_key_derivation'
         call cline%set('smpd',    1.5)
         call cline%set('box',     32)
@@ -427,12 +427,12 @@ contains
 
     !> a search control of the named UI program; with expected_default, one with that default
     logical function has_search_input( program_name, key, expected_default ) result( found )
-        character(len=*),           intent(in) :: program_name, key
-        character(len=*), optional, intent(in) :: expected_default
-        type(ui_program), pointer :: program => null()
-        type(list_iterator) :: iterator
-        type(string) :: name
-        class(*), allocatable :: value
+        character(len=*),           intent(in)           :: program_name, key
+        character(len=*),           optional, intent(in) :: expected_default
+        type(ui_program), pointer     :: program => null()
+        type(list_iterator)           :: iterator
+        type(string)                  :: name
+        class(*),         allocatable :: value
         found = .false.
         name  = program_name
         call get_prg_ptr(name, program)
@@ -463,13 +463,13 @@ contains
     !! Fixture: a one-particle strategy3D toolbox on a small phantom. Expected value: the
     !! stored shift.
     subroutine test_previous_shift_is_stored_shift()
-        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        character(len=*), parameter :: PHANTOM         = 'tmp_strategy3D_inplane_tester_phantom.mrc'
         real,             parameter :: STORED_SHIFT(2) = [1.25, -0.75]
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)         :: cline
-        type(strategy3D_srch) :: srch
-        type(strategy3D_spec) :: spec
+        type(builder),    target    :: b
+        type(parameters), target    :: p
+        type(cmdline)               :: cline
+        type(strategy3D_srch)       :: srch
+        type(strategy3D_spec)       :: spec
         write(*,'(A)') 'test_previous_shift_is_stored_shift'
         call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec)
         call assert_true(all(srch%prev_shvec == STORED_SHIFT), &
@@ -489,14 +489,14 @@ contains
     !! in-plane index about the previous direction, at both poles of the two-direction grid, and assign_ori measures
     !! the in-plane distance between the discrete cells, the previous angle off the grid by 0.3 steps
     subroutine test_previous_inplane_at_poles()
-        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        character(len=*),  parameter           :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
         class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        class(cmdline), allocatable :: cline
-        type(strategy3D_srch)    :: srch
-        type(strategy3D_spec)    :: spec
-        real    :: euls_ref(3), e3_prev, expected
-        integer :: iproj, nrots, irot_prev, irot_new
+        class(cmdline),    allocatable         :: cline
+        type(strategy3D_srch)                  :: srch
+        type(strategy3D_spec)                  :: spec
+        real                                   :: euls_ref(3), e3_prev, expected
+        integer                                :: iproj, nrots, irot_prev, irot_new
         write(*,'(A)') 'test_previous_inplane_at_poles'
         allocate(b, p, cline)
         call one_particle_fixture(PHANTOM, [0., 0.], b, p, cline, srch, spec)
@@ -532,9 +532,9 @@ contains
     !! rotation and a zero shift through refine_assignment_continuously, assign_ori and commit_view, as the matcher does
     subroutine test_view_recovery()
         character(len=6), parameter :: MODES(3) = [character(len=6) :: 'no', 'lbfgsb', 'lm']
-        integer  :: imode
-        real(dp) :: view_err(3), total_err(3), dir_deg
-        integer(int64) :: counts(3)
+        integer                     :: imode
+        real(dp)                    :: view_err(3), total_err(3), dir_deg
+        integer(int64)              :: counts(3)
         write(*,'(A)') 'test_view_recovery'
         do imode = 1, 3
             call recover(MODES(imode), view_err(imode), total_err(imode), counts, dir_deg)
@@ -562,23 +562,23 @@ contains
             real(dp),         intent(out) :: dir_deg
             class(builder),    allocatable, target :: b
             class(parameters), allocatable, target :: p
-            type(cmdline)            :: cline
-            type(strategy3D_srch)    :: srch
-            type(strategy3D_spec)    :: spec
-            type(oris)               :: os_true
-            type(ori)                :: o_tmp
-            complex(sp), allocatable :: sections(:,:,:), pft(:,:), sect(:,:), resid(:,:), rot(:,:)
-            complex(sp) :: gq(3)
-            real(sp)    :: frame_sp(3,3), loc(3)
-            real(sp),    allocatable :: hc(:,:), kc(:,:)
-            real,        allocatable :: rmat(:,:,:)
-            real(sp),    allocatable :: contrib(:)
-            real(dp) :: rcell(3,3), rtrue(3,3), rcomm(3,3), omega(2), x(5), recomp, cosang, xg(5), floss, gloss(5), wsum
-            real(sp),    allocatable :: wk(:,:)
-            real     :: euls(3), corr, sh(2), inpl_coord
-            integer  :: pftsz, kfromto(2), pdim(3), irot, inpl, k, idir
-            logical  :: inpl_valid, evaluated
-            type(view_solve) :: vs
+            type(cmdline)                          :: cline
+            type(strategy3D_srch)                  :: srch
+            type(strategy3D_spec)                  :: spec
+            type(oris)                             :: os_true
+            type(ori)                              :: o_tmp
+            complex(sp),       allocatable         :: sections(:,:,:), pft(:,:), sect(:,:), resid(:,:), rot(:,:)
+            complex(sp)                            :: gq(3)
+            real(sp)                               :: frame_sp(3,3), loc(3)
+            real(sp),          allocatable         :: hc(:,:), kc(:,:)
+            real,              allocatable         :: rmat(:,:,:)
+            real(sp),          allocatable         :: contrib(:)
+            real(dp)                               :: rcell(3,3), rtrue(3,3), rcomm(3,3), omega(2), x(5), recomp, cosang, xg(5), floss, gloss(5), wsum
+            real(sp),          allocatable         :: wk(:,:)
+            real                                   :: euls(3), corr, sh(2), inpl_coord
+            integer                                :: pftsz, kfromto(2), pdim(3), irot, inpl, k, idir
+            logical                                :: inpl_valid, evaluated
+            type(view_solve)                       :: vs
             allocate(b, p)
             call write_view_phantom()
             call cline%set('vol1',      VIEW_PHANTOM)
@@ -772,13 +772,13 @@ contains
 
     !> the 4-blob phantom of simple_pftc_inplane_tester (box 64 at 1.3 A, unmasked)
     subroutine write_view_phantom()
-        integer, parameter :: NB = 4
-        real,    parameter :: CTRS(3,NB) = reshape([-9.,-5.,3., 7.,8.,-5., 0.,-10.,-8., 5.,-3.,10.], [3,NB])
-        real,    parameter :: SIGS(NB) = [3.5, 4.0, 3.0, 3.8], AMPS(NB) = [1.0, 0.8, 0.6, 0.5]
-        type(image)       :: vol
-        real, allocatable :: rmat(:,:,:)
-        real    :: ctr, d(3)
-        integer :: i, j, k, ib
+        integer, parameter   :: NB         = 4
+        real,    parameter   :: CTRS(3,NB) = reshape([-9.,-5.,3., 7.,8.,-5., 0.,-10.,-8., 5.,-3.,10.], [3,NB])
+        real,    parameter   :: SIGS(NB)   = [3.5, 4.0, 3.0, 3.8], AMPS(NB) = [1.0, 0.8, 0.6, 0.5]
+        type(image)          :: vol
+        real,    allocatable :: rmat(:,:,:)
+        real                 :: ctr, d(3)
+        integer              :: i, j, k, ib
         allocate(rmat(VIEW_BOX,VIEW_BOX,VIEW_BOX), source=0.)
         ctr = real(VIEW_BOX)/2. + 1.
         do k = 1, VIEW_BOX
@@ -800,21 +800,21 @@ contains
     !> a one-particle strategy3D toolbox on a small phantom (two directions), the particle at a stored shift, the
     !! search object prepared for the probabilistic route; trs a shift search's window (none by default)
     subroutine one_particle_fixture( phantom, stored_shift, b, p, cline, srch, spec, trs, objfun, box_crop, mskdiam )
-        character(len=*),              intent(in)    :: phantom
-        real,                          intent(in)    :: stored_shift(2)
-        type(builder),         target, intent(inout) :: b
-        type(parameters),      target, intent(inout) :: p
-        type(cmdline),                 intent(inout) :: cline
-        type(strategy3D_srch),         intent(inout) :: srch
-        type(strategy3D_spec),         intent(inout) :: spec
-        real,                optional, intent(in)    :: trs
-        character(len=*),    optional, intent(in)    :: objfun
-        integer,             optional, intent(in)    :: box_crop
-        real,                optional, intent(in)    :: mskdiam
-        integer, parameter :: BOX = 32
-        type(image)        :: vol
-        real, allocatable  :: rmat(:,:,:)
-        integer :: i, j, k
+        character(len=*),              intent(in)            :: phantom
+        real,                          intent(in)            :: stored_shift(2)
+        type(builder),                 target, intent(inout) :: b
+        type(parameters),              target, intent(inout) :: p
+        type(cmdline),                 intent(inout)         :: cline
+        type(strategy3D_srch),         intent(inout)         :: srch
+        type(strategy3D_spec),         intent(inout)         :: spec
+        real,                          optional, intent(in)  :: trs
+        character(len=*),              optional, intent(in)  :: objfun
+        integer,                       optional, intent(in)  :: box_crop
+        real,                          optional, intent(in)  :: mskdiam
+        integer, parameter   :: BOX = 32
+        type(image)          :: vol
+        real,    allocatable :: rmat(:,:,:)
+        integer              :: i, j, k
         allocate(rmat(BOX,BOX,BOX))
         do k = 1, BOX
             do j = 1, BOX
@@ -870,17 +870,17 @@ contains
     !! was found at; the map path writes the drawn cell rotated the same way; the consumer adds the increment to the
     !! stored shift unconverted
     subroutine test_table_increment_axes()
-        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
-        real,             parameter :: STORED_SHIFT(2) = [1.25, -0.75], S_TRUE(2) = [1.5, -2.0], TRS = 5.
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(strategy3D_srch)    :: srch
-        type(strategy3D_spec)    :: spec
-        type(pftc_shsrch_grad)   :: grad_native, grad_ref
-        complex(sp), allocatable :: ref(:,:), ptcl(:,:)
-        real    :: lims(2,2), cxy_native(3), cxy_ref(3), euler(3), shvec(2), u(2)
-        integer :: irot_n, irot_r, nrots, inpl, nchecked, pdim(3), kfromto(2), pftsz, k, pp
+        character(len=*), parameter   :: PHANTOM         = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        real,             parameter   :: STORED_SHIFT(2) = [1.25, -0.75], S_TRUE(2) = [1.5, -2.0], TRS = 5.
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(strategy3D_srch)         :: srch
+        type(strategy3D_spec)         :: spec
+        type(pftc_shsrch_grad)        :: grad_native, grad_ref
+        complex(sp),      allocatable :: ref(:,:), ptcl(:,:)
+        real                          :: lims(2,2), cxy_native(3), cxy_ref(3), euler(3), shvec(2), u(2)
+        integer                       :: irot_n, irot_r, nrots, inpl, nchecked, pdim(3), kfromto(2), pftsz, k, pp
         write(*,'(A)') 'test_table_increment_axes'
         call set_fixed_seed(20261031)
         call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec)
@@ -940,21 +940,21 @@ contains
     !! one map step about it, minimize_in_cell) reaches the lattice-initialised search's optimum on the
     !! white-reference fixture, at the same rotation; the calls of the fills (shiftmap_srch), under euclid
     subroutine test_map_initialised_refinement()
-        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
-        real,             parameter :: STORED_SHIFT(2) = [0., 0.], S_TRUE(2) = [1.5, -2.0], TRS = 5.
-        real(dp),         parameter :: TEMP = 1.d-3   ! cold: the mode is the data's peak on a noise-free particle
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(strategy3D_srch)    :: srch
-        type(strategy3D_spec)    :: spec
-        type(pftc_shsrch_grad)   :: grad_lattice, grad_map
-        complex(sp), allocatable :: ref(:,:), ptcl(:,:)
-        real,        allocatable, target :: sigma2(:,:)
-        real     :: lims(2,2), cxy_l(3), cxy_m(3), xy_cell(2), step, loss
-        real(dp) :: prior_w
-        integer  :: irot_l, irot_m, nrots, inpl, nchecked, pdim(3), kfromto(2), pftsz, k, pp, kscreen, irho, ialpha
-        logical  :: l_cont_refined
+        character(len=*), parameter           :: PHANTOM         = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        real,             parameter           :: STORED_SHIFT(2) = [0., 0.], S_TRUE(2) = [1.5, -2.0], TRS = 5.
+        real(dp),         parameter           :: TEMP            = 1.d-3 ! cold: the mode is the data's peak on a noise-free particle
+        type(builder),    target              :: b
+        type(parameters), target              :: p
+        type(cmdline)                         :: cline
+        type(strategy3D_srch)                 :: srch
+        type(strategy3D_spec)                 :: spec
+        type(pftc_shsrch_grad)                :: grad_lattice, grad_map
+        complex(sp),      allocatable         :: ref(:,:), ptcl(:,:)
+        real,             allocatable, target :: sigma2(:,:)
+        real                                  :: lims(2,2), cxy_l(3), cxy_m(3), xy_cell(2), step, loss
+        real(dp)                              :: prior_w
+        integer                               :: irot_l, irot_m, nrots, inpl, nchecked, pdim(3), kfromto(2), pftsz, k, pp, kscreen, irho, ialpha
+        logical                               :: l_cont_refined
         write(*,'(A)') 'test_map_initialised_refinement'
         call set_fixed_seed(20261101)
         call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec, objfun='euclid')
@@ -1018,18 +1018,18 @@ contains
     !! the window (the white-reference fixture shifted by S_TRUE, refined within +-8 px) goes through the committed
     !! pose's continuous route under trs = 2: it comes back unclipped and scored no worse than itself
     subroutine test_continuous_seed_beyond_window()
-        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
-        real,             parameter :: STORED_SHIFT(2) = [0., 0.], S_TRUE(2) = [4.0, -3.5], RDISK = 8.
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(strategy3D_srch)    :: srch
-        type(strategy3D_spec)    :: spec
-        type(pftc_shsrch_grad)   :: grad_disk
-        complex(sp), allocatable :: ref(:,:), ptcl(:,:)
-        real    :: lims(2,2), cxy(3), sh(2), corr, inpl_coord
-        integer :: irot, inpl, nrots, pdim(3), kfromto(2), pftsz, k, pp, nchecked
-        logical :: inpl_valid
+        character(len=*), parameter   :: PHANTOM         = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        real,             parameter   :: STORED_SHIFT(2) = [0., 0.], S_TRUE(2) = [4.0, -3.5], RDISK = 8.
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(strategy3D_srch)         :: srch
+        type(strategy3D_spec)         :: spec
+        type(pftc_shsrch_grad)        :: grad_disk
+        complex(sp),      allocatable :: ref(:,:), ptcl(:,:)
+        real                          :: lims(2,2), cxy(3), sh(2), corr, inpl_coord
+        integer                       :: irot, inpl, nrots, pdim(3), kfromto(2), pftsz, k, pp, nchecked
+        logical                       :: inpl_valid
         write(*,'(A)') 'test_continuous_seed_beyond_window'
         call set_fixed_seed(20261103)
         call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec, trs=2.)
@@ -1083,22 +1083,22 @@ contains
     !! minimum within one bin of the solved angle, its value at that bin the shifted-reference kernel at
     !! shift_ptcl2ref(sh, rot), and the increment beating the negated and rotated frames there
     subroutine test_solved_row_frame()
-        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
-        real,             parameter :: STORED_SHIFT(2) = [1.25, -0.75], S_TRUE(2) = [2.5, -2.0], TRS = 5.
-        real,             parameter :: TOL_KERNEL = 1.e-6  ! measured 7.6e-8 (Release), single-precision sums
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(strategy3D_srch)    :: srch
-        type(strategy3D_spec)    :: spec
-        type(pftc_shsrch_grad)   :: grad
-        type(view_solve)         :: vs
-        complex(sp), allocatable :: ref(:,:), ptcl(:,:), bank(:,:)
-        real,        allocatable, target :: sigma2(:,:)
-        real,        allocatable :: row(:), rowref(:), rowx(:)
-        real    :: lims(2,2), cxy(3), sh(2), corr, inpl_coord, rot, worst_kernel, alt(2,3)
-        integer :: irot, inpl, nrots, pdim(3), kfromto(2), pftsz, k, pp, nchecked, iroute, ialt, imin, dbin
-        logical :: inpl_valid, l_beats
+        character(len=*), parameter           :: PHANTOM         = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        real,             parameter           :: STORED_SHIFT(2) = [1.25, -0.75], S_TRUE(2) = [2.5, -2.0], TRS = 5.
+        real,             parameter           :: TOL_KERNEL      = 1.e-6 ! measured 7.6e-8 (Release), single-precision sums
+        type(builder),    target              :: b
+        type(parameters), target              :: p
+        type(cmdline)                         :: cline
+        type(strategy3D_srch)                 :: srch
+        type(strategy3D_spec)                 :: spec
+        type(pftc_shsrch_grad)                :: grad
+        type(view_solve)                      :: vs
+        complex(sp),      allocatable         :: ref(:,:), ptcl(:,:), bank(:,:)
+        real,             allocatable, target :: sigma2(:,:)
+        real,             allocatable         :: row(:), rowref(:), rowx(:)
+        real                                  :: lims(2,2), cxy(3), sh(2), corr, inpl_coord, rot, worst_kernel, alt(2,3)
+        integer                               :: irot, inpl, nrots, pdim(3), kfromto(2), pftsz, k, pp, nchecked, iroute, ialt, imin, dbin
+        logical                               :: inpl_valid, l_beats
         write(*,'(A)') 'test_solved_row_frame'
         call set_fixed_seed(20261114)
         call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec, trs=TRS, objfun='euclid')
@@ -1185,16 +1185,16 @@ contains
     !! prep_rec_observation_ptcl, which the ordinary mask would not give (an off-centred Gaussian on a structured
     !! background, as the review's probe); a particle in its window notes the ordinary mask
     subroutine test_rec_observation_mask()
-        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(strategy3D_srch)    :: srch
-        type(strategy3D_spec)    :: spec
-        type(image)              :: raw, work, out, out_pd, rec, obs, obs_l
-        real, allocatable        :: rmat(:,:,:), a(:,:,:), c(:,:,:)
-        real    :: d_box, d_lmsk, scale
-        integer :: i, j
+        character(len=*), parameter   :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(strategy3D_srch)         :: srch
+        type(strategy3D_spec)         :: spec
+        type(image)                   :: raw, work, out, out_pd, rec, obs, obs_l
+        real,             allocatable :: rmat(:,:,:), a(:,:,:), c(:,:,:)
+        real                          :: d_box, d_lmsk, scale
+        integer                       :: i, j
         write(*,'(A)') 'test_rec_observation_mask'
         call one_particle_fixture(PHANTOM, [0., 0.], b, p, cline, srch, spec, trs=3., objfun='euclid', box_crop=28, mskdiam=18.)
         call assert_true(allocated(b%lmsk_box), 'the key builds the box''s mask')

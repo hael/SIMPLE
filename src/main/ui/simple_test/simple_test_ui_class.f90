@@ -4,30 +4,30 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('class', 'Unit tests', 10)
-type(ui_program), target :: units
-type(ui_program), target :: unit_core
-type(ui_program), target :: unit_ori
-type(ui_program), target :: unit_image
-type(ui_program), target :: unit_numerics
-type(ui_program), target :: unit_project
-type(ui_program), target :: unit_motion
-type(ui_program), target :: unit_ui
-type(ui_program), target :: unit_ipc
-type(ui_program), target :: unit_reconstruction
-type(ui_program), target :: lib_reconstruction
-type(ui_program), target :: unit_pftc_align2D3D
-type(ui_program), target :: unit_cart_align3D
-type(ui_program), target :: lib_cart_align3D
-type(ui_program), target :: unit_heterogeneity
-type(ui_program), target :: unit_parallel
-type(ui_program), target :: unit_single
-type(ui_program), target :: lib_single
-type(ui_program), target :: unit_stream
-type(ui_program), target :: lib_stream
-type(ui_program), target :: lib_heterogeneity
-type(ui_program), target :: openmp_offload
-type(ui_program), target :: forked_process
-type(ui_program), target :: gtk
+type(ui_program),          target    :: units
+type(ui_program),          target    :: unit_core
+type(ui_program),          target    :: unit_ori
+type(ui_program),          target    :: unit_image
+type(ui_program),          target    :: unit_numerics
+type(ui_program),          target    :: unit_project
+type(ui_program),          target    :: unit_motion
+type(ui_program),          target    :: unit_ui
+type(ui_program),          target    :: unit_ipc
+type(ui_program),          target    :: unit_reconstruction
+type(ui_program),          target    :: lib_reconstruction
+type(ui_program),          target    :: unit_pftc_align2D3D
+type(ui_program),          target    :: unit_cart_align3D
+type(ui_program),          target    :: lib_cart_align3D
+type(ui_program),          target    :: unit_heterogeneity
+type(ui_program),          target    :: unit_parallel
+type(ui_program),          target    :: unit_single
+type(ui_program),          target    :: lib_single
+type(ui_program),          target    :: unit_stream
+type(ui_program),          target    :: lib_stream
+type(ui_program),          target    :: lib_heterogeneity
+type(ui_program),          target    :: openmp_offload
+type(ui_program),          target    :: forked_process
+type(ui_program),          target    :: gtk
 
 contains
 

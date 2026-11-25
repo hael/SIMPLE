@@ -25,20 +25,20 @@ public :: learn_cavg_quality_model
 public :: evaluate_cavg_quality_model
 public :: evaluate_cavg_quality_result
 
-integer, parameter :: CAVG_QUALITY_LEARN_N_STANDARD_POLICIES = 4
-integer, parameter :: CAVG_QUALITY_LEARN_N_NANO_POLICIES     = 1
-real,    parameter :: LEARN_RECALL_ONLY_FLOOR        = 0.95
-real,    parameter :: LEARN_RECALL_ONLY_PENALTY      = 3.0
-real,    parameter :: LEARN_BALANCED_FN_TOLERANCE_FRAC = 0.02
-real,    parameter :: LEARN_BALANCED_FN_RATE_PENALTY = 10.0
-real,    parameter :: LEARN_BAD_OVERFIT_LOSS_MULT     = 1.50
-real,    parameter :: LEARN_OVERFIT_FOCUS_BAD_LOSS_SCALE = 0.00
-real,    parameter :: LEARN_BAD_OVERFIT_LOWVAR_FG_MIN = 0.0
-real,    parameter :: LEARN_BAD_OVERFIT_SUPPORT_MAX   = 0.5
+integer, parameter :: CAVG_QUALITY_LEARN_N_STANDARD_POLICIES    = 4
+integer, parameter :: CAVG_QUALITY_LEARN_N_NANO_POLICIES        = 1
+real,    parameter :: LEARN_RECALL_ONLY_FLOOR                   = 0.95
+real,    parameter :: LEARN_RECALL_ONLY_PENALTY                 = 3.0
+real,    parameter :: LEARN_BALANCED_FN_TOLERANCE_FRAC          = 0.02
+real,    parameter :: LEARN_BALANCED_FN_RATE_PENALTY            = 10.0
+real,    parameter :: LEARN_BAD_OVERFIT_LOSS_MULT               = 1.50
+real,    parameter :: LEARN_OVERFIT_FOCUS_BAD_LOSS_SCALE        = 0.00
+real,    parameter :: LEARN_BAD_OVERFIT_LOWVAR_FG_MIN           = 0.0
+real,    parameter :: LEARN_BAD_OVERFIT_SUPPORT_MAX             = 0.5
 real,    parameter :: LEARN_OVERFIT_FP_FOCUS_MIN_TRAINABLE_FRAC = 0.20
-real,    parameter :: LEARN_OVERFIT_FP_ACCEPT_RATE_TARGET = 0.20
-real,    parameter :: LEARN_OVERFIT_FP_EXCESS_RATE_PENALTY = 8.0
-real,    parameter :: LEARN_OVERFIT_FP_BP_Z_MAX       = 0.0
+real,    parameter :: LEARN_OVERFIT_FP_ACCEPT_RATE_TARGET       = 0.20
+real,    parameter :: LEARN_OVERFIT_FP_EXCESS_RATE_PENALTY      = 8.0
+real,    parameter :: LEARN_OVERFIT_FP_BP_Z_MAX                 = 0.0
 
 contains
 
@@ -54,13 +54,13 @@ contains
         type(cavg_quality_model),  intent(inout) :: learned_model
         character(len=*),          intent(in)    :: model_fname, report_fname
         type(cavg_quality_training_dataset), allocatable :: dsets(:)
-        type(quality_logistic_problem) :: problem
-        type(cavg_quality_model) :: candidate, best_model
-        type(cavg_quality_model_spec) :: spec
-        real(kind=8), allocatable :: solution(:)
-        real :: score, best_score, objective, best_objective, learn_score
-        integer :: ipol, ilambda, ithresh, n_candidates
-        character(len=32) :: quality_context
+        type(quality_logistic_problem)                   :: problem
+        type(cavg_quality_model)                         :: candidate, best_model
+        type(cavg_quality_model_spec)                    :: spec
+        real(kind=8),                        allocatable :: solution(:)
+        real                                             :: score, best_score, objective, best_objective, learn_score
+        integer                                          :: ipol, ilambda, ithresh, n_candidates
+        character(len=32)                                :: quality_context
         call load_quality_training_datasets(analysis_files, dsets)
         call infer_training_context(dsets, quality_context)
         write(logfhandle,'(A,A)') '>>> CAVG QUALITY TRAINING CONTEXT: ', trim(quality_context)
@@ -114,10 +114,10 @@ contains
     end subroutine validate_quality_context
 
     subroutine infer_training_context( dsets, quality_context )
-        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
-        character(len=*),                    intent(out):: quality_context
+        type(cavg_quality_training_dataset), intent(in)  :: dsets(:)
+        character(len=*),                    intent(out) :: quality_context
         character(len=XLONGSTRLEN) :: errmsg
-        integer :: ids
+        integer                    :: ids
         quality_context = trim(dsets(1)%quality_context)
         if( trim(quality_context) == '' )then
             errmsg = 'quality training file has no quality_context metadata: '//trim(dsets(1)%fname)
@@ -156,8 +156,8 @@ contains
         character(len=*),                    intent(in)    :: context
         real,                                intent(in)    :: lambda
         type(quality_logistic_problem),      intent(inout) :: problem
-        integer :: ids, irow, iobs, nobs, role, ngood, nbad, n_linear, linear_features(CAVG_QUALITY_NFEATS)
-        logical :: has_relational
+        integer      :: ids, irow, iobs, nobs, role, ngood, nbad, n_linear, linear_features(CAVG_QUALITY_NFEATS)
+        logical      :: has_relational
         real(kind=8) :: good_weight, bad_weight, focus_bad_loss_mult
         call feature_policy_indices(ipolicy, context, linear_features, n_linear)
         if( n_linear < 1 ) THROW_HARD('build_logistic_problem: empty feature policy')
@@ -221,7 +221,7 @@ contains
         type(cavg_quality_training_dataset), intent(in) :: dset
         integer,                             intent(in) :: role
         integer :: nfit, nbad_overfit
-        real :: signature_frac
+        real    :: signature_frac
         logistic_overfit_focus_bad_loss_multiplier = 1.0d0
         if( role /= LEARN_ROLE_BALANCED .and. role /= LEARN_ROLE_SPECIFICITY_ONLY ) return
         nfit = count_trainable_classes(dset)
@@ -238,9 +238,9 @@ contains
         type(quality_logistic_problem),      intent(in)    :: problem
         type(cavg_quality_training_dataset), intent(in)    :: dset    !< the relational policy of the training files
         character(len=*),                    intent(in)    :: feature_policy
-        type(cavg_quality_model),          intent(inout) :: model
+        type(cavg_quality_model),            intent(inout) :: model
         type(cavg_quality_model_spec) :: spec
-        integer :: ilinear, iterm, ifeat
+        integer                       :: ilinear, iterm, ifeat
         spec = neutral_learn_base_spec()
         spec%name               = 'learned_pairwise_logistic_v1'
         spec%feature_policy     = trim(feature_policy)
@@ -278,8 +278,8 @@ contains
         type(cavg_quality_model), intent(in) :: model
         character(len=*),         intent(in) :: report_fname
         type(cavg_quality_training_dataset), allocatable :: dsets(:)
-        real :: eval_score
-        integer :: ids
+        real                                             :: eval_score
+        integer                                          :: ids
         call load_quality_training_datasets(analysis_files, dsets)
         do ids = 1, size(dsets)
             if( (trim(dsets(ids)%quality_context) == CAVG_QUALITY_CONTEXT_NANO) .neqv. &
@@ -300,8 +300,8 @@ contains
         type(cavg_quality_model),  intent(in) :: model
         character(len=*),          intent(in) :: dataset_id, report_fname
         type(cavg_quality_training_dataset), allocatable :: dsets(:)
-        integer :: ncls
-        real :: eval_score
+        integer                                          :: ncls
+        real                                             :: eval_score
         ncls = size(reference_states)
         if( .not. allocated(quality%features) ) THROW_HARD('evaluate_cavg_quality_result: missing quality features')
         if( .not. allocated(quality%hard_reject) ) THROW_HARD('evaluate_cavg_quality_result: missing hard-reject mask')
@@ -333,7 +333,7 @@ contains
     end function neutral_learn_base_spec
 
     subroutine load_quality_training_datasets( analysis_files, dsets )
-        class(string), intent(in) :: analysis_files(:)
+        class(string),                       intent(in)                 :: analysis_files(:)
         type(cavg_quality_training_dataset), allocatable, intent(inout) :: dsets(:)
         integer :: i
         if( size(analysis_files) == 0 ) THROW_HARD('load_quality_training_datasets: empty analysis file table')
@@ -456,7 +456,7 @@ contains
         integer,          intent(out) :: inds(CAVG_QUALITY_NFEATS)
         integer,          intent(out) :: ninds
         logical, allocatable :: mask(:)
-        integer :: ifeat
+        integer              :: ifeat
         allocate(mask(cavg_quality_bank_size(context)))
         call feature_policy_mask(ipolicy, context, mask)
         inds = 0
@@ -473,10 +473,10 @@ contains
         type(cavg_quality_training_dataset), intent(inout) :: dset
         character(len=XLONGSTRLEN) :: line
         character(len=LONGSTRLEN)  :: field
-        integer :: funit, ios, nrows, irow, ifeat, feat_col(CAVG_QUALITY_NFEATS), nfeats
-        integer :: dataset_col, hard_reject_col, manual_state_col, relational_col
-        logical :: have_feature_header
-        character(len=32) :: context
+        integer                    :: funit, ios, nrows, irow, ifeat, feat_col(CAVG_QUALITY_NFEATS), nfeats
+        integer                    :: dataset_col, hard_reject_col, manual_state_col, relational_col
+        logical                    :: have_feature_header
+        character(len=32)          :: context
         dset%fname = trim(fname)
         open(newunit=funit, file=trim(fname), status='old', action='read', iostat=ios)
         if( ios /= 0 ) THROW_HARD('read_quality_training_dataset: failed to open '//trim(fname))
@@ -546,8 +546,8 @@ contains
         character(len=*),                    intent(in)    :: line
         type(cavg_quality_training_dataset), intent(inout) :: dset
         character(len=XLONGSTRLEN) :: tmp
-        character(len=64) :: key, value
-        integer :: ieq, ios
+        character(len=64)          :: key, value
+        integer                    :: ieq, ios
         tmp = adjustl(line)
         if( len_trim(tmp) < 4 .or. tmp(1:2) /= '# ' ) return
         ieq = index(tmp, '=')
@@ -601,7 +601,7 @@ contains
         integer,          intent(out) :: dataset_col, hard_reject_col, manual_state_col, relational_col
         integer,          intent(out) :: feat_col(CAVG_QUALITY_NFEATS)
         character(len=LONGSTRLEN) :: field, name
-        integer :: icol, ifeat
+        integer                   :: icol, ifeat
         feat_col = 0
         dataset_col = 0
         hard_reject_col = 0
@@ -639,7 +639,7 @@ contains
         integer,          intent(in) :: feat_col(CAVG_QUALITY_NFEATS)
         character(len=*), intent(in) :: relational_schema, fname
         character(len=LONGSTRLEN) :: errmsg
-        integer :: ifeat
+        integer                   :: ifeat
         if( dataset_col == 0 ) THROW_HARD('read_quality_training_dataset: missing dataset_id column in '//trim(fname))
         if( hard_reject_col == 0 ) &
             THROW_HARD('read_quality_training_dataset: missing hard_reject column in '//trim(fname))
@@ -704,8 +704,8 @@ contains
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
         type(cavg_quality_model),            intent(in) :: model
         type(cavg_quality_result) :: quality
-        integer :: ids, tp, fp, tn, fn, nused, role
-        real :: balacc, role_scores(size(dsets))
+        integer                   :: ids, tp, fp, tn, fn, nused, role
+        real                      :: balacc, role_scores(size(dsets))
         macro_balacc_for_model = 0.0
         nused = 0
         do ids = 1, size(dsets)
@@ -767,7 +767,7 @@ contains
         type(cavg_quality_result),           intent(in) :: quality
         integer,                             intent(in) :: role
         integer :: nbad_overfit, nfp_overfit
-        real :: fp_rate, excess_rate
+        real    :: fp_rate, excess_rate
         overfit_false_positive_penalty = 0.0
         if( role /= LEARN_ROLE_BALANCED .and. role /= LEARN_ROLE_SPECIFICITY_ONLY ) return
         if( .not. dataset_is_overfit_focus(dset) ) return
@@ -846,7 +846,7 @@ contains
         type(cavg_quality_result),           intent(inout) :: quality
         integer,                             intent(out)   :: tp, fp, tn, fn
         logical, allocatable :: pred(:), ref(:)
-        integer :: nfit
+        integer              :: nfit
         call quality%kill()
         quality%features    = dset%features
         quality%hard_reject = dset%hard_reject
@@ -881,7 +881,7 @@ contains
         real,                                intent(in) :: best_score, best_objective
         integer,                             intent(in) :: n_candidates
         type(cavg_quality_learn_diagnostics) :: diag
-        integer :: funit
+        integer                              :: funit
         call collect_learn_diagnostics(dsets, learned_model, diag)
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection pairwise-logistic learn report'
@@ -960,7 +960,7 @@ contains
         type(cavg_quality_model),            intent(in) :: model
         real,                                intent(in) :: eval_score
         type(cavg_quality_learn_diagnostics) :: diag
-        integer :: funit
+        integer                              :: funit
         call collect_learn_diagnostics(dsets, model, diag)
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection evaluate report'
@@ -1041,9 +1041,9 @@ contains
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
         type(cavg_quality_model),            intent(in) :: model
         character(len=*),                    intent(in) :: score_name
-        integer :: ids, tp, fp, tn, fn, role
+        integer                   :: ids, tp, fp, tn, fn, role
         type(cavg_quality_result) :: quality
-        real :: precision, recall, specificity, f1, role_score, accuracy, overfit_penalty
+        real                      :: precision, recall, specificity, f1, role_score, accuracy, overfit_penalty
         write(funit,'(A)') ''
         write(funit,'(A,A,A)') 'dataset,n_classes,n_trainable,trainable_manual_good,trainable_manual_bad,learn_role,', &
             'tp,fp,tn,fn,precision,recall,specificity,f1,', trim(score_name)//&
@@ -1073,7 +1073,7 @@ contains
         type(cavg_quality_model),            intent(in)  :: model
         type(cavg_quality_learn_diagnostics),intent(out) :: diag
         type(cavg_quality_result) :: quality
-        integer :: ids, tp, fp, tn, fn, role
+        integer                   :: ids, tp, fp, tn, fn, role
         diag = cavg_quality_learn_diagnostics()
         diag%n_datasets = size(dsets)
         do ids = 1, size(dsets)

@@ -48,14 +48,14 @@ contains
 
     subroutine exec_tseries_track_particles_distr( self, cline )
         class(commander_tseries_track_particles_distr), intent(inout) :: self
-        class(cmdline),                         intent(inout) :: cline
+        class(cmdline),                                 intent(inout) :: cline
         type(parameters)              :: params
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
         type(nrtxtfile)               :: boxfile
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
-        integer :: ndatlines, numlen, j, orig_box, ipart, nactive
+        integer                       :: ndatlines, numlen, j, orig_box, ipart, nactive
         if( .not. cline%defined('neg')       ) call cline%set('neg',       'yes')
         if( .not. cline%defined('lp')        ) call cline%set('lp',          2.3)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       5.0)
@@ -124,14 +124,14 @@ contains
     subroutine exec_tseries_track_particles( self, cline )
         use single_tseries_tracker
         class(commander_tseries_track_particles), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
+        class(cmdline),                           intent(inout) :: cline
         type(sp_project)          :: spproj
         type(parameters)          :: params
         type(string)              :: dir, forctf
         type(string), allocatable :: intg_names(:), frame_names(:)
         real,         allocatable :: boxdata(:,:)
         logical,      allocatable :: frames_are_there(:), intgs_are_there(:)
-        integer :: i, orig_box, nframes
+        integer                   :: i, orig_box, nframes
         call cline%set('oritype','mic')
         call params%new(cline)
         orig_box = params%box
@@ -249,14 +249,14 @@ contains
     subroutine exec_trajectory_graphene_subtr( self, cline )
         use simple_tseries_graphene_subtr
         class(commander_trajectory_graphene_subtr), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        type(parameters), target :: params
-        type(builder)      :: build
-        type(image)        :: ave_pre, ave_post, img_tmp, img_tmp2, img_tmp3
-        real,  allocatable :: angles1(:), angles2(:)
-        real               :: ave,var,sdev
-        integer            :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
-        logical            :: err
+        class(cmdline),                             intent(inout) :: cline
+        type(parameters), target      :: params
+        type(builder)                 :: build
+        type(image)                   :: ave_pre, ave_post, img_tmp, img_tmp2, img_tmp3
+        real,             allocatable :: angles1(:), angles2(:)
+        real                          :: ave,var,sdev
+        integer                       :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
+        logical                       :: err
         call cline%set('objfun','cc')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         ! sanity checks & dimensions
@@ -337,13 +337,13 @@ contains
     end subroutine exec_trajectory_graphene_subtr
 
     subroutine exec_trajectory_import( self, cline )
-        class(commander_trajectory_import), intent(inout) :: self
+        class(commander_trajectory_import),        intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
         type(ctfparams)  :: ctfvars
         type(oris)       :: os
-        integer :: iframe, lfoo(3)
+        integer          :: iframe, lfoo(3)
         call cline%set('oritype','mic')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
@@ -380,17 +380,17 @@ contains
         use simple_memoize_ft_maps,   only: memoize_ft_maps, forget_ft_maps, ft_map_lims, ft_map_phys_addrh, ft_map_phys_addrk
         class(commander_trajectory_denoise), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        integer, parameter :: SEED = 20261026
-        integer, parameter :: BATCH = 256      !< frames read (written) one by one, then processed in parallel
-        type(parameters) :: params
+        integer,     parameter   :: SEED  = 20261026
+        integer,     parameter   :: BATCH = 256                   !< frames read (written) one by one, then processed in parallel
+        type(parameters)         :: params
         type(image), allocatable :: imgs(:)
         complex(sp), allocatable :: ym(:,:), yu(:,:), yden(:,:)   !< masked frames (similarity), frames, pre-images
         real(dp),    allocatable :: ess(:), choice(:,:)
         real(sp),    allocatable :: wq(:), avgs(:)
         integer,     allocatable :: hidx(:), kidx(:), shell(:)
         integer(timer_int_kind)  :: t0
-        integer :: ldim(3), lims(3,2), n, i, j, h, k, sh, nyq, ncoeff, kfit, kband, funit, iostat, i0, i1, ib, nb, nblk
-        real    :: rmsk
+        integer                  :: ldim(3), lims(3,2), n, i, j, h, k, sh, nyq, ncoeff, kfit, kband, funit, iostat, i0, i1, ib, nb, nblk
+        real                     :: rmsk
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'no')
         if( .not. cline%defined('outstk')  ) call cline%set('outstk',  'trajectory_denoised'//STK_EXT)
         if( .not. cline%defined('neigs')   ) call cline%set('neigs',   32)
@@ -523,11 +523,11 @@ contains
 
     subroutine exec_trajectory_swap_stack( self, cline )
         class(commander_trajectory_swap_stack), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
+        class(cmdline),                         intent(inout) :: cline
         type(sp_project) :: spproj, spproj_tmp
         type(parameters) :: params
         type(ctfparams)  :: ctfparms
-        integer :: ldim(3), nimgs, nstks, iptcl
+        integer          :: ldim(3), nimgs, nstks, iptcl
         call cline%set('oritype','stk')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
@@ -564,11 +564,11 @@ contains
 
     subroutine exec_trajectory_extract_substk( self, cline )
         class(commander_trajectory_extract_substk), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
+        class(cmdline),                             intent(inout) :: cline
+        type(parameters)     :: params
+        type(sp_project)     :: spproj
         integer, allocatable :: pinds(:)
-        integer :: fromto(2), nptcls
+        integer              :: fromto(2), nptcls
         call cline%set('mkdir', 'no')
         ! init params
         call params%new(cline)

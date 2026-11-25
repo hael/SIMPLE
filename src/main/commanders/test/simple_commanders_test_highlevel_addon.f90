@@ -14,12 +14,12 @@ contains
 !! fixture directory (a few hundred MB) is removed on success and kept for
 !! inspection on failure; metrics.tsv stays in the run directory.
 module subroutine exec_test_solve3D_addon( self, cline )
-    class(commander_test_solve3D_addon), intent(inout) :: self
+    class(commander_test_solve3D_addon),    intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
-    class(parameters), allocatable:: params
-    type(string)     :: cwd_saved, fixture_root
-    integer          :: status
-    logical          :: all_ok
+    class(parameters), allocatable :: params
+    type(string)                   :: cwd_saved, fixture_root
+    integer                        :: status
+    logical                        :: all_ok
     allocate(params)
     call simple_getcwd(cwd_saved)
     fixture_root = filepath(cwd_saved, 'test_solve3D_addon_'//int2str(get_process_id()))
@@ -43,17 +43,17 @@ end subroutine exec_test_solve3D_addon
 
 !> Generates append-only cumulative projects for stream/add-on integration tests.
 module subroutine exec_generate_solve3D_addon_snapshots( self, cline )
-    class(commander_generate_solve3D_addon_snapshots), intent(inout) :: self
+    class(commander_generate_solve3D_addon_snapshots),     intent(inout) :: self
     class(cmdline),                                        intent(inout) :: cline
-    class(parameters), allocatable:: params
-    class(sp_project), allocatable:: source, generated, snapshot
-    type(image)      :: img
-    type(string)     :: source_stk, stack_fname, project_fname, project_name
-    integer, allocatable :: chunk_first(:), chunk_last(:), chunk_stkind(:), chunk_snapshot(:), snapshot_last(:)
-    integer :: nptcls, nremaining, naddons, naddon_base, naddon_extra
-    integer :: nchunks, nchunks_snapshot, numlen
-    integer :: iptcl, ind_in_stk, stkind, previous_stkind, isnapshot, previous_snapshot
-    integer :: ichunk, local_ind
+    class(parameters), allocatable :: params
+    class(sp_project), allocatable :: source, generated, snapshot
+    type(image)                    :: img
+    type(string)                   :: source_stk, stack_fname, project_fname, project_name
+    integer,           allocatable :: chunk_first(:), chunk_last(:), chunk_stkind(:), chunk_snapshot(:), snapshot_last(:)
+    integer                        :: nptcls, nremaining, naddons, naddon_base, naddon_extra
+    integer                        :: nchunks, nchunks_snapshot, numlen
+    integer                        :: iptcl, ind_in_stk, stkind, previous_stkind, isnapshot, previous_snapshot
+    integer                        :: ichunk, local_ind
     allocate(params, source, generated, snapshot)
     call cline%set('mkdir', 'no')
     call params%new(cline)
@@ -179,34 +179,34 @@ subroutine run_solve3D_addon_gate( nthr, metrics_file, all_ok )
     integer,       intent(in)    :: nthr
     class(string), intent(in)    :: metrics_file
     logical,       intent(inout) :: all_ok
-    character(len=*), parameter :: GATE_DIR    = 'solve3D_addon_gate'
-    character(len=*), parameter :: TRUTH_VOL   = 'truth_6VXX_blob.mrc'
-    character(len=*), parameter :: PTCL_STK    = 'simulated_particles.mrc'
-    character(len=*), parameter :: STK_BASE    = 'particles_base.mrc'   !< the base set: particles 1-NBASE
-    character(len=*), parameter :: STK_NEW1    = 'particles_new1.mrc'   !< the set the first add-on appends
-    character(len=*), parameter :: STK_NEW2    = 'particles_new2.mrc'   !< the set the second add-on appends
-    character(len=*), parameter :: MID_DIR     = 'mid'                  !< the first add-on's project and run
-    character(len=*), parameter :: TRUTH_ORIS  = 'simulated_oris.txt'
-    character(len=*), parameter :: PROJNAME    = 'addon_gate'
-    character(len=*), parameter :: STRICT_DIR  = 'strict'
-    character(len=*), parameter :: FRCS_2D     = 'frcs_2D_standin.bin' !< the stand-in's class FRCs
-    real,    parameter :: SMPD        = 2.2
-    integer, parameter :: BOX         = 112
-    real,    parameter :: MSKDIAM     = 180.
-    integer, parameter :: NPTCLS      = 3000   ! rows of the current project: both sets
-    integer, parameter :: NBASE       = 2000   ! rows of the frozen project: the base set
-    integer, parameter :: NMID        = 2500   ! rows of the first add-on's project: the base set and the second
-    real,    parameter :: BASE_SELECT = 0.75   ! seeded selection of the base set (about 1500 frozen particles)
-    real,    parameter :: SNR         = 0.2
-    integer, parameter :: NSAMPLE     = 500    ! sampled in the base run and in the add-on (trailing from stage 5)
-    real,    parameter :: GATE_LPSTART = 20.
-    real,    parameter :: GATE_LPSTOP  = 8.
-    integer, parameter :: GOLD_STD_3D = 9      ! past the 8 solve3D stages: no gold-standard stage
-    integer, parameter :: NCLS2D      = 10     ! class labels for class-balanced sampling
-    integer, parameter :: NPAIRS      = 20000
-    integer, parameter :: GATE_SEED   = 20260926
-    real,    parameter :: DOCK_HP     = 100.
-    real,    parameter :: DOCK_LP     = 20.
+    character(len=*), parameter :: GATE_DIR     = 'solve3D_addon_gate'
+    character(len=*), parameter :: TRUTH_VOL    = 'truth_6VXX_blob.mrc'
+    character(len=*), parameter :: PTCL_STK     = 'simulated_particles.mrc'
+    character(len=*), parameter :: STK_BASE     = 'particles_base.mrc'  !< the base set: particles 1-NBASE
+    character(len=*), parameter :: STK_NEW1     = 'particles_new1.mrc'  !< the set the first add-on appends
+    character(len=*), parameter :: STK_NEW2     = 'particles_new2.mrc'  !< the set the second add-on appends
+    character(len=*), parameter :: MID_DIR      = 'mid'                 !< the first add-on's project and run
+    character(len=*), parameter :: TRUTH_ORIS   = 'simulated_oris.txt'
+    character(len=*), parameter :: PROJNAME     = 'addon_gate'
+    character(len=*), parameter :: STRICT_DIR   = 'strict'
+    character(len=*), parameter :: FRCS_2D      = 'frcs_2D_standin.bin' !< the stand-in's class FRCs
+    real,             parameter :: SMPD         = 2.2
+    integer,          parameter :: BOX          = 112
+    real,             parameter :: MSKDIAM      = 180.
+    integer,          parameter :: NPTCLS       = 3000                  ! rows of the current project: both sets
+    integer,          parameter :: NBASE        = 2000                  ! rows of the frozen project: the base set
+    integer,          parameter :: NMID         = 2500                  ! rows of the first add-on's project: the base set and the second
+    real,             parameter :: BASE_SELECT  = 0.75                  ! seeded selection of the base set (about 1500 frozen particles)
+    real,             parameter :: SNR          = 0.2
+    integer,          parameter :: NSAMPLE      = 500                   ! sampled in the base run and in the add-on (trailing from stage 5)
+    real,             parameter :: GATE_LPSTART = 20.
+    real,             parameter :: GATE_LPSTOP  = 8.
+    integer,          parameter :: GOLD_STD_3D  = 9                     ! past the 8 solve3D stages: no gold-standard stage
+    integer,          parameter :: NCLS2D       = 10                    ! class labels for class-balanced sampling
+    integer,          parameter :: NPAIRS       = 20000
+    integer,          parameter :: GATE_SEED    = 20260926
+    real,             parameter :: DOCK_HP      = 100.
+    real,             parameter :: DOCK_LP      = 20.
     ! blob: amplitude relative to the map maximum, width and position in A
     real,    parameter :: BLOB_AMP    = 1.5, BLOB_SIGMA = 11., BLOB_POS(3) = [45., 25., 30.]
     ! floors: the map rows as before (worst observed run plus a margin, 0.05/0.03 corr, 1 A FSC). The
@@ -231,41 +231,41 @@ subroutine run_solve3D_addon_gate( nthr, metrics_file, all_ok )
     ! coverage and loss floors from five runs of 2026-09-26 (coverage 1.00, a correlation loss of at most 0.001,
     ! the union FSC 4.83-5.03 A against the base 5.13-5.48 A), worst run plus a margin rather than the floor
     ! rule; MIN_REPORT_CORR is the report's own DOCK_CORR_FLOOR, below which the report docks
-    real,    parameter :: MIN_COVERAGE        = 0.9   !< cohort particles with updatecnt > 0
-    real,    parameter :: MIN_UNION_CORR      = 0.9   !< docked union map vs truth
-    real,    parameter :: MAX_CORR_LOSS       = 0.03  !< union map correlation below the base map's
-    real,    parameter :: MAX_FSC_LOSS        = 1.0   !< union FSC=0.143 above the base map's (A)
-    real,    parameter :: MIN_REPORT_CORR     = 0.9   !< report: union vs base map up to the base FSC=0.143 resolution
-    type(commander_solve3D)           :: xsolve3D
-    type(commander_solve3D_addon)     :: xaddon
-    type(solve3D_addon_report)        :: addon_report
-    type(commander_simulate_particles):: xsim
-    type(commander_new_project)       :: xnew_project
-    class(cmdline), allocatable:: cl
-    type(atoms)         :: molecule
-    type(molecule_data) :: mol
-    class(sp_project), allocatable:: spproj, strict_proj, out_proj, frz_proj
-    type(oris)          :: truth
-    type(ctfparams)     :: ctfvars
-    type(solve3D_manifest) :: man_base, man_out, man_pub, man_mid
-    class(sp_project), allocatable:: pub_proj, mid_proj
-    type(carried_bundle)      :: bundle
-    type(string)        :: root, stk_abs, stk_base_abs, stk_new1_abs, stk_new2_abs, full_proj, strict_proj_fname
-    type(string)        :: frozen_run_proj, out_run_proj, mid_proj_fname, mid_run_dir, bundle_path
-    type(string)        :: mid_sigma, mid_vol
-    type(image)         :: img
-    type(class_frcs)    :: clsfrcs
-    real, allocatable   :: frc(:)
-    type(string)        :: frozen_sigma, frozen_vol, addon_vol, base_vol, cwd_here, truth_abs
-    character(len=STDLEN) :: msg
-    integer(int64)      :: dig_proj0, dig_mid0
-    integer, allocatable :: frozen_inds(:), cohort_inds(:)
-    logical, allocatable :: l_frozen(:)
-    type(test_gate)     :: gate
-    integer :: i, status, nf, nc, nposed, box_vol
-    real    :: r, smpd_vol, corr_addon, corr_base, fsc_addon, fsc_base, err_cf, err_ff, coverage, err_ctrl
-    real    :: frac_ff, frac_cf
-    logical :: found, l_same, l_pub, l_frz_row
+    real,              parameter       :: MIN_COVERAGE        = 0.9  !< cohort particles with updatecnt > 0
+    real,              parameter       :: MIN_UNION_CORR      = 0.9  !< docked union map vs truth
+    real,              parameter       :: MAX_CORR_LOSS       = 0.03 !< union map correlation below the base map's
+    real,              parameter       :: MAX_FSC_LOSS        = 1.0  !< union FSC=0.143 above the base map's (A)
+    real,              parameter       :: MIN_REPORT_CORR     = 0.9  !< report: union vs base map up to the base FSC=0.143 resolution
+    type(commander_solve3D)            :: xsolve3D
+    type(commander_solve3D_addon)      :: xaddon
+    type(solve3D_addon_report)         :: addon_report
+    type(commander_simulate_particles) :: xsim
+    type(commander_new_project)        :: xnew_project
+    class(cmdline),    allocatable     :: cl
+    type(atoms)                        :: molecule
+    type(molecule_data)                :: mol
+    class(sp_project), allocatable     :: spproj, strict_proj, out_proj, frz_proj
+    type(oris)                         :: truth
+    type(ctfparams)                    :: ctfvars
+    type(solve3D_manifest)             :: man_base, man_out, man_pub, man_mid
+    class(sp_project), allocatable     :: pub_proj, mid_proj
+    type(carried_bundle)               :: bundle
+    type(string)                       :: root, stk_abs, stk_base_abs, stk_new1_abs, stk_new2_abs, full_proj, strict_proj_fname
+    type(string)                       :: frozen_run_proj, out_run_proj, mid_proj_fname, mid_run_dir, bundle_path
+    type(string)                       :: mid_sigma, mid_vol
+    type(image)                        :: img
+    type(class_frcs)                   :: clsfrcs
+    real,              allocatable     :: frc(:)
+    type(string)                       :: frozen_sigma, frozen_vol, addon_vol, base_vol, cwd_here, truth_abs
+    character(len=STDLEN)              :: msg
+    integer(int64)                     :: dig_proj0, dig_mid0
+    integer,           allocatable     :: frozen_inds(:), cohort_inds(:)
+    logical,           allocatable     :: l_frozen(:)
+    type(test_gate)                    :: gate
+    integer                            :: i, status, nf, nc, nposed, box_vol
+    real                               :: r, smpd_vol, corr_addon, corr_base, fsc_addon, fsc_base, err_cf, err_ff, coverage, err_ctrl
+    real                               :: frac_ff, frac_cf
+    logical                            :: found, l_same, l_pub, l_frz_row
     allocate(cl, spproj, strict_proj, out_proj, frz_proj, pub_proj, mid_proj)
     call make_ui
     write(logfhandle,'(a)') '>>> TEST_SOLVE3D_ADDON: solve3D_addon gate'
@@ -617,10 +617,10 @@ contains
     subroutine shuffled_cohort_control( err )
         use simple_rnd, only: shuffle
         real, intent(out) :: err
-        type(oris) :: truth_ctrl
+        type(oris)           :: truth_ctrl
         integer, allocatable :: perm(:)
-        real    :: frac
-        integer :: k
+        real                 :: frac
+        integer              :: k
         truth_ctrl = truth
         perm       = cohort_inds
         call set_fixed_seed(GATE_SEED + 2)

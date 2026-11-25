@@ -19,10 +19,10 @@ public :: run_all_polarft_cont_calc_tests
 
 !> one thread's drawn reference and the section it last cut: reused while the view variables stay unchanged
 type :: cont_sect_cache
-    complex(sp), allocatable :: sect(:,:)        !< (pftsz, kfrom:kto) the section at the cached view
-    complex(sp), allocatable :: dsect(:,:,:)     !< (pftsz, kfrom:kto, 2) its derivatives in the two tilts
-    real(dp)                 :: rref(3,3) = 0.d0 !< the drawn reference's rotation
-    real(dp)                 :: omega(2)  = 0.d0 !< the tilts of the cached section
+    complex(sp), allocatable :: sect(:,:)           !< (pftsz, kfrom:kto) the section at the cached view
+    complex(sp), allocatable :: dsect(:,:,:)        !< (pftsz, kfrom:kto, 2) its derivatives in the two tilts
+    real(dp)                 :: rref(3,3) = 0.d0    !< the drawn reference's rotation
+    real(dp)                 :: omega(2)  = 0.d0    !< the tilts of the cached section
     integer                  :: state     = 0
     logical                  :: iseven    = .true.
     logical                  :: l_ref     = .false. !< a reference is set
@@ -34,13 +34,13 @@ end type cont_sect_cache
 
 type :: polarft_cont_calc
     private
-    class(polarft_calc), pointer :: pftc => null()
-    class(cartft_calc),  pointer :: cftc => null()
-    integer                      :: pftsz      = 0
-    integer                      :: kfromto(2) = 0
-    real(sp),        allocatable :: q(:,:,:)     !< (2, pftsz, kfrom:kto) polar sample positions in the section frame
+    class(polarft_calc),   pointer     :: pftc       => null()
+    class(cartft_calc),    pointer     :: cftc       => null()
+    integer                            :: pftsz      = 0
+    integer                            :: kfromto(2) = 0
+    real(sp),              allocatable :: q(:,:,:) !< (2, pftsz, kfrom:kto) polar sample positions in the section frame
     type(cont_sect_cache), allocatable :: cache(:) !< one per thread of the team at new
-    logical                      :: exists = .false.
+    logical                            :: exists     = .false.
 contains
     procedure          :: new
     procedure          :: kill
@@ -66,11 +66,11 @@ contains
     !> On the polar grid of pftc (its half ring and searched shells) and the references of cftc (made on pftc's box);
     !! one cache per thread of the team in use. Both must outlive this object, renewed with pftc; kills a previous one.
     subroutine new( self, pftc, cftc )
-        class(polarft_cont_calc),    intent(inout) :: self
-        class(polarft_calc), target, intent(inout) :: pftc
-        class(cartft_calc),  target, intent(inout) :: cftc
+        class(polarft_cont_calc),    intent(inout)         :: self
+        class(polarft_calc),         target, intent(inout) :: pftc
+        class(cartft_calc),          target, intent(inout) :: cftc
         real(sp), allocatable :: tmp(:,:)
-        integer :: nthr, ithr, k
+        integer               :: nthr, ithr, k
         call self%kill
         self%pftc    => pftc
         self%cftc    => cftc
@@ -134,7 +134,7 @@ contains
         complex(sp),              intent(out) :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
         complex(sp),              intent(out) :: dnv(self%pftsz,self%kfromto(1):self%kfromto(2))
         complex(sp), allocatable :: dsect(:,:,:)
-        real(dp) :: v(3,2)
+        real(dp)                 :: v(3,2)
         allocate(dsect(self%pftsz,self%kfromto(1):self%kfromto(2),2))
         v = 0.d0
         call cut(self%cftc, self%q, state, iseven, frame, v, sect, dsect, dnv)
@@ -144,11 +144,11 @@ contains
     !! Euclidean loss f, its gradient and, when curv is present, its Gauss-Newton matrix in the same order. A section is
     !! cut only when the tilts differ from the cached ones.
     subroutine eval( self, iptcl, x, f, grad, curv )
-        class(polarft_cont_calc), intent(inout) :: self
-        integer,                  intent(in)    :: iptcl
-        real(dp),                 intent(in)    :: x(5)
-        real(dp),                 intent(out)   :: f, grad(5)
-        real(dp), optional,       intent(out)   :: curv(5,5)
+        class(polarft_cont_calc), intent(inout)               :: self
+        integer,                  intent(in)                  :: iptcl
+        real(dp),                 intent(in)                  :: x(5)
+        real(dp),                 intent(out)                 :: f, grad(5)
+        real(dp),                 optional,       intent(out) :: curv(5,5)
         integer :: ithr
         ithr = self%thread_cache()
         call self%ensure_section(ithr, iptcl, x(4:5))
@@ -247,13 +247,13 @@ contains
     !! exp([v_a]x) F, in the section frame): with q the polar sample in the section frame and g = F grad V its gradient
     !! in that frame, dS = -g . (v_a x q); dnv (optional) is g(3)
     subroutine cut( cftc, q, state, iseven, frame, v, sect, dsect, dnv )
-        class(cartft_calc),    intent(in)  :: cftc
-        real(sp),              intent(in)  :: q(:,:,:)
-        integer,               intent(in)  :: state
-        logical,               intent(in)  :: iseven
-        real(dp),              intent(in)  :: frame(3,3), v(3,2)
-        complex(sp),           intent(out) :: sect(:,:), dsect(:,:,:)
-        complex(sp), optional, intent(out) :: dnv(:,:)
+        class(cartft_calc),    intent(in)            :: cftc
+        real(sp),              intent(in)            :: q(:,:,:)
+        integer,               intent(in)            :: state
+        logical,               intent(in)            :: iseven
+        real(dp),              intent(in)            :: frame(3,3), v(3,2)
+        complex(sp),           intent(out)           :: sect(:,:), dsect(:,:,:)
+        complex(sp),           optional, intent(out) :: dnv(:,:)
         complex(sp) :: val, grad(3), gs(3)
         real(sp)    :: f(3,3), vs(3,2), loc(3), q1, q2
         integer     :: k, irot, a

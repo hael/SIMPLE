@@ -34,8 +34,8 @@ contains
         real,    intent(in) :: val_min, val_max
         integer, intent(in) :: n
         real, allocatable   :: vals(:)
-        real    :: stepsz, val_cur
-        integer :: i
+        real                :: stepsz, val_cur
+        integer             :: i
         if( n > 0 )then
             allocate(vals(n), source=0.)
             stepsz  = (val_max - val_min) / real(n - 1)
@@ -110,8 +110,8 @@ contains
     ! This function takes in input arraya and gives as output arrayb
     ! which is the same as array, but with NO repetition in the elements.
     subroutine elim_dup(arraya, arrayb)
-        real,              intent(in)  :: arraya(:)
-        real, allocatable, intent(out) :: arrayb(:)
+        real,              intent(in)               :: arraya(:)
+        real,              allocatable, intent(out) :: arrayb(:)
         integer              :: ix
         logical, allocatable :: mask(:)
         allocate(mask(size(arraya)))
@@ -213,13 +213,13 @@ contains
 
     !>   implements the sortmeans algorithm
     subroutine sortmeans( dat, maxits, means, labels )
-        real,                 intent(in)  :: dat(:)    !< array for input
-        integer,              intent(in)  :: maxits    !< limit sort
-        real,                 intent(out) :: means(:)  !< array for output
-        integer, allocatable, intent(out) :: labels(:) !< labels for output
+        real,                 intent(in)               :: dat(:)    !< array for input
+        integer,              intent(in)               :: maxits    !< limit sort
+        real,                 intent(out)              :: means(:)  !< array for output
+        integer,              allocatable, intent(out) :: labels(:) !< labels for output
         logical, allocatable :: mask(:)
-        integer :: ncls, ndat, clssz, i, j, cnt_means, loc(1), changes
-        real, allocatable :: dat_sorted(:)
+        integer              :: ncls, ndat, clssz, i, j, cnt_means, loc(1), changes
+        real,    allocatable :: dat_sorted(:)
         ncls = size(means)
         ndat = size(dat)
         if( allocated(labels) ) deallocate(labels)
@@ -263,8 +263,8 @@ contains
         integer, intent(in)    :: nquanta
         real,    intent(inout) :: transl_tab(nquanta)
         real, allocatable      :: vec_norm(:), transl_tab_here(:)
-        real    :: smin, smax, delta, hist(nquanta), dist
-        integer :: i, j, n, ind
+        real                   :: smin, smax, delta, hist(nquanta), dist
+        integer                :: i, j, n, ind
         n     = size(vec)
         smin  = minval(vec)
         smax  = maxval(vec)
@@ -301,8 +301,8 @@ contains
         integer, intent(in)    :: nquanta
         real,    intent(inout) :: transl_tab(nquanta)
         real, allocatable      :: vec_norm(:), transl_tab_here(:)
-        real    :: smin, smax, delta, hist(nquanta), dist, hist_ithr(nthr_glob,nquanta), transl_tab_ithr(nthr_glob,nquanta)
-        integer :: i, j, n, ind, ithr
+        real                   :: smin, smax, delta, hist(nquanta), dist, hist_ithr(nthr_glob,nquanta), transl_tab_ithr(nthr_glob,nquanta)
+        integer                :: i, j, n, ind, ithr
         n     = size(vec)
         smin  = minval(vec)
         smax  = maxval(vec)
@@ -344,14 +344,14 @@ contains
     ! distance threshold based hierarchical medoid clustering
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
     subroutine hac_med_thres( distmat, distthres, labels, medoids, pops )
-        real,                 intent(in)    :: distmat(:,:) ! distance matrix
-        real,                 intent(in)    :: distthres    ! distance threshold for class merging
-        integer, allocatable, intent(inout) :: labels(:)    ! cluster labels
-        integer, allocatable, intent(inout) :: medoids(:)   ! cluster medoids
-        integer, allocatable, intent(inout) :: pops(:)      ! cluster populations
+        real,                 intent(in)                 :: distmat(:,:) ! distance matrix
+        real,                 intent(in)                 :: distthres    ! distance threshold for class merging
+        integer,              allocatable, intent(inout) :: labels(:)    ! cluster labels
+        integer,              allocatable, intent(inout) :: medoids(:)   ! cluster medoids
+        integer,              allocatable, intent(inout) :: pops(:)      ! cluster populations
         logical, allocatable :: available(:), outliers(:)
-        integer :: N, i, icls, jcls, cnt, ncls, sz_dim1, sz_dim2, loc(1)
-        real    :: d
+        integer              :: N, i, icls, jcls, cnt, ncls, sz_dim1, sz_dim2, loc(1)
+        real                 :: d
         sz_dim1 = size(distmat, dim=1)
         sz_dim2 = size(distmat, dim=2)
         if( sz_dim1 /= sz_dim2 )then
@@ -442,15 +442,15 @@ contains
 
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
     subroutine hac_1d( vec, thresh, labels, centroids, populations )
-        real,    intent(in)  :: vec(:)       ! input vector
-        real,    intent(in)  :: thresh       ! threshold for class merging
-        integer, intent(out) :: labels(:)    ! labels of the elements in vec
+        real,    intent(in)               :: vec(:)         ! input vector
+        real,    intent(in)               :: thresh         ! threshold for class merging
+        integer, intent(out)              :: labels(:)      ! labels of the elements in vec
         real,    allocatable, intent(out) :: centroids(:)   ! centroids of the classes
         integer, allocatable, intent(out) :: populations(:) ! number of elements belonging to each class
         real,    allocatable :: mat(:,:)     ! matrix that contains the distances
         logical, allocatable :: mask(:), outliers(:)
-        real    :: d
-        integer :: N, i, j, index(1), loc1(1), loc2(1), cnt, ncls
+        real                 :: d
+        integer              :: N, i, j, index(1), loc1(1), loc2(1), cnt, ncls
         N = size(vec) ! number of data points
         ! 1) calc all the couples of distances, using Manhattan dist
         allocate(mat(N,N), source = 0.)
@@ -541,19 +541,19 @@ contains
     !   - label compaction via an O(N) lookup table instead of O(N×ncls) where/any sweeps
     !   - final centroid/population update via a single O(N) pass instead of O(N²) minloc loop
     subroutine hac_1d_fast( vec, thresh, labels, centroids, populations )
-        real,    intent(in)  :: vec(:)
-        real,    intent(in)  :: thresh
-        integer, intent(out) :: labels(:)
+        real,    intent(in)               :: vec(:)
+        real,    intent(in)               :: thresh
+        integer, intent(out)              :: labels(:)
         real,    allocatable, intent(out) :: centroids(:)
         integer, allocatable, intent(out) :: populations(:)
         logical, allocatable :: mask(:)
         integer, allocatable :: relabel(:), head(:), tail(:), next_lbl(:), label_map(:), order(:)
         real,    allocatable :: centroids_sorted(:)
-        real    :: d, best_d
-        integer :: N, i, j, k, best_j, ncls, cnt
+        real                 :: d, best_d
+        integer              :: N, i, j, k, best_j, ncls, cnt
         integer, allocatable :: populations_sorted(:)
-        real    :: t_all0, t_all1, t_stage0, t_stage1
-        real    :: t_pair, t_init, t_merge, t_compact, t_final
+        real                 :: t_all0, t_all1, t_stage0, t_stage1
+        real                 :: t_pair, t_init, t_merge, t_compact, t_final
         N = size(vec)
         t_pair    = 0.
         t_init    = 0.
@@ -718,7 +718,7 @@ contains
     !>    quadratic interpolation in 2D, from spider
     function quadri(xx, yy, fdata, nx, ny) result(q)
         integer, intent(in) :: nx, ny
-        real, intent(in)    :: xx, yy, fdata(nx,ny)
+        real,    intent(in) :: xx, yy, fdata(nx,ny)
         real    :: x,y,dx0,dy0,f0,c1,c2,c3,c4,c5,dxb,dyb,q
         integer :: i,j,ip1,im1,jp1,jm1,hxc,hyc,ic,jc
         x = xx
@@ -800,9 +800,9 @@ contains
         real,    intent(in)    :: x(n)
         real,    intent(inout) :: thresh ! threshold for binarisation, in the old value range
         integer, parameter  :: MIN_VAL = 0, MAX_VAL = 255, NHIST = MAX_VAL-MIN_VAL+1
-        integer :: i, T, yhist(NHIST)
-        real    :: q1, q2, m1, m2, sigma1, sigma2, sigma, sigma_next, sum1, sum2
-        real    :: p(MIN_VAL:MAX_VAL), xhist(0:NHIST-1), x_copy(n), sc, old_range(2) ! scale factor and old pixel range
+        integer             :: i, T, yhist(NHIST)
+        real                :: q1, q2, m1, m2, sigma1, sigma2, sigma, sigma_next, sum1, sum2
+        real                :: p(MIN_VAL:MAX_VAL), xhist(0:NHIST-1), x_copy(n), sc, old_range(2) ! scale factor and old pixel range
         x_copy = x
         ! scale vecor
         old_range(1) = minval(x_copy)
@@ -871,10 +871,10 @@ contains
 
     ! Otsu's method, see above
     subroutine otsu_binarize(n, x, x_out, thresh)
-        integer,        intent(in)    :: n
-        real,           intent(inout) :: x(n)
-        real,           intent(inout) :: x_out(n)
-        real, optional, intent(inout) :: thresh ! selected threshold for binarisation
+        integer,        intent(in)              :: n
+        real,           intent(inout)           :: x(n)
+        real,           intent(inout)           :: x_out(n)
+        real,           optional, intent(inout) :: thresh ! selected threshold for binarisation
         real :: threshold ! threshold for binarisation
         call otsu_thresh(n, x, threshold)
         where(x > threshold)
@@ -927,11 +927,11 @@ contains
     ! if which == 'sum' then distance is the sum of the distances between the
     !              selected pixel and all the others.
     function pixels_dist_int( px, vec, which, mask, location) result( dist )
-        integer,           intent(in)     :: px(3)
-        integer,           intent(in)     :: vec(:,:)
-        character(len=*),  intent(in)     :: which
-        logical,           intent(inout)  :: mask(:)
-        integer, optional, intent(out)    :: location(1)
+        integer,           intent(in)            :: px(3)
+        integer,           intent(in)            :: vec(:,:)
+        character(len=*),  intent(in)            :: which
+        logical,           intent(inout)         :: mask(:)
+        integer,           optional, intent(out) :: location(1)
         real    :: dist
         integer :: i
         if(size(mask,1) .ne. size(vec, dim = 2)) write(logfhandle,*)'Error! Incompatible sizes mask and input vector; pixels_dist_int'
@@ -958,12 +958,12 @@ contains
     end function pixels_dist_int
 
     function pixels_dist_real( px, vec, which, mask, location, keep_zero) result( dist )
-        real,              intent(in)     :: px(3)
-        real,              intent(in)     :: vec(:,:)
-        character(len=*),  intent(in)     :: which
-        logical,           intent(inout)  :: mask(:)
-        integer, optional, intent(out)    :: location(1)
-        logical, optional, intent(in)     :: keep_zero   ! when calculating min dist, let 0 be the output
+        real,              intent(in)            :: px(3)
+        real,              intent(in)            :: vec(:,:)
+        character(len=*),  intent(in)            :: which
+        logical,           intent(inout)         :: mask(:)
+        integer,           optional, intent(out) :: location(1)
+        logical,           optional, intent(in)  :: keep_zero ! when calculating min dist, let 0 be the output
         real    :: dist
         integer :: i
         logical :: kkeep_zero
@@ -1004,9 +1004,9 @@ contains
     ! This subroutine stores in pos the indexes corresponding to
     ! the pixels with value > 0 in the binary matrix imat.
     subroutine get_pixel_pos(imat, pos)
-        integer,              intent(in)    :: imat(:,:,:)
-        integer, allocatable, intent(inout) :: pos(:,:)
-        integer ::  i, j, k, cnt
+        integer,              intent(in)                 :: imat(:,:,:)
+        integer,              allocatable, intent(inout) :: pos(:,:)
+        integer :: i, j, k, cnt
         integer :: s(3)
         if(allocated(pos)) deallocate(pos)
         s = shape(imat)
@@ -1213,10 +1213,10 @@ contains
         real,    intent(inout) :: y(n)
         integer, parameter :: nl = 3  ! number of points to the left
         integer, parameter :: nr = 3  ! number of points to the right
-        integer, parameter :: NP = 7 ! NP = nl+nr+1
+        integer, parameter :: NP = 7  ! NP = nl+nr+1
         integer, parameter :: m  = 4  ! smoothing polynomial order
-        real    :: ysave(n), c(NP)
-        integer :: i,j, index(NP)
+        real               :: ysave(n), c(NP)
+        integer            :: i,j, index(NP)
         ysave = y
         ! seek shift index for given case nl, nr, m (see savgol).
         index(1)=0
@@ -1246,8 +1246,8 @@ contains
             subroutine savgol(np_here,ld)
                 integer, intent(in)  :: np_here, ld
                 integer, parameter   :: MMAX = 6
-                integer :: icode,imj,ipj,j,k,kk,mm
-                real    :: fac,sum,a(MMAX+1,MMAX+1),a_fit(m+1,m+1),a_inv(m+1,m+1),b(MMAX+1)
+                integer              :: icode,imj,ipj,j,k,kk,mm
+                real                 :: fac,sum,a(MMAX+1,MMAX+1),a_fit(m+1,m+1),a_inv(m+1,m+1),b(MMAX+1)
                 if(np_here.lt.nl+nr+1.or.nl.lt.0.or.nr.lt.0.or.ld.gt.m.or.m.gt.MMAX  &
                 .or.nl+nr.lt.m) stop ' Bad args in savgol'
                 do ipj=0,2*m        !Set up the normal equations of the desired leastsquares fit.

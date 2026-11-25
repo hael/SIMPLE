@@ -18,13 +18,13 @@ integer, parameter :: MAX_TIMEPLOT_POINTS = 512 ! points a plot holds
 
 type, extends( gui_metadata_base ) :: gui_metadata_timeplot
   private
-  character(len=SHORTSTRLEN) :: name     = ''   ! display name for the plot
+  character(len=SHORTSTRLEN) :: name                        = '' ! display name for the plot
   real                       :: labels(MAX_TIMEPLOT_POINTS) = 0. ! x-axis values
   real                       :: data(MAX_TIMEPLOT_POINTS)   = 0. ! primary y-axis trace
   real                       :: data2(MAX_TIMEPLOT_POINTS)  = 0. ! secondary y-axis trace (optional)
-  integer                    :: n_labels = 0    ! number of populated points
+  integer                    :: n_labels                    = 0  ! number of populated points
 contains
-  procedure :: kill => kill_override
+  procedure :: kill    => kill_override
   procedure :: set
   procedure :: get
   procedure :: jsonise => jsonise_override
@@ -38,10 +38,10 @@ contains
   ! data2 is optional; omitting it zeros the secondary trace.
   ! All supplied arrays must be the same length and must not exceed MAX_TIMEPLOT_POINTS.
   subroutine set( self, name, labels, data, data2 )
-    class(gui_metadata_timeplot),              intent(inout) :: self
-    type(string),                              intent(in)    :: name
-    real,                         allocatable, intent(in)    :: labels(:), data(:)
-    real,                         allocatable, intent(in), optional :: data2(:)
+    class(gui_metadata_timeplot),              intent(inout)                     :: self
+    type(string),                              intent(in)                        :: name
+    real,                                      allocatable, intent(in)           :: labels(:), data(:)
+    real,                                      allocatable, intent(in), optional :: data2(:)
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( size(labels) /= size(data) ) THROW_HARD('labels and data differ in size')
     if( size(labels) > size(self%labels) ) THROW_HARD('labels exceeds maximum timeplot size')
@@ -63,9 +63,9 @@ contains
 
   ! Return the plot name, labels, and both data traces; result is .true. if assigned.
   function get( self, name, labels, data, data2 ) result( l_assigned )
-    class(gui_metadata_timeplot),              intent(in)  :: self
-    type(string),                              intent(out) :: name
-    real,                         allocatable, intent(out) :: labels(:), data(:), data2(:)
+    class(gui_metadata_timeplot),              intent(in)               :: self
+    type(string),                              intent(out)              :: name
+    real,                                      allocatable, intent(out) :: labels(:), data(:), data2(:)
     logical                                               :: l_assigned
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned = self%l_assigned

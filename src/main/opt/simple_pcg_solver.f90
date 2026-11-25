@@ -26,43 +26,43 @@ type, abstract :: pcg_operator
 end type pcg_operator
 
 type :: pcg_solver_options
-    integer           :: maxits = 50
-    real              :: rtol = 1.0e-4
-    real              :: xtol = PCG_XTOL
-    integer           :: residual_replace = PCG_RESID_REPLACE
-    real              :: start_max_rel_residual = -1.0
-    logical           :: rescale_start = .false.
-    logical           :: cold_restart = .false.
+    integer           :: maxits                        = 50
+    real              :: rtol                          = 1.0e-4
+    real              :: xtol                          = PCG_XTOL
+    integer           :: residual_replace              = PCG_RESID_REPLACE
+    real              :: start_max_rel_residual        = -1.0
+    logical           :: rescale_start                 = .false.
+    logical           :: cold_restart                  = .false.
     logical           :: track_preconditioned_residual = .true.
-    logical           :: record_history = .true.
-    integer           :: verbose = 0
-    character(len=96) :: tag = 'PCG'
+    logical           :: record_history                = .true.
+    integer           :: verbose                       = 0
+    character(len=96) :: tag                           = 'PCG'
 end type pcg_solver_options
 
 !> Solver facts shared by reconstruction and coupled FLEX solves. The
 !! closed-form fields are populated by reconstruction after this engine returns.
 type :: pcg_solver_outcome
-    character(len=24) :: stop_reason          = 'not_started'
-    integer           :: iteration_count      = 0
-    integer           :: requested_maxits     = 0
-    real              :: initial_rel_residual = 0.0
-    real              :: final_rel_residual   = 0.0
-    real              :: final_rel_residual_m = -1.0
-    real              :: final_rel_update     = 0.0
-    real(dp)          :: failure_curvature    = 0.0_dp
-    integer           :: failure_iteration    = 0
-    real(dp)          :: restart_trigger_curvature = 0.0_dp
-    integer           :: restart_trigger_iteration = 0
-    logical           :: cold_restart_used    = .false.
-    logical           :: start_rejected       = .false.
-    real              :: rejected_start_initial = 0.0
-    logical           :: converged            = .false.
-    real              :: rhs_norm             = 0.0
-    real              :: start_norm           = 0.0
-    real              :: start_corr           = 0.0
-    real              :: start_scale          = 0.0
-    integer           :: iters_to_1e2          = 0
-    real              :: seconds               = 0.0
+    character(len=24) :: stop_reason                = 'not_started'
+    integer           :: iteration_count            = 0
+    integer           :: requested_maxits           = 0
+    real              :: initial_rel_residual       = 0.0
+    real              :: final_rel_residual         = 0.0
+    real              :: final_rel_residual_m       = -1.0
+    real              :: final_rel_update           = 0.0
+    real(dp)          :: failure_curvature          = 0.0_dp
+    integer           :: failure_iteration          = 0
+    real(dp)          :: restart_trigger_curvature  = 0.0_dp
+    integer           :: restart_trigger_iteration  = 0
+    logical           :: cold_restart_used          = .false.
+    logical           :: start_rejected             = .false.
+    real              :: rejected_start_initial     = 0.0
+    logical           :: converged                  = .false.
+    real              :: rhs_norm                   = 0.0
+    real              :: start_norm                 = 0.0
+    real              :: start_corr                 = 0.0
+    real              :: start_scale                = 0.0
+    integer           :: iters_to_1e2               = 0
+    real              :: seconds                    = 0.0
     real              :: closed_form_rel_residual   = -1.0
     real              :: closed_form_rel_residual_m = -1.0
     real              :: closed_form_fsc05_res      = 0.0
@@ -85,22 +85,22 @@ abstract interface
 
     subroutine pcg_apply_i( self, x, y )
         import :: pcg_operator
-        class(pcg_operator), intent(inout) :: self
-        real, contiguous, target, intent(in)  :: x(:)
-        real, contiguous, target, intent(out) :: y(:)
+        class(pcg_operator), intent(inout)                   :: self
+        real,                contiguous, target, intent(in)  :: x(:)
+        real,                contiguous, target, intent(out) :: y(:)
     end subroutine pcg_apply_i
 
     subroutine pcg_precond_i( self, r, z )
         import :: pcg_operator
-        class(pcg_operator), intent(inout) :: self
-        real, contiguous, target, intent(in)  :: r(:)
-        real, contiguous, target, intent(out) :: z(:)
+        class(pcg_operator), intent(inout)                   :: self
+        real,                contiguous, target, intent(in)  :: r(:)
+        real,                contiguous, target, intent(out) :: z(:)
     end subroutine pcg_precond_i
 
     real(dp) function pcg_dot_i( self, a, b ) result(value)
         import :: dp, pcg_operator
-        class(pcg_operator), intent(in) :: self
-        real, contiguous, target, intent(in) :: a(:), b(:)
+        class(pcg_operator), intent(in)                     :: self
+        real,                contiguous, target, intent(in) :: a(:), b(:)
     end function pcg_dot_i
 end interface
 
@@ -110,17 +110,17 @@ contains
     !! and Hp are allocated here. A cold retry, when requested, is permitted
     !! only for an indefinite warm attempt.
     subroutine pcg_solve( op, b, x, options, outcome )
-        class(pcg_operator),       intent(inout) :: op
-        real, contiguous,          intent(in)    :: b(:)
-        real, contiguous,          intent(inout) :: x(:)
-        type(pcg_solver_options),  intent(in)    :: options
-        type(pcg_solver_outcome),  intent(out)   :: outcome
-        real, allocatable :: r(:), p(:), hp(:), z(:)
-        real, allocatable :: rhist(:), xhist(:), mhist(:), thist(:)
-        real(dp) :: rho, rho_new, rho0, alpha, beta, pHp
-        real(dp) :: bnorm, rnorm, xnorm, dxnorm, mnorm, dxx, hnorm, bh
-        integer :: n, iter, n_done, attempt, max_attempts
-        logical :: l_warm, retry, stop_rtol, stop_xtol
+        class(pcg_operator),       intent(inout)                      :: op
+        real,                      contiguous,          intent(in)    :: b(:)
+        real,                      contiguous,          intent(inout) :: x(:)
+        type(pcg_solver_options),  intent(in)                         :: options
+        type(pcg_solver_outcome),  intent(out)                        :: outcome
+        real, allocatable       :: r(:), p(:), hp(:), z(:)
+        real, allocatable       :: rhist(:), xhist(:), mhist(:), thist(:)
+        real(dp)                :: rho, rho_new, rho0, alpha, beta, pHp
+        real(dp)                :: bnorm, rnorm, xnorm, dxnorm, mnorm, dxx, hnorm, bh
+        integer                 :: n, iter, n_done, attempt, max_attempts
+        logical                 :: l_warm, retry, stop_rtol, stop_xtol
         integer(timer_int_kind) :: t_it
 
         n = op%size()

@@ -23,7 +23,7 @@ integer            :: kfromto(2) ! Fourier index range
 
 type sym_stats
     character(len=:), allocatable :: str
-    real :: cc
+    real                          :: cc
 end type sym_stats
 
 contains
@@ -100,9 +100,9 @@ contains
 
     subroutine print_subgroups
         type(sym_stats), allocatable :: pgrps(:)
-        integer, parameter :: cn_stop = 10
-        integer   :: ncsym, nsym, cnt, icsym, idsym, isym
-        type(sym) :: symobj
+        integer,         parameter   :: cn_stop = 10
+        integer                      :: ncsym, nsym, cnt, icsym, idsym, isym
+        type(sym)                    :: symobj
         ! count # symmetries
         ncsym = cn_stop
         nsym  = ncsym * 2 ! because we always search for dihedral symmetries
@@ -138,22 +138,22 @@ contains
 
     subroutine symmetry_tester( params, vol_in, msk, hp, lp, cn_stop, platonic, pgrp_out, fname_out )
         use simple_parameters, only: parameters
-        class(parameters),       intent(in)    :: params
-        class(projector),        intent(inout) :: vol_in
-        real,                    intent(in)    :: msk, hp, lp
-        integer,                 intent(in)    :: cn_stop
-        logical,                 intent(in)    :: platonic
-        character(len=3),        intent(out)   :: pgrp_out
-        class(string), optional, intent(in) :: fname_out
+        class(parameters),       intent(in)           :: params
+        class(projector),        intent(inout)        :: vol_in
+        real,                    intent(in)           :: msk, hp, lp
+        integer,                 intent(in)           :: cn_stop
+        logical,                 intent(in)           :: platonic
+        character(len=3),        intent(out)          :: pgrp_out
+        class(string),           optional, intent(in) :: fname_out
         type(sym_stats), allocatable    :: pgrps(:)
-        real,    allocatable  :: ccs(:), zscores(:)
-        integer, allocatable  :: peaks(:), labels(:)
-        type(sym)             :: symobj
-        character(len=STDLEN) :: errmsg
-        character(len=3)      :: pgrp_sub
-        integer :: ncsym, icsym, cnt, idsym, ldim(3), nsub, isub, npeaks
-        integer :: isym, filtsz, fnr, highest_pgrp_detected
-        real    :: smpd, means(NCLS)
+        real,            allocatable    :: ccs(:), zscores(:)
+        integer,         allocatable    :: peaks(:), labels(:)
+        type(sym)                       :: symobj
+        character(len=STDLEN)           :: errmsg
+        character(len=3)                :: pgrp_sub
+        integer                         :: ncsym, icsym, cnt, idsym, ldim(3), nsub, isub, npeaks
+        integer                         :: isym, filtsz, fnr, highest_pgrp_detected
+        real                            :: smpd, means(NCLS)
         ! get info from vol_in
         smpd       = vol_in%get_smpd()
         filtsz     = vol_in%get_filtsz()
@@ -265,14 +265,14 @@ contains
     subroutine eval_point_groups( params, vol_in, msk, hp, lp, pgrps )
         use simple_parameters, only: parameters
         class(parameters), intent(in)    :: params
-        class(projector), intent(inout) :: vol_in
-        real,             intent(in)    :: msk, hp, lp
-        type(sym_stats),  intent(inout) :: pgrps(:)
+        class(projector),  intent(inout) :: vol_in
+        real,              intent(in)    :: msk, hp, lp
+        type(sym_stats),   intent(inout) :: pgrps(:)
         type(projector) :: vol_pad
         type(image)     :: rovol_pad, rovol, vol_asym_aligned2axis, vol_sym
         type(ori)       :: symaxis
         type(sym)       :: symobj
-        real            :: rmat_symaxis(3,3), smpd!, cxyz(4)
+        real            :: rmat_symaxis(3,3), smpd !, cxyz(4)
         integer         :: filtsz, ldim(3), boxpd, igrp, ldim_pd(3)
         ! prepare for volume rotations
         ldim    = vol_in%get_ldim()

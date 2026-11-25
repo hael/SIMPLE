@@ -17,9 +17,9 @@ contains
     ! SOURCE :
     ! https://en.wikipedia.org/wiki/Butterworth_filter
     pure function butterworth(s, n, fc) result(val)
-        real   , intent(in)  :: s
+        real,    intent(in)  :: s
         integer, intent(in)  :: n
-        real   , intent(in)  :: fc
+        real,    intent(in)  :: fc
         real                 :: val
         real,    parameter :: AN(11,10) = reshape((/ 1., 1.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    , 0.    , 0.,&
                                                     &1., 1.4142,  1.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    , 0.    , 0.,&
@@ -33,9 +33,9 @@ contains
                                                     &1., 6.3925, 20.4317, 42.8021, 64.8824, 74.2334, 64.8824, 42.8021, 20.4317, 6.3925, 1. /),&
                                                     &(/11,10/))
         complex, parameter :: J = (0, 1) ! Complex identity: j = sqrt(-1)
-        complex :: Bn, Kn                ! Normalized Butterworth polynomial, its derivative and its reciprocal
-        complex :: js                    ! frequency is multiplied by the complex identity j
-        integer :: k
+        complex            :: Bn, Kn     ! Normalized Butterworth polynomial, its derivative and its reciprocal
+        complex            :: js         ! frequency is multiplied by the complex identity j
+        integer            :: k
         Bn  = (0., 0.)
         if (s/fc < 100) then
             js  = J*s/fc

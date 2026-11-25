@@ -64,9 +64,9 @@ contains
         class(cmdline),         intent(inout) :: cline
         type(string)              :: getstring, getstring_base
         type(starfile_table_type) :: table
-        integer :: i,j
-        logical :: exists
-        logical :: state, movie, intg, smpd, kv, cs, fraca, opticsgroup
+        integer                   :: i,j
+        logical                   :: exists
+        logical                   :: state, movie, intg, smpd, kv, cs, fraca, opticsgroup
         if(spproj%os_mic%get_noris() == 0) then
             return
         endif
@@ -156,7 +156,7 @@ contains
         real(dp)                  :: dfx, dfy
         integer                   :: i,j
         logical                   :: exists
-        logical :: state, intg, forctf, pspec, smpd, kv, cs, l_dfx, l_dfy, angast, fraca, opticsgroup
+        logical                   :: state, intg, forctf, pspec, smpd, kv, cs, l_dfx, l_dfy, angast, fraca, opticsgroup
         if(spproj%os_mic%get_noris() == 0) then
             return
         endif
@@ -254,8 +254,8 @@ contains
         character(len=*),           intent(in)    :: path, new_suffix
         class(starfile_table_type), intent(inout) :: table
         type(string) :: str_base, filename
-        integer :: lgstr
-        logical :: exists
+        integer      :: lgstr
+        logical      :: exists
         str_base = basename(str)
         lgstr          = len(str_base%to_char())
         filename       = str_base%to_char([1,lgstr-len_suffix]) // trim(new_suffix)
@@ -284,8 +284,8 @@ contains
         real(dp)                  :: dfx, dfy
         integer                   :: i, j, stkindex, nbase, ind_in_stk
         logical                   :: exists
-        logical :: state, stkstate, stkind, smpd, kv, cs, l_dfx, l_dfy, angast, fraca
-        logical :: ptcldfx, ptcldfy, ptclangast, coords, stk, box, opticsgroup, eo
+        logical                   :: state, stkstate, stkind, smpd, kv, cs, l_dfx, l_dfy, angast, fraca
+        logical                   :: ptcldfx, ptcldfy, ptclangast, coords, stk, box, opticsgroup, eo
         real                      :: dfxmin
         real                      :: dfxmax
         real                      :: dfxstep
@@ -459,7 +459,7 @@ contains
             subroutine write_pose( os )
                 class(oris), intent(in) :: os
                 character(len=XLONGSTRLEN) :: msg, stkname
-                real :: smpd, x, y
+                real                       :: smpd, x, y
                 if( l_poses3D )then
                     call starfile_table__setValue_double(table, EMDL_ORIENT_ROT,  real(os%e1get(i), dp))
                     call starfile_table__setValue_double(table, EMDL_ORIENT_TILT, real(os%e2get(i), dp))
@@ -523,8 +523,8 @@ contains
     subroutine generate_epu_tiltgroups(self)
         class(relion_project),  intent(inout)   :: self
         integer                                 :: i,j,k
-        character(len=20), allocatable :: tiltgroups(:)
-        type(string) :: tiltname, tmpname
+        character(len=20), allocatable          :: tiltgroups(:)
+        type(string)                            :: tiltname, tmpname
         if(.NOT. allocated(tiltgroups)) then
             allocate(tiltgroups(50))            ! Max 50 raw groups set here(ie per stage movement)
         end if
@@ -574,16 +574,16 @@ contains
         class(relion_project),  intent(inout)   :: self
         class(cmdline),         intent(inout)   :: cline
         character(len=20), allocatable :: tiltgroups(:)
-        integer              :: i,j
-        type(string)         :: tiltname, tmpname, fname, fname_eps, xmlloc_file
-        type(string)         :: title
-        type(CPlot2D_type)   :: plot2D
-        type(CDataSet_type)  :: dataSet
-        real                 :: beamtiltx, beamtilty, threshold
-        logical              :: l_beamshift
-        real,    allocatable :: tilts(:,:), centroids(:,:)
-        integer, allocatable :: populations(:) 
-        integer              :: pos
+        integer                        :: i,j
+        type(string)                   :: tiltname, tmpname, fname, fname_eps, xmlloc_file
+        type(string)                   :: title
+        type(CPlot2D_type)             :: plot2D
+        type(CDataSet_type)            :: dataSet
+        real                           :: beamtiltx, beamtilty, threshold
+        logical                        :: l_beamshift
+        real,              allocatable :: tilts(:,:), centroids(:,:)
+        integer,           allocatable :: populations(:)
+        integer                        :: pos
         call seed_rnd
         write(logfhandle, *) "Parsing movie XML files ... "
         if(cline%get_carg('xmlloc') .eq. '') then
@@ -698,9 +698,9 @@ contains
         class(sp_project),      intent(inout) :: spproj
         class(cmdline),         intent(inout) :: cline
         integer, allocatable :: opticsgroupmap(:,:)
-        type(string) :: moviename
-        integer      :: i, j
-        real         :: tiltgroupmax
+        type(string)         :: moviename
+        integer              :: i, j
+        real                 :: tiltgroupmax
         tiltgroupmax = cline%get_rarg('tiltgroupmax')
         if(.NOT. allocated(opticsgroupmap)) then
             allocate(opticsgroupmap(2, self%opticsgroups)) !1:count, 2: current mapped cluster id
@@ -777,16 +777,16 @@ contains
     ! distance threshold based yerarchical clustering
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
     subroutine h_clust(data_in,thresh,labels,centroids,populations)
-        real,    intent(in)  :: data_in(:,:)   ! input data, point coords
-        real,    intent(in)  :: thresh         ! threshold for class merging
-        integer, intent(out) :: labels(:)      ! labels of the elements in vec
+        real,    intent(in)               :: data_in(:,:)   ! input data, point coords
+        real,    intent(in)               :: thresh         ! threshold for class merging
+        integer, intent(out)              :: labels(:)      ! labels of the elements in vec
         real,    allocatable, intent(out) :: centroids(:,:) ! centroids of the classes
         integer, allocatable, intent(out) :: populations(:) ! number of elements belonging to each class
         real,    allocatable :: mat(:,:)                    ! pariwise distances matrix
         logical, allocatable :: mask(:), outliers(:)
-        integer :: N, i, j, cnt, ncls
-        integer :: index(1), loc1(1), loc2(1)
-        real    :: d
+        integer              :: N, i, j, cnt, ncls
+        integer              :: index(1), loc1(1), loc2(1)
+        real                 :: d
         if( size(data_in, dim = 2) .ne. 2 ) THROW_HARD('Input data shouldbe two dimensional!; h_clust')
         N = size(data_in, dim = 1) ! number of data points
         ! 1) calc all the couples of distances, using euclid dist

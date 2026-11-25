@@ -8,7 +8,7 @@ use simple_fileio, only: fopen, fclose
 implicit none
 
 integer, parameter :: PFTSZ = 12, KFROMTO(2) = [2, 9], NK = 8, BOX = 32, NSPACE = 100, WIDTH = 2
-real,    parameter :: SMPD = 1.0, MSKDIAM = 24., LP = 4.
+real,    parameter :: SMPD  = 1.0, MSKDIAM = 24., LP = 4.
 
 contains
 
@@ -27,11 +27,11 @@ contains
     !! rounding bound, read at that temperature; the same rows read at half or twice it (a tempered teacher) exceed it;
     !! invalid entries carry no mass
     subroutine test_physical_row_audit()
-        integer,  parameter :: N = 500, NROWS = 20
+        integer,  parameter :: N        = 500, NROWS = 20
         real(sp), parameter :: TEMPS(3) = [50., 800., 3000.]
-        real(sp) :: dists(N), t(N)
-        real(dp) :: dev(2), dev_lo(2), dev_hi(2), worst
-        integer  :: irow, i, it
+        real(sp)            :: dists(N), t(N)
+        real(dp)            :: dev(2), dev_lo(2), dev_hi(2), worst
+        integer             :: irow, i, it
         write(*,'(A)') 'test_physical_row_audit'
         call set_fixed_seed(20261117)
         worst = 0.d0
@@ -59,11 +59,11 @@ contains
 
     !> a student of the tiny geometry with random positive shell weights (kfromto and box for a wider band)
     subroutine make_student( student, seed, kf, box_here )
-        type(pose_student), intent(inout) :: student
-        integer(int64),     intent(in)    :: seed
-        integer, optional,  intent(in)    :: kf(2), box_here
+        type(pose_student), intent(inout)         :: student
+        integer(int64),     intent(in)            :: seed
+        integer,            optional,  intent(in) :: kf(2), box_here
         real(sp), allocatable :: wk(:,:)
-        integer :: k, kf_here(2), b
+        integer               :: k, kf_here(2), b
         kf_here = KFROMTO
         b       = BOX
         if( present(kf) ) kf_here = kf
@@ -97,8 +97,8 @@ contains
         type(pose_student), intent(inout) :: student
         integer,            intent(in)    :: nk_here
         real(sp), allocatable :: xrefs(:,:,:,:)
-        real(sp) :: ctf2(nk_here)
-        integer  :: i
+        real(sp)              :: ctf2(nk_here)
+        integer               :: i
         allocate(xrefs(PFTSZ, nk_here, 2, NSPACE))
         do i = 1,NSPACE
             call random_tensor(nk_here, xrefs(:,:,:,i), ctf2)
@@ -121,9 +121,9 @@ contains
     !! directions (the spiral's first half), none on their mirrors, which the search tests
     subroutine test_pairs()
         type(pose_student) :: student
-        real(sp) :: x(PFTSZ, NK, 2), ctf2(NK), prob(NSPACE)
-        integer  :: p, k, part, i
-        logical  :: l_halves
+        real(sp)           :: x(PFTSZ, NK, 2), ctf2(NK), prob(NSPACE)
+        integer            :: p, k, part, i
+        logical            :: l_halves
         write(*,'(A)') 'test_pairs'
         call make_student(student, 20261109_int64)
         do part = 1,2
@@ -154,8 +154,8 @@ contains
     subroutine test_cone()
         type(pose_student) :: student
         type(student_pred) :: pred
-        real(sp) :: prob(NSPACE), euls(3), ang
-        integer  :: j, m7, m30
+        real(sp)           :: prob(NSPACE), euls(3), ang
+        integer            :: j, m7, m30
         write(*,'(A)') 'test_cone'
         call make_student(student, 20261113_int64)
         m7  = student%mirror_of(7)
@@ -202,14 +202,14 @@ contains
     !> The model file: the header and the weights written and read back give the same geometry, grid, weights
     !! and, bit for bit, the same prediction
     subroutine test_file_roundtrip()
-        type(pose_student) :: student, back
-        type(polar_feats)  :: feats
-        type(polar_feat)   :: feat
-        type(string)       :: cwd_saved, fixture_root, fname
-        complex(sp) :: pft(PFTSZ, KFROMTO(1):KFROMTO(2))
-        real(sp)    :: ctfmat(PFTSZ, KFROMTO(1):KFROMTO(2)), prob0(NSPACE), prob1(NSPACE)
+        type(pose_student)    :: student, back
+        type(polar_feats)     :: feats
+        type(polar_feat)      :: feat
+        type(string)          :: cwd_saved, fixture_root, fname
+        complex(sp)           :: pft(PFTSZ, KFROMTO(1):KFROMTO(2))
+        real(sp)              :: ctfmat(PFTSZ, KFROMTO(1):KFROMTO(2)), prob0(NSPACE), prob1(NSPACE)
         real(sp), allocatable :: wk0(:,:), wk1(:,:)
-        integer  :: nfail0, p, k, kf(2)
+        integer               :: nfail0, p, k, kf(2)
         write(*,'(A)') 'test_file_roundtrip'
         nfail0 = tests_failed
         call enter_fixture('pose_student_file', cwd_saved, fixture_root)
@@ -257,8 +257,8 @@ contains
     subroutine test_weights_contract()
         type(pose_student) :: sa, sb, sf, back
         type(string)       :: cwd_saved, fixture_root
-        real(sp) :: x(PFTSZ, NK, 2), ctf2(NK), pa(NSPACE), pb(NSPACE), pf(NSPACE), p1(NSPACE)
-        integer  :: nfail0, funit, io_stat, status
+        real(sp)           :: x(PFTSZ, NK, 2), ctf2(NK), pa(NSPACE), pb(NSPACE), pf(NSPACE), p1(NSPACE)
+        integer            :: nfail0, funit, io_stat, status
         character(len=256) :: line
         write(*,'(A)') 'test_weights_contract'
         nfail0 = tests_failed
@@ -314,10 +314,10 @@ contains
     !! calibrated one after a reload: values the five-decimal form would merge or split, next to its boundary
     subroutine test_threshold_roundtrip()
         real(sp), parameter :: THRESHOLDS(4) = [0.990005, 0.9900049, 0.9999999, 0.31415927]
-        type(pose_student) :: student, back
-        type(string)       :: cwd_saved, fixture_root
-        real(sp) :: conf(5), t0, t1, cf, hs, hr
-        integer  :: nfail0, it
+        type(pose_student)  :: student, back
+        type(string)        :: cwd_saved, fixture_root
+        real(sp)            :: conf(5), t0, t1, cf, hs, hr
+        integer             :: nfail0, it
         write(*,'(A)') 'test_threshold_roundtrip'
         nfail0 = tests_failed
         call enter_fixture('pose_student_threshold', cwd_saved, fixture_root)
@@ -340,12 +340,12 @@ contains
     !> Models of 227 and 228 shells, either side of the header's former 4,096-character line, read back exactly:
     !! the shell weights bit for bit and the same prediction
     subroutine test_wide_band()
-        integer, parameter :: KLO = 2, NSHELLS(2) = [227, 228], BOX_WIDE = 512
-        type(pose_student) :: student, back
-        type(string)       :: cwd_saved, fixture_root
+        integer,  parameter   :: KLO = 2, NSHELLS(2) = [227, 228], BOX_WIDE = 512
+        type(pose_student)    :: student, back
+        type(string)          :: cwd_saved, fixture_root
         real(sp), allocatable :: x(:,:,:), ctf2(:), wk0(:,:), wk1(:,:)
-        real(sp) :: p0(NSPACE), p1(NSPACE)
-        integer  :: nfail0, is, kf(2), nk_here
+        real(sp)              :: p0(NSPACE), p1(NSPACE)
+        integer               :: nfail0, is, kf(2), nk_here
         write(*,'(A)') 'test_wide_band'
         nfail0 = tests_failed
         call enter_fixture('pose_student_wide', cwd_saved, fixture_root)

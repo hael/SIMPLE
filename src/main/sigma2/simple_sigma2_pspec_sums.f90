@@ -51,15 +51,15 @@ contains
     !! or oversized file, one summed over another number of shells, or an image count outside the range.
     !! Shell count and file size are checked before anything is allocated.
     subroutine read_pspec_part_sums( fname, nshell_expected, fromp, top, nimgs, sums, status, message )
-        character(len=*),          intent(in)  :: fname
-        integer,                   intent(in)  :: nshell_expected
-        integer,                   intent(out) :: fromp, top, nimgs
-        real(real64), allocatable, intent(out) :: sums(:,:)
-        integer,                   intent(out) :: status
-        character(len=*),          intent(out) :: message
+        character(len=*),          intent(in)               :: fname
+        integer,                   intent(in)               :: nshell_expected
+        integer,                   intent(out)              :: fromp, top, nimgs
+        real(real64),              allocatable, intent(out) :: sums(:,:)
+        integer,                   intent(out)              :: status
+        character(len=*),          intent(out)              :: message
         character(len=16) :: magic
         integer(int64)    :: file_bytes, expected_bytes
-        integer :: funit, nshell
+        integer           :: funit, nshell
         fromp = 0
         top   = -1
         nimgs = 0

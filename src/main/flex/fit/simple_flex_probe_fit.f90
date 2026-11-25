@@ -40,10 +40,10 @@ type, extends(flex_fit) :: flex_probe_fit
     procedure, pass(fit) :: estep_particle     => fit_estep_particle      !< the same for one particle (interleaved owners)
     ! ---- the M-step contract ----
     procedure, pass(fit) :: mstep_insert_batch => fit_batch_insert        !< accumulate one batch into Y/rho (and the PCG kernels)
-    procedure, pass(fit) :: iter_begin  => fit_iter_begin
-    procedure, pass(fit) :: iter_reduce => fit_iter_reduce
-    procedure, pass(fit) :: iter_finish => fit_iter_finish
-    procedure, pass(fit) :: merge_stash => probe_fit_merge_stash
+    procedure, pass(fit) :: iter_begin         => fit_iter_begin
+    procedure, pass(fit) :: iter_reduce        => fit_iter_reduce
+    procedure, pass(fit) :: iter_finish        => fit_iter_finish
+    procedure, pass(fit) :: merge_stash        => probe_fit_merge_stash
 end type flex_probe_fit
 
 type :: flex_mean_ref
@@ -197,9 +197,9 @@ interface
     end subroutine run_all_flex_probe_fit_tests
 
     module subroutine reduce_probe_parts( params, rounds, part )
-        class(parameters),     intent(in)    :: params
+        class(parameters),      intent(in)    :: params
         class(flex_pca_rounds), intent(inout) :: rounds
-        type(flex_probe_part), intent(inout) :: part
+        type(flex_probe_part),  intent(inout) :: part
     end subroutine reduce_probe_parts
 
     module subroutine open_probe_part_write( fname, nfits, funit, tmp_fname )
@@ -238,16 +238,16 @@ interface
 
     module subroutine probe_subspace_iteration( params, build, plane_store, pcg_env, model, sel, niters, it_glob, &
         &niters_glob, fprefix, meta_fname, rounds )
-        class(flex_pca_rounds),     intent(inout)         :: rounds
-        class(parameters),          intent(inout)         :: params
-        type(builder),              intent(inout)         :: build
-        class(flex_plane_store),    intent(inout)         :: plane_store
-        class(flex_pcg_environment), intent(in)           :: pcg_env
-        type(flex_fit_model),       intent(inout), target :: model
-        type(flex_selection),       intent(in)            :: sel
-        integer,                    intent(in)            :: niters
-        integer,          optional, intent(in)            :: it_glob, niters_glob
-        character(len=*), optional, intent(in)            :: fprefix, meta_fname
+        class(flex_pca_rounds),      intent(inout)         :: rounds
+        class(parameters),           intent(inout)         :: params
+        type(builder),               intent(inout)         :: build
+        class(flex_plane_store),     intent(inout)         :: plane_store
+        class(flex_pcg_environment), intent(in)            :: pcg_env
+        type(flex_fit_model),        intent(inout), target :: model
+        type(flex_selection),        intent(in)            :: sel
+        integer,                     intent(in)            :: niters
+        integer,                     optional, intent(in)  :: it_glob, niters_glob
+        character(len=*),            optional, intent(in)  :: fprefix, meta_fname
     end subroutine probe_subspace_iteration
 
     module subroutine fit_engine_iterate( params, build, plane_store, fits, means, nfits, niters, &

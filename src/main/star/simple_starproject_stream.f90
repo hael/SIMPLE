@@ -45,11 +45,11 @@ contains
     ! The STAR file @p fname in @p outdir (the working directory when empty; an absolute @p fname
     ! is taken as it is). Paths in it are relative to the folder above @p outdir, the project root.
     subroutine starfile_init( self, params, fname, outdir, verbose)
-        class(starproject_stream), intent(inout) :: self
-        class(parameters),         intent(in)    :: params
-        class(string),             intent(in)    :: fname
-        class(string),             intent(in)    :: outdir
-        logical, optional,         intent(in)    :: verbose
+        class(starproject_stream), intent(inout)                :: self
+        class(parameters),         intent(in)                   :: params
+        class(string),             intent(in)                   :: fname
+        class(string),             intent(in)                   :: outdir
+        logical,                   optional,         intent(in) :: verbose
         type(string) :: cwd, stem
         if(present(verbose)) self%verbose = verbose
         if( outdir%strlen() > 0 )then
@@ -144,7 +144,7 @@ contains
     subroutine starfile_set_micrographs_table( self, spproj )
         class(starproject_stream),  intent(inout) :: self
         class(sp_project),          intent(inout) :: spproj
-        integer               :: i, pathtrim
+        integer                    :: i, pathtrim
         character(len=XLONGSTRLEN) :: str_mov, str_intg, str_mcs, str_boxf, str_ctfj
         pathtrim = 0
         call starfile_table__clear(self%starfile)
@@ -195,8 +195,8 @@ contains
         class(sp_project),         intent(inout) :: spproj
         type(string)               :: stkname
         character(len=XLONGSTRLEN) :: str_stk, str_mic, msg
-        integer      :: i, ind_in_stk, stkind, pathtrim, half_boxsize
-        real         :: smpd
+        integer                    :: i, ind_in_stk, stkind, pathtrim, half_boxsize
+        real                       :: smpd
         pathtrim = 0
         call starfile_table__clear(self%starfile)
         call starfile_table__new(self%starfile)
@@ -249,12 +249,12 @@ contains
     ! export
 
     subroutine stream_export_micrographs( self, params, spproj, outdir, optics_set, filename)
-        class(starproject_stream), intent(inout) :: self
-        class(parameters),         intent(in)    :: params
-        class(sp_project),         intent(inout) :: spproj
-        class(string),             intent(in)    :: outdir
-        class(string), optional,   intent(in)    :: filename
-        logical,       optional,   intent(in)    :: optics_set
+        class(starproject_stream), intent(inout)          :: self
+        class(parameters),         intent(in)             :: params
+        class(sp_project),         intent(inout)          :: spproj
+        class(string),             intent(in)             :: outdir
+        class(string),             optional,   intent(in) :: filename
+        logical,                   optional,   intent(in) :: optics_set
         logical  :: l_optics_set
         if( spproj%os_mic%get_noris() == 0 ) return
         l_optics_set = .false.
@@ -290,12 +290,12 @@ contains
     end subroutine stream_write_optics
 
     subroutine stream_export_particles_2D( self, params, spproj, outdir, optics_set, filename, verbose)
-        class(starproject_stream), intent(inout) :: self
-        class(parameters),         intent(in)    :: params
-        class(sp_project),         intent(inout) :: spproj
-        class(string),             intent(in)    :: outdir
-        class(string), optional,   intent(in)    :: filename
-        logical,       optional,   intent(in)    :: optics_set, verbose
+        class(starproject_stream), intent(inout)          :: self
+        class(parameters),         intent(in)             :: params
+        class(sp_project),         intent(inout)          :: spproj
+        class(string),             intent(in)             :: outdir
+        class(string),             optional,   intent(in) :: filename
+        logical,                   optional,   intent(in) :: optics_set, verbose
         logical                 :: l_optics_set, l_verbose
         integer(timer_int_kind) :: ms0
         real(timer_int_kind)    :: ms_complete
@@ -358,8 +358,8 @@ contains
         class(starproject_stream),  intent(inout) :: self
         class(sp_project),          intent(inout) :: spproj, spproj_src
         integer, allocatable :: ogmap(:)
-        real    :: min_importind, max_importind
-        integer :: i, stkind
+        real                 :: min_importind, max_importind
+        integer              :: i, stkind
         call spproj%os_mic%minmax('importind', min_importind, max_importind)
         call spproj%os_optics%copy(spproj_src%os_optics, is_ptcl=.false.)
         allocate(ogmap(int(max_importind)))

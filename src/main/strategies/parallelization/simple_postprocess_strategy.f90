@@ -23,8 +23,8 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         type(image)      :: vol_unfil, vol_unfil_odd
-        real    :: smpd
-        integer :: state, box, fsc_box
+        real             :: smpd
+        integer          :: state, box, fsc_box
         ! set defaults
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'out')
@@ -95,22 +95,22 @@ contains
         use simple_vol_pproc_policy,    only: state_mask_is_compatible
         use simple_halfmap_diagnostics, only: read_support_provenance
         use simple_image_msk,           only: image_msk
-        class(string),   intent(in)    :: fname_vol, fname_fsc
-        integer,         intent(in)    :: box
-        real,            intent(in)    :: smpd
-        type(parameters),intent(inout) :: params
-        class(cmdline),  intent(inout) :: cline
-        integer,         intent(in)    :: state
-        class(string), optional, intent(in) :: pair_stem
+        class(string),   intent(in)           :: fname_vol, fname_fsc
+        integer,         intent(in)           :: box
+        real,            intent(in)           :: smpd
+        type(parameters),intent(inout)        :: params
+        class(cmdline),  intent(inout)        :: cline
+        integer,         intent(in)           :: state
+        class(string),   optional, intent(in) :: pair_stem
         real, allocatable :: fsc(:), res(:), bwfilter(:), optlp(:)
-        type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_envmsk
-        type(string)     :: fname_even_unfil, fname_odd_unfil
-        type(image)      :: vol_bfac, vol_no_bfac, vol_envmsk, vol_unfil, vol_unfil_odd
-        type(image_msk)  :: bfac_envmsk
-        real    :: fsc0143, fsc05, lplim, cap_gain
-        integer :: ldim(3), ldim_unfil(3), nptcls_unfil, lp_find
-        logical :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_unfil_pair
-        logical :: l_support_at_source, l_prov_constrained, l_prov_found, l_prov_kind, l_ml_shrunk
+        type(string)      :: fname_mirr, fname_pproc, fname_lp, fname_envmsk
+        type(string)      :: fname_even_unfil, fname_odd_unfil
+        type(image)       :: vol_bfac, vol_no_bfac, vol_envmsk, vol_unfil, vol_unfil_odd
+        type(image_msk)   :: bfac_envmsk
+        real              :: fsc0143, fsc05, lplim, cap_gain
+        integer           :: ldim(3), ldim_unfil(3), nptcls_unfil, lp_find
+        logical           :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_unfil_pair
+        logical           :: l_support_at_source, l_prov_constrained, l_prov_found, l_prov_kind, l_ml_shrunk
         character(len=32) :: prov_solve_kind, prov_support_kind
         character(len=32) :: cutoff_text, bfac_text, gain_text
         if( .not.file_exists(fname_vol) )then

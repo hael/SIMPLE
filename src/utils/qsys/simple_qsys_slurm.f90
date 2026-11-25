@@ -56,12 +56,12 @@ contains
 
     !> \brief  writes the header instructions
     subroutine write_slurm_header( self, q_descr, fhandle )
-        class(qsys_slurm), intent(in) :: self
-        class(chash),      intent(in) :: q_descr
-        integer, optional, intent(in) :: fhandle
+        class(qsys_slurm), intent(in)           :: self
+        class(chash),      intent(in)           :: q_descr
+        integer,           optional, intent(in) :: fhandle
         type(string) :: key, sbatch_cmd, sbatch_val
-        integer :: i, which
-        logical :: write2file
+        integer      :: i, which
+        logical      :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
         do i=1,q_descr%size_of()
@@ -94,13 +94,13 @@ contains
 
     !> \brief  writes the array header instructions
     subroutine write_slurm_array_header( self, q_descr, parts_fromto, fhandle, nactive )
-        class(qsys_slurm), intent(in) :: self
-        class(chash),      intent(in) :: q_descr
-        integer,           intent(in) :: parts_fromto(2)
-        integer, optional, intent(in) :: fhandle, nactive
+        class(qsys_slurm), intent(in)           :: self
+        class(chash),      intent(in)           :: q_descr
+        integer,           intent(in)           :: parts_fromto(2)
+        integer,           optional, intent(in) :: fhandle, nactive
         type(string) :: key, sbatch_cmd, sbatch_val
-        integer :: i, which
-        logical :: write2file
+        integer      :: i, which
+        logical      :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
         do i=1,q_descr%size_of()

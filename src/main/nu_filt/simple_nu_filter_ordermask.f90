@@ -9,16 +9,16 @@ implicit none
 contains
 
     module subroutine select_nu_order_mask( margin, locres, dense, even, odd, res05, factor, st, coarsest_lp )
-        real,                 intent(in)  :: margin(:,:,:), locres(:,:,:), even(:,:,:), odd(:,:,:), res05
-        logical,              intent(in)  :: dense(:,:,:)
-        real,                 intent(out) :: factor(:,:,:)
-        type(nu_order_stats), intent(out) :: st
-        real, optional,       intent(in)  :: coarsest_lp
-        real, allocatable :: vals(:), core_margin(:), core_even(:), core_odd(:)
+        real,                 intent(in)                 :: margin(:,:,:), locres(:,:,:), even(:,:,:), odd(:,:,:), res05
+        logical,              intent(in)                 :: dense(:,:,:)
+        real,                 intent(out)                :: factor(:,:,:)
+        type(nu_order_stats), intent(out)                :: st
+        real,                 optional,       intent(in) :: coarsest_lp
+        real,    allocatable :: vals(:), core_margin(:), core_even(:), core_odd(:)
         logical, allocatable :: core(:,:,:)
-        real(dp) :: baseline, kept, sm, sm2, peri, peri_kept, fine, fine_kept
-        real :: threshold, width, arg, w, m, coarse_resolution
-        integer :: nd, nc, ifr, it, i, j, k, v
+        real(dp)             :: baseline, kept, sm, sm2, peri, peri_kept, fine, fine_kept
+        real                 :: threshold, width, arg, w, m, coarse_resolution
+        integer              :: nd, nc, ifr, it, i, j, k, v
         st = nu_order_stats()
         factor = 1.
         coarse_resolution = lowpass_limits(1)
@@ -114,10 +114,10 @@ contains
         real,                 intent(in)    :: res05, lp_smooth
         type(image),          intent(inout) :: factor
         type(nu_order_stats), intent(out)   :: st
-        type(image) :: evmap, locres
-        real(c_float), pointer :: ev(:,:,:), lr(:,:,:), c(:,:,:), e(:,:,:), o(:,:,:), f(:,:,:)
-        logical, allocatable :: dense(:,:,:)
-        integer :: imask, i, j, k, omitted
+        type(image)                :: evmap, locres
+        real(c_float), pointer     :: ev(:,:,:), lr(:,:,:), c(:,:,:), e(:,:,:), o(:,:,:), f(:,:,:)
+        logical,       allocatable :: dense(:,:,:)
+        integer                    :: imask, i, j, k, omitted
         call get_nu_evidence_map(evmap, lp_smooth, NU_ENVMASK_RELATIVE)
         call get_nu_local_resolution_map(locres)
         call evmap%get_rmat_ptr(ev)
@@ -150,7 +150,7 @@ contains
     end subroutine make_nu_order_mask
 
     module subroutine report_nu_order_mask( state, st )
-        integer, intent(in) :: state
+        integer,              intent(in) :: state
         type(nu_order_stats), intent(in) :: st
         character(len=24) :: removed, kept_fine
         if( st%l_off )then

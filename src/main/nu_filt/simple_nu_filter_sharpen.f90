@@ -23,12 +23,12 @@ contains
         real,                    intent(in)    :: fsc(:)
         type(image),             intent(inout) :: vol_sharp
         type(nu_evidence_summary) :: summ
-        type(image) :: vol_merged, vol_work, vol_filt, vol_supp
-        real,    allocatable :: cutoffs(:), cutoff_map(:,:,:), distinct(:), filt(:), optlp(:), res(:)
-        real,    allocatable :: rtmp(:,:,:), rout(:,:,:)
-        logical, allocatable :: supp_lmask(:,:,:)
-        real    :: finest, bfac, mean_half, c_here, fsc05, fsc0143, kscaled, frac
-        integer :: ldim(3), i, j, k, imask, nyq, ndist, icut, cutoff_find, nnull, k0143, kk, klo
+        type(image)               :: vol_merged, vol_work, vol_filt, vol_supp
+        real,    allocatable      :: cutoffs(:), cutoff_map(:,:,:), distinct(:), filt(:), optlp(:), res(:)
+        real,    allocatable      :: rtmp(:,:,:), rout(:,:,:)
+        logical, allocatable      :: supp_lmask(:,:,:)
+        real                      :: finest, bfac, mean_half, c_here, fsc05, fsc0143, kscaled, frac
+        integer                   :: ldim(3), i, j, k, imask, nyq, ndist, icut, cutoff_find, nnull, k0143, kk, klo
         if( .not.nu_evidence_state_is_valid(state) ) &
             &THROW_HARD('cannot sharpen from an invalid NU evidence state; nu_evidence_sharpen_vol')
         call get_nu_evidence_summary(state, summ)

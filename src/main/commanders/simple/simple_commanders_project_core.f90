@@ -156,10 +156,10 @@ contains
         logical,          allocatable :: keys_present(:)
         character(len=STDLEN)         :: args(32)
         character(len=STDLEN)         :: str_static
-        logical    :: ischar
-        type(oris) :: os
-        integer    :: nargs, iseg, noris, ikey, iori, state
-        real       :: rval, norm(3)
+        logical                       :: ischar
+        type(oris)                    :: os
+        integer                       :: nargs, iseg, noris, ikey, iori, state
+        real                          :: rval, norm(3)
         ! parse the keys
         keys = cline%get_carg('keys')
         str_static = keys%to_char()
@@ -264,7 +264,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters)       :: params
         type(sp_project)       :: spproj
-        integer, parameter :: NREMAP_SCOPES = 4
+        integer, parameter     :: NREMAP_SCOPES = 4
         character(len=5), parameter :: REMAP_SCOPES(NREMAP_SCOPES) = &
             [character(len=5) :: 'mic', 'ptcl', 'cavg', 'vol']
         character(len=20), parameter :: REMAP_OLD_KEYS(NREMAP_SCOPES) = &
@@ -370,11 +370,11 @@ contains
         use simple_projfile_utils, only: merge_selected_project_files
         class(commander_merge_projects), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
+        type(parameters)          :: params
+        type(sp_project)          :: spproj
         type(string), allocatable :: fnames(:)
-        type(string) :: projfile_out, projtab_dir
-        integer :: iproj
+        type(string)              :: projfile_out, projtab_dir
+        integer                   :: iproj
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not.cline%defined('projtab') )then
             THROW_HARD('merge_projects requires projtab with one SIMPLE project file per line')
@@ -410,18 +410,18 @@ contains
     subroutine exec_ptcl3D_state_consensus( self, cline )
         class(commander_ptcl3D_state_consensus), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
-        character(len=*), parameter :: CONSENSUS_REPORT = 'ptcl3D_state_consensus.txt'
-        integer,          parameter :: MAX_EXACT_NSTATES = 8
-        type(parameters) :: params
-        type(sp_project) :: target_proj, source_proj
-        type(string), allocatable :: fnames(:)
-        type(string) :: projtab_dir
-        integer, allocatable :: source_labels(:,:), mapped_labels(:,:), state_maps(:,:)
-        integer, allocatable :: original_states(:), consensus_states(:), votes(:,:)
-        integer, allocatable :: best_map(:)
-        integer :: nprojs, nptcls, nstates, inferred_nstates, iproj, iptcl, label
-        integer :: best_label, best_votes, best_score
-        logical :: nstates_inputted
+        character(len=*), parameter   :: CONSENSUS_REPORT  = 'ptcl3D_state_consensus.txt'
+        integer,          parameter   :: MAX_EXACT_NSTATES = 8
+        type(parameters)              :: params
+        type(sp_project)              :: target_proj, source_proj
+        type(string),     allocatable :: fnames(:)
+        type(string)                  :: projtab_dir
+        integer,          allocatable :: source_labels(:,:), mapped_labels(:,:), state_maps(:,:)
+        integer,          allocatable :: original_states(:), consensus_states(:), votes(:,:)
+        integer,          allocatable :: best_map(:)
+        integer                       :: nprojs, nptcls, nstates, inferred_nstates, iproj, iptcl, label
+        integer                       :: best_label, best_votes, best_score
+        logical                       :: nstates_inputted
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not.cline%defined('prune') ) call cline%set('prune', 'no')
         if( .not.cline%defined('projtab') )then
@@ -675,7 +675,7 @@ contains
 
     subroutine exec_fix_projfile( self, cline )
         use simple_projfile_utils, only: fix_project_file
-        class(commander_fix_projfile), intent(inout) :: self
+        class(commander_fix_projfile),      intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters) :: params
         type(string)     :: projfile_out
@@ -706,9 +706,9 @@ contains
         class(commander_concatenate_projects), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         type(string), allocatable :: fnames(:)
-        type(sp_project) :: spproj_read, spproj
-        type(parameters) :: params   
-        integer :: n_spprojs, iproj
+        type(sp_project)          :: spproj_read, spproj
+        type(parameters)          :: params
+        integer                   :: n_spprojs, iproj
         call params%new(cline)
         call read_filetable(params%filetab, fnames)
         n_spprojs = size(fnames)
@@ -780,7 +780,7 @@ contains
         type(ctfparams)                  :: ctfvars
         type(cmdline)                    :: cline_new_proj, cline_import_particles
         type(oris)                       :: os_ptcl2D_prev, os_ptcl3D_prev
-        integer :: i, n, np2D, np3D
+        integer                          :: i, n, np2D, np3D
         call cline%set('mkdir', 'no')
         subprojname = cline%get_carg('subprojname')
         call cline%set('subprojname', trim(subprojname%to_char()))
@@ -881,7 +881,7 @@ contains
         integer                         :: state, xtiles_sel, ytiles_sel, xtiles_desel, ytiles_desel
         integer                         :: s3d, maxs3d
         logical                         :: l_ctfres, l_icefrac, l_append, l_keep, l_writecls2d, l_writestar
-        class(oris), pointer :: pos => NULL()
+        class(oris),        pointer     :: pos => NULL()
         l_append     = .false.
         l_writecls2d = .false.
         l_writestar  = .false.
@@ -1139,7 +1139,7 @@ contains
         subroutine perform_states_selection
             use simple_srch_sort_loc, only: unique
             integer, allocatable :: states_to_select(:), unique_states(:)
-            integer :: iptcl, ps, s, n2select, maxs, mins, min_input_states
+            integer              :: iptcl, ps, s, n2select, maxs, mins, min_input_states
             if( len_trim(params%states) <= 1 ) THROW_HARD('Only for multi-state selection/merging')
             states_to_select = list_of_ints2arr(params%states)
             call unique(states_to_select, unique_states)

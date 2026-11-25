@@ -18,14 +18,14 @@ private
 public :: run_all_opt_tests
 
 ! the 2D quadratic (x-1)^2 + (y+2)^2 and the direction y_norm of the cosine problem
-real, parameter :: XMIN(2)   = [1.0, -2.0]
-real, parameter :: YDIR(2)   = [0.75, 0.25]
+real, parameter :: XMIN(2)    = [1.0, -2.0]
+real, parameter :: YDIR(2)    = [0.75, 0.25]
 real, parameter :: LIMS2(2,2) = reshape([-5., -5., 5., 5.], [2,2])
 
 type, extends(pcg_operator) :: dense_pcg_operator
-    real :: a(3,3) = 0.0
-    real :: minv(3) = 1.0
-    integer :: apply_count = 0
+    real    :: a(3,3)         = 0.0
+    real    :: minv(3)        = 1.0
+    integer :: apply_count    = 0
     logical :: fail_warm_once = .false.
   contains
     procedure :: size    => dense_pcg_size
@@ -37,19 +37,19 @@ end type dense_pcg_operator
 ! L4: the objective (x1 - c)^2/2 + (x2 + 2)^2/2, whose centre c the callback moves once (a discrete
 ! choice, as the polar search's angle), and the record of the evaluations and callbacks
 type :: lm_recorder
-    real(dp) :: c = 1._dp
-    real(dp) :: cb_x(2) = huge(1._dp)
-    integer  :: nev = 0, ncb = 0, nreeval = 0, nrepeat = 0
-    logical  :: pending = .false.
-    logical  :: clear_unchanged = .false. !< L4b: after its first call the callback reports the objective unchanged
-    type(opt_spec), pointer :: spec => null() !< the callback reads the accepted point here
+    real(dp)                :: c               = 1._dp
+    real(dp)                :: cb_x(2)         = huge(1._dp)
+    integer                 :: nev             = 0, ncb = 0, nreeval = 0, nrepeat = 0
+    logical                 :: pending         = .false.
+    logical                 :: clear_unchanged = .false. !< L4b: after its first call the callback reports the objective unchanged
+    type(opt_spec), pointer :: spec            => null() !< the callback reads the accepted point here
 end type lm_recorder
 
 ! the engine on a tester cost with an optional box clip and no free hook: L2's plain-clipping control
 ! (the L2 cost, clipped), L6's status (the null-coordinate cost) and L7's (the over-estimated curvature,
 ! non-finite from evaluation nan_after + 1)
 type, extends(lm_problem) :: clip_only_problem
-    real(dp) :: x(2) = 0._dp, trial(2) = 0._dp, lower(2) = -huge(1._dp), upper(2) = huge(1._dp)
+    real(dp) :: x(2)      = 0._dp, trial(2) = 0._dp, lower(2) = -huge(1._dp), upper(2) = huge(1._dp)
     logical  :: null_cost = .false.
     logical  :: over_curv = .false.
     integer  :: nan_after = 0, nev = 0
@@ -125,7 +125,7 @@ contains
         integer,  intent(in)    :: d
         real,     intent(in)    :: x(d)
         real                    :: r
-        real :: ynorm(2)
+        real                    :: ynorm(2)
         ynorm = YDIR / sqrt(sum(YDIR**2))
         r = 1. - sum(x * ynorm) / sqrt(sum(x**2))
     end function dircost
@@ -314,7 +314,7 @@ contains
 
     subroutine test_spec_bookkeeping()
         type(opt_spec) :: spec
-        real :: lims(2,2)
+        real           :: lims(2,2)
         write(*,'(A)') 'test_spec_bookkeeping'
         call spec%specify('lbfgsb', 2, limits=LIMS2)
         call assert_char('lbfgsb', spec%str_opt, 'specify stores the optimiser name')
@@ -349,9 +349,9 @@ contains
 
     subroutine test_lbfgsb_quadratic()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory) :: ofac
-        type(opt_spec)    :: spec
-        real :: lims(1,2), lowest_cost
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: spec
+        real                      :: lims(1,2), lowest_cost
         write(*,'(A)') 'test_lbfgsb_quadratic'
         lims(1,:) = [-5., 5.]
         call spec%specify('lbfgsb', 1, limits=lims)
@@ -373,9 +373,9 @@ contains
     ! the bound is active when it excludes the free minimum
     subroutine test_lbfgsb_bounded()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory) :: ofac
-        type(opt_spec)    :: spec
-        real :: lims(1,2), lowest_cost
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: spec
+        real                      :: lims(1,2), lowest_cost
         write(*,'(A)') 'test_lbfgsb_bounded'
         lims(1,:) = [-5., 0.5]
         call spec%specify('lbfgsb', 1, limits=lims)
@@ -395,9 +395,9 @@ contains
     ! the old cosine test: from (-5, -7.5), the direction of YDIR
     subroutine test_lbfgsb_direction()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory) :: ofac
-        type(opt_spec)    :: spec
-        real :: lims(2,2), lowest_cost, xnorm(2), ynorm(2)
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: spec
+        real                      :: lims(2,2), lowest_cost, xnorm(2), ynorm(2)
         write(*,'(A)') 'test_lbfgsb_direction'
         lims(:,1) = -10.
         lims(:,2) =  10.
@@ -420,10 +420,10 @@ contains
 
     subroutine test_lbfgsb_rosenbrock()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory) :: ofac
-        type(opt_spec)    :: spec
-        real :: lowest_cost, first_cost, first_x(2)
-        integer :: first_nevals, i
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: spec
+        real                      :: lowest_cost, first_cost, first_x(2)
+        integer                   :: first_nevals, i
         write(*,'(A)') 'test_lbfgsb_rosenbrock'
         call spec%specify('lbfgsb', 2, limits=LIMS2, maxits=1000)
         call spec%set_costfun(rosenbrock)
@@ -460,10 +460,10 @@ contains
     ! evaluations of L-BFGS-B on the same cost are reported, not gated. factr 1e7, pgtol 1e-8 (ruling R3)
     subroutine test_lm_rosenbrock()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory) :: ofac
-        type(opt_spec)    :: spec
-        real    :: lowest_cost
-        integer :: nevals_lm
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: spec
+        real                      :: lowest_cost
+        integer                   :: nevals_lm
         write(*,'(A)') 'test_lm_rosenbrock'
         call spec%specify('lm', 2, limits=LIMS2, maxits=1000, factr=1.d7, pgtol=1.d-8)
         call spec%set_fdfcurvfun_8(rosen_res_fdfcurv)
@@ -496,13 +496,13 @@ contains
     ! stop, as in L-BFGS-B), pgtol 1e-10 (ruling R3)
     subroutine test_lm_coupled_bound()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory)       :: ofac
-        type(opt_spec)          :: spec
-        type(clip_only_problem) :: clip_only
-        type(lm_options)        :: options
-        type(lm_outcome)        :: outcome
-        real(dp) :: f, grad(2), curv(2,2), pgrad(2)
-        real     :: lims(2,2), lowest_cost
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: spec
+        type(clip_only_problem)   :: clip_only
+        type(lm_options)          :: options
+        type(lm_outcome)          :: outcome
+        real(dp)                  :: f, grad(2), curv(2,2), pgrad(2)
+        real                      :: lims(2,2), lowest_cost
         write(*,'(A)') 'test_lm_coupled_bound'
         lims(:,1) = [ 0., -10.]
         lims(:,2) = [10.,  10.]
@@ -542,9 +542,9 @@ contains
     ! 8 rejections (1 + 8 evaluations). factr 1e7, pgtol 1e-5, L-BFGS-B's defaults (ruling R3)
     subroutine test_lm_flipped_gradient()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory) :: ofac
-        type(opt_spec)    :: spec
-        real :: lowest_cost
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: spec
+        real                      :: lowest_cost
         write(*,'(A)') 'test_lm_flipped_gradient'
         call spec%specify('lm', 2, limits=LIMS2, maxits=1000, factr=1.d7, pgtol=1.d-5)
         call spec%set_fdfcurvfun_8(rosen_res_flipped)
@@ -566,10 +566,10 @@ contains
     ! evaluated again there and counted in nevals; the solve continues on the changed objective
     subroutine test_lm_callback()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory)       :: ofac
-        type(opt_spec), target  :: spec
-        type(lm_recorder)       :: rec
-        real :: lowest_cost
+        type(opt_factory)         :: ofac
+        type(opt_spec),   target  :: spec
+        type(lm_recorder)         :: rec
+        real                      :: lowest_cost
         write(*,'(A)') 'test_lm_callback'
         call spec%specify('lm', 2, limits=LIMS2, factr=1.d7, pgtol=1.d-8)
         call spec%set_fdfcurvfun_8(moving_fdfcurv)
@@ -615,10 +615,10 @@ contains
         integer,  intent(out) :: ncb, nevals, nreeval
         real(dp), intent(out) :: x(2)
         class(optimizer), pointer :: opt => null()
-        type(opt_factory)       :: ofac
-        type(opt_spec), target  :: spec
-        type(lm_recorder)       :: rec
-        real :: lowest_cost
+        type(opt_factory)         :: ofac
+        type(opt_spec),   target  :: spec
+        type(lm_recorder)         :: rec
+        real                      :: lowest_cost
         call spec%specify('lm', 2, limits=LIMS2, factr=1.d7, pgtol=1.d-8)
         call spec%set_fdfcurvfun_8(moving_fdfcurv)
         spec%opt_callback => moving_callback
@@ -641,9 +641,9 @@ contains
     ! value (to rounding, 1e-12, guessed): the null direction gets no step. factr 1e7, pgtol 1e-8
     subroutine test_lm_rank_deficient()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory) :: ofac
-        type(opt_spec)    :: spec
-        real :: lowest_cost
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: spec
+        real                      :: lowest_cost
         write(*,'(A)') 'test_lm_rank_deficient'
         call spec%specify('lm', 2, factr=1.d7, pgtol=1.d-8)
         call spec%set_fdfcurvfun_8(rank1_fdfcurv)
@@ -663,12 +663,12 @@ contains
     ! factr 1e7, pgtol 1e-8
     subroutine test_lm_null_coordinate()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory)       :: ofac
-        type(opt_spec)          :: spec
-        type(clip_only_problem) :: null_problem
-        type(lm_options)        :: options
-        type(lm_outcome)        :: outcome
-        real :: lowest_cost
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: spec
+        type(clip_only_problem)   :: null_problem
+        type(lm_options)          :: options
+        type(lm_outcome)          :: outcome
+        real                      :: lowest_cost
         write(*,'(A)') 'test_lm_null_coordinate'
         call spec%specify('lm', 2, factr=1.d7, pgtol=1.d-8)
         call spec%set_fdfcurvfun_8(null_fdfcurv)
@@ -698,13 +698,13 @@ contains
     ! so that the non-finite trials, not the prediction, end the solve.
     subroutine test_lm_nonfinite_trial()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory)       :: ofac
-        type(opt_spec), target  :: spec
-        type(lm_recorder)       :: rec
-        type(clip_only_problem) :: problem
-        type(lm_options)        :: options
-        type(lm_outcome)        :: outcome
-        real :: lowest_cost
+        type(opt_factory)         :: ofac
+        type(opt_spec),   target  :: spec
+        type(lm_recorder)         :: rec
+        type(clip_only_problem)   :: problem
+        type(lm_options)          :: options
+        type(lm_outcome)          :: outcome
+        real                      :: lowest_cost
         ! the damped first step from the origin: 4/(4 (1 + mu0)) along x
         real(dp), parameter :: X_ACCEPTED = 1._dp/(1._dp + 1.e-3_dp)
         write(*,'(A)') 'test_lm_nonfinite_trial'
@@ -806,9 +806,9 @@ contains
     ! DE is stochastic (ran3): the population is drawn in the box, the best member ends near the minimum
     subroutine test_de_quadratic()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory) :: ofac
-        type(opt_spec)    :: spec
-        real :: lowest_cost
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: spec
+        real                      :: lowest_cost
         write(*,'(A)') 'test_de_quadratic'
         call set_fixed_seed(20260927)
         call spec%specify('de', 2, limits=LIMS2, maxits=3000, ftol=1.e-8)
@@ -834,9 +834,9 @@ contains
 
     subroutine test_simplex_quadratic()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory) :: ofac
-        type(opt_spec)    :: spec
-        real :: lowest_cost
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: spec
+        real                      :: lowest_cost
         write(*,'(A)') 'test_simplex_quadratic'
         call set_fixed_seed(20260928)
         call spec%specify('simplex', 2, limits=LIMS2, maxits=1000, nrestarts=3, ftol=1.e-7)
@@ -878,13 +878,13 @@ contains
 
     ! an all-zero x is a start (the origin); nostart says there is none
     subroutine test_start_at_origin()
-        class(optimizer), pointer :: opt => null()
-        type(opt_factory)   :: ofac
-        type(opt_spec)      :: spec
-        type(eval_recorder) :: rec
+        class(optimizer), pointer   :: opt     => null()
+        type(opt_factory)           :: ofac
+        type(opt_spec)              :: spec
+        type(eval_recorder)         :: rec
         character(len=7), parameter :: OPTS(2) = ['simplex', 'de     ']
-        real    :: lowest_cost
-        integer :: iopt
+        real                        :: lowest_cost
+        integer                     :: iopt
         write(*,'(A)') 'test_start_at_origin'
         call set_fixed_seed(20261105)
         do iopt = 1,2
@@ -908,10 +908,10 @@ contains
     ! DE takes the npop given to specify
     subroutine test_de_npop()
         class(optimizer), pointer :: opt => null()
-        type(opt_factory)   :: ofac
-        type(opt_spec)      :: spec
-        type(eval_recorder) :: rec
-        real :: lowest_cost
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: spec
+        type(eval_recorder)       :: rec
+        real                      :: lowest_cost
         write(*,'(A)') 'test_de_npop'
         call set_fixed_seed(20261106)
         call spec%specify('de', 2, limits=LIMS2, maxits=1, npop=20)
@@ -932,7 +932,7 @@ contains
         type(dense_pcg_operator) :: op
         type(pcg_solver_options) :: options
         type(pcg_solver_outcome) :: outcome
-        real :: truth(3), b(3), x(3)
+        real                     :: truth(3), b(3), x(3)
         write(*,'(A)') 'test_pcg_dense_spd'
         call set_spd_operator(op)
         truth = [1.0, -2.0, 0.5]
@@ -955,7 +955,7 @@ contains
         type(dense_pcg_operator) :: op
         type(pcg_solver_options) :: options
         type(pcg_solver_outcome) :: outcome
-        real :: truth(3), b(3), x(3)
+        real                     :: truth(3), b(3), x(3)
         write(*,'(A)') 'test_pcg_diagonal_one_step'
         op%a = 0.0
         op%a(1,1) = 2.0
@@ -980,7 +980,7 @@ contains
         type(dense_pcg_operator) :: op
         type(pcg_solver_options) :: options
         type(pcg_solver_outcome) :: outcome
-        real :: truth(3), b(3), x(3)
+        real                     :: truth(3), b(3), x(3)
         write(*,'(A)') 'test_pcg_cold_restart'
         call set_spd_operator(op)
         op%fail_warm_once = .true.
@@ -1015,9 +1015,9 @@ contains
     end function dense_pcg_size
 
     subroutine dense_pcg_apply( self, x, y )
-        class(dense_pcg_operator), intent(inout) :: self
-        real, contiguous, target,  intent(in)    :: x(:)
-        real, contiguous, target,  intent(out)   :: y(:)
+        class(dense_pcg_operator), intent(inout)                    :: self
+        real,                      contiguous, target,  intent(in)  :: x(:)
+        real,                      contiguous, target,  intent(out) :: y(:)
         self%apply_count = self%apply_count + 1
         if( self%fail_warm_once .and. self%apply_count == 2 )then
             y = -x
@@ -1027,15 +1027,15 @@ contains
     end subroutine dense_pcg_apply
 
     subroutine dense_pcg_precond( self, r, z )
-        class(dense_pcg_operator), intent(inout) :: self
-        real, contiguous, target,  intent(in)    :: r(:)
-        real, contiguous, target,  intent(out)   :: z(:)
+        class(dense_pcg_operator), intent(inout)                    :: self
+        real,                      contiguous, target,  intent(in)  :: r(:)
+        real,                      contiguous, target,  intent(out) :: z(:)
         z = self%minv * r
     end subroutine dense_pcg_precond
 
     real(dp) function dense_pcg_dot( self, a, b ) result(value)
-        class(dense_pcg_operator), intent(in) :: self
-        real, contiguous, target,  intent(in) :: a(:), b(:)
+        class(dense_pcg_operator), intent(in)                      :: self
+        real,                      contiguous, target,  intent(in) :: a(:), b(:)
         value = sum(real(a,dp) * real(b,dp))
     end function dense_pcg_dot
 

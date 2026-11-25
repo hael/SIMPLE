@@ -10,13 +10,13 @@ private
 
 type strategy2D_alloc
     ! global parameters
-    real                 :: power            = EXTR_POWER ! power for the sampling function
-    integer              :: snhc_nrefs_bound = 0        ! refine=snhc
-    integer              :: snhc_smpl_ncls   = 0        !       =snhc_smpl
-    integer              :: snhc_smpl_ninpl  = 0        !       =snhc_smpl
-    integer              :: smpl_ninpl       = 0        !       =greedy_smpl
-    integer              :: smpl_ncls        = 0        !       =greedy_smpl
-    real                 :: shift_prior_sigma2 = 0.     ! the shift prior's variance per axis (shift_prior=yes, the prob modes' refinement)
+    real                 :: power              = EXTR_POWER ! power for the sampling function
+    integer              :: snhc_nrefs_bound   = 0          ! refine=snhc
+    integer              :: snhc_smpl_ncls     = 0          !       =snhc_smpl
+    integer              :: snhc_smpl_ninpl    = 0          !       =snhc_smpl
+    integer              :: smpl_ninpl         = 0          !       =greedy_smpl
+    integer              :: smpl_ncls          = 0          !       =greedy_smpl
+    real                 :: shift_prior_sigma2 = 0.         ! the shift prior's variance per axis (shift_prior=yes, the prob modes' refinement)
     ! per class
     integer, allocatable :: cls_pops(:)
     ! per particle
@@ -37,9 +37,9 @@ contains
     !! time chunks of init_tseries_refs or the classes refine=inpl centres, and the search starts from it, so that
     !! strategy2D_tseries keeps a frame among its neighbours in time; l_has_class says whether the assignment exists
     logical function is_fresh_2D_start( params, which_iter, l_has_class )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: which_iter
-        logical, optional, intent(in) :: l_has_class
+        class(parameters), intent(in)           :: params
+        integer,           intent(in)           :: which_iter
+        logical,           optional, intent(in) :: l_has_class
         is_fresh_2D_start = params%startit <= 1 .and. which_iter <= params%startit &
             &.and. trim(params%continue) /= 'yes' .and. .not. params%l_assign_all
         if( is_fresh_2D_start .and. trim(params%tseries) == 'yes' .and. present(l_has_class) )then
@@ -142,12 +142,12 @@ contains
 
     !>  prep batch related parameters (particles level)
     subroutine prep_strategy2D_batch( params, spproj, which_iter, nptcls, pinds, l_order )
-        class(parameters),  intent(in) :: params  
-        type(sp_project),   intent(in) :: spproj
-        integer,            intent(in) :: which_iter
-        integer,            intent(in) :: nptcls        ! # of particles in batch
-        integer,            intent(in) :: pinds(nptcls)
-        logical, optional,  intent(in) :: l_order       !< draw the stochastic search order (default); the probabilistic
+        class(parameters),  intent(in)            :: params
+        type(sp_project),   intent(in)            :: spproj
+        integer,            intent(in)            :: which_iter
+        integer,            intent(in)            :: nptcls  ! # of particles in batch
+        integer,            intent(in)            :: pinds(nptcls)
+        logical,            optional,  intent(in) :: l_order !< draw the stochastic search order (default); the probabilistic
                                                         !! routes never read it and pass .false., so it is not drawn
         type(ran_tabu) :: rt
         integer        :: i,iptcl,prev_class,k

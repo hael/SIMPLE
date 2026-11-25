@@ -11,16 +11,16 @@ private
 
 type sym
     private
-    type(oris)                    :: e_sym                    !< symmetry eulers
-    character(len=3), allocatable :: subgrps(:)               !< subgroups
-    real                          :: eullims(3,2) = 0.        !< euler angles limits (asymetric unit, including mirrors)
-    real                          :: eullims_nomirr(3,2) = 0. !< euler angles limits (asymetric unit, excluding mirrors)
-    integer                       :: n=1                      !< # symmetry ops
-    integer                       :: ncsym=1                  !< num of order C sym
-    integer                       :: ndsym=1                  !< num of order D sym
-    integer                       :: t_or_o=0                 !< tetahedral or octahedral symmetry
-    character(len=3)              :: pgrp='c1'                !< point-group symmetry
-    logical                       :: c_or_d=.false.           !< c- or d-symmetry
+    type(oris)                    :: e_sym                         !< symmetry eulers
+    character(len=3), allocatable :: subgrps(:)                    !< subgroups
+    real                          :: eullims(3,2)        = 0.      !< euler angles limits (asymetric unit, including mirrors)
+    real                          :: eullims_nomirr(3,2) = 0.      !< euler angles limits (asymetric unit, excluding mirrors)
+    integer                       :: n                   = 1       !< # symmetry ops
+    integer                       :: ncsym               = 1       !< num of order C sym
+    integer                       :: ndsym               = 1       !< num of order D sym
+    integer                       :: t_or_o              = 0       !< tetahedral or octahedral symmetry
+    character(len=3)              :: pgrp                = 'c1'    !< point-group symmetry
+    logical                       :: c_or_d              = .false. !< c- or d-symmetry
   contains
     ! constructor
     procedure          :: new
@@ -40,7 +40,7 @@ type sym
     procedure, private :: set_subgrps
     ! modifiers
     procedure, private :: apply_ori, apply_euls
-    generic            :: apply => apply_ori, apply_euls
+    generic            :: apply                  => apply_ori, apply_euls
     procedure, private :: apply2all
     procedure          :: apply_sym_with_shift
     procedure          :: find_closest_proj
@@ -54,7 +54,7 @@ type sym
     procedure, private :: rnd_euler_full
     procedure, private :: rnd_euler_near
     procedure, private :: rnd_euler_near_projinpl
-    generic            :: rnd_euler => rnd_euler_full, rnd_euler_near, rnd_euler_near_projinpl
+    generic            :: rnd_euler              => rnd_euler_full, rnd_euler_near, rnd_euler_near_projinpl
     ! calculators
     procedure, private :: sym_dists_ori, sym_dists_euls
     generic            :: sym_dists => sym_dists_ori, sym_dists_euls
@@ -76,14 +76,14 @@ interface sym
     module procedure constructor
 end interface sym
 
-integer, parameter          :: ntet   = 12 ! # tetahedral symmetry operations
-integer, parameter          :: noct   = 24 ! # octahedral symmetry operations
-integer, parameter          :: nico   = 60 ! # icosahedral symmetry operations
-double precision, parameter :: delta2 = 180.d0
-double precision, parameter :: delta3 = 120.d0
-double precision, parameter :: delta5 = 72.d0
-double precision, parameter :: deltan = 36.d0
-double precision, parameter :: gamma  = 54.735610317245346d0
+integer,          parameter :: ntet          = 12 ! # tetahedral symmetry operations
+integer,          parameter :: noct          = 24 ! # octahedral symmetry operations
+integer,          parameter :: nico          = 60 ! # icosahedral symmetry operations
+double precision, parameter :: delta2        = 180.d0
+double precision, parameter :: delta3        = 120.d0
+double precision, parameter :: delta5        = 72.d0
+double precision, parameter :: deltan        = 36.d0
+double precision, parameter :: gamma         = 54.735610317245346d0
 real,             parameter :: tet_theta_lim = 70.52877936550931
 real,             parameter :: oct_theta_lim = real(gamma)
 real,             parameter :: ico_theta_lim = 37.37736814064969
@@ -212,7 +212,7 @@ contains
     !>  \brief  is a getter
     function get_nsubgrp( self )result( n )
         class(sym) :: self
-        integer :: n      !< size of sym groups
+        integer    :: n   !< size of sym groups
         n = size(self%subgrps)
     end function get_nsubgrp
 
@@ -249,7 +249,7 @@ contains
     function get_subgrp_descr( self, i )result( str_descr )
         class(sym),intent(in) :: self
         character(len=3)      :: str_descr
-        integer   :: i, n
+        integer               :: i, n
         n = size(self%subgrps)
         if( (i>n).or.(i<1) )then
             write(logfhandle,*)'Index out of bonds on simple_sym; get_subgrp_descr'
@@ -261,7 +261,7 @@ contains
     function get_all_subgrps_descr( self )result( str_descr )
         class(sym),intent(in) :: self
         character(len=:), allocatable :: str_descr, str_tmp
-        integer :: i, n
+        integer                       :: i, n
         n = size(self%subgrps)
         allocate(str_descr, source=trim(self%subgrps(1)))
         if( n == 1 ) return
@@ -322,11 +322,11 @@ contains
 
     !>  \brief  is a symmetry adaptor
     subroutine apply2all( self, e_in, symop )
-        class(sym), intent(inout) :: self
-        class(oris), intent(inout):: e_in  !< orientations object
-        integer,    intent(in)    :: symop !< index of sym operation
+        class(sym),  intent(inout) :: self
+        class(oris), intent(inout) :: e_in  !< orientations object
+        integer,     intent(in)    :: symop !< index of sym operation
         type(ori)                 :: o, o2
-        integer :: i
+        integer                   :: i
         do i=1,e_in%get_noris()
             call e_in%get_ori(i, o)
             call self%apply(o, symop, o2)
@@ -465,11 +465,11 @@ contains
         class(oris), intent(inout) :: os_ref, os_asym
         real,        intent(out)   :: distmat(:,:)
         real, parameter   :: TIETOL = 1.e-4 ! radians, as in sym_dists
-        real, parameter   :: u(2) = [0., 1.]
+        real, parameter   :: u(2)   = [0., 1.]
         real, allocatable :: nrm_asym(:,:,:), x_asym(:,:,:), nrm_ref(:,:), x_ref(:,:)
-        type(ori) :: o, osym
-        real      :: mat(2,2), euldist, inplrotdist, dist, inpldist
-        integer   :: nref, nasym, i, j, isym
+        type(ori)         :: o, osym
+        real              :: mat(2,2), euldist, inplrotdist, dist, inpldist
+        integer           :: nref, nasym, i, j, isym
         nref  = os_ref%get_noris()
         nasym = os_asym%get_noris()
         if( size(distmat,1) /= nref .or. size(distmat,2) /= nasym )then
@@ -548,9 +548,9 @@ contains
 
     !>  \brief  whether or not an orientation falls within the asymetric unit excluding mirror
     logical function within_asymunit( self, o, incl_mirr )
-        class(sym),        intent(in) :: self
-        class(ori),        intent(in) :: o !< symmetry orientation
-        logical, optional, intent(in) :: incl_mirr
+        class(sym),        intent(in)           :: self
+        class(ori),        intent(in)           :: o !< symmetry orientation
+        logical,           optional, intent(in) :: incl_mirr
         real    :: e1, e2
         logical :: incl_mirr_here
         within_asymunit = .false.
@@ -619,11 +619,11 @@ contains
 
     !>  apply symmetry orientations with shift
     subroutine apply_sym_with_shift( self, os, symaxis_ori, shvec, state )
-        class(sym),        intent(inout) :: self
-        class(oris),       intent(inout) :: os          !< output orientations
-        class(ori),        intent(in)    :: symaxis_ori !< input orientations
-        real,              intent(in)    :: shvec(3)    !< shift vector
-        integer, optional, intent(in)    :: state       !< current state
+        class(sym),        intent(inout)        :: self
+        class(oris),       intent(inout)        :: os          !< output orientations
+        class(ori),        intent(in)           :: symaxis_ori !< input orientations
+        real,              intent(in)           :: shvec(3)    !< shift vector
+        integer,           optional, intent(in) :: state       !< current state
         type(ori) :: o
         integer   :: i, s
         if( present(state) )then
@@ -684,7 +684,7 @@ contains
     !! of each other to create more complex search spaces
     subroutine nearest_proj_neighbors_thres( self, os_asym_unit, o, euldist_thres, lnns )
         class(sym), intent(inout) :: self
-        type(oris), intent(inout) :: os_asym_unit !< sampled orientations from assymetric unit, eg from spiral with symmetry
+        type(oris), intent(inout) :: os_asym_unit  !< sampled orientations from assymetric unit, eg from spiral with symmetry
         class(ori), intent(in)    :: o
         real,       intent(in)    :: euldist_thres ! in degrees
         logical,    intent(inout) :: lnns(os_asym_unit%get_noris())
@@ -753,12 +753,12 @@ contains
 
     !>  \brief  is for retrieving nearest symmetry neighbours in an assymetric set of projection directions
     subroutine nearest_sym_neighbors( self, asym_os, nnmat )
-        class(sym),           intent(inout) :: self
-        type(oris),           intent(inout) :: asym_os    !< C1 projection directions
-        integer, allocatable, intent(inout) :: nnmat(:,:) !< nearest-neighbour matrix
+        class(sym),           intent(inout)              :: self
+        type(oris),           intent(inout)              :: asym_os    !< C1 projection directions
+        integer,              allocatable, intent(inout) :: nnmat(:,:) !< nearest-neighbour matrix
         real,    allocatable :: dists(:)
-        type(ori)  :: oasym, osym, oj
-        integer    :: i, j, n_os, isym, loc(1), nsym
+        type(ori)            :: oasym, osym, oj
+        integer              :: i, j, n_os, isym, loc(1), nsym
         if( trim(self%pgrp).eq.'c1' )then
             call asym_os%nearest_proj_neighbors(1, nnmat)
         else
@@ -815,9 +815,9 @@ contains
     subroutine build_refspiral( self, os )
         class(sym), intent(in)    :: self
         type(oris), intent(inout) :: os
-        type(oris) :: tmp, os_nomirr
-        real       :: euls(3)
-        integer    :: cnt, i, n, nprojs, lim, nos, nos_nomirr
+        type(oris)           :: tmp, os_nomirr
+        real                 :: euls(3)
+        integer              :: cnt, i, n, nprojs, lim, nos, nos_nomirr
         logical, allocatable :: avail(:)
         nos = os%get_noris()
         if(is_odd(nos))THROW_HARD('odd number of projections directions not supported; build_refspiral')
@@ -957,9 +957,9 @@ contains
     !>  \brief  SPIDER code for making c and d symmetries
     subroutine make_c_and_d( self )
         class(sym), intent(inout) :: self
-        double precision :: delta, degree
+        double precision                 :: delta, degree
         double precision, dimension(3,3) :: a,b,g
-        integer   :: i,j,cnt
+        integer                          :: i,j,cnt
         delta = 360.d0/dble(self%ncsym)
         cnt = 0
         do i=0,1
@@ -979,7 +979,7 @@ contains
     !>  \brief  hardcoded euler angles taken from SPARX
     subroutine make_o( self )
         class(sym), intent(inout) :: self
-        integer   :: i,j,cnt
+        integer          :: i,j,cnt
         double precision :: psi, phi
         cnt = 0
         do i = 1,4
@@ -1001,7 +1001,7 @@ contains
     subroutine make_t( self )
         class(sym), intent(inout) :: self
         double precision :: tester,dt,degree,psi,theta,phi
-        integer :: i,j,cnt
+        integer          :: i,j,cnt
         ! value from (90 -dihedral angle) + 90 =? 109.47
         tester = 1.d0/3.d0
         ! degree = 180.0 - (acos(tester) * (180.0/pi))
@@ -1028,7 +1028,7 @@ contains
     subroutine make_i_spider( self )
         class(sym), intent(inout) :: self
         double precision :: psi, theta, phi
-        integer   :: i, j, cnt
+        integer          :: i, j, cnt
         cnt = 0
         do i=0,1
             do j=0,4
@@ -1150,7 +1150,7 @@ contains
 
             !> get even symmetry
             subroutine getevensym( cstr, o )
-                integer,intent(in)           :: o     !< order
+                integer,          intent(in) :: o     !< order
                 character(len=1), intent(in) :: cstr  !< sym type
                 integer          :: i
                 do i=2,o
@@ -1169,7 +1169,7 @@ contains
             !> format symmetry string, symmetry type, one char options  c, d, t or i
             function fmtsymstr( symtype, iord ) result( ostr )
                 character(len=1), intent(in)  :: symtype
-                integer, intent(in)           :: iord    !< order
+                integer,          intent(in)  :: iord    !< order
                 character(len=2)              :: ord     !< temp
                 character(len=3)              :: ostr    !< formatted output
                 write(ord,'(I2)') iord
@@ -1191,7 +1191,7 @@ contains
     !!          rotation ccw looking towards 0 from +axis accepts 2 arguments,
     !!          0=x or 1=z (first reg.)and rot angle in deg.(second reg.)
     function matcreate( inxorz, indegr ) result( newmat )
-        integer, intent(in)          :: inxorz  !< input axis
+        integer,          intent(in) :: inxorz  !< input axis
         double precision, intent(in) :: indegr  !< input rotation angle
         double precision             :: newmat(3,3) !< output rot. matrix
         double precision             :: inrad

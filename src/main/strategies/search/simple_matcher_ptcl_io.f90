@@ -26,7 +26,7 @@ public :: pass_team
 private
 
 ! outcomes of filling the particle buffer, or of opening it for records
-integer, parameter :: BUFFER_FILLED = 0, BUFFER_OFF = 1, BUFFER_OVER_BUDGET = 2, BUFFER_NO_MEMORY = 3
+integer, parameter :: BUFFER_FILLED  = 0, BUFFER_OFF = 1, BUFFER_OVER_BUDGET = 2, BUFFER_NO_MEMORY = 3
 integer, parameter :: BUFFER_RECORDS = 4
 
 interface read_imgbatch
@@ -40,15 +40,15 @@ type(stack_io) :: stkio_r
 !> The particle reads of every read session, cumulative over the process and updated by the
 !! master thread; a pass's counts are the difference of two snapshots (ptcl_read_counts_since).
 type :: ptcl_read_counts
-    integer(int64)       :: nopens     = 0_int64 !< stacks opened
-    integer(int64)       :: nrequests  = 0_int64 !< read requests
-    integer(int64)       :: bytes_req  = 0_int64 !< file bytes of the images delivered
-    integer(int64)       :: bytes_read = 0_int64 !< file bytes read, the gaps spans bridge and the window included
+    integer(int64)       :: nopens              = 0_int64 !< stacks opened
+    integer(int64)       :: nrequests           = 0_int64 !< read requests
+    integer(int64)       :: bytes_req           = 0_int64 !< file bytes of the images delivered
+    integer(int64)       :: bytes_read          = 0_int64 !< file bytes read, the gaps spans bridge and the window included
     integer(int64)       :: bytes_prefetched    = 0_int64 !< file bytes read ahead into the prefetch window
     integer(int64)       :: bytes_prefetch_used = 0_int64 !< window bytes images were decoded from
     integer(int64)       :: bytes_advised       = 0_int64 !< file bytes hinted to the kernel beyond the window
-    integer(int64)       :: nbuffered  = 0_int64 !< images copied from the particle buffer, no file touched
-    real(timer_int_kind) :: rt_read    = 0.      !< wall time reading stacks (L_BENCH_GLOB)
+    integer(int64)       :: nbuffered           = 0_int64 !< images copied from the particle buffer, no file touched
+    real(timer_int_kind) :: rt_read             = 0.      !< wall time reading stacks (L_BENCH_GLOB)
 end type ptcl_read_counts
 
 type(ptcl_read_counts) :: read_totals
@@ -62,8 +62,8 @@ type(ptcl_read_counts) :: read_totals
 type(image_slab)     :: pass_slab
 integer, allocatable :: pass_slot(:)    !< slab slot of particle p at pass_slot(p - pass_lo + 1), 0 when absent
 logical, allocatable :: pass_put(:)     !< records: slot k has been put
-integer              :: pass_lo  = 0
-integer              :: pass_box = 0
+integer              :: pass_lo        = 0
+integer              :: pass_box       = 0
 logical              :: l_pass_ready   = .false.
 logical              :: l_pass_records = .false.
 
@@ -133,11 +133,11 @@ contains
     end subroutine write_mem_bench_context
 
     subroutine prepimgbatch( params, build, batchsz, box, smpd )
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: batchsz
-        integer, optional, intent(in)    :: box
-        real,    optional, intent(in)    :: smpd
+        class(parameters), intent(in)           :: params
+        class(builder),    intent(inout)        :: build
+        integer,           intent(in)           :: batchsz
+        integer,           optional, intent(in) :: box
+        real,              optional, intent(in) :: smpd
         integer :: currsz, ibatch, box_here, ldim_curr(3)
         real    :: smpd_here
         logical :: doprep
@@ -180,7 +180,7 @@ contains
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: fromptop(2)
         type(string) :: stkname
-        integer :: iptcl, ind_in_batch, ind_in_stk
+        integer      :: iptcl, ind_in_batch, ind_in_stk
         do iptcl=fromptop(1),fromptop(2)
             ind_in_batch = iptcl - fromptop(1) + 1
             call build%spproj%get_stkname_and_ind(params%oritype, iptcl, stkname, ind_in_stk)
@@ -200,7 +200,7 @@ contains
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: n, pinds(n), batchlims(2)
         type(string) :: stkname
-        integer :: ind_in_stk, i, ii
+        integer      :: ind_in_stk, i, ii
         do i=batchlims(1),batchlims(2)
             ii = i - batchlims(1) + 1
             call build%spproj%get_stkname_and_ind(params%oritype, pinds(i), stkname, ind_in_stk)
@@ -221,7 +221,7 @@ contains
         integer,           intent(in)    :: iptcl
         class(image),      intent(inout) :: img
         type(string) :: stkname
-        integer :: ind_in_stk
+        integer      :: ind_in_stk
         call build%spproj%get_stkname_and_ind(params%oritype, iptcl, stkname, ind_in_stk)
         if( .not. stkio_r%stk_is_open() )then
             call stkio_r%open(stkname, params%smpd, 'read')
@@ -257,7 +257,7 @@ contains
         integer,                  intent(in)    :: n, pinds(n), batchlims(2)
         type(stack_read_counts)   :: c0, c1
         integer(timer_int_kind)   :: t_read
-        integer :: nbatch, nexp
+        integer                   :: nbatch, nexp
         if( batchlims(1) < 1 .or. batchlims(2) > n .or. batchlims(1) > batchlims(2) )then
             write(logfhandle,*) 'batchlims: ', batchlims
             write(logfhandle,*) 'n        : ', n
@@ -309,7 +309,7 @@ contains
             logical, intent(in) :: l_ahead
             type(string), allocatable :: stknames(:)
             integer,      allocatable :: inds_in_stk(:)
-            integer :: i
+            integer                   :: i
             allocate(stknames(size(pinds_here)), inds_in_stk(size(pinds_here)))
             do i = 1, size(pinds_here)
                 call build%spproj%get_stkname_and_ind(params%oritype, pinds_here(i), stknames(i), inds_in_stk(i))
@@ -592,9 +592,9 @@ contains
 
     !> The particles of pinds in state state_here and half eo_here, in the order of pinds
     subroutine rec_state_half( build, state_here, eo_here, pinds, selected )
-        class(builder),       intent(in)  :: build
-        integer,              intent(in)  :: state_here, eo_here, pinds(:)
-        integer, allocatable, intent(out) :: selected(:)
+        class(builder),       intent(in)               :: build
+        integer,              intent(in)               :: state_here, eo_here, pinds(:)
+        integer,              allocatable, intent(out) :: selected(:)
         integer :: i, n, p
         n = 0
         do i = 1, size(pinds)
@@ -644,10 +644,10 @@ contains
     !> 1/sigma2 of half eo_here at the native shells 0:R of the cropped box, read from the spectra's plane
     !! grid at the padded shells OSMPL_PAD_FAC*n, which hold exactly sigma2(n) (objfun=euclid)
     subroutine rec_obs_inv_sig2( params, build, eo_here, R, inv_sig2 )
-        class(parameters),  intent(in)    :: params
-        class(builder),     intent(inout) :: build
-        integer,            intent(in)    :: eo_here, R
-        real, allocatable,  intent(out)   :: inv_sig2(:)
+        class(parameters),  intent(in)                :: params
+        class(builder),     intent(inout)             :: build
+        integer,            intent(in)                :: eo_here, R
+        real,               allocatable,  intent(out) :: inv_sig2(:)
         integer :: ih
         call build%esig%prep_fplane_grid(params%box_croppd, lbound(build%esig%sigma2_noise,1))
         ih = sigma2_half(eo_here)
@@ -671,8 +671,8 @@ contains
         complex,                 intent(inout) :: y_batch(lims2(1,1):,lims2(2,1):,:)
         real(timer_int_kind),    intent(inout) :: rt_prep
         integer(timer_int_kind) :: t_prep
-        integer :: ii, ithr, nthr, batchsz
-        logical :: l_records
+        integer                 :: ii, ithr, nthr, batchsz
+        logical                 :: l_records
         batchsz = batchlims(2) - batchlims(1) + 1
         if( size(y_batch,3) < batchsz ) THROW_HARD('the plane batch is smaller than the particle batch; read_rec_obs_batch')
         if( size(obs) < 1 ) THROW_HARD('no observation work images; read_rec_obs_batch')

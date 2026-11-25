@@ -63,9 +63,9 @@ contains
     subroutine test_tile_pixels()
         type(c_ptr)                 :: tile
         integer(c_int32_t), pointer :: pix(:,:)
-        integer :: gray(TILE_BOX,TILE_BOX), loc(2), i, j
-        logical :: l_gray
-        real    :: centre
+        integer                     :: gray(TILE_BOX,TILE_BOX), loc(2), i, j
+        logical                     :: l_gray
+        real                        :: centre
         write(logfhandle,'(a)') 'test_tile_pixels'
         tile = make_tile()
         call surface_pixels(tile, TILE_BOX, pix)
@@ -94,9 +94,9 @@ contains
     subroutine test_tile_paint()
         type(c_ptr)                 :: tile, canvas, cr
         integer(c_int32_t), pointer :: pix(:,:)
-        integer :: blue(PAINT_W,PAINT_H), loc(2), i, j
-        logical :: l_gray
-        real    :: scale, x0
+        integer                     :: blue(PAINT_W,PAINT_H), loc(2), i, j
+        logical                     :: l_gray
+        real                        :: scale, x0
         write(logfhandle,'(a)') 'test_tile_paint'
         tile   = make_tile()
         canvas = cairo_image_surface_create(CAIRO_FORMAT_RGB24, PAINT_W, PAINT_H)
@@ -157,8 +157,8 @@ contains
     function make_tile() result( surface )
         type(c_ptr)                 :: surface
         integer(c_int32_t), pointer :: pix(:,:)
-        real    :: img(TILE_BOX,TILE_BOX), x, y, r, box, lo, hi
-        integer :: i, j, gray
+        real                        :: img(TILE_BOX,TILE_BOX), x, y, r, box, lo, hi
+        integer                     :: i, j, gray
         box = real(TILE_BOX)
         do j = 1,TILE_BOX
             y = real(j) - 0.5 * (box + 1.)
@@ -204,9 +204,9 @@ contains
 
     ! the pixels of an RGB24 image surface: rows stride bytes apart, a pixel a native-endian 0x00RRGGBB word
     subroutine surface_pixels( surface, nrows, pix )
-        type(c_ptr),                 intent(in)  :: surface
-        integer(c_int),              intent(in)  :: nrows
-        integer(c_int32_t), pointer, intent(out) :: pix(:,:)
+        type(c_ptr),                 intent(in)           :: surface
+        integer(c_int),              intent(in)           :: nrows
+        integer(c_int32_t),          pointer, intent(out) :: pix(:,:)
         integer :: stride
         call cairo_surface_flush(surface)
         stride = int(cairo_image_surface_get_stride(surface))
@@ -224,7 +224,7 @@ contains
     ! ---- GTK callbacks (user data: the gtk_run of test_window) -------------
 
     subroutine activate( app, user_data ) bind(c)
-        type(c_ptr), value     :: app, user_data
+        type(c_ptr),   value   :: app, user_data
         type(gtk_run), pointer :: run
         type(c_ptr)            :: window, box, label, area, button
         character(len=64)      :: text
@@ -261,7 +261,7 @@ contains
 
     ! the "draw" signal: paints and records the draw; the first one starts the timer that closes the window
     function draw_area( area, cr, user_data ) bind(c) result( handled )
-        type(c_ptr), value     :: area, cr, user_data
+        type(c_ptr),   value   :: area, cr, user_data
         integer(c_int)         :: handled
         type(gtk_run), pointer :: run
         integer(c_int)         :: width, height
@@ -277,7 +277,7 @@ contains
     end function draw_area
 
     function close_on_timeout( user_data ) bind(c) result( again )
-        type(c_ptr), value     :: user_data
+        type(c_ptr),   value   :: user_data
         integer(c_int)         :: again
         type(gtk_run), pointer :: run
         call c_f_pointer(user_data, run)
@@ -288,7 +288,7 @@ contains
 
     ! the window is gone (timer or Close): drop a pending timer, it would outlive the run
     subroutine on_destroy( widget, user_data ) bind(c)
-        type(c_ptr), value     :: widget, user_data
+        type(c_ptr),   value   :: widget, user_data
         type(gtk_run), pointer :: run
         call c_f_pointer(user_data, run)
         run%window = c_null_ptr

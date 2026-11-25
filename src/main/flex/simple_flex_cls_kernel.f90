@@ -16,21 +16,21 @@ private
 #include "simple_local_flags.inc"
 
 real(dp), parameter :: TAUS(8)  = [0.d0, 0.25d0, 0.5d0, 1.d0, 2.d0, 4.d0, 8.d0, -1.d0] !< bandwidths in noise units; < 0: the class mean
-integer,  parameter :: RANKS(5) = [1, 2, 4, 8, 16]  !< latent ranks the cross-validation tries
-integer,  parameter :: BLOCK    = 4                 !< side of the Fourier blocks of the coefficient split
-integer,  parameter :: NSAMPLE  = 1000              !< validation members and candidate representatives, at most
-real(dp), parameter :: RIDGE    = 1.d-6             !< ridge of the ML latent system, relative to its largest diagonal
-real(dp), parameter :: WIENER   = 0.1d0             !< CV prediction denominator + this times the mean member density
-real(dp), parameter :: LWMIN    = -46.d0            !< log weights this far below the largest are zero
+integer,  parameter :: RANKS(5) = [1, 2, 4, 8, 16]                                     !< latent ranks the cross-validation tries
+integer,  parameter :: BLOCK    = 4                                                    !< side of the Fourier blocks of the coefficient split
+integer,  parameter :: NSAMPLE  = 1000                                                 !< validation members and candidate representatives, at most
+real(dp), parameter :: RIDGE    = 1.d-6                                                !< ridge of the ML latent system, relative to its largest diagonal
+real(dp), parameter :: WIENER   = 0.1d0                                                !< CV prediction denominator + this times the mean member density
+real(dp), parameter :: LWMIN    = -46.d0                                               !< log weights this far below the largest are zero
 
 !> One class: its members' latents in the directions the cross-validation chose, the pre-image bandwidth and the
 !! representatives' weights. new -> select -> average, preimage, labels -> kill
 type flex_cls_kernel
     private
-    integer  :: n = 0, nk = 0, nn = 0, nsig = 0, nrep = 0, ncv = 0
-    real(dp) :: tau_cv = -1.d0, tau = -1.d0, zscore = 0.d0, overlap = 0.d0
-    logical  :: l_pre  = .false.                         !< the representatives are pre-images (else the class mean)
-    logical  :: exists = .false.
+    integer                  :: n      = 0, nk = 0, nn = 0, nsig = 0, nrep = 0, ncv = 0
+    real(dp)                 :: tau_cv = -1.d0, tau = -1.d0, zscore = 0.d0, overlap = 0.d0
+    logical                  :: l_pre  = .false.         !< the representatives are pre-images (else the class mean)
+    logical                  :: exists = .false.
     real(dp),    allocatable :: cv(:), cv_rank(:)        !< CV error per bandwidth at the chosen rank; best per rank
     logical,     allocatable :: info(:)                  !< (n) the members with a latent
     real(dp),    allocatable :: cov(:,:,:), snz(:,:,:)   !< full-model latent covariance and nuisance-latent block
@@ -54,9 +54,9 @@ type flex_cls_kernel
     procedure :: report
     procedure :: kill
     ! bound for the self-test submodule (external linkage)
-    procedure, private :: cross_validate
-    procedure, private :: logweights
-    procedure, private :: kernel_mean
+    procedure, private         :: cross_validate
+    procedure, private         :: logweights
+    procedure, private         :: kernel_mean
     procedure, private, nopass :: ml_latents
     procedure, private, nopass :: coeff_sets
 end type flex_cls_kernel
@@ -83,8 +83,8 @@ contains
         type(flex_cls_model)  :: moda, modb
         real(dp), allocatable :: z(:,:), wall(:,:)
         logical,  allocatable :: fitmask(:), seta(:), setb(:)
-        integer :: ncoeff, kcv
-        logical :: ok
+        integer               :: ncoeff, kcv
+        logical               :: ok
         call self%kill
         if( .not. model%exists ) THROW_HARD('flex_cls_kernel%new: no model')
         ncoeff  = size(y,1)
@@ -131,8 +131,8 @@ contains
         real(dp), allocatable :: lw(:,:)
         integer,  allocatable :: cinds(:), pick(:)
         logical,  allocatable :: okp(:), l_tier(:), l_used(:), okl(:)
-        real(dp) :: lwj(self%n), d(max(self%nsig,1)), lwmax
-        integer  :: n, nc, ntake, t, i, j, r
+        real(dp)              :: lwj(self%n), d(max(self%nsig,1)), lwmax
+        integer               :: n, nc, ntake, t, i, j, r
         if( .not. self%exists ) THROW_HARD('flex_cls_kernel%select: no kernel')
         call whole(self)
         if( nsub < 2 .or. self%nsig < 1 ) return
@@ -228,7 +228,7 @@ contains
         complex(sp),            intent(out) :: avg(:)
         real(dp), allocatable :: lw(:,:), wts(:)
         logical,  allocatable :: okl(:)
-        real(dp) :: cen(max(self%nsig,1)), lwmax
+        real(dp)              :: cen(max(self%nsig,1)), lwmax
         if( i < 1 .or. i > self%n ) THROW_HARD('flex_cls_kernel%preimage: member index')
         allocate(wts(self%n), source=1.d0)
         cen = 0.d0
@@ -252,9 +252,9 @@ contains
 
     !> Kish effective population of representative irep's weights, over the members in sel when present
     real(dp) function neff( self, irep, sel )
-        class(flex_cls_kernel), intent(in) :: self
-        integer,                intent(in) :: irep
-        logical, optional,      intent(in) :: sel(:)
+        class(flex_cls_kernel), intent(in)                :: self
+        integer,                intent(in)                :: irep
+        logical,                optional,      intent(in) :: sel(:)
         if( present(sel) )then
             neff = kish_ess(pack(self%kw(:,irep), sel))
         else
@@ -338,9 +338,9 @@ contains
         real(dp), allocatable :: g(:)
         logical,  allocatable :: infa(:), infb(:)
         integer,  allocatable :: vinds(:)
-        real(dp) :: wnorm, best, gmean, gsd
-        integer  :: n, nv, ntau, ir, r, itau, i
-        logical  :: oka, okb
+        real(dp)              :: wnorm, best, gmean, gsd
+        integer               :: n, nv, ntau, ir, r, itau, i
+        logical               :: oka, okb
         n    = self%n
         ntau = size(TAUS)
         allocate(za(n,moda%ncomp), cova(moda%ncomp,moda%ncomp,n), zb(n,modb%ncomp), covb(modb%ncomp,modb%ncomp,n))
@@ -389,13 +389,13 @@ contains
     !> log N(zr_j; cen_l, covr_j + covc + tau^2 I) of every member for the locations cen, the constant dropped;
     !! ok is false for a member without a latent or a positive-definite kernel covariance
     subroutine logweights( self, cen, lw, ok )
-        class(flex_cls_kernel), intent(in)  :: self
-        real(dp),               intent(in)  :: cen(:,:)    !< (nsig,nloc)
-        real(dp),               intent(out) :: lw(:,:)     !< (n,nloc)
-        logical, allocatable,   intent(out) :: ok(:)
+        class(flex_cls_kernel), intent(in)                 :: self
+        real(dp),               intent(in)                 :: cen(:,:) !< (nsig,nloc)
+        real(dp),               intent(out)                :: lw(:,:)  !< (n,nloc)
+        logical,                allocatable,   intent(out) :: ok(:)
         real(dp), allocatable :: prec(:,:,:), logdet(:)
-        real(dp) :: d(self%nsig)
-        integer  :: j, l
+        real(dp)              :: d(self%nsig)
+        integer               :: j, l
         allocate(prec(self%nsig,self%nsig,self%n), logdet(self%n))
         call precisions(self%covr, self%tau, self%covc, prec, logdet, ok)
         ok = ok .and. self%info
@@ -426,8 +426,8 @@ contains
         real(dp),    allocatable :: wk(:), ga(:,:), gb(:,:), prec(:,:,:), logdet(:), sa(:), sb(:)
         logical,     allocatable :: okp(:)
         complex(dp), allocatable :: num(:)
-        real(dp)    :: den, cw, g(self%nk)
-        integer     :: ncoeff, n, nk, nn, ic, j0, j1, i, j, jj
+        real(dp)                 :: den, cw, g(self%nk)
+        integer                  :: ncoeff, n, nk, nn, ic, j0, j1, i, j, jj
         ncoeff = size(y,1)
         n      = self%n
         nk     = self%nk
@@ -493,19 +493,19 @@ contains
     !> every member's ML latent under a model (no latent prior, the nuisance profiled out), its covariance and the
     !! nuisance-latent block of the inverse; info is false where the joint system is not positive definite
     subroutine ml_latents( model, y, c, w, wq, z, cov, info, snz )
-        type(flex_cls_model), intent(in)  :: model
-        complex(sp),          intent(in)  :: y(:,:)
-        real(sp),             intent(in)  :: c(:,:), w(:,:), wq(:)
-        real(dp),             intent(out) :: z(:,:)          !< (nptcls,ncomp)
-        real(dp),             intent(out) :: cov(:,:,:)      !< (ncomp,ncomp,nptcls)
-        logical, allocatable, intent(out) :: info(:)         !< (nptcls)
-        real(dp), optional,   intent(out) :: snz(:,:,:)      !< (nnuis,ncomp,nptcls)
+        type(flex_cls_model), intent(in)               :: model
+        complex(sp),          intent(in)               :: y(:,:)
+        real(sp),             intent(in)               :: c(:,:), w(:,:), wq(:)
+        real(dp),             intent(out)              :: z(:,:)     !< (nptcls,ncomp)
+        real(dp),             intent(out)              :: cov(:,:,:) !< (ncomp,ncomp,nptcls)
+        logical,              allocatable, intent(out) :: info(:)    !< (nptcls)
+        real(dp),             optional,   intent(out)  :: snz(:,:,:) !< (nnuis,ncomp,nptcls)
         real(dp),    allocatable :: A(:,:), S(:,:), b(:)
         complex(dp), allocatable :: col(:)
-        complex(dp) :: res
-        real(dp)    :: wc, cc, ridge_abs
-        integer     :: nptcls, nk, nt, i, jj, j, q, r
-        logical     :: ok
+        complex(dp)              :: res
+        real(dp)                 :: wc, cc, ridge_abs
+        integer                  :: nptcls, nk, nt, i, jj, j, q, r
+        logical                  :: ok
         nptcls = size(y,2)
         nk = model%ncomp
         nt = nk + model%nnuis
@@ -568,12 +568,12 @@ contains
     !> the latent directions by scatter over noise: generalised eigenvectors of the informative members' latent
     !! scatter against their mean covariance, normalised to whiten it, by decreasing eigenvalue
     subroutine signal_space( z, cov, info, wall, ok )
-        real(dp),              intent(in)  :: z(:,:), cov(:,:,:)
-        logical,               intent(in)  :: info(:)
-        real(dp), allocatable, intent(out) :: wall(:,:)    !< (k,k) the directions, by column
-        logical,               intent(out) :: ok
+        real(dp),              intent(in)               :: z(:,:), cov(:,:,:)
+        logical,               intent(in)               :: info(:)
+        real(dp),              allocatable, intent(out) :: wall(:,:) !< (k,k) the directions, by column
+        logical,               intent(out)              :: ok
         real(dp), allocatable :: cbar(:,:), scat(:,:), l(:,:), linv(:,:), m(:,:), v(:,:), d(:), zbar(:), e(:)
-        integer :: k, j, q, nrot, ninfo
+        integer               :: k, j, q, nrot, ninfo
         k     = size(z,2)
         ninfo = count(info)
         allocate(wall(k,k), source=0.d0)
@@ -609,8 +609,8 @@ contains
 
     !> the latents and their covariances in the directions wsig
     subroutine project( z, cov, wsig, zr, covr )
-        real(dp),              intent(in)  :: z(:,:), cov(:,:,:), wsig(:,:)
-        real(dp), allocatable, intent(out) :: zr(:,:), covr(:,:,:)
+        real(dp),              intent(in)               :: z(:,:), cov(:,:,:), wsig(:,:)
+        real(dp),              allocatable, intent(out) :: zr(:,:), covr(:,:,:)
         integer :: j
         zr = matmul(z, wsig)
         allocate(covr(size(wsig,2),size(wsig,2),size(z,1)))
@@ -636,9 +636,9 @@ contains
         real(dp), allocatable :: nre(:), nim(:), nden(:), covbar(:,:)
         integer,  allocatable :: qidx(:)
         logical,  allocatable :: okp(:)
-        real(dp)    :: d(size(zs,2)), tau, lwmax, e
-        complex(dp) :: xhat
-        integer     :: n, nq, qq, q, j, t, i, itau
+        real(dp)              :: d(size(zs,2)), tau, lwmax, e
+        complex(dp)           :: xhat
+        integer               :: n, nq, qq, q, j, t, i, itau
         n    = size(zs,1)
         qidx = pack([(q, q=1,size(valset))], valset)
         nq   = size(qidx)
@@ -718,9 +718,9 @@ contains
 
     !> (cov_j + add + tau^2 I)^-1 and its log determinant for every member; ok is false where not positive definite
     subroutine precisions( cov, tau, add, prec, logdet, ok )
-        real(dp),             intent(in)  :: cov(:,:,:), tau, add(:,:)
-        real(dp),             intent(out) :: prec(:,:,:), logdet(:)
-        logical, allocatable, intent(out) :: ok(:)
+        real(dp),             intent(in)               :: cov(:,:,:), tau, add(:,:)
+        real(dp),             intent(out)              :: prec(:,:,:), logdet(:)
+        logical,              allocatable, intent(out) :: ok(:)
         real(dp) :: m(size(cov,1),size(cov,1))
         integer  :: j, p, k
         k = size(cov,1)

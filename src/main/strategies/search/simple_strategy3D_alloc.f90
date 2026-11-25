@@ -12,22 +12,22 @@ private
 
 type strategy3D_alloc
     ! global parameters
-    real,           allocatable :: smpl_inpl_athres(:)      !< angular threshold of in-plane rotation sampling
-    real                        :: shift_prior_sigma2 = 0.  !< the shift prior's variance per axis (shift_prior=yes, the prob modes' refinement)
+    real,           allocatable :: smpl_inpl_athres(:)             !< angular threshold of in-plane rotation sampling
+    real                        :: shift_prior_sigma2      = 0.    !< the shift prior's variance per axis (shift_prior=yes, the prob modes' refinement)
     real(dp)                    :: cont_shift_prior_sigma2 = 0._dp !< Cartesian variance in native pixels
-    logical,        allocatable :: state_exists(:)          !< indicates state existence
+    logical,        allocatable :: state_exists(:)                 !< indicates state existence
     ! per thread allocation
-    type(ran_tabu), allocatable :: rts(:)                   !< stochastic search order generators
-    type(ran_tabu), allocatable :: rts_inpl(:)              !< stochastic search order generators for inpls
-    type(ran_tabu), allocatable :: rts_sub(:)               !< stochastic search order generators, subspace
-    real,           allocatable :: proj_space_shift(:,:,:)  !< shift vectors
-    real,           allocatable :: proj_space_corrs(:,:)    !< reference vs. particle correlations
-    real,           allocatable :: proj_space_inplcoords(:,:)!< fractional in-plane grid coordinates
-    integer,        allocatable :: proj_space_inplinds(:,:) !< in-plane indices
-    logical,        allocatable :: proj_space_inplvalid(:,:)!< accepted continuous coordinate validity
-    integer,        allocatable :: srch_order(:,:)          !< stochastic search index
-    integer,        allocatable :: inpl_order(:,:)          !< stochastic inpl search index
-    integer,        allocatable :: srch_order_sub(:,:)      !< stochastic search index, subspace
+    type(ran_tabu), allocatable :: rts(:)                     !< stochastic search order generators
+    type(ran_tabu), allocatable :: rts_inpl(:)                !< stochastic search order generators for inpls
+    type(ran_tabu), allocatable :: rts_sub(:)                 !< stochastic search order generators, subspace
+    real,           allocatable :: proj_space_shift(:,:,:)    !< shift vectors
+    real,           allocatable :: proj_space_corrs(:,:)      !< reference vs. particle correlations
+    real,           allocatable :: proj_space_inplcoords(:,:) !< fractional in-plane grid coordinates
+    integer,        allocatable :: proj_space_inplinds(:,:)   !< in-plane indices
+    logical,        allocatable :: proj_space_inplvalid(:,:)  !< accepted continuous coordinate validity
+    integer,        allocatable :: srch_order(:,:)            !< stochastic search index
+    integer,        allocatable :: inpl_order(:,:)            !< stochastic inpl search index
+    integer,        allocatable :: srch_order_sub(:,:)        !< stochastic search index, subspace
 end type strategy3D_alloc
 
 type(strategy3D_alloc) :: s3D                         ! singleton

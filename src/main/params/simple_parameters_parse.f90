@@ -29,8 +29,8 @@ contains
     end subroutine parse_inputs
 
     module subroutine bind_input_carg(self, reg)
-        class(parameters),   target, intent(inout) :: self
-        class(param_registry),       intent(inout) :: reg
+        class(parameters),           target, intent(inout) :: self
+        class(param_registry),       intent(inout)         :: reg
         call reg%add_yesno('acf', self%acf)
         call reg%add_char('algorithm', self%algorithm)
         call reg%add_char('angastunit', self%angastunit)
@@ -262,8 +262,8 @@ contains
     end subroutine bind_input_carg
 
     module subroutine bind_input_files(self, reg)
-        class(parameters),   target, intent(inout) :: self
-        class(param_registry),       intent(inout) :: reg
+        class(parameters),           target, intent(inout) :: self
+        class(param_registry),       intent(inout)         :: reg
         call reg%add_file('angtab', self%angtab,'T')
         call reg%add_file('boxfile', self%boxfile,'T')
         call reg%add_file('boxtab', self%boxtab,'T')
@@ -315,8 +315,8 @@ contains
     end subroutine bind_input_files
 
     module subroutine bind_input_dirs(self, reg)
-        class(parameters),   target, intent(inout) :: self
-        class(param_registry),       intent(inout) :: reg
+        class(parameters),           target, intent(inout) :: self
+        class(param_registry),       intent(inout)         :: reg
         call reg%add_dir('cache_dir', self%cache_dir)
         call reg%add_dir('cavg_new_root', self%cavg_new_root)
         call reg%add_dir('dir', self%dir)
@@ -337,8 +337,8 @@ contains
     end subroutine bind_input_dirs
 
     module subroutine bind_input_iarg(self, reg)
-        class(parameters),   target, intent(inout) :: self
-        class(param_registry),       intent(inout) :: reg
+        class(parameters),           target, intent(inout) :: self
+        class(param_registry),       intent(inout)         :: reg
         call reg%add_int('angstep', self%angstep)
         call reg%add_int('binwidth', self%binwidth)
         call reg%add_int('box', self%box)
@@ -490,8 +490,8 @@ contains
     end subroutine bind_input_iarg
 
     module subroutine bind_input_rarg(self, reg)
-        class(parameters),   target, intent(inout) :: self
-        class(param_registry),       intent(inout) :: reg
+        class(parameters),           target, intent(inout) :: self
+        class(param_registry),       intent(inout)         :: reg
         call reg%add_real('amsklp', self%amsklp)
         call reg%add_real('angerr', self%angerr)
         call reg%add_real('angthres_mi_proj', self%angthres_mi_proj)

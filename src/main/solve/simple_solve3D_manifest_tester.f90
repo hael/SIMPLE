@@ -53,7 +53,7 @@ contains
     !> NLADDER stages with distinct values in every field
     function ladder() result( stages )
         type(solve3D_stage_record) :: stages(NLADDER)
-        integer :: i
+        integer                    :: i
         do i = 1, NLADDER
             stages(i)%lp_planned     = 20. - real(i)
             stages(i)%lp_emitted     = 20. - real(i) - 0.25
@@ -71,16 +71,16 @@ contains
     !> a completed eligible solve3D run of nstates over spproj, built the way
     !! exec_solve3D builds it; its artifacts are those spproj registers
     subroutine make_manifest( man, spproj, nstates, vol1, rec_backend, bundle, nu_stage, gold_std_stage )
-        type(solve3D_manifest),     intent(inout) :: man
-        type(sp_project),           intent(inout) :: spproj
-        integer,                    intent(in)    :: nstates
-        character(len=*), optional, intent(in)    :: vol1  !< the starting-volume input (a path)
-        logical,          optional, intent(in)    :: rec_backend !< record rec_backend=pcg (default yes)
-        character(len=*), optional, intent(in)    :: bundle      !< an add-on's carried bundle manifest
-        integer,          optional, intent(in)    :: nu_stage    !< the nu_stage given on the run's command line
-        integer,          optional, intent(in)    :: gold_std_stage
+        type(solve3D_manifest),     intent(inout)        :: man
+        type(sp_project),           intent(inout)        :: spproj
+        integer,                    intent(in)           :: nstates
+        character(len=*),           optional, intent(in) :: vol1        !< the starting-volume input (a path)
+        logical,                    optional, intent(in) :: rec_backend !< record rec_backend=pcg (default yes)
+        character(len=*),           optional, intent(in) :: bundle      !< an add-on's carried bundle manifest
+        integer,                    optional, intent(in) :: nu_stage    !< the nu_stage given on the run's command line
+        integer,                    optional, intent(in) :: gold_std_stage
         type(cmdline) :: cl
-        logical :: l_backend
+        logical       :: l_backend
         call man%new(RUN_ID, 'solve3D', .true., spproj)
         call man%set_solution(nstates, 'c3', 128, 1.3, 180.)
         call man%set_sampling(10000, 8000, 1., .true.)
@@ -153,15 +153,15 @@ contains
     !> A small committed sigma2 state. Its header layout identity belongs to
     !! spproj; its global spectra and particle section are independently mutable.
     subroutine write_sigma_state( fname, spproj, generation )
-        character(len=*),         intent(in)    :: fname
-        type(sp_project),         intent(inout) :: spproj
-        integer(int64), optional, intent(in)    :: generation
+        character(len=*),         intent(in)           :: fname
+        type(sp_project),         intent(inout)        :: spproj
+        integer(int64),           optional, intent(in) :: generation
         type(sigma2_state_header) :: header
-        type(string) :: candidate
-        real(real32) :: spectra(3,NPTCLS), globals(3,2)
-        integer(int64) :: gen
-        character(len=STDLEN) :: msg
-        integer :: i, status
+        type(string)              :: candidate
+        real(real32)              :: spectra(3,NPTCLS), globals(3,2)
+        integer(int64)            :: gen
+        character(len=STDLEN)     :: msg
+        integer                   :: i, status
         gen = 1_int64
         if( present(generation) ) gen = generation
         candidate = trim(fname)//'.next'
@@ -192,9 +192,9 @@ contains
         logical,          intent(in) :: particle_value
         real(real32),     intent(in) :: value
         type(sigma2_state_header) :: header
-        character(len=STDLEN) :: msg
-        integer(int64) :: pos
-        integer :: funit, io_stat, status
+        character(len=STDLEN)     :: msg
+        integer(int64)            :: pos
+        integer                   :: funit, io_stat, status
         call sigma2_state_read_header(fname, header, status, msg)
         call assert_int(0, status, 'read manifest sigma2 fixture header: '//trim(msg))
         if( status /= 0 ) return
@@ -214,7 +214,7 @@ contains
         character(len=*), intent(in) :: fname
         real,             intent(in) :: val
         type(image) :: vol
-        real :: rmat(8,8,8)
+        real        :: rmat(8,8,8)
         rmat = val
         call vol%new([8,8,8], 1.3, wthreads=.false.)
         call vol%set_rmat(rmat, .false.)
@@ -255,8 +255,8 @@ contains
         character(len=*),    intent(in) :: fname
         character(len=1024), intent(in) :: lines(:)
         character(len=1024) :: str
-        integer(int64)     :: checksum
-        integer :: i
+        integer(int64)      :: checksum
+        integer             :: i
         checksum = sigma2_state_digest_begin()
         do i = 1, size(lines)
             call sigma2_state_digest_text(checksum, trim(lines(i)))
@@ -270,7 +270,7 @@ contains
     logical function file_contains( fname, line ) result( l_found )
         character(len=*), intent(in) :: fname, line
         character(len=1024) :: lines(256)
-        integer :: n, i
+        integer             :: n, i
         call read_lines(fname, lines, n)
         l_found = .false.
         do i = 1, n
@@ -282,7 +282,7 @@ contains
     logical function same_text( fname1, fname2 ) result( l_same )
         character(len=*), intent(in) :: fname1, fname2
         character(len=1024) :: lines1(256), lines2(256)
-        integer :: n1, n2
+        integer             :: n1, n2
         call read_lines(fname1, lines1, n1)
         call read_lines(fname2, lines2, n2)
         l_same = n1 == n2 .and. n1 > 0
@@ -293,12 +293,12 @@ contains
 
     subroutine test_round_trip()
         type(solve3D_manifest)        :: man, back
-        type(solve3D_stage_record) :: a, b, stages(NLADDER)
-        type(sp_project)      :: spproj
-        type(string)          :: path
-        character(len=STDLEN) :: msg
-        logical :: found, l_same_stages
-        integer :: status, i
+        type(solve3D_stage_record)    :: a, b, stages(NLADDER)
+        type(sp_project)              :: spproj
+        type(string)                  :: path
+        character(len=STDLEN)         :: msg
+        logical                       :: found, l_same_stages
+        integer                       :: status, i
         write(*,'(A)') 'test_round_trip'
         call make_project(spproj)
         call make_manifest(man, spproj, 2)
@@ -364,7 +364,7 @@ contains
         type(cmdline)              :: cl
         character(len=1024)        :: lines(256), tampered(256)
         character(len=STDLEN)      :: msg
-        integer :: status, n, i, iend
+        integer                    :: status, n, i, iend
         write(*,'(A)') 'test_file_refusals'
         call make_project(spproj)
         call make_manifest(man, spproj, 2)
@@ -469,9 +469,9 @@ contains
 
     subroutine test_registration()
         type(solve3D_manifest) :: man, other, back
-        type(sp_project)      :: spproj
-        character(len=STDLEN) :: msg
-        integer :: status
+        type(sp_project)       :: spproj
+        character(len=STDLEN)  :: msg
+        integer                :: status
         write(*,'(A)') 'test_registration'
         call make_project(spproj)
         call make_manifest(man, spproj, 1)
@@ -510,12 +510,12 @@ contains
         character(len=*), parameter :: DIR2       = DIR1//'/'//repeat('b', 120)
         character(len=*), parameter :: LONG_SIGMA = DIR2//'/tester sigma2 with blanks.bin'
         character(len=*), parameter :: LONG_VOL1  = '/abs/'//repeat('refs/', 60)//'startvol_state01.mrc'
-        type(solve3D_manifest) :: man, back
-        type(sp_project)          :: spproj
-        type(string)              :: path
-        character(len=STDLEN)     :: msg
-        logical                   :: found
-        integer                   :: status
+        type(solve3D_manifest)      :: man, back
+        type(sp_project)            :: spproj
+        type(string)                :: path
+        character(len=STDLEN)       :: msg
+        logical                     :: found
+        integer                     :: status
         write(*,'(A)') 'test_long_paths'
         call simple_mkdir(DIR1)
         call simple_mkdir(DIR2)
@@ -553,8 +553,8 @@ contains
 
     subroutine test_replay()
         type(solve3D_manifest) :: man
-        type(sp_project) :: spproj
-        type(cmdline)    :: cl, cl_nu
+        type(sp_project)       :: spproj
+        type(cmdline)          :: cl, cl_nu
         write(*,'(A)') 'test_replay'
         call make_project(spproj)
         call make_manifest(man, spproj, 2)
@@ -606,8 +606,8 @@ contains
     !! may be overridden from its command line; nothing else is overridable
     subroutine test_overridable_inputs()
         type(solve3D_manifest) :: man
-        type(sp_project) :: spproj
-        type(cmdline)    :: cl, given
+        type(sp_project)       :: spproj
+        type(cmdline)          :: cl, given
         write(*,'(A)') 'test_overridable_inputs'
         call assert_true(manifest_overridable_input('balance'), 'balance is overridable')
         call assert_true(manifest_overridable_input('nclust'),  'nclust is overridable')
@@ -640,9 +640,9 @@ contains
 
     subroutine test_frozen_validation()
         type(sp_project)          :: spproj, altered
-        type(solve3D_manifest) :: man, foreign
+        type(solve3D_manifest)    :: man, foreign
         character(len=STDLEN)     :: msg
-        integer :: status
+        integer                   :: status
         write(*,'(A)') 'test_frozen_validation'
         call make_project(spproj)
         call make_manifest(man, spproj, 1)
@@ -701,12 +701,12 @@ contains
     !! and detects a changed bundle manifest
     subroutine test_carried_bundle_artifact()
         character(len=*), parameter :: BUNDLE = 'tmp_manifest_tester_carried_bundle.txt'
-        type(solve3D_manifest) :: man, back
-        type(sp_project)       :: spproj
-        type(string)           :: path
-        character(len=STDLEN)  :: msg
-        integer :: status, funit
-        logical :: found
+        type(solve3D_manifest)      :: man, back
+        type(sp_project)            :: spproj
+        type(string)                :: path
+        character(len=STDLEN)       :: msg
+        integer                     :: status, funit
+        logical                     :: found
         write(*,'(A)') 'test_carried_bundle_artifact'
         call fopen(funit, file=string(BUNDLE), status='REPLACE', action='WRITE')
         write(funit,'(A)') 'solve3D_addon_carried_bundle 1'

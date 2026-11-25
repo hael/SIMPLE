@@ -16,7 +16,7 @@ type(commander_ctf_estimate)          :: xctf_estimate
 type(commander_extract)               :: xextract
 type(commander_gen_pspecs_and_thumbs) :: xgen_pspecs_and_thumbs
 type(commander_motion_correct)        :: xmotion_correct
-type(commander_refine_motion_model)  :: xrefine_motion_model
+type(commander_refine_motion_model)   :: xrefine_motion_model
 type(commander_pick)                  :: xpick
 type(commander_preprocess)            :: xpreprocess
 type(commander_reextract)             :: xreextract

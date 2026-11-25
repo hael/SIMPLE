@@ -15,7 +15,7 @@ public :: calc_pspec_strategy, calc_pspec_inmem_strategy, calc_pspec_partitioned
 private
 #include "simple_local_flags.inc"
 
-integer,          parameter :: SIGMA2_BOOTSTRAP_MAX_PARTICLES = 25000
+integer,          parameter :: SIGMA2_BOOTSTRAP_MAX_PARTICLES   = 25000
 character(len=*), parameter :: SIGMA2_BOOTSTRAP_SELECTION_FNAME = 'sigma2_bootstrap_selection.dat'
 
 ! --------------------------------------------------------------------
@@ -24,7 +24,7 @@ character(len=*), parameter :: SIGMA2_BOOTSTRAP_SELECTION_FNAME = 'sigma2_bootst
 
 type, abstract :: calc_pspec_strategy
     character(len=:), allocatable :: end_msg
-    logical :: end_print_simple = .true.
+    logical                       :: end_print_simple = .true.
 contains
     procedure(init_interface),     deferred :: initialize
     procedure(exec_interface),     deferred :: execute
@@ -145,8 +145,8 @@ contains
         type(builder),                    intent(inout) :: build
         class(cmdline),                   intent(inout) :: cline
         type(commander_calc_pspec_assemble) :: xcalc_pspec_assemble
-        integer, allocatable :: sel_pinds(:)
-        real :: sig2_mul(2)
+        integer, allocatable                :: sel_pinds(:)
+        real                                :: sig2_mul(2)
         ! Sigma2 is bootstrapped once from a capped, random global even/odd sample:
         ! one seed spectrum per half, written to every active particle record of
         ! the half; the matchers' residual updates replace them later.
@@ -221,9 +221,9 @@ contains
         type(builder),                          intent(inout) :: build
         class(cmdline),                         intent(inout) :: cline
         type(commander_calc_pspec_assemble) :: xcalc_pspec_assemble
-        integer, allocatable :: sel_pinds(:), part_ids(:)
-        real    :: sig2_mul(2)
-        integer :: ipart
+        integer, allocatable                :: sel_pinds(:), part_ids(:)
+        real                                :: sig2_mul(2)
+        integer                             :: ipart
         call read_sigma2_bootstrap_selection(params, build, sel_pinds, sig2_mul)
         part_ids = [(ipart, ipart=1,params%nparts)]
         call compute_pspec_partitions(params, build, part_ids, self%parts, sel_pinds, sig2_mul)
@@ -268,17 +268,17 @@ contains
         integer,          intent(in)    :: part_ranges(:,:)
         integer,          intent(in)    :: sel_pinds(:)
         real,             intent(in)    :: sig2_mul(2)
-        type(image)          :: sum_img
-        type(ptcl_read_session) :: reads
+        type(image)              :: sum_img
+        type(ptcl_read_session)  :: reads
         complex(dp), allocatable :: cmat_thr_sum(:,:,:,:)
         complex,     allocatable :: cmat_part_sum(:,:,:,:), cmat_dims(:,:,:)
         integer,     allocatable :: work_pinds(:), work_slot(:), slot_from(:), slot_to(:), nsum_slot(:)
         real,        allocatable :: sigma2_sel(:,:), sigma2_batch(:,:)
         real(dp),    allocatable :: half_sums(:,:)
-        integer :: batchlims(2)
-        integer :: i, nyq, nselected, n_work, batchsz_max, nbatch
-        integer :: islot, nslots, ipart, fromp, top, run_lo, run_hi, eo
-        integer :: ninvalid_sigma2, nthr_team
+        integer                  :: batchlims(2)
+        integer                  :: i, nyq, nselected, n_work, batchsz_max, nbatch
+        integer                  :: islot, nslots, ipart, fromp, top, run_lo, run_hi, eo
+        integer                  :: ninvalid_sigma2, nthr_team
         nslots          = size(part_ids)
         nselected       = size(sel_pinds)
         ninvalid_sigma2 = 0
@@ -444,7 +444,7 @@ contains
     subroutine cleanup_calc_pspec_outputs(params)
         type(parameters), intent(in) :: params
         type(string) :: fname
-        integer :: ipart
+        integer      :: ipart
         do ipart = 1,params%nparts
             fname = pspec_part_sums_fname(ipart)
             call del_file(fname)
@@ -461,8 +461,8 @@ contains
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         integer, allocatable :: candidates(:,:), pinds(:)
-        integer :: nactive(2), nsample(2), nfilled(2), nselected, iptcl, eo, i, ios, fd, offset
-        logical :: is_open
+        integer              :: nactive(2), nsample(2), nfilled(2), nselected, iptcl, eo, i, ios, fd, offset
+        logical              :: is_open
         nactive = 0
         do iptcl = 1,params%nptcls
             if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
@@ -520,10 +520,10 @@ contains
     !!  returned indices are sorted and span the whole particle range; callers
     !!  slice them to their own [fromp,top].
     subroutine read_sigma2_bootstrap_selection(params, build, sel_pinds, sig2_mul)
-        type(parameters), intent(in)    :: params
-        type(builder),    intent(inout) :: build
-        integer, allocatable, intent(out) :: sel_pinds(:)
-        real,             intent(out)   :: sig2_mul(2)
+        type(parameters), intent(in)               :: params
+        type(builder),    intent(inout)            :: build
+        integer,          allocatable, intent(out) :: sel_pinds(:)
+        real,             intent(out)              :: sig2_mul(2)
         integer :: nactive(2), nsample(2), nselected, eo, i, ios, fd
         logical :: is_open
         if( .not.file_exists(SIGMA2_BOOTSTRAP_SELECTION_FNAME) ) &

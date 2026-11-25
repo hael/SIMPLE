@@ -28,7 +28,7 @@ public :: sigma2_state_validate_identity
 public :: sigma2_state_extend, sigma2_state_union_means
 public :: run_all_sigma2_state_tests
 
-integer, parameter :: BLOCK_ROWS = 4096
+integer,          parameter :: BLOCK_ROWS         = 4096
 character(len=*), parameter :: SIGMA2_RANGE_FBODY = 'sigma2_state_range_part'
 
 interface
@@ -82,7 +82,7 @@ contains
     function transaction_stem(committed_path) result(stem)
         character(len=*), intent(in) :: committed_path
         type(string) :: stem
-        integer :: l
+        integer      :: l
         l = len_trim(committed_path)
         if( l > 4 )then
             if( committed_path(l-3:l) == '.bin' )then
@@ -134,11 +134,11 @@ contains
     !> the two global spectra (shells, half): per half, the mean of the records summed; an empty half or
     !! a non-finite mean is refused, and the skipped invalid records are reported in one warning
     subroutine form_global(sums, counts, ninvalid, global, status, message)
-        real(real64),              intent(in)  :: sums(:,:)
-        integer(int64),            intent(in)  :: counts(2), ninvalid
-        real(real32), allocatable, intent(out) :: global(:,:)
-        integer,                   intent(out) :: status
-        character(len=*),          intent(out) :: message
+        real(real64),              intent(in)               :: sums(:,:)
+        integer(int64),            intent(in)               :: counts(2), ninvalid
+        real(real32),              allocatable, intent(out) :: global(:,:)
+        integer,                   intent(out)              :: status
+        character(len=*),          intent(out)              :: message
         integer :: half
         status  = 0
         message = ''
@@ -166,7 +166,7 @@ contains
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         integer(int64) :: generation
-        integer :: ipart
+        integer        :: ipart
         call sigma2_state_validate_file(committed_path, status, message)
         if( status /= 0 ) return
         call sigma2_state_next_generation(committed_path, generation, status, message)
@@ -195,9 +195,9 @@ contains
         real(real32), allocatable :: block(:,:), global(:,:)
         real(real64), allocatable :: sums(:,:)
         integer,      allocatable :: owner(:), range_first(:)
-        integer(int64) :: counts(2), ninvalid, generation, layout_digest
-        integer :: nrows, nshell, i, first_row, last_row, kfrom, kto, row, seg_last, src, nblock
-        integer :: src_unit, range_unit, dst_unit, open_range, first_row_r, last_row_r
+        integer(int64)            :: counts(2), ninvalid, generation, layout_digest
+        integer                   :: nrows, nshell, i, first_row, last_row, kfrom, kto, row, seg_last, src, nblock
+        integer                   :: src_unit, range_unit, dst_unit, open_range, first_row_r, last_row_r
         src_unit   = -1
         range_unit = -1
         dst_unit   = -1
@@ -336,8 +336,8 @@ contains
         type(sigma2_state_header) :: source
         real(real32), allocatable :: block(:,:), global(:,:)
         real(real64), allocatable :: sums(:,:)
-        integer(int64) :: counts(2), ninvalid
-        integer :: isrc, offset, first_row, nblock, nshell, src_unit, dst_unit
+        integer(int64)            :: counts(2), ninvalid
+        integer                   :: isrc, offset, first_row, nblock, nshell, src_unit, dst_unit
         src_unit = -1
         if( size(active) /= header%nptcls .or. size(eo) /= header%nptcls )then
             status = 1; message = 'sigma2 even/odd metadata has the wrong size'; return
@@ -404,13 +404,13 @@ contains
 
     subroutine sigma2_state_validate_identity(path, box, smpd, kfrom, kto, nptcls, layout_digest, &
         &status, message, expected_state)
-        character(len=*), intent(in) :: path
-        integer,          intent(in) :: box, kfrom, kto, nptcls
-        real,             intent(in) :: smpd
-        integer(int64),   intent(in) :: layout_digest
-        integer,          intent(out) :: status
-        character(len=*), intent(out) :: message
-        integer(int32), optional, intent(in) :: expected_state
+        character(len=*), intent(in)           :: path
+        integer,          intent(in)           :: box, kfrom, kto, nptcls
+        real,             intent(in)           :: smpd
+        integer(int64),   intent(in)           :: layout_digest
+        integer,          intent(out)          :: status
+        character(len=*), intent(out)          :: message
+        integer(int32),   optional, intent(in) :: expected_state
         type(sigma2_state_header) :: header
         call sigma2_state_validate_file(path, status, message)
         if( status /= 0 ) return
@@ -444,8 +444,8 @@ contains
         type(sigma2_state_header) :: frozen
         real(real32), allocatable :: block(:,:), fblock(:,:), fglobal(:,:), global(:,:)
         real(real64), allocatable :: sums(:,:)
-        integer(int64) :: counts(2), ninvalid
-        integer :: nrows, nfrozen, nshell, first_row, last_row, nblock, i, row, flast, src_unit, dst_unit
+        integer(int64)            :: counts(2), ninvalid
+        integer                   :: nrows, nfrozen, nshell, first_row, last_row, nblock, i, row, flast, src_unit, dst_unit
         src_unit = -1
         dst_unit = -1
         call sigma2_state_validate_file(frozen_path, status, message)
@@ -549,8 +549,8 @@ contains
         character(len=*), intent(out) :: message
         type(string), allocatable :: no_ranges(:)
         logical,      allocatable :: scheduled(:)
-        type(string)   :: candidate
-        integer(int64) :: generation
+        type(string)              :: candidate
+        integer(int64)            :: generation
         call sigma2_state_next_generation(committed_path, generation, status, message)
         if( status /= 0 ) return
         candidate = sigma2_state_candidate_path(committed_path, generation)

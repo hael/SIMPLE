@@ -13,29 +13,29 @@ public :: flex_cls_frc_cutoff, flex_cls_allocate_subclasses, flex_cls_split_floo
 private
 #include "simple_local_flags.inc"
 
-integer,  parameter :: FLEX_CLS_N_ALS      = 4      !< prior-free probe iterations
-integer,  parameter :: FLEX_CLS_N_PPCA     = 8      !< PPCA iterations (upper bound, convergence stops earlier)
-integer,  parameter :: FLEX_CLS_N_RESTARTS = 3      !< random starts of the ALS probe
-real(dp), parameter :: FLEX_CLS_RIDGE_REL  = 1.d-3  !< Tikhonov ridge on the basis block, relative to G(1,1)
-real(dp), parameter :: FLEX_CLS_CONV_TOL   = 1.d-3  !< relative latent change that stops the PPCA loop
-real(dp), parameter :: FLEX_CLS_WIENER_EPS = 0.1d0  !< sub-average denominator ctf^2 + eps, per member
-real(dp), parameter :: FLEX_CLS_NUIS_RIDGE = 1.d-6  !< ridge on the free nuisance block of the E-step, relative to max A(q,q)
-real(dp), parameter :: FLEX_CLS_INV_RIDGE  = 1.d-12 !< ridge before inverting a small SPD matrix, relative to max |A|
-real(dp), parameter :: FLEX_CLS_GROUP_ALPHA = 0.5d0 !< a group's subclass total grows as its population**alpha
+integer,  parameter :: FLEX_CLS_N_ALS       = 4      !< prior-free probe iterations
+integer,  parameter :: FLEX_CLS_N_PPCA      = 8      !< PPCA iterations (upper bound, convergence stops earlier)
+integer,  parameter :: FLEX_CLS_N_RESTARTS  = 3      !< random starts of the ALS probe
+real(dp), parameter :: FLEX_CLS_RIDGE_REL   = 1.d-3  !< Tikhonov ridge on the basis block, relative to G(1,1)
+real(dp), parameter :: FLEX_CLS_CONV_TOL    = 1.d-3  !< relative latent change that stops the PPCA loop
+real(dp), parameter :: FLEX_CLS_WIENER_EPS  = 0.1d0  !< sub-average denominator ctf^2 + eps, per member
+real(dp), parameter :: FLEX_CLS_NUIS_RIDGE  = 1.d-6  !< ridge on the free nuisance block of the E-step, relative to max A(q,q)
+real(dp), parameter :: FLEX_CLS_INV_RIDGE   = 1.d-12 !< ridge before inverting a small SPD matrix, relative to max |A|
+real(dp), parameter :: FLEX_CLS_GROUP_ALPHA = 0.5d0  !< a group's subclass total grows as its population**alpha
 
 type flex_cls_model
-    integer :: nfit = 0, ncomp = 0, nptcls = 0
+    integer                  :: nfit   = 0, ncomp = 0, nptcls = 0
     integer,     allocatable :: fitidx(:)   !< (nfit) indices of the fitted coefficients in the caller's arrays
     complex(dp), allocatable :: mu(:)       !< (nfit) mean
     complex(dp), allocatable :: U(:,:)      !< (nfit,ncomp) basis
     real(dp),    allocatable :: z(:,:)      !< (nptcls,ncomp) MAP latent of every member
     real(dp),    allocatable :: prec(:,:,:) !< (ncomp,ncomp,nptcls) posterior precision
-    integer                  :: nnuis = 0   !< fixed nuisance columns (pose-residual tangents), fitted jointly, never placed on
+    integer                  :: nnuis  = 0  !< fixed nuisance columns (pose-residual tangents), fitted jointly, never placed on
     complex(dp), allocatable :: N(:,:)      !< (nfit,nnuis) orthonormalised nuisance columns
     real(dp),    allocatable :: nu(:,:)     !< (nptcls,nnuis) nuisance coefficients of every member
     real(dp),    allocatable :: resid(:)    !< (nptcls) weighted fit residual per coefficient (1 = noise level)
     real(dp),    allocatable :: cpow(:)     !< (nptcls) log of the member's weighted CTF power over the fit band
-    logical :: exists = .false.
+    logical                  :: exists = .false.
   contains
     procedure :: new  => model_new
     procedure :: kill => model_kill
@@ -78,22 +78,22 @@ contains
 
     !> fits mean and basis on the coefficients in fitmask; leaves every member's latent and precision in the model
     subroutine flex_cls_fit( model, y, c, w, wq, fitmask, ncomp, verbose, nuis )
-        type(flex_cls_model),  intent(inout) :: model
-        complex(sp),           intent(in)    :: y(:,:)      !< (ncoeff,nptcls) coefficients in the class frame
-        real(sp),              intent(in)    :: c(:,:)      !< (ncoeff,nptcls) CTF in the class frame
-        real(sp),              intent(in)    :: w(:,:)      !< (ncoeff,nptcls) inverse noise variance
-        real(sp),              intent(in)    :: wq(:)       !< (ncoeff) half-plane quadrature weight
-        logical,               intent(in)    :: fitmask(:)  !< (ncoeff) coefficient enters the fit
-        integer,               intent(in)    :: ncomp
-        logical,     optional, intent(in)    :: verbose
-        complex(sp), optional, intent(in)    :: nuis(:,:)   !< (ncoeff,nnuis) nuisance columns, fitted jointly, never placed on
+        type(flex_cls_model),  intent(inout)        :: model
+        complex(sp),           intent(in)           :: y(:,:)     !< (ncoeff,nptcls) coefficients in the class frame
+        real(sp),              intent(in)           :: c(:,:)     !< (ncoeff,nptcls) CTF in the class frame
+        real(sp),              intent(in)           :: w(:,:)     !< (ncoeff,nptcls) inverse noise variance
+        real(sp),              intent(in)           :: wq(:)      !< (ncoeff) half-plane quadrature weight
+        logical,               intent(in)           :: fitmask(:) !< (ncoeff) coefficient enters the fit
+        integer,               intent(in)           :: ncomp
+        logical,               optional, intent(in) :: verbose
+        complex(sp),           optional, intent(in) :: nuis(:,:)  !< (ncoeff,nnuis) nuisance columns, fitted jointly, never placed on
         complex(sp), allocatable :: yf(:,:)
         real(sp),    allocatable :: cf(:,:), wf(:,:), wqf(:)
         real(dp),    allocatable :: ea(:,:), eaa(:,:,:), zprev(:,:), ubest(:,:), zbest(:,:)
         complex(dp), allocatable :: mubest(:)
-        real(dp) :: dz, znorm, sq, gsum, resid, resid_best
-        integer  :: nptcls, ncoeff, nfit, i, j, q, it, nals, nppca, nit, nrs, irs
-        logical  :: l_prior, l_verb
+        real(dp)                 :: dz, znorm, sq, gsum, resid, resid_best
+        integer                  :: nptcls, ncoeff, nfit, i, j, q, it, nals, nppca, nit, nrs, irs
+        logical                  :: l_prior, l_verb
         nals  = FLEX_CLS_N_ALS
         nppca = FLEX_CLS_N_PPCA
         nrs   = FLEX_CLS_N_RESTARTS   ! random starts of the ALS probe; the smallest weighted residual continues
@@ -198,15 +198,15 @@ contains
 
     !> one member's weighted fit residual per coefficient (1 at the noise level); nuisance from row inu or nu
     function member_residual( basis, yf, cf, wf, wqf, nfit, z, inu, nu ) result( r )
-        type(flex_cls_model), intent(in) :: basis
-        integer,              intent(in) :: nfit, inu
-        complex(sp),          intent(in) :: yf(nfit)
-        real(sp),             intent(in) :: cf(nfit), wf(nfit), wqf(nfit)
-        real(dp),             intent(in) :: z(:)
-        real(dp), optional,   intent(in) :: nu(:)
-        real(dp) :: r
+        type(flex_cls_model), intent(in)             :: basis
+        integer,              intent(in)             :: nfit, inu
+        complex(sp),          intent(in)             :: yf(nfit)
+        real(sp),             intent(in)             :: cf(nfit), wf(nfit), wqf(nfit)
+        real(dp),             intent(in)             :: z(:)
+        real(dp),             optional,   intent(in) :: nu(:)
+        real(dp)    :: r
         complex(dp) :: pred(nfit)
-        integer :: q
+        integer     :: q
         pred = basis%mu
         do q = 1, basis%ncomp
             pred = pred + basis%U(:,q) * z(q)
@@ -254,8 +254,8 @@ contains
         integer, intent(out) :: nsub(size(pops)), ngot
         integer,  allocatable :: cap(:), gind(:), glab(:), gk(:), gcap(:), gtot(:)
         real(dp), allocatable :: gpow(:)
-        real(dp) :: q, qbest
-        integer  :: m, ng, c, g, k, ibest, iextra
+        real(dp)              :: q, qbest
+        integer               :: m, ng, c, g, k, ibest, iextra
         m = size(pops)
         nsub = 1
         ngot = m
@@ -330,8 +330,8 @@ contains
         integer,     intent(in)  :: hidx(:), kidx(:), box
         complex(sp), intent(out) :: nuis(:,:)      !< (ncoeff,3)
         integer, allocatable :: lookup(:,:)
-        complex(dp) :: dh, dk, mp, mm
-        integer :: ncoeff, j, hmax, kmin, kmax
+        complex(dp)          :: dh, dk, mp, mm
+        integer              :: ncoeff, j, hmax, kmin, kmax
         ncoeff = size(mu)
         hmax = maxval(hidx); kmin = minval(kidx); kmax = maxval(kidx)
         allocate(lookup(-hmax:hmax, kmin-1:kmax+1), source=0)
@@ -372,8 +372,8 @@ contains
         integer,     parameter   :: CHUNK = 2048  !< coefficients per thread block
         complex(dp), allocatable :: mu(:)
         real(dp),    allocatable :: den(:)
-        real(dp) :: pow(nsh)
-        integer  :: cnt(nsh), ncoeff, nptcls, i, j, ic, j0, j1
+        real(dp)                 :: pow(nsh)
+        integer                  :: cnt(nsh), ncoeff, nptcls, i, j, ic, j0, j1
         ncoeff = size(y,1)
         nptcls = size(y,2)
         allocate(mu(ncoeff), den(ncoeff))
@@ -448,9 +448,9 @@ contains
         real(sp),    intent(in)  :: w(:,:)        !< (ncoeff,nptcls)
         complex(sp), intent(out) :: avg(:)        !< (ncoeff)
         integer,     parameter   :: CHUNK = 2048  !< coefficients per thread block
-        real(dp)    :: den, wc
-        complex(dp) :: num
-        integer     :: ncoeff, nptcls, i, j, ic, j0, j1
+        real(dp)                 :: den, wc
+        complex(dp)              :: num
+        integer                  :: ncoeff, nptcls, i, j, ic, j0, j1
         ncoeff = size(y,1)
         nptcls = size(y,2)
         if( size(avg) /= ncoeff ) THROW_HARD('flex_cls_ctf_mean: avg shape')
@@ -477,24 +477,24 @@ contains
     !! on all, the even and the odd members; above the fit band each shell is shrunk by 2F/(1+F), F the FRC of the
     !! half solutions, and the fitted coefficients keep the fitted basis. even: the halves (default: alternately)
     subroutine flex_cls_extend_basis( model, y, c, w, shell, uext, frc_basis, even )
-        type(flex_cls_model), intent(in)  :: model
-        complex(sp),          intent(in)  :: y(:,:)        !< (ncoeff,nptcls)
-        real(sp),             intent(in)  :: c(:,:), w(:,:) !< (ncoeff,nptcls)
-        integer,              intent(in)  :: shell(:)      !< (ncoeff)
-        complex(dp),          intent(out) :: uext(:,:)     !< (ncoeff,ncomp)
-        real(dp),    optional, intent(out) :: frc_basis(:) !< (nsh) even/odd FRC of the columns on every shell
-        logical,     optional, intent(in)  :: even(:)      !< (nptcls) the even half
+        type(flex_cls_model), intent(in)            :: model
+        complex(sp),          intent(in)            :: y(:,:)         !< (ncoeff,nptcls)
+        real(sp),             intent(in)            :: c(:,:), w(:,:) !< (ncoeff,nptcls)
+        integer,              intent(in)            :: shell(:)       !< (ncoeff)
+        complex(dp),          intent(out)           :: uext(:,:)      !< (ncoeff,ncomp)
+        real(dp),             optional, intent(out) :: frc_basis(:)   !< (nsh) even/odd FRC of the columns on every shell
+        logical,              optional, intent(in)  :: even(:)        !< (nptcls) the even half
         integer,     allocatable :: half(:)
-        integer,  parameter :: CHUNK = 512
+        integer,     parameter   :: CHUNK = 512
         real(dp),    allocatable :: cov(:,:), wsh(:), num(:), dee(:), doo(:)
         real(dp),    allocatable :: xm(:,:,:), exm(:,:,:), am(:,:), bre(:,:), bim(:,:), lpk(:,:,:), rre(:,:,:), rim(:,:,:)
         complex(dp), allocatable :: ue(:,:), uo(:,:)
         integer,     allocatable :: hidx(:,:), pos(:)
         logical,     allocatable :: l_fit(:)
-        real(dp)    :: x(1+model%ncomp+model%nnuis), ex(1+model%ncomp+model%nnuis,1+model%ncomp+model%nnuis)
-        real(dp)    :: a(1+model%ncomp+model%nnuis,1+model%ncomp+model%nnuis), cw, f
-        complex(dp) :: b(1+model%ncomp+model%nnuis,3), th(1+model%ncomp+model%nnuis,3)
-        integer     :: ncoeff, nptcls, r, nn, q, npk, nsh, nchunk, ic, j0, j1, nj, j, i, h, sh, p, k, m, nh(2)
+        real(dp)                 :: x(1+model%ncomp+model%nnuis), ex(1+model%ncomp+model%nnuis,1+model%ncomp+model%nnuis)
+        real(dp)                 :: a(1+model%ncomp+model%nnuis,1+model%ncomp+model%nnuis), cw, f
+        complex(dp)              :: b(1+model%ncomp+model%nnuis,3), th(1+model%ncomp+model%nnuis,3)
+        integer                  :: ncoeff, nptcls, r, nn, q, npk, nsh, nchunk, ic, j0, j1, nj, j, i, h, sh, p, k, m, nh(2)
         ncoeff = size(y,1); nptcls = size(y,2); r = model%ncomp; nn = model%nnuis; q = 1 + r + nn; npk = q * (q + 1) / 2
         if( nptcls /= model%nptcls ) THROW_HARD('flex_cls_extend_basis: member count')
         if( size(uext,1) /= ncoeff .or. size(uext,2) /= r ) THROW_HARD('flex_cls_extend_basis: uext shape')
@@ -672,8 +672,8 @@ contains
         integer,     parameter   :: CHUNK = 2048
         complex(dp), allocatable :: me(:), mo(:)
         real(dp),    allocatable :: de(:), do_(:)
-        real(dp) :: num(nsh), pe(nsh), po(nsh), wc
-        integer  :: ncoeff, nptcls, ic, j0, j1, i, j, sh
+        real(dp)                 :: num(nsh), pe(nsh), po(nsh), wc
+        integer                  :: ncoeff, nptcls, ic, j0, j1, i, j, sh
         ncoeff = size(y,1); nptcls = size(y,2)
         allocate(me(ncoeff), mo(ncoeff), de(ncoeff), do_(ncoeff))
         !$omp parallel do default(shared) private(ic,j0,j1,i,j,wc) schedule(static)
@@ -733,9 +733,9 @@ contains
         real(sp),    intent(in)  :: cf(nfit,nptcls), wf(nfit,nptcls)
         real(dp),    intent(in)  :: eps
         complex(dp), intent(out) :: mu(nfit)
-        real(dp) :: den, wc
+        real(dp)    :: den, wc
         complex(dp) :: num
-        integer :: i, j
+        integer     :: i, j
         !$omp parallel do default(shared) private(i,j,num,den,wc) schedule(static)
         do j = 1, nfit
             num = DCMPLX_ZERO
@@ -761,8 +761,8 @@ contains
         complex(sp),          intent(in)    :: yf(nfit,nptcls)
         real(sp),             intent(in)    :: cf(nfit,nptcls), wf(nfit,nptcls), wqf(nfit)
         real(dp), allocatable :: g(:,:)
-        real(dp) :: u1, u2
-        integer  :: i, j, q
+        real(dp)              :: u1, u2
+        integer               :: i, j, q
         allocate(g(nptcls,ncomp))
         do q = 1, ncomp
             do i = 1, nptcls
@@ -792,9 +792,9 @@ contains
         integer,              intent(in) :: nfit, nptcls, ncomp
         complex(sp),          intent(in) :: yf(nfit,nptcls)
         real(sp),             intent(in) :: cf(nfit,nptcls), wf(nfit,nptcls), wqf(nfit)
-        real(dp) :: resid
+        real(dp)    :: resid
         complex(dp) :: pred
-        integer :: i, j
+        integer     :: i, j
         resid = 0.d0
         !$omp parallel do default(shared) private(i,j,pred) schedule(static) reduction(+:resid)
         do i = 1, nptcls
@@ -837,10 +837,10 @@ contains
         real(dp),             intent(out)   :: ea(0:ncomp,nptcls), eaa(0:ncomp,0:ncomp,nptcls)
         real(dp),    allocatable :: A(:,:), S(:,:), b(:), m(:)
         complex(dp), allocatable :: col(:,:), mui(:)
-        real(dp)    :: wc, cc, ridge
-        complex(dp) :: res
-        integer :: i, j, q, r, nn, ntot
-        logical :: ok
+        real(dp)                 :: wc, cc, ridge
+        complex(dp)              :: res
+        integer                  :: i, j, q, r, nn, ntot
+        logical                  :: ok
         nn   = model%nnuis
         ntot = ncomp + nn
         !$omp parallel do default(shared) private(i,j,q,r,A,S,b,m,col,mui,wc,cc,res,ok,ridge) schedule(dynamic,8)
@@ -904,7 +904,7 @@ contains
         complex(sp),          intent(in) :: yf(nfit,nptcls)
         real(sp),             intent(in) :: cf(nfit,nptcls)
         complex(sp) :: yr(nfit,nptcls)
-        integer :: i, j
+        integer     :: i, j
         if( model%nnuis < 1 )then
             yr = yf
             return
@@ -927,8 +927,8 @@ contains
         real(dp),             intent(in)    :: ea(0:ncomp,nptcls), eaa(0:ncomp,0:ncomp,nptcls)
         real(dp)    :: G(0:ncomp,0:ncomp), Ginv(0:ncomp,0:ncomp), xr(0:ncomp), xi(0:ncomp), wc, cc, ridge
         complex(dp) :: h(0:ncomp)
-        integer :: i, j, q
-        logical :: ok
+        integer     :: i, j, q
+        logical     :: ok
         !$omp parallel do default(shared) private(i,j,q,G,Ginv,h,xr,xi,wc,cc,ridge,ok) schedule(static)
         do j = 1, nfit
             G = 0.d0

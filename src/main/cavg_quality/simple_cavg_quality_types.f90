@@ -38,17 +38,17 @@ public :: cavg_quality_learn_diagnostics
 public :: reset_cavg_quality_result
 
 ! the largest bank of a context; bank arrays are indexed by position in the context's list
-integer, parameter :: CAVG_QUALITY_NFEATS  = 14
-integer, parameter :: CAVG_QUALITY_MAX_INTERACTIONS = (CAVG_QUALITY_NFEATS * (CAVG_QUALITY_NFEATS - 1)) / 2
-integer, parameter :: CAVG_QUALITY_TRAINING_VERSION = 1
-real,    parameter :: EPS                  = 1.0e-6
-real,    parameter :: CLIP_Z               = 4.0
-character(len=*), parameter :: CAVG_RELATIONAL_SCHEMA_NONE            = 'none'
+integer,          parameter :: CAVG_QUALITY_NFEATS                       = 14
+integer,          parameter :: CAVG_QUALITY_MAX_INTERACTIONS             = (CAVG_QUALITY_NFEATS * (CAVG_QUALITY_NFEATS - 1)) / 2
+integer,          parameter :: CAVG_QUALITY_TRAINING_VERSION             = 1
+real,             parameter :: EPS                                       = 1.0e-6
+real,             parameter :: CLIP_Z                                    = 4.0
+character(len=*), parameter :: CAVG_RELATIONAL_SCHEMA_NONE               = 'none'
 character(len=*), parameter :: CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1 = 'corr_knn_signal_v1'
-integer,          parameter :: CAVG_RELATIONAL_DEFAULT_KNN             = 5
-real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_HP         = 100.0
-real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_LP         = 15.0
-real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_TRS        = 10.0
+integer,          parameter :: CAVG_RELATIONAL_DEFAULT_KNN               = 5
+real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_HP           = 100.0
+real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_LP           = 15.0
+real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_TRS          = 10.0
 ! nano: high-pass below the particle, low-pass at the lattice, shift range in pixels
 real,             parameter :: CAVG_RELATIONAL_NANO_CORR_HP            = 15.0
 real,             parameter :: CAVG_RELATIONAL_NANO_CORR_LP            = 1.5
@@ -83,24 +83,24 @@ type :: cavg_quality_feature_def
 end type cavg_quality_feature_def
 
 type :: cavg_quality_model_spec
-    character(len=64) :: name                         = ''
-    character(len=32) :: context                      = 'chunk'
-    character(len=64) :: feature_policy               = 'microchunk_plus_score_signal'
-    real              :: weights(CAVG_QUALITY_NFEATS) = 0.0
-    real              :: intercept                    = 0.0
-    real              :: linear_coefficients(CAVG_QUALITY_NFEATS) = 0.0
-    integer           :: n_interactions               = 0
-    integer           :: interaction_terms(CAVG_QUALITY_MAX_INTERACTIONS,2) = 0
+    character(len=64) :: name                                                    = ''
+    character(len=32) :: context                                                 = 'chunk'
+    character(len=64) :: feature_policy                                          = 'microchunk_plus_score_signal'
+    real              :: weights(CAVG_QUALITY_NFEATS)                            = 0.0
+    real              :: intercept                                               = 0.0
+    real              :: linear_coefficients(CAVG_QUALITY_NFEATS)                = 0.0
+    integer           :: n_interactions                                          = 0
+    integer           :: interaction_terms(CAVG_QUALITY_MAX_INTERACTIONS,2)      = 0
     real              :: interaction_coefficients(CAVG_QUALITY_MAX_INTERACTIONS) = 0.0
-    real              :: prob_threshold               = 0.5
-    real              :: regularization_lambda        = 0.0
-    real              :: calibration_temperature      = 1.0
-    character(len=64) :: relational_feature_schema    = CAVG_RELATIONAL_SCHEMA_NONE
-    integer           :: relational_knn               = 0
-    real              :: relational_corr_hp           = 0.0
-    real              :: relational_corr_lp           = 0.0
-    real              :: relational_corr_trs          = 0.0
-    real              :: relational_coefficient       = 0.0
+    real              :: prob_threshold                                          = 0.5
+    real              :: regularization_lambda                                   = 0.0
+    real              :: calibration_temperature                                 = 1.0
+    character(len=64) :: relational_feature_schema                               = CAVG_RELATIONAL_SCHEMA_NONE
+    integer           :: relational_knn                                          = 0
+    real              :: relational_corr_hp                                      = 0.0
+    real              :: relational_corr_lp                                      = 0.0
+    real              :: relational_corr_trs                                     = 0.0
+    real              :: relational_coefficient                                  = 0.0
 end type cavg_quality_model_spec
 
 type :: cavg_quality_result
@@ -127,16 +127,16 @@ contains
 end type cavg_quality_result
 
 type :: cavg_quality_training_dataset
-    character(len=LONGSTRLEN) :: fname      = ''
-    character(len=LONGSTRLEN) :: dataset_id = ''
-    integer                   :: training_version = 0
-    character(len=32)         :: quality_context = ''
+    character(len=LONGSTRLEN) :: fname                     = ''
+    character(len=LONGSTRLEN) :: dataset_id                = ''
+    integer                   :: training_version          = 0
+    character(len=32)         :: quality_context           = ''
     character(len=64)         :: relational_feature_schema = CAVG_RELATIONAL_SCHEMA_NONE
-    integer                   :: relational_knn = 0
-    real                      :: relational_corr_hp = 0.0
-    real                      :: relational_corr_lp = 0.0
-    real                      :: relational_corr_trs = 0.0
-    integer                   :: ncls       = 0
+    integer                   :: relational_knn            = 0
+    real                      :: relational_corr_hp        = 0.0
+    real                      :: relational_corr_lp        = 0.0
+    real                      :: relational_corr_trs       = 0.0
+    integer                   :: ncls                      = 0
     real,    allocatable      :: features(:,:)
     real,    allocatable      :: relational_feature(:)
     integer, allocatable      :: manual_states(:)

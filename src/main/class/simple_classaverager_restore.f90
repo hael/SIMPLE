@@ -13,20 +13,20 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! restoration state
-type(ptcl_record),   allocatable :: precs(:)                  !< Particle records
-type(image),         allocatable :: tmp_pad_imgs(:)           !< Temporary images for on-the-fly classes update
-type(cavgs_set)                  :: cavgs                     !< Class averages
-type(builder),        pointer    :: b_ptr  => null()          !< active builder instance
-integer,             allocatable :: eo_pops(:,:)              !< Even/odd class populations
-real,                allocatable :: center_offsets(:,:)       !< Class-centering offsets of the references (2,ncls)
-integer                          :: ncls       = 0            !< # classes
-integer                          :: ldim(3)        = [0,0,0]  !< logical dimension of image
-integer                          :: ldim_crop(3)   = [0,0,0]  !< logical dimension of cropped image
-integer                          :: ldim_pd(3)     = [0,0,0]  !< logical dimension of image, padded
-integer                          :: ldim_croppd(3) = [0,0,0]  !< logical dimension of cropped image, padded
-real                             :: smpd       = 0.           !< sampling distance
-real                             :: smpd_crop  = 0.           !< cropped sampling distance
-logical                          :: l_cropped_ptcls = .false. !< particles handed to cavger_update_sums are at box_crop
+type(ptcl_record),    allocatable :: precs(:)                  !< Particle records
+type(image),          allocatable :: tmp_pad_imgs(:)           !< Temporary images for on-the-fly classes update
+type(cavgs_set)                   :: cavgs                     !< Class averages
+type(builder),        pointer     :: b_ptr           => null() !< active builder instance
+integer,              allocatable :: eo_pops(:,:)              !< Even/odd class populations
+real,                 allocatable :: center_offsets(:,:)       !< Class-centering offsets of the references (2,ncls)
+integer                           :: ncls            = 0       !< # classes
+integer                           :: ldim(3)         = [0,0,0] !< logical dimension of image
+integer                           :: ldim_crop(3)    = [0,0,0] !< logical dimension of cropped image
+integer                           :: ldim_pd(3)      = [0,0,0] !< logical dimension of image, padded
+integer                           :: ldim_croppd(3)  = [0,0,0] !< logical dimension of cropped image, padded
+real                              :: smpd            = 0.      !< sampling distance
+real                              :: smpd_crop       = 0.      !< cropped sampling distance
+logical                           :: l_cropped_ptcls = .false. !< particles handed to cavger_update_sums are at box_crop
 
 contains
 
@@ -58,9 +58,9 @@ contains
 
     !>  \brief  transfers metadata to the instance for a subset of particles
     module subroutine cavger_transf_oridat( nptcls, pinds, updated_only )
-        integer,            intent(in) :: nptcls
-        integer,            intent(in) :: pinds(nptcls)
-        logical,  optional, intent(in) :: updated_only
+        integer,            intent(in)           :: nptcls
+        integer,            intent(in)           :: pinds(nptcls)
+        logical,            optional, intent(in) :: updated_only
         class(oris), pointer :: spproj_field
         integer              :: i, iptcl, stkind, ihalf
         logical              :: l_updated_only
@@ -111,7 +111,7 @@ contains
     !>  \brief  for loading sigma2
     module subroutine cavger_read_euclid_sigma2
         type(string) :: fname
-        logical :: found
+        logical      :: found
         if( p_ptr%l_ml_reg )then
             call b_ptr%spproj%get_sigma2_state_path(fname, found)
             if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
@@ -126,10 +126,10 @@ contains
     !!         population and average correlation
     module subroutine cavger_gen2Dclassdoc()
         class(oris), pointer :: ptcl_field, cls_field
-        integer  :: pops(p_ptr%ncls)
-        real(dp) :: corrs(p_ptr%ncls)
-        real     :: frc05, frc0143
-        integer  :: iptcl, icls, pop, nptcls
+        integer              :: pops(p_ptr%ncls)
+        real(dp)             :: corrs(p_ptr%ncls)
+        real                 :: frc05, frc0143
+        integer              :: iptcl, icls, pop, nptcls
         select case(trim(p_ptr%oritype))
             case('ptcl2D')
                 ptcl_field => b_ptr%spproj%os_ptcl2D
@@ -181,8 +181,8 @@ contains
     ! workers and the shared-memory matcher accumulate the current sample only, and the
     ! assembly owner blends the carried sums (cavger_commit_carryover)
     module subroutine cavger_init_online( maxbatchsz, cropped_ptcls )
-        integer,           intent(in) :: maxbatchsz
-        logical, optional, intent(in) :: cropped_ptcls
+        integer,           intent(in)           :: maxbatchsz
+        logical,           optional, intent(in) :: cropped_ptcls
         ! Whether cavger_update_sums will be fed box_crop particles (from the
         ! downscaled cache) rather than the full-size originals. Set explicitly by
         ! the caller rather than inferred, so the offline assembly path is unaffected.
@@ -224,20 +224,20 @@ contains
     !! ent_n, ent_e3 and ent_w, given together, sum a particle with entries at each of them with its weight, on the data
     !! and the CTF^2 terms alike, in entry order; a particle without entries is summed at its committed angle.
     subroutine cavger_update_sums( nptcls, ptcl_imgs, ts_sum, wall_region, ent_n, ent_e3, ent_w )
-        integer,            intent(in)    :: nptcls
-        class(image),       intent(inout) :: ptcl_imgs(nptcls)
-        real(dp), optional, intent(inout) :: ts_sum, wall_region
-        integer,  optional, intent(in)    :: ent_n(:)
-        real,     optional, intent(in)    :: ent_e3(:,:), ent_w(:,:)
+        integer,            intent(in)              :: nptcls
+        class(image),       intent(inout)           :: ptcl_imgs(nptcls)
+        real(dp),           optional, intent(inout) :: ts_sum, wall_region
+        integer,            optional, intent(in)    :: ent_n(:)
+        real,               optional, intent(in)    :: ent_e3(:,:), ent_w(:,:)
         type(fplane_type), allocatable :: fplanes(:)
-        type(fplane_grid) :: grid
-        type(ctfparams)   :: ctfparms_here
-        integer,  allocatable :: bfirst(:), border(:), tasks(:)
-        real(dp), allocatable :: ts_thr(:)
-        real(dp) :: t_region, t_task
-        integer  :: iptcl, ithr, icls, i, j, ih, box_pd, nthr_team, nbuckets, ib, ihalf, itask, ntasks, k, nent_i
-        real     :: crop_factor, shift_here(2)
-        logical  :: l_ent
+        type(fplane_grid)              :: grid
+        type(ctfparams)                :: ctfparms_here
+        integer,           allocatable :: bfirst(:), border(:), tasks(:)
+        real(dp),          allocatable :: ts_thr(:)
+        real(dp)                       :: t_region, t_task
+        integer                        :: iptcl, ithr, icls, i, j, ih, box_pd, nthr_team, nbuckets, ib, ihalf, itask, ntasks, k, nent_i
+        real                           :: crop_factor, shift_here(2)
+        logical                        :: l_ent
         l_ent = present(ent_n)
         if( (l_ent .neqv. present(ent_e3)) .or. (l_ent .neqv. present(ent_w)) ) &
             &THROW_HARD('the in-plane entries come together: ent_n, ent_e3 and ent_w; cavger_update_sums')
@@ -412,13 +412,13 @@ contains
     module subroutine cavger_assemble_sums()
         use simple_matcher_ptcl_io, only: prepimgbatch, ptcl_read_session, killimgbatch, &
             &ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since
-        class(oris), pointer :: spproj_field
-        type(string)         :: source_stk
-        type(ptcl_read_counts) :: reads0
+        class(oris), pointer    :: spproj_field
+        type(string)            :: source_stk
+        type(ptcl_read_counts)  :: reads0
         type(ptcl_read_session) :: reads
-        integer :: pinds(READBUFFSZ)
-        integer :: iptcl, i, ind_in_stk, nptcls_eff, batchind, ibatch_start, ibatch_end
-        integer :: first_stkind, fromp, istk, nptcls_in_stk, last_stkind, ibatch, nbatches, nptcls_tot
+        integer                 :: pinds(READBUFFSZ)
+        integer                 :: iptcl, i, ind_in_stk, nptcls_eff, batchind, ibatch_start, ibatch_end
+        integer                 :: first_stkind, fromp, istk, nptcls_in_stk, last_stkind, ibatch, nbatches, nptcls_tot
         integer(timer_int_kind) :: t_tot, t
         real(timer_int_kind)    :: rt_init, rt_transf, rt_sums
         real(dp)                :: ts_sums, wall_sums
@@ -532,7 +532,7 @@ contains
         character(len=*), intent(in) :: prefix
         real(dp),         intent(in) :: ts_sums, wall_sums
         character(len=36) :: label
-        integer :: nthr_team
+        integer           :: nthr_team
         nthr_team = omp_get_max_threads()
         label = prefix//' class sums'
         write(fnr,'(a,a,1x,f0.2)') label, ':', ts_sums
@@ -765,9 +765,9 @@ contains
         real,     allocatable :: mprev(:)
         real(dp), allocatable :: mass(:), mass_cur(:)
         integer,  allocatable :: nrep(:), nsmp(:)
-        real    :: s(ncls), w(ncls), mnew(ncls)
-        integer :: icls, iptcl, status, eo
-        logical :: l_blend
+        real                  :: s(ncls), w(ncls), mnew(ncls)
+        integer               :: icls, iptcl, status, eo
+        logical               :: l_blend
         l_blend = .false.
         if( l_frac )then
             call prev%read(string(CAVG_STATE_FILE), CAVG_SUMS_STATE, status)
@@ -859,14 +859,14 @@ contains
     !!         carry-over mode, blends and publishes the carried sums, restores the class averages
     !!         and deletes the contributions
     module subroutine cavger_assemble_sums_from_parts
-        integer(timer_int_kind) ::  t_init,  t_io,  t_merge_eos_and_norm,  t_tot
+        integer(timer_int_kind) :: t_init,  t_io,  t_merge_eos_and_norm,  t_tot
         real(timer_int_kind)    :: rt_init, rt_io, rt_merge_eos_and_norm, rt_tot
-        type(cavg_sums)      :: total, part_sums
-        real,    allocatable :: offsets(:,:)
-        integer, allocatable :: part_pops(:,:)
-        real    :: offsets_ref(2,ncls)
-        integer :: ipart, fnr, status, acc_pops(2,ncls)
-        logical :: l_frac
+        type(cavg_sums)         :: total, part_sums
+        real,    allocatable    :: offsets(:,:)
+        integer, allocatable    :: part_pops(:,:)
+        real                    :: offsets_ref(2,ncls)
+        integer                 :: ipart, fnr, status, acc_pops(2,ncls)
+        logical                 :: l_frac
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -958,34 +958,34 @@ contains
         use simple_sp_project,          only: sp_project
         use simple_matcher_ptcl_io,     only: ptcl_read_session, prepimgbatch, killimgbatch
         use simple_memoize_ft_maps
-        class(parameters), target,          intent(in)    :: params
-        class(builder),                     target, intent(inout) :: build
-        class(sp_project),                  intent(inout) :: spproj
-        character(len=*),                   intent(in)    :: oritype
-        integer,                            intent(in)    :: icls
-        type(image),           allocatable, intent(inout) :: timgs(:)
-        integer,               allocatable, intent(inout) :: pinds(:)
-        logical,     optional,              intent(in)    :: phflip
-        type(image), optional,              intent(inout) :: cavg
-        type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
-        integer,     optional,              intent(in)    :: pinds_in(:)
-        logical,     optional,              intent(in)    :: keep_ft   !< return the class-frame Fourier planes (no ifft, no gridding correction)
-        type(image), optional,              intent(inout) :: gridcorr  !< the gridding-correction image, for the caller
-        class(oris), pointer :: pos
-        type(kbinterpol)     :: kbwin
-        type(image)          :: gridcorr_img
+        class(parameters),                  target,          intent(in)          :: params
+        class(builder),                     target, intent(inout)                :: build
+        class(sp_project),                  intent(inout)                        :: spproj
+        character(len=*),                   intent(in)                           :: oritype
+        integer,                            intent(in)                           :: icls
+        type(image),                        allocatable, intent(inout)           :: timgs(:)
+        integer,                            allocatable, intent(inout)           :: pinds(:)
+        logical,                            optional,              intent(in)    :: phflip
+        type(image),                        optional,              intent(inout) :: cavg
+        type(image),                        optional, allocatable, intent(inout) :: imgs_ori(:)
+        integer,                            optional,              intent(in)    :: pinds_in(:)
+        logical,                            optional,              intent(in)    :: keep_ft  !< return the class-frame Fourier planes (no ifft, no gridding correction)
+        type(image),                        optional,              intent(inout) :: gridcorr !< the gridding-correction image, for the caller
+        class(oris), pointer     :: pos
+        type(kbinterpol)         :: kbwin
+        type(image)              :: gridcorr_img
         type(image), allocatable :: img(:)
-        type(ptcl_read_session) :: reads
-        type(ctfparams)      :: ctfparms
-        type(ctf)            :: tfun
-        type(string)         :: str
-        real,     allocatable :: kbw(:,:)
-        integer,  allocatable :: phys_addrh_ori(:,:), phys_addrk_ori(:,:)
-        complex :: fcomp, fcompl
-        real    :: mat(2,2), shift(2), loc(2), e3, pf2
-        integer :: ldim_pd(3), ldim(3),logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),win(2,2)
-        integer :: i,iptcl, l,m, pop, h,k, hh,kk,hp,kp, ithr, iwinsz, wdim, physh,physk, nthr_team
-        logical :: l_phflip, l_ori_imgs, l_conjg, l_keep_ft
+        type(ptcl_read_session)  :: reads
+        type(ctfparams)          :: ctfparms
+        type(ctf)                :: tfun
+        type(string)             :: str
+        real,        allocatable :: kbw(:,:)
+        integer,     allocatable :: phys_addrh_ori(:,:), phys_addrk_ori(:,:)
+        complex                  :: fcomp, fcompl
+        real                     :: mat(2,2), shift(2), loc(2), e3, pf2
+        integer                  :: ldim_pd(3), ldim(3),logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),win(2,2)
+        integer                  :: i,iptcl, l,m, pop, h,k, hh,kk,hp,kp, ithr, iwinsz, wdim, physh,physk, nthr_team
+        logical                  :: l_phflip, l_ori_imgs, l_conjg, l_keep_ft
         p_ptr => params
         b_ptr => build
         ! parse inputs

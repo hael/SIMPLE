@@ -29,9 +29,9 @@ contains
         type(ctfparams)           :: ctfvars, prev_ctfvars
         type(stream_watcher)      :: movie_buff
         type(string)              :: boxfname
-        type(string), allocatable :: boxfnames(:), movfnames(:) 
-        logical :: inputted_boxtab, inputted_deftab, inputted_dir_movies, inputted_filetab, first_import
-        integer :: nmovf, nboxf, i, nprev_movies, nprev_intgs
+        type(string), allocatable :: boxfnames(:), movfnames(:)
+        logical                   :: inputted_boxtab, inputted_deftab, inputted_dir_movies, inputted_filetab, first_import
+        integer                   :: nmovf, nboxf, i, nprev_movies, nprev_intgs
         ! set defaults
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
@@ -151,8 +151,8 @@ contains
         class(cmdline),                     intent(inout) :: cline
         type(string), allocatable :: micstab(:)
         integer,      allocatable :: orimap(:)
-        type(parameters) :: params
-        type(sp_project) :: spproj
+        type(parameters)          :: params
+        type(sp_project)          :: spproj
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         call params%new(cline)
         call spproj%read(params%projfile)

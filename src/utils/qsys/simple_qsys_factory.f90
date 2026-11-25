@@ -27,8 +27,8 @@ contains
 
     !> \brief  is a constructor
     subroutine new( self, which, ptr )
-        class(qsys_factory), target, intent(inout) :: self  !< instance
-        class(string),               intent(in)    :: which !< which qsys
+        class(qsys_factory),         target, intent(inout) :: self  !< instance
+        class(string),               intent(in)            :: which !< which qsys
         class(qsys_base),    pointer               :: ptr   !< pointer to constructed object
         ptr => null()
         call self%kill

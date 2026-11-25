@@ -50,11 +50,11 @@ contains
 
     subroutine test_round_trip()
         class(sp_project), allocatable :: project
-        type(class_candidates) :: pub, back
-        integer, allocatable   :: pinds(:), routes(:), ncands(:), cands(:,:)
-        character(len=:), allocatable :: msg
-        integer :: got(KMAX), n, i, status
-        logical :: l_same, l_unseeded
+        type(class_candidates)         :: pub, back
+        integer,           allocatable :: pinds(:), routes(:), ncands(:), cands(:,:)
+        character(len=:),  allocatable :: msg
+        integer                        :: got(KMAX), n, i, status
+        logical                        :: l_same, l_unseeded
         write(*,'(A)') 'test_round_trip'
         allocate(project)
         call make_project(project, 'cands_particles')
@@ -87,16 +87,16 @@ contains
     !> three parts (rows 1-2 with no predicted row, 3-7, 8-NP), each writing its range, merge into the bytes the
     !! whole prediction publishes
     subroutine test_parts()
-        integer, parameter :: NPARTS = 3
-        integer, parameter :: RANGES(2,NPARTS) = reshape([1,2, 3,7, 8,NP], [2,NPARTS])
-        character(len=*), parameter :: FNAME_PARTS = 'class_candidates_test_cands_parts.bin'
+        integer,           parameter   :: NPARTS           = 3
+        integer,           parameter   :: RANGES(2,NPARTS) = reshape([1,2, 3,7, 8,NP], [2,NPARTS])
+        character(len=*),  parameter   :: FNAME_PARTS      = 'class_candidates_test_cands_parts.bin'
         class(sp_project), allocatable :: project
-        type(class_candidates) :: pub
-        type(string)           :: part_fnames(NPARTS)
-        integer, allocatable   :: pinds(:), routes(:), ncands(:), cands(:,:)
-        logical, allocatable   :: in_part(:)
-        integer, allocatable   :: cols(:)
-        integer :: ipart, i
+        type(class_candidates)         :: pub
+        type(string)                   :: part_fnames(NPARTS)
+        integer,           allocatable :: pinds(:), routes(:), ncands(:), cands(:,:)
+        logical,           allocatable :: in_part(:)
+        integer,           allocatable :: cols(:)
+        integer                        :: ipart, i
         write(*,'(A)') 'test_parts'
         allocate(project)
         call make_project(project, 'cands_particles')
@@ -121,10 +121,10 @@ contains
 
     subroutine test_refusals()
         class(sp_project), allocatable :: project, other
-        type(class_candidates) :: pub, back
-        integer, allocatable   :: pinds(:), routes(:), ncands(:), cands(:,:)
-        character(len=:), allocatable :: msg
-        integer :: status, u
+        type(class_candidates)         :: pub, back
+        integer,           allocatable :: pinds(:), routes(:), ncands(:), cands(:,:)
+        character(len=:),  allocatable :: msg
+        integer                        :: status, u
         write(*,'(A)') 'test_refusals'
         allocate(project, other)
         ! no artifact registered
@@ -163,7 +163,7 @@ contains
         class(sp_project), intent(inout) :: project
         character(len=*),  intent(in)    :: stkname
         type(string) :: cwd
-        integer :: i
+        integer      :: i
         call project%kill
         call project%projinfo%new(1, is_ptcl=.false.)
         call project%projinfo%set(1, 'projname', PROJ(1:len(PROJ)-7))

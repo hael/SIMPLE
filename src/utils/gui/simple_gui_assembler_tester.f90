@@ -275,7 +275,7 @@ contains
   ! because the section embeds a live Unix timestamp (last_micrograph_imported).
   subroutine test_initial_picking()
     type(gui_assembler)                              :: assembler
-    type(gui_metadata_stream_picking)        :: meta_initial_picking
+    type(gui_metadata_stream_picking)                :: meta_initial_picking
     type(gui_metadata_micrograph),       allocatable :: meta_micrographs(:)
     type(string)                                     :: json_str
     integer                                          :: i
@@ -349,11 +349,11 @@ contains
   ! the section is non-empty.  An exact hash comparison is not possible because
   ! the section embeds a live Unix timestamp (last_particles_imported).
   subroutine test_initial_analysis()
-    type(gui_assembler)                            :: assembler
+    type(gui_assembler)                                   :: assembler
     type(gui_metadata_stream_initial_analysis)            :: meta_initial_analysis
-    type(gui_metadata_cavg2D),         allocatable :: meta_cavgs2D(:), meta_final_cavgs2D(:)
-    type(string)                                   :: json_str
-    integer                                        :: i
+    type(gui_metadata_cavg2D),         allocatable        :: meta_cavgs2D(:), meta_final_cavgs2D(:)
+    type(string)                                          :: json_str
+    integer                                               :: i
     write(*,'(A)') 'test_initial_analysis'
     call meta_initial_analysis%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE)
     call meta_initial_analysis%set(stage=string('test stage'), particles_imported=50000, &
@@ -434,7 +434,7 @@ contains
   subroutine test_pool2D()
     type(gui_assembler)                              :: assembler
     type(gui_metadata_stream_pool2D)                 :: meta_pool2D
-    type(gui_metadata_stream_snapshot)        :: meta_snapshot
+    type(gui_metadata_stream_snapshot)               :: meta_snapshot
     type(gui_metadata_cavg2D),           allocatable :: meta_latest_cavgs2D(:)
     type(string)                                     :: json_str
     integer                                          :: i
@@ -529,10 +529,10 @@ contains
   ! alone (the communicator runs it outside the metadata lock); its apply fills it. An exact hash
   ! comparison is not possible because the section embeds a live Unix timestamp (created).
   subroutine test_project()
-    type(gui_assembler)        :: assembler
-    type(gui_metadata_project) :: meta_project_inmem
-    type(gui_project_builder)  :: builder
-    type(sp_project)           :: proj
+    type(gui_assembler)         :: assembler
+    type(gui_metadata_project)  :: meta_project_inmem
+    type(gui_project_builder)   :: builder
+    type(sp_project)            :: proj
     type(string)                :: projfile, projname, json_str
     integer                     :: nmics, nstks, nptcls, created
     write(*,'(A)') 'test_project'
@@ -598,13 +598,13 @@ contains
   function heartbeat_mismatch( payload, expected_status ) result( what )
     type(string),     intent(in)  :: payload
     character(len=*), intent(in)  :: expected_status
-    character(len=:), allocatable :: what
-    type(json_core)               :: json
-    type(json_value), pointer     :: root
+    character(len=:),         allocatable :: what
+    type(json_core)                       :: json
+    type(json_value),         pointer     :: root
     character(kind=CK,len=:), allocatable :: actual_status
     character(len=:),         allocatable :: path
-    integer :: i, job_id, pid, starttime, stoptime
-    logical :: found
+    integer                               :: i, job_id, pid, starttime, stoptime
+    logical                               :: found
     nullify(root)
     call json%initialize()
     call json%parse(root, payload%to_char())
@@ -670,10 +670,10 @@ contains
   function json_str_field( payload, path ) result( val )
     type(string),     intent(in)          :: payload
     character(len=*), intent(in)          :: path
-    character(len=:), allocatable         :: val
+    character(len=:),         allocatable :: val
     character(kind=CK,len=:), allocatable :: cval
     type(json_core)                       :: json
-    type(json_value), pointer             :: root
+    type(json_value),         pointer     :: root
     logical                               :: found
     val = ''
     call parse_payload(json, root, payload)

@@ -42,8 +42,8 @@ contains
 
     !> the magnitudes 0, step, 2 step, ... up to radius
     subroutine magnitudes( radius, step, rhos )
-        real(dp),              intent(in)  :: radius, step
-        real(dp), allocatable, intent(out) :: rhos(:)
+        real(dp),              intent(in)               :: radius, step
+        real(dp),              allocatable, intent(out) :: rhos(:)
         integer :: n, i
         n = floor(radius / step) + 1
         allocate(rhos(n))

@@ -16,11 +16,11 @@ type aff_prop
     real,    allocatable :: Aold(:,:), Rold(:,:)
     real,    allocatable :: Rp(:,:), AS(:,:)
     real,    allocatable :: S(:,:)               !< private similarity matrix
-    integer              :: maxits=500           !< maximum number of iterations
-    real                 :: ftol=1e-9            !< fractional convergence tolerance score
-    real                 :: lam=0.5              !< dampening factor
+    integer              :: maxits = 500         !< maximum number of iterations
+    real                 :: ftol   = 1e-9        !< fractional convergence tolerance score
+    real                 :: lam    = 0.5         !< dampening factor
     real                 :: Smin, Smax           !< similarity min/max
-    logical              :: exists=.false.       !< to indicate existence
+    logical              :: exists = .false.     !< to indicate existence
   contains
     procedure :: new
     procedure :: propagate
@@ -33,11 +33,11 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, N, S, ftol, lam, pref, maxits )
-        class(aff_prop),   intent(inout) :: self
-        integer,           intent(in)    :: N               ! # data entries
-        real,              intent(in)    :: S(N,N)          ! similarity matrix
-        real,    optional, intent(in)    :: ftol, lam, pref ! tolerance, dampening factor, preference thres
-        integer, optional, intent(in)    :: maxits
+        class(aff_prop),   intent(inout)        :: self
+        integer,           intent(in)           :: N               ! # data entries
+        real,              intent(in)           :: S(N,N)          ! similarity matrix
+        real,              optional, intent(in) :: ftol, lam, pref ! tolerance, dampening factor, preference thres
+        integer,           optional, intent(in) :: maxits
         integer :: i, j
         real    :: ppref, diff
         call self%kill
@@ -73,15 +73,15 @@ contains
 
     !>  \brief  is the message passing algorithm
     subroutine propagate( self, centers, labels, simsum )
-        class(aff_prop),      intent(inout) :: self
-        integer, allocatable, intent(inout) :: centers(:) !< cluster centres
-        integer, allocatable, intent(inout) :: labels(:)  !< cluster labels
-        real,                 intent(inout) :: simsum     !< similarity sum
-        real, allocatable :: similarities(:)
+        class(aff_prop),      intent(inout)              :: self
+        integer,              allocatable, intent(inout) :: centers(:) !< cluster centres
+        integer,              allocatable, intent(inout) :: labels(:)  !< cluster labels
+        real,                 intent(inout)              :: simsum     !< similarity sum
+        real,    allocatable :: similarities(:)
         logical, allocatable :: exemplars(:), exemplars_prev(:)
-        real              :: best, second, avail, colsum, val, pseudo, exemplar_tol, realmax
-        integer           :: i, j, k, ncls, nborder, fallback_center, nstable, best_idx
-        logical           :: converged, use_fallback_center
+        real                 :: best, second, avail, colsum, val, pseudo, exemplar_tol, realmax
+        integer              :: i, j, k, ncls, nborder, fallback_center, nstable, best_idx
+        logical              :: converged, use_fallback_center
         ! initialize
         realmax   = huge(realmax)
         converged = .false.
@@ -255,7 +255,7 @@ contains
             subroutine calc_exemplar_mask( mask, tol )
                 logical, intent(inout) :: mask(:)
                 real,    intent(out)   :: tol
-                real :: pseudo_absmax_here
+                real    :: pseudo_absmax_here
                 integer :: ii
                 pseudo_absmax_here = 0.
                 do ii=1,self%N
@@ -272,7 +272,7 @@ contains
     pure real function deterministic_tiebreak( i, j ) result( val )
         integer, intent(in) :: i, j
         integer, parameter :: HASH_MOD = 8191, HASH_A = 37, HASH_B = 1009
-        integer :: ii, jj, h
+        integer            :: ii, jj, h
         ii  = mod(i - 1, HASH_MOD)
         jj  = mod(j - 1, HASH_MOD)
         h   = mod(HASH_A * ii + HASH_B * jj + mod(ii * jj, HASH_MOD), HASH_MOD)

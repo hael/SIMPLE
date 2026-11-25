@@ -37,14 +37,14 @@ end type gridding_half_restore
 !! set (new_plane) also holds the plane positions its samples are written back to (put_plane)
 type :: exp_samples
     private
-    integer :: n    = 0
-    integer :: wdim = 0
+    integer              :: n       = 0
+    integer              :: wdim    = 0
     integer, allocatable :: win(:,:)    !< (3,n) window lower corners
     real,    allocatable :: w(:,:,:)    !< (wdim,3,n) normalized separable KB weights
     logical, allocatable :: l_conj(:)   !< (n) the point was reflected into h >= 0
     integer, allocatable :: hk(:,:)     !< (2,n) plane positions (new_plane)
     complex, allocatable :: vbuf(:)     !< gathered values of project_fplane, kept with the sample set
-    logical :: l_plane = .false.
+    logical              :: l_plane = .false.
   contains
     procedure :: new       => exp_samples_new
     procedure :: new_plane => exp_samples_new_plane
@@ -56,24 +56,24 @@ end type exp_samples
 
 type, extends(image) :: reconstructor
     private
-    class(parameters),  pointer :: p_ptr => null()              !< pointer to parameters object
-    type(kbinterpol)            :: kbwin                        !< window function object
-    type(c_ptr)                 :: kp                           !< c pointer for fftw allocation
-    real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
-    complex, allocatable, public :: cmat_exp(:,:,:)             !< Fourier components of expanded reconstructor, only made public for the sake of GPU implementation
-    real,    allocatable, public :: rho_exp(:,:,:)              !< sampling+CTF**2 density of expanded reconstructor, only made public for the sake of GPU implementation
-    real,    allocatable         :: invenv1d(:)                  !< inverse KB-stencil envelope on the native lattice
-    real                        :: shconst_rec(3) = 0.          !< memoized constants for origin shifting
-    integer                     :: wdim           = 0           !< dim of interpolation matrix
-    integer                     :: nyq            = 0           !< Nyqvist Fourier index
-    integer                     :: sh_lim         = 0           !< limit for shell-limited reconstruction
-    integer                     :: ldim_img(3)    = 0           !< logical dimension of the original image
-    integer                     :: ldim_exp(3,2)  = 0           !< logical dimension of the expanded complex matrix
-    integer                     :: lims(3,2)      = 0           !< Friedel limits
-    integer                     :: rho_shape(3)   = 0           !< shape of sampling density matrix
-    integer                     :: cyc_lims(3,2)  = 0           !< redundant limits of the 2D image
-    integer(kind(ENUM_CTFFLAG)) :: ctfflag                      !< ctf flag <yes=1|no=0|flip=2>
-    logical                     :: rho_allocated  = .false.     !< existence of rho matrix
+    class(parameters),  pointer             :: p_ptr          => null() !< pointer to parameters object
+    type(kbinterpol)                        :: kbwin                    !< window function object
+    type(c_ptr)                             :: kp                       !< c pointer for fftw allocation
+    real(kind=c_float), pointer             :: rho(:,:,:)     => null() !< sampling+CTF**2 density
+    complex,            allocatable, public :: cmat_exp(:,:,:)          !< Fourier components of expanded reconstructor, only made public for the sake of GPU implementation
+    real,               allocatable, public :: rho_exp(:,:,:)           !< sampling+CTF**2 density of expanded reconstructor, only made public for the sake of GPU implementation
+    real,               allocatable         :: invenv1d(:)              !< inverse KB-stencil envelope on the native lattice
+    real                                    :: shconst_rec(3) = 0.      !< memoized constants for origin shifting
+    integer                                 :: wdim           = 0       !< dim of interpolation matrix
+    integer                                 :: nyq            = 0       !< Nyqvist Fourier index
+    integer                                 :: sh_lim         = 0       !< limit for shell-limited reconstruction
+    integer                                 :: ldim_img(3)    = 0       !< logical dimension of the original image
+    integer                                 :: ldim_exp(3,2)  = 0       !< logical dimension of the expanded complex matrix
+    integer                                 :: lims(3,2)      = 0       !< Friedel limits
+    integer                                 :: rho_shape(3)   = 0       !< shape of sampling density matrix
+    integer                                 :: cyc_lims(3,2)  = 0       !< redundant limits of the 2D image
+    integer(kind(ENUM_CTFFLAG))             :: ctfflag                  !< ctf flag <yes=1|no=0|flip=2>
+    logical                                 :: rho_allocated  = .false. !< existence of rho matrix
   contains
     ! CONSTRUCTORS
     procedure          :: new_accumulator
@@ -122,9 +122,9 @@ contains
     ! CONSTRUCTORS
 
     subroutine new_gridding_half_restore( self, backend, wthreads )
-        class(gridding_half_restore), intent(inout) :: self
-        class(reconstructor),         intent(in)    :: backend
-        logical, optional,            intent(in)    :: wthreads
+        class(gridding_half_restore), intent(inout)                   :: self
+        class(reconstructor),         intent(in)                      :: backend
+        logical,                      optional,            intent(in) :: wthreads
         integer :: ldim(3)
         call self%kill
         if( .not. backend%exists() ) THROW_HARD('construct gridding backend before restoration result')
@@ -133,9 +133,9 @@ contains
     end subroutine new_gridding_half_restore
 
     subroutine prepare_gridding_half_final( self, backend, wthreads )
-        class(gridding_half_restore), intent(inout) :: self
-        class(reconstructor),         intent(in)    :: backend
-        logical, optional,            intent(in)    :: wthreads
+        class(gridding_half_restore), intent(inout)                   :: self
+        class(reconstructor),         intent(in)                      :: backend
+        logical,                      optional,            intent(in) :: wthreads
         if( .not. backend%exists() ) THROW_HARD('construct gridding backend before final restoration')
         call self%final%new(backend%get_ldim(), backend%get_smpd(), wthreads)
     end subroutine prepare_gridding_half_final
@@ -145,11 +145,11 @@ contains
     !! no longer need to coordinate the inherited image allocation with rho.
     subroutine new_accumulator( self, params, spproj, expand, wthreads )
         use simple_sp_project, only: sp_project
-        class(reconstructor),      intent(inout) :: self
-        class(parameters), target, intent(inout) :: params
-        class(sp_project),         intent(inout) :: spproj
-        logical,                   intent(in)    :: expand
-        logical, optional,         intent(in)    :: wthreads
+        class(reconstructor),      intent(inout)                :: self
+        class(parameters),         target, intent(inout)        :: params
+        class(sp_project),         intent(inout)                :: spproj
+        logical,                   intent(in)                   :: expand
+        logical,                   optional,         intent(in) :: wthreads
         integer :: ldim(3)
         call self%kill
         ldim = [params%box_crop, params%box_crop, params%box_crop]
@@ -160,10 +160,10 @@ contains
 
     subroutine alloc_rho( self, params, spproj, expand )
         use simple_sp_project, only: sp_project
-        class(reconstructor),      intent(inout) :: self           !< this instance
-        class(parameters), target, intent(inout) :: params         !< parameters object
-        class(sp_project),         intent(inout) :: spproj         !< project description
-        logical,                   intent(in)    :: expand         !< expand flag
+        class(reconstructor),      intent(inout)         :: self   !< this instance
+        class(parameters),         target, intent(inout) :: params !< parameters object
+        class(sp_project),         intent(inout)         :: spproj !< project description
+        logical,                   intent(in)            :: expand !< expand flag
         integer :: dim
         logical :: l_expand
         if(.not. self%exists() ) THROW_HARD('construct image before allocating rho; alloc_rho')
@@ -256,9 +256,9 @@ contains
     end subroutine set_sh_lim
 
     subroutine pad_with_zeros( self, vol_prev, rho_prev )
-        class(reconstructor),      intent(inout) :: self !< this instance
-        class(image),               intent(in)   :: vol_prev
-        real(kind=c_float_complex), intent(in)   :: rho_prev(:,:,:)
+        class(reconstructor),       intent(inout) :: self !< this instance
+        class(image),               intent(in)    :: vol_prev
+        real(kind=c_float_complex), intent(in)    :: rho_prev(:,:,:)
         call self%pad_mats(self%rho, vol_prev, rho_prev)
     end subroutine pad_with_zeros
 
@@ -288,7 +288,7 @@ contains
     subroutine write_rho( self, kernam )
         class(reconstructor), intent(in) :: self   !< this instance
         class(string),        intent(in) :: kernam !< kernel name
-        integer :: filnum, ierr
+        integer           :: filnum, ierr
         character(len=24) :: pad
         call del_file(kernam)
         call fopen(filnum, kernam, status='NEW', action='WRITE', access='STREAM', iostat=ierr)
@@ -323,7 +323,7 @@ contains
         real(dp),      intent(out) :: smpd
         character(len=8)              :: magic
         character(len=:), allocatable :: errmsg
-        integer :: ierr
+        integer                       :: ierr
         read(fhandle, pos=1, iostat=ierr) magic, ldim, rho_shape, smpd
         if( ierr /= 0 .or. magic /= RHO_MAGIC )then
             errmsg = 'not a gridding density file with a header: '//fname%to_char()
@@ -337,9 +337,9 @@ contains
         integer,              intent(in) :: fhandle
         class(string),        intent(in) :: fname
         character(len=:), allocatable :: errmsg
-        character(len=160) :: line
-        integer  :: ldim(3), rho_shape(3)
-        real(dp) :: smpd
+        character(len=160)            :: line
+        integer                       :: ldim(3), rho_shape(3)
+        real(dp)                      :: smpd
         call read_rho_header(fhandle, fname, ldim, rho_shape, smpd)
         if( any(ldim /= self%get_ldim()) .or. any(rho_shape /= self%rho_shape) .or. &
             &abs(smpd - real(self%get_smpd(),dp)) > 1.d-4 * real(self%get_smpd(),dp) )then
@@ -383,11 +383,11 @@ contains
     !! restored for a later FSC-prior replay. Rho is deliberately not copied:
     !! attaching a prior to it remains an in-place backend operation.
     subroutine restore_base( self, vol, preserve_numerator )
-        class(reconstructor), intent(inout) :: self
-        class(image),         intent(inout) :: vol
-        logical, optional,    intent(in)    :: preserve_numerator
+        class(reconstructor), intent(inout)           :: self
+        class(image),         intent(inout)           :: vol
+        logical,              optional,    intent(in) :: preserve_numerator
         complex, allocatable :: cmat(:,:,:)
-        logical :: l_preserve
+        logical              :: l_preserve
         call validate_restore_source(self)
         l_preserve = .false.
         if( present(preserve_numerator) ) l_preserve = preserve_numerator
@@ -411,11 +411,11 @@ contains
     !! consumers. Numerator preservation supports the ML replay path after an
     !! FSC-derived prior has been attached to rho.
     subroutine restore_final( self, vol, preserve_numerator )
-        class(reconstructor), intent(inout) :: self
-        class(image),         intent(inout) :: vol
-        logical, optional,    intent(in)    :: preserve_numerator
+        class(reconstructor), intent(inout)           :: self
+        class(image),         intent(inout)           :: vol
+        logical,              optional,    intent(in) :: preserve_numerator
         complex, allocatable :: cmat(:,:,:)
-        logical :: l_preserve
+        logical              :: l_preserve
         call validate_restore_source(self)
         l_preserve = .false.
         if( present(preserve_numerator) ) l_preserve = preserve_numerator
@@ -453,11 +453,11 @@ contains
     !! alike (a fractional state weight); without it the plane enters with weight one.
     subroutine insert_plane_oversamp( self, se, o, fpl, w )
         use simple_math, only: ceil_div, floor_div
-        class(reconstructor), intent(inout) :: self
-        class(sym),           intent(inout) :: se
-        class(ori),           intent(inout) :: o
-        class(fplane_type),   intent(in)    :: fpl
-        real, optional,       intent(in)    :: w
+        class(reconstructor), intent(inout)              :: self
+        class(sym),           intent(inout)              :: se
+        class(ori),           intent(inout)              :: o
+        class(fplane_type),   intent(in)                 :: fpl
+        real,                 optional,       intent(in) :: w
         type(ori) :: o_sym
         complex   :: comp, cmplx_raw
         real      :: rotmats(se%get_nsym(),3,3), loc(3), hrow(3), ctfval
@@ -608,12 +608,12 @@ contains
     !!  sampl_dens_correct, which divides unfloored. Needed for kernel-weighted (flex) state maps,
     !!  whose rho is small and noisy in low-occupancy regions.
     subroutine floor_rho_shellwise( self, frac )
-        class(reconstructor), intent(inout) :: self
-        real, optional,       intent(in)    :: frac
+        class(reconstructor), intent(inout)              :: self
+        real,                 optional,       intent(in) :: frac
         real(dp), allocatable :: shsum(:)
         integer,  allocatable :: shcnt(:)
-        integer  :: h, k, m, phys(3), sh, nsh
-        real     :: ffrac, floor_here
+        integer               :: h, k, m, phys(3), sh, nsh
+        real                  :: ffrac, floor_here
         ffrac = 1000.0
         if( present(frac) ) ffrac = max(1.0, frac)
         nsh = self%sh_lim
@@ -677,9 +677,9 @@ contains
         class(reconstructor), intent(inout) :: self
         real(dp), allocatable :: rho_shell_sum(:), rho_shell_mean(:)
         integer,  allocatable :: rho_shell_cnt(:)
-        complex :: comp_here
-        real    :: rho_here, rho_floor
-        integer :: phys(3), h, k, m, sh
+        complex               :: comp_here
+        real                  :: rho_here, rho_floor
+        integer               :: phys(3), h, k, m, sh
         if(.not. allocated(self%cmat_exp) .or. .not.allocated(self%rho_exp))then
             THROW_HARD('expanded complex or rho matrices do not exist; compress_exp')
         endif
@@ -969,14 +969,14 @@ contains
     !! (put_plane: no ctfsq or transfer plane; zeroed only when the geometry changes). samples is optional
     !! work storage a caller reuses particle by particle.
     subroutine project_fplane( self, o, fpl_ref, fpl_out, apply_ctf_amp, samples )
-        class(reconstructor),        intent(in)    :: self
-        class(ori),                  intent(inout) :: o
-        class(fplane_type),          intent(in)    :: fpl_ref
-        type(fplane_type),           intent(inout) :: fpl_out
-        logical,           optional, intent(in)    :: apply_ctf_amp
-        type(exp_samples), optional, intent(inout) :: samples
+        class(reconstructor),        intent(in)              :: self
+        class(ori),                  intent(inout)           :: o
+        class(fplane_type),          intent(in)              :: fpl_ref
+        type(fplane_type),           intent(inout)           :: fpl_out
+        logical,                     optional, intent(in)    :: apply_ctf_amp
+        type(exp_samples),           optional, intent(inout) :: samples
         type(exp_samples) :: work
-        logical :: l_apply_ctf_amp
+        logical           :: l_apply_ctf_amp
         if( .not. allocated(self%cmat_exp) ) THROW_HARD('expanded matrix does not exist; reconstructor project_fplane')
         if( .not. allocated(fpl_ref%cmplx_plane) .or. .not. allocated(fpl_ref%ctfsq_plane) )then
             THROW_HARD('reference Fourier plane does not exist; reconstructor project_fplane')
@@ -1016,19 +1016,19 @@ contains
         real(dp),            intent(in)    :: data_w(:,:), dens_w(:,:,:)
         logical,             intent(in)    :: valid(:)
         integer,             intent(in)    :: nrecords
-        type(ori) :: o_sym
-        type(kbinterpol) :: kbwin
-        complex   :: comp_base, cmplx_raw
-        real, allocatable :: rotmats(:,:,:,:), data_w_sp(:,:), dens_w_packed(:,:)
+        type(ori)            :: o_sym
+        type(kbinterpol)     :: kbwin
+        complex              :: comp_base, cmplx_raw
+        real,    allocatable :: rotmats(:,:,:,:), data_w_sp(:,:), dens_w_packed(:,:)
         integer, allocatable :: fpllims(:,:,:), nyq_disks(:)
-        integer, parameter :: WDIM = 2 * ceiling(KBWINSZ - 0.5) + 1
-        real      :: loc(3), hrow(3), ctfsq_raw, ww, r2(3), pf2, eps_norm, inv_wdim
-        real      :: wx(WDIM), wy(WDIM), wz(WDIM)
-        integer   :: win(3,2), h, k, l, nsym, isym, iwinsz, stride
-        integer   :: ix, iy, iz, hx, ky, mz, q, r, i, ncomp, ipair
-        integer   :: h_sq, k_max_h, k_lo, k_hi, ih, ik, im, nyq_eff
-        integer   :: exp_lb(3), exp_ub(3), exp_shape(3), npairs
-        logical   :: l_shared, l_diagonal
+        integer, parameter   :: WDIM = 2 * ceiling(KBWINSZ - 0.5) + 1
+        real                 :: loc(3), hrow(3), ctfsq_raw, ww, r2(3), pf2, eps_norm, inv_wdim
+        real                 :: wx(WDIM), wy(WDIM), wz(WDIM)
+        integer              :: win(3,2), h, k, l, nsym, isym, iwinsz, stride
+        integer              :: ix, iy, iz, hx, ky, mz, q, r, i, ncomp, ipair
+        integer              :: h_sq, k_max_h, k_lo, k_hi, ih, ik, im, nyq_eff
+        integer              :: exp_lb(3), exp_ub(3), exp_shape(3), npairs
+        logical              :: l_shared, l_diagonal
         ncomp = size(recs)
         if( ncomp <= 0 .or. nrecords <= 0 ) return
         npairs     = (ncomp * (ncomp + 1)) / 2
@@ -1193,7 +1193,7 @@ contains
         class(reconstructor), intent(inout) :: self
         class(string),        intent(in)    :: fname
         type(image) :: img
-        integer :: c,phys(3),h,k,m
+        integer     :: c,phys(3),h,k,m
         call img%new([self%rho_shape(2),self%rho_shape(2),self%rho_shape(2)], 1.0)
         c = self%rho_shape(2)/2+1
         !$omp parallel do collapse(3) private(h,k,m,phys) schedule(static) default(shared) proc_bind(close)
@@ -1222,7 +1222,7 @@ contains
         class(reconstructor), intent(inout) :: self
         class(string),        intent(in)    :: fname
         type(image) :: img
-        integer :: c,phys(3),h,k,m
+        integer     :: c,phys(3),h,k,m
         call img%new([self%rho_shape(2),self%rho_shape(2),self%rho_shape(2)], 1.0)
         c = self%rho_shape(2)/2+1
         !$omp parallel do collapse(3) private(h,k,m,phys) schedule(static) default(shared) proc_bind(close)
@@ -1262,8 +1262,8 @@ contains
         real,     allocatable :: sig2(:), tau2(:), ssnr(:)
         integer,  allocatable :: cnt(:)
         real(dp), allocatable :: rsum(:)
-        real              :: fudge, cc, invtau2
-        integer           :: h, k, m, sh, phys(3), sz, reslim_ind
+        real                  :: fudge, cc, invtau2
+        integer               :: h, k, m, sh, phys(3), sz, reslim_ind
         sz = size(fsc)
         allocate(ssnr(0:sz), rsum(0:sz), cnt(0:sz), tau2(0:sz), sig2(0:sz))
         rsum  = 0.d0

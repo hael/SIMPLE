@@ -17,15 +17,15 @@ type dstack_io
     type(string)  :: stkname
     real          :: smpd   = 0.
     integer       :: box    = 0, nptcls = 0, mode = -1
-    logical       :: ft = .false., l_open = .false., l_threadsafe_reads = .true.
+    logical       :: ft     = .false., l_open = .false., l_threadsafe_reads = .true.
     logical       :: exists = .false.
 contains
-    procedure :: new
-    procedure :: open => open_1
-    procedure :: read
+    procedure          :: new
+    procedure          :: open    => open_1
+    procedure          :: read
     procedure, private :: check_index
-    procedure :: close   => close_stack
-    procedure :: kill
+    procedure          :: close   => close_stack
+    procedure          :: kill
 end type dstack_io
 
 contains

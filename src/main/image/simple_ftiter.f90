@@ -9,17 +9,17 @@ private
 
 type :: ftiter
     private
-    integer :: clogi_lbounds(3)=[0,0,0]     !<  In each dimension, the lower bound of the complex image's logical addresses
-    integer :: clogi_ubounds(3)=[0,0,0]     !<  In each dimension, the upper bound of the complex image's logical addresses
-    integer :: clogi_lbounds_all(3)=[0,0,0] !<  In each dimension, the lower bound of the complex image's logical addresses,
+    integer :: clogi_lbounds(3)     = [0,0,0] !<  In each dimension, the lower bound of the complex image's logical addresses
+    integer :: clogi_ubounds(3)     = [0,0,0] !<  In each dimension, the upper bound of the complex image's logical addresses
+    integer :: clogi_lbounds_all(3) = [0,0,0] !<  In each dimension, the lower bound of the complex image's logical addresses,
                                             !! including redundant Friedel mates in the negative frequencies of the first dimension
     integer :: clogi_ubounds_all(3)=[0,0,0] !<  In each dimension, the upper bound of the complex image's logical addresses,
                                             !! including redundant Friedel mates in the negative frequencies of the first dimension
-    integer :: ldim(3)=[1,1,1]              !< logical image dimensions
-    integer :: lfnys(3)=0                   !< Nyqvist indices
-    integer :: lhps(3)=0                    !< High-pass indices
-    real    :: dsteps(3)=0.                 !< wavelengths of first components
-    real    :: smpd=0.                      !< sampling distance (Angstroms per pixel)
+    integer :: ldim(3)   = [1,1,1]          !< logical image dimensions
+    integer :: lfnys(3)  = 0                !< Nyqvist indices
+    integer :: lhps(3)   = 0                !< High-pass indices
+    real    :: dsteps(3) = 0.               !< wavelengths of first components
+    real    :: smpd      = 0.               !< sampling distance (Angstroms per pixel)
   contains
     ! CONSTRUCTOR
     procedure :: new
@@ -173,9 +173,9 @@ contains
 
     !>  \brief is for determining loop limits for transforms
     function loop_lims( self, mode, lp_dyn ) result( lims )
-        class(ftiter),  intent(in) :: self
-        integer,        intent(in) :: mode
-        real, optional, intent(in) :: lp_dyn
+        class(ftiter),  intent(in)           :: self
+        integer,        intent(in)           :: mode
+        real,           optional, intent(in) :: lp_dyn
         integer                    :: lims(3,2)
         if( present(lp_dyn) )then
             select case(mode)

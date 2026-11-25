@@ -29,8 +29,8 @@ contains
     function fsc2ssnr( corrs ) result( ssnr )
         real, intent(in)  :: corrs(:) !< FSC
         real, allocatable :: ssnr(:)  !< SSNR
-        integer :: nyq, k
-        real    :: fsc
+        integer           :: nyq, k
+        real              :: fsc
         nyq = size(corrs)
         allocate( ssnr(nyq) )
         do k=1,nyq
@@ -56,7 +56,7 @@ contains
     function fsc2optlp( corrs ) result( filt )
         real, intent(in)  :: corrs(:) !< fsc plot (correlations)
         real, allocatable :: filt(:)  !< output filter coefficients
-        integer :: nyq
+        integer           :: nyq
         nyq = size(corrs)
         allocate( filt(nyq) )
         filt = 0.
@@ -74,7 +74,7 @@ contains
     function fsc2cref( corrs ) result( filt )
         real, intent(in)  :: corrs(:) !< fsc plot (correlations)
         real, allocatable :: filt(:)  !< output weights
-        integer :: k
+        integer           :: k
         filt = sqrt(fsc2optlp(corrs))
         do k = 1,size(corrs)
             if( corrs(k) < 1.e-4 )then
@@ -87,9 +87,9 @@ contains
 
     !> \brief  converts the FSC to the optimal low-pass filter
     subroutine fsc2optlp_sub( filtsz, corrs, filt, merged )
-        integer, intent(in)  :: filtsz        !< sz of filter
-        real,    intent(in)  :: corrs(filtsz) !< fsc plot (correlations)
-        real,    intent(out) :: filt(filtsz)  !< output filter coefficients
+        integer, intent(in)           :: filtsz        !< sz of filter
+        real,    intent(in)           :: corrs(filtsz) !< fsc plot (correlations)
+        real,    intent(out)          :: filt(filtsz)  !< output filter coefficients
         logical, optional, intent(in) :: merged
         logical :: l_merged
         l_merged = .false.
@@ -107,7 +107,7 @@ contains
     function ssnr2fsc( ssnr ) result( corrs )
         real, intent(in)  :: ssnr(:)  !< input SSNR array
         real, allocatable :: corrs(:) !< output FSC result
-        integer :: nyq, k
+        integer           :: nyq, k
         nyq = size(ssnr)
         allocate( corrs(nyq) )
         do k=1,nyq
@@ -119,7 +119,7 @@ contains
     function ssnr2optlp( ssnr ) result( w )
         real, intent(in)  :: ssnr(:) !<  instrument SSNR
         real, allocatable :: w(:) !<  FIR low-pass filter
-        integer :: nyq, k
+        integer           :: nyq, k
         nyq = size(ssnr)
         allocate( w(nyq) )
         do k=1,nyq
@@ -128,9 +128,9 @@ contains
     end function ssnr2optlp
 
     subroutine lowpass_from_klim( klim, nyq, filter, width )
-        integer,        intent(in)    :: klim, nyq
-        real,           intent(inout) :: filter(nyq)
-        real, optional, intent(in)    :: width
+        integer,        intent(in)           :: klim, nyq
+        real,           intent(inout)        :: filter(nyq)
+        real,           optional, intent(in) :: width
         real    :: freq, lplim_freq, wwidth
         integer :: k
         wwidth = 10.
@@ -198,9 +198,9 @@ contains
 
     ! Following Grant & Grigorieff; eLife 2015;4:e06980
     subroutine calc_dose_weights( nframes, box, smpd, kV, total_dose, weights )
-        integer,           intent(in)    :: nframes, box
-        real,              intent(in)    :: smpd, kV, total_dose
-        real, allocatable, intent(inout) :: weights(:,:)
+        integer,           intent(in)                 :: nframes, box
+        real,              intent(in)                 :: smpd, kV, total_dose
+        real,              allocatable, intent(inout) :: weights(:,:)
         real, parameter :: A=0.245, B=-1.665, C=2.81
         real            :: acc_doses(nframes), spaFreq
         real            :: twoNe, limksq, dose_per_frame
@@ -341,16 +341,16 @@ contains
     end function stage_trslim
 
     subroutine lpstages_fast( box, nstages, smpd, lpstart, lpstop, lpinfo, force_lpstart, verbose, trslim_override )
-        integer,           intent(in)  :: box, nstages
-        real,              intent(in)  :: smpd, lpstart, lpstop
-        type(lp_crop_inf), intent(out) :: lpinfo(nstages)
-        logical, optional, intent(in)  :: force_lpstart, verbose
-        real,    optional, intent(in)  :: trslim_override
+        integer,           intent(in)           :: box, nstages
+        real,              intent(in)           :: smpd, lpstart, lpstop
+        type(lp_crop_inf), intent(out)          :: lpinfo(nstages)
+        logical,           optional, intent(in) :: force_lpstart, verbose
+        real,              optional, intent(in) :: trslim_override
         real,    parameter :: LP2SMPD_TARGET   = 0.4
         real,    parameter :: SMPD_TARGET_MIN  = 2.5
-        integer :: i
-        real    :: lpstart_eff
-        logical :: l_verbose
+        integer            :: i
+        real               :: lpstart_eff
+        logical            :: l_verbose
         l_verbose = .true.
         if( present(verbose) ) l_verbose = verbose
         if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_fast')
@@ -381,17 +381,17 @@ contains
     !> a linear ladder from lpstart to lpstop; the end stages cropped to their limits, a linear box ramp between
     subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose, first_stage, trslim_override )
         use simple_magic_boxes
-        integer,           intent(in)  :: box, nstages
-        real,              intent(in)  :: smpd, lpstart, lpstop
-        type(lp_crop_inf), intent(out) :: lpinfo(nstages)
-        logical, optional, intent(in)  :: verbose
-        integer, optional, intent(in)  :: first_stage
-        real,    optional, intent(in)  :: trslim_override
+        integer,           intent(in)           :: box, nstages
+        real,              intent(in)           :: smpd, lpstart, lpstop
+        type(lp_crop_inf), intent(out)          :: lpinfo(nstages)
+        logical,           optional, intent(in) :: verbose
+        integer,           optional, intent(in) :: first_stage
+        real,              optional, intent(in) :: trslim_override
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
-        integer :: i, box_trial, ifirst
-        real    :: rbox_stepsz
-        logical :: l_verbose
+        integer            :: i, box_trial, ifirst
+        real               :: rbox_stepsz
+        logical            :: l_verbose
         l_verbose = .true.
         if( present(verbose) ) l_verbose = verbose
         if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_setlims')

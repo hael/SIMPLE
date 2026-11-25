@@ -78,20 +78,20 @@ contains
     !> Kernel-regression consensus mean (eq. S.1) estimated from the particles themselves, as an
     !! alternative to reading the supplied consensus volume. Selected by COV_MEAN_FROM_DATA.
     subroutine estimate_mean_from_data( params, build, plane_store, mean_rec, pinds, nptcls )
-        class(parameters),      intent(inout) :: params
-        type(builder),          intent(inout) :: build
+        class(parameters),       intent(inout) :: params
+        type(builder),           intent(inout) :: build
         class(flex_plane_store), intent(inout) :: plane_store
-        type(reconstructor),    intent(inout) :: mean_rec
-        integer,                intent(in)    :: pinds(:), nptcls
+        type(reconstructor),     intent(inout) :: mean_rec
+        integer,                 intent(in)    :: pinds(:), nptcls
         type(fplane_type), allocatable :: fpls(:)
-        type(fplane_type) :: num_fpl
-        type(ori)    :: orientation
-        type(image)  :: gridcorr_img
-        type(string) :: fname
-        integer :: batchlims(2), batchsz, ibatch, i, iptcl, used
-        logical :: l_pcache
-        integer(timer_int_kind) :: t_phase
-        type(ptcl_read_session) :: reads
+        type(fplane_type)              :: num_fpl
+        type(ori)                      :: orientation
+        type(image)                    :: gridcorr_img
+        type(string)                   :: fname
+        integer                        :: batchlims(2), batchsz, ibatch, i, iptcl, used
+        logical                        :: l_pcache
+        integer(timer_int_kind)        :: t_phase
+        type(ptcl_read_session)        :: reads
         call init_basis_reconstructor(params, build, mean_rec)
         ! one read path for every pass of the run: the downscaled cache when it is in use
         l_pcache = plane_store%cache_in_use()
@@ -150,8 +150,8 @@ contains
         !> per-fit namespace (paired engine); default flex_pca_mean_scale.bin
         character(len=*), optional, intent(in)    :: cache_fname
         real, allocatable :: filt(:)
-        type(string) :: fname
-        integer :: nyq
+        type(string)      :: fname
+        integer           :: nyq
         nyq   = max(1, fdim(params%box_crop) - 1)
         fname = mean_scale_cache_fname(cache_fname)
         if( .not. file_exists(fname) ) THROW_HARD('flex_pca worker found no mean-scale cache from the master')
@@ -175,20 +175,20 @@ contains
         integer,                    intent(in)    :: pinds(:), nptcls
         !> per-fit cache namespace (paired distributed master writes one per fit)
         character(len=*), optional, intent(in)    :: cache_fname
-        integer, parameter :: NSAMPLE = 4000
+        integer,           parameter   :: NSAMPLE = 4000
         type(fplane_type), allocatable :: fpls(:)
         type(fplane_type), allocatable :: mean_fpl_t(:)
         type(exp_samples), allocatable :: es_t(:)
         type(ori),         allocatable :: ori_t(:)
-        integer  :: batchlims(2), batchsz, ibatch, i, iptcl, stride, used, nyq, sh, j, nsub
-        integer  :: nthr_here, ithr, t, levels_saved
-        integer, allocatable :: sub_pinds(:), used_t(:)
-        real(dp) :: s_my, s_mm, s, sm
-        real(dp), allocatable :: smy_sh(:), smm_sh(:), sprof(:)
-        real(dp), allocatable :: s_my_t(:), s_mm_t(:), smy_sh_t(:,:), smm_sh_t(:,:)
-        real,     allocatable :: filt(:)
-        logical  :: l_pcache
-        type(ptcl_read_session) :: reads
+        integer                        :: batchlims(2), batchsz, ibatch, i, iptcl, stride, used, nyq, sh, j, nsub
+        integer                        :: nthr_here, ithr, t, levels_saved
+        integer,           allocatable :: sub_pinds(:), used_t(:)
+        real(dp)                       :: s_my, s_mm, s, sm
+        real(dp),          allocatable :: smy_sh(:), smm_sh(:), sprof(:)
+        real(dp),          allocatable :: s_my_t(:), s_mm_t(:), smy_sh_t(:,:), smm_sh_t(:,:)
+        real,              allocatable :: filt(:)
+        logical                        :: l_pcache
+        type(ptcl_read_session)        :: reads
         nyq = max(1, fdim(params%box_crop) - 1)
         allocate(smy_sh(0:nyq), smm_sh(0:nyq), source=0.d0)
         stride = max(1, nptcls / NSAMPLE)
@@ -372,10 +372,10 @@ contains
     !> Complex inner product over the native k<=0 half-plane (stored half-plane, k in [kmin,0]) inside the
     !! shared nyq disc; the optional half (1 or 2) restricts it to one cov_half_parity split half.
     function cov_herm_inner( lhs, rhs, half ) result( val )
-        type(fplane_type), intent(in) :: lhs, rhs
-        integer, optional, intent(in) :: half
+        type(fplane_type), intent(in)           :: lhs, rhs
+        integer,           optional, intent(in) :: half
         complex(dp) :: val, acc
-        integer :: h, k, hmin, hmax, kmin, kmax, nyq_eff, pf, h_hi, hlf, par, nyq_disk, k_sq
+        integer     :: h, k, hmin, hmax, kmin, kmax, nyq_eff, pf, h_hi, hlf, par, nyq_disk, k_sq
         hlf = 0
         if( present(half) ) hlf = half
         acc = cmplx(0.d0,0.d0,dp)
@@ -461,7 +461,7 @@ contains
         integer,           intent(in)  :: nyq
         real,              intent(in)  :: frac
         real(dp),          intent(out) :: pw, cnt
-        integer  :: h, k, hmin, hmax, kmin, kmax, sh_lo, sh
+        integer     :: h, k, hmin, hmax, kmin, kmax, sh_lo, sh
         complex(dp) :: c
         sh_lo= nint(frac*real(nyq))
         pw   = 0.d0; cnt = 0.d0
@@ -506,25 +506,25 @@ contains
     !! pairs and orthonormalised; deterministic. One capped data pass calibrates sig2 and Gamma^0;
     !! the master also writes the initial eigenvolumes and the it000 copies the paired merge deflates against.
     subroutine init_basis_datafree( params, build, env, model, sel, col_sep, neigs_req, fprefix, rounds )
-        type(flex_fit_model),       intent(inout) :: model   !< mean in; basis, prior variances, rank, noise level out
-        type(flex_selection),       intent(in)    :: sel
-        class(flex_pca_rounds),     intent(inout) :: rounds
-        class(parameters),          intent(inout) :: params
-        type(builder),              intent(inout) :: build
-        class(flex_pcg_environment), intent(inout) :: env
-        integer,                    intent(in)    :: col_sep, neigs_req
-        character(len=*), optional, intent(in)    :: fprefix
-        type(reconstructor) :: work
+        type(flex_fit_model),        intent(inout)        :: model !< mean in; basis, prior variances, rank, noise level out
+        type(flex_selection),        intent(in)           :: sel
+        class(flex_pca_rounds),      intent(inout)        :: rounds
+        class(parameters),           intent(inout)        :: params
+        type(builder),               intent(inout)        :: build
+        class(flex_pcg_environment), intent(inout)        :: env
+        integer,                     intent(in)           :: col_sep, neigs_req
+        character(len=*),            optional, intent(in) :: fprefix
+        type(reconstructor)              :: work
         type(reconstructor), allocatable :: utilde(:)
         type(image),         allocatable :: realvols(:), utilde_real(:)
         integer,             allocatable :: col_hkl(:,:)
         complex,             allocatable :: colvol(:,:,:,:)
         real(dp),            allocatable :: svals(:)
-        integer  :: lb(3), ub(3), ncols_req, ncol, nreal, d_tilde, s, q, h, k, l
-        integer, allocatable :: cpinds(:)
-        integer  :: ncal
-        real(dp) :: gam0
-        type(string) :: fname, pfx
+        integer                          :: lb(3), ub(3), ncols_req, ncol, nreal, d_tilde, s, q, h, k, l
+        integer,             allocatable :: cpinds(:)
+        integer                          :: ncal
+        real(dp)                         :: gam0
+        type(string)                     :: fname, pfx
         if( allocated(model%basis_recs) )then
             do q = 1, size(model%basis_recs)
                 call model%basis_recs(q)%dealloc_rho; call model%basis_recs(q)%kill
@@ -605,12 +605,12 @@ contains
         real(dp),            intent(out)   :: sig2_out, gam0
         type(fplane_type), allocatable :: fpls(:), basis_fpls(:,:), mean_fpl(:)
         type(ori),         allocatable :: orientations(:)
-        real(dp), allocatable :: res_thr(:), trg_thr(:), hfp_thr(:), hfc_thr(:), aa_thr(:)
-        integer,  allocatable :: nval_thr(:)
-        integer  :: nthr, ithr, i, q, ibatch, batchlims(2), batchsz, nyq_rec, nval
-        type(ptcl_read_session) :: reads
-        real(dp) :: a, aa, e_mm, e_yy, myv, res, trg, pw, cnt, wcnt
-        real(dp) :: res_sum, trg_sum, aa_sum, hfpw, hfcnt
+        real(dp),          allocatable :: res_thr(:), trg_thr(:), hfp_thr(:), hfc_thr(:), aa_thr(:)
+        integer,           allocatable :: nval_thr(:)
+        integer                        :: nthr, ithr, i, q, ibatch, batchlims(2), batchsz, nyq_rec, nval
+        type(ptcl_read_session)        :: reads
+        real(dp)                       :: a, aa, e_mm, e_yy, myv, res, trg, pw, cnt, wcnt
+        real(dp)                       :: res_sum, trg_sum, aa_sum, hfpw, hfcnt
         nthr    = omp_get_max_threads()
         nyq_rec = mean_rec%get_lfny(1)
         call mean_rec%expand_exp
@@ -694,11 +694,11 @@ contains
     !> Master -> probe-worker handoff of MODEL state only (dimension, noise level, prior variances).
     !! Round control (iteration, budget, fits, stage) travels in job_descr under registered keys.
     subroutine save_probe_state( ncomp, eigvals, sig2_eff, fname )
-        integer,                    intent(in) :: ncomp
-        real(dp),                   intent(in) :: eigvals(:), sig2_eff
-        character(len=*), optional, intent(in) :: fname
+        integer,                    intent(in)           :: ncomp
+        real(dp),                   intent(in)           :: eigvals(:), sig2_eff
+        character(len=*),           optional, intent(in) :: fname
         type(string) :: fn
-        integer :: funit, io_stat, q
+        integer      :: funit, io_stat, q
         fn = COV_PROBE_META
         if( present(fname) ) fn = trim(fname)
         call fopen(funit, file=fn, action='WRITE', status='REPLACE', iostat=io_stat)
@@ -713,12 +713,12 @@ contains
     end subroutine save_probe_state
 
     subroutine load_probe_state( ncomp, eigvals, sig2_eff, fname )
-        integer,                       intent(out) :: ncomp
-        real(dp),         allocatable, intent(out) :: eigvals(:)
-        real(dp),                      intent(out) :: sig2_eff
-        character(len=*), optional,    intent(in)  :: fname
+        integer,                       intent(out)              :: ncomp
+        real(dp),                      allocatable, intent(out) :: eigvals(:)
+        real(dp),                      intent(out)              :: sig2_eff
+        character(len=*),              optional,    intent(in)  :: fname
         type(string) :: fn
-        integer :: funit, io_stat, q
+        integer      :: funit, io_stat, q
         fn = COV_PROBE_META
         if( present(fname) ) fn = trim(fname)
         if( .not. file_exists(fn) ) &
@@ -740,11 +740,11 @@ contains
     !!  set_rmat then fft then expand_exp, never add(), which would leave the reconstructor flagged
     !!  Fourier and propagate an untransformed grid.
     subroutine load_probe_basis( params, build, ncomp, basis_recs, fprefix )
-        class(parameters),                intent(inout) :: params
-        type(builder),                    intent(inout) :: build
-        integer,                          intent(in)    :: ncomp
-        type(reconstructor), allocatable, intent(out)   :: basis_recs(:)
-        character(len=*),    optional,    intent(in)    :: fprefix
+        class(parameters),                intent(inout)            :: params
+        type(builder),                    intent(inout)            :: build
+        integer,                          intent(in)               :: ncomp
+        type(reconstructor),              allocatable, intent(out) :: basis_recs(:)
+        character(len=*),                 optional,    intent(in)  :: fprefix
         type(image)  :: vol
         type(string) :: fname, pfx
         integer      :: q
@@ -770,12 +770,12 @@ contains
     !> Deterministic low-frequency column selection: repeatedly take the lowest-|xi| candidate in the
     !! canonical Hermitian half that is at least col_sep away from every already-chosen column.
     subroutine select_frequencies_lowfreq( params, ncols_req, col_sep, col_hkl, ncol )
-        class(parameters),    intent(in)  :: params
-        integer,              intent(in)  :: ncols_req, col_sep
-        integer, allocatable, intent(out) :: col_hkl(:,:)
-        integer,              intent(out) :: ncol
+        class(parameters),    intent(in)               :: params
+        integer,              intent(in)               :: ncols_req, col_sep
+        integer,              allocatable, intent(out) :: col_hkl(:,:)
+        integer,              intent(out)              :: ncol
         integer, allocatable :: cand(:,:)
-        integer :: kfromto(2), kmax, kmax_sq, h, k, l, sep, r_sq, ncand, i, target
+        integer              :: kfromto(2), kmax, kmax_sq, h, k, l, sep, r_sq, ncand, i, target
         kfromto = covariance_kfromto(params)
         kmax    = max(2, kfromto(2))
         kmax_sq = kmax*(kmax+1)
@@ -852,17 +852,17 @@ contains
     !> Convert each merged complex column C_q into its two real spatial representatives Re(ifft
     !! C_q)=Sigma*cos_q and Im(ifft C_q)=Sigma*sin_q.
     subroutine basis_to_real_representatives( params, env, work, colvol, ncol, lb, ub, realvols, nreal )
-        class(parameters),        intent(inout) :: params
-        type(flex_pcg_environment), intent(inout) :: env
-        type(reconstructor),      intent(inout) :: work
-        complex,                  intent(in)    :: colvol(:,:,:,:)
-        integer,                  intent(in)    :: ncol, lb(3), ub(3)
-        type(image), allocatable, intent(out)   :: realvols(:)
-        integer,                  intent(out)   :: nreal
-        type(image)  :: gridcorr_img
+        class(parameters),          intent(inout)            :: params
+        type(flex_pcg_environment), intent(inout)            :: env
+        type(reconstructor),        intent(inout)            :: work
+        complex,                    intent(in)               :: colvol(:,:,:,:)
+        integer,                    intent(in)               :: ncol, lb(3), ub(3)
+        type(image),                allocatable, intent(out) :: realvols(:)
+        integer,                    intent(out)              :: nreal
+        type(image)          :: gridcorr_img
         complex, allocatable :: vr(:,:,:), vi(:,:,:)
-        integer :: s, i1, i2, i3, n1, n2, n3, hn, kn, ln, h, k, l
-        real    :: energy
+        integer              :: s, i1, i2, i3, n1, n2, n3, hn, kn, ln, h, k, l
+        real                 :: energy
         n1 = ub(1)-lb(1)+1; n2 = ub(2)-lb(2)+1; n3 = ub(3)-lb(3)+1
         allocate(vr(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)))
         allocate(vi(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)))
@@ -905,12 +905,12 @@ contains
     !>  Load a Hermitian expanded Fourier volume into the work reconstructor, fold to
     !!  compressed storage, inverse-FFT to a real volume, deapodize, low-pass and mask.
     subroutine realize_hermitian_volume( params, env, work, vherm, gridcorr_img, energy )
-        class(parameters),   intent(in)    :: params
+        class(parameters),          intent(in)    :: params
         type(flex_pcg_environment), intent(inout) :: env
-        type(reconstructor), intent(inout) :: work
-        complex,             intent(in)    :: vherm(:,:,:)
-        type(image),         intent(inout) :: gridcorr_img
-        real,                intent(out)   :: energy
+        type(reconstructor),        intent(inout) :: work
+        complex,                    intent(in)    :: vherm(:,:,:)
+        type(image),                intent(inout) :: gridcorr_img
+        real,                       intent(out)   :: energy
         real, pointer :: rmat(:,:,:)
         integer       :: ldim_work(3)
         call work%reset
@@ -937,23 +937,23 @@ contains
     !! eigendecomposition, keeping every direction above a relative energy floor.
     subroutine orthonormalize_representatives( params, build, realvols, nreal, utilde, utilde_real, d_tilde, svals, &
         &nptcls_basis )
-        class(parameters),                intent(inout) :: params
-        type(builder),                    intent(inout) :: build
-        type(image),                      intent(inout) :: realvols(:)
-        integer,                          intent(in)    :: nreal
-        type(reconstructor), allocatable, intent(out)   :: utilde(:)
-        type(image),         allocatable, intent(out)   :: utilde_real(:)
-        integer,                          intent(out)   :: d_tilde
+        class(parameters),                intent(inout)            :: params
+        type(builder),                    intent(inout)            :: build
+        type(image),                      intent(inout)            :: realvols(:)
+        integer,                          intent(in)               :: nreal
+        type(reconstructor),              allocatable, intent(out) :: utilde(:)
+        type(image),                      allocatable, intent(out) :: utilde_real(:)
+        integer,                          intent(out)              :: d_tilde
         !> squared singular values of the representative set.
         real(dp), allocatable, optional, intent(out)   :: svals(:)
         !> particles that actually reached the basis stages. Only used to REPORT the
         !! samples-per-parameter rank bound; it selects nothing.
         integer,             optional,    intent(in)    :: nptcls_basis
         real(dp), allocatable :: gram(:,:), evec(:,:), eval(:)
-        real, pointer :: rmat_i(:,:,:), rmat_j(:,:,:)
-        integer :: i, q, nrot, keep, d_budget, d_cap, d_signal, d_samples, nbasis
-        real(dp) :: lam_max, nrm
-        character(len=9) :: accum_model
+        real,     pointer     :: rmat_i(:,:,:), rmat_j(:,:,:)
+        integer               :: i, q, nrot, keep, d_budget, d_cap, d_signal, d_samples, nbasis
+        real(dp)              :: lam_max, nrm
+        character(len=9)      :: accum_model
         if( nreal < 1 ) THROW_HARD('flex_pca produced no covariance column representatives')
         allocate(gram(nreal,nreal), evec(nreal,nreal), eval(nreal))
         do i = 1, nreal
@@ -1039,12 +1039,12 @@ contains
     !!  orthonormal); z_ref = M z_tgt maps a target-basis latent into the reference frame. svals are
     !!  the singular values of M, i.e. the principal-angle cosines between the two subspaces.
     subroutine align_basis_to_reference( ref_imgs, nref_c, tgt_imgs, ntgt_c, M, svals )
-        integer,               intent(in)    :: nref_c, ntgt_c
-        type(image),           intent(inout) :: ref_imgs(nref_c), tgt_imgs(ntgt_c)
-        real(dp), allocatable, intent(out)   :: M(:,:), svals(:)
-        real, pointer :: rmat_i(:,:,:), rmat_j(:,:,:)
+        integer,               intent(in)               :: nref_c, ntgt_c
+        type(image),           intent(inout)            :: ref_imgs(nref_c), tgt_imgs(ntgt_c)
+        real(dp),              allocatable, intent(out) :: M(:,:), svals(:)
+        real,     pointer     :: rmat_i(:,:,:), rmat_j(:,:,:)
         real(dp), allocatable :: nrm_r(:), nrm_t(:), Mwork(:,:), V(:,:), ev(:)
-        integer  :: i, j, nrot, nsv
+        integer               :: i, j, nrot, nsv
         allocate(M(nref_c,ntgt_c), source=0.d0)
         allocate(nrm_r(nref_c), nrm_t(ntgt_c), source=0.d0)
         do i = 1, nref_c
@@ -1076,11 +1076,11 @@ contains
 
     !> Turn a set of real-space basis volumes into embedding-ready column reconstructors.
     subroutine basis_recs_from_images( params, build, imgs, ncomp, basis_recs )
-        class(parameters),                intent(inout) :: params
-        type(builder),                    intent(inout) :: build
-        integer,                          intent(in)    :: ncomp
-        type(image),                      intent(inout) :: imgs(ncomp)
-        type(reconstructor), allocatable, intent(out)   :: basis_recs(:)
+        class(parameters),                intent(inout)            :: params
+        type(builder),                    intent(inout)            :: build
+        integer,                          intent(in)               :: ncomp
+        type(image),                      intent(inout)            :: imgs(ncomp)
+        type(reconstructor),              allocatable, intent(out) :: basis_recs(:)
         integer :: q
         allocate(basis_recs(ncomp))
         do q = 1, ncomp
@@ -1098,8 +1098,8 @@ contains
         integer,     intent(in)    :: n, nb
         type(image), intent(inout) :: imgs(n), basis(nb)
         real, pointer :: rv(:,:,:), rb(:,:,:)
-        real(dp) :: c, bb
-        integer  :: i, k
+        real(dp)      :: c, bb
+        integer       :: i, k
         do k = 1, nb
             call basis(k)%get_rmat_ptr(rb)
             bb = sum(real(rb,dp)*real(rb,dp))
@@ -1120,14 +1120,14 @@ contains
     !! cosines are the singular values of (E'E)^-1/2 (E'O) (O'O)^-1/2. Everything is done in the
     !! n x n Gram algebra, so the volume work is three symmetric Gram products and nothing else.
     subroutine cross_half_subspace_angles( eimgs, oimgs, n, svals )
-        integer,               intent(in)    :: n
-        type(image),           intent(inout) :: eimgs(n), oimgs(n)
-        real(dp), allocatable, intent(out)   :: svals(:)
-        real, pointer :: ri(:,:,:), rj(:,:,:)
+        integer,               intent(in)               :: n
+        type(image),           intent(inout)            :: eimgs(n), oimgs(n)
+        real(dp),              allocatable, intent(out) :: svals(:)
+        real,     pointer     :: ri(:,:,:), rj(:,:,:)
         real(dp), allocatable :: Gee(:,:), Goo(:,:), Geo(:,:), We(:,:), Wo(:,:)
         real(dp), allocatable :: M(:,:), MtM(:,:), V2(:,:), ev2(:)
-        integer  :: i, j, nrot
-        real(dp) :: lam
+        integer               :: i, j, nrot
+        real(dp)              :: lam
         allocate(Gee(n,n), Goo(n,n), Geo(n,n), source=0.d0)
         do i = 1, n
             call eimgs(i)%get_rmat_ptr(ri)
@@ -1169,8 +1169,8 @@ contains
             real(dp), intent(in)  :: A(m,m)
             real(dp), intent(out) :: Ainvsq(m,m)
             real(dp), allocatable :: Aw(:,:), Vv(:,:), ee(:)
-            integer :: k, nr
-            real(dp) :: mx
+            integer               :: k, nr
+            real(dp)              :: mx
             allocate(Aw(m,m), Vv(m,m), ee(m))
             Aw = A
             call jacobi(Aw, m, m, ee, Vv, nr)

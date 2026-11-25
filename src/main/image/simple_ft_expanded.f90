@@ -16,18 +16,18 @@ integer             :: ftexp_transf_kzero       ! index shift for transfer & b-f
 
 type :: ft_expanded
     private
-    complex,     allocatable :: cmat(:,:)       !< Fourier components
-    logical,     allocatable :: bandmsk(:,:)    !< for band-passed correlation
-    complex(dp), allocatable :: tmp_cmat12(:,:) !< temporary matrix for shift search
-    real                 :: hp                  !< high-pass limit
-    real                 :: lp                  !< low-pass limit
-    real                 :: smpd  = 0.          !< sampling distance of originating image
-    real                 :: sumsq = 0.          !< sum of squares
-    integer              :: lims(3,2)           !< physical limits for the Fourier transform
-    integer              :: flims(3,2)          !< shifted limits
-    integer              :: ldim(3)=[1,1,1]     !< logical dimension of originating image
-    integer              :: kzero               !< to determine shift index to be applied to access the transfer matrix
-    logical              :: existence=.false.   !< existence
+    complex,     allocatable :: cmat(:,:)           !< Fourier components
+    logical,     allocatable :: bandmsk(:,:)        !< for band-passed correlation
+    complex(dp), allocatable :: tmp_cmat12(:,:)     !< temporary matrix for shift search
+    real                     :: hp                  !< high-pass limit
+    real                     :: lp                  !< low-pass limit
+    real                     :: smpd      = 0.      !< sampling distance of originating image
+    real                     :: sumsq     = 0.      !< sum of squares
+    integer                  :: lims(3,2)           !< physical limits for the Fourier transform
+    integer                  :: flims(3,2)          !< shifted limits
+    integer                  :: ldim(3)   = [1,1,1] !< logical dimension of originating image
+    integer                  :: kzero               !< to determine shift index to be applied to access the transfer matrix
+    logical                  :: existence = .false. !< existence
   contains
     ! constructors
     procedure          :: new
@@ -68,15 +68,15 @@ contains
     ! CONSTRUCTORS
 
     subroutine new( self, img, hp, lp, fetch_comps, bfac )
-        class(ft_expanded), intent(inout) :: self
-        class(image),       intent(inout) :: img
-        real,               intent(in)    :: hp, lp
-        logical,            intent(in)    :: fetch_comps
-        real, optional,     intent(in)    :: bfac
+        class(ft_expanded), intent(inout)            :: self
+        class(image),       intent(inout)            :: img
+        real,               intent(in)               :: hp, lp
+        logical,            intent(in)               :: fetch_comps
+        real,               optional,     intent(in) :: bfac
         real, allocatable :: wh(:)
-        real    :: lp_nyq, spafreqh,spafreqk,wk
-        integer :: h,k,i,hcnt,kcnt,lplim,hplim,sqarg
-        logical :: didft, l_bfac
+        real              :: lp_nyq, spafreqh,spafreqk,wk
+        integer           :: h,k,i,hcnt,kcnt,lplim,hplim,sqarg
+        logical           :: didft, l_bfac
         ! kill pre-existing object
         call self%kill
         ! set constants
@@ -176,7 +176,7 @@ contains
 
     subroutine set_cmat( self, cmat )
         class(ft_expanded), intent(inout) :: self
-        complex,            intent(in) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2))
+        complex,            intent(in)    :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2))
         self%cmat = cmat
         self%sumsq = real(self%corr_unnorm_serial(self))
     end subroutine set_cmat
@@ -206,9 +206,9 @@ contains
     ! ARITHMETICS
 
     subroutine add( self, self2add, w )
-        class(ft_expanded), intent(inout) :: self
-        class(ft_expanded), intent(in)    :: self2add
-        real, optional,     intent(in)    :: w
+        class(ft_expanded), intent(inout)            :: self
+        class(ft_expanded), intent(in)               :: self2add
+        real,               optional,     intent(in) :: w
         if( present(w) )then
              if( w > 0. )then
                  self%cmat  = self%cmat + self2add%cmat*w
@@ -237,9 +237,9 @@ contains
     end subroutine add2cmat
 
     subroutine subtr( self, self2subtr, w )
-        class(ft_expanded), intent(inout) :: self
-        class(ft_expanded), intent(in)    :: self2subtr
-        real, optional,     intent(in)    :: w
+        class(ft_expanded), intent(inout)            :: self
+        class(ft_expanded), intent(in)               :: self2subtr
+        real,               optional,     intent(in) :: w
         real :: ww
         ww = 1.0
         if( present(w) ) ww = w
@@ -378,8 +378,8 @@ contains
     end subroutine corr_normalize_dp
 
     subroutine get_hp_lp( self, hp, lp )
-        class(ft_expanded), intent(in) :: self
-        real, intent(out) :: hp, lp
+        class(ft_expanded), intent(in)  :: self
+        real,               intent(out) :: hp, lp
         hp = self%hp
         lp = self%lp
     end subroutine get_hp_lp
@@ -485,7 +485,7 @@ contains
 
     !< cost function for minimizer, f and gradient
     subroutine corr_fdfshifted_cost_8( self, shvec, denominator, f, grad )
-        class(ft_expanded), intent(inout) :: self
+        class(ft_expanded),  intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2), denominator
         real(dp),            intent(out)   :: grad(2), f
         complex(dp) :: tmp
@@ -570,8 +570,8 @@ contains
     ! TRANSFER MATRIX ROUTINES
 
     subroutine ftexp_transfmat_init( img, lp )
-        class(image),   intent(in) :: img
-        real, optional, intent(in) :: lp
+        class(image),   intent(in)           :: img
+        real,           optional, intent(in) :: lp
         real    :: lp_here, shconst(2)
         integer :: h,k,i,hcnt,kcnt
         integer :: ldim(3),flims(3,2),ftexp_transf_flims(3,2)

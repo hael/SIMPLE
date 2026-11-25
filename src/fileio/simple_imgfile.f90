@@ -90,14 +90,14 @@ end type imgfile
 contains
 
     subroutine open( self, fname, ldim, smpd, del_if_exists, formatchar, readhead, rwaction )
-        class(imgfile),             intent(inout) :: self          !< Imagefile object to be created
-        class(string),              intent(in)    :: fname         !< Filename
-        integer,                    intent(in)    :: ldim(3)       !< logical dimension of image/stack
-        real,                       intent(in)    :: smpd          !< Pixel size of image data (in Angstroms)
-        logical,          optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace it
-        character(len=1), optional, intent(in)    :: formatchar    !< file format character flag
-        logical,          optional, intent(in)    :: readhead      !< header read indicator
-        character(len=*), optional, intent(in)    :: rwaction      !< action flag
+        class(imgfile),             intent(inout)        :: self          !< Imagefile object to be created
+        class(string),              intent(in)           :: fname         !< Filename
+        integer,                    intent(in)           :: ldim(3)       !< logical dimension of image/stack
+        real,                       intent(in)           :: smpd          !< Pixel size of image data (in Angstroms)
+        logical,                    optional, intent(in) :: del_if_exists !< If the file already exists on disk, replace it
+        character(len=1),           optional, intent(in) :: formatchar    !< file format character flag
+        logical,                    optional, intent(in) :: readhead      !< header read indicator
+        character(len=*),           optional, intent(in) :: rwaction      !< action flag
         character(len=1) :: format_descriptor
         logical          :: rreadhead, write_enabled, l_exists
         rreadhead = .true.
@@ -168,9 +168,9 @@ contains
 
     !>  \brief open the file(s) for the imgfile
     subroutine open_local( self, del_if_exists, rwaction )
-        class(imgfile),             intent(inout) :: self          !< Imagefile object
-        logical, optional,          intent(in)    :: del_if_exists !< overwrite flag
-        character(len=*), optional, intent(in)    :: rwaction      !< read/write flag
+        class(imgfile),             intent(inout)                 :: self          !< Imagefile object
+        logical,                    optional,          intent(in) :: del_if_exists !< overwrite flag
+        character(len=*),           optional, intent(in)          :: rwaction      !< read/write flag
         character(len=9) :: rw_str
         character(len=7) :: stat_str
         integer          :: ios
@@ -234,10 +234,10 @@ contains
     !>  \brief  for translating an image index to record indices in the stack
     !! \param[out] hedinds,iminds header and image indices in the stack
     subroutine slice2recpos( self, nr, hedinds, iminds )
-        class(imgfile), target, intent(in)  :: self
-        integer,                intent(in)  :: nr
-        integer(kind=8),        intent(out) :: hedinds(2), iminds(2)
-        integer :: cnt, j, dims(3)
+        class(imgfile),         target, intent(in) :: self
+        integer,                intent(in)         :: nr
+        integer(kind=8),        intent(out)        :: hedinds(2), iminds(2)
+        integer                 :: cnt, j, dims(3)
         class(ImgHead), pointer :: ptr=>null()
         ptr => self%overall_head
         select type(ptr)
@@ -270,9 +270,9 @@ contains
     !>  \brief  for translating an image index to record indices in the stack
     !! \param[out] hedinds,iminds  indices in the stack
     subroutine slice2bytepos( self, nr, hedinds, iminds )
-        class(imgfile), target, intent(in)    :: self
-        integer,                intent(in)    :: nr
-        integer(kind=8),        intent(inout) :: hedinds(2), iminds(2)
+        class(imgfile),         target, intent(in) :: self
+        integer,                intent(in)         :: nr
+        integer(kind=8),        intent(inout)      :: hedinds(2), iminds(2)
         class(ImgHead), pointer :: ptr=>null()
         ptr => self%overall_head
         select type(ptr)
@@ -297,17 +297,17 @@ contains
     !>  \brief  reads a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine rSlices( self, first_slice, last_slice, rarr, is_mrc )
-        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
-        integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
-        integer,                intent(in)    :: last_slice   !< Last slice
-        real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
-        logical,                intent(in)    :: is_mrc
-        character(len=100)          :: io_message
-        integer                     :: io_stat, dims(3)
-        integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
+        class(imgfile),         target, intent(inout) :: self        !< instance  Imagefile object
+        integer,                intent(in)            :: first_slice !< First slice (the first slice in the file is numbered 1)
+        integer,                intent(in)            :: last_slice  !< Last slice
+        real,                   intent(inout)         :: rarr(:,:,:) !< Array of reals. Will be (re)allocated if needed
+        logical,                intent(in)            :: is_mrc
+        character(len=100)           :: io_message
+        integer                      :: io_stat, dims(3)
+        integer(kind=8)              :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
         integer(kind=1), allocatable :: tmp_byte_array(:,:,:)
         integer(kind=2), allocatable :: tmp_16bit_int_array(:,:,:)
-        class(ImgHead), pointer     :: ptr=>null()
+        class(ImgHead),  pointer     :: ptr=>null()
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
         dims       = self%overall_head%getDims()
         dims(3)    = last_slice - first_slice + 1
@@ -405,19 +405,19 @@ contains
     !!          2-Dimensional images are assumed
     subroutine rTiffSlices( self, image_index, rarr )
         use simple_string_utils, only: int2str, to_cstring
-        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
-        integer,                intent(in)    :: image_index  !<
-        real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
-        class(ImgHead),  pointer :: ptr=>null()
-        real(kind=4),    pointer :: ftemp_byte_array32(:)
-        integer(kind=1), pointer :: itemp_byte_array8(:)
-        integer(kind=2), pointer :: itemp_byte_array16(:)
-        type(c_ptr)              :: strip_buffer_cptr, string_ptr
-        real(kind=dp) :: v
-        integer :: dims(3), nbytes_in_buffer, first_byte, first_row
-        integer :: io_stat, last_byte, last_row, row_counter, strip_counter
-        integer :: last_strip_length, strip_length, nbytes, nrows
-        character,pointer,dimension(:) :: string
+        class(imgfile),         target, intent(inout) :: self        !< instance  Imagefile object
+        integer,                intent(in)            :: image_index !<
+        real,                   intent(inout)         :: rarr(:,:,:) !< Array of reals. Will be (re)allocated if needed
+        class(ImgHead),  pointer              :: ptr=>null()
+        real(kind=4),    pointer              :: ftemp_byte_array32(:)
+        integer(kind=1), pointer              :: itemp_byte_array8(:)
+        integer(kind=2), pointer              :: itemp_byte_array16(:)
+        type(c_ptr)                           :: strip_buffer_cptr, string_ptr
+        real(kind=dp)                         :: v
+        integer                               :: dims(3), nbytes_in_buffer, first_byte, first_row
+        integer                               :: io_stat, last_byte, last_row, row_counter, strip_counter
+        integer                               :: last_strip_length, strip_length, nbytes, nrows
+        character,       pointer,dimension(:) :: string
         ! checks have been performed in rSlices
         select case(self%head_format)
         case('J','L')
@@ -539,14 +539,14 @@ contains
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine wSlices( self, first_slice, last_slice, rarr, ldim, is_ft, smpd )
-        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
-        integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
-        integer,                intent(in)    :: last_slice   !< Last slice
-        real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
-        integer,                intent(in)    :: ldim(3)      !< Logical size of the array. This will be written to disk: rarr(1:ldim(1),:,:)
-        logical,                intent(in)    :: is_ft        !< to indicate FT status of image
-        real,                   intent(in)    :: smpd         !< sampling distance
-        integer                     :: io_stat,itmp,dims(3)!,dims_stored(3)
+        class(imgfile),         target, intent(inout) :: self        !< instance  Imagefile object
+        integer,                intent(in)            :: first_slice !< First slice (the first slice in the file is numbered 1)
+        integer,                intent(in)            :: last_slice  !< Last slice
+        real,                   intent(inout)         :: rarr(:,:,:) !< Array of reals. Will be (re)allocated if needed
+        integer,                intent(in)            :: ldim(3)     !< Logical size of the array. This will be written to disk: rarr(1:ldim(1),:,:)
+        logical,                intent(in)            :: is_ft       !< to indicate FT status of image
+        real,                   intent(in)            :: smpd        !< sampling distance
+        integer                     :: io_stat,itmp,dims(3) !,dims_stored(3)
         integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
         logical                     :: arr_is_ready
         real                        :: min_val,max_val
@@ -668,12 +668,12 @@ contains
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine wmrcSlices( self, first_slice, last_slice, rarr, ldim, is_ft )
-        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
-        integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
-        integer,                intent(in)    :: last_slice   !< Last slice
-        real,           target, intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
-        integer,                intent(in)    :: ldim(3)      !< Logical size of the array
-        logical,                intent(in)    :: is_ft        !< to indicate FT status of image
+        class(imgfile),         target, intent(inout) :: self        !< instance  Imagefile object
+        integer,                intent(in)            :: first_slice !< First slice (the first slice in the file is numbered 1)
+        integer,                intent(in)            :: last_slice  !< Last slice
+        real,                   target, intent(inout) :: rarr(:,:,:) !< Array of reals. Will be (re)allocated if needed
+        integer,                intent(in)            :: ldim(3)     !< Logical size of the array
+        logical,                intent(in)            :: is_ft       !< to indicate FT status of image
         integer         :: io_stat,dims(3),mode,nslices
         integer         :: error_slice,error_row
         integer(kind=8) :: first_byte,byteperpix
@@ -746,14 +746,14 @@ contains
 
     subroutine write_float16_slices( self, first_slice, rarr, dims, first_byte, byteperpix, &
         &io_stat, error_slice, error_row )
-        class(imgfile),         intent(inout) :: self
-        integer,                intent(in)    :: first_slice
-        real,           target, intent(in)    :: rarr(:,:,:)
-        integer,                intent(in)    :: dims(3)
-        integer(kind=8),        intent(in)    :: first_byte,byteperpix
-        integer,                intent(out)   :: io_stat,error_slice,error_row
-        integer :: islice,irow,icol,ipixel,ncopy,nbuffered
-        integer(kind=8) :: write_pos
+        class(imgfile),         intent(inout)      :: self
+        integer,                intent(in)         :: first_slice
+        real,                   target, intent(in) :: rarr(:,:,:)
+        integer,                intent(in)         :: dims(3)
+        integer(kind=8),        intent(in)         :: first_byte,byteperpix
+        integer,                intent(out)        :: io_stat,error_slice,error_row
+        integer           :: islice,irow,icol,ipixel,ncopy,nbuffered
+        integer(kind=8)   :: write_pos
         integer(c_size_t) :: nconverted
         if( .not. allocated(self%float16_write_buffer) ) THROW_HARD('float16 write buffer is not initialized')
         io_stat      = 0
@@ -797,8 +797,8 @@ contains
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine update_MRC_stats( self, stats )
-        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
-        real,                   intent(in)    :: stats(4)
+        class(imgfile),         target, intent(inout) :: self !< instance  Imagefile object
+        real,                   intent(in)            :: stats(4)
         select case(self%head_format)
         case('M','F')
             call self%setMinmax(stats(1), stats(2))
@@ -824,7 +824,7 @@ contains
     !>  \brief  Return one of the dimension of the image stack
     function getDim( self, which_dim )
         class(imgfile), intent(in) :: self
-        integer, intent(in)        :: which_dim
+        integer,        intent(in) :: which_dim
         integer :: getDim
         getDim = self%overall_head%getDim(which_dim)
     end function getDim
@@ -843,8 +843,8 @@ contains
 
     !>  \brief  Set the format descriptor of the stack
     subroutine setIform( self, iform )
-        class(imgfile), intent(inout) :: self   !< Imagefile object
-        integer, intent(in)           :: iform   !< format descriptor
+        class(imgfile), intent(inout) :: self    !< Imagefile object
+        integer,        intent(in)    :: iform   !< format descriptor
         call self%overall_head%setIform(iform)
         self%was_written_to = .true.
     end subroutine setIform
@@ -852,7 +852,7 @@ contains
     !>  \brief  Set the pixel size of the stack
     subroutine setPixSz( self, smpd )
         class(imgfile), intent(inout) :: self !< Imagefile object
-        real, intent(in)              :: smpd !< sample resolution or pixel size (angstroms)
+        real,           intent(in)    :: smpd !< sample resolution or pixel size (angstroms)
         call self%overall_head%setPixSz(smpd)
         self%was_written_to = .true.
     end subroutine setPixSz
@@ -860,7 +860,7 @@ contains
     !>  \brief  Set the RMS of the stack
     subroutine setRMSD( self, dev )
         class(imgfile), intent(inout) :: self !< Imagefile object
-        real,           intent(in)    :: dev !< rmsd
+        real,           intent(in)    :: dev  !< rmsd
         call self%overall_head%setRMSD(dev)
         self%was_written_to = .true.
     end subroutine setRMSD
@@ -885,7 +885,7 @@ contains
     !>  \brief  Set the mode of the MRC file
     subroutine setMode( self, mode )
         class(imgfile), intent(inout) :: self !< Imagefile object
-        integer, intent(in)           :: mode !< MRC mode type
+        integer,        intent(in)    :: mode !< MRC mode type
         call self%overall_head%setMode(mode)
         if( mode == MRC_MODE_FLOAT16 ) call self%prepare_float16_write_buffer
         self%was_written_to = .true.
@@ -893,8 +893,8 @@ contains
 
     !>  \brief  for setting the logical dimensions
     subroutine setDims( self, ldim )
-        class(imgfile), intent(inout) :: self !< Imagefile object
-        integer, intent(in)           :: ldim(3) !< dimensions
+        class(imgfile), intent(inout) :: self    !< Imagefile object
+        integer,        intent(in)    :: ldim(3) !< dimensions
         call self%overall_head%setDims(ldim)
         self%was_written_to = .true.
     end subroutine setDims
@@ -903,9 +903,9 @@ contains
 
     subroutine real16_array_to_real32( i16, r32 )
         integer(c_int16_t), contiguous, target, intent(in) :: i16(:,:,:)
-        real(c_float), target, intent(out) :: r32(:,:,:)
+        real(c_float),      target, intent(out)            :: r32(:,:,:)
         integer(c_size_t) :: ncols
-        integer :: irow, islice
+        integer           :: irow, islice
         ncols = int(size(i16,1),c_size_t)
         do islice = 1,size(i16,3)
             do irow = 1,size(i16,2)

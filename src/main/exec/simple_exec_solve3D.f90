@@ -18,7 +18,7 @@ type(commander_solve3D_cavgs)                         :: xsolve3D_cavgs
 type(commander_solve3D_addon)                         :: xsolve3D_addon
 type(commander_solve3D_chunks)                        :: xsolve3D_chunks
 type(commander_validate_pose_student)                 :: xvalidate_pose_student
-type(commander_solve3D_cavgs_conditional_restarts) :: xsolve3D_cavgs_conditional_restarts
+type(commander_solve3D_cavgs_conditional_restarts)    :: xsolve3D_cavgs_conditional_restarts
 type(commander_noisevol)                              :: xnoisevol
 
 contains

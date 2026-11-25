@@ -53,7 +53,7 @@ type, extends(pick_strategy) :: pick_distr_strategy
     type(sp_project) :: spproj
     type(qsys_env)   :: qenv
     type(chash)      :: job_descr
-    integer          :: nmics = 0
+    integer          :: nmics              = 0
     logical          :: templates_provided = .false.
 contains
     procedure :: initialize     => distr_initialize
@@ -107,7 +107,7 @@ contains
     function create_pick_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
         class(pick_strategy), allocatable :: strategy
-        logical :: is_master
+        logical                           :: is_master
         ! Distributed master when nparts defined but no explicit worker range/part.
         is_master = cline%defined('nparts') .and. (.not.cline%defined('part')) &
                    .and. (.not.cline%defined('fromp')) .and. (.not.cline%defined('top'))
@@ -183,25 +183,25 @@ contains
         use simple_commanders_cavgs, only: commander_cluster_cavgs
         use simple_syslib, only: simple_getcwd
         class(cmdline), intent(inout) :: cline
-        type(parameters)         :: params
-        type(stack_io)           :: stkio_r
-        type(stack_io)           :: stkio_w
-        type(oris)               :: moldiamori
-        type(image)              :: ref2D, ref2D_clip, img_in
-        type(image)              :: img_medoid
-        type(image), allocatable :: projs(:), masks(:)
-        type(sp_project)         :: spproj_cluster
-        type(cmdline)            :: cline_cluster_cavgs
+        type(parameters)              :: params
+        type(stack_io)                :: stkio_r
+        type(stack_io)                :: stkio_w
+        type(oris)                    :: moldiamori
+        type(image)                   :: ref2D, ref2D_clip, img_in
+        type(image)                   :: img_medoid
+        type(image), allocatable      :: projs(:), masks(:)
+        type(sp_project)              :: spproj_cluster
+        type(cmdline)                 :: cline_cluster_cavgs
         type(commander_cluster_cavgs) :: xcluster_cavgs
-        type(string)             :: pickrefs_source, pickrefs_cluster_proj, pickrefs_medoids
-        type(string)             :: pickrefs_source_jpeg, cwd
-        real,        allocatable :: diams(:), shifts(:,:)
-        integer,     allocatable :: medoid_inds(:), medoid_map(:)
-        integer, parameter :: NREFS = 100
-        real    :: ang, rot, lp, diam_max, maxdiam, moldiam, mskdiam, smpd_stk, smpd_read, smpd_cluster
-        integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ldim_stk(3), ncavgs, icavg
-        integer :: cnt, norefs, box_for_pick, box_for_extract, ncls_pickrefs, nmedoids, n_pickrefs_source, i
-        logical :: do_rescale
+        type(string)                  :: pickrefs_source, pickrefs_cluster_proj, pickrefs_medoids
+        type(string)                  :: pickrefs_source_jpeg, cwd
+        real,        allocatable      :: diams(:), shifts(:,:)
+        integer,     allocatable      :: medoid_inds(:), medoid_map(:)
+        integer,     parameter        :: NREFS = 100
+        real                          :: ang, rot, lp, diam_max, maxdiam, moldiam, mskdiam, smpd_stk, smpd_read, smpd_cluster
+        integer                       :: nrots, iref, irot, ldim_clip(3), ldim(3), ldim_stk(3), ncavgs, icavg
+        integer                       :: cnt, norefs, box_for_pick, box_for_extract, ncls_pickrefs, nmedoids, n_pickrefs_source, i
+        logical                       :: do_rescale
         ! error check
         if( cline%defined('vol1') ) THROW_HARD('pick does not take vol1; use prg=reproject to generate 20 2D references')
         if( .not.cline%defined('pickrefs') ) THROW_HARD('PICKREFS must be informed!')

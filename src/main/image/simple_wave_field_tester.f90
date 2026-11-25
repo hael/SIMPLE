@@ -38,12 +38,12 @@ contains
 
     subroutine test_dft_and_round_trip()
         integer, parameter :: N = 12
-        type(wave_field) :: f
-        complex, pointer :: p(:,:)
-        complex          :: x(N,N)
-        complex(dp)      :: ref
-        real(dp)         :: err, scale
-        integer          :: i, j, u, v
+        type(wave_field)   :: f
+        complex, pointer   :: p(:,:)
+        complex            :: x(N,N)
+        complex(dp)        :: ref
+        real(dp)           :: err, scale
+        integer            :: i, j, u, v
         call f%new(N)
         x = random_field(N)
         p => f%ptr()
@@ -129,12 +129,12 @@ contains
     !! pair of the disk folding onto one native bin
     subroutine test_embedded_amplitude()
         integer, parameter :: NAT = 2*RNAT
-        type(wave_field) :: f
-        complex, pointer :: p(:,:)
-        complex          :: s(-RNAT:RNAT,-RNAT:RNAT)
-        complex(dp)      :: ref
-        real(dp)         :: err, scale
-        integer          :: i, j, h, k
+        type(wave_field)   :: f
+        complex, pointer   :: p(:,:)
+        complex            :: s(-RNAT:RNAT,-RNAT:RNAT)
+        complex(dp)        :: ref
+        real(dp)           :: err, scale
+        integer            :: i, j, h, k
         call f%new(NFINE)
         p => f%ptr()
         s = random_disk()
@@ -164,10 +164,10 @@ contains
     !! embed_t gives the bin to both, and the pairs stay transposes
     subroutine test_native_grid()
         integer, parameter :: N = 2*RNAT
-        type(wave_field) :: f
-        complex, pointer :: p(:,:)
-        complex  :: s(-RNAT:RNAT,-RNAT:RNAT), t(-RNAT:RNAT,-RNAT:RNAT), u(N,N), es(N,N)
-        real(dp) :: lhs, rhs
+        type(wave_field)   :: f
+        complex, pointer   :: p(:,:)
+        complex            :: s(-RNAT:RNAT,-RNAT:RNAT), t(-RNAT:RNAT,-RNAT:RNAT), u(N,N), es(N,N)
+        real(dp)           :: lhs, rhs
         call f%new(N)
         p => f%ptr()
         s = random_disk()
@@ -194,8 +194,8 @@ contains
         type(wave_field) :: f
         complex, pointer :: p(:,:)
         real,    pointer :: r(:,:)
-        complex :: s(-RNAT:RNAT,-RNAT:RNAT), t1(-RNAT:RNAT,-RNAT:RNAT), t2(-RNAT:RNAT,-RNAT:RNAT), u(n,n)
-        real    :: rref(n,n)
+        complex          :: s(-RNAT:RNAT,-RNAT:RNAT), t1(-RNAT:RNAT,-RNAT:RNAT), t2(-RNAT:RNAT,-RNAT:RNAT), u(n,n)
+        real             :: rref(n,n)
         call f%new(n, with_real=.true.)
         p => f%ptr()
         r => f%rptr()

@@ -69,11 +69,11 @@ contains
     end function medoids
 
     subroutine test_three_clusters()
-        real, parameter      :: PREFS(2) = [-1., -30.]
-        type(aff_prop)       :: ap
-        real                 :: simmat(NTOT,NTOT), simmat_in(NTOT,NTOT), simsum, simsum_ref
-        integer              :: truth(NTOT), meds(3), i, j, ip, nerr
-        integer, allocatable :: centers(:), labels(:)
+        real,             parameter   :: PREFS(2) = [-1., -30.]
+        type(aff_prop)                :: ap
+        real                          :: simmat(NTOT,NTOT), simmat_in(NTOT,NTOT), simsum, simsum_ref
+        integer                       :: truth(NTOT), meds(3), i, j, ip, nerr
+        integer,          allocatable :: centers(:), labels(:)
         character(len=:), allocatable :: tag
         write(*,'(A)') 'test_three_clusters'
         call make_data(simmat, truth)

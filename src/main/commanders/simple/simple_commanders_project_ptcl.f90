@@ -465,8 +465,8 @@ contains
         real,             allocatable :: states(:)
         type(string)                  :: fname
         logical,          allocatable :: part_mask(:)
-        integer :: imic,nmics,cnt,istk,nstks,ipart,nptcls,nparts,iptcl,numlen
-        integer :: nstks_orig,nptcls_orig,nmics_orig,i
+        integer                       :: imic,nmics,cnt,istk,nstks,ipart,nptcls,nparts,iptcl,numlen
+        integer                       :: nstks_orig,nptcls_orig,nmics_orig,i
         ! init
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
@@ -802,22 +802,22 @@ contains
     subroutine exec_consolidate_particles( self, cline )
         class(commander_consolidate_particles), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
-        character(len=*),     parameter :: STKFBODY    = 'consolidated_particles'
-        integer(kind=8),      parameter :: BUFBYTES    = 268435456_8        ! copy buffer cap, 256 MB
-        real(timer_int_kind), parameter :: REPORT_SECS = 30._timer_int_kind ! seconds between progress lines
-        real(timer_int_kind), parameter :: RATE_WEIGHT = 0.2_timer_int_kind ! weight of the latest interval in the rate
-        type(parameters)             :: params
-        type(sp_project)             :: spproj
-        type(MrcImgHead)             :: hed_out, hed_src
-        type(string)                 :: stkname, stkout, cwd
-        integer(kind=1), allocatable :: buf(:)
-        integer(kind=8)              :: imgbytes, ncopied, ncopied_rep, nbytes_tot
-        integer(timer_int_kind)      :: t0, t_copy
-        real(timer_int_kind)         :: t_report, rate_avg
-        integer :: ldim_ref(3), mode_ref, nptcls, nstks, istk, iptcl, fromp, top
-        integer :: run_row, run_ind, run_len, max_run, stkind, indstk, src_unit, out_unit, ios
-        logical :: l_ref
-        real    :: smpd
+        character(len=*),     parameter   :: STKFBODY    = 'consolidated_particles'
+        integer(kind=8),      parameter   :: BUFBYTES    = 268435456_8        ! copy buffer cap, 256 MB
+        real(timer_int_kind), parameter   :: REPORT_SECS = 30._timer_int_kind ! seconds between progress lines
+        real(timer_int_kind), parameter   :: RATE_WEIGHT = 0.2_timer_int_kind ! weight of the latest interval in the rate
+        type(parameters)                  :: params
+        type(sp_project)                  :: spproj
+        type(MrcImgHead)                  :: hed_out, hed_src
+        type(string)                      :: stkname, stkout, cwd
+        integer(kind=1),      allocatable :: buf(:)
+        integer(kind=8)                   :: imgbytes, ncopied, ncopied_rep, nbytes_tot
+        integer(timer_int_kind)           :: t0, t_copy
+        real(timer_int_kind)              :: t_report, rate_avg
+        integer                           :: ldim_ref(3), mode_ref, nptcls, nstks, istk, iptcl, fromp, top
+        integer                           :: run_row, run_ind, run_len, max_run, stkind, indstk, src_unit, out_unit, ios
+        logical                           :: l_ref
+        real                              :: smpd
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         t0 = tic()
@@ -970,20 +970,20 @@ contains
     end subroutine exec_consolidate_particles
 
     subroutine exec_scale_project( self, cline )
-        class(commander_scale_project), intent(inout) :: self
+        class(commander_scale_project),       intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(chash),      allocatable :: part_params(:)
         integer,          allocatable :: parts(:,:)
         integer,          parameter   :: MAX_NCUNITS = 64
-        type(string)     :: dir_target, projfile_sc
-        type(qsys_env)   :: qenv
-        type(chash)      :: job_descr
-        type(cmdline)    :: cline_scale
-        type(parameters) :: params
-        type(builder)    :: build
-        real             :: smpd, smpd_target
-        integer          :: ipart, nparts, nstks, box, newbox, nthr_orig, nparts_orig, ncunits_orig
-        logical          :: gen_sc_project
+        type(string)                  :: dir_target, projfile_sc
+        type(qsys_env)                :: qenv
+        type(chash)                   :: job_descr
+        type(cmdline)                 :: cline_scale
+        type(parameters)              :: params
+        type(builder)                 :: build
+        real                          :: smpd, smpd_target
+        integer                       :: ipart, nparts, nstks, box, newbox, nthr_orig, nparts_orig, ncunits_orig
+        logical                       :: gen_sc_project
         ! mkdir=yes: a new *_sc project + stacks are generated
         ! mkdir=no : only stacks are scaled
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -1067,7 +1067,7 @@ contains
 
     subroutine exec_split_stack( self, cline )
         class(commander_split_stack), intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
+        class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
         call cline%set("oritype", 'stk')

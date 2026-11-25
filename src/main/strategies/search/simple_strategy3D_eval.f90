@@ -32,9 +32,9 @@ contains
     end subroutine new_eval
 
     subroutine srch_eval( self, os, ithr )
-        class(strategy3D_eval), intent(inout) :: self
+        class(strategy3D_eval),  intent(inout) :: self
         class(oris),             intent(inout) :: os
-        integer,                intent(in)    :: ithr
+        integer,                 intent(in)    :: ithr
         if( os%get_state(self%s%iptcl) > 0 )then
             self%s%ithr = ithr
             call self%s%prep4srch

@@ -9,7 +9,7 @@ contains
         class(string),       intent(in) :: fname
         integer,             intent(in) :: nptcls_total
         integer,             intent(in) :: iwrite_from, iwrite_to
-        integer :: funit, io_stat, nwrite
+        integer         :: funit, io_stat, nwrite
         integer(kind=8) :: header_bytes, pft_bytes, write_pos
         if( .not. self%existence ) THROW_HARD('polarft_calc does not exist; write_ptcl_pft_range')
         if( nptcls_total < 1 ) THROW_HARD('nptcls_total must be > 0; write_ptcl_pft_range')
@@ -41,8 +41,8 @@ contains
         class(polarft_calc), intent(in) :: self
         class(string),       intent(in) :: fname
         logical,             intent(in) :: iseven
-        integer :: funit, ieo
-        integer :: header(4)
+        integer         :: funit, ieo
+        integer         :: header(4)
         integer(kind=8) :: payload_pos
         if( .not. self%existence ) THROW_HARD('polarft_calc does not exist; write_ref_pfts')
         header      = [self%pftsz, self%kfromto(1), self%kfromto(2), self%nrefs]
@@ -59,14 +59,14 @@ contains
     !! iref_from onwards, inside this object's range (a model loaded beside another one, as the
     !! pose-posterior diagnostic loads the real halves beside the matcher's references).
     module subroutine read_ref_pfts( self, fname, iseven, iref_from )
-        class(polarft_calc), intent(inout) :: self
-        class(string),       intent(in)    :: fname
-        logical,             intent(in)    :: iseven
-        integer, optional,   intent(in)    :: iref_from
-        integer :: funit, io_stat, ieo, ifrom, ito
-        integer :: header(4)
+        class(polarft_calc), intent(inout)          :: self
+        class(string),       intent(in)             :: fname
+        logical,             intent(in)             :: iseven
+        integer,             optional,   intent(in) :: iref_from
+        integer         :: funit, io_stat, ieo, ifrom, ito
+        integer         :: header(4)
         integer(kind=8) :: payload_pos
-        logical :: l_range_ok
+        logical         :: l_range_ok
         if( .not. self%existence ) THROW_HARD('polarft_calc does not exist; read_ref_pfts')
         if( .not. file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist; read_ref_pfts')
         call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)

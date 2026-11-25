@@ -28,7 +28,7 @@ contains
     !> an empty pool answers as before any iteration, and kill leaves an empty pool, twice over
     subroutine test_new_kill()
         class(stream_pool2D), allocatable :: pool
-        type(stream_pool2D_stats) :: st
+        type(stream_pool2D_stats)         :: st
         allocate(pool)
         write(*,'(A)') 'test_new_kill'
         call pool%new()
@@ -80,8 +80,8 @@ contains
     !> the pool takes the sets of an import and reports its micrographs and selected particles
     subroutine test_append_sets()
         class(stream_pool2D), allocatable :: pool
-        type(sp_project) :: sets(2)
-        integer          :: nmics, nsel
+        type(sp_project)                  :: sets(2)
+        integer                           :: nmics, nsel
         allocate(pool)
         write(*,'(A)') 'test_append_sets'
         call pool%new()
@@ -104,8 +104,8 @@ contains
     !! already updated, and deselected ones, keep theirs
     subroutine test_draw_new_classes()
         type(sp_project) :: proj1, proj2
-        integer :: i
-        logical :: l_same, l_populated
+        integer          :: i
+        logical          :: l_same, l_populated
         write(*,'(A)') 'test_draw_new_classes'
         call make_draw_project(proj1)
         call make_draw_project(proj2)
@@ -154,12 +154,12 @@ contains
     subroutine test_mask_clamped_to_box()
         class(stream_pool2D), allocatable :: pool
         class(parameters),    allocatable :: params
-        type(stream_pool2D_stats) :: st
-        type(cmdline)    :: cline
-        type(sp_project) :: spproj
-        type(string)     :: cwd_saved, root
-        real             :: mskdiam_max
-        integer          :: nfail0
+        type(stream_pool2D_stats)         :: st
+        type(cmdline)                     :: cline
+        type(sp_project)                  :: spproj
+        type(string)                      :: cwd_saved, root
+        real                              :: mskdiam_max
+        integer                           :: nfail0
         allocate(pool, params)
         write(*,'(A)') 'test_mask_clamped_to_box'
         nfail0 = tests_failed
@@ -186,11 +186,11 @@ contains
     subroutine test_restart_after_kill()
         class(stream_pool2D), allocatable :: pool
         class(parameters),    allocatable :: params
-        type(stream_pool2D_stats) :: st
-        type(cmdline)    :: cline
-        type(sp_project) :: spproj
-        type(string)     :: cwd_saved, root
-        integer          :: nfail0
+        type(stream_pool2D_stats)         :: st
+        type(cmdline)                     :: cline
+        type(sp_project)                  :: spproj
+        type(string)                      :: cwd_saved, root
+        integer                           :: nfail0
         allocate(pool, params)
         write(*,'(A)') 'test_restart_after_kill'
         nfail0 = tests_failed
@@ -218,9 +218,9 @@ contains
     !> a pool whose particles have never been through an iteration publishes nothing for 3D
     subroutine test_unclassified_publishes_nothing()
         class(stream_pool2D), allocatable :: pool
-        type(sp_project) :: sets(1)
-        type(string)     :: cwd_saved, root
-        integer          :: nfail0, nmics, nsel, nstks
+        type(sp_project)                  :: sets(1)
+        type(string)                      :: cwd_saved, root
+        integer                           :: nfail0, nmics, nsel, nstks
         allocate(pool)
         write(*,'(A)') 'test_unclassified_publishes_nothing'
         nfail0 = tests_failed
@@ -240,10 +240,10 @@ contains
     !! (no particles, no file) instead of stopping the stage; an empty pool's current iteration is 0
     subroutine test_snapshot_without_frcs()
         class(stream_pool2D), allocatable :: pool
-        type(string)         :: cwd_saved, root, jpeg, mrc
-        integer, allocatable :: idx(:), pop(:)
-        real,    allocatable :: res(:)
-        integer              :: nfail0, nptcls, ntx, nty
+        type(string)                      :: cwd_saved, root, jpeg, mrc
+        integer,              allocatable :: idx(:), pop(:)
+        real,                 allocatable :: res(:)
+        integer                           :: nfail0, nptcls, ntx, nty
         allocate(pool)
         write(*,'(A)') 'test_snapshot_without_frcs'
         nfail0 = tests_failed
@@ -292,9 +292,9 @@ contains
     ! a sieve set in memory: one micrograph and one stack per entry of @p nptcls_mic, its particles
     ! selected, in class 3 with a shift, the first @p nrejected of them deselected
     subroutine make_set( proj, nptcls_mic, nrejected )
-        type(sp_project),  intent(inout) :: proj
-        integer,           intent(in)    :: nptcls_mic(:)
-        integer, optional, intent(in)    :: nrejected
+        type(sp_project),  intent(inout)        :: proj
+        integer,           intent(in)           :: nptcls_mic(:)
+        integer,           optional, intent(in) :: nrejected
         integer :: imic, fromp, iptcl
         call proj%os_mic%new(size(nptcls_mic), is_ptcl=.false.)
         call proj%os_stk%new(size(nptcls_mic), is_ptcl=.false.)

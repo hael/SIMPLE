@@ -20,13 +20,13 @@ integer, parameter :: POLAR_NANG_MIN = 6
 !> Polar sampling grid over the half-plane k<=0, ring by ring.
 !! `nsamp` samples carry the model at one-lattice-unit angular spacing.
 type :: polar_grid_t
-    integer :: kfrom = 0, kto = 0, nk = 0, nsamp = 0
-    integer :: hlo = 0, hhi = 0, klo = 0                  !< particle-plane bounds (native lattice, as stored)
+    integer               :: kfrom  = 0, kto = 0, nk = 0, nsamp = 0
+    integer               :: hlo    = 0, hhi = 0, klo = 0 !< particle-plane bounds (native lattice, as stored)
     integer,  allocatable :: rbeg(:), rend(:)             !< (nk) sample range of each ring
     real,     allocatable :: rad(:), cs(:), sn(:), wq(:)  !< (nsamp)
     real,     allocatable :: sqwq(:)                      !< (nsamp) sqrt(wq), hoisted out of the inner loop
     real,     allocatable :: wq_ring(:)                   !< (nk) per-sample weight of that ring
-    logical :: exists = .false.
+    logical               :: exists = .false.
   contains
     procedure :: build => polar_grid_build
     procedure :: kill  => polar_grid_kill
@@ -35,13 +35,13 @@ end type polar_grid_t
 !> One fit's polar E-step service. The fit owns this bank explicitly; no ring geometry,
 !! projected basis, direction assignment or thread scratch is shared through module state.
 type :: flex_polar_bank
-    logical :: l_pol_grid = .false.
-    logical :: l_pol_bank_it = .false., l_pol_hyb = .false.
-    integer :: ndir_es = 0, nsamp_es = 0, nsamp2_es = 0, nk_es = 0
-    integer :: hlo_es = 0, hhi_es = 0, klo_es = 0
-    integer :: nyqr_es = 0, nyqb_es = 0, rhyb_es = 0, npos_es = 0
+    logical               :: l_pol_grid    = .false.
+    logical               :: l_pol_bank_it = .false., l_pol_hyb = .false.
+    integer               :: ndir_es       = 0, nsamp_es = 0, nsamp2_es = 0, nk_es = 0
+    integer               :: hlo_es        = 0, hhi_es = 0, klo_es = 0
+    integer               :: nyqr_es       = 0, nyqb_es = 0, rhyb_es = 0, npos_es = 0
     integer,  allocatable :: hex_es(:), kex_es(:)
-    type(polar_grid_t) :: pg_es
+    type(polar_grid_t)    :: pg_es
     real,     allocatable :: rmatb_es(:,:,:), nrmb_es(:,:)
     real,     allocatable :: cae(:), sae(:)
     integer,  allocatable :: dir_es(:)
@@ -52,7 +52,7 @@ type :: flex_polar_bank
     real,     allocatable :: CspE(:,:,:)
     real,     allocatable :: xws_es(:,:), wr_es(:,:), Reb_es(:,:)
     real(dp), allocatable :: wrd_es(:,:)
-    real :: sec_bank = 0.
+    real                  :: sec_bank      = 0.
   contains
     procedure :: kill => flex_polar_bank_kill
 end type flex_polar_bank
@@ -62,9 +62,9 @@ contains
     !> Ring-wise polar grid over kfrom..kto. gate_lo makes the measure exclude h^2+k^2 <= gate_lo
     !! (nint shells: above shell r starts at r*(r+1)+1) instead of h^2+k^2 < kfrom^2.
     subroutine polar_grid_build( g, kfrom, kto, hlo, hhi, klo, gate_lo )
-        class(polar_grid_t), intent(inout) :: g
-        integer,            intent(in)    :: kfrom, kto, hlo, hhi, klo
-        integer, optional,  intent(in)    :: gate_lo
+        class(polar_grid_t), intent(inout)         :: g
+        integer,             intent(in)            :: kfrom, kto, hlo, hhi, klo
+        integer,             optional,  intent(in) :: gate_lo
         integer :: r, t, nang, j, ncart, h, k, nyq_disk, hk2
         real    :: phi, dphi, wtot, scal
         logical :: l_gate_lo
@@ -189,8 +189,8 @@ contains
         complex,             intent(out) :: out(:,0:)   !< (nsamp, 0:nrec)
         type(exp_samples) :: samples
         real, allocatable :: locs(:,:)
-        real    :: hb, kb
-        integer :: j, q
+        real              :: hb, kb
+        integer           :: j, q
         allocate(locs(3,g%nsamp))
         do j = 1, g%nsamp
             hb        =  g%rad(j) * g%cs(j)
@@ -238,10 +238,10 @@ contains
         real,               intent(out) :: wr(:)
         real,               intent(out) :: tazim
         type(kbinterpol) :: kbwin
-        integer :: j, ir, nang, i, iwinsz, wlox, wloy, ix, iy, hx, ky
-        real    :: hu, ku, c1, s1, t2, tm, tv, bx, by, sx, sy, w, wyy, inv_wdim, eps_norm
-        real    :: wx(LATENT_WDIM), wy(LATENT_WDIM)
-        complex :: yv, tv_c, xwj
+        integer          :: j, ir, nang, i, iwinsz, wlox, wloy, ix, iy, hx, ky
+        real             :: hu, ku, c1, s1, t2, tm, tv, bx, by, sx, sy, w, wyy, inv_wdim, eps_norm
+        real             :: wx(LATENT_WDIM), wy(LATENT_WDIM)
+        complex          :: yv, tv_c, xwj
         kbwin    = kbinterpol(KBWINSZ, KBALPHA)
         iwinsz   = ceiling(KBWINSZ - 0.5)
         inv_wdim = 1.0 / real(LATENT_WDIM)
@@ -322,10 +322,10 @@ contains
         integer, intent(in)  :: nptcls, ndir
         real,    intent(in)  :: nrm_b(3,ndir)
         integer, intent(out) :: dir_of(nptcls)
-        integer, parameter :: ASSIGN_CHUNK = 128   !< particles per product: the products of a thread stay in its cache
+        integer, parameter   :: ASSIGN_CHUNK = 128 !< particles per product: the products of a thread stay in its cache
         real,    allocatable :: dots(:,:,:)
-        integer :: nthr, ithr, ic, i0, nc, i, j, jbest
-        real    :: best
+        integer              :: nthr, ithr, ic, i0, nc, i, j, jbest
+        real                 :: best
         nthr = 1
         !$ nthr = omp_get_max_threads()
         allocate(dots(ndir,ASSIGN_CHUNK,nthr))

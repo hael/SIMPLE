@@ -10,10 +10,10 @@ public :: exec_tseries_commander
 private
 
 type(commander_tseries_track_particles_distr)        :: xtrack
-type(commander_tseries_import)               :: xtseries_import
-type(commander_tseries_make_pickavg)         :: xtseries_make_pickavg
-type(commander_tseries_motion_correct_distr) :: xmcorr
-type(commander_tseries_prep4tracking)        :: xprep4tracking
+type(commander_tseries_import)                       :: xtseries_import
+type(commander_tseries_make_pickavg)                 :: xtseries_make_pickavg
+type(commander_tseries_motion_correct_distr)         :: xmcorr
+type(commander_tseries_prep4tracking)                :: xprep4tracking
 
 contains
     

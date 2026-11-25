@@ -15,13 +15,13 @@ contains
 
     !> every payload block of one fit survives the writer and the reduce bit for bit
     subroutine test_probe_part_codec()
-        logical :: pass
-        type(flex_probe_part) :: src, dst
-        type(flex_pca_rounds_shmem) :: rounds
+        logical                        :: pass
+        type(flex_probe_part)          :: src, dst
+        type(flex_pca_rounds_shmem)    :: rounds
         class(parameters), allocatable :: params
-        type(string) :: fname, tmp_fname
-        integer :: i, j, k, q, p, funit
-        real :: xr, xi
+        type(string)                   :: fname, tmp_fname
+        integer                        :: i, j, k, q, p, funit
+        real                           :: xr, xi
         src%ncomp  = 2
         src%nval   = 17
         src%nll_sum = 1.25d0

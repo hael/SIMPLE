@@ -23,18 +23,18 @@ private
 
 type :: eul_prob_marginal
     private
-    integer :: nrefs = 0, nrots = 0, kin = 0, i_first = 0, i_last = -1
-    real(dp),    allocatable :: lnz(:,:)        !< (nrefs, i_first:i_last) ln of the in-plane partition sum
-    real(dp),    allocatable :: pen(:,:)        !< (nrefs, i_first:i_last) the view weight's shift-prior term
-    real,        allocatable :: dmin(:,:)       !< (nrefs, i_first:i_last) its row's minimum
-    real,        allocatable :: sh(:,:,:)       !< (2, nrefs, i_first:i_last) the shift its row was last computed at
-    real,        allocatable :: temp(:)         !< (i_first:i_last) the physical temperature (0 for the argmin)
-    integer,     allocatable :: nin(:)          !< (i_first:i_last) the in-plane rows kept
-    integer,     allocatable :: refs(:,:)       !< (kin, i_first:i_last) their references, in descending marginal mass
-    real,        allocatable :: rows(:,:,:)     !< (nrots, kin, i_first:i_last) their in-plane posteriors
+    integer                  :: nrefs  = 0, nrots = 0, kin = 0, i_first = 0, i_last = -1
+    real(dp),    allocatable :: lnz(:,:)             !< (nrefs, i_first:i_last) ln of the in-plane partition sum
+    real(dp),    allocatable :: pen(:,:)             !< (nrefs, i_first:i_last) the view weight's shift-prior term
+    real,        allocatable :: dmin(:,:)            !< (nrefs, i_first:i_last) its row's minimum
+    real,        allocatable :: sh(:,:,:)            !< (2, nrefs, i_first:i_last) the shift its row was last computed at
+    real,        allocatable :: temp(:)              !< (i_first:i_last) the physical temperature (0 for the argmin)
+    integer,     allocatable :: nin(:)               !< (i_first:i_last) the in-plane rows kept
+    integer,     allocatable :: refs(:,:)            !< (kin, i_first:i_last) their references, in descending marginal mass
+    real,        allocatable :: rows(:,:,:)          !< (nrots, kin, i_first:i_last) their in-plane posteriors
     real,        allocatable :: wrow(:,:), wcdf(:,:) !< (nrots, nthr) per thread: a row, the draw's work
-    complex(sp), allocatable :: bank(:,:,:)     !< (pftsz+1, nk, nthr) per thread: the shifted particle
-    logical :: exists = .false.
+    complex(sp), allocatable :: bank(:,:,:)          !< (pftsz+1, nk, nthr) per thread: the shifted particle
+    logical                  :: exists = .false.
 contains
     procedure :: new
     procedure :: score_entry
@@ -88,14 +88,14 @@ contains
     !! tdraw with the variate pftc%gen_posterior_val keys (scope, particle, reference), so dist and irot are its, bit
     !! for bit; the row's in-plane marginal at the insertion's temperature kept. On thread ithr's work
     subroutine score_entry( self, pftc, scope, iref, ri, i, iptcl, shift, tdraw, ithr, dist, irot, bank )
-        class(eul_prob_marginal), intent(inout) :: self
-        class(polarft_calc),      intent(inout) :: pftc
-        type(rnd_key),            intent(in)    :: scope
-        integer,                  intent(in)    :: iref, ri, i, iptcl, ithr
-        real,                     intent(in)    :: shift(2), tdraw
-        real,                     intent(out)   :: dist
-        integer,                  intent(out)   :: irot
-        complex(sp), optional,    intent(in)    :: bank(:,:)
+        class(eul_prob_marginal), intent(inout)           :: self
+        class(polarft_calc),      intent(inout)           :: pftc
+        type(rnd_key),            intent(in)              :: scope
+        integer,                  intent(in)              :: iref, ri, i, iptcl, ithr
+        real,                     intent(in)              :: shift(2), tdraw
+        real,                     intent(out)             :: dist
+        integer,                  intent(out)             :: irot
+        complex(sp),              optional,    intent(in) :: bank(:,:)
         real(dp) :: u
         if( present(bank) )then
             call pftc%gen_euclid_dists_bank(iref, iptcl, bank, self%wrow(:,ithr))

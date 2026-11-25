@@ -36,19 +36,19 @@ contains
     !! cosine with the span where pa_cos >= thr), which sets the axis weights. ok=.false. without stamps.
     subroutine init_deflated_matchcos( imgsA, ncA, imgsB, ncB, pstar, defl_cos, ok, thr, sub_cos, pa_cos )
         use simple_linalg, only: jacobi, eigsrt
-        type(image),           intent(in)  :: imgsA(:), imgsB(:)
-        integer,               intent(in)  :: ncA, ncB, pstar(:)
-        real(dp), allocatable, intent(out) :: defl_cos(:)
-        logical,               intent(out) :: ok
-        real(dp), optional,    intent(in)  :: thr
-        real(dp), allocatable, optional, intent(out) :: sub_cos(:), pa_cos(:)
-        type(image) :: ivol
-        type(string) :: fn
+        type(image),           intent(in)                         :: imgsA(:), imgsB(:)
+        integer,               intent(in)                         :: ncA, ncB, pstar(:)
+        real(dp),              allocatable, intent(out)           :: defl_cos(:)
+        logical,               intent(out)                        :: ok
+        real(dp),              optional,    intent(in)            :: thr
+        real(dp),              allocatable, optional, intent(out) :: sub_cos(:), pa_cos(:)
+        type(image)           :: ivol
+        type(string)          :: fn
         real(dp), allocatable :: VA(:,:), VB(:,:), VI(:,:)
         real(dp), allocatable :: QA(:,:), QB(:,:), G(:,:), C(:,:), ev(:), evec(:,:), u(:)
-        real, pointer :: rmat(:,:,:) => null()
-        real(dp) :: nrm, pj
-        integer  :: nvox, q, k, ni, ldim(3), nrot, r, j
+        real,     pointer     :: rmat(:,:,:) => null()
+        real(dp)              :: nrm, pj
+        integer               :: nvox, q, k, ni, ldim(3), nrot, r, j
         ok = .false.
         ! collect the init stamps (fit A namespace; the init is shared by construction)
         ni = 0
@@ -169,20 +169,20 @@ contains
         real(dp), allocatable, intent(out)   :: m_matchcos(:)
         type(reconstructor), allocatable :: Ymrg(:), utilde(:)
         type(image),         allocatable :: realvols(:), utilde_real(:)
-        type(image)  :: mstep_gridcorr, imga, imgb
-        type(string) :: fname
-        real(dp), allocatable :: Mba(:,:), Rm(:,:), sv_ab(:), eigvals_m(:)
-        real,     allocatable :: rho_me(:,:,:,:), rho_mo(:,:,:,:), kpk_m(:,:)
-        complex,  allocatable :: rpk_m(:,:)
-        type(flex_pcg_outcome_t) :: pcg_out
-        logical  :: l_pcg_m
-        real,     allocatable :: h_e(:,:), h_o(:,:), h_sum(:,:), invtau2(:,:), fscq(:,:), corrs(:)
-        integer,  allocatable :: pstar(:), psign(:)
-        real,     pointer     :: rmatp(:,:,:)
-        real(dp) :: rdev, gA, gB, paircos
-        real     :: lp_m, fmean
-        integer  :: ncm, ncb, npairs_m, es(3), lb(3), nyq, filtsz, klo, kfr(2), kfr_pcg(2), khi_m
-        integer  :: q, p, d_new, ncA_del, ncB_del
+        type(image)                      :: mstep_gridcorr, imga, imgb
+        type(string)                     :: fname
+        real(dp),            allocatable :: Mba(:,:), Rm(:,:), sv_ab(:), eigvals_m(:)
+        real,                allocatable :: rho_me(:,:,:,:), rho_mo(:,:,:,:), kpk_m(:,:)
+        complex,             allocatable :: rpk_m(:,:)
+        type(flex_pcg_outcome_t)         :: pcg_out
+        logical                          :: l_pcg_m
+        real,                allocatable :: h_e(:,:), h_o(:,:), h_sum(:,:), invtau2(:,:), fscq(:,:), corrs(:)
+        integer,             allocatable :: pstar(:), psign(:)
+        real,                pointer     :: rmatp(:,:,:)
+        real(dp)                         :: rdev, gA, gB, paircos
+        real                             :: lp_m, fmean
+        integer                          :: ncm, ncb, npairs_m, es(3), lb(3), nyq, filtsz, klo, kfr(2), kfr_pcg(2), khi_m
+        integer                          :: q, p, d_new, ncA_del, ncB_del
         ! ---- gate-4 pair-algebra self-check: packed R^T rho R vs brute-force dense, K=2 and a
         ! rectangular 3->2 case, deterministic values; THROWs on mismatch ----
         if( allocated(model%basis_recs) ) deallocate(model%basis_recs)
@@ -244,9 +244,9 @@ contains
         ! ---- init-deflated match (the axis-weight signal at any budget) ----
         block
             real(dp), allocatable :: dcos(:), scos(:), pcos(:)
-            real(dp) :: thr
-            logical :: l_dok
-            integer :: qd, rdim
+            real(dp)              :: thr
+            logical               :: l_dok
+            integer               :: qd, rdim
             thr = 0.50d0    ! the reporting bar for a reproducible principal direction
             call init_deflated_matchcos(fits(1)%mstep%mg_prev, ncm, fits(2)%mstep%mg_prev, ncb, &
                 &pstar, dcos, l_dok, thr=thr, sub_cos=scos, pa_cos=pcos)
@@ -452,18 +452,18 @@ contains
     !! matched |cos| tables (log + manifest), and the merge provenance appended to the paired manifest.
     subroutine merged_delivery( fits, mode, mimgs, nm, eigvals_m, sig2_m, &
         &Rm, Mba, sv_ab, pstar, psign, fscq, khi_m )
-        type(flex_probe_fit), intent(inout) :: fits(2)
-        integer,              intent(in)    :: mode, nm
-        type(image),          intent(inout) :: mimgs(:)
-        real(dp),             intent(in)    :: eigvals_m(:)
-        real(dp),             intent(in)    :: sig2_m
-        real(dp), optional,   intent(in)    :: Rm(:,:), Mba(:,:), sv_ab(:)
-        integer,  optional,   intent(in)    :: pstar(:), psign(:)
-        real,     optional,   intent(in)    :: fscq(:,:)
-        integer,  optional,   intent(in)    :: khi_m
+        type(flex_probe_fit), intent(inout)          :: fits(2)
+        integer,              intent(in)             :: mode, nm
+        type(image),          intent(inout)          :: mimgs(:)
+        real(dp),             intent(in)             :: eigvals_m(:)
+        real(dp),             intent(in)             :: sig2_m
+        real(dp),             optional,   intent(in) :: Rm(:,:), Mba(:,:), sv_ab(:)
+        integer,              optional,   intent(in) :: pstar(:), psign(:)
+        real,                 optional,   intent(in) :: fscq(:,:)
+        integer,              optional,   intent(in) :: khi_m
         integer,  allocatable :: ma(:), mb(:)
         real(dp), allocatable :: mcos_a(:), mcos_b(:)
-        integer  :: q, p, u
+        integer               :: q, p, u
         ! merged meta + eigenvalue table
         call save_probe_state(nm, eigvals_m, sig2_m, fname=MERGED_META)
         call del_file(MERGED_EIG_FNAME)
@@ -522,15 +522,15 @@ contains
     !! matching, factored): my(i) is the y-component matched to x-component i, without
     !! replacement while y-components last, then best-|cos| with replacement.
     subroutine matched_abs_cos( ximgs, nx, yimgs, ny, my, mcos )
-        integer,               intent(in)    :: nx, ny
-        type(image),           intent(inout) :: ximgs(:), yimgs(:)
-        integer,  allocatable, intent(out)   :: my(:)
-        real(dp), allocatable, intent(out)   :: mcos(:)
-        real,    pointer     :: prx(:,:,:), pry(:,:,:)
+        integer,               intent(in)               :: nx, ny
+        type(image),           intent(inout)            :: ximgs(:), yimgs(:)
+        integer,               allocatable, intent(out) :: my(:)
+        real(dp),              allocatable, intent(out) :: mcos(:)
+        real,     pointer     :: prx(:,:,:), pry(:,:,:)
         real(dp), allocatable :: cosm(:,:)
         logical,  allocatable :: used_x(:), used_y(:)
-        real(dp) :: nrm_x, nrm_y, c, best_c
-        integer  :: q, p, k, best_q, best_p
+        real(dp)              :: nrm_x, nrm_y, c, best_c
+        integer               :: q, p, k, best_q, best_p
         allocate(cosm(nx,ny), used_x(nx), used_y(ny), my(nx), mcos(nx))
         used_x = .false.; used_y = .false.
         my = 0; mcos = 0.d0
@@ -583,8 +583,8 @@ contains
         integer,     intent(in)    :: nref, n
         type(image), intent(inout) :: ref_imgs(:), imgs(:)
         type(image), allocatable :: rot(:)
-        real(dp), allocatable :: Mra(:,:), sv(:), Tg(:,:), Mt(:,:)
-        integer :: q, k
+        real(dp),    allocatable :: Mra(:,:), sv(:), Tg(:,:), Mt(:,:)
+        integer                  :: q, k
         if( n /= nref ) THROW_HARD('gauge_fix_to_frame: rank mismatch')
         ! Mra(i,j) = <ref_i, img_j>; svals = span principal-angle cosines (log: faithfulness)
         call align_basis_to_reference(ref_imgs, nref, imgs, n, Mra, sv)
@@ -621,9 +621,9 @@ contains
     !! Procrustes frame-rotation precedent (jacobi on M^T M, inverse-sqrt with a 1e-12 floor).
     !! Semi-orthogonal (columns orthonormal) when ncb >= ncm.
     subroutine polar_factor( Mba, ncb, ncm, Rm )
-        integer,               intent(in)  :: ncb, ncm
-        real(dp),              intent(in)  :: Mba(ncb,ncm)
-        real(dp), allocatable, intent(out) :: Rm(:,:)
+        integer,               intent(in)               :: ncb, ncm
+        real(dp),              intent(in)               :: Mba(ncb,ncm)
+        real(dp),              allocatable, intent(out) :: Rm(:,:)
         real(dp) :: MtM(ncm,ncm), Vo(ncm,ncm), Wo(ncm,ncm), evo(ncm)
         integer  :: q, nrot
         MtM = matmul(transpose(Mba), Mba)
@@ -704,7 +704,7 @@ contains
         real,     intent(in)    :: rho_b(:,:,:,:)
         real,     intent(inout) :: rho_acc(:,:,:,:)
         real, allocatable :: dout(:)
-        integer :: i1, i2, i3, n1, n2, n3, npb, npm
+        integer           :: i1, i2, i3, n1, n2, n3, npb, npm
         npb = (ncb*(ncb+1))/2
         npm = (ncm*(ncm+1))/2
         if( size(rho_b,1) /= npb .or. size(rho_acc,1) /= npm ) &
@@ -729,7 +729,7 @@ contains
         real,     intent(in)    :: rho_b(:,:)
         real,     intent(inout) :: rho_acc(:,:)
         real, allocatable :: dout(:)
-        integer :: t, npb, npm
+        integer           :: t, npb, npm
         npb = (ncb*(ncb+1))/2
         npm = (ncm*(ncm+1))/2
         if( size(rho_b,1) /= npb .or. size(rho_acc,1) /= npm ) &
@@ -815,12 +815,12 @@ contains
         type(image),          intent(inout) :: realvols(:)
         integer,              intent(in)    :: nvols
         type(image), allocatable :: dfl_basis(:)
-        type(image) :: mvol_dfl
-        real, pointer :: rm_dfl(:,:,:), rv_dfl(:,:,:)
-        real(dp) :: mm_dfl, mv_dfl, rem_dfl, tot_dfl, mnorm_dfl
-        real     :: res_lo, res_hi
-        integer  :: ndfl, ndfl_sh, idfl, jdfl, nkeep_dfl, kfr_dfl(2), q
-        logical  :: l_dfl_bg, l_dfl_dil
+        type(image)              :: mvol_dfl
+        real,        pointer     :: rm_dfl(:,:,:), rv_dfl(:,:,:)
+        real(dp)                 :: mm_dfl, mv_dfl, rem_dfl, tot_dfl, mnorm_dfl
+        real                     :: res_lo, res_hi
+        integer                  :: ndfl, ndfl_sh, idfl, jdfl, nkeep_dfl, kfr_dfl(2), q
+        logical                  :: l_dfl_bg, l_dfl_dil
         if( .not. fit%spec%l_deflate_mean ) return
         ndfl = max(1, fit%spec%vdfl)
         l_dfl_bg = .true.

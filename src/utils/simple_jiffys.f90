@@ -27,7 +27,7 @@ contains
     !> \brief is for printing a progress bar
     subroutine progress_gfortran(i, imax)
         integer, intent(in) :: i, imax
-        integer :: k, curr, prev
+        integer          :: k, curr, prev
         character(len=1) :: back
         if( .not. l_distr_worker_glob )then
             back = char(8)
@@ -67,9 +67,9 @@ contains
     subroutine simple_end( str, print_simple, verbose_exit, verbose_exit_fname )
         use simple_syslib, only: simple_touch
         use simple_string
-        character(len=*),       intent(in) :: str
-        type(string), optional, intent(in) :: verbose_exit_fname
-        logical,      optional, intent(in) :: print_simple, verbose_exit
+        character(len=*),       intent(in)           :: str
+        type(string),           optional, intent(in) :: verbose_exit_fname
+        logical,                optional, intent(in) :: print_simple, verbose_exit
         type(string)                       :: exit_fname
         logical                            :: pprint_simple
         ! pretty ending

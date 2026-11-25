@@ -20,11 +20,11 @@ contains
 
     !> Run the dose consumer on a fresh producer fixture, independently of the producer test suite.
     subroutine run_all_dose_filter3D_tests()
-        class(cmdline), allocatable :: filter_cline
+        class(cmdline), allocatable   :: filter_cline
         type(commander_dose_filter3D) :: filter
-        type(dose_curve) :: curve
-        type(string) :: cwd, root, arm, truth_a, truth_b, truth_mean, truth_diff, oritab, stack, message
-        integer :: nfail0
+        type(dose_curve)              :: curve
+        type(string)                  :: cwd, root, arm, truth_a, truth_b, truth_mean, truth_diff, oritab, stack, message
+        integer                       :: nfail0
         nfail0 = tests_failed
         call enter_fixture('dose_filter3d', cwd, root)
         allocate(filter_cline)

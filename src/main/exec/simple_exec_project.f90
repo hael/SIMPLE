@@ -17,30 +17,30 @@ implicit none
 public :: exec_project_commander
 private
 
-type(commander_consolidate_particles) :: xconsolidate_particles
-type(commander_export_relion)         :: xexport_relion
-type(commander_export_starproject)    :: xexport_starproject
-type(commander_extract_subproj)       :: xextract_subproj
-type(commander_import_boxes)          :: ximport_boxes
-type(commander_import_cavgs)          :: ximport_cavgs
-type(commander_import_movies)         :: ximport_movies
-type(commander_import_particles)      :: ximport_particles
-type(commander_reimport_particles)    :: xreimport_particles
-type(commander_import_starproject)    :: ximport_starproject
-type(commander_merge_projects)        :: xmerge_projects
-type(commander_new_project)           :: xnew_project
-type(commander_print_project_field)   :: xprint_project_field
-type(commander_print_project_info)    :: xprint_project_info
+type(commander_consolidate_particles)  :: xconsolidate_particles
+type(commander_export_relion)          :: xexport_relion
+type(commander_export_starproject)     :: xexport_starproject
+type(commander_extract_subproj)        :: xextract_subproj
+type(commander_import_boxes)           :: ximport_boxes
+type(commander_import_cavgs)           :: ximport_cavgs
+type(commander_import_movies)          :: ximport_movies
+type(commander_import_particles)       :: ximport_particles
+type(commander_reimport_particles)     :: xreimport_particles
+type(commander_import_starproject)     :: ximport_starproject
+type(commander_merge_projects)         :: xmerge_projects
+type(commander_new_project)            :: xnew_project
+type(commander_print_project_field)    :: xprint_project_field
+type(commander_print_project_info)     :: xprint_project_info
 type(commander_ptcl3D_state_consensus) :: xptcl3D_state_consensus
-type(commander_prune_project_distr)   :: xprune_project
-type(commander_replace_project_field) :: xreplace_project_field
-type(commander_selection)             :: xselection
-type(commander_select_micrographs)    :: xselect_micrographs
-type(commander_select_particles)      :: xselect_particles
-type(commander_update_project)        :: xupdate_project
-type(commander_fix_projfile)          :: xfix_projfile
-type(commander_zero_project_shifts)   :: xzero_project_shifts
-type(commander_write_mic_filetab)     :: xwrite_mic_filetab
+type(commander_prune_project_distr)    :: xprune_project
+type(commander_replace_project_field)  :: xreplace_project_field
+type(commander_selection)              :: xselection
+type(commander_select_micrographs)     :: xselect_micrographs
+type(commander_select_particles)       :: xselect_particles
+type(commander_update_project)         :: xupdate_project
+type(commander_fix_projfile)           :: xfix_projfile
+type(commander_zero_project_shifts)    :: xzero_project_shifts
+type(commander_write_mic_filetab)      :: xwrite_mic_filetab
 
 contains
 

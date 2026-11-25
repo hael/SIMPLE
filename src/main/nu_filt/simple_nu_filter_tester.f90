@@ -82,10 +82,10 @@ contains
     !! beta is a real reduction, so the field is reproducible at a fixed thread count; the level smoothings and the
     !! Potts sweeps run in parallel)
     subroutine test_label_field_threads()
-        integer, parameter :: NREP = 20
-        type(image) :: even, odd
-        real, allocatable :: lp_first(:), lp_rep(:)
-        integer :: irep, ndiff, nthr_prev, nthr_full
+        integer, parameter   :: NREP = 20
+        type(image)          :: even, odd
+        real,    allocatable :: lp_first(:), lp_rep(:)
+        integer              :: irep, ndiff, nthr_prev, nthr_full
         write(logfhandle,'(A)') '-- test_label_field_threads'
         nthr_prev = 1
         nthr_full = 1
@@ -121,9 +121,9 @@ contains
     !! equals the column-by-column filtering it replaced, reference_tent_smooth, bit for bit: odd box sizes, radii 1-7,
     !! zero rows, planes and slabs (of either sign) beside random values; at one thread and 20 times at every processor
     subroutine test_tent_smooth_exact()
-        integer, parameter :: NX = 23, NY = 17, NZ = 19
-        real, allocatable :: vol(:,:,:), ref(:,:,:), new(:,:,:), tmp(:,:,:)
-        integer :: radius, irep, nthr_prev, nthr_full, ndiff, i, j, k
+        integer, parameter   :: NX = 23, NY = 17, NZ = 19
+        real,    allocatable :: vol(:,:,:), ref(:,:,:), new(:,:,:), tmp(:,:,:)
+        integer              :: radius, irep, nthr_prev, nthr_full, ndiff, i, j, k
         write(logfhandle,'(A)') 'test_tent_smooth_exact'
         nthr_prev = 1
         nthr_full = 1
@@ -256,8 +256,8 @@ contains
         real, intent(in) :: white(BOX,BOX,BOX)
         real, intent(in) :: sigma_px
         real, allocatable :: rmat(:,:,:), tmp(:,:,:), kernel(:)
-        integer :: r, m
-        real    :: avg, sdev
+        integer           :: r, m
+        real              :: avg, sdev
         r = ceiling(3.5 * sigma_px)
         allocate(kernel(-r:r))
         do m = -r, r
@@ -307,7 +307,7 @@ contains
         logical,     intent(in)    :: l_split
         type(image), intent(inout) :: even, odd
         real, allocatable :: white(:,:,:), s_fine(:,:,:), s_coarse(:,:,:), e(:,:,:), o(:,:,:)
-        integer :: i, j, k
+        integer           :: i, j, k
         call set_fixed_seed(SEED)
         allocate(white(BOX,BOX,BOX), e(BOX,BOX,BOX), o(BOX,BOX,BOX))
         call fill_gaussian(white)
@@ -343,13 +343,13 @@ contains
 
     !> the unary is ((E - O_c)^2 + (E_c - O)^2) / (2 sigma^2) on the support and zero outside it
     subroutine test_objective_closed_form()
-        integer, parameter :: N     = 16
-        real,    parameter :: SIGMA = 0.8
-        type(image) :: e_raw, e_filt, o_raw, o_filt
+        integer, parameter   :: N     = 16
+        real,    parameter   :: SIGMA = 0.8
+        type(image)          :: e_raw, e_filt, o_raw, o_filt
         real,    allocatable :: er(:,:,:), ef(:,:,:), orw(:,:,:), of(:,:,:), diff(:,:,:)
         logical, allocatable :: lmask(:,:,:)
-        real(dp) :: expected, maxerr, maxexp
-        integer  :: i, j, k, n_outside
+        real(dp)             :: expected, maxerr, maxexp
+        integer              :: i, j, k, n_outside
         write(logfhandle,'(A)') '-- test_objective_closed_form'
         call set_fixed_seed(SEED + 1)
         allocate(er(N,N,N), ef(N,N,N), orw(N,N,N), of(N,N,N), diff(N,N,N), lmask(N,N,N))
@@ -420,12 +420,12 @@ contains
 
     !> sigma_0 recovers the sdev of E - O; exact zero/zero voxels are left out; an all-zero pair gives one
     subroutine test_noise_scale()
-        real, parameter :: SDEV = 0.3
-        type(image) :: even, odd
+        real,    parameter   :: SDEV = 0.3
+        type(image)          :: even, odd
         real,    allocatable :: white(:,:,:), s(:,:,:), e(:,:,:), o(:,:,:)
         logical, allocatable :: lmask(:,:,:)
-        real    :: truth, est
-        integer :: i, j, k
+        real                 :: truth, est
+        integer              :: i, j, k
         write(logfhandle,'(A)') '-- test_noise_scale'
         call set_fixed_seed(SEED + 2)
         allocate(white(BOX,BOX,BOX), e(BOX,BOX,BOX), o(BOX,BOX,BOX))
@@ -468,14 +468,14 @@ contains
     !> under stationary noise, scaling sigma_0 by a constant scales every unary by its inverse square
     !! and leaves the per-voxel winner among the candidates unchanged
     subroutine test_ranking_scale_free()
-        real, parameter :: LPS(4)    = [12., 8., 6., 4.5]
-        real, parameter :: SCALES(2) = [3.7, 0.2]
-        type(image) :: even, odd
-        type(image) :: even_bank(size(LPS)), odd_bank(size(LPS))
+        real,    parameter   :: LPS(4)    = [12., 8., 6., 4.5]
+        real,    parameter   :: SCALES(2) = [3.7, 0.2]
+        type(image)          :: even, odd
+        type(image)          :: even_bank(size(LPS)), odd_bank(size(LPS))
         real,    allocatable :: cost(:,:,:,:), cost_s(:,:,:,:)
         logical, allocatable :: lmask(:,:,:)
-        real    :: sigma0, best, second, ref
-        integer :: i, j, k, c, is, n_flips, n_off, n_resolved, nmask
+        real                 :: sigma0, best, second, ref
+        integer              :: i, j, k, c, is, n_flips, n_off, n_resolved, nmask
         write(logfhandle,'(A)') '-- test_ranking_scale_free'
         call make_pair(.false., even, odd)
         call support_sphere(lmask)
@@ -530,10 +530,10 @@ contains
     !> the full competition (bank, smoothing, like-for-like selection, Potts prior) on the split phantom:
     !! the fine half takes labels at or finer than 6 A, the coarse disagreeing half at or coarser than 10 A
     subroutine test_coarser_region()
-        type(image) :: even, odd
+        type(image)          :: even, odd
         real,    allocatable :: lp_fine(:), lp_coarse(:)
         logical, allocatable :: region(:,:,:)
-        real :: med_fine, med_coarse, frac_fine, frac_coarse
+        real                 :: med_fine, med_coarse, frac_fine, frac_coarse
         write(logfhandle,'(A)') '-- test_coarser_region'
         call make_pair(.true., even, odd)
         call set_nu_filter_report(.false.)
@@ -565,9 +565,9 @@ contains
     !> the composed pair of the split phantom, filtered again from the input halves: every voxel is its label's
     !! candidate (the edge-tapered half Butterworth-filtered at the label's cutoff; label 1 outside the support), exactly
     subroutine test_composition_per_label()
-        type(image) :: even, odd, even_nu, odd_nu
+        type(image)       :: even, odd, even_nu, odd_nu
         real, allocatable :: bwfilter(:)
-        integer :: icut, ndiff
+        integer           :: icut, ndiff
         write(logfhandle,'(A)') '-- test_composition_per_label'
         call make_pair(.true., even, odd)
         call set_nu_filter_report(.false.)
@@ -596,10 +596,10 @@ contains
             type(image), intent(in)    :: half
             type(image), intent(inout) :: composed
             integer,     intent(in)    :: icut_loc
-            type(image) :: cand
-            real(kind=c_float), pointer :: rmat_cand(:,:,:), rmat_comp(:,:,:)
-            logical, allocatable :: l_label(:,:,:)
-            real :: edge_mean
+            type(image)                     :: cand
+            real(kind=c_float), pointer     :: rmat_cand(:,:,:), rmat_comp(:,:,:)
+            logical,            allocatable :: l_label(:,:,:)
+            real                            :: edge_mean
             call cand%copy(half)
             call cand%set_wthreads(.true.)
             call cand%taper_edges_vol(nint(COSMSKHALFWIDTH), edge_mean)
@@ -623,19 +623,19 @@ contains
     !! and the null in the solvent, the margin separates them, the envelope recovers the molecule; a pair
     !! zeroed outside a hard support keeps its noise level and freezes the unobserved voxels at the null
     subroutine test_evidence_envelope()
-        type(image) :: even, odd, vol_supp
+        type(image)               :: even, odd, vol_supp
         type(nu_evidence_state)   :: evstate
         type(nu_evidence_summary) :: evsummary
         type(nu_envmask_params)   :: envp
         type(nu_envmask_stats)    :: envstats
-        real,    allocatable :: rmat_even(:,:,:), rmat_odd(:,:,:), evmargin(:), ev_cutoff(:), ev_uncertainty(:)
-        real,    allocatable :: ev_band_support(:,:)
-        integer, allocatable :: ev_label(:)
-        logical, allocatable :: l_true(:,:,:), l_supp(:,:,:), l_hard(:,:,:), l_env(:,:,:)
-        integer(kind=8) :: s1, s2
-        real    :: cen, dsq, sig, sigma_full, sigma_hard, support_in, support_out, null_in, null_out
-        real    :: mean_in, mean_out, recall, fpr
-        integer :: i, j, k, imask, n_in, n_out, n_unobserved, n_bad, iband
+        real,    allocatable      :: rmat_even(:,:,:), rmat_odd(:,:,:), evmargin(:), ev_cutoff(:), ev_uncertainty(:)
+        real,    allocatable      :: ev_band_support(:,:)
+        integer, allocatable      :: ev_label(:)
+        logical, allocatable      :: l_true(:,:,:), l_supp(:,:,:), l_hard(:,:,:), l_env(:,:,:)
+        integer(kind=8)           :: s1, s2
+        real                      :: cen, dsq, sig, sigma_full, sigma_hard, support_in, support_out, null_in, null_out
+        real                      :: mean_in, mean_out, recall, fpr
+        integer                   :: i, j, k, imask, n_in, n_out, n_unobserved, n_bad, iband
         write(logfhandle,'(A)') '-- test_evidence_envelope'
         cen = real(EBOX) / 2. + 1.
         s1  = 1234567_8

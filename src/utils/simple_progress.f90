@@ -27,7 +27,7 @@ contains
     subroutine progressfile_init_part(part)
         integer, intent(in) :: part
         integer             :: progress_fhandle, ok
-        type(string) :: fname
+        type(string)        :: fname
         fname = '.progress_' // trim(adjustl(int2str(part)))
         if( file_exists(fname) ) call del_file(fname)
         call fopen(progress_fhandle,file=fname, status='new', iostat=ok)
@@ -39,7 +39,7 @@ contains
     subroutine progressfile_update(progress)
         real, intent(in) :: progress
         integer          :: progress_fhandle, ok
-        type(string) :: fname
+        type(string)     :: fname
         fname = '.progress'
         if( file_exists(fname) ) call del_file(fname)
         call fopen(progress_fhandle,file=fname, status='new', iostat=ok)
@@ -134,11 +134,11 @@ contains
     end function progress_estimate_2D
     
     subroutine lastfoundfile_update()
-        integer       :: lastfound_fhandle, ok
-        type(string)  :: fname
-        character(8)  :: date
-        character(10) :: time
-        character(5)  :: zone
+        integer              :: lastfound_fhandle, ok
+        type(string)         :: fname
+        character(8)         :: date
+        character(10)        :: time
+        character(5)         :: zone
         integer,dimension(8) :: values
         ! using keyword arguments
         call date_and_time(date,time,zone,values)

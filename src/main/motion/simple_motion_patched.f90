@@ -24,32 +24,32 @@ integer, parameter :: PATCH_PDIM     = 18   ! dimension of fitted polynomial
 type :: motion_patched
     private
     logical                             :: existence
-    class(parameters),      pointer     :: p_ptr => null()
+    class(parameters),      pointer     :: p_ptr              => null()
     type(image_stack),      allocatable :: frame_patches(:,:)
     real,                   allocatable :: shifts_patches(:,:,:,:)
     real,                   allocatable :: shifts_patches_for_fit(:,:,:,:)
-    real,                   allocatable :: global_shifts(:,:)       ! isotropic solution
+    real,                   allocatable :: global_shifts(:,:)         ! isotropic solution
     real,                   allocatable :: frameweights(:)
-    real,                   allocatable :: patch_centers(:,:,:)     ! patches centers
+    real,                   allocatable :: patch_centers(:,:,:)       ! patches centers
     integer,                allocatable :: updateres(:,:)
-    integer,                allocatable :: lims_patches(:,:,:,:)    ! patches corners
+    integer,                allocatable :: lims_patches(:,:,:,:)      ! patches corners
     type(string)                        :: shift_fname
     integer                             :: nframes
-    integer                             :: ldim(3)                  ! size of entire frame, reference
-    integer                             :: ldim_patch(3)            ! size of one patch
-    integer                             :: npatch(2)                ! # of patches in the x/y dimension
-    integer                             :: fixed_frame        = 1   ! frame of reference for alignment
-    integer                             :: interp_fixed_frame = 1   ! frame of reference for interpolation
+    integer                             :: ldim(3)                    ! size of entire frame, reference
+    integer                             :: ldim_patch(3)              ! size of one patch
+    integer                             :: npatch(2)                  ! # of patches in the x/y dimension
+    integer                             :: fixed_frame        = 1     ! frame of reference for alignment
+    integer                             :: interp_fixed_frame = 1     ! frame of reference for interpolation
     real                                :: smpd               = 0.
     real                                :: bfactor            = -1.
     real(dp)                            :: poly_coeffs(PATCH_PDIM,2)  ! coefficients of fitted polynomial
     real                                :: polyfit_rmsd(2)            ! polynomial fitting goodness of fit
     real                                :: trs
     real                                :: lp
-    real, public                        :: hp
+    real,                   public      :: hp
     logical                             :: has_global_shifts
-    logical                             :: has_frameweights  = .false.
-    logical                             :: fitshifts         = .false.
+    logical                             :: has_frameweights   = .false.
+    logical                             :: fitshifts          = .false.
 contains
     ! Constructors
     procedure                           :: new
@@ -83,10 +83,10 @@ contains
     ! CONSTRUCTORS
 
     subroutine new( self, params, npatch, trs )
-        class(motion_patched),     intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        integer,                   intent(in)    :: npatch(2)
-        real, optional,            intent(in)    :: trs
+        class(motion_patched),     intent(inout)                   :: self
+        class(parameters),         target, intent(in)              :: params
+        integer,                   intent(in)                      :: npatch(2)
+        real,                      optional,            intent(in) :: trs
         call self%kill()
         self%npatch = npatch
         self%trs    = TRS_DEFAULT
@@ -140,11 +140,11 @@ contains
     ! DRIVERS
 
     subroutine correct( self, hp, frames, shift_fname, global_shifts )
-        class(motion_patched),       intent(inout) :: self
-        real,                        intent(in)    :: hp
-        type(image),    allocatable, intent(inout) :: frames(:)
-        class(string),               intent(inout) :: shift_fname
-        real, optional, allocatable, intent(in)    :: global_shifts(:,:)
+        class(motion_patched),       intent(inout)                     :: self
+        real,                        intent(in)                        :: hp
+        type(image),                 allocatable, intent(inout)        :: frames(:)
+        class(string),               intent(inout)                     :: shift_fname
+        real,                        optional, allocatable, intent(in) :: global_shifts(:,:)
         integer :: ldim_frames(3)
         integer :: iframe
         ! prep
@@ -197,12 +197,12 @@ contains
     ! SPECIFIC METHODS
 
     subroutine det_shifts( self, frames )
-        class(motion_patched), target, intent(inout) :: self
-        type(image),      allocatable, intent(inout) :: frames(:)
+        class(motion_patched), target, intent(inout)      :: self
+        type(image),           allocatable, intent(inout) :: frames(:)
         type(motion_align_hybrid), allocatable :: align_hybrid(:,:)
-        real, allocatable :: opt_shifts(:,:), res(:)
-        real              :: corr_avg
-        integer           :: iframe, i, j
+        real,                      allocatable :: opt_shifts(:,:), res(:)
+        real                                   :: corr_avg
+        integer                                :: iframe, i, j
         self%shifts_patches = 0.
         allocate(align_hybrid(self%npatch(1), self%npatch(2)))
         corr_avg = 0.
@@ -299,11 +299,11 @@ contains
         real, parameter           :: SCALE = 40.
         type(string)              :: title
         type(CPlot2D_type)        :: plot2D
-        type(CDataSet_type)       :: dataSetStart, dataSet, fit, patch_start!, obs
+        type(CDataSet_type)       :: dataSetStart, dataSet, fit, patch_start !, obs
         type(CDataPoint_type)     :: point2, p_fit, point
         type(string)              :: ps2pdf_cmd, fname_pdf
-        integer :: l, ipx,ipy, iframe, j, iostat
-        real    :: shifts(self%nframes,2), loc_shift(2), ref_shift(2), xcenter,ycenter, cx,cy
+        integer                   :: l, ipx,ipy, iframe, j, iostat
+        real                      :: shifts(self%nframes,2), loc_shift(2), ref_shift(2), xcenter,ycenter, cx,cy
         call CPlot2D__new(plot2D, self%shift_fname%to_char())
         call CPlot2D__SetXAxisSize(plot2D, 600._c_double)
         call CPlot2D__SetYAxisSize(plot2D, 600._c_double)
@@ -407,8 +407,8 @@ contains
 
     ! produces shifts for 'polishing' close to relion 3 convention
     subroutine get_poly4star( self, polycoeffs, patch_shifts, patch_centers )
-        class(motion_patched), intent(inout) :: self
-        real(dp), allocatable, intent(inout) :: polycoeffs(:), patch_shifts(:,:,:,:), patch_centers(:,:,:)
+        class(motion_patched), intent(inout)              :: self
+        real(dp),              allocatable, intent(inout) :: polycoeffs(:), patch_shifts(:,:,:,:), patch_centers(:,:,:)
         real(dp) :: yx(self%nframes*self%npatch(1)*self%npatch(2))      ! along x
         real(dp) :: yy(self%nframes*self%npatch(1)*self%npatch(2))      ! along y
         real(dp) :: x(3,self%nframes*self%npatch(1)*self%npatch(2))     ! x,y,t
@@ -514,9 +514,9 @@ contains
     end subroutine set_size_frames_ref
 
     subroutine gen_patch( self, stack, pi, pj )
-        class(motion_patched),          intent(inout) :: self
-        type(image),       allocatable, intent(inout) :: stack(:)
-        integer,                        intent(in)    :: pi, pj
+        class(motion_patched),          intent(inout)              :: self
+        type(image),                    allocatable, intent(inout) :: stack(:)
+        integer,                        intent(in)                 :: pi, pj
         integer             :: iframe, k, l, ip, jp           ! ip, jp: i_patch, j_patch
         do iframe=1,self%nframes
             ! init
@@ -533,8 +533,8 @@ contains
     end subroutine gen_patch
 
     subroutine set_frameweights( self, frameweights )
-        class(motion_patched), intent(inout) :: self
-        real, allocatable,     intent(in) :: frameweights(:)
+        class(motion_patched), intent(inout)               :: self
+        real,                  allocatable,     intent(in) :: frameweights(:)
         integer :: nlen
         nlen = size(frameweights)
         if (allocated(self%frameweights)) deallocate(self%frameweights)
@@ -555,8 +555,8 @@ contains
     end subroutine set_poly_coeffs
 
     subroutine get_poly_coeffs( self, p )
-        class(motion_patched), intent(inout) :: self
-        real(dp), allocatable, intent(inout) :: p(:)
+        class(motion_patched), intent(inout)              :: self
+        real(dp),              allocatable, intent(inout) :: p(:)
         if(allocated(p)) deallocate(p)
         allocate(p(2*PATCH_PDIM),source=0.d0)
         p(1:PATCH_PDIM) = self%poly_coeffs(:,1)

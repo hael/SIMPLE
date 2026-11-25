@@ -44,7 +44,7 @@ type, extends(image) :: image_bin
     procedure          :: cc2bin
     procedure          :: cos_edge
     procedure          :: feret_minmax
-    procedure          :: inv_bimg 
+    procedure          :: inv_bimg
     procedure          :: grow_bins
     procedure          :: apply_mask
     procedure          :: vol_shape_descr
@@ -66,10 +66,10 @@ contains
     ! CONSTRUCTORS
 
     subroutine new_bimg( self, ldim, smpd, wthreads )
-        class(image_bin),   intent(inout) :: self
-        integer,           intent(in)    :: ldim(3)
-        real,              intent(in)    :: smpd
-        logical, optional, intent(in)    :: wthreads
+        class(image_bin),   intent(inout)        :: self
+        integer,            intent(in)           :: ldim(3)
+        real,               intent(in)           :: smpd
+        logical,            optional, intent(in) :: wthreads
         call self%kill_bimg
         call self%new(ldim, smpd, wthreads)
         self%bldim = self%get_ldim()
@@ -80,8 +80,8 @@ contains
     end subroutine new_bimg
 
     subroutine copy_bimg( self, self_in )
-        class(image_bin),         intent(inout) :: self
-        class(image_bin), target, intent(in)    :: self_in
+        class(image_bin),         intent(inout)      :: self
+        class(image_bin),         target, intent(in) :: self_in
         call self%copy(self_in)
         self%bldim = self_in%bldim
         self%bsmpd = self_in%bsmpd
@@ -94,7 +94,7 @@ contains
 
     subroutine transfer2bimg( self, self_in )
         class(image_bin), intent(inout) :: self
-        class(image),    intent(in)    :: self_in
+        class(image),     intent(in)    :: self_in
         call self%kill_bimg
         call self%copy(self_in)
         self%bldim = self_in%get_ldim()
@@ -107,8 +107,8 @@ contains
     ! SETTERS/GETTERS
 
     subroutine set_imat( self, imat )
-        class(image_bin),   intent(inout) :: self
-        integer, optional, intent(in)    :: imat(self%bldim(1),self%bldim(2),self%bldim(3))
+        class(image_bin),   intent(inout)        :: self
+        integer,            optional, intent(in) :: imat(self%bldim(1),self%bldim(2),self%bldim(3))
         real(kind=c_float), pointer      :: brmat(:,:,:)=>null()
         if( present(imat) ) then
             self%bimat = imat
@@ -121,15 +121,15 @@ contains
     end subroutine set_imat
 
     subroutine get_imat( self, imat )
-        class(image_bin),      intent(inout) :: self
-        integer, allocatable, intent(inout) :: imat(:,:,:)
+        class(image_bin),      intent(inout)              :: self
+        integer,               allocatable, intent(inout) :: imat(:,:,:)
         if( allocated(imat) ) deallocate(imat)
         allocate(imat(self%bldim(1),self%bldim(2),self%bldim(3)), source=self%bimat)
     end subroutine get_imat
 
     subroutine get_nccs( self, n )
         class(image_bin), intent(inout)  :: self
-        integer,         intent(out)    :: n
+        integer,          intent(out)    :: n
         n = maxval(self%bimat)
         ! update the instance of the class
         self%nccs = n
@@ -153,9 +153,9 @@ contains
     end subroutine write_bimg
 
     subroutine read_bimg( self, fname, i )
-        class(image_bin),  intent(inout) :: self
-        class(string),     intent(in)    :: fname
-        integer, optional, intent(in)    :: i
+        class(image_bin),  intent(inout)        :: self
+        class(string),     intent(in)           :: fname
+        integer,           optional, intent(in) :: i
         call self%read(fname, i)
         call self%set_imat()
     end subroutine read_bimg
@@ -163,13 +163,13 @@ contains
     ! CONNECTED COMPONENTS
 
     subroutine find_ccs( self, ccimage, black, update_imat )
-        class(image_bin),   intent(inout) :: self
-        class(image_bin),   intent(inout) :: ccimage
-        logical, optional, intent(in)    :: black, update_imat
+        class(image_bin),   intent(inout)        :: self
+        class(image_bin),   intent(inout)        :: ccimage
+        logical,            optional, intent(in) :: black, update_imat
         integer,           allocatable   :: dqueue(:,:)     ! queue data structure
         logical,           allocatable   :: visited(:,:,:)
-        integer :: i, j, k, comp_ind, queue_first, queue_last, nforeground
-        logical :: l_black
+        integer                          :: i, j, k, comp_ind, queue_first, queue_last, nforeground
+        logical                          :: l_black
         if( present(update_imat) )then
             if( update_imat ) call self%set_imat
         endif
@@ -286,7 +286,7 @@ contains
     function size_ccs( self ) result( sz )
         class(image_bin), intent(in) :: self
         integer, allocatable :: sz(:)
-        integer :: n_cc, imax
+        integer              :: n_cc, imax
         if( .not. any(self%bimat > 0) )then
             allocate(sz(1), source=0)
             ! THROW_WARN('Inputted non-existent cc; size_ccs')
@@ -303,11 +303,11 @@ contains
     ! Voxels of every label in 1..nlabels from one pass over bimat: label l owns vox(:,first(l):first(l+1)-1),
     ! in array element order (the order of pack and maxloc). Other labels are ignored.
     subroutine get_cc_voxels( self, nlabels, first, vox )
-        class(image_bin),     intent(in)  :: self
-        integer,              intent(in)  :: nlabels
-        integer, allocatable, intent(out) :: first(:), vox(:,:)
+        class(image_bin),     intent(in)               :: self
+        integer,              intent(in)               :: nlabels
+        integer,              allocatable, intent(out) :: first(:), vox(:,:)
         integer, allocatable :: next(:)
-        integer :: i, j, k, l
+        integer              :: i, j, k, l
         allocate(first(nlabels+1), source=0)
         do k = 1, self%bldim(3)
             do j = 1, self%bldim(2)
@@ -343,11 +343,11 @@ contains
     ! to the final call, avoiding O(n²) reordering overhead. In that case the caller
     ! must invoke order_ccs() and update_img_rmat() manually afterwards.
     subroutine elim_cc( self, n_cc, update )
-        class(image_bin),  intent(inout) :: self
-        integer,           intent(in)    :: n_cc   ! 1-based label of the CC to remove
-        logical, optional, intent(in)    :: update ! re-label and sync rmat (default .true.)
+        class(image_bin),  intent(inout)        :: self
+        integer,           intent(in)           :: n_cc   ! 1-based label of the CC to remove
+        logical,           optional, intent(in) :: update ! re-label and sync rmat (default .true.)
         integer, allocatable :: bimat_copy(:,:,:)
-        logical :: l_update
+        logical              :: l_update
         l_update = .true.
         if( present(update) ) l_update = update
         if( n_cc < 1 .or. n_cc > self%nccs ) then
@@ -370,7 +370,7 @@ contains
     subroutine order_ccs( self )
         class(image_bin), intent(inout) :: self
         integer, allocatable :: imat_aux(:,:,:)
-        integer :: cnt, i
+        integer              :: cnt, i
         if(.not. any(self%bimat > 0)) then
             THROW_WARN('Inputted non-existent cc; order_ccs')
             return
@@ -392,13 +392,13 @@ contains
     ! their centre of mass, in 2D and in 3D
     subroutine diameter_cc( self, n_cc, diam )
         class(image_bin), intent(inout) :: self
-        integer,         intent(in)    :: n_cc
-        real,            intent(out)   :: diam
-        integer, allocatable :: pos(:,:)       ! position of the pixels of a fixed cc
-        integer, allocatable :: imat_cc(:,:,:) ! auxiliary
-        logical, allocatable :: msk(:)         ! For using function pixels_dist
-        real  :: center_of_mass(3)             ! geometrical center of mass
-        real  :: radius
+        integer,          intent(in)    :: n_cc
+        real,             intent(out)   :: diam
+        integer, allocatable :: pos(:,:)          ! position of the pixels of a fixed cc
+        integer, allocatable :: imat_cc(:,:,:)    ! auxiliary
+        logical, allocatable :: msk(:)            ! For using function pixels_dist
+        real                 :: center_of_mass(3) ! geometrical center of mass
+        real                 :: radius
         if(.not. any(self%bimat > 0)) then
             diam = 0.
             ! THROW_WARN('Inputted non-existent cc; diameter_cc')
@@ -427,8 +427,8 @@ contains
     !>  Returns the center of a CC in pixel coordinates with respect to image center
     subroutine masscen_cc( self, label, xy )
         class(image_bin), intent(inout) :: self
-        integer,         intent(in)    :: label
-        real,            intent(out)   :: xy(2)
+        integer,          intent(in)    :: label
+        real,             intent(out)   :: xy(2)
         integer :: cen(2),i,j,n,pxy(2)
         xy = 0.
         n = count(self%bimat(:,:,1) == label)
@@ -445,12 +445,12 @@ contains
     end subroutine masscen_cc
 
     subroutine feret_minmax( self, min_feret, max_feret, ntheta )
-        class(image_bin),   intent(inout) :: self
-        real,               intent(out)   :: min_feret, max_feret
-        integer,  optional, intent(in)    :: ntheta
-        integer :: ntheta_use, npix, i, j, k, itheta
+        class(image_bin),   intent(inout)        :: self
+        real,               intent(out)          :: min_feret, max_feret
+        integer,            optional, intent(in) :: ntheta
+        integer           :: ntheta_use, npix, i, j, k, itheta
         real, allocatable :: xpts(:), ypts(:)
-        real :: pi_v, theta, cth, sth, proj, pmin, pmax, width
+        real              :: pi_v, theta, cth, sth, proj, pmin, pmax, width
 
         if( .not. self%bimat_is_set ) call self%set_imat
         if( self%bldim(3) /= 1 ) THROW_HARD('2D images only: feret_minmax')
@@ -501,7 +501,7 @@ contains
 
     subroutine apply_mask(self, mask )
         class(image_bin), intent(inout) :: self
-        logical,         intent(in)    :: mask(:,:)
+        logical,          intent(in)    :: mask(:,:)
         if( self%bldim(3) > 1 )then
             THROW_HARD('2D images only: apply_mask')
         endif
@@ -519,7 +519,7 @@ contains
     ! where just the cc n_cc is kept.
     subroutine cc2bin( self, n_cc )
         class(image_bin), intent(inout) :: self  ! cc image
-        integer,         intent(in)    :: n_cc  ! label of the cc to keep
+        integer,          intent(in)    :: n_cc  ! label of the cc to keep
         if(.not. any(self%bimat > 0)) then
             ! THROW_WARN('Inputted non-existent cc; cc2bin')
             return
@@ -539,21 +539,21 @@ contains
     !! binarisation), near 1 for one object whatever specks or small splits come with it. The
     !! binarised volume and the components are written as vol_binarized<tag>.mrc and vol_cc<tag>.mrc.
     subroutine vol_shape_descr( self, vol, lp, msk, nccs, min_frac, tag, dominant_frac )
-        class(image_bin), intent(inout) :: self
-        class(image), intent(in)        :: vol
-        real, intent(in)                :: lp, msk
-        integer, intent(out)            :: nccs
+        class(image_bin), intent(inout)         :: self
+        class(image),     intent(in)            :: vol
+        real,             intent(in)            :: lp, msk
+        integer,          intent(out)           :: nccs
         real,             optional, intent(in)  :: min_frac
         character(len=*), optional, intent(in)  :: tag
         real,             optional, intent(out) :: dominant_frac
-        integer, allocatable :: cc_sz(:)
-        real, allocatable    :: vals(:)
-        logical, allocatable :: l_in(:,:,:)
-        real, pointer        :: rmat(:,:,:)
-        type(image_bin)      :: vol_ccs
+        integer,          allocatable :: cc_sz(:)
+        real,             allocatable :: vals(:)
+        logical,          allocatable :: l_in(:,:,:)
+        real,             pointer     :: rmat(:,:,:)
+        type(image_bin)               :: vol_ccs
         character(len=:), allocatable :: suffix
-        real                 :: ecc, aniso, asph, acyl, rg_sq, threshold, threshold_first, frac, cen(3)
-        integer              :: ldim(3), i, j, k
+        real                          :: ecc, aniso, asph, acyl, rg_sq, threshold, threshold_first, frac, cen(3)
+        integer                       :: ldim(3), i, j, k
         frac = 0.
         if( present(min_frac) ) frac = min_frac
         suffix = ''
@@ -623,7 +623,7 @@ contains
     subroutine dilate( self )
         class(image_bin), intent(inout) :: self
         type(image_bin) :: self_copy
-        integer        :: neigh_8_inds(3,8), i, j, k, nsz
+        integer         :: neigh_8_inds(3,8), i, j, k, nsz
         if( .not. self%bimat_is_set ) call self%set_imat
         call self_copy%copy_bimg(self)
         if(self%bldim(3) /= 1) THROW_HARD('Non implemented for volumes!; dilatate')
@@ -643,8 +643,8 @@ contains
 
     ! This subroutine implements the morphological operation erosion for 2D binary images
     subroutine erode( self, label )
-        class(image_bin),   intent(inout) :: self
-        integer, optional, intent(in)    :: label
+        class(image_bin),   intent(inout)        :: self
+        integer,            optional, intent(in) :: label
         logical, allocatable :: border(:,:,:)
         if( .not. self%bimat_is_set ) call self%set_imat
         if( present(label) ) then
@@ -671,13 +671,13 @@ contains
     ! useful in the case of very small objects, to make sure that the
     ! surface does not coincide with the volume itself.
     subroutine border_mask( self, border, label, four )
-        class(image_bin),      intent(inout) :: self
-        logical, allocatable, intent(inout) :: border(:,:,:)
-        integer, optional,    intent(in)    :: label
-        logical, optional,    intent(in)    :: four
+        class(image_bin),      intent(inout)              :: self
+        logical,               allocatable, intent(inout) :: border(:,:,:)
+        integer,               optional,    intent(in)    :: label
+        logical,               optional,    intent(in)    :: four
         integer, allocatable :: neigh_8_pixs(:)
-        integer :: i, j, k, nsz, llabel
-        logical :: ffour
+        integer              :: i, j, k, nsz, llabel
+        logical              :: ffour
         if( .not. self%bimat_is_set ) call self%set_imat
         llabel = 1
         if(present(label)) llabel = label
@@ -739,8 +739,8 @@ contains
     subroutine set_largestcc2background( self )
         class(image_bin), intent(inout) :: self
         type (image_bin)      :: img_cc ! connected component image
-        integer, allocatable :: ccsizes(:)
-        integer :: ind_bg
+        integer, allocatable  :: ccsizes(:)
+        integer               :: ind_bg
         if( self%bldim(3) > 1 ) then
             THROW_WARN('Not implemented for volumes; set_largest_cc2background')
             return
@@ -764,7 +764,7 @@ contains
     subroutine set_edgecc2background( self )
         class(image_bin), intent(inout) :: self
         type (image_bin) :: img_cc ! connected component image
-        integer         :: seed
+        integer          :: seed
         call self%find_ccs(img_cc, black=.true.)
         seed = img_cc%bimat(1,1,1) ! Corner pixel should belong to the background
         if( seed == 0 )then
@@ -788,9 +788,9 @@ contains
     !> \brief grow_bins adds nlayers of pixels bordering the background in a binary image
     subroutine grow_bins( self, nlayers )
         class(image_bin), intent(inout) :: self
-        integer,         intent(in)    :: nlayers
+        integer,          intent(in)    :: nlayers
         logical, allocatable :: add_pixels(:,:,:), template(:,:,:)
-        integer :: i,j,k, tsz(3,2), win(3,2), pdsz(3,2)
+        integer              :: i,j,k, tsz(3,2), win(3,2), pdsz(3,2)
         if( .not. self%bimat_is_set ) call self%set_imat
         tsz(:,1) = -nlayers
         tsz(:,2) =  nlayers
@@ -852,9 +852,9 @@ contains
 
     !>  \brief cos_edge applies cosine squared edge to a binary image
     subroutine cos_edge( self, falloff, cos_img )
-        class(image_bin),        intent(inout) :: self    ! input
-        integer,                intent(in)    :: falloff
-        class(image), optional, intent(inout) :: cos_img ! output
+        class(image_bin),        intent(inout)           :: self    ! input
+        integer,                 intent(in)              :: falloff
+        class(image),            optional, intent(inout) :: cos_img ! output
         real,    allocatable :: rmat(:,:,:)
         real,    pointer     :: prmat(:,:,:)
         real                 :: rfalloff, scalefactor

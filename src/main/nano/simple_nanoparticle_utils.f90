@@ -19,7 +19,7 @@ public :: est_nn_dist, lattice_cutoff, lattice_bond, binary_lattice, contact_cut
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG = .false.
+logical, parameter :: DEBUG         = .false.
 integer, parameter :: NSTRAIN_COMPS = 7
 real,    parameter :: RMAX_NN_FRAC  = 1.267 ! close-packed neighbour cutoff in units of the nearest-neighbour distance
 real,    parameter :: U_WZ          = 3./8. ! ideal wurtzite internal parameter: the bond along c is u c
@@ -30,17 +30,17 @@ contains
     ! - reference atoms: atoms2
     ! - reg_atom = out_scale * (out_mat * atoms1 + out_trans)
     subroutine atoms_register( atoms1, atoms2, reg_atom, maxits, out_mat, out_trans, out_scale)
-        real,              intent(in)    :: atoms1(:,:)
-        real,              intent(in)    :: atoms2(:,:)
-        real,              intent(inout) :: reg_atom(:,:)
-        integer, optional, intent(in)    :: maxits
-        real,    optional, intent(out)   :: out_mat(3,3), out_trans(3), out_scale
+        real,              intent(in)            :: atoms1(:,:)
+        real,              intent(in)            :: atoms2(:,:)
+        real,              intent(inout)         :: reg_atom(:,:)
+        integer,           optional, intent(in)  :: maxits
+        real,              optional, intent(out) :: out_mat(3,3), out_trans(3), out_scale
         integer, allocatable :: perm(:,:), inds(:)
         real,    allocatable :: costs(:), large_pos(:,:), small_pos(:,:)
         logical, allocatable :: taken(:,:)
-        real    :: rec_mat(3,3), rec_trans(3), rec_scale, tmp_atom2(3), cur_cost, inv_mat(3,3), min_cost, glob_cost
-        integer :: N1, N2, tmp, i, j, k, a1, a2, min_a2, counter, errflg, ref_inds(3), ithr, min_ref(3), min_perm(3), iter, cnt, stoch_iters
-        logical :: l_flip, l_exist
+        real                 :: rec_mat(3,3), rec_trans(3), rec_scale, tmp_atom2(3), cur_cost, inv_mat(3,3), min_cost, glob_cost
+        integer              :: N1, N2, tmp, i, j, k, a1, a2, min_a2, counter, errflg, ref_inds(3), ithr, min_ref(3), min_perm(3), iter, cnt, stoch_iters
+        logical              :: l_flip, l_exist
         N1     = size(atoms1, 2)
         N2     = size(atoms2, 2)
         l_flip = (N2 < N1)
@@ -141,8 +141,8 @@ contains
         real,    intent(inout) :: ret_scale
         integer, allocatable   :: inds(:)
         integer, parameter     :: N = 3     ! hard-coded 3 positions to avoid allocations
-        real    :: mean1(1,N), mean2(1,N), mat(3,3), eig_vals(3), eig_vecs(3,3), eye(3,3), var1(3,N), var2(3,N)
-        integer :: i
+        real                   :: mean1(1,N), mean2(1,N), mat(3,3), eig_vals(3), eig_vecs(3,3), eye(3,3), var1(3,N), var2(3,N)
+        integer                :: i
         mean1(1,:) = sum(pos1, dim=2) / real(N)
         mean2(1,:) = sum(pos2, dim=2) / real(N)
         do i = 1, N
@@ -225,11 +225,11 @@ contains
         integer,      intent(in)    :: ncls
         real,         intent(inout) :: ts(ncls)
         ! type(image) :: binimg
-        integer :: MAXITS = 10
+        integer              :: MAXITS = 10
         real,    allocatable :: vec_pos(:), means(:)
         integer, allocatable :: labels(:)
-        integer :: icls
-        real    :: t1
+        integer              :: icls
+        real                 :: t1
         vec_pos = img%serialize(0.)           ! only positive pixels
         call otsu(size(vec_pos), vec_pos, t1) ! first treshold by otsu
         vec_pos = img%serialize(t1)
@@ -276,8 +276,8 @@ contains
         character(len=5)  :: el_ucase
         character(len=10) :: crystal_system
         real, parameter   :: FRAC_ERR = 0.15 ! error term for expanding rMax (fraction of atomic radius)
-        real    :: a_0(3), rMax, r, err
-        integer :: Z
+        real              :: a_0(3), rMax, r, err
+        integer           :: Z
         el_ucase = uppercase(trim(adjustl(element)))
         call get_lattice_params(el_ucase, crystal_system, a_0)
         call get_element_Z_and_radius(uppercase(el_symbol(element)), Z, r)
@@ -341,17 +341,17 @@ contains
         real,             intent(inout) :: model(:,:)
         real,             intent(inout) :: a(3) ! fitted lattice parameter
         real(kind=8) , allocatable :: A_matrix(:,:), x2(:),x2_ref(:)
-        real(kind=8) :: p0(3,size(model,dim=2))
-        real(kind=8) :: b(3), uvw(3,3)
-        real         :: cMin(3), cMax(3), cMid(3), centerAtomCoords(3), origin0(3), origin(3)
-        real         :: dist, dist_temp, avgNNRR, avgD, subK, k
-        real         :: rMaxsq, rMax, rMin, angleUV, angleUW, angleVW
-        real         :: u0(3), v0(3), w0(3), u(3), v(3), w(3), uN(3), vN(3), wN(3), xyzbeta(4,3)
-        integer      :: natoms, iatom, centerAtom, i
-        logical      :: areNearest(size(model,dim=2))
-        character(len=10) :: crystal_system
-        character(len=5)  :: el_ucase
-        real              :: a_tab(3), bond
+        real(kind=8)               :: p0(3,size(model,dim=2))
+        real(kind=8)               :: b(3), uvw(3,3)
+        real                       :: cMin(3), cMax(3), cMid(3), centerAtomCoords(3), origin0(3), origin(3)
+        real                       :: dist, dist_temp, avgNNRR, avgD, subK, k
+        real                       :: rMaxsq, rMax, rMin, angleUV, angleUW, angleVW
+        real                       :: u0(3), v0(3), w0(3), u(3), v(3), w(3), uN(3), vN(3), wN(3), xyzbeta(4,3)
+        integer                    :: natoms, iatom, centerAtom, i
+        logical                    :: areNearest(size(model,dim=2))
+        character(len=10)          :: crystal_system
+        character(len=5)           :: el_ucase
+        real                       :: a_tab(3), bond
         ! sanity check
         if( size(model,dim=1) /=3 )then
             THROW_HARD('Nonconforming input coordinates; fit_lattice')
@@ -484,11 +484,11 @@ contains
 
             ! Computes nearest neighbor bond length along the <111> <110> <100> lattice directions of the crystal
             subroutine nnbdl_lat()
-                real    :: bondl, cendist, dvect(3), angle, dist, d111(3), d100(3), d110(3), d(3), a, latensor(3, 3)
-                integer :: natoms, iatom, jatom, ios, funit
-                real, parameter    :: threshold=10.
-                logical            :: ifound
-                character(len=256) :: io_msg
+                real                        :: bondl, cendist, dvect(3), angle, dist, d111(3), d100(3), d110(3), d(3), a, latensor(3, 3)
+                integer                     :: natoms, iatom, jatom, ios, funit
+                real,             parameter :: threshold     = 10.
+                logical                     :: ifound
+                character(len=256)          :: io_msg
                 character(len=3), parameter :: ldir(3)       = ["100", "110", "111"]
                 character(len=*), parameter :: NNBDL_FILE(3) = ['nnbondl_100.csv','nnbondl_110.csv','nnbondl_111.csv']
                 character(len=*), parameter :: NNBDL_HEAD    = 'ATOM'//CSV_DELIM//'CENDIST'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'ANGLE'
@@ -529,10 +529,10 @@ contains
             ! solves a linear system A*x = b in the least squares sense.
             ! It uses LAPACK-backed QR least-squares helpers.
             subroutine qr( a, b, x2 )
-                real(kind=8) :: a(:,:)
-                real(kind=8) :: b(:)
+                real(kind=8)              :: a(:,:)
+                real(kind=8)              :: b(:)
                 real(kind=8), allocatable :: x2(:)
-                integer :: m, n
+                integer                   :: m, n
                 m = size(a,1)
                 n = size(a,2)
                 if( allocated(x2) ) deallocate(x2)
@@ -547,9 +547,9 @@ contains
     ! the contact score of each atom: its neighbours within contact_cutoff(d_nn), d_nn the measured nearest-neighbour
     ! distance; coordinates and d_nn in ANGSTROMS
     subroutine calc_contact_scores( model, contact_scores, d_nn )
-        real, allocatable, intent(in)    :: model(:,:)
-        integer,           intent(inout) :: contact_scores(size(model,2))
-        real,              intent(in)    :: d_nn
+        real,              allocatable, intent(in) :: model(:,:)
+        integer,           intent(inout)           :: contact_scores(size(model,2))
+        real,              intent(in)              :: d_nn
         integer :: natoms, iatom, jatom, cnt
         real    :: dist, rMax
         ! init
@@ -573,15 +573,15 @@ contains
     ! This function calculates the coordination number for each atom
     ! ATTENTION: input coords of model have to be in ANGSTROMS.
     subroutine run_cn_analysis( element, model, a, coord_nums_std, coord_nums_gen )
-        character(len=*),  intent(in)    :: element
-        real, allocatable, intent(in)    :: model(:,:)
-        real,              intent(in)    :: a(3) ! lattice parameters
-        integer,           intent(inout) :: coord_nums_std(size(model,2))
-        real,              intent(inout) :: coord_nums_gen(size(model,2))
+        character(len=*),  intent(in)              :: element
+        real,              allocatable, intent(in) :: model(:,:)
+        real,              intent(in)              :: a(3) ! lattice parameters
+        integer,           intent(inout)           :: coord_nums_std(size(model,2))
+        real,              intent(inout)           :: coord_nums_gen(size(model,2))
         character(len=5)  :: el_ucase
         character(len=10) :: crystal_system
-        integer :: natoms, iatom, jatom, cnt, cn_max(size(model,2))
-        real    :: dist, d, a0, foo(3)
+        integer           :: natoms, iatom, jatom, cnt, cn_max(size(model,2))
+        real              :: dist, d, a0, foo(3)
         ! the first-shell cutoff; the cubic systems take the mean of the fitted lattice parameters
         a0 = sum(a)/real(size(a))
         el_ucase = uppercase(trim(adjustl(element)))
@@ -643,28 +643,28 @@ contains
         real,    allocatable :: list_eXX(:,:), list_eYY(:,:), list_eZZ(:,:), list_eXY(:,:), list_eYZ(:,:), list_eXZ(:,:)
         real,    allocatable :: list_eRR(:,:), list_Ux(:,:), list_Uy(:,:), list_Uz(:,:)
         real,    allocatable :: r_CS(:), r_C(:), theta_CS(:), theta_C(:), phi_CS(:), phi_C(:), eRR(:)
-        real         :: cMin(3), cMax(3), cMid(3), centerAtomCoords(3),origin0(3), origin(3)
-        real         :: dist, dist_temp, avgNNRR, avgD, subK, k, rMax, rMin
-        real         :: u0(3), v0(3), w0(3), u(3), v(3), w(3)
-        real         :: dx, dy, dz, x_local, y_local, z_local, x2_local, y2_local, z2_local, Ux_local, Uy_local, Uz_local
-        real         :: uvwN0(3,3), coord(3), ref(3), Strain_local, r_local
-        real         :: plusx_local, plusy_local, plusz_local, minusx_local, minusy_local, minusz_local
-        real         :: plusR_local, minusR_local, plust_local, minust_local, plusp_local, minusp_local
-        real         :: Ux_plusx_local, Ux_minusx_local, Ux_plusy_local, Ux_minusy_local, Ux_plusz_local, Ux_minusz_local
-        real         :: Uy_plusx_local, Uy_minusx_local, Uy_plusy_local, Uy_minusy_local, Uy_plusz_local, Uy_minusz_local
-        real         :: Uz_plusx_local, Uz_minusx_local, Uz_plusy_local, Uz_minusy_local, Uz_plusz_local, Uz_minusz_local
-        real         :: UR_plusR_local, UR_minusR_local, Ut_plusR_local, Ut_minusR_local, Up_plusR_local, Up_minusR_local
-        real         :: K1, K2, K3, K4, K5, K6, dR, dR_final, atm_a(3)
-        integer      :: natoms,iatom,centerAtom,i,ii,filnum,n,io_stat
-        logical      :: areNearest(size(model,dim=2))
-        logical      :: plusx_surface, minusx_surface, plusy_surface, minusy_surface, plusz_surface, minusz_surface
-        type(atoms)  :: Exx_strain,Eyy_strain,Ezz_strain,Exy_strain,Eyz_strain,Exz_strain, Err_strain
-        type(atoms)  :: Ux_atoms, Uy_atoms, Uz_atoms
-        real(kind=8) :: p0(3, size(model,dim=2))
-        character(len=5)  :: el_ucase
-        character(len=4)  :: atom_name
-        character(len=2)  :: el
-        character(len=10) :: crystal_system
+        real                 :: cMin(3), cMax(3), cMid(3), centerAtomCoords(3),origin0(3), origin(3)
+        real                 :: dist, dist_temp, avgNNRR, avgD, subK, k, rMax, rMin
+        real                 :: u0(3), v0(3), w0(3), u(3), v(3), w(3)
+        real                 :: dx, dy, dz, x_local, y_local, z_local, x2_local, y2_local, z2_local, Ux_local, Uy_local, Uz_local
+        real                 :: uvwN0(3,3), coord(3), ref(3), Strain_local, r_local
+        real                 :: plusx_local, plusy_local, plusz_local, minusx_local, minusy_local, minusz_local
+        real                 :: plusR_local, minusR_local, plust_local, minust_local, plusp_local, minusp_local
+        real                 :: Ux_plusx_local, Ux_minusx_local, Ux_plusy_local, Ux_minusy_local, Ux_plusz_local, Ux_minusz_local
+        real                 :: Uy_plusx_local, Uy_minusx_local, Uy_plusy_local, Uy_minusy_local, Uy_plusz_local, Uy_minusz_local
+        real                 :: Uz_plusx_local, Uz_minusx_local, Uz_plusy_local, Uz_minusy_local, Uz_plusz_local, Uz_minusz_local
+        real                 :: UR_plusR_local, UR_minusR_local, Ut_plusR_local, Ut_minusR_local, Up_plusR_local, Up_minusR_local
+        real                 :: K1, K2, K3, K4, K5, K6, dR, dR_final, atm_a(3)
+        integer              :: natoms,iatom,centerAtom,i,ii,filnum,n,io_stat
+        logical              :: areNearest(size(model,dim=2))
+        logical              :: plusx_surface, minusx_surface, plusy_surface, minusy_surface, plusz_surface, minusz_surface
+        type(atoms)          :: Exx_strain,Eyy_strain,Ezz_strain,Exy_strain,Eyz_strain,Exz_strain, Err_strain
+        type(atoms)          :: Ux_atoms, Uy_atoms, Uz_atoms
+        real(kind=8)         :: p0(3, size(model,dim=2))
+        character(len=5)     :: el_ucase
+        character(len=4)     :: atom_name
+        character(len=2)     :: el
+        character(len=10)    :: crystal_system
         write(logfhandle, '(A)') '>>> STRAIN ANALYSIS'
         el = el_symbol(element)
         ! the analysis assumes atoms on a cubic grid of step a/2, which zincblende and wurtzite do not have
@@ -1169,8 +1169,8 @@ contains
     ! NANOPARTICLE PDB UTILS
 
     subroutine read_pdb2matrix( pdbfile, matrix )
-        class(string),     intent(in)    :: pdbfile
-        real, allocatable, intent(inout) :: matrix(:,:)
+        class(string),     intent(in)                 :: pdbfile
+        real,              allocatable, intent(inout) :: matrix(:,:)
         integer     :: n, i
         type(atoms) :: a
         ! check that the file extension is .pdb
@@ -1186,14 +1186,14 @@ contains
     end subroutine read_pdb2matrix
 
     subroutine write_matrix2pdb( element, matrix, pdbfile, betas )
-        character(len=*), intent(in) :: element
-        real,             intent(in) :: matrix(:,:)
-        class(string),    intent(in) :: pdbfile
-        real, optional,   intent(in) :: betas(size(matrix, dim=2))
+        character(len=*), intent(in)             :: element
+        real,             intent(in)             :: matrix(:,:)
+        class(string),    intent(in)             :: pdbfile
+        real,             optional,   intent(in) :: betas(size(matrix, dim=2))
         character(len=4) :: atom_name
-        integer     :: n, i
-        type(atoms) :: a
-        logical     :: betas_present
+        integer          :: n, i
+        type(atoms)      :: a
+        logical          :: betas_present
         betas_present = present(betas)
         ! check that the file extension is .pdb
         if(fname2ext(pdbfile) .ne. 'pdb') THROW_HARD('Wrong extension input file! Should be pdb')
@@ -1218,14 +1218,14 @@ contains
 
     ! Outputs pdb file of ideal atomic positions from fit lattice for visualization
     subroutine write_ideal_lattice_pdb( element, lattice, betas )
-        character(len=*),  intent(in) :: element
-        real, allocatable, intent(in) :: lattice(:,:)
-        real, optional,    intent(in) :: betas(size(lattice, dim=2))
+        character(len=*),  intent(in)              :: element
+        real,              allocatable, intent(in) :: lattice(:,:)
+        real,              optional,    intent(in) :: betas(size(lattice, dim=2))
         character(len=4)              :: atom_name
         character(len=*), parameter   :: pdbfile='ideal_lattice.pdb'
-        integer     :: n, i
-        type(atoms) :: a
-        logical     :: betas_present
+        integer                       :: n, i
+        type(atoms)                   :: a
+        logical                       :: betas_present
         betas_present = present(betas)
         ! check that the file extension is .pdb
         if( fname2ext(string(pdbfile)) .ne. 'pdb' ) THROW_HARD('Wrong extension input file! Should be pdb')
@@ -1249,15 +1249,15 @@ contains
     end subroutine write_ideal_lattice_pdb
 
     subroutine find_couples( points_P, points_Q, element, P, Q, theoretical_rad, frac_diam )
-        real,              intent(in)    :: points_P(:,:), points_Q(:,:)
-        character(len=*),  intent(in)    :: element
-        real, allocatable, intent(inout) :: P(:,:), Q(:,:) ! just the couples of points
-        real, optional,    intent(in)    :: theoretical_rad, frac_diam
-        real    :: theoretical_radius                      ! for threshold selection
-        integer :: n                                       ! max number of couples
-        integer :: cnt                                     ! actual number of couples
-        integer :: i, location(1), cnt_P, cnt_Q, z
-        real    :: d, theo_diam, ffrac_diam, d_thres
+        real,              intent(in)                 :: points_P(:,:), points_Q(:,:)
+        character(len=*),  intent(in)                 :: element
+        real,              allocatable, intent(inout) :: P(:,:), Q(:,:) ! just the couples of points
+        real,              optional,    intent(in)    :: theoretical_rad, frac_diam
+        real                 :: theoretical_radius         ! for threshold selection
+        integer              :: n                          ! max number of couples
+        integer              :: cnt                        ! actual number of couples
+        integer              :: i, location(1), cnt_P, cnt_Q, z
+        real                 :: d, theo_diam, ffrac_diam, d_thres
         character(len=2)     :: el_ucase
         logical, allocatable :: mask(:)
         real,    allocatable :: points_P_out(:,:), points_Q_out(:,:)
@@ -1336,11 +1336,11 @@ contains
     end subroutine find_couples
 
     subroutine remove_atoms( atms2rm, atms2keep, atms_kept )
-        real,              intent(in)    :: atms2rm(:,:), atms2keep(:,:)
-        real, allocatable, intent(inout) :: atms_kept(:,:)
+        real,              intent(in)                 :: atms2rm(:,:), atms2keep(:,:)
+        real,              allocatable, intent(inout) :: atms_kept(:,:)
         logical, allocatable :: mask2keep(:)
-        integer :: n2rm, n, i, n2keep, cnt, loc(1)
-        real    :: d
+        integer              :: n2rm, n, i, n2keep, cnt, loc(1)
+        real                 :: d
         n    = size(atms2keep, dim=2)
         n2rm = size(atms2rm,   dim=2)
         if( n2rm > n ) THROW_HARD('atoms to remove must be subset of atoms to keep')
@@ -1367,7 +1367,7 @@ contains
         real, intent(in)     :: atms_common1(:,:), atms_common2(:,:)
         real,    allocatable :: dists(:)
         logical, allocatable :: mask(:)
-        integer :: n1, n2, i, loc(1)
+        integer              :: n1, n2, i, loc(1)
         n1 = size(atms_common1, dim=2)
         n2 = size(atms_common2, dim=2)
         if( n1 /= n2 ) THROW_HARD('number of atoms in common distributions must be equal')
@@ -1385,7 +1385,7 @@ contains
         real,    allocatable :: dists(:)
         logical, allocatable :: mask(:)
         type(stats_struct)   :: dist_stats
-        integer :: n1, n2, i, loc(1)
+        integer              :: n1, n2, i, loc(1)
         n1 = size(atms1, dim=2)
         n2 = size(atms2, dim=2)
         if( n1 <= n2 )then ! let #1 lead
@@ -1409,13 +1409,13 @@ contains
     end function atm_rmsd_stats
 
     subroutine find_atoms_subset( atms2find, atms, mask_out, l_inv )
-        real,              intent(in)    :: atms2find(:,:), atms(:,:)
-        logical,           intent(inout) :: mask_out(:)
-        logical, optional, intent(in)    :: l_inv
+        real,              intent(in)           :: atms2find(:,:), atms(:,:)
+        logical,           intent(inout)        :: mask_out(:)
+        logical,           optional, intent(in) :: l_inv
         logical, allocatable   :: mask(:)
-        integer :: i, location(1), n2find, n
-        real    :: d
-        logical :: ll_inv
+        integer                :: i, location(1), n2find, n
+        real                   :: d
+        logical                :: ll_inv
         ll_inv = .false.
         if( present(l_inv) ) ll_inv = l_inv
         n2find = size(atms2find, dim=2)

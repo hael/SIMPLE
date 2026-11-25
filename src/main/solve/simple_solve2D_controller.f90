@@ -21,40 +21,40 @@ private
 real,             parameter :: SMPD_TARGET        = 2.67
 integer,          parameter :: MINBOXSZ           = 88
 ! Stages
-integer,          parameter :: NSTAGES_CLS        = 6
-integer,          parameter :: ITS_INCR           = 5
-integer,          parameter :: PHASES(2)          = [4, 6]
-integer,          parameter :: EXTR_LIM_LOCAL     = 20
-integer,          parameter :: PROBREFINE_STAGE   = 3
-integer,          parameter :: STICKY_SAMPL_STAGE = 1                ! the only sticky stage (startit == 1): later stages sample freely
-integer,          parameter :: FRAC_UPDATE_STAGE  = 2                ! fractional class-average carry-over starts here
-integer,          parameter :: FIRST_SHIFT_STAGE  = 2                ! the first stage with shifts: the dense table under the key, the box's mask for an automatic run's mask estimate
-integer,          parameter :: GOLD_STD_STAGE     = 2                ! half-specific references from the first regularized stage
+integer,          parameter :: NSTAGES_CLS            = 6
+integer,          parameter :: ITS_INCR               = 5
+integer,          parameter :: PHASES(2)              = [4, 6]
+integer,          parameter :: EXTR_LIM_LOCAL         = 20
+integer,          parameter :: PROBREFINE_STAGE       = 3
+integer,          parameter :: STICKY_SAMPL_STAGE     = 1            ! the only sticky stage (startit == 1): later stages sample freely
+integer,          parameter :: FRAC_UPDATE_STAGE      = 2            ! fractional class-average carry-over starts here
+integer,          parameter :: FIRST_SHIFT_STAGE      = 2            ! the first stage with shifts: the dense table under the key, the box's mask for an automatic run's mask estimate
+integer,          parameter :: GOLD_STD_STAGE         = 2            ! half-specific references from the first regularized stage
 integer,          parameter :: SIGMA2_FLAT_LAST_STAGE = 3            ! scoring-noise annealing reaches the smoothed bootstrap at this stage's end
-integer,          parameter :: NSAMPLE_DEFAULT_2D = 200000
-integer,          parameter :: COVERAGE_NITS_CAP  = 10
-character(len=3), parameter :: EO_STAGE           = 'yes'
+integer,          parameter :: NSAMPLE_DEFAULT_2D     = 200000
+integer,          parameter :: COVERAGE_NITS_CAP      = 10
+character(len=3), parameter :: EO_STAGE               = 'yes'
 ! Stage omission: a stage whose planned limit the class averages already resolve past is omitted
 integer,          parameter :: SKIP_MIN_STAGE       = 2   ! never the first two stages (the second is the centring stage)
 real,             parameter :: FRC05_SKIP_PTCL_FRAC = 0.5 ! the fraction of the particles whose classes must resolve past the limit at FRC=0.5
 
 ! convenience type
 type stage_params
-    real    :: lp=0., smpd_crop=0., trslim=0.
-    real    :: update_frac=1.
-    real    :: mskdiam=0.       !< the stage's mask diameter (A; 0: the command line's), set under the polar shift map
-    integer :: box_crop = 0, nptcls=0
-    logical :: l_lpset=.false., l_update_frac=.false.
-    logical :: l_sticky_sampling=.false., l_frac_restore=.false.
+    real    :: lp                = 0., smpd_crop=0., trslim=0.
+    real    :: update_frac       = 1.
+    real    :: mskdiam           = 0. !< the stage's mask diameter (A; 0: the command line's), set under the polar shift map
+    integer :: box_crop          = 0, nptcls=0
+    logical :: l_lpset           = .false., l_update_frac=.false.
+    logical :: l_sticky_sampling = .false., l_frac_restore=.false.
 end type stage_params
 
 type refine2D_stage_cfg
     type(string) :: refine, center, objfun, refs, gauref, ml_reg
-    integer      :: iphase=0, iter=0, imaxits=0, minits=0, extr_iter=0
-    integer      :: gold_std_stage=0
-    real         :: trs=0., gaufreq=0., mskdiam=0., shift_sigma=0.
-    logical      :: l_prob_beta_end_user=.false. !< the user set prob_beta_end: the stages keep it
-    logical      :: l_anneal_tail=.false.        !< the last probabilistic stage anneals its draws to the physical posterior
+    integer      :: iphase               = 0, iter=0, imaxits=0, minits=0, extr_iter=0
+    integer      :: gold_std_stage       = 0
+    real         :: trs                  = 0., gaufreq=0., mskdiam=0., shift_sigma=0.
+    logical      :: l_prob_beta_end_user = .false. !< the user set prob_beta_end: the stages keep it
+    logical      :: l_anneal_tail        = .false. !< the last probabilistic stage anneals its draws to the physical posterior
 end type refine2D_stage_cfg
 
 interface
@@ -93,7 +93,7 @@ contains
         type(stage_params),          intent(in)    :: stage_parms(:)
         integer,                     intent(in)    :: maxits, istage
         type(refine2D_stage_cfg) :: cfg
-        real :: first, last
+        real                     :: first, last
         call build_refine2D_stage_cfg( cfg, cline_refine2D, cline, params, stage_parms, maxits, istage )
         call emit_refine2D_stage_cfg( cline_refine2D, cfg, stage_parms, istage )
         if( trim(params%sigma2_anneal) /= 'no' )then
@@ -222,7 +222,7 @@ contains
 
     subroutine build_refine2D_stage_cfg( cfg, cline_refine2D, cline, params, stage_parms, maxits, istage )
         use simple_cmdline, only: cmdline
-        type(refine2D_stage_cfg), intent(inout) :: cfg
+        type(refine2D_stage_cfg),  intent(inout) :: cfg
         class(cmdline),            intent(in)    :: cline_refine2D
         class(cmdline),            intent(in)    :: cline
         class(parameters),         intent(in)    :: params
@@ -244,7 +244,7 @@ contains
 
     subroutine set_refine2D_stage_gold_standard_policy( cfg, params )
         type(refine2D_stage_cfg), intent(inout) :: cfg
-        class(parameters),       intent(in)    :: params
+        class(parameters),        intent(in)    :: params
         cfg%gold_std_stage = gold_start_stage(params)
     end subroutine set_refine2D_stage_gold_standard_policy
 
@@ -255,7 +255,7 @@ contains
     end function gold_start_stage
 
     subroutine set_refine2D_stage_objfun_policy( cfg, params )
-        type(refine2D_stage_cfg), intent(inout) :: cfg
+        type(refine2D_stage_cfg),  intent(inout) :: cfg
         class(parameters),         intent(in)    :: params
         if( params%cc_objfun == OBJFUN_CC )then
             cfg%objfun = 'cc'
@@ -266,7 +266,7 @@ contains
 
     subroutine set_refine2D_stage_iteration_policy( cfg, cline_refine2D )
         use simple_cmdline, only: cmdline
-        type(refine2D_stage_cfg), intent(inout) :: cfg
+        type(refine2D_stage_cfg),  intent(inout) :: cfg
         class(cmdline),            intent(in)    :: cline_refine2D
         cfg%iter = 0
         if( cline_refine2D%defined('endit') ) cfg%iter = cline_refine2D%get_iarg('endit')
@@ -274,7 +274,7 @@ contains
     end subroutine set_refine2D_stage_iteration_policy
 
     subroutine set_refine2D_stage_phase_policy( cfg, istage )
-        type(refine2D_stage_cfg), intent(inout) :: cfg
+        type(refine2D_stage_cfg),  intent(inout) :: cfg
         integer,                   intent(in)    :: istage
         if(      istage <= PHASES(1) )then
             cfg%iphase = 1
@@ -287,7 +287,7 @@ contains
 
     subroutine set_refine2D_stage_reference_policy( cfg, cline, params, stage_parms, maxits, istage )
         use simple_cmdline, only: cmdline
-        type(refine2D_stage_cfg), intent(inout) :: cfg
+        type(refine2D_stage_cfg),  intent(inout) :: cfg
         class(cmdline),            intent(in)    :: cline
         class(parameters),         intent(in)    :: params
         type(stage_params),        intent(in)    :: stage_parms(:)
@@ -371,7 +371,7 @@ contains
     end function sample_coverage_nits
 
     subroutine set_refine2D_stage_regular_refs( cfg, params, stage_parms, istage )
-        type(refine2D_stage_cfg), intent(inout) :: cfg
+        type(refine2D_stage_cfg),  intent(inout) :: cfg
         class(parameters),         intent(in)    :: params
         type(stage_params),        intent(in)    :: stage_parms(:)
         integer,                   intent(in)    :: istage
@@ -383,7 +383,7 @@ contains
     end subroutine set_refine2D_stage_regular_refs
 
     subroutine set_refine2D_stage_search_policy( cfg, params, istage, nstages )
-        type(refine2D_stage_cfg), intent(inout) :: cfg
+        type(refine2D_stage_cfg),  intent(inout) :: cfg
         class(parameters),         intent(in)    :: params
         integer,                   intent(in)    :: istage, nstages
         ! the first stage with shifts runs the dense table under the key: every particle not yet centred takes the disk
@@ -404,7 +404,7 @@ contains
     !! of an automatic run's first shift stage, or that estimate, set by the commander); the key goes to every stage
     !! from the first with shifts on (stage 1 is the SNHC window stage, which has no table)
     subroutine set_refine2D_stage_mask_policy( cfg, params, stage_parms, istage )
-        type(refine2D_stage_cfg), intent(inout) :: cfg
+        type(refine2D_stage_cfg),  intent(inout) :: cfg
         class(parameters),         intent(in)    :: params
         type(stage_params),        intent(in)    :: stage_parms(:)
         integer,                   intent(in)    :: istage
@@ -415,7 +415,7 @@ contains
     end subroutine set_refine2D_stage_mask_policy
 
     logical function refine2D_stage_requires_full_assignment( cfg, stage_parms, istage ) result( l_required )
-        type(refine2D_stage_cfg), intent(in) :: cfg
+        type(refine2D_stage_cfg),  intent(in) :: cfg
         type(stage_params),        intent(in) :: stage_parms(:)
         integer,                   intent(in) :: istage
         l_required = stage_parms(istage)%l_update_frac .and.&
@@ -425,7 +425,7 @@ contains
     subroutine emit_refine2D_stage_cfg( cline_refine2D, cfg, stage_parms, istage )
         use simple_cmdline, only: cmdline
         class(cmdline),            intent(inout) :: cline_refine2D
-        type(refine2D_stage_cfg), intent(in)     :: cfg
+        type(refine2D_stage_cfg),  intent(in)    :: cfg
         type(stage_params),        intent(in)    :: stage_parms(:)
         integer,                   intent(in)    :: istage
         logical :: l_require_full_assignment
@@ -500,15 +500,15 @@ contains
     !! the median particle's class resolution, which a few overfit or empty classes cannot move). frac_past is the
     !! population fraction in classes past lp. A class with pop < 1 is left out; 0 without a populated class.
     subroutine frc05_ptcl_quantile( res05s, pops, frac, res05_q, lp, frac_past )
-        real,           intent(in)  :: res05s(:) !< FRC=0.5 resolution per class (A)
-        integer,        intent(in)  :: pops(:)   !< population per class
-        real,           intent(in)  :: frac
-        real,           intent(out) :: res05_q
-        real, optional, intent(in)  :: lp
-        real, optional, intent(out) :: frac_past
+        real,           intent(in)            :: res05s(:) !< FRC=0.5 resolution per class (A)
+        integer,        intent(in)            :: pops(:)   !< population per class
+        real,           intent(in)            :: frac
+        real,           intent(out)           :: res05_q
+        real,           optional, intent(in)  :: lp
+        real,           optional, intent(out) :: frac_past
         real,    allocatable :: keys(:)
         integer, allocatable :: order(:)
-        integer :: ncls, i, ntot, ncum
+        integer              :: ncls, i, ntot, ncum
         res05_q = 0.
         if( present(frac_past) ) frac_past = 0.
         ncls = size(res05s)
@@ -536,17 +536,17 @@ contains
     subroutine solve2D_class_frc05_quantile( spproj, frac, res05_q, lp, frac_past )
         use simple_sp_project, only: sp_project
         use simple_class_frcs, only: class_frcs
-        class(sp_project), intent(inout) :: spproj
-        real,              intent(in)    :: frac
-        real,              intent(out)   :: res05_q
-        real, optional,    intent(in)    :: lp
-        real, optional,    intent(out)   :: frac_past
+        class(sp_project), intent(inout)            :: spproj
+        real,              intent(in)               :: frac
+        real,              intent(out)              :: res05_q
+        real,              optional,    intent(in)  :: lp
+        real,              optional,    intent(out) :: frac_past
         type(class_frcs)     :: clsfrcs
         type(string)         :: frcs_fname
         real,    allocatable :: res05s(:)
         integer, allocatable :: pops(:)
-        integer :: ncls, icls
-        real    :: res05, res0143
+        integer              :: ncls, icls
+        real                 :: res05, res0143
         res05_q = 0.
         if( present(frac_past) ) frac_past = 0.
         ncls = spproj%os_cls2D%get_noris()
@@ -585,11 +585,11 @@ contains
     !! last phase-1 stage's and a phase-2 stage's are dropped.
     logical function solve2D_stage_behind_frc05( stage_parms, istage, start_stage, stop_stage, res05_hist, nhist, &
         &sigma2_anneal ) result( l_behind )
-        type(stage_params), intent(in) :: stage_parms(:)
-        integer,            intent(in) :: istage, start_stage, stop_stage
-        real,               intent(in) :: res05_hist(:) !< the quantile at the ends of the executed stages, in order
-        integer,            intent(in) :: nhist         !< # stages executed so far
-        logical, optional,  intent(in) :: sigma2_anneal
+        type(stage_params), intent(in)            :: stage_parms(:)
+        integer,            intent(in)            :: istage, start_stage, stop_stage
+        real,               intent(in)            :: res05_hist(:) !< the quantile at the ends of the executed stages, in order
+        integer,            intent(in)            :: nhist         !< # stages executed so far
+        logical,            optional,  intent(in) :: sigma2_anneal
         l_behind = .false.
         if( present(sigma2_anneal) )then
             if( sigma2_anneal .and. istage >= size(stage_parms)-1 ) return
@@ -620,8 +620,8 @@ contains
         type(image), allocatable  :: imgs(:)
         real,        allocatable  :: diams(:), shifts(:,:), pops(:)
         integer,     allocatable  :: order(:)
-        integer :: ldim(3), ncls, icls
-        real    :: wtot, wcum, diam_q
+        integer                   :: ldim(3), ncls, icls
+        real                      :: wtot, wcum, diam_q
         call find_ldim_nptcls(cavgs, ldim, ncls)
         if( ncls /= cls_field%get_noris() ) THROW_HARD('class averages and class field disagree on the class count; solve2D_mskdiam_estimate')
         settings%amsklp   = AUTOMASK2D_AMSKLP

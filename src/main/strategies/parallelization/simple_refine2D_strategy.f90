@@ -40,10 +40,10 @@ end type refine2D_strategy
 
 !> Timings of an iteration, from its start to the end of finalize_iteration (the REFINE2D_STRATEGY bench record)
 type :: refine2D_bench_state
-    integer(timer_int_kind) :: t_tot        = 0
-    integer(timer_int_kind) :: t_sigma_prep = 0
-    integer(timer_int_kind) :: t_sigma      = 0
-    integer(timer_int_kind) :: t            = 0   !< start of the phase being timed
+    integer(timer_int_kind) :: t_tot         = 0
+    integer(timer_int_kind) :: t_sigma_prep  = 0
+    integer(timer_int_kind) :: t_sigma       = 0
+    integer(timer_int_kind) :: t             = 0   !< start of the phase being timed
     real(timer_int_kind)    :: rt_tot        = 0.
     real(timer_int_kind)    :: rt_sigma_prep = 0.
     real(timer_int_kind)    :: rt_sigma      = 0.
@@ -57,14 +57,14 @@ type :: refine2D_bench_state
     real(timer_int_kind)    :: rt_star       = 0.  !< the cls2D star file
     real(timer_int_kind)    :: rt_jpeg       = 0.  !< the class-average JPEG
     ! the canonical sigma2 store this iteration updated, and the rows its update replaced
-    integer                 :: sigma2_nptcls  = 0
-    integer                 :: sigma2_nshells = 0
-    integer(int64)          :: sigma2_nbytes  = 0_int64
+    integer                 :: sigma2_nptcls        = 0
+    integer                 :: sigma2_nshells       = 0
+    integer(int64)          :: sigma2_nbytes        = 0_int64
     integer                 :: sigma2_nrows_updated = 0
 end type refine2D_bench_state
 
 type, extends(refine2D_strategy) :: refine2D_inmem_strategy
-    type(convergence) :: conv
+    type(convergence)                   :: conv
     type(refine2D_bench_state), private :: bench
 contains
     procedure :: initialize         => inmem_initialize
@@ -76,10 +76,10 @@ contains
 end type refine2D_inmem_strategy
 
 type, extends(refine2D_strategy) :: refine2D_distr_strategy
-    type(qsys_env)     :: qenv
-    type(chash)        :: job_descr
-    type(convergence)  :: conv
-    integer            :: nthr_master
+    type(qsys_env)                      :: qenv
+    type(chash)                         :: job_descr
+    type(convergence)                   :: conv
+    integer                             :: nthr_master
     type(refine2D_bench_state), private :: bench
 contains
     procedure :: initialize         => distr_initialize
@@ -93,7 +93,7 @@ end type refine2D_distr_strategy
 abstract interface
     subroutine init_interface(self, params, build, cline)
         import :: refine2D_strategy, parameters, builder, cmdline
-        class(refine2D_strategy), intent(inout) :: self
+        class(refine2D_strategy),  intent(inout) :: self
         type(parameters),          intent(inout) :: params
         type(builder),             intent(inout) :: build
         type(cmdline),             intent(inout) :: cline
@@ -101,7 +101,7 @@ abstract interface
 
     subroutine exec_iter_interface(self, params, build, cline, converged)
         import :: refine2D_strategy, parameters, builder, cmdline
-        class(refine2D_strategy), intent(inout) :: self
+        class(refine2D_strategy),  intent(inout) :: self
         type(parameters),          intent(inout) :: params
         type(builder),             intent(inout) :: build
         type(cmdline),             intent(inout) :: cline
@@ -110,14 +110,14 @@ abstract interface
 
     subroutine finalize_iter_interface(self, params, build)
         import :: refine2D_strategy, parameters, builder
-        class(refine2D_strategy), intent(inout) :: self
+        class(refine2D_strategy),  intent(inout) :: self
         type(parameters),          intent(in)    :: params
         type(builder),             intent(inout) :: build
     end subroutine finalize_iter_interface
 
     subroutine finalize_run_interface(self, params, build, cline)
         import :: refine2D_strategy, parameters, builder, cmdline
-        class(refine2D_strategy), intent(inout) :: self
+        class(refine2D_strategy),  intent(inout) :: self
         type(parameters),          intent(in)    :: params
         type(builder),             intent(inout) :: build
         type(cmdline),             intent(inout) :: cline
@@ -125,7 +125,7 @@ abstract interface
 
     subroutine cleanup_interface(self, params)
         import :: refine2D_strategy, parameters
-        class(refine2D_strategy), intent(inout) :: self
+        class(refine2D_strategy),  intent(inout) :: self
         type(parameters),          intent(in)    :: params
     end subroutine cleanup_interface
 
@@ -156,7 +156,7 @@ contains
     ! ======================================================================
 
     subroutine inmem_initialize(self, params, build, cline)
-        class(refine2D_inmem_strategy), intent(inout) :: self
+        class(refine2D_inmem_strategy),  intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
@@ -190,7 +190,7 @@ contains
         use simple_strategy2D_matcher, only: refine2D_exec
         use simple_starproject,        only: starproject
         use simple_rnd,                only: seed_rnd
-        class(refine2D_inmem_strategy), intent(inout) :: self
+        class(refine2D_inmem_strategy),  intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
@@ -263,7 +263,7 @@ contains
     end subroutine inmem_execute_iteration
 
     subroutine inmem_finalize_iteration( self, params, build)
-        class(refine2D_inmem_strategy), intent(inout)   :: self
+        class(refine2D_inmem_strategy),  intent(inout)  :: self
         type(parameters),                intent(in)     :: params
         type(builder),                   intent(inout)  :: build
         if( L_BENCH_GLOB ) self%bench%t = tic()
@@ -276,13 +276,13 @@ contains
     end subroutine inmem_finalize_iteration
 
     subroutine inmem_cleanup( self, params)
-        class(refine2D_inmem_strategy), intent(inout) :: self
+        class(refine2D_inmem_strategy),  intent(inout) :: self
         type(parameters),                intent(in)    :: params
         ! No cleanup needed for in-memory strategy, but could add here if needed in the future
     end subroutine inmem_cleanup
 
     subroutine inmem_finalize_run( self, params, build, cline )
-        class(refine2D_inmem_strategy), intent(inout) :: self
+        class(refine2D_inmem_strategy),  intent(inout) :: self
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
@@ -306,7 +306,7 @@ contains
 
     subroutine distr_initialize( self, params, build, cline )
         use simple_exec_helpers, only: set_master_num_threads
-        class(refine2D_distr_strategy), intent(inout) :: self
+        class(refine2D_distr_strategy),  intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
@@ -340,7 +340,7 @@ contains
     subroutine distr_execute_iteration( self, params, build, cline, converged )
         use simple_stream_utils,         only: terminate_stream
         !$ use omp_lib,                  only: omp_get_max_threads, omp_set_num_threads
-        class(refine2D_distr_strategy), intent(inout) :: self
+        class(refine2D_distr_strategy),  intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
@@ -473,7 +473,7 @@ contains
     end subroutine distr_execute_iteration
 
     subroutine distr_finalize_iteration( self, params, build )
-        class(refine2D_distr_strategy), intent(inout) :: self
+        class(refine2D_distr_strategy),  intent(inout) :: self
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
         if( L_BENCH_GLOB ) self%bench%t = tic()
@@ -492,7 +492,7 @@ contains
 
     subroutine distr_cleanup( self, params )
         use simple_qsys_funs, only: qsys_cleanup
-        class(refine2D_distr_strategy), intent(inout) :: self
+        class(refine2D_distr_strategy),  intent(inout) :: self
         type(parameters),                intent(in)    :: params
         call self%qenv%kill()
         call qsys_cleanup(params)
@@ -500,7 +500,7 @@ contains
     end subroutine distr_cleanup
 
     subroutine distr_finalize_run( self, params, build, cline )
-        class(refine2D_distr_strategy), intent(inout) :: self
+        class(refine2D_distr_strategy),  intent(inout) :: self
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
@@ -605,7 +605,7 @@ contains
         type(parameters),           intent(in) :: params
         type(refine2D_bench_state), intent(in) :: bench
         character(len=*),           intent(in) :: execution_mode
-        integer :: fnr
+        integer              :: fnr
         real(timer_int_kind) :: rt_accounted
         if( .not. L_BENCH_GLOB ) return
         rt_accounted = 0.

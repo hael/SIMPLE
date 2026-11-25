@@ -17,32 +17,32 @@ private
 public :: class_candidates, run_all_class_candidates_tests
 public :: CANDS_OK, CANDS_NONE, CANDS_UNREADABLE, CANDS_STALE
 
-character(len=*), parameter :: IMGKIND = 'class_candidates'
-character(len=8), parameter :: MAGIC   = 'CLSCAND1'
-character(len=8), parameter :: MAGIC_PART = 'CLSCANDP' !< a distributed part's rows fromp..top, merged by publish_parts
-integer,          parameter :: VERSION = 1
-integer, parameter :: CANDS_OK         = 0 !< opened
-integer, parameter :: CANDS_NONE       = 1 !< the project registers no artifact
-integer, parameter :: CANDS_UNREADABLE = 2 !< registered, but missing or not this format
-integer, parameter :: CANDS_STALE      = 3 !< another particle layout or another class count
+character(len=*), parameter :: IMGKIND          = 'class_candidates'
+character(len=8), parameter :: MAGIC            = 'CLSCAND1'
+character(len=8), parameter :: MAGIC_PART       = 'CLSCANDP' !< a distributed part's rows fromp..top, merged by publish_parts
+integer,          parameter :: VERSION          = 1
+integer,          parameter :: CANDS_OK         = 0          !< opened
+integer,          parameter :: CANDS_NONE       = 1          !< the project registers no artifact
+integer,          parameter :: CANDS_UNREADABLE = 2          !< registered, but missing or not this format
+integer,          parameter :: CANDS_STALE      = 3          !< another particle layout or another class count
 
 type :: class_candidates
     private
-    integer        :: nrows = 0, ncls = 0, kmax = 0
-    integer(int64) :: digest = 0_int64
+    integer                     :: nrows  = 0, ncls = 0, kmax = 0
+    integer(int64)              :: digest = 0_int64
     integer(int8),  allocatable :: route(:)   !< (nrows) 1 seeded, 2 dense, 0 not predicted
     integer(int8),  allocatable :: ncand(:)   !< (nrows)
     integer(int16), allocatable :: cands(:,:) !< (kmax, nrows)
-    logical :: exists = .false.
+    logical                     :: exists = .false.
   contains
-    procedure :: publish
-    procedure :: write_part
-    procedure :: publish_parts
-    procedure :: new
-    procedure :: is_seeded
-    procedure :: get_cands
-    procedure :: get_nseeded
-    procedure :: kill
+    procedure          :: publish
+    procedure          :: write_part
+    procedure          :: publish_parts
+    procedure          :: new
+    procedure          :: is_seeded
+    procedure          :: get_cands
+    procedure          :: get_nseeded
+    procedure          :: kill
     procedure, private :: fill_rows
     procedure, private :: write_and_register
 end type class_candidates
@@ -96,9 +96,9 @@ contains
         class(string),           intent(in)    :: projfile, fname, part_fnames(:)
         integer,                 intent(in)    :: ncls
         logical, allocatable :: covered(:)
-        character(len=8) :: magic_read
-        integer(int32)   :: version_read, nrows_read, ncls_read, kmax_read, fromp, top
-        integer :: ipart, u, ios
+        character(len=8)     :: magic_read
+        integer(int32)       :: version_read, nrows_read, ncls_read, kmax_read, fromp, top
+        integer              :: ipart, u, ios
         call self%kill
         self%nrows = particles%get_noris(consider_state=.false.)
         self%ncls  = ncls
@@ -165,7 +165,7 @@ contains
         class(oris),             intent(in)    :: particles
         class(string),           intent(in)    :: projfile, fname
         type(string) :: path
-        integer :: u, ios, ind
+        integer      :: u, ios, ind
         self%digest = ptcl_layout_digest(project, particles)
         if( self%digest == 0_int64 ) THROW_HARD('the particle layout digest is undefined for this project; class_candidates')
         open(newunit=u, file=fname%to_char(), access='stream', form='unformatted', status='replace', action='write', iostat=ios)
@@ -186,18 +186,18 @@ contains
     !! file is this format, its digest the particles' layout, its rows and classes the consumer's; otherwise the
     !! status says why (message), and the consumer runs without it
     subroutine new( self, project, particles, ncls, status, message )
-        class(class_candidates),       intent(inout) :: self
-        class(sp_project),             intent(in)    :: project
-        class(oris),                   intent(in)    :: particles
-        integer,                       intent(in)    :: ncls
-        integer,                       intent(out)   :: status
-        character(len=:), allocatable, intent(out)   :: message
+        class(class_candidates),       intent(inout)            :: self
+        class(sp_project),             intent(in)               :: project
+        class(oris),                   intent(in)               :: particles
+        integer,                       intent(in)               :: ncls
+        integer,                       intent(out)              :: status
+        character(len=:),              allocatable, intent(out) :: message
         type(string)     :: path, kind
         character(len=8) :: magic_read
         integer(int32)   :: version_read, nrows_read, ncls_read, kmax_read
         integer(int64)   :: digest_read
-        integer :: i, u, ios
-        logical :: found
+        integer          :: i, u, ios
+        logical          :: found
         call self%kill
         status  = CANDS_NONE
         message = 'no class candidates registered'

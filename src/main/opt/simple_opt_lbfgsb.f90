@@ -39,12 +39,12 @@ interface
     end subroutine dscal
 end interface
 
-logical  :: PRINT_NEVALS = .false.
-real(dp), parameter :: zero=0.0d0,one=1.0d0,p5=0.5d0,p66=0.66d0
-real(dp), parameter :: xtrapl=1.1d0,xtrapu=4.0d0
-real(dp), parameter :: big=1.0d+10
-real(dp), parameter :: xtol_lbfgsb=0.1d0
-real(dp), parameter :: two=2.0d0,three=3.0d0
+logical             :: PRINT_NEVALS = .false.
+real(dp), parameter :: zero         = 0.0d0,one=1.0d0,p5=0.5d0,p66=0.66d0
+real(dp), parameter :: xtrapl       = 1.1d0,xtrapu=4.0d0
+real(dp), parameter :: big          = 1.0d+10
+real(dp), parameter :: xtol_lbfgsb  = 0.1d0
+real(dp), parameter :: two          = 2.0d0,three=3.0d0
 
 type, extends(optimizer) :: opt_lbfgsb
     private
@@ -54,7 +54,7 @@ type, extends(optimizer) :: opt_lbfgsb
     real(dp)               :: f
     real(dp)               :: dsave(24)
     integer,  allocatable  :: nbd(:), iwa(:)
-    real(dp), allocatable  ::  l(:), u(:), g(:), wa(:)
+    real(dp), allocatable  :: l(:), u(:), g(:), wa(:)
     logical                :: exists=.false.
 contains
     procedure :: new      => new_opt_lbfgsb
@@ -416,15 +416,15 @@ contains
             &                  csave, lsave, isave, dsave)
             implicit none
             character(len=60) :: task, csave
-            logical   :: lsave(4)
-            integer   :: n, m, nbd(n), index(n)
-            integer   :: iwhere(n), indx2(n), isave(23)
-            real(dp)  :: f, factr, pgtol
-            real(dp)  :: x(n), l(n), u(n), g(n), z(n), r(n), d(n), t(n)
-            real(dp)  :: xp(n)
-            real(dp)  :: wa(8*m)
-            real(dp)  :: ws(n, m), wy(n, m), sy(m, m), ss(m, m)
-            real(dp)  :: wt(m, m), wn(2*m, 2*m), snd(2*m, 2*m), dsave(24)
+            logical           :: lsave(4)
+            integer           :: n, m, nbd(n), index(n)
+            integer           :: iwhere(n), indx2(n), isave(23)
+            real(dp)          :: f, factr, pgtol
+            real(dp)          :: x(n), l(n), u(n), g(n), z(n), r(n), d(n), t(n)
+            real(dp)          :: xp(n)
+            real(dp)          :: wa(8*m)
+            real(dp)          :: ws(n, m), wy(n, m), sy(m, m), ss(m, m)
+            real(dp)          :: wt(m, m), wn(2*m, 2*m), snd(2*m, 2*m), dsave(24)
             !     ************
             !
             !     Subroutine mainlb
@@ -591,15 +591,15 @@ contains
             !
             !
             !     ************
-            logical   :: prjctd,cnstnd,boxed,updatd,wrk
+            logical          :: prjctd,cnstnd,boxed,updatd,wrk
             character(len=3) :: word
-            integer   :: i,k,nintol,itfile,iback,nskip
-            integer   :: head,col,iter,itail,iupdat
-            integer   :: nseg,nfgv,info,ifun
-            integer   :: iword,nfree,nact,ileave,nenter
-            real(dp)  :: theta,fold,dr,rr,tol
-            real(dp)  :: xstep,sbgnrm,ddum,dnorm,dtd,epsmch
-            real(dp)  :: gd,gdold,stp,stpmx
+            integer          :: i,k,nintol,itfile,iback,nskip
+            integer          :: head,col,iter,itail,iupdat
+            integer          :: nseg,nfgv,info,ifun
+            integer          :: iword,nfree,nact,ileave,nenter
+            real(dp)         :: theta,fold,dr,rr,tol
+            real(dp)         :: xstep,sbgnrm,ddum,dnorm,dtd,epsmch
+            real(dp)         :: gd,gdold,stp,stpmx
             if (task .eq. 'START') then
                 epsmch = epsilon(one)
                 ! Initialize counters and scalars when task='START'.
@@ -1582,8 +1582,8 @@ contains
 
         subroutine errclb(n, m, factr, l, u, nbd, task, info, k)
             character(len=60) :: task
-            integer   :: n, m, info, k, nbd(n)
-            real(dp)  :: factr, l(n), u(n)
+            integer           :: n, m, info, k, nbd(n)
+            real(dp)          :: factr, l(n), u(n)
             !     ************
             !
             !     Subroutine errclb
@@ -2159,12 +2159,12 @@ contains
             &                  iback, nfgv, info, task, boxed, cnstnd, csave, &
             &                  isave, dsave)
             character(len=60) :: task, csave
-            logical   :: boxed, cnstnd
-            integer   :: n, iter, ifun, iback, nfgv, info
-            integer   :: nbd(n), isave(2)
-            real(dp)  :: f, fold, gd, gdold, stp, dnorm, dtd, xstep
-            real(dp)  :: stpmx, x(n), l(n), u(n), g(n), d(n), r(n), t(n)
-            real(dp)  :: z(n), dsave(13)
+            logical           :: boxed, cnstnd
+            integer           :: n, iter, ifun, iback, nfgv, info
+            integer           :: nbd(n), isave(2)
+            real(dp)          :: f, fold, gd, gdold, stp, dnorm, dtd, xstep
+            real(dp)          :: stpmx, x(n), l(n), u(n), g(n), d(n), r(n), t(n)
+            real(dp)          :: z(n), dsave(13)
             !     **********
             !
             !     Subroutine lnsrlb

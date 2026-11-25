@@ -106,8 +106,8 @@ contains
     !===========================
 
     module subroutine ran( self, b )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: b      ! support upper bound, defaults to 1
+        class(image),   intent(inout)        :: self
+        real,           optional, intent(in) :: b ! support upper bound, defaults to 1
         integer :: i, j, k
         do k=1,self%ldim(3)
             do j=1,self%ldim(2)
@@ -187,10 +187,10 @@ contains
         character(len=*), intent(in)    :: mode
         real,    parameter :: PADDING = sqrt(2.)
         integer, parameter :: CS_DIM  = 1024
-        type(image)     :: img_pad, msk
-        real            :: smpd_bin
-        integer         :: ldim_pd(3), ldim_bin(3), ldim_cs(3), bin_dim
-        integer         :: i,j,is,js,ie,je, binning
+        type(image)        :: img_pad, msk
+        real               :: smpd_bin
+        integer            :: ldim_pd(3), ldim_bin(3), ldim_cs(3), bin_dim
+        integer            :: i,j,is,js,ie,je, binning
         if( self%ft )      THROW_HARD('Real space only!, estimate_background')
         if( self%is_3d() ) THROW_HARD('2D images only!, estimate_background')
         select case(trim(mode))
@@ -293,9 +293,9 @@ contains
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         real, allocatable :: xyz(:,:)
-        real    :: A,B,C,D
-        integer :: cen(2),i,j,npix
-        logical :: err
+        real              :: A,B,C,D
+        integer           :: cen(2),i,j,npix
+        logical           :: err
         if( self%ft )      THROW_HARD('Real space only!, subtr_backr_ramp')
         if( self%is_3d() ) THROW_HARD('2D images only!, subtr_backr_ramp')
         npix = product(self%ldim) - count(lmsk)
@@ -322,9 +322,9 @@ contains
 
     !>  Subtracts background, for micrographs
     module subroutine subtract_background( self, freq, mode )
-        class(image),               intent(inout) :: self
-        real,                       intent(in)    :: freq
-        character(len=*), optional, intent(in)    :: mode
+        class(image),               intent(inout)        :: self
+        real,                       intent(in)           :: freq
+        character(len=*),           optional, intent(in) :: mode
         integer,    parameter :: CS_DIM  = 1024
         type(image)           :: tmpimg
         character(len=STDLEN) :: cmode
@@ -349,8 +349,8 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: ldim(2)
         type(image) :: upsampled
-        integer :: i,j,fx,fy,fpx,fpy
-        real :: scales(2), scale, x,y, dx,dy,b
+        integer     :: i,j,fx,fy,fpx,fpy
+        real        :: scales(2), scale, x,y, dx,dy,b
         if( ldim(1) /= ldim(2) ) THROW_HARD('Unsupported dimensions!')
         scales = real(self%ldim(1:2)) / real(ldim(1:2))
         scale  = product(scales)
@@ -684,18 +684,18 @@ contains
         real,             intent(in)    :: total_dose   ! in e-/A2
         real,             intent(in)    :: voltage      ! in kV
         character(len=*), intent(in)    :: mode
-        real(dp), parameter :: A = 0.245d0
-        real(dp), parameter :: B = -1.665d0
-        real(dp), parameter :: C = 2.81d0
-        real(dp), parameter :: halfB = 0.5d0 * B
+        real(dp), parameter :: A                 = 0.245d0
+        real(dp), parameter :: B                 = -1.665d0
+        real(dp), parameter :: C                 = 2.81d0
+        real(dp), parameter :: halfB             = 0.5d0 * B
         real(dp), parameter :: CRITICAL_SCALE    = 0.67586d0
         real(dp), parameter :: CRITICAL_EXPONENT = -1.31489d0
-        real(dp) :: s, sksq, twoNe, alpha, r, r2, q, sumsq, term
-        real(dp) :: freq, critical_exposure, dose_per_frame_cs, weight_sum
-        real(dp) :: limhsq_cs, limksq_cs
-        real     :: smpd, limhsq, limksq, dose_per_frame
-        integer  :: ldim(3), hphys, kphys, h, k, i, j, nsel
-        integer  :: nxphys, nyphys, ldimx, ldimy, ldimx_half, ldimy_half
+        real(dp)            :: s, sksq, twoNe, alpha, r, r2, q, sumsq, term
+        real(dp)            :: freq, critical_exposure, dose_per_frame_cs, weight_sum
+        real(dp)            :: limhsq_cs, limksq_cs
+        real                :: smpd, limhsq, limksq, dose_per_frame
+        integer             :: ldim(3), hphys, kphys, h, k, i, j, nsel
+        integer             :: nxphys, nyphys, ldimx, ldimy, ldimx_half, ldimy_half
         if (.not. frames(frange(1))%is_ft()) THROW_HARD('Frames should be in Fourier space')
         smpd       = frames(frange(1))%smpd
         ldim       = frames(frange(1))%ldim

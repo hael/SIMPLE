@@ -115,7 +115,7 @@ contains
   subroutine test_server_start_join_lifecycle()
     type(ipc_tcp_socket_server)  :: server
     type(listener_args), target  :: largs
-    integer :: port
+    integer                      :: port
     write(*,'(A)') 'test_server_start_join_lifecycle'
     call init_listener_args(largs)
     call server%start_listener(c_funloc(listener_ready_once), c_loc(largs))
@@ -130,13 +130,13 @@ contains
   end subroutine test_server_start_join_lifecycle
 
   subroutine test_client_server_roundtrip()
-    type(ipc_tcp_socket_server)  :: server
-    type(listener_args), target  :: largs
-    type(ipc_tcp_socket_client)  :: client
-    character(kind=c_char), target :: rcv_buffer(TCP_MAX_MSG)
+    type(ipc_tcp_socket_server)                        :: server
+    type(listener_args),           target              :: largs
+    type(ipc_tcp_socket_client)                        :: client
+    character(kind=c_char),        target              :: rcv_buffer(TCP_MAX_MSG)
     character(kind=c_char, len=:), allocatable, target :: snd_buffer
-    integer :: nread
-    logical :: sent
+    integer                                            :: nread
+    logical                                            :: sent
     write(*,'(A)') 'test_client_server_roundtrip'
     call init_listener_args(largs)
     call server%new(c_funloc(listener_echo_ok_once), c_loc(largs))
@@ -153,11 +153,11 @@ contains
   end subroutine test_client_server_roundtrip
 
   subroutine test_client_send_recv_without_server_fails()
-    type(ipc_tcp_socket_client)  :: client
-    character(kind=c_char), target :: rcv_buffer(TCP_MAX_MSG)
+    type(ipc_tcp_socket_client)                        :: client
+    character(kind=c_char),        target              :: rcv_buffer(TCP_MAX_MSG)
     character(kind=c_char, len=:), allocatable, target :: snd_buffer
-    integer :: nread
-    logical :: sent
+    integer                                            :: nread
+    logical                                            :: sent
     write(*,'(A)') 'test_client_send_recv_without_server_fails'
     call assert_true(TCP_MAX_RETRIES > 0, 'client retry constant should be positive')
     call assert_true(TCP_TIMEOUT_MS  > 0, 'client timeout constant should be positive')
@@ -200,10 +200,10 @@ contains
   subroutine poke_server_port(port)
     integer, intent(in) :: port
     type(tcp_sockaddr_in), target :: addr
-    integer(c_int), target :: ping
-    integer(c_int) :: fd
-    integer(c_int) :: rc
-    integer(c_socklen_t) :: addrlen
+    integer(c_int),        target :: ping
+    integer(c_int)                :: fd
+    integer(c_int)                :: rc
+    integer(c_socklen_t)          :: addrlen
     write(*,'(A)') 'poke_server_port'
     fd = c_socket(AF_INET, SOCK_STREAM, 0_c_int)
     call assert_true(fd >= 0_c_int, 'poke helper should open socket')
@@ -224,13 +224,13 @@ contains
   end subroutine poke_server_port
 
   subroutine listener_ready_once(arg_ptr) bind(c)
-    type(c_ptr), value :: arg_ptr
-    type(listener_args), pointer :: args
-    character(kind=c_char, len=TCP_MAX_MSG), target :: msg
-    integer(c_int) :: conn_fd
-    integer :: nread
-    logical :: ok
-    integer(c_int) :: rc
+    type(c_ptr),                             value   :: arg_ptr
+    type(listener_args),                     pointer :: args
+    character(kind=c_char, len=TCP_MAX_MSG), target  :: msg
+    integer(c_int)                                   :: conn_fd
+    integer                                          :: nread
+    logical                                          :: ok
+    integer(c_int)                                   :: rc
     write(*,'(A)') 'listener_ready_once'
     if( .not. c_associated(arg_ptr) ) return
     call c_f_pointer(arg_ptr, args)
@@ -243,14 +243,14 @@ contains
   end subroutine listener_ready_once
 
   subroutine listener_echo_ok_once(arg_ptr) bind(c)
-    type(c_ptr), value :: arg_ptr
-    type(listener_args), pointer :: args
-    character(kind=c_char, len=TCP_MAX_MSG), target :: in_msg
-    character(kind=c_char, len=TCP_MAX_MSG), target :: out_msg
-    integer(c_int) :: conn_fd
-    integer :: nread, nwrite
-    logical :: ok
-    integer(c_int) :: rc
+    type(c_ptr),                             value   :: arg_ptr
+    type(listener_args),                     pointer :: args
+    character(kind=c_char, len=TCP_MAX_MSG), target  :: in_msg
+    character(kind=c_char, len=TCP_MAX_MSG), target  :: out_msg
+    integer(c_int)                                   :: conn_fd
+    integer                                          :: nread, nwrite
+    logical                                          :: ok
+    integer(c_int)                                   :: rc
     write(*,'(A)') 'listener_echo_ok_once'
     if( .not. c_associated(arg_ptr) ) return
     call c_f_pointer(arg_ptr, args)

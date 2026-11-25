@@ -54,13 +54,13 @@ contains
 
     !> \brief  writes the header instructions
     subroutine write_pbs_header( self, q_descr, fhandle )
-        class(qsys_pbs),   intent(in) :: self
-        class(chash),      intent(in) :: q_descr
-        integer, optional, intent(in) :: fhandle
+        class(qsys_pbs),   intent(in)           :: self
+        class(chash),      intent(in)           :: q_descr
+        integer,           optional, intent(in) :: fhandle
         type(string) :: key, pbs_cmd, pbs_val
-        real    :: rval
-        integer :: i, which
-        logical :: write2file
+        real         :: rval
+        integer      :: i, which
+        logical      :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
         do i=1,q_descr%size_of()
@@ -101,8 +101,8 @@ contains
         contains
 
             subroutine write_formatted(cmd, val, delimiter)
-                character(len=*),           intent(in) :: cmd, val
-                character(len=*), optional, intent(in) :: delimiter
+                character(len=*),           intent(in)           :: cmd, val
+                character(len=*),           optional, intent(in) :: delimiter
                 if(present(delimiter))then
                     if( write2file )then
                         write(fhandle,'(a)') trim(cmd)//trim(delimiter)//trim(val)
@@ -122,10 +122,10 @@ contains
 
     !> \brief  writes the array header instructions
     subroutine write_pbs_array_header( self, q_descr, parts_fromto, fhandle, nactive )
-        class(qsys_pbs),   intent(in) :: self
-        class(chash),      intent(in) :: q_descr
-        integer,           intent(in) :: parts_fromto(2)
-        integer, optional, intent(in) :: fhandle, nactive
+        class(qsys_pbs),   intent(in)           :: self
+        class(chash),      intent(in)           :: q_descr
+        integer,           intent(in)           :: parts_fromto(2)
+        integer,           optional, intent(in) :: fhandle, nactive
     end subroutine write_pbs_array_header
 
     !> \brief  is a destructor

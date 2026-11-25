@@ -26,12 +26,12 @@ type nu_state_filter_timings
     real(timer_int_kind) :: envmask   = 0.
     real(timer_int_kind) :: filter    = 0.
     ! the filter's own split (simple_nu_filter, get_nu_filter_timings)
-    real(timer_int_kind) :: filtering = 0.
-    real(timer_int_kind) :: objective = 0.
-    real(timer_int_kind) :: optimise  = 0.
+    real(timer_int_kind) :: filtering  = 0.
+    real(timer_int_kind) :: objective  = 0.
+    real(timer_int_kind) :: optimise   = 0.
     real(timer_int_kind) :: opt_levels = 0.  !< of optimise: the level smoothings and comparisons
     real(timer_int_kind) :: opt_potts  = 0.  !< of optimise: the ordered-label Potts sweeps
-    real(timer_int_kind) :: compose   = 0.
+    real(timer_int_kind) :: compose    = 0.
 end type nu_state_filter_timings
 
 contains
@@ -49,25 +49,25 @@ contains
     subroutine nonuniform_filter_state( params, state, vol_base_even, vol_base_odd, &
             &vol_aux_even, vol_aux_odd, l_use_aux, res0143, res05, volname, eonames, align_lp, timings, &
             &base_support, l_base_constrained )
-        class(parameters),            intent(in)    :: params
-        integer,                      intent(in)    :: state
-        type(image),                  intent(inout) :: vol_base_even, vol_base_odd
-        type(image),                  intent(inout) :: vol_aux_even, vol_aux_odd
-        logical,                      intent(in)    :: l_use_aux
-        real,                         intent(in)    :: res0143, res05
-        class(string),                intent(in)    :: volname, eonames(2)
-        real,                         intent(out)   :: align_lp
+        class(parameters),             intent(in)              :: params
+        integer,                       intent(in)              :: state
+        type(image),                   intent(inout)           :: vol_base_even, vol_base_odd
+        type(image),                   intent(inout)           :: vol_aux_even, vol_aux_odd
+        logical,                       intent(in)              :: l_use_aux
+        real,                          intent(in)              :: res0143, res05
+        class(string),                 intent(in)              :: volname, eonames(2)
+        real,                          intent(out)             :: align_lp
         type(nu_state_filter_timings), optional, intent(inout) :: timings
-        class(image),     optional, intent(in)    :: base_support       !< the support that constrained the base pair (PCG)
-        logical,          optional, intent(in)    :: l_base_constrained !< the base pair was solved on base_support, not the sphere
+        class(image),                  optional, intent(in)    :: base_support       !< the support that constrained the base pair (PCG)
+        logical,                       optional, intent(in)    :: l_base_constrained !< the base pair was solved on base_support, not the sphere
         type(image), allocatable :: nu_aux_even(:), nu_aux_odd(:)
         type(image)              :: vol_even_nu, vol_odd_nu, vol_base_avg, envelope_core, envelope_dilated, order_mask
         type(image_msk)          :: density_envelope, active_envelope
         type(string)             :: nu_envmask_file, order_mask_file
         type(nu_order_stats)     :: order_stats
         integer(timer_int_kind)  :: t_filter, t_envmask
-        real    :: aux_resolution, bank_cap_res
-        logical :: l_constrained, l_nu_envelope_valid
+        real                     :: aux_resolution, bank_cap_res
+        logical                  :: l_constrained, l_nu_envelope_valid
         align_lp = 0.
         if( L_BENCH_GLOB ) t_filter = tic()
         l_constrained = .false.
@@ -230,8 +230,8 @@ contains
         end subroutine write_nonuniform_outputs
 
         subroutine record_nu_alignment_lowpass_limit()
-            real    :: raw_lp, populated_lp
-            integer :: n_signal
+            real                          :: raw_lp, populated_lp
+            integer                       :: n_signal
             character(len=:), allocatable :: label
             ! handoff = finest bank member, independent of which labels won voxels; the population statistics
             ! are diagnostics (doc/policies/NU/nonuniform_filtering_policy.md section 12)

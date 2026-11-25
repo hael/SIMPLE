@@ -19,76 +19,76 @@ private
 
 !> the accumulation schemes: the measured model, the Grant & Grigorieff control, the flat mean (a = 1)
 integer, parameter :: DOSE_WEIGHTS_MODEL = 1, DOSE_WEIGHTS_CONTROL = 2, DOSE_WEIGHTS_FLAT = 3
-integer, parameter :: N_SCHEMES = 3
+integer, parameter :: N_SCHEMES          = 3
 
-integer,  parameter :: MIN_BAND_SHELLS = 6       !< a line in k^2 needs a band to be a line over
-integer,  parameter :: N_ALT_PASSES    = 3       !< alternating passes of the rank-one fit
-integer,  parameter :: N_LM_ITER       = 50      !< Levenberg-Marquardt iterations of the Guinier fit
+integer,  parameter :: MIN_BAND_SHELLS = 6         !< a line in k^2 needs a band to be a line over
+integer,  parameter :: N_ALT_PASSES    = 3         !< alternating passes of the rank-one fit
+integer,  parameter :: N_LM_ITER       = 50        !< Levenberg-Marquardt iterations of the Guinier fit
 real(dp), parameter :: GUINIER_REL_TOL = 1.e-10_dp !< the Guinier fit's relative stops (predicted, accepted reduction)
-integer,  parameter :: N_BANDS         = 8       !< resolution bands of the readout
+integer,  parameter :: N_BANDS         = 8         !< resolution bands of the readout
 real(dp), parameter :: OWN_FSC_FLOOR   = 0.1_dp
-real(dp), parameter :: SE_RATIO        = 2.0_dp  !< shells entering the log-domain start of the Guinier fit
-real(dp), parameter :: C_DETECT        = 5.0_dp  !< errors a window's scale must clear to count as measured
+real(dp), parameter :: SE_RATIO        = 2.0_dp    !< shells entering the log-domain start of the Guinier fit
+real(dp), parameter :: C_DETECT        = 5.0_dp    !< errors a window's scale must clear to count as measured
 
 type :: dose_series
     private
-    integer  :: nwin = 0, nsh = 0, klo = 0, khi = 0
-    real(dp) :: kv = 300._dp
-    real(dp) :: rscale = 1._dp, mask_frac = 1._dp
-    real(dp) :: shell_corr = 1._dp  !< variance inflation of a fit across shells, from their correlation
-    logical  :: l_line   = .true.
-    logical  :: l_paired = .false.
-    logical  :: l_exists = .false.
-    integer,  allocatable :: nshell(:)       !< (nsh) coefficients per shell in the statistics
-    real(dp), allocatable :: kfreq(:)        !< (nsh) spatial frequency of each shell, 1/A
-    real(dp), allocatable :: dose(:)         !< (nwin) scaled accumulated dose at the window centre
-    real(dp), allocatable :: ddose(:)        !< (nwin) scaled dose span of the window
-    real(dp), allocatable :: sigma2(:,:)     !< (nwin,nsh) one half's noise variance
-    real(dp), allocatable :: prec(:,:)       !< (nwin,nsh) 1/sigma2
-    real(dp), allocatable :: gram(:,:,:)     !< (2*nwin,2*nwin,nsh) Gram matrix of the halves
-    real(dp), allocatable :: cvar(:,:,:)     !< (nwin,nwin,nsh) variance of the cross-half products
-    real(dp), allocatable :: atten(:,:)      !< (nwin,nsh) model-free relative attenuation
-    real(dp), allocatable :: atten_se(:,:)   !< (nwin,nsh) its standard error
-    real(dp), allocatable :: atten_cov(:,:,:) !< (nwin,nwin,nsh) joint attenuation covariance
-    real(dp), allocatable :: bw_cov(:,:)      !< (nwin,nwin) covariance of the measured B-factors
-    real(dp), allocatable :: sigpow(:)       !< (nsh) signal power of window 1
+    integer               :: nwin          = 0, nsh = 0, klo = 0, khi = 0
+    real(dp)              :: kv            = 300._dp
+    real(dp)              :: rscale        = 1._dp, mask_frac = 1._dp
+    real(dp)              :: shell_corr    = 1._dp                                                 !< variance inflation of a fit across shells, from their correlation
+    logical               :: l_line        = .true.
+    logical               :: l_paired      = .false.
+    logical               :: l_exists      = .false.
+    integer,  allocatable :: nshell(:)                                                             !< (nsh) coefficients per shell in the statistics
+    real(dp), allocatable :: kfreq(:)                                                              !< (nsh) spatial frequency of each shell, 1/A
+    real(dp), allocatable :: dose(:)                                                               !< (nwin) scaled accumulated dose at the window centre
+    real(dp), allocatable :: ddose(:)                                                              !< (nwin) scaled dose span of the window
+    real(dp), allocatable :: sigma2(:,:)                                                           !< (nwin,nsh) one half's noise variance
+    real(dp), allocatable :: prec(:,:)                                                             !< (nwin,nsh) 1/sigma2
+    real(dp), allocatable :: gram(:,:,:)                                                           !< (2*nwin,2*nwin,nsh) Gram matrix of the halves
+    real(dp), allocatable :: cvar(:,:,:)                                                           !< (nwin,nwin,nsh) variance of the cross-half products
+    real(dp), allocatable :: atten(:,:)                                                            !< (nwin,nsh) model-free relative attenuation
+    real(dp), allocatable :: atten_se(:,:)                                                         !< (nwin,nsh) its standard error
+    real(dp), allocatable :: atten_cov(:,:,:)                                                      !< (nwin,nwin,nsh) joint attenuation covariance
+    real(dp), allocatable :: bw_cov(:,:)                                                           !< (nwin,nwin) covariance of the measured B-factors
+    real(dp), allocatable :: sigpow(:)                                                             !< (nsh) signal power of window 1
     real(dp), allocatable :: cw(:), cw_se(:), bw(:), bw_se(:), bw_star(:), zw(:), grms(:)
-    logical,  allocatable :: l_rejected(:)   !< (nwin) no fit of the window's attenuation
-    real(dp), allocatable :: weight(:,:,:)   !< (nwin,nsh,N_SCHEMES) accumulation weights
-    real(dp), allocatable :: ess(:), abar(:) !< (nsh) of the model's weights
-    real(dp), allocatable :: cv(:,:)         !< (N_SCHEMES,nsh) mean whitened cross-half prediction error
-    real(dp), allocatable :: dsum(:)         !< (nsh) sum of paired model-minus-control errors
-    real(dp), allocatable :: paired_delta(:) !< (nsh) paired mean error difference; descriptive only
-    real(dp), allocatable :: ne_shell(:), ne_se(:) !< (nsh) model-free critical exposure and its error
-    real(dp), allocatable :: ne_model_est(:)       !< (nsh) the per-window model's, through the same estimator
-    real(dp) :: b0 = 0._dp, beta = 0._dp, beta_se = 0._dp, tau = 0._dp
-    real(dp) :: lnc0 = 0._dp, gamma = 0._dp, gamma_se = 0._dp, tau_c = 0._dp  !< ln c = lnc0 - gamma D
-    logical  :: l_line_fitted = .false.
+    logical,  allocatable :: l_rejected(:)                                                         !< (nwin) no fit of the window's attenuation
+    real(dp), allocatable :: weight(:,:,:)                                                         !< (nwin,nsh,N_SCHEMES) accumulation weights
+    real(dp), allocatable :: ess(:), abar(:)                                                       !< (nsh) of the model's weights
+    real(dp), allocatable :: cv(:,:)                                                               !< (N_SCHEMES,nsh) mean whitened cross-half prediction error
+    real(dp), allocatable :: dsum(:)                                                               !< (nsh) sum of paired model-minus-control errors
+    real(dp), allocatable :: paired_delta(:)                                                       !< (nsh) paired mean error difference; descriptive only
+    real(dp), allocatable :: ne_shell(:), ne_se(:)                                                 !< (nsh) model-free critical exposure and its error
+    real(dp), allocatable :: ne_model_est(:)                                                       !< (nsh) the per-window model's, through the same estimator
+    real(dp)              :: b0            = 0._dp, beta = 0._dp, beta_se = 0._dp, tau = 0._dp
+    real(dp)              :: lnc0          = 0._dp, gamma = 0._dp, gamma_se = 0._dp, tau_c = 0._dp !< ln c = lnc0 - gamma D
+    logical               :: l_line_fitted = .false.
   contains
-    procedure :: new
-    procedure :: set_window
-    procedure :: accumulate_gram
-    procedure :: set_band
-    procedure :: fit
-    procedure :: paired_cv
-    procedure :: accumulate
-    procedure :: zerodose
-    procedure :: write_model_table
-    procedure :: write_attenuation_table
-    procedure :: write_weights_table
-    procedure :: write_cv_table
-    procedure :: write_decay_table
-    procedure :: write_step_exposure
-    procedure :: write_window_fsc
-    procedure :: write_resolution_weights
-    procedure :: export_curve
-    procedure :: log_readout
-    procedure :: get_beta
-    procedure :: get_band
-    procedure :: get_weights
-    procedure :: get_cv
-    procedure :: get_attenuation
-    procedure :: kill
+    procedure          :: new
+    procedure          :: set_window
+    procedure          :: accumulate_gram
+    procedure          :: set_band
+    procedure          :: fit
+    procedure          :: paired_cv
+    procedure          :: accumulate
+    procedure          :: zerodose
+    procedure          :: write_model_table
+    procedure          :: write_attenuation_table
+    procedure          :: write_weights_table
+    procedure          :: write_cv_table
+    procedure          :: write_decay_table
+    procedure          :: write_step_exposure
+    procedure          :: write_window_fsc
+    procedure          :: write_resolution_weights
+    procedure          :: export_curve
+    procedure          :: log_readout
+    procedure          :: get_beta
+    procedure          :: get_band
+    procedure          :: get_weights
+    procedure          :: get_cv
+    procedure          :: get_attenuation
+    procedure          :: kill
     procedure, private :: shell_buckets
     procedure, private :: noise_spectra
     procedure, private :: derive_band
@@ -112,7 +112,7 @@ end type dose_series
 !> the Guinier fit (10) of one window for lm_solve: (c, B) over the window's resolved shells
 type, extends(lm_problem) :: guinier_problem
     real(dp), allocatable :: atten(:), wgt(:), k2(:) !< the resolved shells: attenuation, 1/se^2, k^2
-    real(dp) :: x(2) = 0._dp, trial(2) = 0._dp
+    real(dp)              :: x(2) = 0._dp, trial(2) = 0._dp
 contains
     procedure :: eval       => guinier_eval
     procedure :: limit_step => guinier_limit_step
@@ -167,8 +167,8 @@ contains
     pure real(dp) function shell_independence( m ) result( frac )
         real, intent(in) :: m(:,:,:)
         real(dp), allocatable :: m2(:,:,:)
-        real(dp) :: total, g
-        integer  :: n(3)
+        real(dp)              :: total, g
+        integer               :: n(3)
         n     = shape(m)
         m2    = real(m, dp)**2
         total = sum(m2)
@@ -187,8 +187,8 @@ contains
     pure real(dp) function shell_correlation( m ) result( f )
         real, intent(in) :: m(:,:,:)
         real(dp), allocatable :: m2(:,:,:)
-        real(dp) :: quart, p(3)
-        integer  :: n(3)
+        real(dp)              :: quart, p(3)
+        integer               :: n(3)
         n     = shape(m)
         m2    = real(m, dp)**2
         quart = sum(m2 * m2)
@@ -262,11 +262,11 @@ contains
 
     !> order the in-range coefficients by shell, so a loop over shells sums each one in a fixed order
     subroutine shell_buckets( self, shell, offset, order )
-        class(dose_series),   intent(in)    :: self
-        integer,              intent(in)    :: shell(:)
-        integer, allocatable, intent(inout) :: offset(:), order(:)
+        class(dose_series),   intent(in)                 :: self
+        integer,              intent(in)                 :: shell(:)
+        integer,              allocatable, intent(inout) :: offset(:), order(:)
         integer, allocatable :: cnt(:)
-        integer :: i, s
+        integer              :: i, s
         if( allocated(offset) ) deallocate(offset)
         if( allocated(order)  ) deallocate(order)
         allocate(cnt(self%nsh), source=0)
@@ -297,9 +297,9 @@ contains
         real(dp),           intent(in)    :: mask_frac          !< fraction of a shell's coefficients the mask leaves independent
         real(dp),           intent(in)    :: shell_corr         !< variance inflation of a fit across shells (shell_correlation)
         integer,  allocatable :: offset(:), order(:)
-        complex(dp) :: y(2*self%nwin)
-        real(dp)    :: x, invn, invneff, pwr, nvals, vx(self%nwin,self%nwin)
-        integer     :: ncoeff, i, s, w, v, a, nn, lo, hi
+        complex(dp)           :: y(2*self%nwin)
+        real(dp)              :: x, invn, invneff, pwr, nvals, vx(self%nwin,self%nwin)
+        integer               :: ncoeff, i, s, w, v, a, nn, lo, hi
         if( .not. self%l_exists ) THROW_HARD('Dose series not constructed')
         ncoeff = size(shell)
         if( size(em,1) /= ncoeff .or. size(om,1) /= ncoeff ) THROW_HARD('Coefficient count mismatch')
@@ -552,8 +552,8 @@ contains
         real(dp), intent(in)  :: a(:), p, cvar(:,:), sigma2(:), neff
         real(dp), intent(out) :: se(:), acov(:,:)
         real(dp), allocatable :: jac(:,:), lmat(:,:), dw(:), rv(:), lam(:), h(:,:), hinv(:,:), b(:,:), jdl(:,:), cov(:,:)
-        integer :: nw, m, ip, w, v, k
-        logical :: ok
+        integer               :: nw, m, ip, w, v, k
+        logical               :: ok
         nw = size(a)
         m  = nw*(nw+1)/2
         ! parameters: a_2..a_nw in columns 1..nw-1, P in column nw
@@ -605,9 +605,9 @@ contains
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
         class(dose_series), intent(inout) :: self
         character(len=:), allocatable :: msg
-        real(dp) :: k2(self%nsh), wgt, lsum(4), sxy, rhs(2), jtj(3), det, c, b, obj, varc
-        real(dp) :: db_da(self%nwin,self%nsh)
-        integer  :: w, v, s, nused
+        real(dp)                      :: k2(self%nsh), wgt, lsum(4), sxy, rhs(2), jtj(3), det, c, b, obj, varc
+        real(dp)                      :: db_da(self%nwin,self%nsh)
+        integer                       :: w, v, s, nused
         k2 = self%kfreq * self%kfreq
         self%l_rejected = .false.
         db_da = 0._dp
@@ -726,7 +726,7 @@ contains
             type(guinier_problem) :: problem
             type(lm_options)      :: options
             type(lm_outcome)      :: outcome
-            logical :: resolved(self%klo:self%khi)
+            logical               :: resolved(self%klo:self%khi)
             resolved      = self%atten_se(w,self%klo:self%khi) < huge(1._dp)
             problem%atten = pack(self%atten(w,self%klo:self%khi), resolved)
             problem%wgt   = 1._dp / max(DTINY, pack(self%atten_se(w,self%klo:self%khi), resolved)**2)
@@ -1070,9 +1070,9 @@ contains
         complex(sp),        intent(in)    :: em(:,:), om(:,:)   !< (ncoeff,nwin) masked halves
         integer,            intent(in)    :: shell(:)
         integer,     allocatable :: offset(:), order(:)
-        real(dp)    :: am(self%nwin), ac(self%nwin), gm(self%nwin), gc(self%nwin), d, rm, rc, dm, dc
-        complex(dp) :: e(self%nwin), o(self%nwin), sem, som, sec, soc
-        integer     :: s, a, i, w, t
+        real(dp)                 :: am(self%nwin), ac(self%nwin), gm(self%nwin), gc(self%nwin), d, rm, rc, dm, dc
+        complex(dp)              :: e(self%nwin), o(self%nwin), sem, som, sec, soc
+        integer                  :: s, a, i, w, t
         if( .not. self%l_exists ) THROW_HARD('Dose series not constructed')
         if( self%khi < self%klo ) THROW_HARD('Fit the series before pairing its cross-validation')
         if( size(em,1) /= size(shell) .or. size(om,1) /= size(shell) ) THROW_HARD('Coefficient count mismatch')
@@ -1197,9 +1197,9 @@ contains
 
     !> per-shell weights of one scheme
     subroutine get_weights( self, w, scheme )
-        class(dose_series),    intent(in)    :: self
-        real(dp), allocatable, intent(inout) :: w(:,:)
-        integer,               intent(in)    :: scheme
+        class(dose_series),    intent(in)                 :: self
+        real(dp),              allocatable, intent(inout) :: w(:,:)
+        integer,               intent(in)                 :: scheme
         if( scheme < 1 .or. scheme > N_SCHEMES ) THROW_HARD('Unknown accumulation scheme')
         if( allocated(w) ) deallocate(w)
         allocate(w(self%nwin,self%nsh), source=self%weight(:,:,scheme))
@@ -1207,8 +1207,8 @@ contains
 
     !> Per-shell cross-half errors and the paired model-minus-control mean difference; not a significance test.
     subroutine get_cv( self, cv, delta )
-        class(dose_series),    intent(in)    :: self
-        real(dp), allocatable, intent(inout) :: cv(:,:), delta(:)
+        class(dose_series),    intent(in)                 :: self
+        real(dp),              allocatable, intent(inout) :: cv(:,:), delta(:)
         if( allocated(cv) ) deallocate(cv)
         if( allocated(delta) ) deallocate(delta)
         allocate(cv(N_SCHEMES,self%nsh), source=self%cv)
@@ -1218,8 +1218,8 @@ contains
     !> the model-free attenuation of every window and shell with its standard error, and each window's
     !! Guinier rms: the residual of its B-factor curve in units of those errors
     subroutine get_attenuation( self, atten, se, grms )
-        class(dose_series),    intent(in)    :: self
-        real(dp), allocatable, intent(inout) :: atten(:,:), se(:,:), grms(:)
+        class(dose_series),    intent(in)                 :: self
+        real(dp),              allocatable, intent(inout) :: atten(:,:), se(:,:), grms(:)
         if( allocated(atten) ) deallocate(atten)
         if( allocated(se)    ) deallocate(se)
         if( allocated(grms)  ) deallocate(grms)
@@ -1234,8 +1234,8 @@ contains
         class(dose_series), intent(in) :: self
         class(string),      intent(in) :: fname
         character, parameter :: TAB = achar(9)
-        real(dp) :: bref, cref
-        integer  :: funit, w, io_stat, iref
+        real(dp)             :: bref, cref
+        integer              :: funit, w, io_stat, iref
         iref = self%sharpest()
         bref = self%bw_star(iref)
         cref = self%cw(iref)
@@ -1265,7 +1265,7 @@ contains
         class(dose_series), intent(in) :: self
         class(string),      intent(in) :: fname
         character, parameter :: TAB = achar(9)
-        integer :: funit, s, w, io_stat
+        integer              :: funit, s, w, io_stat
         call fopen(funit, file=fname, status='replace', action='write', form='formatted')
         write(funit,'(A)',advance='no',iostat=io_stat) 'shell'//TAB//'k_inv_A'
         call fileiochk('Writing attenuation header', io_stat)
@@ -1293,7 +1293,7 @@ contains
         class(dose_series), intent(in) :: self
         class(string),      intent(in) :: fname
         character, parameter :: TAB = achar(9)
-        integer :: funit, s, w, io_stat
+        integer              :: funit, s, w, io_stat
         call fopen(funit, file=fname, status='replace', action='write', form='formatted')
         write(funit,'(A)',advance='no',iostat=io_stat) 'shell'//TAB//'k_inv_A'//TAB//'neff'//TAB//'abar'
         call fileiochk('Writing weights header', io_stat)
@@ -1321,7 +1321,7 @@ contains
         class(dose_series), intent(in) :: self
         class(string),      intent(in) :: fname
         character, parameter :: TAB = achar(9)
-        integer :: funit, s, io_stat
+        integer              :: funit, s, io_stat
         call fopen(funit, file=fname, status='replace', action='write', form='formatted')
         write(funit,'(A)',iostat=io_stat) '# cross-half prediction error: 1 is noise-free, 2 the window alone; parameters fitted on both halves;'// &
             &' paired differences are descriptive, with no calibrated significance or winner'
@@ -1346,8 +1346,8 @@ contains
         class(dose_series), intent(in) :: self
         class(string),      intent(in) :: fname
         character, parameter :: TAB = achar(9)
-        real(dp) :: nan, ne_model, ne_gg, se, am, rate
-        integer  :: funit, s, w, io_stat
+        real(dp)             :: nan, ne_model, ne_gg, se, am, rate
+        integer              :: funit, s, w, io_stat
         nan = ieee_value(1._dp, ieee_quiet_nan)
         call fopen(funit, file=fname, status='replace', action='write', form='formatted')
         write(funit,'(A)',iostat=io_stat) '# critical exposure in the scaled dose coordinate (e/A^2); NaN where not measured'
@@ -1395,8 +1395,8 @@ contains
         class(string),      intent(in) :: fname
         real(dp),           intent(in) :: res(:)
         character, parameter :: TAB = achar(9)
-        real(dp) :: nan, ne, se, ne_gg
-        integer  :: funit, w, i, io_stat, sres(size(res))
+        real(dp)             :: nan, ne, se, ne_gg
+        integer              :: funit, w, i, io_stat, sres(size(res))
         nan = ieee_value(1._dp, ieee_quiet_nan)
         do i = 1, size(res)
             sres(i) = nint(1._dp / (res(i) * self%kfreq(1)))
@@ -1435,7 +1435,7 @@ contains
         class(dose_series), intent(in) :: self
         class(string),      intent(in) :: fname
         character, parameter :: TAB = achar(9)
-        integer :: funit, s, w, v, io_stat
+        integer              :: funit, s, w, v, io_stat
         if( .not. self%l_exists ) THROW_HARD('Dose series not constructed')
         call fopen(funit, file=fname, status='replace', action='write', form='formatted')
         write(funit,'(A)',iostat=io_stat) '# FSC between windows w and v under the mask: the even half of each against '// &
@@ -1468,8 +1468,8 @@ contains
         class(string),      intent(in) :: fname
         real(dp),           intent(in) :: res(:)
         character, parameter :: TAB = achar(9)
-        real(dp) :: nan
-        integer  :: funit, w, i, io_stat, sres(size(res))
+        real(dp)             :: nan
+        integer              :: funit, w, i, io_stat, sres(size(res))
         nan = ieee_value(1._dp, ieee_quiet_nan)
         do i = 1, size(res)
             sres(i) = nint(1._dp / (res(i) * self%kfreq(1)))
@@ -1528,8 +1528,8 @@ contains
     subroutine log_readout( self )
         class(dose_series), intent(in) :: self
         real(dp), parameter :: RES_PROBE(3) = [2._dp, 3._dp, 10._dp]
-        real(dp) :: ne, equiv(3), n, nsw, ess_b, abar_b, cvb(N_SCHEMES), delta, bref, cref
-        integer  :: w, i, j, nb, nsb, k1, k2, s, iref
+        real(dp)            :: ne, equiv(3), n, nsw, ess_b, abar_b, cvb(N_SCHEMES), delta, bref, cref
+        integer             :: w, i, j, nb, nsb, k1, k2, s, iref
         iref = self%sharpest()
         bref = self%bw_star(iref)
         cref = self%cw(iref)
@@ -1602,7 +1602,7 @@ contains
         class(dose_series), intent(in) :: self
         integer,            intent(in) :: w, iref
         real(dp) :: gradient(self%nwin), weight(self%nwin), s0, s1, s2, det, alpha
-        integer :: v
+        integer  :: v
         se = huge(1._dp)
         if( self%l_rejected(w) ) return
         gradient = 0._dp

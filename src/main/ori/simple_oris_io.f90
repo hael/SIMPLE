@@ -24,12 +24,12 @@ contains
     end subroutine print_matrices
 
     module subroutine read( self, orifile, fromto, nst )
-        class(oris),       intent(inout) :: self
-        class(string),     intent(in)    :: orifile
-        integer, optional, intent(in)    :: fromto(2)
-        integer, optional, intent(out)   :: nst
+        class(oris),       intent(inout)         :: self
+        class(string),     intent(in)            :: orifile
+        integer,           optional, intent(in)  :: fromto(2)
+        integer,           optional, intent(out) :: nst
         character(len=100) :: io_message
-        integer :: file_stat, i, fnr, state, istart, iend
+        integer            :: file_stat, i, fnr, state, istart, iend
         if( .not. file_exists(orifile) )then
             THROW_HARD("the file you are trying to read: "//orifile%to_char()//' does not exist in cwd' )
         endif
@@ -103,9 +103,9 @@ contains
     end subroutine read_ctfparams_state_eo
 
     module subroutine write_range( self, orifile, fromto )
-        class(oris),       intent(in) :: self
-        class(string),     intent(in) :: orifile
-        integer, optional, intent(in) :: fromto(2)
+        class(oris),       intent(in)           :: self
+        class(string),     intent(in)           :: orifile
+        integer,           optional, intent(in) :: fromto(2)
         character(len=100) :: io_message
         integer            :: file_stat, fnr, i, ffromto(2), cnt
         ffromto(1) = 1
@@ -170,28 +170,28 @@ contains
     end subroutine write2bild
 
     module subroutine write_projdir_heatmap( self, state, nspace, fname, legend )
-        class(oris),            intent(in) :: self
-        integer,                intent(in) :: state, nspace
-        class(string),          intent(in) :: fname
-        type(string), optional, intent(in) :: legend
-        integer, parameter :: JPEG_QUALITY      = 96
-        integer, parameter :: ANGLE_LABEL_WIDTH = 24, ANGLE_LABEL_HEIGHT = 24
-        integer, parameter :: TICK_LABEL_WIDTH  = 10, TICK_LABEL_HEIGHT  = 14, TICK_LABEL_ADVANCE = 12
-        integer, parameter :: PLOT_WIDTH        = 540, PLOT_HEIGHT       = 270
-        integer, parameter :: LEFT_MARGIN       = 72,  RIGHT_MARGIN      = 8
-        integer, parameter :: TOP_MARGIN        = 32,  BOTTOM_MARGIN     = 72
-        integer, parameter :: COLORBAR_GAP      = 24,  COLORBAR_WIDTH    = 16
-        integer, parameter :: SCALE_LABEL_WIDTH = 80
-        type(jpg_img)     :: jpg
-        real, allocatable :: canvas(:,:), heatmap(:,:)
-        character(len=64) :: legend_here
-        character(len=16) :: min_label, max_label
-        character(len=3)  :: pi_label
-        character(len=4)  :: two_pi_label
-        real    :: val, vmin, vmax, range_scale, scaled, color, black, white
-        integer :: canvas_width, canvas_height, plot_x0, plot_x1, plot_y0, plot_y1
-        integer :: colorbar_x0, colorbar_x1, x, y, status, red, green, blue
-        logical :: error
+        class(oris),            intent(in)           :: self
+        integer,                intent(in)           :: state, nspace
+        class(string),          intent(in)           :: fname
+        type(string),           optional, intent(in) :: legend
+        integer, parameter   :: JPEG_QUALITY      = 96
+        integer, parameter   :: ANGLE_LABEL_WIDTH = 24, ANGLE_LABEL_HEIGHT = 24
+        integer, parameter   :: TICK_LABEL_WIDTH  = 10, TICK_LABEL_HEIGHT  = 14, TICK_LABEL_ADVANCE = 12
+        integer, parameter   :: PLOT_WIDTH        = 540, PLOT_HEIGHT       = 270
+        integer, parameter   :: LEFT_MARGIN       = 72,  RIGHT_MARGIN      = 8
+        integer, parameter   :: TOP_MARGIN        = 32,  BOTTOM_MARGIN     = 72
+        integer, parameter   :: COLORBAR_GAP      = 24,  COLORBAR_WIDTH    = 16
+        integer, parameter   :: SCALE_LABEL_WIDTH = 80
+        type(jpg_img)        :: jpg
+        real,    allocatable :: canvas(:,:), heatmap(:,:)
+        character(len=64)    :: legend_here
+        character(len=16)    :: min_label, max_label
+        character(len=3)     :: pi_label
+        character(len=4)     :: two_pi_label
+        real                 :: val, vmin, vmax, range_scale, scaled, color, black, white
+        integer              :: canvas_width, canvas_height, plot_x0, plot_x1, plot_y0, plot_y1
+        integer              :: colorbar_x0, colorbar_x1, x, y, status, red, green, blue
+        logical              :: error
         if( self%n < 1 ) THROW_HARD('Projection-direction heat-map requires a nonempty oris object')
         if( .not. self%isthere('proj') ) THROW_HARD('Projection-direction heat-map requires PROJ keys')
         if( nspace < 1 ) THROW_HARD('Projection-direction heat-map requires a positive nspace')
@@ -281,10 +281,10 @@ contains
             real,    allocatable :: proj_pops(:), angles(:,:), stencil_weights(:)
             integer, allocatable :: stencil_dx(:), stencil_dy(:)
             logical, allocatable :: proj_seen(:)
-            real    :: phi, theta, population, weight, logpop
-            real    :: phi_step, theta_step, delta, sig2, cutoff2, dsq
-            integer :: i, p, center_x, center_y, dx, dy, target_x, target_y, s, stencil_index
-            integer :: halfwin_x, halfwin_y, stencil_capacity, stencil_size
+            real                 :: phi, theta, population, weight, logpop
+            real                 :: phi_step, theta_step, delta, sig2, cutoff2, dsq
+            integer              :: i, p, center_x, center_y, dx, dy, target_x, target_y, s, stencil_index
+            integer              :: halfwin_x, halfwin_y, stencil_capacity, stencil_size
             error = .false.
             allocate(proj_pops(nspace), angles(2,nspace), source=0.)
             allocate(proj_seen(nspace), source=.false.)
@@ -362,10 +362,10 @@ contains
                 &], [3,N_COLORS])
             real,    intent(in)  :: fraction
             integer, intent(out) :: r, g, b
-            real :: local_fraction
+            real    :: local_fraction
             integer :: segment
             integer :: rgb0(3), rgb1(3)
-            real :: fraction_here
+            real    :: fraction_here
             fraction_here = max(0., min(1., fraction))
             segment = min(N_COLORS - 1, int(real(N_COLORS - 1) * fraction_here) + 1)
             local_fraction = real(N_COLORS - 1) * fraction_here - real(segment - 1)
@@ -411,13 +411,13 @@ contains
         end subroutine fill_rect
 
         pure subroutine draw_smooth_angle_glyph( bitmap, xpos, ypos, glyph, ink )
-            integer, parameter :: SUPERSAMPLE = 4
-            real, parameter :: INNER_RADIUS_SQ = 0.88**2, OUTER_RADIUS_SQ = 1.12**2
+            integer, parameter :: SUPERSAMPLE     = 4
+            real,    parameter :: INNER_RADIUS_SQ = 0.88**2, OUTER_RADIUS_SQ = 1.12**2
             real,             intent(inout) :: bitmap(:,:)
             integer,          intent(in)    :: xpos, ypos
             character(len=*), intent(in)    :: glyph
             real,             intent(in)    :: ink
-            real :: coverage, ellipse_radius_sq, sample_x, sample_y
+            real    :: coverage, ellipse_radius_sq, sample_x, sample_y
             integer :: ix, iy, sample_ix, sample_iy, covered_samples
             logical :: is_glyph_sample
             do iy = 0, ANGLE_LABEL_HEIGHT - 1
@@ -492,14 +492,14 @@ contains
         end subroutine draw_smooth_tick_text
 
         pure subroutine draw_smooth_tick_glyph( bitmap, xpos, ypos, glyph, ink )
-            integer, parameter :: SUPERSAMPLE = 4
-            real, parameter :: ZERO_INNER_SQ = 0.50, ZERO_OUTER_SQ = 1.00
-            real, parameter :: STROKE_RADIUS_SQ = 0.75**2
+            integer, parameter :: SUPERSAMPLE      = 4
+            real,    parameter :: ZERO_INNER_SQ    = 0.50, ZERO_OUTER_SQ = 1.00
+            real,    parameter :: STROKE_RADIUS_SQ = 0.75**2
             real,             intent(inout) :: bitmap(:,:)
             integer,          intent(in)    :: xpos, ypos
             character(len=*), intent(in)    :: glyph
             real,             intent(in)    :: ink
-            real :: coverage, ellipse_radius_sq, sample_x, sample_y
+            real    :: coverage, ellipse_radius_sq, sample_x, sample_y
             integer :: ix, iy, sample_ix, sample_iy, covered_samples
             logical :: is_glyph_sample
             do iy = 0, TICK_LABEL_HEIGHT - 1

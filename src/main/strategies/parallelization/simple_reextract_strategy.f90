@@ -48,7 +48,7 @@ type, extends(reextract_strategy) :: reextract_distr_strategy
     type(qsys_env)                   :: qenv
     type(chash)                      :: job_descr
     type(chash), allocatable         :: part_params(:)
-    integer, allocatable             :: parts(:,:)
+    integer,     allocatable         :: parts(:,:)
     integer                          :: nmics_tot = 0
     logical                          :: skip_run  = .false.
 contains
@@ -103,7 +103,7 @@ contains
     function create_reextract_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
         class(reextract_strategy), allocatable :: strategy
-        logical :: is_master
+        logical                                :: is_master
         ! master if nparts defined but no explicit worker range/part.
         is_master = cline%defined('nparts') .and. (.not.cline%defined('part')) &
                    .and. (.not.cline%defined('fromp')) .and. (.not.cline%defined('top'))
@@ -193,12 +193,12 @@ contains
         logical,          allocatable :: mic_mask(:), ptcl_mask(:)
         integer,          allocatable :: mic2stk_inds(:), boxcoords(:,:), ptcl_inds(:), mic_dims(:,:)
         type(string)                  :: stack
-        real    :: prev_shift(2),shift2d(2),shift3d(2),prev_shift_sc(2), translation(2), prev_center_sc(2)
-        real    :: stk_min, stk_max, stk_mean, stk_sdev, scale
-        integer :: prev_pos(2), new_pos(2), ishift(2), ldim(3), prev_center(2), new_center(2), ldim_sc(3)
-        integer :: i, nframes, imic, iptcl, nmics, prev_box, box_foo, cnt, nmics_tot, stk_ind
-        integer :: fromp, top, istk, nptcls2extract, nptcls
-        logical :: l_3d, l_scale_particles, l_movie_frames, l_measured
+        real                          :: prev_shift(2),shift2d(2),shift3d(2),prev_shift_sc(2), translation(2), prev_center_sc(2)
+        real                          :: stk_min, stk_max, stk_mean, stk_sdev, scale
+        integer                       :: prev_pos(2), new_pos(2), ishift(2), ldim(3), prev_center(2), new_center(2), ldim_sc(3)
+        integer                       :: i, nframes, imic, iptcl, nmics, prev_box, box_foo, cnt, nmics_tot, stk_ind
+        integer                       :: fromp, top, istk, nptcls2extract, nptcls
+        logical                       :: l_3d, l_scale_particles, l_movie_frames, l_measured
         l_movie_frames    = trim(params%extractfrommov).eq.'yes'
         l_measured        = trim(params%dose_weighting).eq.'measured'
         l_scale_particles = cline%defined('osmpd')
@@ -609,7 +609,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(sp_project), allocatable :: spproj_parts(:)
         type(oris)                    :: os_stk
-        type(string), allocatable     :: stktab(:), parts_fname(:)
+        type(string),     allocatable :: stktab(:), parts_fname(:)
         integer                       :: numlen, ipart, imic, istk
         integer                       :: nmics, cnt, nstks, nptcls, i, stkind
         if( self%skip_run ) return

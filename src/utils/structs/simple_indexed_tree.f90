@@ -10,19 +10,19 @@ public :: indexed_tree
 ! Multiple roots are allowed while building a hierarchy. Payloads belong to callers.
 type :: indexed_tree
     private
-    integer :: nnodes = 0
+    integer              :: nnodes = 0
     integer, allocatable :: parent(:), first_child(:), last_child(:), next_sibling(:)
   contains
-    procedure :: new
-    procedure :: kill
-    procedure :: add_root
-    procedure :: add_child
-    procedure :: join_roots
-    procedure :: get_nnodes
-    procedure :: get_parent
-    procedure :: get_children
-    procedure :: get_roots
-    procedure :: get_leaves
+    procedure          :: new
+    procedure          :: kill
+    procedure          :: add_root
+    procedure          :: add_child
+    procedure          :: join_roots
+    procedure          :: get_nnodes
+    procedure          :: get_parent
+    procedure          :: get_children
+    procedure          :: get_roots
+    procedure          :: get_leaves
     procedure, private :: check_node
     procedure, private :: reserve
     procedure, private :: link_child
@@ -102,7 +102,7 @@ contains
         class(indexed_tree), intent(in) :: self
         integer,             intent(in) :: inode
         integer, allocatable :: children(:)
-        integer :: child, n, i
+        integer              :: child, n, i
         call self%check_node(inode)
         n     = 0
         child = self%first_child(inode)
@@ -122,7 +122,7 @@ contains
     function get_roots( self ) result( roots )
         class(indexed_tree), intent(in) :: self
         integer, allocatable :: roots(:)
-        integer :: i
+        integer              :: i
         if( self%nnodes == 0 )then
             allocate(roots(0))
             return
@@ -133,7 +133,7 @@ contains
     function get_leaves( self ) result( leaves )
         class(indexed_tree), intent(in) :: self
         integer, allocatable :: leaves(:)
-        integer :: i
+        integer              :: i
         if( self%nnodes == 0 )then
             allocate(leaves(0))
             return

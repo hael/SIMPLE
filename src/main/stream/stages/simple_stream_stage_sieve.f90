@@ -81,32 +81,32 @@ integer,          parameter :: MAX_PROJECTS_IMPORT       = 20      ! completed u
 type :: stream_stage_sieve
     type(parameters), allocatable              :: params
     ! allocatable (compile-time policy), allocated in init_params and released in kill
-    type(qsys_env),   allocatable              :: qenv          ! starts the persistent workers the sieve's chunk jobs run on
-    type(sp_project), allocatable              :: spproj        ! the stage's project
-    type(stream_watcher)                       :: project_buff  ! completed reference-picking sets
-    type(rec_list)                             :: project_list  ! one record per imported micrograph
+    type(qsys_env),   allocatable              :: qenv                          ! starts the persistent workers the sieve's chunk jobs run on
+    type(sp_project), allocatable              :: spproj                        ! the stage's project
+    type(stream_watcher)                       :: project_buff                  ! completed reference-picking sets
+    type(rec_list)                             :: project_list                  ! one record per imported micrograph
     type(ptcl_sieve), allocatable              :: sieve
-    type(stream_pipe)                          :: pipe          ! to the master
+    type(stream_pipe)                          :: pipe                          ! to the master
     type(gui_metadata_stream_particle_sieving) :: meta_status
     type(gui_metadata_cavg2D)                  :: meta_cavgs
-    type(string), allocatable :: restored_imports(:)            ! restart: the sets the sieve has chunked from
-    integer,      allocatable :: latest_inds(:), latest_pops(:), latest_selection(:)
-    real,         allocatable :: latest_res(:)
-    type(string)              :: latest_jpeg, latest_stk        ! the sieve's latest class averages
-    real    :: mskdiam          = 0.      ! the picking references' mask diameter (moldiam.txt), the sieve's
-    integer :: latest_xtiles    = 0
-    integer :: latest_ytiles    = 0
-    integer :: n_mics_imported  = 0
-    integer :: n_ptcls_imported = 0
-    integer :: last_import_time = 0
-    integer :: last_watch       = 0       ! time of the last watch of the upstream folder
-    integer :: upstream_done_since = 0    ! when reference picking was first seen idle or stopped; 0: it is not
-    logical :: l_final          = .false. ! final ingestion is set
-    logical :: l_attached       = .false. ! the upstream completed-sets folder exists and is watched
-    logical :: l_waiting_logged = .false.
-    logical :: l_sieve_active   = .false. ! the sieve is made (on the first import)
-    logical :: l_restart        = .false. ! the output directory existed before params%new
-    logical :: l_exists         = .false.
+    type(string),     allocatable              :: restored_imports(:)           ! restart: the sets the sieve has chunked from
+    integer,          allocatable              :: latest_inds(:), latest_pops(:), latest_selection(:)
+    real,             allocatable              :: latest_res(:)
+    type(string)                               :: latest_jpeg, latest_stk       ! the sieve's latest class averages
+    real                                       :: mskdiam             = 0.      ! the picking references' mask diameter (moldiam.txt), the sieve's
+    integer                                    :: latest_xtiles       = 0
+    integer                                    :: latest_ytiles       = 0
+    integer                                    :: n_mics_imported     = 0
+    integer                                    :: n_ptcls_imported    = 0
+    integer                                    :: last_import_time    = 0
+    integer                                    :: last_watch          = 0       ! time of the last watch of the upstream folder
+    integer                                    :: upstream_done_since = 0       ! when reference picking was first seen idle or stopped; 0: it is not
+    logical                                    :: l_final             = .false. ! final ingestion is set
+    logical                                    :: l_attached          = .false. ! the upstream completed-sets folder exists and is watched
+    logical                                    :: l_waiting_logged    = .false.
+    logical                                    :: l_sieve_active      = .false. ! the sieve is made (on the first import)
+    logical                                    :: l_restart           = .false. ! the output directory existed before params%new
+    logical                                    :: l_exists            = .false.
     ! waits (s); tests set them to 0, and settle_s to -1 to take files written in the same second
     integer :: settle_s         = SHORTWAIT ! a completed set is taken once untouched longer than this;
                                             ! reference picking moves finished sets in with a rename
@@ -119,7 +119,7 @@ contains
     procedure :: kill
     ! the steps of new(), in order
     procedure, private :: init_params
-    procedure :: init_queue
+    procedure          :: init_queue
     procedure, private :: init_gui
     procedure, private :: restore_imports
     ! the steps of iterate() and their helpers
@@ -130,7 +130,7 @@ contains
     procedure, private :: resumable
     procedure, private :: read_mask_diameter
     procedure, private :: send_status
-    procedure :: send_latest_cavgs
+    procedure          :: send_latest_cavgs
 end type stream_stage_sieve
 
 interface
@@ -212,7 +212,7 @@ contains
         class(stream_stage_sieve), intent(inout) :: self
         type(string), allocatable :: projnames(:), sets(:), one_set(:)
         integer,      allocatable :: micinds(:)
-        integer :: i, j, nsets, n_before, irec
+        integer                   :: i, j, nsets, n_before, irec
         ! from the chunks that exist: a crash may have come between a chunk and the list
         call rebuild_chunked_mics()
         call read_chunked_mics(string(CHUNKED_MICS), projnames, micinds)
@@ -396,7 +396,7 @@ contains
     subroutine import_projects( self )
         class(stream_stage_sieve), intent(inout) :: self
         type(string), allocatable :: projects(:)
-        integer :: nprojects
+        integer                   :: nprojects
         self%last_watch = simple_gettime()
         call self%project_buff%watch(nprojects, projects, max_nmovies=MAX_PROJECTS_IMPORT)
         ! a capped watch may have left sets for the next pass
@@ -495,7 +495,7 @@ contains
         class(stream_stage_sieve), intent(inout) :: self
         type(string),              intent(in)    :: stage
         type(string) :: stage_text
-        integer :: i, naccepted, nrejected, nfailed
+        integer      :: i, naccepted, nrejected, nfailed
         naccepted  = 0
         nrejected  = 0
         nfailed    = 0

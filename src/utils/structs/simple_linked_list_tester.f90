@@ -11,8 +11,8 @@ private
 ! Derived type used in testing
 !-----------------------------------
 type :: particle
-    integer :: id
-    real    :: score
+    integer                   :: id
+    real                      :: score
     character(:), allocatable :: label
 end type particle
 
@@ -50,7 +50,7 @@ contains
 
     subroutine test_push_and_size()
         type(linked_list) :: lst
-        integer :: i
+        integer           :: i
         write(*,'(A)') 'test_push_and_size'
         call assert_true(lst%is_empty(), 'initial list empty')
         call assert_int(0, lst%size(), 'initial size=0')
@@ -65,9 +65,9 @@ contains
     !------------------- pop_front -------------------
 
     subroutine test_pop_front()
-        type(linked_list) :: lst
+        type(linked_list)     :: lst
         class(*), allocatable :: x
-        logical :: ok
+        logical               :: ok
         write(*,'(A)') 'test_pop_front'
         call lst%push_back(10)
         call lst%push_back(20)
@@ -88,7 +88,7 @@ contains
     !------------------- accessors: front/back/at -------------------
 
     subroutine test_front_back_at()
-        type(linked_list) :: lst
+        type(linked_list)     :: lst
         class(*), allocatable :: x
         write(*,'(A)') 'test_front_back_at'
         call lst%push_back(5)
@@ -103,7 +103,7 @@ contains
     !------------------- assign / deep copy -------------------
 
     subroutine test_assign_and_copy_semantics()
-        type(linked_list) :: a, b
+        type(linked_list)     :: a, b
         class(*), allocatable :: x
         write(*,'(A)') 'test_assign_and_copy_semantics'
         call a%push_back(1)
@@ -122,7 +122,7 @@ contains
     !------------------- append -------------------
 
     subroutine test_append()
-        type(linked_list) :: a, b, c
+        type(linked_list)     :: a, b, c
         class(*), allocatable :: x
         write(*,'(A)') 'test_append'
         call a%push_back(1)
@@ -138,8 +138,8 @@ contains
     !------------------- slice -------------------
 
     subroutine test_slice()
-        type(linked_list) :: lst, sl
-        class(*), allocatable:: x
+        type(linked_list)     :: lst, sl
+        class(*), allocatable :: x
         write(*,'(A)') 'test_slice'
         call lst%push_back(10)
         call lst%push_back(20)
@@ -154,11 +154,11 @@ contains
     !------------------- iterator: manual loop -------------------
 
     subroutine test_iteration()
-        type(linked_list) :: lst
-        type(list_iterator) :: it
+        type(linked_list)     :: lst
+        type(list_iterator)   :: it
         class(*), allocatable :: x
-        integer :: expected(3) = [10,20,30]
-        integer :: i
+        integer               :: expected(3) = [10,20,30]
+        integer               :: i
         write(*,'(A)') 'test_iteration'
         call lst%push_back(10)
         call lst%push_back(20)
@@ -182,8 +182,8 @@ contains
     !------------------- iterator index + advance -------------------
 
     subroutine test_iterator_index_and_advance()
-        type(linked_list) :: lst
-        type(list_iterator) :: it
+        type(linked_list)     :: lst
+        type(list_iterator)   :: it
         class(*), allocatable :: x
         write(*,'(A)') 'test_iterator_index_and_advance'
         call lst%push_back(100)
@@ -202,7 +202,7 @@ contains
     !------------------- end() iterator semantics -------------------
 
     subroutine test_end_iterator_behavior()
-        type(linked_list) :: lst
+        type(linked_list)   :: lst
         type(list_iterator) :: it_end, it_begin
         write(*,'(A)') 'test_end_iterator_behavior'
         call lst%push_back(1)
@@ -230,9 +230,9 @@ contains
     !===========================
 
     subroutine test_intrinsic_integer()
-        type(linked_list) :: lst
+        type(linked_list)     :: lst
         class(*), allocatable :: x
-        integer :: i
+        integer               :: i
         write(*,'(A)') 'test_intrinsic_integer'
         do i=1,5
             call lst%push_back(i)
@@ -252,7 +252,7 @@ contains
     end subroutine test_intrinsic_integer
 
     subroutine test_real()
-        type(linked_list) :: lst
+        type(linked_list)     :: lst
         class(*), allocatable :: x
         write(*,'(A)') 'test_real'
         call lst%push_back(1.5)
@@ -277,9 +277,9 @@ contains
     end subroutine test_real
 
     subroutine test_complex()
-        type(linked_list) :: lst
+        type(linked_list)     :: lst
         class(*), allocatable :: x
-        complex :: expected
+        complex               :: expected
         write(*,'(A)') 'test_complex'
         expected = (3.0, -4.0)
         call lst%push_back(expected)
@@ -295,7 +295,7 @@ contains
     end subroutine test_complex
 
     subroutine test_logical()
-        type(linked_list) :: lst
+        type(linked_list)     :: lst
         class(*), allocatable :: x
         write(*,'(A)') 'test_logical'
         call lst%push_back(.true.)
@@ -324,8 +324,8 @@ contains
     !===========================
 
     subroutine test_string_values()
-        type(linked_list) :: lst
-        class(*), allocatable :: x
+        type(linked_list)         :: lst
+        class(*),     allocatable :: x
         character(:), allocatable :: s
         write(*,'(A)') 'test_string_values'
         call lst%push_back('Alpha')
@@ -348,10 +348,10 @@ contains
     !===========================
 
     subroutine test_derived_type_values()
-        type(linked_list) :: lst
-        type(particle) :: p
+        type(linked_list)     :: lst
+        type(particle)        :: p
         class(*), allocatable :: x
-        type(particle) :: p2
+        type(particle)        :: p2
         write(*,'(A)') 'test_derived_type_values'
         p%id=42; p%score=0.987; p%label='P42'
         call lst%push_back(p)
@@ -370,10 +370,10 @@ contains
     end subroutine test_derived_type_values
 
     subroutine test_derived_type_independence()
-        type(linked_list) :: lst
-        type(particle) :: p
+        type(linked_list)     :: lst
+        type(particle)        :: p
         class(*), allocatable :: x
-        type(particle) :: copied
+        type(particle)        :: copied
         write(*,'(A)') 'test_derived_type_independence'
         p%id=1; p%score=10; p%label='A'
         call lst%push_back(p)
@@ -399,10 +399,10 @@ contains
     !---------------------------------------
 
     subroutine test_nested_allocations()
-        type(linked_list) :: lst
-        type(particle) :: p
+        type(linked_list)     :: lst
+        type(particle)        :: p
         class(*), allocatable :: x
-        type(particle) :: restored
+        type(particle)        :: restored
         write(*,'(A)') 'test_nested_allocations'
         p%id=77
         p%score=3.14
@@ -427,7 +427,7 @@ contains
     !---------------------------------------
 
     subroutine test_move_semantics()
-        type(linked_list) :: a, b
+        type(linked_list)     :: a, b
         class(*), allocatable :: x
         write(*,'(A)') 'test_move_semantics'
         call a%push_back(1)
@@ -451,7 +451,7 @@ contains
     !---------------------------------------
 
     subroutine test_type_safe_wrappers()
-        type(linked_list) :: lst
+        type(linked_list)         :: lst
         character(:), allocatable :: s
         write(*,'(A)') 'test_type_safe_wrappers'
         call lst%push_back_int(101)
@@ -463,8 +463,8 @@ contains
     end subroutine test_type_safe_wrappers
 
     subroutine test_replace_iterator_stability()
-        type(linked_list) :: lst
-        type(list_iterator) :: it
+        type(linked_list)     :: lst
+        type(list_iterator)   :: it
         class(*), allocatable :: x
         write(*,'(A)') 'test_replace_iterator_stability'
         call lst%push_back(10)

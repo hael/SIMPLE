@@ -150,13 +150,13 @@ contains
         type(flex_probe_fit), intent(inout) :: fits(2)
         integer,              intent(in)    :: it_eff
         type(crossfsc_record) :: rec
-        type(image) :: imga, imgb
+        type(image)           :: imga, imgb
         real,     pointer     :: pra(:,:,:), prb(:,:,:)
         real(dp), allocatable :: cosm(:,:)
         real,     allocatable :: corrs(:)
         logical,  allocatable :: used_a(:), used_b(:)
-        integer  :: nc_a, nc_b, km, q, p, k, best_q, best_p
-        real(dp) :: nrm_a, nrm_b, c, best_c, cos_lead
+        integer               :: nc_a, nc_b, km, q, p, k, best_q, best_p
+        real(dp)              :: nrm_a, nrm_b, c, best_c, cos_lead
         if( .not. (allocated(fits(1)%diag%xf_h_e) .and. allocated(fits(2)%diag%xf_h_e) .and. &
             &allocated(fits(1)%diag%xf_h_o) .and. allocated(fits(2)%diag%xf_h_o)) ) &
             &THROW_HARD('xfsc_paired_record: writer payloads missing (l_xf_harvest not set?)')

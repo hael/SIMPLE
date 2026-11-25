@@ -28,7 +28,7 @@ contains
         character(len=*), intent(in) :: fname
         type(molecule_data) :: mol
         character(len=80)   :: line
-        integer :: funit, ios, n, i
+        integer             :: funit, ios, n, i
         open(newunit=funit, file=fname, status='old', action='read', iostat=ios)
         if( ios /= 0 ) THROW_HARD('cannot open the test molecule '//fname)
         n = 0

@@ -27,10 +27,10 @@ end type opt_lm
 
 !> the spec's cost over its box; spec and fun_self are valid during minimize only
 type, extends(lm_problem) :: spec_problem
-    class(opt_spec), pointer :: spec     => null()
-    class(*),        pointer :: fun_self => null()
-    real(dp), allocatable    :: x(:), trial(:), lower(:), upper(:)
-    logical                  :: bounded = .false.
+    class(opt_spec), pointer     :: spec     => null()
+    class(*),        pointer     :: fun_self => null()
+    real(dp),        allocatable :: x(:), trial(:), lower(:), upper(:)
+    logical                      :: bounded  = .false.
 contains
     procedure :: eval       => spec_problem_eval
     procedure :: limit_step => spec_problem_limit_step
@@ -61,13 +61,13 @@ contains
 
     !> the solve, with spec and fun_self as targets of the problem's pointers
     subroutine minimize_targets( spec, fun_self, lowest_cost )
-        class(opt_spec), target, intent(inout) :: spec
-        class(*),        target, intent(inout) :: fun_self
-        real,                    intent(out)   :: lowest_cost
+        class(opt_spec),         target, intent(inout) :: spec
+        class(*),                target, intent(inout) :: fun_self
+        real,                    intent(out)           :: lowest_cost
         type(spec_problem) :: problem
         type(lm_options)   :: options
         type(lm_outcome)   :: outcome
-        integer :: n
+        integer            :: n
         if( .not. associated(spec%fdfcurvfun_8) ) THROW_HARD('the lm optimiser requires set_fdfcurvfun_8; lm_minimize')
         n = spec%ndim
         problem%spec     => spec

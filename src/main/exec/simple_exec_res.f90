@@ -7,7 +7,7 @@ implicit none
 public :: exec_res_commander
 private
 
-type(commander_fsc)      :: xfsc
+type(commander_fsc)            :: xfsc
 type(commander_fsc_area_score) :: xfsc_area_score
 
 contains

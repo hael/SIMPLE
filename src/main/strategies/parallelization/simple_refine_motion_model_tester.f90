@@ -9,23 +9,23 @@ use simple_test_utils, only: assert_true, assert_false, assert_int, assert_char,
     &enter_fixture, leave_fixture, tests_failed
 implicit none
 
-integer, parameter :: METADATA_BOX = 8
-real, parameter :: METADATA_SMPD = 2.
+integer, parameter :: METADATA_BOX  = 8
+real,    parameter :: METADATA_SMPD = 2.
 
 contains
 
     !> Exercise metadata from the actual selected state-1 particles and saved decoded-fraction models.
     module subroutine run_all_refine_motion_model_tests()
-        class(parameters), allocatable :: params
-        class(sp_project), allocatable :: project
+        class(parameters),           allocatable :: params
+        class(sp_project),           allocatable :: project
         class(dose_series_manifest), allocatable :: manifest
-        type(string) :: cwd, root, model1, model2, message, even, odd
-        integer, allocatable :: rows(:), halves(:), pinds(:)
-        integer :: nfail0, i, a, b, nselected
-        integer :: ranges(2,2)
-        real(dp) :: dlo, dhi, smpd, kv
-        integer :: box
-        logical :: ok
+        type(string)                             :: cwd, root, model1, model2, message, even, odd
+        integer,                     allocatable :: rows(:), halves(:), pinds(:)
+        integer                                  :: nfail0, i, a, b, nselected
+        integer                                  :: ranges(2,2)
+        real(dp)                                 :: dlo, dhi, smpd, kv
+        integer                                  :: box
+        logical                                  :: ok
         nfail0 = tests_failed
         call enter_fixture('fraction_dose_metadata', cwd, root)
         allocate(params, project, manifest)
@@ -134,8 +134,8 @@ contains
     !! unrelated frames_* folder stay
     subroutine test_remove_fraction_stacks()
         type(string) :: dirs(3)
-        integer :: ind
-        logical :: l_gone
+        integer      :: ind
+        logical      :: l_gone
         write(*,'(A)') 'test_remove_fraction_stacks'
         ! fromf=1, tof=8, stepf=3: the last window is anchored at tof and overlaps its predecessor
         dirs = [string('frames_1-3'), string('frames_4-6'), string('frames_6-8')]
@@ -160,14 +160,14 @@ contains
     !> Verify serialized particle counts and the independently computed fingerprint of this fixture.
     subroutine check_manifest_partition(manifest, root)
         class(dose_series_manifest), intent(inout) :: manifest
-        type(string), intent(in) :: root
+        type(string),                intent(in)    :: root
         class(image), allocatable :: volume
-        type(string) :: even, odd, message, fname
-        real(dp) :: dlo, dhi
-        integer :: a, b, i, funit, ios, count_value
-        character(len=512) :: line
-        character(len=32) :: prefix, key
-        logical :: ok, found_digest, found_count
+        type(string)              :: even, odd, message, fname
+        real(dp)                  :: dlo, dhi
+        integer                   :: a, b, i, funit, ios, count_value
+        character(len=512)        :: line
+        character(len=32)         :: prefix, key
+        logical                   :: ok, found_digest, found_count
         allocate(volume)
         call volume%new([METADATA_BOX,METADATA_BOX,METADATA_BOX], METADATA_SMPD)
         volume = 1.
@@ -204,7 +204,7 @@ contains
     module subroutine run_all_refine_motion_model_lib_tests()
         use simple_test_flex_phantom_fixture, only: create_flex_pca_phantom_fixture
         type(string) :: cwd, root, truth_a, truth_b, truth_mean, truth_diff, oritab, stack
-        integer :: nfail0
+        integer      :: nfail0
         nfail0 = tests_failed
         call enter_fixture('fraction_dose_export', cwd, root)
         call create_flex_pca_phantom_fixture(root, 1, truth_a, truth_b, truth_mean, truth_diff, oritab, stack, nptcls=RECON_NPTCLS)

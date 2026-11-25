@@ -52,7 +52,7 @@ contains
     subroutine test_cont_prior_binding()
         use simple_parameters, only: parameters
         class(parameters), allocatable :: params
-        class(cmdline), allocatable :: cline
+        class(cmdline),    allocatable :: cline
         allocate(params, cline)
         call base_cline(cline)
         call params%new(cline, silent=.true.)
@@ -74,7 +74,7 @@ contains
 
     !> Invalid controls fail before matching.
     subroutine test_cont_prior_rejections()
-        type(parameters_child) :: child
+        type(parameters_child)      :: child
         class(cmdline), allocatable :: cline
         allocate(cline)
         call base_cline(cline)
@@ -169,7 +169,7 @@ contains
         use simple_parameters, only: parameters
         use simple_cmdline,    only: cmdline
         class(parameters), allocatable :: params
-        class(cmdline), allocatable :: cline
+        class(cmdline),    allocatable :: cline
         allocate(params, cline)
         call cline%set('box',32)
         call cline%set('smpd',SMPD)
@@ -222,7 +222,7 @@ contains
     subroutine test_suite_binding()
         use simple_parameters, only: parameters
         class(parameters), allocatable :: params
-        class(cmdline), allocatable    :: cline
+        class(cmdline),    allocatable :: cline
         write(*,'(A)') 'test_suite_binding'
         allocate(params, cline)
         call base_cline(cline)
@@ -258,7 +258,7 @@ contains
     subroutine test_ui_keys_bound()
         use simple_parameters, only: parameters
         class(parameters), allocatable :: params
-        class(cmdline), allocatable    :: cline
+        class(cmdline),    allocatable :: cline
         write(*,'(A)') 'test_ui_keys_bound'
         allocate(params, cline)
         call base_cline(cline)
@@ -350,9 +350,9 @@ contains
         use simple_syslib,     only: simple_abspath
         use simple_sp_project, only: sp_project
         class(parameters), allocatable :: params
-        class(cmdline), allocatable    :: cline
+        class(cmdline),    allocatable :: cline
         class(sp_project), allocatable :: proj
-        type(string) :: absname
+        type(string)                   :: absname
         write(*,'(A)') 'test_worker_project_recorded'
         allocate(params, cline, proj)
         call proj%update_projinfo(string('worker_recorded.simple'))
@@ -386,10 +386,10 @@ contains
         use simple_syslib,     only: file_exists, simple_getcwd
         use simple_ui,         only: make_ui
         class(parameters), allocatable :: params
-        class(cmdline), allocatable    :: cline
+        class(cmdline),    allocatable :: cline
         class(sp_project), allocatable :: proj
-        type(string) :: saved, root, input_project, run_project, cwd, cline_project
-        integer :: nfail0
+        type(string)                   :: saved, root, input_project, run_project, cwd, cline_project
+        integer                        :: nfail0
         write(*,'(A)') 'test_execution_project_copy'
         allocate(params, cline, proj)
         call make_ui

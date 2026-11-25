@@ -25,9 +25,9 @@ contains
         class(commander_test_pose_student), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         class(parameters), allocatable :: params
-        type(string) :: cwd_saved, fixture_root
-        integer      :: status
-        logical      :: all_ok
+        type(string)                   :: cwd_saved, fixture_root
+        integer                        :: status
+        logical                        :: all_ok
         allocate(params)
         call simple_getcwd(cwd_saved)
         fixture_root = filepath(cwd_saved, 'test_pose_student_'//int2str(get_process_id()))
@@ -62,8 +62,8 @@ contains
         integer, parameter :: NKS_BENCH(4)    = [12, 18, 25, 37] !< rings of the band at 20, 15, 12 and 8 A of a 300 A box
         integer, parameter :: WIDTHS_BENCH(3) = [16, 32, 64]     !< the designs learn_pose_student tries
         integer, parameter :: NREP_BENCH      = 5
-        integer :: fnr, nthr, nspace
-        logical :: ok_identity
+        integer            :: fnr, nthr, nspace
+        logical            :: ok_identity
         nthr = 1
         !$ nthr = omp_get_max_threads()
         if( cline%defined('nthr') ) nthr = cline%get_iarg('nthr')
@@ -104,46 +104,46 @@ contains
         integer,       intent(in)    :: nthr
         class(string), intent(in)    :: metrics_file
         logical,       intent(inout) :: all_ok
-        character(len=*), parameter :: GATE_DIR   = 'pose_student_gate'
-        character(len=*), parameter :: TRUTH_VOL  = 'truth.mrc'
-        character(len=*), parameter :: PROJNAME   = 'pose_gate'
-        character(len=*), parameter :: MODEL      = 'student.txt'
-        character(len=*), parameter :: PRED_TABLE = 'student_pred.txt'
-        character(len=*), parameter :: WEIGHTS    = 'student_weights.bin'
-        integer, parameter :: NPARTS_CHK = 4      !< the parts' check: uneven ranges, the third of one unselected row
-        integer, parameter :: PART_RANGES(2,NPARTS_CHK) = reshape([1,700, 701,1998, 1999,1999, 2000,2000], [2,NPARTS_CHK])
-        integer, parameter :: NPTCLS  = 2000       !< 1 000 training rows (100 held out), 1 000 test rows
-        integer, parameter :: NSPACE  = NSPACE_STUDENT
-        integer, parameter :: GATE_SEED = 20261108 !< the classic generator's seed before every search (in-process identity)
-        real,    parameter :: SNR     = 1.         !< the fixture's phantom SNR
-        real,    parameter :: LP      = 8.         !< the band: 16 rings at the blob box (64 at 2 A), two ring bands in the readout
-        real,    parameter :: SHIFT_SIGMA = 2.     !< the centring width of the training's shift disk (3 widths): the 2 px of the measurements, not the 10 px default
+        character(len=*),   parameter       :: GATE_DIR                  = 'pose_student_gate'
+        character(len=*),   parameter       :: TRUTH_VOL                 = 'truth.mrc'
+        character(len=*),   parameter       :: PROJNAME                  = 'pose_gate'
+        character(len=*),   parameter       :: MODEL                     = 'student.txt'
+        character(len=*),   parameter       :: PRED_TABLE                = 'student_pred.txt'
+        character(len=*),   parameter       :: WEIGHTS                   = 'student_weights.bin'
+        integer,            parameter       :: NPARTS_CHK                = 4        !< the parts' check: uneven ranges, the third of one unselected row
+        integer,            parameter       :: PART_RANGES(2,NPARTS_CHK) = reshape([1,700, 701,1998, 1999,1999, 2000,2000], [2,NPARTS_CHK])
+        integer,            parameter       :: NPTCLS                    = 2000     !< 1 000 training rows (100 held out), 1 000 test rows
+        integer,            parameter       :: NSPACE                    = NSPACE_STUDENT
+        integer,            parameter       :: GATE_SEED                 = 20261108 !< the classic generator's seed before every search (in-process identity)
+        real,               parameter       :: SNR                       = 1.       !< the fixture's phantom SNR
+        real,               parameter       :: LP                        = 8.       !< the band: 16 rings at the blob box (64 at 2 A), two ring bands in the readout
+        real,               parameter       :: SHIFT_SIGMA               = 2.       !< the centring width of the training's shift disk (3 widths): the 2 px of the measurements, not the 10 px default
         type(state_fixture)                 :: fix
         type(commander_learn_pose_student)  :: xlearn
         type(commander_predict_poses)       :: xpredict
         type(commander_refine3D)            :: xrefine3D
         type(commander_rec3D)               :: xrec3D
-        class(cmdline),    allocatable :: cl
-        class(sp_project), allocatable :: proj, pred, searched, control, dense
-        type(image)         :: vol, vol_rec
-        type(oris)          :: truth
-        type(ori)           :: o_truth
-        type(test_gate)     :: gate
-        type(sym)           :: symop
-        type(string)        :: root, gate_root, truth_abs, model_abs, proj_abs
-        real, allocatable   :: corrs(:), res(:)
-        integer :: box
-        real    :: smpd, mskdiam, mskrad
-        real    :: conf_threshold, cone_bound, heldout_seeded, heldout_recovered, time_train, spacing
-        real    :: radius(NPTCLS), euls(3), euls_m(3), euls_t(3), euls_sym(3), d1, d2, inpld, fsc05, fsc0143
-        real    :: wall_learn, wall_predict, wall_search, wall_control, wall_dense, wall_rec, fsc05_d, fsc0143_d
-        integer :: i, j, k, status, route(NPTCLS), nsel, nseeded, ndense, n_in_cone, n_two, nshell
-        integer :: n6(0:1), n12(0:1), nroute(0:1), nk12, n6d(0:1), n12d(0:1)
-        logical :: l_route_ok, l_cone_ok, l_dense_ok, l_fold_ok, l_fallback_same, l_seeded_changed, l_finite, l_sel(NPTCLS)
-        logical :: l_reloc_same, l_parts_range, l_parts_same, l_parts_docs, l_master_table, l_master_records, l_master_clean
-        character(len=256), allocatable :: rows_full(:), rows_part(:)
-        integer :: ipart, ncover(NPTCLS), junk_unit
-        integer(timer_int_kind) :: t0
+        class(cmdline),     allocatable     :: cl
+        class(sp_project),  allocatable     :: proj, pred, searched, control, dense
+        type(image)                         :: vol, vol_rec
+        type(oris)                          :: truth
+        type(ori)                           :: o_truth
+        type(test_gate)                     :: gate
+        type(sym)                           :: symop
+        type(string)                        :: root, gate_root, truth_abs, model_abs, proj_abs
+        real,               allocatable     :: corrs(:), res(:)
+        integer                             :: box
+        real                                :: smpd, mskdiam, mskrad
+        real                                :: conf_threshold, cone_bound, heldout_seeded, heldout_recovered, time_train, spacing
+        real                                :: radius(NPTCLS), euls(3), euls_m(3), euls_t(3), euls_sym(3), d1, d2, inpld, fsc05, fsc0143
+        real                                :: wall_learn, wall_predict, wall_search, wall_control, wall_dense, wall_rec, fsc05_d, fsc0143_d
+        integer                             :: i, j, k, status, route(NPTCLS), nsel, nseeded, ndense, n_in_cone, n_two, nshell
+        integer                             :: n6(0:1), n12(0:1), nroute(0:1), nk12, n6d(0:1), n12d(0:1)
+        logical                             :: l_route_ok, l_cone_ok, l_dense_ok, l_fold_ok, l_fallback_same, l_seeded_changed, l_finite, l_sel(NPTCLS)
+        logical                             :: l_reloc_same, l_parts_range, l_parts_same, l_parts_docs, l_master_table, l_master_records, l_master_clean
+        character(len=256), allocatable     :: rows_full(:), rows_part(:)
+        integer                             :: ipart, ncover(NPTCLS), junk_unit
+        integer(timer_int_kind)             :: t0
         allocate(cl, proj, pred, searched, control, dense)
         call make_ui
         write(logfhandle,'(a)') '>>> TEST_POSE_STUDENT: the split-half protocol in miniature'
@@ -481,8 +481,8 @@ contains
             character(len=*), parameter :: PART_FILES(4) = [character(len=24) :: 'student_part1_pred.txt', &
                 &'algndoc_2.simple', 'JOB_FINISHED_1', 'distr_simple_script_2']
             class(sp_project), allocatable :: runs(:)
-            type(string) :: here
-            integer :: irun
+            type(string)                   :: here
+            integer                        :: irun
             allocate(runs(2))
             call simple_getcwd(here)
             do irun = 1,2
@@ -572,7 +572,7 @@ contains
         subroutine read_model_record( fname )
             class(string), intent(in) :: fname
             character(len=512) :: line
-            integer :: funit, io_stat, ieq
+            integer            :: funit, io_stat, ieq
             conf_threshold = huge(conf_threshold); cone_bound = 0.; heldout_seeded = 0.; heldout_recovered = 0.; time_train = 0.
             call fopen(funit, fname, status='old', action='read', iostat=io_stat)
             if( io_stat /= 0 ) THROW_HARD('cannot open the model '//fname%to_char())
@@ -598,7 +598,7 @@ contains
             class(string),      intent(in)  :: fname
             character(len=256), intent(out) :: rows(NPTCLS)
             character(len=256) :: line
-            integer :: funit, io_stat, iptcl
+            integer            :: funit, io_stat, iptcl
             rows = ''
             call fopen(funit, fname, status='old', action='read', iostat=io_stat)
             if( io_stat /= 0 ) THROW_HARD('cannot open the prediction table '//fname%to_char())
@@ -617,8 +617,8 @@ contains
         subroutine read_pred_table( fname )
             class(string), intent(in) :: fname
             character(len=512) :: line
-            real    :: vals(14)
-            integer :: funit, io_stat, iptcl
+            real               :: vals(14)
+            integer            :: funit, io_stat, iptcl
             radius = 0.
             call fopen(funit, fname, status='old', action='read', iostat=io_stat)
             if( io_stat /= 0 ) THROW_HARD('cannot open the prediction table '//fname%to_char())

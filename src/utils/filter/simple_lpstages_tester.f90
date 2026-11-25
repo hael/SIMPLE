@@ -14,9 +14,9 @@ implicit none
 private
 public :: run_all_lpstages_tests
 
-integer, parameter :: BOX = 256
+integer, parameter :: BOX  = 256
 real,    parameter :: SMPD = 1.3, LPFINAL = 6.
-real,    parameter :: TOL = 1.e-4
+real,    parameter :: TOL  = 1.e-4
 
 contains
 
@@ -103,12 +103,12 @@ contains
 
     ! a linear ramp from lpstart to lpstop with no floor; an optional delayed start holds its prefix at lpstart
     subroutine test_lpstages_setlims()
-        type(lp_crop_inf) :: info(8)
+        type(lp_crop_inf)  :: info(8)
         integer, parameter :: BOXCROP(5)         = [88, 108, 128, 150, 168]
         integer, parameter :: BOXCROP_DELAYED(8) = [88, 88, 88, 88, 108, 128, 150, 168]
         real,    parameter :: LPS(5)             = [15., 12.5, 10., 7.5, 5.]
         real,    parameter :: LPS_DELAYED(8)     = [15., 15., 15., 15., 12.5, 10., 7.5, 5.]
-        integer :: i, nlines
+        integer            :: i, nlines
         write(*,'(A)') 'test_lpstages_setlims'
         call lpstages_setlims(BOX, 5, SMPD, 15., 5., info(1:5), verbose=.false.)
         do i = 1,5
@@ -139,11 +139,11 @@ contains
         contains
 
             subroutine count_setlims_diagnostics( nlines, first_stage )
-                integer, intent(out) :: nlines
+                integer, intent(out)          :: nlines
                 integer, optional, intent(in) :: first_stage
-                integer :: saved_log, scratch_log, io_stat
+                integer            :: saved_log, scratch_log, io_stat
                 character(len=256) :: line
-                type(lp_crop_inf) :: diagnostic_info(8)
+                type(lp_crop_inf)  :: diagnostic_info(8)
                 saved_log = logfhandle
                 open(newunit=scratch_log, status='scratch', action='readwrite', iostat=io_stat)
                 call assert_int(0, io_stat, 'setlims diagnostics: open scratch log')
@@ -173,9 +173,9 @@ contains
     end subroutine test_lpstages_setlims
 
     subroutine test_trslim_override()
-        real, parameter :: TRSLIM = 15.
+        real, parameter   :: TRSLIM = 15.
         type(lp_crop_inf) :: info(8)
-        integer :: i
+        integer           :: i
         write(*,'(A)') 'test_trslim_override'
         call lpstages_fast(BOX, 8, SMPD, 20., LPFINAL, info, verbose=.false., trslim_override=TRSLIM)
         do i = 1,8
@@ -199,11 +199,11 @@ contains
     ! Henderson C_ref, RELION postprocessing.cpp applyFscWeighting), zero from the first shell with
     ! f < 1e-4 onwards even where a later shell recovers (closed forms)
     subroutine test_fsc_weightings()
-        real, parameter :: CORRS(8)  = [0.999, 0.8, 0.5, 0.143, 0.02, 0.00005, 0.3, 0.1]
-        real, parameter :: WIENER(8) = [0.999500, 0.888889, 0.666667, 0.250219, 0.039216, 0.000100, 0.461538, 0.181818]
-        real, parameter :: CREF(8)   = [0.999750, 0.942809, 0.816497, 0.500219, 0.198030, 0.0, 0.0, 0.0]
+        real, parameter   :: CORRS(8)  = [0.999, 0.8, 0.5, 0.143, 0.02, 0.00005, 0.3, 0.1]
+        real, parameter   :: WIENER(8) = [0.999500, 0.888889, 0.666667, 0.250219, 0.039216, 0.000100, 0.461538, 0.181818]
+        real, parameter   :: CREF(8)   = [0.999750, 0.942809, 0.816497, 0.500219, 0.198030, 0.0, 0.0, 0.0]
         real, allocatable :: w(:), c(:)
-        integer :: k
+        integer           :: k
         write(*,'(A)') 'test_fsc_weightings'
         w = fsc2optlp(CORRS)
         c = fsc2cref(CORRS)
@@ -223,10 +223,10 @@ contains
     ! on every shell from 25 to 50; identity for B >= 0 (closed forms)
     subroutine test_bfac_cap_filter()
         integer, parameter :: FILTSZ_CAP = 50, BOX_CAP = 100, KCUT = 25
-        real,    parameter :: B_CAP = -100., CUT_GAIN = 4.770733
-        real    :: filt(FILTSZ_CAP), s2
-        integer :: k
-        logical :: l_held
+        real,    parameter :: B_CAP      = -100., CUT_GAIN = 4.770733
+        real               :: filt(FILTSZ_CAP), s2
+        integer            :: k
+        logical            :: l_held
         write(*,'(A)') 'test_bfac_cap_filter'
         filt = bfac_cap_filter(FILTSZ_CAP, BOX_CAP, 1., B_CAP, KCUT)
         call assert_true(all(filt(1:KCUT) == 1.), 'bfac cap: identity up to the cutoff shell')
@@ -249,10 +249,10 @@ contains
     ! notch form is the product of a low-pass at c2 and a high-pass at c1
     subroutine test_butterworth()
         real, parameter :: EXPECTED(5) = [1.0, 0.999992, 0.707107, 0.165460, 0.003906] ! s = 0, 10, 20, 25, 40 for fc = 20
-        real        :: fil(64), fil2(64), fil_rng(10:30)
-        type(image) :: img
-        integer     :: k
-        logical     :: l_mono
+        real            :: fil(64), fil2(64), fil_rng(10:30)
+        type(image)     :: img
+        integer         :: k
+        logical         :: l_mono
         write(*,'(A)') 'test_butterworth'
         call butterworth_filter(20, fil)
         call assert_real(EXPECTED(1), fil(1),  1.e-6, 'Butterworth: unity at zero frequency')
@@ -292,10 +292,10 @@ contains
     ! Fourier shells (filtsz = 16; numpy count over [-16,15]^3). postprocess relies on this to keep
     ! exp(-B s^2/4) out of the cube corners.
     subroutine test_filter_nyquist_support()
-        integer, parameter :: N = 32
-        real,    parameter :: KEPT_FRAC_NYQ = 18706. / 32768.
-        type(image)       :: img
-        real, allocatable :: ones(:)
+        integer, parameter   :: N             = 32
+        real,    parameter   :: KEPT_FRAC_NYQ = 18706. / 32768.
+        type(image)          :: img
+        real,    allocatable :: ones(:)
         write(*,'(A)') 'test_filter_nyquist_support'
         call img%new([N,N,N], 1.)
         call img%set_rmat_at(N/2+1, N/2+1, N/2+1, 1.)

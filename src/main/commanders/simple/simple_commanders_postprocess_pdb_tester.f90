@@ -15,17 +15,17 @@ public :: run_all_postprocess_pdb_tests
 contains
 
     subroutine run_all_postprocess_pdb_tests()
-        integer, parameter :: BOX=64
-        real, parameter :: SMPD=2.
-        type(atoms) :: model
-        type(image) :: vol, result
-        class(cmdline), allocatable :: cline
-        logical :: did_execute, silent
-        real, allocatable :: fsc(:)
-        real, pointer :: rmat(:,:,:)
-        real :: coords(3,4), positive_peak
-        integer :: i
-        character(len=*), parameter :: STEM='tmp_postprocess_pdb'
+        integer,          parameter   :: BOX  = 64
+        real,             parameter   :: SMPD = 2.
+        type(atoms)                   :: model
+        type(image)                   :: vol, result
+        class(cmdline),   allocatable :: cline
+        logical                       :: did_execute, silent
+        real,             allocatable :: fsc(:)
+        real,             pointer     :: rmat(:,:,:)
+        real                          :: coords(3,4), positive_peak
+        integer                       :: i
+        character(len=*), parameter   :: STEM = 'tmp_postprocess_pdb'
         write(*,'(A)') '**** running postprocess_pdb half-map FSC tests ****'
         coords = reshape([40.,50.,60., 76.,44.,58., 56.,82.,66., 60.,60.,88.], [3,4])
         call model%new(4, dummy=.true.)

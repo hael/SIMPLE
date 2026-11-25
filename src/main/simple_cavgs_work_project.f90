@@ -49,8 +49,8 @@ contains
         type(ori)            :: o, o_even, o_odd
         type(string)         :: stk, stk_even, stk_odd, ext
         integer, allocatable :: states(:), states_even(:), states_odd(:)
-        integer :: icls, even_ind, odd_ind
-        real    :: smpd
+        integer              :: icls, even_ind, odd_ind
+        real                 :: smpd
         call self%kill
         call spproj%get_cavgs_stk(stk, self%ncavgs, smpd)
         if( .not. file_exists(stk) ) THROW_HARD('class-average stack does not exist: '//stk%to_char())

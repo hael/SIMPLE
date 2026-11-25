@@ -78,49 +78,49 @@ contains
     !! reads the particle field; writes what refine2D's setup writes (the halves, the sigma2 bootstrap). With mode, the
     !! physical posterior's best class of every particle written to the particle field instead (run_class_posterior_mode)
     subroutine learn_class_student_exec( params, build, cline, mode )
-        type(parameters), target, intent(inout) :: params
-        type(builder),    target, intent(inout) :: build
-        class(cmdline),           intent(inout) :: cline
-        logical, optional,        intent(in)    :: mode
-        type(eul_prob_tab2D)     :: tab
-        type(ptcl_read_session)  :: reads
-        type(image), allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_imgs(:)
-        type(polar_feats)        :: feats
-        type(polar_feat)         :: feat
-        type(polar_feat_work)    :: feat_wk
-        type(prob_row_file)      :: rows
-        type(prob_row_record)    :: rec
-        type(prob_row_marginal)  :: marg
-        type(class_student)      :: student, reread
-        type(class_pred)         :: pred
-        type(string)             :: base, fname_rows, fname_stats, fname_header, projpath
-        real,    allocatable     :: dists(:), wk(:,:), x_all(:,:,:,:), ctf2_all(:,:), side_all(:), dists_all(:,:)
-        real,    allocatable     :: temps_all(:), e3_all(:), xcavgs(:,:,:,:), ctf_one(:,:), prob(:,:)
-        real,    allocatable     :: conf_held(:), e3_held(:)
-        complex, allocatable     :: pft_ref(:,:)
-        logical, allocatable     :: held(:), recov(:,:)
-        integer, allocatable     :: pinds(:), batches(:,:), mode_all(:), held_inds(:), group_held(:), group_of(:), stkinds(:)
-        integer, allocatable     :: k99_held(:), ncand_held(:), mode_held_s(:), states(:)
-        integer, allocatable     :: inpl_cls(:,:)     !< the rotation loss: each row's KMAX_INPL_ROW heaviest classes
-        real,    allocatable     :: inpl_rows(:,:,:)  !< and their in-plane posteriors on the teacher's rotation grid
-        real,    allocatable     :: rot_t(:)          !< the teacher's rotation grid's angles (the mapping's audit)
-        real(dp)                 :: audit_rep(10), mass_rep(4)
-        real                     :: map_err(3)
-        integer                  :: nmap
-        logical                  :: l_mapped
-        type(string)             :: fname_audit
-        integer(int64)           :: cavgs_hash
-        integer(timer_int_kind)  :: t0, t_all
-        real(timer_int_kind)     :: rt_prep, rt_batch, rt_fill, rt_rows, rt_train, rt_all
-        real(timer_int_kind)     :: rt_cand(size(STUDENT_WIDTHS)), rt_boot(size(STUDENT_WIDTHS))
-        real     :: recov_cand(size(STUDENT_WIDTHS)), loss_cand(size(STUDENT_WIDTHS)), gain_q(size(STUDENT_WIDTHS))
-        integer  :: epoch_cand(size(STUDENT_WIDTHS))
-        real     :: shift_aug, conf_threshold, heldout_seeded, heldout_recovered
-        real     :: loss_train, loss_held, mode_held, time_train_s
-        integer  :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, nk, nheld, j, icls, ntry
-        integer  :: stat_unit, head_unit, io_stat, nthr_here, iw_best, ntried, nsel, ncls
-        integer  :: nptcls_train, nheldout, epochs_run, best_epoch, nweights
-        logical  :: l_rebuilt, l_by_stack, l_mode
+        type(parameters),         target, intent(inout)       :: params
+        type(builder),            target, intent(inout)       :: build
+        class(cmdline),           intent(inout)               :: cline
+        logical,                  optional,        intent(in) :: mode
+        type(eul_prob_tab2D)          :: tab
+        type(ptcl_read_session)       :: reads
+        type(image),      allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_imgs(:)
+        type(polar_feats)             :: feats
+        type(polar_feat)              :: feat
+        type(polar_feat_work)         :: feat_wk
+        type(prob_row_file)           :: rows
+        type(prob_row_record)         :: rec
+        type(prob_row_marginal)       :: marg
+        type(class_student)           :: student, reread
+        type(class_pred)              :: pred
+        type(string)                  :: base, fname_rows, fname_stats, fname_header, projpath
+        real,             allocatable :: dists(:), wk(:,:), x_all(:,:,:,:), ctf2_all(:,:), side_all(:), dists_all(:,:)
+        real,             allocatable :: temps_all(:), e3_all(:), xcavgs(:,:,:,:), ctf_one(:,:), prob(:,:)
+        real,             allocatable :: conf_held(:), e3_held(:)
+        complex,          allocatable :: pft_ref(:,:)
+        logical,          allocatable :: held(:), recov(:,:)
+        integer,          allocatable :: pinds(:), batches(:,:), mode_all(:), held_inds(:), group_held(:), group_of(:), stkinds(:)
+        integer,          allocatable :: k99_held(:), ncand_held(:), mode_held_s(:), states(:)
+        integer,          allocatable :: inpl_cls(:,:)    !< the rotation loss: each row's KMAX_INPL_ROW heaviest classes
+        real,             allocatable :: inpl_rows(:,:,:) !< and their in-plane posteriors on the teacher's rotation grid
+        real,             allocatable :: rot_t(:)         !< the teacher's rotation grid's angles (the mapping's audit)
+        real(dp)                      :: audit_rep(10), mass_rep(4)
+        real                          :: map_err(3)
+        integer                       :: nmap
+        logical                       :: l_mapped
+        type(string)                  :: fname_audit
+        integer(int64)                :: cavgs_hash
+        integer(timer_int_kind)       :: t0, t_all
+        real(timer_int_kind)          :: rt_prep, rt_batch, rt_fill, rt_rows, rt_train, rt_all
+        real(timer_int_kind)          :: rt_cand(size(STUDENT_WIDTHS)), rt_boot(size(STUDENT_WIDTHS))
+        real                          :: recov_cand(size(STUDENT_WIDTHS)), loss_cand(size(STUDENT_WIDTHS)), gain_q(size(STUDENT_WIDTHS))
+        integer                       :: epoch_cand(size(STUDENT_WIDTHS))
+        real                          :: shift_aug, conf_threshold, heldout_seeded, heldout_recovered
+        real                          :: loss_train, loss_held, mode_held, time_train_s
+        integer                       :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, nk, nheld, j, icls, ntry
+        integer                       :: stat_unit, head_unit, io_stat, nthr_here, iw_best, ntried, nsel, ncls
+        integer                       :: nptcls_train, nheldout, epochs_run, best_epoch, nweights
+        logical                       :: l_rebuilt, l_by_stack, l_mode
         character(len=:), allocatable :: msg
         t_all = tic()
         l_mode = .false.
@@ -565,7 +565,7 @@ contains
         !! the teacher's and the student's classes and in-plane angles, and whether it is recovered
         subroutine write_heldout_table
             type(string) :: fname_held
-            integer :: jj, ii, held_unit
+            integer      :: jj, ii, held_unit
             fname_held = base%to_char()//'_heldout.txt'
             call fopen(held_unit, fname_held, status='replace', action='write', iostat=io_stat)
             call fileiochk('learn_class_student; open '//fname_held%to_char(), io_stat)
@@ -583,7 +583,7 @@ contains
         !> the student's in-plane angle against the teacher's on the held-out rows where their classes agree
         subroutine log_inpl_error
             real, allocatable :: d(:)
-            integer :: jj, ii, n
+            integer           :: jj, ii, n
             allocate(d(nheld), source=0.)
             n = 0
             do jj = 1,nheld
@@ -696,13 +696,13 @@ contains
     !! written once, their tables joined, their candidates published as one artifact (doc/algorithms/class_student.md)
     subroutine predict_classes_master( cline )
         class(cmdline), intent(inout) :: cline
-        type(parameters), target  :: params
-        type(builder)             :: build
-        type(class_candidates)    :: cands_art
-        type(string)              :: base
-        type(string), allocatable :: part_bases(:), part_cands(:)
-        logical :: l_rebuilt
-        integer :: ipart
+        type(parameters), target      :: params
+        type(builder)                 :: build
+        type(class_candidates)        :: cands_art
+        type(string)                  :: base
+        type(string),     allocatable :: part_bases(:), part_cands(:)
+        logical                       :: l_rebuilt
+        integer                       :: ipart
         call build%init_params_and_build_spproj(cline, params)
         if( cline%defined('refs') )then
             call ensure_field_halves(build%spproj, params%oritype, params%projfile)
@@ -731,33 +731,33 @@ contains
     !! refs, each particle aligned over the disk about its stored shift against its candidates; to <fname>_pred.txt,
     !! <fname>_times.txt, the records (class, e3, shift, pconf, route) and the class_candidates artifact
     subroutine predict_classes_exec( params, build, cline )
-        type(parameters), target, intent(inout) :: params
-        type(builder),    target, intent(inout) :: build
-        class(cmdline),           intent(inout) :: cline
-        type(class_student)      :: student
-        type(ptcl_read_session)  :: reads
-        type(image), allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_imgs(:)
-        type(polar_feats)        :: feats
-        type(string)             :: base, fname_pred, fname_times
-        type(class_pred), allocatable :: preds(:)
+        type(parameters),         target, intent(inout) :: params
+        type(builder),            target, intent(inout) :: build
+        class(cmdline),           intent(inout)         :: cline
+        type(class_student)                    :: student
+        type(ptcl_read_session)                :: reads
+        type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:), ptcl_imgs(:)
+        type(polar_feats)                      :: feats
+        type(string)                           :: base, fname_pred, fname_times
+        type(class_pred),          allocatable :: preds(:)
         type(class_student_align), allocatable :: aln(:)
         type(polar_feat),          allocatable :: feat_t(:)
         type(polar_feat_work),     allocatable :: feat_wk_t(:)
-        real,    allocatable     :: wk(:,:), prob(:,:), e3_pred(:), sh_in(:,:), e3_aln(:), sh_aln(:,:)
-        real,    allocatable     :: sdev_aln(:)
-        integer, allocatable     :: pinds(:), batches(:,:), class_stored(:), routes(:), ncands(:), cands_all(:,:)
-        integer, allocatable     :: cls_aln(:)
-        type(class_candidates)   :: cands_art
-        character(len=:), allocatable :: msg
-        character(len=*), parameter :: PRED_HEADER = '# iptcl eo class pmax k99 ncand conf route e3 x y class_stored cands'
-        integer(timer_int_kind)  :: t0, t_all
-        real(timer_int_kind)     :: rt_prep, rt_batch, rt_pred, rt_aln, rt_write, rt_all
-        real     :: conf_threshold, conf_fraction, heldout_seeded, heldout_recovered
-        integer  :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, nthr, pred_unit, io_stat, kfromto(2)
-        integer, allocatable     :: pinds_part(:)
-        integer  :: route, n_seeded, n_capped, n_agree, j
-        real(dp) :: ncand_sum, conf_sum
-        logical  :: l_reg, l_rebuilt, l_part
+        real,                      allocatable :: wk(:,:), prob(:,:), e3_pred(:), sh_in(:,:), e3_aln(:), sh_aln(:,:)
+        real,                      allocatable :: sdev_aln(:)
+        integer,                   allocatable :: pinds(:), batches(:,:), class_stored(:), routes(:), ncands(:), cands_all(:,:)
+        integer,                   allocatable :: cls_aln(:)
+        type(class_candidates)                 :: cands_art
+        character(len=:),          allocatable :: msg
+        character(len=*),          parameter   :: PRED_HEADER = '# iptcl eo class pmax k99 ncand conf route e3 x y class_stored cands'
+        integer(timer_int_kind)                :: t0, t_all
+        real(timer_int_kind)                   :: rt_prep, rt_batch, rt_pred, rt_aln, rt_write, rt_all
+        real                                   :: conf_threshold, conf_fraction, heldout_seeded, heldout_recovered
+        integer                                :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, nthr, pred_unit, io_stat, kfromto(2)
+        integer,                   allocatable :: pinds_part(:)
+        integer                                :: route, n_seeded, n_capped, n_agree, j
+        real(dp)                               :: ncand_sum, conf_sum
+        logical                                :: l_reg, l_rebuilt, l_part
         t_all = tic()
         call check_pass_team('predict_classes')
         ! a part of a distributed master (part, nparts, fromp, top, outfile: the commander checks they are given)

@@ -12,8 +12,8 @@ contains
         class(image), intent(in)  :: vol_src_even, vol_src_odd
         real(kind=c_float), pointer :: rmat_even_out(:,:,:),  rmat_odd_out(:,:,:)
         real(kind=c_float), pointer :: rmat_aux_even(:,:,:), rmat_aux_odd(:,:,:)
-        integer(timer_int_kind) :: t0
-        integer :: i, j, k, imask
+        integer(timer_int_kind)     :: t0
+        integer                     :: i, j, k, imask
         if( L_BENCH_GLOB ) t0 = tic()
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_filter_vols')
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vols')
@@ -57,11 +57,11 @@ contains
     subroutine compose_nu_labels_from_volume( vol_in, vol_out )
         class(image), intent(in)  :: vol_in
         class(image), intent(out) :: vol_out
-        type(image) :: vol_in_ft, vol_filt
-        real(kind=c_float), pointer :: rmat_filt(:,:,:), rmat_out(:,:,:)
-        real, allocatable :: bwfilter(:)
-        integer :: i, j, k, icut, imask, winsz
-        real    :: edge_mean
+        type(image)                     :: vol_in_ft, vol_filt
+        real(kind=c_float), pointer     :: rmat_filt(:,:,:), rmat_out(:,:,:)
+        real,               allocatable :: bwfilter(:)
+        integer                         :: i, j, k, icut, imask, winsz
+        real                            :: edge_mean
         if( any(vol_in%get_ldim() /= ldim)       ) THROW_HARD('apply volume dimensions differ; compose_nu_labels_from_volume')
         if( abs(vol_in%get_smpd() - smpd) > TINY ) THROW_HARD('apply volume smpd differs; compose_nu_labels_from_volume')
         call vol_in_ft%copy(vol_in)

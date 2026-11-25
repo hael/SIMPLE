@@ -21,7 +21,7 @@ contains
     end subroutine run_all_class_compatibility_tests
 
     subroutine test_defaults_and_lifecycle()
-        type(class_compatibility) :: comp
+        type(class_compatibility)   :: comp
         type(support_model_metrics) :: metrics
 
         write(*,'(A)') 'test_defaults_and_lifecycle'
@@ -40,11 +40,11 @@ contains
     end subroutine test_defaults_and_lifecycle
 
     subroutine test_train_1_from_project_sets_valid_fit()
-        type(class_compatibility) :: comp
-        type(sp_project)          :: proj
+        type(class_compatibility)   :: comp
+        type(sp_project)            :: proj
         type(support_model_metrics) :: metrics
-        type(string)              :: stkname
-        integer, allocatable      :: states(:)
+        type(string)                :: stkname
+        integer, allocatable        :: states(:)
 
         write(*,'(A)') 'test_train_1_from_project_sets_valid_fit'
 
@@ -71,11 +71,11 @@ contains
     end subroutine test_train_1_from_project_sets_valid_fit
 
     subroutine test_train_1_too_small_set_no_fit()
-        type(class_compatibility) :: comp
-        type(sp_project)          :: proj
+        type(class_compatibility)   :: comp
+        type(sp_project)            :: proj
         type(support_model_metrics) :: metrics
-        type(string)              :: stkname
-        integer, allocatable      :: states(:)
+        type(string)                :: stkname
+        integer, allocatable        :: states(:)
 
         write(*,'(A)') 'test_train_1_too_small_set_no_fit'
 
@@ -101,9 +101,9 @@ contains
     end subroutine test_train_1_too_small_set_no_fit
 
     subroutine test_train_2_retrain_sets_delta_and_convergence()
-        type(class_compatibility) :: comp
+        type(class_compatibility)   :: comp
         type(support_model_metrics) :: metrics
-        type(string)              :: stkname
+        type(string)                :: stkname
 
         write(*,'(A)') 'test_train_2_retrain_sets_delta_and_convergence'
 
@@ -193,9 +193,9 @@ contains
     end subroutine test_infer_without_valid_model_preserves_selection
 
     subroutine test_kill_support_model_resets_after_fit()
-        type(class_compatibility) :: comp
+        type(class_compatibility)   :: comp
         type(support_model_metrics) :: metrics
-        type(string)              :: stkname
+        type(string)                :: stkname
 
         write(*,'(A)') 'test_kill_support_model_resets_after_fit'
 
@@ -248,7 +248,7 @@ contains
         type(string), intent(in) :: stkname
         integer,      intent(in) :: half_widths(:)
         type(image), allocatable :: imgs(:)
-        integer :: i, n
+        integer                  :: i, n
 
         n = size(half_widths)
         allocate(imgs(n))

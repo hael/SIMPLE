@@ -34,16 +34,16 @@ integer,          parameter :: BUNDLE_SCHEMA_VERSION = 1
 !! the per-box accumulator sets bound to it
 type :: frozen_accum
     private
-    character(len=64) :: run_id  = ''
-    integer :: nstates      = 0 !< inherited state count
-    integer :: nrows        = 0 !< rows of the add-on's working project (the consumers' index space)
-    integer :: nrows_frozen = 0 !< rows of the frozen project (the producers' index space)
-    integer :: nfrozen      = 0 !< frozen particles (state > 0 and updatecnt > 0 in the frozen project)
+    character(len=64)    :: run_id       = ''
+    integer              :: nstates      = 0       !< inherited state count
+    integer              :: nrows        = 0       !< rows of the add-on's working project (the consumers' index space)
+    integer              :: nrows_frozen = 0       !< rows of the frozen project (the producers' index space)
+    integer              :: nfrozen      = 0       !< frozen particles (state > 0 and updatecnt > 0 in the frozen project)
     integer, allocatable :: nfrozen_state(:)
-    character(len=8)  :: weighting = '' !< the loading run's reconstruction weighting (euclid|cc)
-    integer(kind=8)   :: wset_id(2) = 0_8 !< the loading run's state weight set identity (0 under hard labels)
-    logical           :: l_carried = .false. !< a carried store: carried_* sets
-    type(string)      :: dir                 !< directory of the sets, the working directory when empty
+    character(len=8)     :: weighting    = ''      !< the loading run's reconstruction weighting (euclid|cc)
+    integer(kind=8)      :: wset_id(2)   = 0_8     !< the loading run's state weight set identity (0 under hard labels)
+    logical              :: l_carried    = .false. !< a carried store: carried_* sets
+    type(string)         :: dir                    !< directory of the sets, the working directory when empty
   contains
     ! the run context
     procedure          :: new
@@ -69,23 +69,23 @@ end type frozen_accum
 !! counts, weighting), where they are (states x boxes at one sampling), the run it continued (parent)
 !! and the sigma2 generation it published with them; the membership file names the rows inside the sums
 type :: carried_bundle
-    character(len=64) :: run_id     = ''
-    character(len=64) :: parent_run = ''
-    character(len=8)  :: route      = ''   !< first: the frozen particles were read once; carried: none was read
-    integer :: nstates = 0
-    integer :: nrows   = 0
-    integer, allocatable :: boxes(:)          !< the stage box and the native box (one when equal)
-    real,    allocatable :: smpds(:)          !< the sampling at each box
+    character(len=64)    :: run_id            = ''
+    character(len=64)    :: parent_run        = ''
+    character(len=8)     :: route             = '' !< first: the frozen particles were read once; carried: none was read
+    integer              :: nstates           = 0
+    integer              :: nrows             = 0
+    integer, allocatable :: boxes(:)               !< the stage box and the native box (one when equal)
+    real,    allocatable :: smpds(:)               !< the sampling at each box
     integer, allocatable :: ncarried_state(:)
-    character(len=8) :: weighting = ''
-    integer(kind=8)  :: wset_id(2) = 0_8
-    integer(kind=8)  :: sigma2_generation = 0_8
+    character(len=8)     :: weighting         = ''
+    integer(kind=8)      :: wset_id(2)        = 0_8
+    integer(kind=8)      :: sigma2_generation = 0_8
   contains
-    procedure :: write  => write_bundle
-    procedure :: read   => read_bundle
-    procedure :: store  => bundle_store
+    procedure :: write    => write_bundle
+    procedure :: read     => read_bundle
+    procedure :: store    => bundle_store
     procedure :: validate => validate_bundle
-    procedure :: kill   => kill_bundle
+    procedure :: kill     => kill_bundle
 end type carried_bundle
 
 interface
@@ -102,11 +102,11 @@ contains
     !! of the working and the frozen project, nstates is the length of the
     !! per-state frozen counts and nfrozen their sum
     subroutine new( self, run_id, nrows, nrows_frozen, nfrozen_state, carried )
-        class(frozen_accum), intent(inout) :: self
-        character(len=*),    intent(in)    :: run_id
-        integer,             intent(in)    :: nrows, nrows_frozen
-        integer,             intent(in)    :: nfrozen_state(:)
-        logical, optional,   intent(in)    :: carried
+        class(frozen_accum), intent(inout)          :: self
+        character(len=*),    intent(in)             :: run_id
+        integer,             intent(in)             :: nrows, nrows_frozen
+        integer,             intent(in)             :: nfrozen_state(:)
+        logical,             optional,   intent(in) :: carried
         call self%kill
         if( present(carried) ) self%l_carried = carried
         if( len_trim(run_id) == 0 .or. index(trim(run_id), ' ') > 0 ) &
@@ -127,7 +127,7 @@ contains
         class(frozen_accum), intent(in) :: self
         class(string),       intent(in) :: fname
         type(string) :: tmpname
-        integer :: funit, io_stat, s
+        integer      :: funit, io_stat, s
         if( self%nstates < 1 .or. .not. allocated(self%nfrozen_state) ) THROW_HARD('frozen context has no state layout')
         tmpname = fname//'.tmp'
         call del_file(tmpname)
@@ -156,9 +156,9 @@ contains
         integer,             intent(out)   :: status
         character(len=*),    intent(out)   :: msg
         character(len=XLONGSTRLEN) :: line
-        character(len=64) :: key, schema, backend
-        integer :: funit, io_stat, version, s, cnt, nseen
-        logical :: l_end, l_seen(6)
+        character(len=64)          :: key, schema, backend
+        integer                    :: funit, io_stat, version, s, cnt, nseen
+        logical                    :: l_end, l_seen(6)
         call self%kill
         status = 1
         msg    = ''
@@ -289,14 +289,14 @@ contains
     !! cc_objfun is the loading run's reconstruction weighting; producer is
     !! true for the frozen_seed handshake, false for frozen_rec.
     subroutine load( self, fname, nstates, nrows, cc_objfun, producer, wset_id, carried )
-        class(frozen_accum), intent(inout) :: self
-        class(string),       intent(in)    :: fname
-        integer,             intent(in)    :: nstates, nrows, cc_objfun
-        logical,             intent(in)    :: producer
-        integer(kind=8),     intent(in)    :: wset_id(2)
-        logical, optional,   intent(in)    :: carried
+        class(frozen_accum), intent(inout)          :: self
+        class(string),       intent(in)             :: fname
+        integer,             intent(in)             :: nstates, nrows, cc_objfun
+        logical,             intent(in)             :: producer
+        integer(kind=8),     intent(in)             :: wset_id(2)
+        logical,             optional,   intent(in) :: carried
         character(len=STDLEN) :: msg
-        integer :: status
+        integer               :: status
         call self%read(fname, status, msg)
         if( status /= 0 ) THROW_HARD(trim(msg))
         call self%validate(nstates, nrows, producer, status, msg)
@@ -394,8 +394,8 @@ contains
         class(reconstructor), intent(inout) :: even_rec, odd_rec
         type(string)    :: manifest
         integer(kind=8) :: sizes(4)
-        integer :: ldim(3), ifile
-        real    :: smpd
+        integer         :: ldim(3), ifile
+        real            :: smpd
         if( state < 1 .or. state > self%nstates ) THROW_HARD('frozen gridding set state is outside the context layout')
         ldim = even_rec%get_ldim()
         smpd = even_rec%get_smpd()
@@ -423,7 +423,7 @@ contains
         real,                intent(in) :: smpd
         integer(kind=8),     intent(in) :: sizes(4)
         type(string) :: manifest, tmpname
-        integer :: funit, io_stat
+        integer      :: funit, io_stat
         manifest = self%set_manifest(state, box)
         tmpname  = manifest//'.tmp'
         call del_file(tmpname)
@@ -457,8 +457,8 @@ contains
         integer,             intent(in) :: state, box
         real,                intent(in) :: smpd
         character(len=STDLEN) :: msg
-        integer(kind=8) :: sizes(4)
-        integer :: status, ifile
+        integer(kind=8)       :: sizes(4)
+        integer               :: status, ifile
         if( state < 1 .or. state > self%nstates ) THROW_HARD('imported gridding set state is outside the context layout')
         if( self%nfrozen_state(state) /= src%nfrozen_state(state) ) &
             &THROW_HARD('an imported gridding set must keep its particle count')
@@ -486,12 +486,12 @@ contains
         integer,             intent(out) :: status
         character(len=*),    intent(out) :: msg
         character(len=XLONGSTRLEN) :: line
-        character(len=64)  :: key, schema, run_id, backend, weighting
-        type(string)       :: manifest
-        integer(kind=8)    :: sizes(4), wset_set(2)
-        integer :: funit, io_stat, version, state_set, nstates_set, box_set, nrows_set, nfrozen_set, ifile
-        real    :: smpd_set
-        logical :: l_end
+        character(len=64)          :: key, schema, run_id, backend, weighting
+        type(string)               :: manifest
+        integer(kind=8)            :: sizes(4), wset_set(2)
+        integer                    :: funit, io_stat, version, state_set, nstates_set, box_set, nrows_set, nfrozen_set, ifile
+        real                       :: smpd_set
+        logical                    :: l_end
         status = 1
         msg    = ''
         l_end  = .false.
@@ -587,10 +587,10 @@ contains
         integer,              intent(in)    :: state
         class(reconstructor), intent(inout) :: even_rec, odd_rec, read_even, read_odd
         character(len=STDLEN) :: msg
-        type(imgfile) :: ioimg
-        type(string)  :: fname
-        integer :: ldim(3), status, funit, ierr
-        real    :: smpd
+        type(imgfile)         :: ioimg
+        type(string)          :: fname
+        integer               :: ldim(3), status, funit, ierr
+        real                  :: smpd
         ldim = even_rec%get_ldim()
         smpd = even_rec%get_smpd()
         if( any(odd_rec%get_ldim() /= ldim) .or. any(read_even%get_ldim() /= ldim) .or. &
@@ -630,7 +630,7 @@ contains
         class(carried_bundle), intent(in) :: self
         class(string),         intent(in) :: fname
         type(string) :: tmpname
-        integer :: funit, io_stat, s
+        integer      :: funit, io_stat, s
         if( self%nstates < 1 .or. .not. allocated(self%ncarried_state) .or. .not. allocated(self%boxes) ) &
             &THROW_HARD('carried bundle has no layout')
         tmpname = fname//'.tmp'
@@ -665,9 +665,9 @@ contains
         integer,               intent(out)   :: status
         character(len=*),      intent(out)   :: msg
         character(len=XLONGSTRLEN) :: line
-        character(len=64) :: key, schema, backend
-        integer :: funit, io_stat, version, s, cnt, nboxes, nseen
-        logical :: l_end, l_states, l_boxes, l_smpds
+        character(len=64)          :: key, schema, backend
+        integer                    :: funit, io_stat, version, s, cnt, nboxes, nseen
+        logical                    :: l_end, l_states, l_boxes, l_smpds
         call self%kill
         l_states = .false.
         l_boxes  = .false.
@@ -795,9 +795,9 @@ contains
         class(string),         intent(in)  :: dir
         integer,               intent(out) :: status
         character(len=*),      intent(out) :: msg
-        type(frozen_accum) :: store
+        type(frozen_accum)   :: store
         integer, allocatable :: states(:)
-        integer :: s, b
+        integer              :: s, b
         store = self%store(dir)
         do s = 1, self%nstates
             do b = 1, size(self%boxes)
@@ -849,7 +849,7 @@ contains
         class(string), intent(in) :: fname
         integer,       intent(in) :: states(:)
         type(string) :: tmpname
-        integer :: funit, io_stat
+        integer      :: funit, io_stat
         tmpname = fname//'.tmp'
         call del_file(tmpname)
         call fopen(funit, file=tmpname, status='REPLACE', action='WRITE', access='STREAM', iostat=io_stat)
@@ -862,12 +862,12 @@ contains
 
     !> the membership of nrows rows; status /= 0 when the file is missing or of another size
     subroutine read_carried_membership( fname, nrows, states, status )
-        class(string),        intent(in)  :: fname
-        integer,              intent(in)  :: nrows
-        integer, allocatable, intent(out) :: states(:)
-        integer,              intent(out) :: status
+        class(string),        intent(in)               :: fname
+        integer,              intent(in)               :: nrows
+        integer,              allocatable, intent(out) :: states(:)
+        integer,              intent(out)              :: status
         integer(kind=4), allocatable :: buf(:)
-        integer :: funit, io_stat
+        integer                      :: funit, io_stat
         status = 1
         if( nrows < 1 ) return
         if( fname_size(fname) /= 4_8 * int(nrows,8) ) return

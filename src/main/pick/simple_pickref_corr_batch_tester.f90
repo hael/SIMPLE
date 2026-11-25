@@ -9,9 +9,9 @@ implicit none
 private
 public :: run_all_pickref_corr_batch_tests
 
-integer,  parameter :: T_NX = 96, T_NY = 80, T_BOX = 12, T_NREFS = 3, T_NFIX = 8, T_NPOS = 40, T_BATCH = 7
-integer,  parameter :: T_YDRAW = 44            !< the drawn windows' last corner row: they stay clear of the flat block
-real,     parameter :: T_NOISE = 0.1            !< the micrograph's noise relative to the planted unit-variance references
+integer,  parameter :: T_NX      = 96, T_NY = 80, T_BOX = 12, T_NREFS = 3, T_NFIX = 8, T_NPOS = 40, T_BATCH = 7
+integer,  parameter :: T_YDRAW   = 44           !< the drawn windows' last corner row: they stay clear of the flat block
+real,     parameter :: T_NOISE   = 0.1          !< the micrograph's noise relative to the planted unit-variance references
 real(dp), parameter :: TOL_SCORE = 1.d-4        !< single-precision products of T_BOX**2 terms against the double sums
 real,     parameter :: PLANT_MIN = 0.98         !< a planted reference under T_NOISE correlates at 1/sqrt(1 + 0.01)
 
@@ -75,8 +75,8 @@ contains
         logical,     intent(in) :: valid(T_NREFS)
         integer,     intent(in) :: pos(2)
         real, allocatable :: r(:,:,:)
-        real(dp) :: w(T_BOX,T_BOX), sd, s
-        integer  :: iref
+        real(dp)          :: w(T_BOX,T_BOX), sd, s
+        integer           :: iref
         w  = micn(pos(1)+1:pos(1)+T_BOX, pos(2)+1:pos(2)+T_BOX)
         w  = w - sum(w) / real(T_BOX**2,dp)
         sd = sqrt(sum(w**2) / real(T_BOX**2,dp))
@@ -94,11 +94,11 @@ contains
     !! one reaching outside the micrograph scores -1
     subroutine test_scores()
         type(pickref_corr_batch) :: corr
-        type(image) :: mic, refs(T_NREFS)
-        logical     :: valid(T_NREFS)
-        integer     :: pos(T_NPOS,2), ip, iref
-        real        :: scores(T_NPOS)
-        real(dp)    :: micn(T_NX,T_NY), err
+        type(image)              :: mic, refs(T_NREFS)
+        logical                  :: valid(T_NREFS)
+        integer                  :: pos(T_NPOS,2), ip, iref
+        real                     :: scores(T_NPOS)
+        real(dp)                 :: micn(T_NX,T_NY), err
         write(*,'(A)') 'test_scores'
         call make_fixture(mic, refs, valid, pos, micn)
         call corr%new(mic, refs, valid, T_BATCH)
@@ -125,11 +125,11 @@ contains
     subroutine test_team_identity()
         !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
         type(pickref_corr_batch) :: corr
-        type(image) :: mic, refs(T_NREFS)
-        logical     :: valid(T_NREFS)
-        integer     :: pos(T_NPOS,2), nthr_prev, iref
-        real        :: scores1(T_NPOS), scoresn(T_NPOS)
-        real(dp)    :: micn(T_NX,T_NY)
+        type(image)              :: mic, refs(T_NREFS)
+        logical                  :: valid(T_NREFS)
+        integer                  :: pos(T_NPOS,2), nthr_prev, iref
+        real                     :: scores1(T_NPOS), scoresn(T_NPOS)
+        real(dp)                 :: micn(T_NX,T_NY)
         write(*,'(A)') 'test_team_identity'
         call make_fixture(mic, refs, valid, pos, micn)
         call corr%new(mic, refs, valid, T_BATCH)

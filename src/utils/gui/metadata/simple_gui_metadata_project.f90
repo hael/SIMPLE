@@ -38,33 +38,33 @@ module simple_gui_metadata_project
 
   type, extends(gui_metadata_base) :: gui_metadata_project
     private
-    character(len=LONGSTRLEN)     :: projname = '' ! SIMPLE project name
-    character(len=LONGSTRLEN)     :: projfile = '' ! path to the *.simple project file
-    integer                       :: nmics    = 0  ! number of records in the mic segment
-    integer                       :: nmics_selected = 0  ! number of selected records in the mic segment
-    integer                       :: nstks    = 0  ! number of records in the stk segment
-    integer                       :: nptcls   = 0  ! number of records in the ptcl2D segment
-    integer                       :: nptcls_selected = 0  ! number of selected records in the ptcl2D segment
-    integer                       :: ncls2D   = 0  ! number of records in the cls2D segment
-    integer                       :: ncls2D_selected = 0  ! number of selected records in the cls2D segment
-    integer                       :: nstates3D = 0 ! number of states in the ptcl3D 'state' label
-    integer                       :: created  = 0  ! Unix timestamp of first assignment
-    real                          :: mskdiam   = 0. ! mask diameter (in A) used for the cls2D run
-    real                          :: mskscale  = 0. ! cavgs box size in A (box * smpd), for overlay scaling
-    integer                       :: dim_cavgs = 0  ! cavgs box size (in pixels)
-    integer                       :: xdim_mic   = 0 ! micrograph width in pixels
-    integer                       :: ydim_mic   = 0 ! micrograph height in pixels
-    real                          :: smpd_mic   = 0. ! micrograph pixel size (in A)
-    integer                       :: pspec_size = 0 ! power spectrum thumbnail size (in pixels)
-    character(len=LONGSTRLEN)     :: ptcls_jpg = '' ! path to a JPEG montage of a random particle sample
-    integer                       :: nptcls_shown = 0 ! number of particles included in ptcls_jpg
+    character(len=LONGSTRLEN)                    :: projname        = '' ! SIMPLE project name
+    character(len=LONGSTRLEN)                    :: projfile        = '' ! path to the *.simple project file
+    integer                                      :: nmics           = 0  ! number of records in the mic segment
+    integer                                      :: nmics_selected  = 0  ! number of selected records in the mic segment
+    integer                                      :: nstks           = 0  ! number of records in the stk segment
+    integer                                      :: nptcls          = 0  ! number of records in the ptcl2D segment
+    integer                                      :: nptcls_selected = 0  ! number of selected records in the ptcl2D segment
+    integer                                      :: ncls2D          = 0  ! number of records in the cls2D segment
+    integer                                      :: ncls2D_selected = 0  ! number of selected records in the cls2D segment
+    integer                                      :: nstates3D       = 0  ! number of states in the ptcl3D 'state' label
+    integer                                      :: created         = 0  ! Unix timestamp of first assignment
+    real                                         :: mskdiam         = 0. ! mask diameter (in A) used for the cls2D run
+    real                                         :: mskscale        = 0. ! cavgs box size in A (box * smpd), for overlay scaling
+    integer                                      :: dim_cavgs       = 0  ! cavgs box size (in pixels)
+    integer                                      :: xdim_mic        = 0  ! micrograph width in pixels
+    integer                                      :: ydim_mic        = 0  ! micrograph height in pixels
+    real                                         :: smpd_mic        = 0. ! micrograph pixel size (in A)
+    integer                                      :: pspec_size      = 0  ! power spectrum thumbnail size (in pixels)
+    character(len=LONGSTRLEN)                    :: ptcls_jpg       = '' ! path to a JPEG montage of a random particle sample
+    integer                                      :: nptcls_shown    = 0  ! number of particles included in ptcls_jpg
     type(gui_metadata_micrograph),   allocatable :: meta_movies(:)
     type(gui_metadata_micrograph),   allocatable :: meta_micrographs(:)
     type(gui_metadata_cavg2D_stage), allocatable :: meta_cavg2D(:)
     type(gui_metadata_vol3D_stage),  allocatable :: meta_vol3D(:)
     type(gui_metadata_ptcl),         allocatable :: meta_ptcls(:)
   contains
-    procedure :: kill => kill_override
+    procedure :: kill      => kill_override
     procedure :: set_project
     procedure :: start_update
     procedure :: set_summary
@@ -75,7 +75,7 @@ module simple_gui_metadata_project
     procedure :: set_vols3D
     procedure :: get
     procedure :: serialise => serialise_override
-    procedure :: jsonise => jsonise_override
+    procedure :: jsonise   => jsonise_override
   end type gui_metadata_project
 
 contains
@@ -110,9 +110,9 @@ contains
 
   ! Set the counts and sizes given; the others keep their values.
   subroutine set_summary( self, nmics, nmics_selected, nstks, nptcls, nptcls_selected, ncls2D, ncls2D_selected, nstates3D, pspec_size )
-    class(gui_metadata_project), intent(inout) :: self
-    integer, optional,           intent(in)    :: nmics, nmics_selected, nstks, nptcls, nptcls_selected
-    integer, optional,           intent(in)    :: ncls2D, ncls2D_selected, nstates3D, pspec_size
+    class(gui_metadata_project), intent(inout)                  :: self
+    integer,                     optional,           intent(in) :: nmics, nmics_selected, nstks, nptcls, nptcls_selected
+    integer,                     optional,           intent(in) :: ncls2D, ncls2D_selected, nstates3D, pspec_size
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( present(nmics)           ) self%nmics           = nmics
     if( present(nmics_selected)  ) self%nmics_selected  = nmics_selected
@@ -166,7 +166,7 @@ contains
     integer,                     intent(in)    :: dim_cavgs
     real,                        intent(in)    :: mskdiam, mskscale
     type(gui_metadata_cavg2D_stage), allocatable :: tmp(:)
-    integer :: islot, nslots
+    integer                                      :: islot, nslots
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( stage < 0 ) THROW_HARD('stage must be >= 1, or 0 for the final one')
     if( allocated(self%meta_cavg2D) )then
@@ -193,7 +193,7 @@ contains
     integer,                     intent(in)    :: stage
     type(gui_metadata_vol3D),    intent(in)    :: vols(:)
     type(gui_metadata_vol3D_stage), allocatable :: tmp(:)
-    integer :: islot, nslots
+    integer                                     :: islot, nslots
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( stage < 0 ) THROW_HARD('stage must be >= 1, or 0 for the final one')
     if( allocated(self%meta_vol3D) )then
@@ -236,7 +236,7 @@ contains
   ! Retrieve the project name, project file path, segment record counts, and
   ! created timestamp. Returns .true. if the object has been assigned.
   function get( self, projname, projfile, nmics, nstks, nptcls, created ) result( l_assigned )
-    class(gui_metadata_project), intent(in)  :: self
+    class(gui_metadata_project),  intent(in)  :: self
     type(string),                 intent(out) :: projname, projfile
     integer,                      intent(out) :: nmics, nstks, nptcls, created
     logical                                   :: l_assigned
@@ -255,8 +255,8 @@ contains
   ! The record's allocatable components would travel as descriptors of this process's memory:
   ! it is jsonised in-process only, and never sent over a pipe.
   subroutine serialise_override( self, buffer )
-    class(gui_metadata_project),           intent(in)    :: self
-    character(len=:),         allocatable, intent(inout) :: buffer
+    class(gui_metadata_project),           intent(in)                 :: self
+    character(len=:),                      allocatable, intent(inout) :: buffer
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( allocated(buffer) ) deallocate(buffer)
     THROW_HARD('gui_metadata_project holds allocatable components and is jsonised in-process only')

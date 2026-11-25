@@ -16,21 +16,21 @@ contains
     module subroutine build_nu_evidence_state( vol_even, vol_odd, state )
         class(image),            intent(in)  :: vol_even, vol_odd
         type(nu_evidence_state), intent(out) :: state
-        type(image) :: vol_zero
-        type(string) :: identity_seed_string, identity_hash
+        type(image)                              :: vol_zero
+        type(string)                             :: identity_seed_string, identity_hash
         integer(kind=NU_LABEL_KIND), allocatable :: evidence_map(:,:,:)
-        real, allocatable :: null_full(:,:,:), smooth_tmp(:,:,:), null_cost(:), coords(:), signal_lps(:)
-        real, allocatable :: gaps(:), gaps_obs(:), probs(:), candidate_measure(:), band_support_tmp(:,:)
-        real, allocatable :: band_limits_active(:)
-        real    :: nextb
-        real(kind=8) :: fingerprint(6), cutoff_checksum, uncertainty_checksum, support_checksum
-        real :: beta, temperature, best_e, second_e, e, prob_sum, entropy, null_lp
-        real :: unconstrained_null_fraction
-        real :: null_bias_median, null_bias_mad, null_bias_threshold
-        integer :: n_signal, n_candidates, imask, icand, iband, i, j, k, label, n_uncertain, k25
-        integer :: nb_active, n_observed, n_null_observed
-        character(len=32) :: value_text
-        character(len=XLONGSTRLEN) :: identity_seed
+        real,                        allocatable :: null_full(:,:,:), smooth_tmp(:,:,:), null_cost(:), coords(:), signal_lps(:)
+        real,                        allocatable :: gaps(:), gaps_obs(:), probs(:), candidate_measure(:), band_support_tmp(:,:)
+        real,                        allocatable :: band_limits_active(:)
+        real                                     :: nextb
+        real(kind=8)                             :: fingerprint(6), cutoff_checksum, uncertainty_checksum, support_checksum
+        real                                     :: beta, temperature, best_e, second_e, e, prob_sum, entropy, null_lp
+        real                                     :: unconstrained_null_fraction
+        real                                     :: null_bias_median, null_bias_mad, null_bias_threshold
+        integer                                  :: n_signal, n_candidates, imask, icand, iband, i, j, k, label, n_uncertain, k25
+        integer                                  :: nb_active, n_observed, n_null_observed
+        character(len=32)                        :: value_text
+        character(len=XLONGSTRLEN)               :: identity_seed
 
         if( .not.nu_evidence_requested ) &
             &THROW_HARD('NU evidence setup was not requested with an evidence source')
@@ -403,11 +403,11 @@ contains
     !! than the static ladder takes the branch past the early return (Fourier-shell coordinates, Voronoi-width
     !! masses); init_nu_filter builds none, and the evidence path rejects the auxiliary label.
     subroutine setup_evidence_candidate_geometry( signal_lps, coords, measure )
-        real, intent(in) :: signal_lps(:)
+        real, intent(in)               :: signal_lps(:)
         real, allocatable, intent(out) :: coords(:), measure(:)
         real, allocatable :: widths(:)
-        real :: shell_scale, left_edge, right_edge, coord_eps
-        integer :: n_signal, n_static, static_find_gap, i
+        real              :: shell_scale, left_edge, right_edge, coord_eps
+        integer           :: n_signal, n_static, static_find_gap, i
         n_signal = size(signal_lps)
         if( n_signal < 1 ) THROW_HARD('empty NU evidence signal geometry')
         allocate(coords(n_signal + 1), source=0.)
@@ -447,10 +447,10 @@ contains
     end subroutine setup_evidence_candidate_geometry
 
     module subroutine calculate_nu_source_fingerprint( vol_even, vol_odd, fingerprint )
-        class(image), intent(in) :: vol_even, vol_odd
+        class(image), intent(in)  :: vol_even, vol_odd
         real(kind=8), intent(out) :: fingerprint(6)
         real(kind=8) :: even_val, odd_val, weight
-        integer :: imask, i, j, k
+        integer      :: imask, i, j, k
         if( .not.allocated(nu_mask_vox) ) THROW_HARD('NU support is unavailable for source fingerprint')
         fingerprint = 0.d0
         do imask = 1, n_nu_mask
@@ -535,9 +535,9 @@ contains
     end subroutine get_nu_evidence_summary
 
     module subroutine unpack_nu_evidence_state( state, selected_label, selected_cutoff, uncertainty, band_support )
-        type(nu_evidence_state), intent(in) :: state
-        integer, allocatable, optional, intent(out) :: selected_label(:)
-        real,    allocatable, optional, intent(out) :: selected_cutoff(:), uncertainty(:), band_support(:,:)
+        type(nu_evidence_state), intent(in)                         :: state
+        integer,                 allocatable, optional, intent(out) :: selected_label(:)
+        real,                    allocatable, optional, intent(out) :: selected_cutoff(:), uncertainty(:), band_support(:,:)
         if( .not.nu_evidence_state_is_valid(state) ) THROW_HARD('cannot unpack invalid NU evidence state')
         if( present(selected_label) )then
             allocate(selected_label(size(state%selected_label)))
@@ -619,7 +619,7 @@ contains
 
     real function estimate_evidence_beta( null_cost, signal_costs ) result( beta )
         real, intent(in) :: null_cost(:), signal_costs(:,:)
-        real :: best_e, second_e, e
+        real    :: best_e, second_e, e
         integer :: imask, icand, n_used
         beta  = 0.
         n_used = 0
@@ -645,11 +645,11 @@ contains
 
     subroutine regularize_evidence_labels( null_cost, signal_costs, coords, beta, candmap, &
             &l_constrain_background )
-        real, intent(in) :: null_cost(:), signal_costs(:,:), coords(:), beta
+        real,                        intent(in)               :: null_cost(:), signal_costs(:,:), coords(:), beta
         integer(kind=NU_LABEL_KIND), allocatable, intent(out) :: candmap(:,:,:)
-        logical, optional, intent(in) :: l_constrain_background
+        logical,                     optional, intent(in)     :: l_constrain_background
         integer :: imask, icand, i, j, k, iter, color, current, best, nchanged
-        real :: e, best_e
+        real    :: e, best_e
         logical :: l_constrain
         l_constrain = .false.
         if( present(l_constrain_background) ) l_constrain = l_constrain_background
@@ -736,11 +736,11 @@ contains
     end subroutine regularize_evidence_labels
 
     real function evidence_site_energy( imask, icand, null_cost, signal_costs, coords, candmap, beta ) result( energy )
-        integer, intent(in) :: imask, icand
-        real, intent(in) :: null_cost(:), signal_costs(:,:), coords(:), beta
+        integer,                     intent(in) :: imask, icand
+        real,                        intent(in) :: null_cost(:), signal_costs(:,:), coords(:), beta
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
         integer :: i, j, k, neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz, ineigh, ni, nj, nk, degree, other
-        real :: pair_sum
+        real    :: pair_sum
         i = nu_mask_vox(1,imask)
         j = nu_mask_vox(2,imask)
         k = nu_mask_vox(3,imask)
@@ -762,7 +762,7 @@ contains
 
     real function evidence_unary( imask, icand, null_cost, signal_costs ) result( unary )
         integer, intent(in) :: imask, icand
-        real, intent(in) :: null_cost(:), signal_costs(:,:)
+        real,    intent(in) :: null_cost(:), signal_costs(:,:)
         if( icand == 1 )then
             unary = null_cost(imask)
         else

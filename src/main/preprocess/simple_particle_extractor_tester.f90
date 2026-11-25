@@ -34,7 +34,7 @@ contains
     subroutine test_movie_outlier_curation()
         !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
         class(ptcl_extractor), allocatable :: extractor
-        logical :: gain_only, combined, flat_gain_only, flat_combined, no_gain, non_eer, clean_gain
+        logical                            :: gain_only, combined, flat_gain_only, flat_combined, no_gain, non_eer, clean_gain
         !$ integer :: saved_omp
         write(*,'(A)') 'test_movie_outlier_curation'
         !$ saved_omp = omp_get_max_threads()
@@ -57,11 +57,11 @@ contains
     subroutine movie_outlier_curation_cases( self, gain_only, combined, flat_gain_only, flat_combined,&
         &no_gain, non_eer, clean_gain )
         class(ptcl_extractor), intent(inout) :: self
-        logical, intent(out) :: gain_only, combined, flat_gain_only, flat_combined, no_gain, non_eer, clean_gain
+        logical,               intent(out)   :: gain_only, combined, flat_gain_only, flat_combined, no_gain, non_eer, clean_gain
         integer, parameter :: NX=32, NY=32, NFR=2, GX=13, GY=16, HX=24, HY=16
-        real :: pixels(NX,NY,1), expected(NX,NY,NFR), gain_pixels(NX,NY,1)
-        integer :: icase, iframe, i, j
-        logical :: checks(7)
+        real               :: pixels(NX,NY,1), expected(NX,NY,NFR), gain_pixels(NX,NY,1)
+        integer            :: icase, iframe, i, j
+        logical            :: checks(7)
         checks = .true.
         do icase = 1,size(checks)
             call self%kill
@@ -116,10 +116,10 @@ contains
     end subroutine movie_outlier_curation_cases
 
     subroutine test_missing_motion_model()
-        character(len=*), parameter :: MISSING_MODEL = 'tmp_particle_extractor_missing.mmodel'
-        class(ptcl_extractor), allocatable :: extractor
-        class(parameters), allocatable, target :: params
-        type(ori) :: omic
+        character(len=*),      parameter           :: MISSING_MODEL = 'tmp_particle_extractor_missing.mmodel'
+        class(ptcl_extractor), allocatable         :: extractor
+        class(parameters),     allocatable, target :: params
+        type(ori)                                  :: omic
         write(*,'(A)') 'test_missing_motion_model'
         allocate(extractor, params)
         call omic%new(is_ptcl=.false.)
@@ -146,7 +146,7 @@ contains
 
     subroutine test_init_mic_selects_micrograph_mode()
         class(ptcl_extractor), allocatable :: extractor
-        logical, allocatable :: mask(:,:,:)
+        logical,               allocatable :: mask(:,:,:)
         write(*,'(A)') 'test_init_mic_selects_micrograph_mode'
         allocate(extractor)
         call extractor%get_particle_mask(mask)
@@ -179,27 +179,27 @@ contains
     subroutine test_binary_model_constructors()
         use simple_test_utils,        only: assert_real
         !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
-        integer, parameter :: NX = 48, NY = 40, NFR = 3, BOX_TEST = 8, REF_FRAME = 2
+        integer, parameter :: NX           = 48, NY = 40, NFR = 3, BOX_TEST = 8, REF_FRAME = 2
         integer, parameter :: DRIFT(2,NFR) = reshape([0,0,2,-1,-1,2], [2,NFR])
-        real, parameter :: PIXEL_SIZE = 1.5, DOSE = 6., FRAME_WEIGHTS(NFR) = [0.25,0.5,0.25]
+        real,    parameter :: PIXEL_SIZE   = 1.5, DOSE = 6., FRAME_WEIGHTS(NFR) = [0.25,0.5,0.25]
         ! a measured curve with windows at fractions 1 and 2, centres 3 and 9 e/A^2; fraction 3 at 15 continues
         ! the window-2 values along the line slopes beta = 5 A^2 and gamma = 0.03 per e/A^2
         real(dp), parameter :: CURVE_C(NFR) = [1._dp, 0.8_dp, 0.8_dp*exp(-0.18_dp)], CURVE_B(NFR) = [0._dp, 40._dp, 70._dp]
-        type(dose_curve) :: curve
+        type(dose_curve)    :: curve
         ! Allow single-precision I/O, FFTs and background normalization roundoff.
-        real, parameter :: PIXEL_TOL = 1024. * epsilon(1.)
-        class(ptcl_extractor), allocatable :: extractor, mic_extractor
-        class(parameters), allocatable, target :: params
-        class(motion_model), allocatable :: model
-        class(image), pointer :: frames(:)
-        type(image), allocatable :: actual(:), expected(:)
-        type(image) :: gain_image, truth_image
-        type(ori) :: omic
-        type(string) :: movie, gain, model_file, star_file
-        integer, allocatable :: pinds(:)
-        real :: pixels(NX,NY,1), gain_pixels(NX,NY,1), vmin, vmax, vmean, vsdev
-        real(dp) :: omega(2), frequency(2), critical_dose(2), dw(2,NFR), weights(NFR), phase(2), pi
-        integer :: coords(2,1), shift(2), i, j, iframe, imode
+        real,                  parameter           :: PIXEL_TOL = 1024. * epsilon(1.)
+        class(ptcl_extractor), allocatable         :: extractor, mic_extractor
+        class(parameters),     allocatable, target :: params
+        class(motion_model),   allocatable         :: model
+        class(image),          pointer             :: frames(:)
+        type(image),           allocatable         :: actual(:), expected(:)
+        type(image)                                :: gain_image, truth_image
+        type(ori)                                  :: omic
+        type(string)                               :: movie, gain, model_file, star_file
+        integer,               allocatable         :: pinds(:)
+        real                                       :: pixels(NX,NY,1), gain_pixels(NX,NY,1), vmin, vmax, vmean, vsdev
+        real(dp)                                   :: omega(2), frequency(2), critical_dose(2), dw(2,NFR), weights(NFR), phase(2), pi
+        integer                                    :: coords(2,1), shift(2), i, j, iframe, imode
         !$ integer :: saved_omp
         character(len=96) :: message
         write(*,'(A)') 'test_binary_model_constructors'
@@ -379,20 +379,20 @@ contains
     subroutine test_particle_frame_cache()
         use simple_test_utils,   only: assert_real
         !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
-        integer, parameter :: NX = 48, NY = 40, NFR = 3, REF_FRAME = 2, NPTCLS = 2
-        integer, parameter :: BOXES(3) = [8,10,10]
-        real, parameter :: SAMPLINGS(3) = [1.5,1.5,2.0], PIXEL_TOL = 1024. * epsilon(1.)
-        integer, parameter :: COORDS(2,NPTCLS) = reshape([10,10,24,19], [2,NPTCLS])
-        class(ptcl_extractor), allocatable :: extractor, other, mic_extractor
-        class(parameters), allocatable, target :: params
-        class(motion_model), allocatable :: model
-        class(image), pointer :: frames(:)
-        type(image), allocatable :: actual(:), expected(:)
-        type(image) :: truth_image
-        type(ori) :: omic, missing_model
-        type(string) :: movie, model_file, star_file
-        real :: movie_pixels(NX,NY,1,NFR), vmin, vmax, vmean, vsdev
-        integer :: i, j, iframe, icase
+        integer,               parameter           :: NX               = 48, NY = 40, NFR = 3, REF_FRAME = 2, NPTCLS = 2
+        integer,               parameter           :: BOXES(3)         = [8,10,10]
+        real,                  parameter           :: SAMPLINGS(3)     = [1.5,1.5,2.0], PIXEL_TOL = 1024. * epsilon(1.)
+        integer,               parameter           :: COORDS(2,NPTCLS) = reshape([10,10,24,19], [2,NPTCLS])
+        class(ptcl_extractor), allocatable         :: extractor, other, mic_extractor
+        class(parameters),     allocatable, target :: params
+        class(motion_model),   allocatable         :: model
+        class(image),          pointer             :: frames(:)
+        type(image),           allocatable         :: actual(:), expected(:)
+        type(image)                                :: truth_image
+        type(ori)                                  :: omic, missing_model
+        type(string)                               :: movie, model_file, star_file
+        real                                       :: movie_pixels(NX,NY,1,NFR), vmin, vmax, vmean, vsdev
+        integer                                    :: i, j, iframe, icase
         !$ integer :: saved_omp
         write(*,'(A)') 'test_particle_frame_cache'
         !$ saved_omp = omp_get_max_threads()
@@ -493,7 +493,7 @@ contains
         subroutine check_cached_sum(ffromto, n)
             integer, intent(in) :: ffromto(2), n
             integer, allocatable :: pinds(:)
-            integer :: iptcl
+            integer              :: iptcl
             ! Zero motion: sum the raw fixture pixels, sharing only downstream normalization.
             call truth_image%set_rmat(sum(movie_pixels(:,:,:,ffromto(1):ffromto(2)), dim=4), .false.)
             pinds = [(iptcl, iptcl=1,n)]
@@ -507,13 +507,13 @@ contains
     end subroutine test_particle_frame_cache
 
     subroutine assert_dose_weighting_report( extractor, applied, model_dw )
-        class(ptcl_extractor), intent(in) :: extractor
-        logical,              intent(in) :: applied
-        logical, optional,    intent(in) :: model_dw
-        integer :: saved_log, scratch_log, ios, nmodel, napplied
+        class(ptcl_extractor), intent(in)              :: extractor
+        logical,               intent(in)              :: applied
+        logical,               optional,    intent(in) :: model_dw
+        integer            :: saved_log, scratch_log, ios, nmodel, napplied
         character(len=256) :: line
-        character(len=32) :: label
-        logical :: value
+        character(len=32)  :: label
+        logical            :: value
         saved_log = logfhandle
         open(newunit=scratch_log, status='scratch', action='readwrite')
         logfhandle = scratch_log

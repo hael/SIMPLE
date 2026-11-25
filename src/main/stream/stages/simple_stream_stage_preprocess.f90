@@ -95,12 +95,12 @@ private
 ! the micrograph rejection thresholds last set from the GUI, kept in the stage's folder for a restart
 character(len=*), parameter :: GUI_THRESHOLDS = 'gui_thresholds.txt'
 
-integer, parameter :: PLOT_WINDOW      = 500   ! micrographs per point of the windowed time plots
-integer, parameter :: NTHUMBS          = 10    ! most recent micrograph thumbnails sent to the GUI
-integer, parameter :: STAR_EVERY_NMICS = 1000  ! below this many micrographs the STAR file is rewritten on every import...
-integer, parameter :: STAR_STEP_NMICS  = 100   ! ...above it, every this many new micrographs
-integer, parameter :: GAIN_BATCH_NMOVIES = 10  ! movies per batch handed to the gain analysis/estimation
-integer, parameter :: PARTIAL_SET_QUIET_S = 180 ! movies short of a set go as a partial set after this long (s)
+integer, parameter :: PLOT_WINDOW         = 500  ! micrographs per point of the windowed time plots
+integer, parameter :: NTHUMBS             = 10   ! most recent micrograph thumbnails sent to the GUI
+integer, parameter :: STAR_EVERY_NMICS    = 1000 ! below this many micrographs the STAR file is rewritten on every import...
+integer, parameter :: STAR_STEP_NMICS     = 100  ! ...above it, every this many new micrographs
+integer, parameter :: GAIN_BATCH_NMOVIES  = 10   ! movies per batch handed to the gain analysis/estimation
+integer, parameter :: PARTIAL_SET_QUIET_S = 180  ! movies short of a set go as a partial set after this long (s)
                                                 ! without a new movie; below MOVIES_IDLE_TIME_S, so before idling
 character(len=*), parameter :: GENERATED_GAINREF = 'gainref_generated.mrc'
 
@@ -123,25 +123,25 @@ type :: stream_stage_preprocess
     ! settled after params%new: the gain reference and its flip once resolved (resolve_gain), and
     ! the micrograph rejection thresholds the GUI may change (set_threshold)
     type(string)          :: gainref
-    character(len=STDLEN) :: flipgain     = 'no'
-    real                  :: ctfres_thres  = 0.
-    real                  :: astig_thres   = 0.
-    real                  :: icefrac_thres = 0.
-    integer :: import_counter      = 0       ! last import index given to a movie
-    integer :: last_movie_time     = 0       ! when a new movie was last seen
-    integer :: nmic_star           = 0       ! micrographs in the last STAR snapshot (above STAR_EVERY_NMICS)
-    integer :: n_failed_jobs       = 0
-    integer :: prev_stacksz        = 0
-    integer :: last_injection      = 0       ! time of the last import
-    integer :: nmovs2importperiter = 0
-    logical :: l_sj_dirs           = .false. ! movies arrive in <dir_movies>/<xx>/Data/ folders
-    logical :: l_xml_meta          = .false. ! per-movie XML metadata in dir_meta
-    logical :: l_movies_left       = .false. ! the watcher returned more movies than were submitted
-    integer :: nmovies_unset       = 0       ! movies short of a set at the end of the last pass
-    logical :: l_haschanged        = .false. ! imports since the last idle STAR snapshot
-    logical :: l_nmics_reached     = .false.
-    logical :: l_restart           = .false. ! the output directory existed before params%new
-    logical :: l_exists            = .false.
+    character(len=STDLEN) :: flipgain            = 'no'
+    real                  :: ctfres_thres        = 0.
+    real                  :: astig_thres         = 0.
+    real                  :: icefrac_thres       = 0.
+    integer               :: import_counter      = 0       ! last import index given to a movie
+    integer               :: last_movie_time     = 0       ! when a new movie was last seen
+    integer               :: nmic_star           = 0       ! micrographs in the last STAR snapshot (above STAR_EVERY_NMICS)
+    integer               :: n_failed_jobs       = 0
+    integer               :: prev_stacksz        = 0
+    integer               :: last_injection      = 0       ! time of the last import
+    integer               :: nmovs2importperiter = 0
+    logical               :: l_sj_dirs           = .false. ! movies arrive in <dir_movies>/<xx>/Data/ folders
+    logical               :: l_xml_meta          = .false. ! per-movie XML metadata in dir_meta
+    logical               :: l_movies_left       = .false. ! the watcher returned more movies than were submitted
+    integer               :: nmovies_unset       = 0       ! movies short of a set at the end of the last pass
+    logical               :: l_haschanged        = .false. ! imports since the last idle STAR snapshot
+    logical               :: l_nmics_reached     = .false.
+    logical               :: l_restart           = .false. ! the output directory existed before params%new
+    logical               :: l_exists            = .false.
     ! waits (s); tests set them to 0
     integer :: settle_s            = LONGTIME  ! a file is taken once untouched this long
     integer :: wait_s              = WAITTIME  ! idle pause between iterations
@@ -154,34 +154,34 @@ contains
     procedure :: kill
     ! the steps of new(), in order
     procedure, private :: init_params
-    procedure :: init_movie_watcher
-    procedure :: resume_previous_run
+    procedure          :: init_movie_watcher
+    procedure          :: resume_previous_run
     procedure, private :: init_job_dirs
-    procedure :: init_queue
+    procedure          :: init_queue
     procedure, private :: resolve_gain
     procedure, private :: build_worker_cline
     procedure, private :: init_gui
     ! the steps of iterate() and their helpers
     procedure, private :: import_previous_projects
-    procedure :: detect_gain_flip
-    procedure :: generate_gain_from_movies
-    procedure :: next_movie_batch
-    procedure :: submit_new_movies
+    procedure          :: detect_gain_flip
+    procedure          :: generate_gain_from_movies
+    procedure          :: next_movie_batch
+    procedure          :: submit_new_movies
     procedure, private :: create_movies_set_project
-    procedure :: schedule_jobs
-    procedure :: collect_jobs
+    procedure          :: schedule_jobs
+    procedure          :: collect_jobs
     procedure, private :: import_completed
     procedure, private :: process_imports
-    procedure :: send_plots
-    procedure :: idle
+    procedure          :: send_plots
+    procedure          :: idle
     procedure, private :: send_status
     procedure, private :: apply_gui_updates
-    procedure :: set_threshold
-    procedure :: apply_thresholds
-    procedure :: update_idle_marker
-    procedure :: save_thresholds
-    procedure :: restore_thresholds
-    procedure :: write_mic_star_and_field
+    procedure          :: set_threshold
+    procedure          :: apply_thresholds
+    procedure          :: update_idle_marker
+    procedure          :: save_thresholds
+    procedure          :: restore_thresholds
+    procedure          :: write_mic_star_and_field
 end type stream_stage_preprocess
 
 interface
@@ -437,8 +437,8 @@ contains
     subroutine import_previous_projects( self )
         class(stream_stage_preprocess), intent(inout) :: self
         type(string), allocatable :: completed_fnames(:)
-        type(oris) :: os_done
-        integer    :: nmics, ndone, imic
+        type(oris)                :: os_done
+        integer                   :: nmics, ndone, imic
         call self%sets%restore(completed_fnames)
         if( size(completed_fnames) == 0 ) return
         ! every movie of the completed sets is done, accepted or rejected: none is processed again,
@@ -499,14 +499,14 @@ contains
     function detect_gain_flip( self ) result( flipgain )
         class(stream_stage_preprocess), intent(inout) :: self
         character(len=:), allocatable :: flipgain
-        integer, parameter :: MAX_BATCHES = 8
-        integer, parameter :: MAX_WAITS   = 180
-        type(stream_watcher)      :: watcher
-        type(gain_flip_analyzer)  :: analyzer
-        type(image)               :: batch_sum
-        type(string), allocatable :: batch(:)
-        logical :: l_ok, ran_analysis
-        integer :: nwaits, nbatches, part_movies, part_frames
+        integer,          parameter   :: MAX_BATCHES = 8
+        integer,          parameter   :: MAX_WAITS   = 180
+        type(stream_watcher)          :: watcher
+        type(gain_flip_analyzer)      :: analyzer
+        type(image)                   :: batch_sum
+        type(string),     allocatable :: batch(:)
+        logical                       :: l_ok, ran_analysis
+        integer                       :: nwaits, nbatches, part_movies, part_frames
         flipgain = 'no'
         if( self%gainref == '' )then
             write(logfhandle,'(A)') '>>> GAIN AUTO: gainref is empty; defaulting to no flip'
@@ -554,14 +554,14 @@ contains
     ! returns its absolute path. Uses its own watcher, so these movies are still preprocessed.
     function generate_gain_from_movies( self ) result( gainref )
         class(stream_stage_preprocess), intent(inout) :: self
-        type(string) :: gainref
-        integer, parameter :: N_MOVIES_TARGET = 1000
+        type(string)              :: gainref
+        integer,      parameter   :: N_MOVIES_TARGET = 1000
         type(stream_watcher)      :: watcher
         type(image)               :: gain_sum
         type(string), allocatable :: batch(:)
         type(string)              :: fname
-        logical :: l_ok
-        integer :: movies_used, frames_used
+        logical                   :: l_ok
+        integer                   :: movies_used, frames_used
         gainref = ''
         write(logfhandle,'(A,I0,A)') '>>> GAIN GENERATION: waiting for ', N_MOVIES_TARGET, ' movies'
         call new_movie_watcher(self%params%dir_movies, self%l_sj_dirs, self%settle_s, watcher, l_ok)
@@ -598,12 +598,12 @@ contains
 
     ! The next GAIN_BATCH_NMOVIES non-EER movies from watcher, or l_ok=.false. when not enough have arrived.
     subroutine next_movie_batch( self, watcher, batch, l_ok )
-        class(stream_stage_preprocess), intent(in)    :: self
-        type(stream_watcher),           intent(inout) :: watcher
-        type(string), allocatable,      intent(inout) :: batch(:)
-        logical,                        intent(out)   :: l_ok
+        class(stream_stage_preprocess), intent(in)                      :: self
+        type(stream_watcher),           intent(inout)                   :: watcher
+        type(string),                   allocatable,      intent(inout) :: batch(:)
+        logical,                        intent(out)                     :: l_ok
         type(string), allocatable :: movies(:)
-        integer :: nmovies, imov, nvalid
+        integer                   :: nmovies, imov, nvalid
         l_ok = .false.
         if( allocated(batch) ) deallocate(batch)
         call watcher%detect_and_add_dirs(self%params%dir_movies, self%l_sj_dirs)
@@ -651,7 +651,7 @@ contains
     subroutine submit_new_movies( self )
         class(stream_stage_preprocess), intent(inout) :: self
         type(string), allocatable :: movies(:)
-        integer :: nmovies, nsets, iset, ifirst, ilast, imovie, cnt
+        integer                   :: nmovies, nsets, iset, ifirst, ilast, imovie, cnt
         self%l_movies_left = .false.
         call self%movie_buff%detect_and_add_dirs(self%params%dir_movies, self%l_sj_dirs)
         call self%movie_buff%watch(nmovies, movies, max_nmovies=self%nmovs2importperiter)
@@ -751,7 +751,7 @@ contains
         class(stream_stage_preprocess), intent(inout) :: self
         integer,                        intent(out)   :: n_imported
         type(string), allocatable :: done(:)
-        integer :: n_failed
+        integer                   :: n_failed
         n_imported = 0
         ! n_failed: the movies of the failed jobs, all of a set's
         call self%sets%collect(self%qenv, done, n_failed)
@@ -769,8 +769,8 @@ contains
         type(sp_project), allocatable :: job_projs(:)
         logical,          allocatable :: mics_mask(:)
         integer,          allocatable :: first(:) ! the first micrograph of each set in mics_mask
-        type(string) :: fname
-        integer      :: n_jobs, n_old, nmics, iproj, i, imic, j, nrejected, n_set
+        type(string)                  :: fname
+        integer                       :: n_jobs, n_old, nmics, iproj, i, imic, j, nrejected, n_set
         n_imported = 0
         n_jobs     = size(job_fnames)
         if( n_jobs == 0 ) return
@@ -910,11 +910,11 @@ contains
     !---------------- GUI ----------------
 
     subroutine send_status( self, stage )
-        class(stream_stage_preprocess), intent(inout) :: self
-        type(string), optional,         intent(in)    :: stage
+        class(stream_stage_preprocess), intent(inout)                :: self
+        type(string),                   optional,         intent(in) :: stage
         type(string) :: stage_here
-        real    :: average_ctfres, average_astig, average_icefrac
-        integer :: nmics
+        real         :: average_ctfres, average_astig, average_icefrac
+        integer      :: nmics
         stage_here = 'finding and processing new movies'
         if( present(stage) ) stage_here = stage
         associate( os_mic => self%spproj_glob%os_mic )
@@ -945,7 +945,7 @@ contains
         class(stream_stage_preprocess), intent(inout) :: self
         type(gui_metadata_stream_update) :: update
         character(len=:), allocatable    :: buffer
-        real :: val
+        real                             :: val
         do while( self%pipe%receive(buffer) )
             update = transfer(buffer, update)
             val    = update%get_ctfres_update()
@@ -1011,8 +1011,8 @@ contains
     !---------------- helpers ----------------
 
     subroutine write_mic_star_and_field( self, write_field, optics_set )
-        class(stream_stage_preprocess), intent(inout) :: self
-        logical, optional,              intent(in)    :: write_field, optics_set
+        class(stream_stage_preprocess), intent(inout)                     :: self
+        logical,                        optional,              intent(in) :: write_field, optics_set
         logical :: l_write_field, l_optics_set
         l_write_field = .false.
         l_optics_set  = .false.

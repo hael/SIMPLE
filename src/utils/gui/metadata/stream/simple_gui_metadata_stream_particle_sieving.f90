@@ -20,15 +20,15 @@ module simple_gui_metadata_stream_particle_sieving
 
   type, extends(gui_metadata_base) :: gui_metadata_stream_particle_sieving
     private
-    character(len=STDLEN) :: stage                   = 'unknown'
+    character(len=STDLEN) :: stage                          = 'unknown'
     integer(kind=2)       :: selection(MAX_SIEVE_SELECTION) = 0
-    integer               :: n_selection             = 0
-    integer               :: particles_imported      = 0       ! total particles received from upstream
-    integer               :: particles_accepted      = 0       ! particles passing 2-D selection criteria
-    integer               :: particles_rejected      = 0       ! particles rejected by the sieve (caller-supplied)
-    integer               :: last_import_time        = 0       ! Unix timestamp of most recent import event
+    integer               :: n_selection                    = 0
+    integer               :: particles_imported             = 0 ! total particles received from upstream
+    integer               :: particles_accepted             = 0 ! particles passing 2-D selection criteria
+    integer               :: particles_rejected             = 0 ! particles rejected by the sieve (caller-supplied)
+    integer               :: last_import_time               = 0 ! Unix timestamp of most recent import event
   contains
-    procedure :: kill => kill_override
+    procedure :: kill    => kill_override
     procedure :: set
     procedure :: set_selection
     procedure :: clear_selection

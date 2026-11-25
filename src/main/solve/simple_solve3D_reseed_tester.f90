@@ -62,15 +62,15 @@ contains
         use simple_sp_project,    only: sp_project
         use simple_type_defs,     only: lp_crop_inf
         use simple_string_utils,  only: int2str
-        real, parameter :: LPS_EXPORT_GATE(8) = [19.375, 17.4375, 15.5, 13.5625, 11.625, 9.6875, 7.75, 5.8125]
-        real, parameter :: LPS_PFCRT(8)       = [20., 18., 16., 14., 12., 10., 8., 6.]
-        real, parameter :: LPS_PORF(5)        = [21.25, 19.071429, 16.892857, 14.714286, 12.535714]
-        real, parameter :: LPS_STREPT(5)      = [10., 9.214286, 8.428571, 7.642857, 6.857143]
+        real,              parameter   :: LPS_EXPORT_GATE(8) = [19.375, 17.4375, 15.5, 13.5625, 11.625, 9.6875, 7.75, 5.8125]
+        real,              parameter   :: LPS_PFCRT(8)       = [20., 18., 16., 14., 12., 10., 8., 6.]
+        real,              parameter   :: LPS_PORF(5)        = [21.25, 19.071429, 16.892857, 14.714286, 12.535714]
+        real,              parameter   :: LPS_STREPT(5)      = [10., 9.214286, 8.428571, 7.642857, 6.857143]
         class(parameters), allocatable :: params
         class(sp_project), allocatable :: proj
         type(lp_crop_inf), allocatable :: saved_lpinfo(:)
-        integer :: saved_nstages, i
-        logical :: saved_cavgs_mode, saved_trs_override
+        integer                        :: saved_nstages, i
+        logical                        :: saved_cavgs_mode, saved_trs_override
         write(*,'(A)') 'test_ptcl_lplims'
         allocate(params, proj)
         saved_nstages      = nstages_refine3D
@@ -156,23 +156,23 @@ contains
         use simple_defs,       only: logfhandle
         use simple_final_rec,  only: final_rec_mask_settings
         class(parameters), allocatable :: params
-        class(cmdline), allocatable    :: saved_cline
+        class(cmdline),    allocatable :: saved_cline
         class(sp_project), allocatable :: proj
         type(lp_crop_inf), allocatable :: saved_lpinfo(:), base_lpinfo(:)
-        type(solve3D_addon_ctx) :: addon
-        type(string) :: cwd, root, final_automsk
-        logical :: saved_flags(10), l_final_envfsc, l_final_nu_mask
-        real    :: saved_update_frac, planned_lp(8)
+        type(solve3D_addon_ctx)        :: addon
+        type(string)                   :: cwd, root, final_automsk
+        logical                        :: saved_flags(10), l_final_envfsc, l_final_nu_mask
+        real                           :: saved_update_frac, planned_lp(8)
         ! the first five rungs of the eight-stage size ladder for these masks (A)
-        real, parameter :: START_DIAMS(6) = [50., 80., 155., 160., 170., 400.]
-        real, parameter :: P1_LPS(6) = [10.,       10.,       19.375,  20., 21.25,     30.]
-        real, parameter :: P2_LPS(6) = [9.214286,  9.214286,  17.4375, 18., 19.071429, 26.571429]
-        real, parameter :: P3_LPS(6) = [8.428571,  8.428571,  15.5,    16., 16.892857, 23.142857]
-        real, parameter :: P4_LPS(6) = [7.642857,  7.642857,  13.5625, 14., 14.714286, 19.714286]
-        real, parameter :: P5_LPS(6) = [6.857143,  6.857143,  11.625,  12., 12.535714, 16.285714]
-        integer :: saved_nptcls_eff, saved_nstages, nfail0, backend, istage, imode, i
-        integer :: saved_logfhandle, log_unit
-        character(len=7), parameter :: mask_modes(4) = [character(len=7) :: 'no', 'density', 'nu', 'order']
+        real,             parameter :: START_DIAMS(6) = [50., 80., 155., 160., 170., 400.]
+        real,             parameter :: P1_LPS(6)      = [10.,       10.,       19.375,  20., 21.25,     30.]
+        real,             parameter :: P2_LPS(6)      = [9.214286,  9.214286,  17.4375, 18., 19.071429, 26.571429]
+        real,             parameter :: P3_LPS(6)      = [8.428571,  8.428571,  15.5,    16., 16.892857, 23.142857]
+        real,             parameter :: P4_LPS(6)      = [7.642857,  7.642857,  13.5625, 14., 14.714286, 19.714286]
+        real,             parameter :: P5_LPS(6)      = [6.857143,  6.857143,  11.625,  12., 12.535714, 16.285714]
+        integer                     :: saved_nptcls_eff, saved_nstages, nfail0, backend, istage, imode, i
+        integer                     :: saved_logfhandle, log_unit
+        character(len=7), parameter :: mask_modes(4)  = [character(len=7) :: 'no', 'density', 'nu', 'order']
         write(*,'(A)') 'test_gold_standard_stages'
         nfail0 = tests_failed
         call enter_fixture('solve3D_gold_standard', cwd, root)
@@ -605,7 +605,7 @@ contains
         use simple_solve3D_utils, only: cline_refine3D, set_cline_refine3D, nstages_refine3D
         use simple_parameters, only: parameters
         class(parameters), intent(inout) :: params
-        real :: bounds(0:8)
+        real    :: bounds(0:8)
         integer :: nstages, stage, mode
         write(*,'(A)') 'check_sigma2_schedules'
         params%sigma2_anneal = 'yes'
@@ -681,12 +681,12 @@ contains
         use simple_string,                  only: string
         class(parameters), intent(in) :: params
         integer,           intent(in) :: last_stage, first_stage
-        integer, parameter :: NPTCLS = 16, NITER = 6
+        integer,           parameter           :: NPTCLS = 16, NITER = 6
         class(builder),    allocatable, target :: build
-        class(parameters), allocatable :: sampling
-        type(string) :: balance
-        integer, allocatable :: inds(:), expected(:)
-        integer :: istage, iter, nsamp, nround, i
+        class(parameters), allocatable         :: sampling
+        type(string)                           :: balance
+        integer,           allocatable         :: inds(:), expected(:)
+        integer                                :: istage, iter, nsamp, nround, i
         write(*,'(A,2I3)') 'check_early_stage_sticky', first_stage, last_stage
         allocate(build, sampling)
         call build%spproj%os_ptcl3D%new(NPTCLS, is_ptcl=.true.)
@@ -749,14 +749,14 @@ contains
         class(parameters), intent(in) :: params
         character(len=*),  intent(in) :: mode
         logical,           intent(in) :: l_release
-        integer, parameter :: NPTCLS = 16, NITER = 3, NSTICKY = 4
-        class(builder),    allocatable, target :: build
-        class(parameters), allocatable :: sampling
-        type(class_sample), allocatable :: units(:)
-        type(string) :: projfile
-        integer, allocatable :: inds(:), sticky(:), best(:)
-        logical :: drawn(NPTCLS), l_sticky(NPTCLS), l_sticky_prev
-        integer :: istage, iter, nsamp, nits, nupdated, i
+        integer,            parameter           :: NPTCLS = 16, NITER = 3, NSTICKY = 4
+        class(builder),     allocatable, target :: build
+        class(parameters),  allocatable         :: sampling
+        type(class_sample), allocatable         :: units(:)
+        type(string)                            :: projfile
+        integer,            allocatable         :: inds(:), sticky(:), best(:)
+        logical                                 :: drawn(NPTCLS), l_sticky(NPTCLS), l_sticky_prev
+        integer                                 :: istage, iter, nsamp, nits, nupdated, i
         write(*,'(A,A,L2)') 'check_sticky_release ', mode, l_release
         allocate(build, sampling)
         call build%spproj%os_ptcl3D%new(NPTCLS, is_ptcl=.true.)
@@ -883,14 +883,14 @@ contains
         use simple_sym,        only: sym
         use simple_ori,        only: ori
         use simple_string,     only: string
-        integer,          parameter :: NPTCLS = 12
-        character(len=*), parameter :: PROJFILE = 'symrand.simple'
+        integer,           parameter   :: NPTCLS   = 12
+        character(len=*),  parameter   :: PROJFILE = 'symrand.simple'
         class(sp_project), allocatable :: proj_file, proj_stale, proj_back
-        type(sym)    :: symobj
-        type(ori)    :: o_ref, o_mate, o_back, o_stale
-        type(string) :: cwd, root
-        integer      :: i, nfail0, nkept, nmoved, nstale
-        real         :: mat_back(3,3), mat_stale(3,3,NPTCLS)
+        type(sym)                      :: symobj
+        type(ori)                      :: o_ref, o_mate, o_back, o_stale
+        type(string)                   :: cwd, root
+        integer                        :: i, nfail0, nkept, nmoved, nstale
+        real                           :: mat_back(3,3), mat_stale(3,3,NPTCLS)
         write(*,'(A)') 'test_symmetry_randomize'
         nfail0 = tests_failed
         call enter_fixture('symrand', cwd, root)
@@ -934,9 +934,9 @@ contains
     !> populated states, and a single state, are left as they are
     subroutine test_no_weak_state()
         integer, parameter :: NCAVGS = 12
-        integer :: states(2*NCAVGS), nmoved
-        real    :: scores(2*NCAVGS)
-        integer :: i
+        integer            :: states(2*NCAVGS), nmoved
+        real               :: scores(2*NCAVGS)
+        integer            :: i
         write(*,'(A)') 'test_no_weak_state'
         do i = 1, NCAVGS
             states(i)        = mod(i - 1, 3) + 1
@@ -954,10 +954,10 @@ contains
     !> an empty state takes the donor's worst-fitting classes, both halves together, up to half
     !! the donor; deselected classes and the other state stay as they are
     subroutine test_one_empty_state()
-        integer, parameter :: NCAVGS = 12
+        integer, parameter :: NCAVGS     = 12
         real,    parameter :: SCORES1(6) = [0.9, 0.2, 0.8, 0.1, 0.7, 0.3] ! classes 4, 2 and 6 fit worst
-        integer :: states(2*NCAVGS), expected(2*NCAVGS), nmoved, i
-        real    :: scores(2*NCAVGS)
+        integer            :: states(2*NCAVGS), expected(2*NCAVGS), nmoved, i
+        real               :: scores(2*NCAVGS)
         write(*,'(A)') 'test_one_empty_state'
         ! classes 1-6 in state 1, 7-11 in state 2, 12 deselected, state 3 empty
         states(1:6)   = 1
@@ -984,8 +984,8 @@ contains
     !> every class in one state: the two empty states each take an equal share, the worst-fitting first
     subroutine test_all_in_one_state()
         integer, parameter :: NCAVGS = 12
-        integer :: states(2*NCAVGS), nmoved, i
-        real    :: scores(2*NCAVGS)
+        integer            :: states(2*NCAVGS), nmoved, i
+        real               :: scores(2*NCAVGS)
         write(*,'(A)') 'test_all_in_one_state'
         states = 1
         do i = 1, NCAVGS
@@ -1005,8 +1005,8 @@ contains
     !> a state above the search's floor but under 2% of the selected halves is reseeded
     subroutine test_weak_by_fraction()
         integer, parameter :: NCAVGS = 200
-        integer :: states(2*NCAVGS), nmoved, i
-        real    :: scores(2*NCAVGS)
+        integer            :: states(2*NCAVGS), nmoved, i
+        real               :: scores(2*NCAVGS)
         write(*,'(A)') 'test_weak_by_fraction'
         states(1:100)   = 1
         states(101:197) = 2
@@ -1028,8 +1028,8 @@ contains
     !! state is left empty while another is relabelled
     subroutine test_too_few_to_reseed()
         integer, parameter :: NCAVGS = 4
-        integer :: states(2*NCAVGS), states_in(2*NCAVGS), nmoved, i
-        real    :: scores(2*NCAVGS)
+        integer            :: states(2*NCAVGS), states_in(2*NCAVGS), nmoved, i
+        real               :: scores(2*NCAVGS)
         write(*,'(A)') 'test_too_few_to_reseed'
         states = 1
         do i = 1, NCAVGS

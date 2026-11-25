@@ -53,60 +53,60 @@ logical,          parameter :: DEBUG_HERE     = .false.
 
 !> What the GUI shows of the pool (stats)
 type :: stream_pool2D_stats
-    integer      :: last_complete_iter = 0      ! the latest iteration whose results are back
-    integer      :: nassigned          = 0      ! particles assigned
-    integer      :: nrejected          = 0      ! particles rejected
-    real         :: resolution         = 999.   ! the current estimated resolution (A)
-    real         :: mskdiam            = 0.     ! the mask the next iteration uses: diameter (A)
-    real         :: msk_crop           = 0.     ! and radius at the working dimensions (px)
-    type(string) :: cavgs_jpeg                  ! the class averages' sprite sheet, absolute ('' before the first)
-    type(string) :: cavgs_mrc                   ! the class averages, absolute ('' before the first)
-    integer      :: jpeg_ntilesx       = 0
-    integer      :: jpeg_ntilesy       = 0
-    integer, allocatable :: jpeg_map(:)         ! per tile: class index, population and resolution;
-    integer, allocatable :: jpeg_pop(:)         ! not allocated before the first
+    integer              :: last_complete_iter = 0    ! the latest iteration whose results are back
+    integer              :: nassigned          = 0    ! particles assigned
+    integer              :: nrejected          = 0    ! particles rejected
+    real                 :: resolution         = 999. ! the current estimated resolution (A)
+    real                 :: mskdiam            = 0.   ! the mask the next iteration uses: diameter (A)
+    real                 :: msk_crop           = 0.   ! and radius at the working dimensions (px)
+    type(string)         :: cavgs_jpeg                ! the class averages' sprite sheet, absolute ('' before the first)
+    type(string)         :: cavgs_mrc                 ! the class averages, absolute ('' before the first)
+    integer              :: jpeg_ntilesx       = 0
+    integer              :: jpeg_ntilesy       = 0
+    integer, allocatable :: jpeg_map(:)               ! per tile: class index, population and resolution;
+    integer, allocatable :: jpeg_pop(:)               ! not allocated before the first
     real,    allocatable :: jpeg_res(:)
 end type stream_pool2D_stats
 
 type :: stream_pool2D
     private
     ! allocatable (compile-time policy), allocated in new and released in kill
-    type(cmdline),            allocatable :: cline_refine2D  ! the iterations' command line
-    type(sp_project),         allocatable :: proj            ! the pool: every imported particle
-    type(sp_project),         allocatable :: history(:)      ! the last POOL_NHISTORY completed iterations, a ring (history_slot)
-    type(qsys_env),           allocatable :: qenv            ! the iterations' queue environment
-    type(starproject_stream), allocatable :: starproj_stream ! the final project's STAR files
-    type(qsys_async_job)                  :: job             ! the current iteration's job (its files: POOL_EXIT_CODE...)
-    integer :: history_iter(POOL_NHISTORY) = 0               ! the iteration each history slot holds (0: none)
+    type(cmdline),            allocatable :: cline_refine2D                  ! the iterations' command line
+    type(sp_project),         allocatable :: proj                            ! the pool: every imported particle
+    type(sp_project),         allocatable :: history(:)                      ! the last POOL_NHISTORY completed iterations, a ring (history_slot)
+    type(qsys_env),           allocatable :: qenv                            ! the iterations' queue environment
+    type(starproject_stream), allocatable :: starproj_stream                 ! the final project's STAR files
+    type(qsys_async_job)                  :: job                             ! the current iteration's job (its files: POOL_EXIT_CODE...)
+    integer                               :: history_iter(POOL_NHISTORY) = 0 ! the iteration each history slot holds (0: none)
     ! dimensions, mask and resolution; none is a parameter (they are known at the first import)
     type(scaled_dims) :: dims                                ! the working dimensions, downscaled from the native ones
-    integer :: native_box  = 0                               ! particle box of the imported sets (px)
-    real    :: native_smpd = 0.                              ! their pixel size (A)
-    real    :: mskdiam     = 0.                              ! the mask diameter (A)
-    real    :: user_lpstop = 0.                              ! the user's low-pass stop (A), 0 when none was given
-    real    :: lpstop_hard = 0.                              ! the hard low-pass limit (A): the user's, never below Nyquist
-    real    :: lpstart     = 0.                              ! the low-pass ramp, from (A)
-    real    :: lpstop      = 0.                              ! to (A)
-    real    :: lpcen       = 0.                              ! the centering low-pass limit (A)
-    real    :: resolution  = 999.                            ! the current estimated resolution (A)
-    real    :: resolutions(POOL_NPREV_RES) = 999.            ! its history
-    logical :: l_scaling   = .false.
+    integer           :: native_box                  = 0     ! particle box of the imported sets (px)
+    real              :: native_smpd                 = 0.    ! their pixel size (A)
+    real              :: mskdiam                     = 0.    ! the mask diameter (A)
+    real              :: user_lpstop                 = 0.    ! the user's low-pass stop (A), 0 when none was given
+    real              :: lpstop_hard                 = 0.    ! the hard low-pass limit (A): the user's, never below Nyquist
+    real              :: lpstart                     = 0.    ! the low-pass ramp, from (A)
+    real              :: lpstop                      = 0.    ! to (A)
+    real              :: lpcen                       = 0.    ! the centering low-pass limit (A)
+    real              :: resolution                  = 999.  ! the current estimated resolution (A)
+    real              :: resolutions(POOL_NPREV_RES) = 999.  ! its history
+    logical           :: l_scaling                   = .false.
     ! the iterations
-    integer :: iter               = 0                        ! the latest iteration dispatched
-    integer :: last_complete_iter = 0
-    integer :: ncls               = 0
-    integer :: numlen             = 0
-    integer :: nattempts          = 0                        ! submissions of the current iteration: a failed first is retried once
-    integer :: lim_ufrac_nptcls   = 0                        ! selected particles beyond which an iteration samples stacks
+    integer              :: iter                = 0          ! the latest iteration dispatched
+    integer              :: last_complete_iter  = 0
+    integer              :: ncls                = 0
+    integer              :: numlen              = 0
+    integer              :: nattempts           = 0          ! submissions of the current iteration: a failed first is retried once
+    integer              :: lim_ufrac_nptcls    = 0          ! selected particles beyond which an iteration samples stacks
     logical, allocatable :: stacks_mask(:)                   ! the stacks of the current iteration
-    type(string) :: center                                   ! the centering (yes|no) on a full update
-    type(string) :: refs                                     ! the latest class averages, relative to the stage's folder
-    type(string) :: orig_projfile                            ! the stage's project file
-    logical :: l_active            = .false.                 ! started
-    logical :: l_available         = .false.                 ! no iteration running
-    logical :: l_failed            = .false.                 ! the current iteration failed twice: the pool stops
-    logical :: l_update_frac_given = .false.                 ! update_frac on the stage's command line
-    logical :: l_cenlp_given       = .false.                 ! cenlp on the stage's command line
+    type(string)         :: center                           ! the centering (yes|no) on a full update
+    type(string)         :: refs                             ! the latest class averages, relative to the stage's folder
+    type(string)         :: orig_projfile                    ! the stage's project file
+    logical              :: l_active            = .false.    ! started
+    logical              :: l_available         = .false.    ! no iteration running
+    logical              :: l_failed            = .false.    ! the current iteration failed twice: the pool stops
+    logical              :: l_update_frac_given = .false.    ! update_frac on the stage's command line
+    logical              :: l_cenlp_given       = .false.    ! cenlp on the stage's command line
     ! counts and convergence
     integer :: nptcls          = 0                           ! particles in the pool
     integer :: nptcls_rejected = 0
@@ -115,11 +115,11 @@ type :: stream_pool2D
     real    :: conv_mi_class   = 0.
     real    :: conv_score      = 0.
     ! the GUI's class averages
-    type(string) :: jpeg                                     ! the current class-average JPEG ('' before the first)
-    integer :: jpeg_ntiles  = 0
-    integer :: jpeg_ntilesx = 0
-    integer :: jpeg_ntilesy = 0
-    integer :: stats_iter   = 0                              ! the iteration write_stats wrote last
+    type(string)         :: jpeg                             ! the current class-average JPEG ('' before the first)
+    integer              :: jpeg_ntiles  = 0
+    integer              :: jpeg_ntilesx = 0
+    integer              :: jpeg_ntilesy = 0
+    integer              :: stats_iter   = 0                 ! the iteration write_stats wrote last
     integer, allocatable :: jpeg_map(:), jpeg_pop(:)
     real,    allocatable :: jpeg_res(:)
 contains
@@ -405,14 +405,14 @@ contains
     subroutine iterate( self, params )
         class(stream_pool2D), intent(inout) :: self
         class(parameters),    intent(inout) :: params
-        logical, parameter            :: L_BENCH = .false.
+        logical,          parameter   :: L_BENCH = .false.
         type(sp_project)              :: spproj
         integer(timer_int_kind)       :: t_tot
         integer,          allocatable :: nptcls_per_stk(:)
-        type(string) :: stkname
-        real         :: frac_update, smpd
-        integer      :: iptcl,i, nptcls_tot, fromp, top, nstks_tot, jptcl, islot
-        integer      :: nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, ncls
+        type(string)                  :: stkname
+        real                          :: frac_update, smpd
+        integer                       :: iptcl,i, nptcls_tot, fromp, top, nstks_tot, jptcl, islot
+        integer                       :: nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, ncls
         if( .not. self%l_active    ) return
         if( .not. self%l_available ) return
         if( L_BENCH ) t_tot  = tic()
@@ -708,11 +708,11 @@ contains
         class(stream_pool2D), intent(inout) :: self
         class(parameters),    intent(inout) :: params
         integer,      allocatable :: pops(:)
-        type(sp_project) :: spproj
-        type(oris)       :: os
-        type(class_frcs) :: frcs
-        type(string)     :: fname, cwd
-        integer          :: i, it, jptcl, iptcl, istk
+        type(sp_project)          :: spproj
+        type(oris)                :: os
+        type(class_frcs)          :: frcs
+        type(string)              :: fname, cwd
+        integer                   :: i, it, jptcl, iptcl, istk
         if( .not. self%l_active    ) return
         if( .not. self%l_available ) return
         call del_file(POOL_DIR//REFINE2D_FINISHED)
@@ -800,7 +800,7 @@ contains
         class(stream_pool2D), intent(inout) :: self
         integer, parameter :: ITERLIM    = 20
         integer, parameter :: ITERSHIFT  = 5
-        real :: lp, gamma
+        real               :: lp, gamma
         if( .not. self%l_active    ) return
         if( .not. self%l_available ) return
         if( self%iter < ITERLIM )then
@@ -953,9 +953,9 @@ contains
 
     ! write jpeg of the latest class averages
     subroutine write_jpeg( self, params, filename)
-        class(stream_pool2D),    intent(inout) :: self
-        class(parameters),       intent(in)    :: params
-        class(string), optional, intent(in)    :: filename
+        class(stream_pool2D),    intent(inout)        :: self
+        class(parameters),       intent(in)           :: params
+        class(string),           optional, intent(in) :: filename
         type(string)   :: jpeg_path, cwd
         type(image)    :: img, img_pad, img_jpeg
         type(stack_io) :: stkio_r
@@ -1106,10 +1106,10 @@ contains
         class(stream_pool2D), intent(in) :: self
         class(string),        intent(in) :: src, dest
         integer, allocatable :: cls_pop(:)
-        type(image)    :: img, img_pad
-        type(stack_io) :: stkio_r, stkio_w
-        type(string)   :: dest_here
-        integer        :: ldim(3),icls, ncls_here
+        type(image)          :: img, img_pad
+        type(stack_io)       :: stkio_r, stkio_w
+        type(string)         :: dest_here
+        integer              :: ldim(3),icls, ncls_here
         if(src == dest)then
             dest_here = 'tmp_cavgs.mrc'
         else
@@ -1147,9 +1147,9 @@ contains
     !! completed iterations, a full copy of the pool each, serves only snapshots and goes first, so
     !! the final write does not hold it too. The resident memory is logged at each step.
     subroutine finalise( self, params, optics_dir )
-        class(stream_pool2D),    intent(inout) :: self
-        class(parameters),       intent(inout) :: params
-        class(string), optional, intent(in)    :: optics_dir
+        class(stream_pool2D),    intent(inout)        :: self
+        class(parameters),       intent(inout)        :: params
+        class(string),           optional, intent(in) :: optics_dir
         integer      :: ipart, lastmap, i
         call log_rss('finalise/start')
         if( allocated(self%history) )then
@@ -1220,11 +1220,11 @@ contains
     !! native sampling, the newest optics map's groups (with @p optics_dir), ptcl3D prepared for
     !! 3D, the class STAR file and, with @p write_star, the micrograph and particle STAR files.
     subroutine write_project( self, params, write_star, clspath, optics_dir )
-        class(stream_pool2D),    intent(inout) :: self
-        class(parameters),       intent(inout) :: params
-        logical,       optional, intent(in)    :: write_star
-        logical,       optional, intent(in)    :: clspath
-        class(string), optional, intent(in)    :: optics_dir
+        class(stream_pool2D),    intent(inout)        :: self
+        class(parameters),       intent(inout)        :: params
+        logical,                 optional, intent(in) :: write_star
+        logical,                 optional, intent(in) :: clspath
+        class(string),           optional, intent(in) :: optics_dir
         type(class_frcs)        :: frcs
         type(oris)              :: os_backup
         type(starproject)       :: starproj
@@ -1320,16 +1320,16 @@ contains
     !! @p cavgs_* report the selected class averages' sprite sheet for the GUI.
     subroutine write_snapshot( self, iteration, selection, projfile, starfile_base, optics_dir, optics_offset,&
             &nptcls, cavgs_jpeg, cavgs_mrc, cavgs_ntilesx, cavgs_ntilesy, cavgs_idx, cavgs_pop, cavgs_res )
-        class(stream_pool2D), intent(inout) :: self
-        integer,              intent(in)    :: iteration
-        integer,              intent(in)    :: selection(:)
-        class(string),        intent(in)    :: projfile, starfile_base, optics_dir
-        integer,              intent(in)    :: optics_offset
-        integer,              intent(out)   :: nptcls
-        type(string),         intent(out)   :: cavgs_jpeg, cavgs_mrc
-        integer,              intent(out)   :: cavgs_ntilesx, cavgs_ntilesy
-        integer, allocatable, intent(out)   :: cavgs_idx(:), cavgs_pop(:)
-        real,    allocatable, intent(out)   :: cavgs_res(:)
+        class(stream_pool2D), intent(inout)            :: self
+        integer,              intent(in)               :: iteration
+        integer,              intent(in)               :: selection(:)
+        class(string),        intent(in)               :: projfile, starfile_base, optics_dir
+        integer,              intent(in)               :: optics_offset
+        integer,              intent(out)              :: nptcls
+        type(string),         intent(out)              :: cavgs_jpeg, cavgs_mrc
+        integer,              intent(out)              :: cavgs_ntilesx, cavgs_ntilesy
+        integer,              allocatable, intent(out) :: cavgs_idx(:), cavgs_pop(:)
+        real,                 allocatable, intent(out) :: cavgs_res(:)
         type(sp_project) :: snapshot_proj
         type(string)     :: dir, stk, frcs, cavgsfname, frcsfname
         real             :: smpd
@@ -1481,7 +1481,7 @@ contains
     function stats( self ) result( st )
         class(stream_pool2D), intent(in) :: self
         type(stream_pool2D_stats) :: st
-        type(string) :: cwd
+        type(string)              :: cwd
         st%last_complete_iter = self%last_complete_iter
         st%nassigned          = self%nptcls - self%nptcls_rejected
         st%nrejected          = self%nptcls_rejected

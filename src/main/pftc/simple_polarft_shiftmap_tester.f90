@@ -40,18 +40,18 @@ contains
     !! lives. pftsz_in 0 lets the parameters derive pftsz from the mask
     subroutine make_pftc_kernel( p, pftc, objfun, nthr, box, smpd, mskdiam, lp, pftsz_in, nrefs, nptcls, sigma2, refs,&
             &ptcls, ctfs, kfromto )
-        class(parameters), target,        intent(inout) :: p
-        class(polarft_calc),              intent(inout) :: pftc
-        character(len=*),                 intent(in)    :: objfun
-        integer,                          intent(in)    :: nthr, box, pftsz_in, nrefs, nptcls
-        real,                             intent(in)    :: smpd, mskdiam, lp
-        real,        allocatable, target, intent(inout) :: sigma2(:,:)
-        complex(sp), allocatable,         intent(out)   :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp),    allocatable,         intent(out)   :: ctfs(:,:,:)
-        integer,                          intent(out)   :: kfromto(2)
+        class(parameters),                target,        intent(inout)       :: p
+        class(polarft_calc),              intent(inout)                      :: pftc
+        character(len=*),                 intent(in)                         :: objfun
+        integer,                          intent(in)                         :: nthr, box, pftsz_in, nrefs, nptcls
+        real,                             intent(in)                         :: smpd, mskdiam, lp
+        real,                             allocatable, target, intent(inout) :: sigma2(:,:)
+        complex(sp),                      allocatable,         intent(out)   :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),                         allocatable,         intent(out)   :: ctfs(:,:,:)
+        integer,                          intent(out)                        :: kfromto(2)
         type(cmdline) :: cline
-        real    :: theta
-        integer :: k, pp, pdim(3), iref, iptcl, pftsz, ieo
+        real          :: theta
+        integer       :: k, pp, pdim(3), iref, iptcl, pftsz, ieo
         call cline%set('box',     real(box))
         call cline%set('smpd',    smpd)
         call cline%set('mskdiam', mskdiam)
@@ -114,19 +114,19 @@ contains
     subroutine test_kernel_identity( objfun )
         use simple_eul_prob_tab_utils, only: posterior_temperature
         character(len=*), intent(in) :: objfun
-        integer,  parameter :: NALPHA = 20, NRHO = 5, NTRIALS = 60, NALPHA_FOLD = 7, KSCREEN = 6
-        real(dp), parameter :: RHOS(NRHO) = [0.d0, 1.5d0, 4.d0, 9.d0, 15.d0]
+        integer,             parameter           :: NALPHA     = 20, NRHO = 5, NTRIALS = 60, NALPHA_FOLD = 7, KSCREEN = 6
+        real(dp),            parameter           :: RHOS(NRHO) = [0.d0, 1.5d0, 4.d0, 9.d0, 15.d0]
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
-        type(polar_shiftmap)      :: sm
-        real,        allocatable  :: sigma2(:,:)
-        complex(sp), allocatable  :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp),    allocatable  :: ctfs(:,:,:), vals(:,:,:), vals_before(:,:,:)
-        real(dp),    allocatable  :: w(:)
-        complex(dp), allocatable  :: Q(:,:), A(:,:)
-        real(dp) :: scale, alpha, c_mech, c_kern, err_mech, err_grid, err_zero, err_fold, val_ref, val_map, s(2), temp
-        real(dp) :: err_nats
-        integer  :: kfromto(2), pftsz, nrots, nmax, k, itrial, irot, ir, j, branch_rots(4), nrho_c, nalpha_c
+        type(polar_shiftmap)                     :: sm
+        real,                allocatable         :: sigma2(:,:)
+        complex(sp),         allocatable         :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:), vals(:,:,:), vals_before(:,:,:)
+        real(dp),            allocatable         :: w(:)
+        complex(dp),         allocatable         :: Q(:,:), A(:,:)
+        real(dp)                                 :: scale, alpha, c_mech, c_kern, err_mech, err_grid, err_zero, err_fold, val_ref, val_map, s(2), temp
+        real(dp)                                 :: err_nats
+        integer                                  :: kfromto(2), pftsz, nrots, nmax, k, itrial, irot, ir, j, branch_rots(4), nrho_c, nalpha_c
         write(*,'(A)') 'test_kernel_identity ('//trim(objfun)//')'
         call set_fixed_seed(20261102)
         allocate(p, pftc)
@@ -267,16 +267,16 @@ contains
     !! index wraps modulo the ring; the grid's objective is still the calculator's shifted, rotated objective (cc, a
     !! ring of 2 x 16 samples, magnitudes out to 20 px at shell 21)
     subroutine test_orders_beyond_ring()
-        integer,  parameter :: NALPHA = 24, NRHO = 4, NTRIALS = 40
-        real(dp), parameter :: RHOS(NRHO) = [0.d0, 6.d0, 13.d0, 20.d0]
+        integer,             parameter           :: NALPHA     = 24, NRHO = 4, NTRIALS = 40
+        real(dp),            parameter           :: RHOS(NRHO) = [0.d0, 6.d0, 13.d0, 20.d0]
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
-        type(polar_shiftmap)      :: sm
-        real,        allocatable  :: sigma2(:,:)
-        complex(sp), allocatable  :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp),    allocatable  :: ctfs(:,:,:), vals(:,:,:)
-        real(dp) :: s(2), err, val_ref
-        integer  :: kfromto(2), pftsz, nrots, itrial, irot, ir, j
+        type(polar_shiftmap)                     :: sm
+        real,                allocatable         :: sigma2(:,:)
+        complex(sp),         allocatable         :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:), vals(:,:,:)
+        real(dp)                                 :: s(2), err, val_ref
+        integer                                  :: kfromto(2), pftsz, nrots, itrial, irot, ir, j
         write(*,'(A)') 'test_orders_beyond_ring'
         call set_fixed_seed(20261104)
         allocate(p, pftc)
@@ -312,15 +312,15 @@ contains
     !! shifted, and the continuous evaluator is the row at the grid angles; with reference and particle the alternating
     !! half ring (-1)^(p-1), unit CTF, the loss is 0 at rotation 1 and 4 at rotation 2 in all four, the map included
     subroutine test_angular_nyquist()
-        integer,  parameter :: NALPHA = 8, NRHO = 2
-        real(dp), parameter :: RHOS(NRHO) = [0.d0, 2.d0], TOL = 1.d-5
+        integer,             parameter           :: NALPHA     = 8, NRHO = 2
+        real(dp),            parameter           :: RHOS(NRHO) = [0.d0, 2.d0], TOL = 1.d-5
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
-        real,        allocatable  :: sigma2(:,:)
-        complex(sp), allocatable  :: refs(:,:,:,:), ptcls(:,:,:), alt(:,:)
-        real(sp),    allocatable  :: ctfs(:,:,:), row(:), vals(:,:,:), ones(:,:)
-        real(dp) :: f, grad(3), err_row, err_cont, shifts(2,2), l_dir, l_row, l_map, l_cont
-        integer  :: kfromto(2), pftsz, nrots, k, pp, irot, is, pdim(3)
+        real,                allocatable         :: sigma2(:,:)
+        complex(sp),         allocatable         :: refs(:,:,:,:), ptcls(:,:,:), alt(:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:), row(:), vals(:,:,:), ones(:,:)
+        real(dp)                                 :: f, grad(3), err_row, err_cont, shifts(2,2), l_dir, l_row, l_map, l_cont
+        integer                                  :: kfromto(2), pftsz, nrots, k, pp, irot, is, pdim(3)
         write(*,'(A)') 'test_angular_nyquist'
         call set_fixed_seed(20261105)
         allocate(p, pftc)
@@ -381,16 +381,16 @@ contains
 
     !> A forced team must give the serial grids bit for bit with per-thread work and one shared plan.
     subroutine test_kernel_threads()
-        integer,  parameter :: NALPHA = 16, NRHO = 4
-        real(dp), parameter :: RHOS(NRHO) = [0.d0, 2.d0, 5.d0, 9.d0]
+        integer,             parameter           :: NALPHA     = 16, NRHO = 4
+        real(dp),            parameter           :: RHOS(NRHO) = [0.d0, 2.d0, 5.d0, 9.d0]
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
-        real,        allocatable :: sigma2(:,:)
-        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp),    allocatable :: ctfs(:,:,:), vals_serial(:,:,:,:), vals_par(:,:,:,:)
-        real(sp), allocatable :: width_serial(:), width_par(:), loss_serial(:), loss_par(:)
-        integer, allocatable :: cells_serial(:,:), cells_par(:,:)
-        integer :: kfromto(2), nrots, ip, nthr_prev, nthr_test, nptcls, actual_team, expected_team
+        real,                allocatable         :: sigma2(:,:)
+        complex(sp),         allocatable         :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:), vals_serial(:,:,:,:), vals_par(:,:,:,:)
+        real(sp),            allocatable         :: width_serial(:), width_par(:), loss_serial(:), loss_par(:)
+        integer,             allocatable         :: cells_serial(:,:), cells_par(:,:)
+        integer                                  :: kfromto(2), nrots, ip, nthr_prev, nthr_test, nptcls, actual_team, expected_team
         write(*,'(A)') 'test_kernel_threads'
         call set_fixed_seed(20261103)
         allocate(p, pftc)
@@ -450,16 +450,16 @@ contains
     !> Magnitudes in any order: where the magnitudes that keep an order do not trail, the kernel sums the shells per
     !! magnitude instead of in one product; the grids equal the sorted list's at the permuted magnitudes (cc)
     subroutine test_unsorted_magnitudes()
-        integer,  parameter :: NALPHA = 20, NRHO = 5
-        integer,  parameter :: PERM(NRHO) = [4, 1, 5, 2, 3]
-        real(dp), parameter :: RHOS(NRHO) = [0.d0, 1.5d0, 4.d0, 9.d0, 15.d0]
+        integer,             parameter           :: NALPHA     = 20, NRHO = 5
+        integer,             parameter           :: PERM(NRHO) = [4, 1, 5, 2, 3]
+        real(dp),            parameter           :: RHOS(NRHO) = [0.d0, 1.5d0, 4.d0, 9.d0, 15.d0]
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
-        real,        allocatable :: sigma2(:,:)
-        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp),    allocatable :: ctfs(:,:,:), vals_sorted(:,:,:), vals_perm(:,:,:)
-        real(dp) :: err
-        integer  :: kfromto(2), nrots, ir
+        real,                allocatable         :: sigma2(:,:)
+        complex(sp),         allocatable         :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:), vals_sorted(:,:,:), vals_perm(:,:,:)
+        real(dp)                                 :: err
+        integer                                  :: kfromto(2), nrots, ir
         write(*,'(A)') 'test_unsorted_magnitudes'
         call set_fixed_seed(20261123)
         allocate(p, pftc)
@@ -489,15 +489,15 @@ contains
     !! serial caller with a wide OpenMP pool (a threaded BLAS would split it) gets the team's grids bit for bit, and the
     !! grid is the calculator's objective (euclid, box 128, a ring of 400, shells 2-63, seven magnitudes, orders folded)
     subroutine test_blocked_shell_sums()
-        integer,  parameter :: NALPHA = 16, NRHO = 7
-        real(dp), parameter :: RHOS(NRHO) = [0.d0, 1.d0, 2.5d0, 4.d0, 6.d0, 9.d0, 12.d0]
+        integer,             parameter           :: NALPHA     = 16, NRHO = 7
+        real(dp),            parameter           :: RHOS(NRHO) = [0.d0, 1.d0, 2.5d0, 4.d0, 6.d0, 9.d0, 12.d0]
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
-        real,        allocatable :: sigma2(:,:)
-        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp),    allocatable :: ctfs(:,:,:), vals_serial(:,:,:,:), vals_par(:,:,:,:)
-        integer(int64) :: mnk
-        integer        :: kfromto(2), nrots, ip, nthr_prev, nthr_test, nptcls
+        real,                allocatable         :: sigma2(:,:)
+        complex(sp),         allocatable         :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:), vals_serial(:,:,:,:), vals_par(:,:,:,:)
+        integer(int64)                           :: mnk
+        integer                                  :: kfromto(2), nrots, ip, nthr_prev, nthr_test, nptcls
         write(*,'(A)') 'test_blocked_shell_sums'
         call set_fixed_seed(20261123)
         allocate(p, pftc)
@@ -548,11 +548,11 @@ contains
     subroutine test_disk_within_radius()
         class(parameters),   allocatable :: p
         class(polarft_calc), allocatable :: pftc
-        real,        allocatable :: sigma2(:,:)
-        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp),    allocatable :: ctfs(:,:,:)
-        real(dp) :: step, prior_w, radius, x(2), rmax
-        integer  :: kfromto(2), nrho, nalpha, kscreen, icase, ir
+        real,                allocatable :: sigma2(:,:)
+        complex(sp),         allocatable :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),            allocatable :: ctfs(:,:,:)
+        real(dp)                         :: step, prior_w, radius, x(2), rmax
+        integer                          :: kfromto(2), nrho, nalpha, kscreen, icase, ir
         write(*,'(A)') 'test_disk_within_radius'
         allocate(p, pftc)
         call make_pftc_kernel(p, pftc, 'euclid', 1, 64, 1.0, 48.0, 6.0, 48, 1, 1, sigma2, refs, ptcls, ctfs, kfromto)
@@ -582,18 +582,18 @@ contains
 
     subroutine test_kernel_draw()
         use simple_eul_prob_tab_utils, only: posterior_temperature
-        integer,  parameter :: NDRAWS = 1500
-        real(dp), parameter :: SIGMA = 10.d0, RADIUS = 30.d0, EXPECTED_MEAN = 12.30d0
+        integer,             parameter           :: NDRAWS = 1500
+        real(dp),            parameter           :: SIGMA  = 10.d0, RADIUS = 30.d0, EXPECTED_MEAN = 12.30d0
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
-        real,        allocatable :: sigma2(:,:)
-        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp),    allocatable :: ctfs(:,:,:), vals(:,:,:)
-        real(dp),    allocatable :: rhos(:)
-        real(dp) :: prior_w, lse_prior, logp0, logz, step, mean_rho, disc_mean, wsum, wr, w
-        real(dp) :: lmax, s, lse, pen, loga, rho, temp
-        real(sp) :: loss
-        integer  :: kfromto(2), nrots, nrho, nalpha, idraw, irot, irho, ialpha, ir, j, ro, imax(3)
+        real,                allocatable         :: sigma2(:,:)
+        complex(sp),         allocatable         :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:), vals(:,:,:)
+        real(dp),            allocatable         :: rhos(:)
+        real(dp)                                 :: prior_w, lse_prior, logp0, logz, step, mean_rho, disc_mean, wsum, wr, w
+        real(dp)                                 :: lmax, s, lse, pen, loga, rho, temp
+        real(sp)                                 :: loss
+        integer                                  :: kfromto(2), nrots, nrho, nalpha, idraw, irot, irho, ialpha, ir, j, ro, imax(3)
         write(*,'(A)') 'test_kernel_draw'
         call set_fixed_seed(20261105)
         allocate(p, pftc)
@@ -679,15 +679,15 @@ contains
 
     !> Physical moments from a direct grid sum, including broad and concentrated posteriors in both halves.
     subroutine test_physical_width()
-        real(dp), parameter :: RHOS(4) = [0.d0, 1.5d0, 3.d0, 4.5d0]
+        real(dp),            parameter           :: RHOS(4) = [0.d0, 1.5d0, 3.d0, 4.5d0]
         class(parameters),   allocatable, target :: p
-        class(polarft_calc), allocatable :: pftc
-        real, allocatable :: sigma2(:,:)
-        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp), allocatable :: ctfs(:,:,:), vals(:,:,:)
-        real(dp) :: prior_w, lse_prior, logp0, logz, temp, tphys, expected, radial_mass, radial_second
-        real(sp) :: loss, width, mode_loss, mode_width
-        integer :: kb(2), nrho, na, ip, icase, irot, irho, ialpha, ir, ieo, mr, mh, ma
+        class(polarft_calc), allocatable         :: pftc
+        real,                allocatable         :: sigma2(:,:)
+        complex(sp),         allocatable         :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:), vals(:,:,:)
+        real(dp)                                 :: prior_w, lse_prior, logp0, logz, temp, tphys, expected, radial_mass, radial_second
+        real(sp)                                 :: loss, width, mode_loss, mode_width
+        integer                                  :: kb(2), nrho, na, ip, icase, irot, irho, ialpha, ir, ieo, mr, mh, ma
         write(*,'(A)') 'test_physical_width'
         call set_fixed_seed(20261103)
         allocate(p, pftc)
@@ -756,17 +756,17 @@ contains
     !> A sub-resolution prior leaves these represented masses unchanged. An off-origin, concentrated
     !! posterior exposes rounding changes hidden by a broad posterior or an exactly centred peak.
     subroutine test_zero_prior_width_rounding()
-        real(dp), parameter :: RHOS(4) = [0.d0, 1.5d0, 3.d0, 4.5d0]
-        real(dp), parameter :: TEMPS(5) = [10.d0, 20.d0, 30.d0, 40.d0, 80.d0]
-        class(parameters), allocatable, target :: p
-        class(polarft_calc), allocatable :: pftc
-        real, allocatable :: sigma2(:,:)
-        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp), allocatable :: ctfs(:,:,:)
-        real(dp), allocatable :: ax(:,:), ay(:,:), phase(:,:)
-        real(dp) :: xy(2), temp, tphys
-        real(sp) :: loss, width, tiny_loss, tiny_width
-        integer :: kb(2), ip, it, ieo, ro, ir, a, tr, ti, ta
+        real(dp),            parameter           :: RHOS(4)  = [0.d0, 1.5d0, 3.d0, 4.5d0]
+        real(dp),            parameter           :: TEMPS(5) = [10.d0, 20.d0, 30.d0, 40.d0, 80.d0]
+        class(parameters),   allocatable, target :: p
+        class(polarft_calc), allocatable         :: pftc
+        real,                allocatable         :: sigma2(:,:)
+        complex(sp),         allocatable         :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:)
+        real(dp),            allocatable         :: ax(:,:), ay(:,:), phase(:,:)
+        real(dp)                                 :: xy(2), temp, tphys
+        real(sp)                                 :: loss, width, tiny_loss, tiny_width
+        integer                                  :: kb(2), ip, it, ieo, ro, ir, a, tr, ti, ta
         write(*,'(A)') 'test_zero_prior_width_rounding'
         call set_fixed_seed(20261103)
         allocate(p, pftc)
@@ -804,11 +804,11 @@ contains
     !> Direct posterior moments in particle axes; independent of the sampler's log-mass work and reductions.
     real(dp) function direct_shift_width( pftc, rhos, vals, temp, prior_w ) result( width )
         class(polarft_calc), intent(in) :: pftc
-        real(dp), intent(in) :: rhos(:), temp, prior_w
-        real(sp), intent(in) :: vals(:,:,:)
+        real(dp),            intent(in) :: rhos(:), temp, prior_w
+        real(sp),            intent(in) :: vals(:,:,:)
         real(dp), allocatable :: masses(:,:,:), points(:,:,:,:)
-        real(dp) :: angle, a, x(2), u(2), lmax, z, mu(2), variance
-        integer :: ir, ro, j, na, nr
+        real(dp)              :: angle, a, x(2), u(2), lmax, z, mu(2), variance
+        integer               :: ir, ro, j, na, nr
         na = size(vals,1)
         nr = size(vals,2)
         allocate(masses(na,nr,size(rhos)), points(2,na,nr,size(rhos)))
@@ -836,15 +836,15 @@ contains
 
     !> Cache reuse across noise updates, same-sized particle remaps and short batches against direct objectives.
     subroutine test_map_cache_lifecycle()
-        real(dp), parameter :: RHOS(3) = [0.d0, 1.d0, 2.d0]
-        class(parameters), allocatable, target :: p
-        class(polarft_calc), allocatable :: pftc
-        real, allocatable :: sigma2(:,:)
-        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp), allocatable :: ctfs(:,:,:), before(:,:,:), after(:,:,:)
-        real(dp) :: times(6)
-        integer(int64) :: counts(8)
-        integer :: kb(2), ip, cycle
+        real(dp),            parameter           :: RHOS(3) = [0.d0, 1.d0, 2.d0]
+        class(parameters),   allocatable, target :: p
+        class(polarft_calc), allocatable         :: pftc
+        real,                allocatable         :: sigma2(:,:)
+        complex(sp),         allocatable         :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:), before(:,:,:), after(:,:,:)
+        real(dp)                                 :: times(6)
+        integer(int64)                           :: counts(8)
+        integer                                  :: kb(2), ip, cycle
         write(*,'(A)') 'test_map_cache_lifecycle'
         call set_fixed_seed(20261103)
         allocate(p, pftc)
@@ -901,10 +901,10 @@ contains
 
     subroutine check_map_objective( pftc, iref, iptcl )
         class(polarft_calc), intent(inout) :: pftc
-        integer, intent(in) :: iref, iptcl
+        integer,             intent(in)    :: iref, iptcl
         real(sp), allocatable :: vals(:,:,:)
-        real(dp) :: xy(2), expected, error
-        integer :: na, nrho, ir, j, ro
+        real(dp)              :: xy(2), expected, error
+        integer               :: na, nrho, ir, j, ro
         call pftc%shiftmap_dims(SHIFTMAP_FULL, nrho, na)
         allocate(vals(na,pftc%get_nrots(),nrho))
         call pftc%gen_shiftmap(SHIFTMAP_FULL, iref, iptcl)
@@ -924,17 +924,17 @@ contains
 
     subroutine test_screen_width_identity()
         use simple_eul_prob_tab_utils, only: update_screen_best
-        integer, parameter :: NREF = 8, KEEP = 2
-        real(dp), parameter :: RHOS(3) = [0.d0, 1.d0, 2.d0]
-        class(parameters), allocatable, target :: p
-        class(polarft_calc), allocatable :: pftc
-        real, allocatable :: sigma2(:,:)
-        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp), allocatable :: ctfs(:,:,:)
-        real :: losses(NREF), widths(NREF), selected_widths(NREF), best(KEEP), work(NREF), loss
-        real(dp) :: times(6), times0(6), full_time, selective_time
-        integer(int64) :: counts0(8), counts1(8)
-        integer :: kb(2), r, j, ro, ir, a, selected, ip, ieo
+        integer,             parameter           :: NREF    = 8, KEEP = 2
+        real(dp),            parameter           :: RHOS(3) = [0.d0, 1.d0, 2.d0]
+        class(parameters),   allocatable, target :: p
+        class(polarft_calc), allocatable         :: pftc
+        real,                allocatable         :: sigma2(:,:)
+        complex(sp),         allocatable         :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:)
+        real                                     :: losses(NREF), widths(NREF), selected_widths(NREF), best(KEEP), work(NREF), loss
+        real(dp)                                 :: times(6), times0(6), full_time, selective_time
+        integer(int64)                           :: counts0(8), counts1(8)
+        integer                                  :: kb(2), r, j, ro, ir, a, selected, ip, ieo
         write(*,'(A)') 'test_screen_width_identity'
         call set_fixed_seed(20261103)
         allocate(p, pftc)
@@ -993,18 +993,18 @@ contains
     !! centring disk (30 A). Printed, not asserted.
     subroutine test_kernel_timing()
         use simple_eul_prob_tab_utils, only: posterior_temperature
-        integer, parameter :: NLP = 2
-        real,    parameter :: LPS(NLP) = [8.0, 2.7], SMPD = 1.3, WINDOW = 5.0, DISK_A = 30.0
+        integer,             parameter           :: NLP      = 2
+        real,                parameter           :: LPS(NLP) = [8.0, 2.7], SMPD = 1.3, WINDOW = 5.0, DISK_A = 30.0
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
-        real,        allocatable :: sigma2(:,:)
-        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp),    allocatable :: ctfs(:,:,:), vals(:,:,:), corrs(:)
-        real(dp),    allocatable :: rhos(:)
-        integer(timer_int_kind)  :: t0
-        real(dp) :: t_coarse, t_win, t_disk, t_draw, step, lse_prior, logp0, temp, logz
-        real     :: x, y, loss
-        integer  :: kfromto(2), nrots, ilp, irep, ix, iy, nrho, nalpha, nrep, irot, irho, ialpha
+        real,                allocatable         :: sigma2(:,:)
+        complex(sp),         allocatable         :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:), vals(:,:,:), corrs(:)
+        real(dp),            allocatable         :: rhos(:)
+        integer(timer_int_kind)                  :: t0
+        real(dp)                                 :: t_coarse, t_win, t_disk, t_draw, step, lse_prior, logp0, temp, logz
+        real                                     :: x, y, loss
+        integer                                  :: kfromto(2), nrots, ilp, irep, ix, iy, nrho, nalpha, nrep, irot, irho, ialpha
         write(*,'(A)') 'test_kernel_timing'
         write(*,'(A)') '  per pair, ms: the coarse 5x5 lattice | the map at the 5 px window | the map at the 30 A disk'
         do ilp = 1, NLP

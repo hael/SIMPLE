@@ -12,9 +12,9 @@ type :: histogram
     private
     real,    allocatable :: x(:)
     real,    allocatable :: counts(:)
-    integer              :: nbins = 0
-    real                 :: ntot  = 0.
-    real                 :: dx=0., xrange=0.
+    integer              :: nbins  = 0
+    real                 :: ntot   = 0.
+    real                 :: dx     = 0., xrange=0.
     logical              :: exists = .false.
   contains
     ! Initialization
@@ -81,18 +81,18 @@ contains
     end subroutine new_by_nbins
 
     subroutine new_from_img( self, img, nbins, minmax, radius )
-        class(histogram),  intent(inout) :: self
-        class(image),      intent(in)    :: img
-        integer,           intent(in)    :: nbins
-        real,    optional, intent(in)    :: minmax(2), radius
+        class(histogram),  intent(inout)        :: self
+        class(image),      intent(in)           :: img
+        integer,           intent(in)           :: nbins
+        real,              optional, intent(in) :: minmax(2), radius
         call self%new_by_nbins(nbins)
         call self%quantize(img, minmax, radius)
     end subroutine new_from_img
 
     subroutine new_from_hist( self, other, copy )
-        class(histogram),  intent(inout) :: self
-        type(histogram),   intent(in)    :: other
-        logical, optional, intent(in)    :: copy
+        class(histogram),  intent(inout)        :: self
+        type(histogram),   intent(in)           :: other
+        logical,           optional, intent(in) :: copy
         call self%new_by_nbins(other%nbins)
         self%x      = other%x
         self%xrange = other%xrange
@@ -106,9 +106,9 @@ contains
     end subroutine new_from_hist
 
     subroutine new_from_vec_nbins( self, nbins, rvec )
-        class(histogram),  intent(inout) :: self
-        integer,           intent(in)    :: nbins
-        real, allocatable, intent(in)    :: rvec(:)
+        class(histogram),  intent(inout)           :: self
+        integer,           intent(in)              :: nbins
+        real,              allocatable, intent(in) :: rvec(:)
         real    :: minmax(2), diff
         integer :: i,n,bin
         if( .not.allocated(rvec) ) THROW_HARD('Input vector not allocated')
@@ -141,8 +141,8 @@ contains
     end subroutine new_from_vec_nbins
 
     subroutine new_from_vec( self, rvec )
-        class(histogram),  intent(inout) :: self
-        real, allocatable, intent(in)    :: rvec(:) ! are the desired bins centers
+        class(histogram),  intent(inout)           :: self
+        real,              allocatable, intent(in) :: rvec(:) ! are the desired bins centers
         real    :: minmax(2), diff
         integer :: i,nbins
         if( .not.allocated(rvec) ) THROW_HARD('Input vector not allocated')
@@ -185,9 +185,9 @@ contains
     end subroutine zero
 
     subroutine quantize( self, img, minmax, radius )
-        class(histogram),  intent(inout) :: self
-        class(image),      intent(in)    :: img
-        real,    optional, intent(in)    :: minmax(2), radius
+        class(histogram),  intent(inout)        :: self
+        class(image),      intent(in)           :: img
+        real,              optional, intent(in) :: minmax(2), radius
         real          :: minmax_here(2), diff, radsq, dsq, v
         integer       :: dims(3), center(3), i,j,bin,djsq
         if( .not.self%exists ) THROW_HARD('Object has not been instanciated!')
@@ -232,9 +232,9 @@ contains
     !> Getters
 
     elemental real function get( self , i, prob )
-        class(histogram),  intent(in) :: self
-        integer,           intent(in) :: i
-        logical, optional, intent(in) :: prob
+        class(histogram),  intent(in)           :: self
+        integer,           intent(in)           :: i
+        logical,           optional, intent(in) :: prob
         if( (i < 1) .or. (i > self%nbins) )then
             get = 0.
             return
@@ -308,8 +308,8 @@ contains
     !> Calculators
 
     pure integer function npeaks( self, include_lims )
-        class(histogram),  intent(in) :: self
-        logical, optional, intent(in) :: include_lims
+        class(histogram),  intent(in)           :: self
+        logical,           optional, intent(in) :: include_lims
         integer :: i
         npeaks = 0
         do i = 2,self%nbins-1
@@ -378,8 +378,8 @@ contains
     end function mean
 
     real function variance( self, mean )
-        class(histogram), intent(in) :: self
-        real, optional,   intent(in) :: mean
+        class(histogram), intent(in)             :: self
+        real,             optional,   intent(in) :: mean
         real :: m
         if( present(mean) )then
             m = mean
@@ -407,8 +407,8 @@ contains
     end function hmode
 
     pure real function entropy( self, bounded )
-        class(histogram),  intent(in) :: self
-        logical, optional, intent(in) :: bounded
+        class(histogram),  intent(in)           :: self
+        logical,           optional, intent(in) :: bounded
         real    :: p
         integer :: i
         entropy = 0.
@@ -468,9 +468,9 @@ contains
 
     subroutine plot( self, fname, abscissa )
         use CPlot2D_wrapper_module
-        class(histogram),           intent(in) :: self
-        character(len=*),           intent(in) :: fname
-        character(len=*), optional, intent(in) :: abscissa
+        class(histogram),           intent(in)           :: self
+        character(len=*),           intent(in)           :: fname
+        character(len=*),           optional, intent(in) :: abscissa
         type(string)                 :: title
         type(CPlot2D_type)           :: fig
         type(CDataSet_type)          :: dataSet

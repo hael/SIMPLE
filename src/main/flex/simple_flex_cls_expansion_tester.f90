@@ -28,10 +28,10 @@ contains
 
     !> a preferred view over six classes, a view in two classes, a single class and a small view
     subroutine test_allocation_views()
-        integer, parameter :: POPS(12)   = [3200, 3100, 3000, 2900, 2900, 2800, 2500, 1800, 600, 400, 250, 120]
-        integer, parameter :: GROUPS(12) = [1, 1, 1, 1, 1, 1, 2, 2, 3, 4, 4, 4]
+        integer, parameter :: POPS(12)     = [3200, 3100, 3000, 2900, 2900, 2800, 2500, 1800, 600, 400, 250, 120]
+        integer, parameter :: GROUPS(12)   = [1, 1, 1, 1, 1, 1, 2, 2, 3, 4, 4, 4]
         integer, parameter :: NSUB_REF(12) = [4, 3, 3, 3, 3, 3, 5, 4, 4, 2, 1, 1] ! alloc_ref.py
-        integer :: nsub(12), ngot, c
+        integer            :: nsub(12), ngot, c
         write(*,'(A)') 'test_allocation_views'
         call flex_cls_allocate_subclasses(POPS, GROUPS, 36, 50, 100, nsub, ngot)
         call assert_int(36, ngot,      'the total is met')

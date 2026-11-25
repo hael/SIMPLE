@@ -20,10 +20,10 @@ end type ui_hash
 contains
 
     subroutine set_ui_program( self, key, obj )
-        class(ui_hash),           intent(inout) :: self
-        character(len=*),         intent(in)    :: key
-        type(ui_program), target, intent(inout) :: obj
-        class(*), pointer :: p
+        class(ui_hash),           intent(inout)         :: self
+        character(len=*),         intent(in)            :: key
+        type(ui_program),         target, intent(inout) :: obj
+        class(*),     pointer     :: p
         character(:), allocatable :: k
         k = trim(adjustl(key))
         p => obj
@@ -31,12 +31,12 @@ contains
     end subroutine set_ui_program
 
     subroutine get_ui_program( self, key, pobj, found )
-        class(ui_hash),            intent(in)  :: self
-        type(string),              intent(in)  :: key
-        type(ui_program), pointer, intent(out) :: pobj
-        logical, optional,         intent(out) :: found
-        class(*), pointer :: ptmp
-        logical :: lfound
+        class(ui_hash),            intent(in)                    :: self
+        type(string),              intent(in)                    :: key
+        type(ui_program),          pointer, intent(out)          :: pobj
+        logical,                   optional,         intent(out) :: found
+        class(*),     pointer     :: ptmp
+        logical                   :: lfound
         character(:), allocatable :: k
         nullify(pobj)
         k = adjustl(key%to_char())

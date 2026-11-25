@@ -67,29 +67,29 @@ abstract interface
     subroutine init_interface(self, params, cline)
         import :: motion_correct_strategy, parameters, cmdline
         class(motion_correct_strategy), intent(inout) :: self
-        type(parameters),              intent(inout) :: params
-        class(cmdline),                intent(inout) :: cline
+        type(parameters),               intent(inout) :: params
+        class(cmdline),                 intent(inout) :: cline
     end subroutine init_interface
 
     subroutine exec_interface(self, params, cline)
         import :: motion_correct_strategy, parameters, cmdline
         class(motion_correct_strategy), intent(inout) :: self
-        type(parameters),              intent(inout) :: params
-        class(cmdline),                intent(inout) :: cline
+        type(parameters),               intent(inout) :: params
+        class(cmdline),                 intent(inout) :: cline
     end subroutine exec_interface
 
     subroutine finalize_interface(self, params, cline)
         import :: motion_correct_strategy, parameters, cmdline
         class(motion_correct_strategy), intent(inout) :: self
-        type(parameters),              intent(in)    :: params
-        class(cmdline),                intent(inout) :: cline
+        type(parameters),               intent(in)    :: params
+        class(cmdline),                 intent(inout) :: cline
     end subroutine finalize_interface
 
     subroutine cleanup_interface(self, params, cline)
         import :: motion_correct_strategy, parameters, cmdline
         class(motion_correct_strategy), intent(inout) :: self
-        type(parameters),              intent(in)    :: params
-        class(cmdline),                intent(inout) :: cline
+        type(parameters),               intent(in)    :: params
+        class(cmdline),                 intent(inout) :: cline
     end subroutine cleanup_interface
 
     function endmsg_interface(self) result(msg)
@@ -108,7 +108,7 @@ contains
     function create_motion_correct_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
         class(motion_correct_strategy), allocatable :: strategy
-        logical :: is_master
+        logical                                     :: is_master
         ! Master heuristic: nparts defined, but no explicit worker range/part.
         is_master = cline%defined('nparts') .and. (.not.cline%defined('part')) &
                    .and. (.not.cline%defined('fromp')) .and. (.not.cline%defined('top'))

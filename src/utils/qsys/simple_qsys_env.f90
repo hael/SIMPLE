@@ -27,19 +27,19 @@ private
 
 type :: qsys_env
     ! --- public state (read directly by callers) ---
-    integer, allocatable,        public  :: parts(:,:)                 !< particle ranges [ipart, start/end]
-    type(qsys_ctrl),             public  :: qscripts                   !< script controller for the dispatch path
-    type(chash),                 public  :: qdescr                     !< key/value queue-job description
+    integer,                     allocatable,        public :: parts(:,:) !< particle ranges [ipart, start/end]
+    type(qsys_ctrl),             public                     :: qscripts   !< script controller for the dispatch path
+    type(chash),                 public                     :: qdescr     !< key/value queue-job description
     ! --- private implementation details ---
-    type(qsys_ctrl),             private :: base_qscripts              !< script controller for the base/worker-launch path
-    type(string),                private :: simple_exec_bin            !< fully resolved path to submission executable
-    type(qsys_factory),          private :: qsys_fac_base              !< factory that owns base_qsys
-    type(qsys_factory),          private :: qsys_fac_dispatch          !< factory that owns dispatch_qsys
-    class(qsys_base),   pointer, private :: base_qsys     => null()    !< base backend (local/slurm/lsf/…)
-    class(qsys_base),   pointer, private :: dispatch_qsys => null()    !< dispatch backend (persistent_worker)
-    integer,                     private :: nparts                     !< number of job partitions
-    logical,                     private :: existence       = .false.  !< .true. after new(); .false. after kill()
-    logical,                     private :: worker_priority = .false.  !< .true. if tasks should be prioritised when dispatching to workers
+    type(qsys_ctrl),             private          :: base_qscripts             !< script controller for the base/worker-launch path
+    type(string),                private          :: simple_exec_bin           !< fully resolved path to submission executable
+    type(qsys_factory),          private          :: qsys_fac_base             !< factory that owns base_qsys
+    type(qsys_factory),          private          :: qsys_fac_dispatch         !< factory that owns dispatch_qsys
+    class(qsys_base),            pointer, private :: base_qsys       => null() !< base backend (local/slurm/lsf/…)
+    class(qsys_base),            pointer, private :: dispatch_qsys   => null() !< dispatch backend (persistent_worker)
+    integer,                     private          :: nparts                    !< number of job partitions
+    logical,                     private          :: existence       = .false. !< .true. after new(); .false. after kill()
+    logical,                     private          :: worker_priority = .false. !< .true. if tasks should be prioritised when dispatching to workers
     contains
     procedure :: new
     procedure :: exists
@@ -67,7 +67,7 @@ type :: qsys_env_ref
     type(qsys_env), pointer :: p => null()
 end type qsys_env_ref
 type(qsys_env_ref), allocatable, save :: warmup_envs(:)
-type(qsys_env), pointer, save :: active_persistent_worker_env => null()
+type(qsys_env),     pointer, save     :: active_persistent_worker_env => null()
 
 interface
     !> white-box tests (submodule simple_qsys_env_tester, built only with BUILD_TESTS=ON)
@@ -81,10 +81,10 @@ contains
     !! Falls back to shell environment variables (SIMPLE_PATH, SIMPLE_QSYS, …)
     !! when the corresponding parameter fields are empty.
     subroutine init_qdescr_from_runtime( qdescr, params, qsys_name, qsys_partition )
-        type(chash),               intent(inout) :: qdescr           !< populated with scheduler metadata on return
-        class(parameters),         intent(in)    :: params           !< run-time parameter set
-        class(string), optional,   intent(in)    :: qsys_name        !< explicit scheduler name; overrides params and environment
-        class(string), optional,   intent(in)    :: qsys_partition   !< explicit partition; overrides environment
+        type(chash),               intent(inout)          :: qdescr         !< populated with scheduler metadata on return
+        class(parameters),         intent(in)             :: params         !< run-time parameter set
+        class(string),             optional,   intent(in) :: qsys_name      !< explicit scheduler name; overrides params and environment
+        class(string),             optional,   intent(in) :: qsys_partition !< explicit partition; overrides environment
         type(string)          :: env_var, qsys_name_here, job_name
         integer               :: iostat
         ! Resolve SIMPLE installation path – mandatory.
@@ -128,17 +128,17 @@ contains
     !! TCP persistent-worker dispatch path; all other names use the standard backend directly.
     subroutine new( self, params, nparts, stream, numlen, nptcls, exec_bin, qsys_name, qsys_nthr, qsys_partition, l_active )
         use simple_sp_project, only: sp_project
-        class(qsys_env), target, intent(inout) :: self
-        class(parameters),       intent(in)    :: params             !< run-time parameter set
-        integer,                 intent(in)    :: nparts             !< number of parallel job partitions
-        logical,       optional, intent(in)    :: stream             !< .true. for streaming / continuous mode
-        integer,       optional, intent(in)    :: numlen             !< zero-padding width for script numbering
-        integer,       optional, intent(in)    :: nptcls             !< override params%nptcls particle count
-        integer,       optional, intent(in)    :: qsys_nthr          !< override per-job thread count
-        class(string), optional, intent(in)    :: exec_bin           !< override default submission executable
-        class(string), optional, intent(in)    :: qsys_name          !< override scheduler name from params/env
-        class(string), optional, intent(in)    :: qsys_partition     !< override scheduler partition from params/env
-        logical,       optional, intent(in)    :: l_active(:)        !< split_mode='even': balance the particles that do work
+        class(qsys_env),         target, intent(inout) :: self
+        class(parameters),       intent(in)            :: params         !< run-time parameter set
+        integer,                 intent(in)            :: nparts         !< number of parallel job partitions
+        logical,                 optional, intent(in)  :: stream         !< .true. for streaming / continuous mode
+        integer,                 optional, intent(in)  :: numlen         !< zero-padding width for script numbering
+        integer,                 optional, intent(in)  :: nptcls         !< override params%nptcls particle count
+        integer,                 optional, intent(in)  :: qsys_nthr      !< override per-job thread count
+        class(string),           optional, intent(in)  :: exec_bin       !< override default submission executable
+        class(string),           optional, intent(in)  :: qsys_name      !< override scheduler name from params/env
+        class(string),           optional, intent(in)  :: qsys_partition !< override scheduler partition from params/env
+        logical,                 optional, intent(in)  :: l_active(:)    !< split_mode='even': balance the particles that do work
         type(ori)             :: compenv_o
         type(sp_project)      :: spproj
         type(string)          :: qsnam, qsnam_requested, tpi, hrs_str, mins_str, secs_str, runtime_simple_path
@@ -457,7 +457,7 @@ contains
         type(parameters), optional, intent(in) :: extra_params
         class(string),    optional             :: algnfbody
         logical,          optional             :: array
-        logical :: aarray
+        logical                                :: aarray
         aarray = .false.
         if( present(array) ) aarray = array
         ! we only support array execution by SLURM and distributed local shared-memory
@@ -513,13 +513,13 @@ contains
     !! exit_code_fname is present the script writes the program's exit status there.
     subroutine exec_simple_prg_in_queue_async( self, cline, script_name, outfile, exec_bin, base, exit_code_fname )
         use simple_cmdline, only: cmdline
-        class(qsys_env),         intent(inout) :: self
-        class(cmdline),          intent(in)    :: cline           !< command-line parameters for the job
-        class(string),           intent(in)    :: script_name     !< path of the script to generate and submit
-        class(string),           intent(in)    :: outfile         !< stdout/stderr log path for the job
-        class(string), optional, intent(in)    :: exec_bin        !< override submission executable
-        logical,       optional, intent(in)    :: base            !< .true. to route via base (not dispatch) controller
-        class(string), optional, intent(in)    :: exit_code_fname !< write the program's exit status here
+        class(qsys_env),         intent(inout)        :: self
+        class(cmdline),          intent(in)           :: cline           !< command-line parameters for the job
+        class(string),           intent(in)           :: script_name     !< path of the script to generate and submit
+        class(string),           intent(in)           :: outfile         !< stdout/stderr log path for the job
+        class(string),           optional, intent(in) :: exec_bin        !< override submission executable
+        logical,                 optional, intent(in) :: base            !< .true. to route via base (not dispatch) controller
+        class(string),           optional, intent(in) :: exit_code_fname !< write the program's exit status here
         type(chash) :: job_descr
         logical     :: l_base
         l_base = .false.
@@ -555,16 +555,16 @@ contains
     !! When base=.true. all scripts are routed through base_qscripts.
     subroutine exec_simple_prgs_in_queue_async( self, clines, script_name, outfile, exec_bins, base, exit_code_fname )
         use simple_cmdline, only: cmdline
-        class(qsys_env),            intent(inout) :: self
-        type(cmdline), allocatable, intent(in)    :: clines(:)       !< one command line per job
-        class(string),              intent(in)    :: script_name     !< shared script path prefix
-        class(string),              intent(in)    :: outfile         !< shared stdout/stderr log path
-        class(string),    optional, intent(in)    :: exec_bins(:)    !< per-job executable overrides
-        logical,          optional, intent(in)    :: base            !< .true. to route via base controller
-        class(string),    optional, intent(in)    :: exit_code_fname !< write the status of the failed or last job here
+        class(qsys_env),            intent(inout)           :: self
+        type(cmdline),              allocatable, intent(in) :: clines(:)       !< one command line per job
+        class(string),              intent(in)              :: script_name     !< shared script path prefix
+        class(string),              intent(in)              :: outfile         !< shared stdout/stderr log path
+        class(string),              optional, intent(in)    :: exec_bins(:)    !< per-job executable overrides
+        logical,                    optional, intent(in)    :: base            !< .true. to route via base controller
+        class(string),              optional, intent(in)    :: exit_code_fname !< write the status of the failed or last job here
         type(chash), allocatable :: jobs_descr(:)
-        integer :: i, njobs
-        logical :: l_base
+        integer                  :: i, njobs
+        logical                  :: l_base
         njobs = size(clines)
         l_base = .false.
         if( present(base) ) l_base = base
@@ -742,10 +742,10 @@ contains
     !! oldest live registrant, or at once with @p owner (the environment that starts the server).
     subroutine register_warmup_env( env, owner )
         class(qsys_env), target, intent(inout) :: env
-        logical,       optional, intent(in)    :: owner
+        logical,         optional, intent(in)  :: owner
         type(qsys_env_ref), allocatable :: tmp(:)
-        logical :: l_owner
-        integer :: i, n
+        logical                         :: l_owner
+        integer                         :: i, n
         l_owner = .false.
         if( present(owner) ) l_owner = owner
         if( .not. allocated(warmup_envs) ) allocate(warmup_envs(0))
@@ -770,7 +770,7 @@ contains
     subroutine unregister_warmup_env( env )
         class(qsys_env), target, intent(in) :: env
         type(qsys_env_ref), allocatable :: tmp(:)
-        integer :: i, n
+        integer                         :: i, n
         if( .not. allocated(warmup_envs) ) return
         n = 0
         allocate(tmp(size(warmup_envs)))

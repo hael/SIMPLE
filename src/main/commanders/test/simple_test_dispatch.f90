@@ -24,12 +24,12 @@ public :: exec_state_name
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: EXEC_QUEUED = 0, EXEC_RUNNING = 1, EXEC_PASSED = 2, EXEC_FAILED = 3, EXEC_TIMEDOUT = 4
-integer, parameter :: EXEC_NOT_RUN = 5 !< never started: the dispatcher was interrupted first
-integer, parameter :: EXEC_INTERRUPTED = 6 !< stopped because the dispatcher was interrupted (no verdict)
-integer, parameter :: POLL_US      = 200000 !< poll interval of the children (microseconds)
-real,    parameter :: SAMPLE_S     = 1.     !< interval of the CPU and memory samples (seconds)
-character(len=*), parameter :: MARKER = 'SIMPLE_TEST_EXECUTION' !< <dispatcher pid>.<execution index>
+integer,          parameter :: EXEC_QUEUED      = 0, EXEC_RUNNING = 1, EXEC_PASSED = 2, EXEC_FAILED = 3, EXEC_TIMEDOUT = 4
+integer,          parameter :: EXEC_NOT_RUN     = 5                       !< never started: the dispatcher was interrupted first
+integer,          parameter :: EXEC_INTERRUPTED = 6                       !< stopped because the dispatcher was interrupted (no verdict)
+integer,          parameter :: POLL_US          = 200000                  !< poll interval of the children (microseconds)
+real,             parameter :: SAMPLE_S         = 1.                      !< interval of the CPU and memory samples (seconds)
+character(len=*), parameter :: MARKER           = 'SIMPLE_TEST_EXECUTION' !< <dispatcher pid>.<execution index>
 
 abstract interface
     !> runs the test program prg under cline, in the calling process
@@ -46,28 +46,28 @@ type :: test_execution
     character(len=32)   :: prg         = ''  !< simple_test_exec test=<prg>
     character(len=256)  :: args        = ''  !< the other keys of its command line
     character(len=1024) :: dir         = ''  !< its run directory, absolute
-    integer :: seed_offset = 0
-    integer :: nthr        = 1               !< OMP_NUM_THREADS of the child
-    integer :: ncpu        = 1               !< peak CPU reservation
-    real    :: mem_gb      = 0.              !< peak resident memory reservation (GiB)
-    real    :: disk_gb     = 0.              !< what its run directory grows to (GiB)
-    integer :: deadline    = 0               !< seconds; 0 is none
-    integer :: state       = EXEC_QUEUED
-    integer :: pid         = 0               !< of the child, which leads its session
-    integer :: exit_code   = 0               !< exit status, or minus the signal that ended it
-    real    :: wall        = 0.              !< seconds
-    real    :: peak_cpu    = -1.             !< cores, the largest sampled use of its session
-    real    :: peak_rss_gb = -1.             !< GiB, the largest sampled resident memory of its session
+    integer             :: seed_offset = 0
+    integer             :: nthr        = 1   !< OMP_NUM_THREADS of the child
+    integer             :: ncpu        = 1   !< peak CPU reservation
+    real                :: mem_gb      = 0.  !< peak resident memory reservation (GiB)
+    real                :: disk_gb     = 0.  !< what its run directory grows to (GiB)
+    integer             :: deadline    = 0   !< seconds; 0 is none
+    integer             :: state       = EXEC_QUEUED
+    integer             :: pid         = 0   !< of the child, which leads its session
+    integer             :: exit_code   = 0   !< exit status, or minus the signal that ended it
+    real                :: wall        = 0.  !< seconds
+    real                :: peak_cpu    = -1. !< cores, the largest sampled use of its session
+    real                :: peak_rss_gb = -1. !< GiB, the largest sampled resident memory of its session
 end type test_execution
 
 !> a forked child that runs one execution
 type, extends(forked_process) :: dispatch_child
     procedure(test_route), pointer, nopass :: route => null()
-    character(len=32)   :: prg  = ''
-    character(len=1024) :: dir  = ''
-    character(len=32)   :: mark = ''  !< the value of its marker
-    integer :: seed_offset = 0
-    integer :: nthr        = 1
+    character(len=32)   :: prg         = ''
+    character(len=1024) :: dir         = ''
+    character(len=32)   :: mark        = '' !< the value of its marker
+    integer             :: seed_offset = 0
+    integer             :: nthr        = 1
   contains
     procedure :: execute => execute_child
 end type dispatch_child
@@ -75,10 +75,10 @@ end type dispatch_child
 type :: test_dispatcher
     private
     type(test_execution), allocatable :: execs(:)
-    integer :: nexecs = 0
-    integer :: budget = 1  !< cores
-    integer :: grace  = 30 !< seconds between SIGTERM and SIGKILL
-    logical :: keep_outputs = .true. !< .false.: a passed execution's subdirectories are deleted, its disk freed
+    integer                           :: nexecs       = 0
+    integer                           :: budget       = 1      !< cores
+    integer                           :: grace        = 30     !< seconds between SIGTERM and SIGKILL
+    logical                           :: keep_outputs = .true. !< .false.: a passed execution's subdirectories are deleted, its disk freed
   contains
     procedure :: new
     procedure :: add
@@ -96,9 +96,9 @@ contains
     !> keep_outputs=.false.: every subdirectory of a passed execution's run directory (its outputs) is
     !! deleted when it ends, and its disk returns to the budget; run.log and metrics.tsv stay
     subroutine new( self, budget, grace, keep_outputs )
-        class(test_dispatcher), intent(inout) :: self
-        integer,                intent(in)    :: budget, grace
-        logical, optional,      intent(in)    :: keep_outputs
+        class(test_dispatcher), intent(inout)             :: self
+        integer,                intent(in)                :: budget, grace
+        logical,                optional,      intent(in) :: keep_outputs
         call self%kill
         self%budget = max(1, budget)
         self%grace  = max(0, grace)
@@ -112,7 +112,7 @@ contains
         class(test_dispatcher), intent(inout) :: self
         type(test_execution),   intent(in)    :: exec
         type(test_execution), allocatable :: tmp(:)
-        type(cmdline) :: cline
+        type(cmdline)                     :: cline
         ! a malformed command line stops here, before any child runs
         call command_line_of(exec, cline)
         call cline%kill
@@ -162,16 +162,16 @@ contains
         procedure(test_route)                 :: route
         logical,                intent(out)   :: interrupted
         type(dispatch_child), allocatable :: children(:)
-        integer(int64), allocatable :: t_start(:), t_term(:)
-        logical,        allocatable :: queued(:), l_term(:), l_kill(:), l_deadline(:), l_stopped(:), l_reaped_kill(:)
-        integer,        allocatable :: ncpus(:), prev_pid(:)
-        real,           allocatable :: mems(:), disks(:)
-        integer(int64), allocatable :: prev_ticks(:)
-        type(cmdline)  :: cline
-        integer(int64) :: t_now, t_last_sample, rate
-        integer        :: i, inext, nrunning, in_use, rc
-        real           :: mem_budget, disk_budget, mem_in_use, disk_started
-        type(c_funptr) :: prev_int, prev_term, prev_hup, prev
+        integer(int64),       allocatable :: t_start(:), t_term(:)
+        logical,              allocatable :: queued(:), l_term(:), l_kill(:), l_deadline(:), l_stopped(:), l_reaped_kill(:)
+        integer,              allocatable :: ncpus(:), prev_pid(:)
+        real,                 allocatable :: mems(:), disks(:)
+        integer(int64),       allocatable :: prev_ticks(:)
+        type(cmdline)                     :: cline
+        integer(int64)                    :: t_now, t_last_sample, rate
+        integer                           :: i, inext, nrunning, in_use, rc
+        real                              :: mem_budget, disk_budget, mem_in_use, disk_started
+        type(c_funptr)                    :: prev_int, prev_term, prev_hup, prev
         l_interrupted = .false.
         interrupted   = .false.
         if( self%nexecs == 0 ) return
@@ -331,8 +331,8 @@ contains
             use simple_syslib, only: simple_list_dirs, simple_rmdir
             integer, intent(in) :: iexec
             type(string), allocatable :: subdirs(:)
-            integer :: j, status
-            logical :: l_all
+            integer                   :: j, status
+            logical                   :: l_all
             subdirs = simple_list_dirs(trim(self%execs(iexec)%dir))
             l_all   = .true.
             do j = 1, size(subdirs)
@@ -346,13 +346,13 @@ contains
         !! unless l_group is .false.
         subroutine signal_execution( iexec, sig, l_group )
             use unix, only: c_kill
-            integer,           intent(in) :: iexec
-            integer(c_int),    intent(in) :: sig
-            logical, optional, intent(in) :: l_group
+            integer,           intent(in)           :: iexec
+            integer(c_int),    intent(in)           :: sig
+            logical,           optional, intent(in) :: l_group
             integer,        allocatable :: pids(:), sids(:), marks(:)
             integer(int64), allocatable :: ticks(:), rss(:)
-            integer :: ip
-            logical :: l_grp
+            integer                     :: ip
+            logical                     :: l_grp
             l_grp = .true.
             if( present(l_group) ) l_grp = l_group
             if( l_grp ) call children(iexec)%signal_group(sig)
@@ -365,10 +365,10 @@ contains
         !> the CPU use (cores over the last interval) and resident memory of each running execution
         subroutine sample_sessions( dt )
             real, intent(in) :: dt
-            integer, allocatable :: pids(:), sids(:), marks(:)
+            integer,        allocatable :: pids(:), sids(:), marks(:)
             integer(int64), allocatable :: ticks(:), rss(:)
-            integer(int64) :: dticks, mem
-            integer :: iexec, ip, j
+            integer(int64)              :: dticks, mem
+            integer                     :: iexec, ip, j
             call scan_proc(pids, sids, ticks, rss, marks)
             if( size(pids) == 0 ) return
             do iexec = 1, self%nexecs
@@ -403,7 +403,7 @@ contains
         type(test_execution), intent(in)    :: exec
         type(cmdline),        intent(inout) :: cline
         character(len=256) :: tokens(64), args
-        integer :: ntok, itok, pos
+        integer            :: ntok, itok, pos
         call cline%kill
         call cline%set('test', trim(exec%prg))
         call cline%set('prg',  trim(exec%prg))
@@ -451,7 +451,7 @@ contains
         real,             intent(out) :: mem_budget, disk_budget
         character(len=256) :: line
         integer(int64)     :: kib, avail
-        integer :: funit, ios, slash
+        integer            :: funit, ios, slash
         mem_budget  = huge(1.)
         disk_budget = huge(1.)
         open(newunit=funit, file='/proc/meminfo', action='read', status='old', iostat=ios)
@@ -546,10 +546,10 @@ contains
         integer,        allocatable, intent(out) :: pids(:), sids(:), marks(:)
         integer(int64), allocatable, intent(out) :: ticks(:), rss(:)
         type(c_dirent), pointer :: entry
-        type(c_ptr)       :: dirp
-        character(len=32) :: dname
-        integer           :: pid, sid, ios, n, i, nmax, self_pid
-        integer(int64)    :: tck, mem
+        type(c_ptr)             :: dirp
+        character(len=32)       :: dname
+        integer                 :: pid, sid, ios, n, i, nmax, self_pid
+        integer(int64)          :: tck, mem
         nmax = 4096
         allocate(pids(nmax), sids(nmax), ticks(nmax), rss(nmax), marks(nmax))
         n        = 0
@@ -598,12 +598,12 @@ contains
         use, intrinsic :: iso_c_binding, only: c_loc
         use unix, only: c_open, c_read, c_close, O_RDONLY, c_mode_t
         integer, intent(in) :: pid, dispatcher_pid
-        character(kind=c_char, len=4096), target :: buf
-        character(len=:), allocatable :: env
-        character(len=48)  :: fname, prefix
-        integer(c_int)     :: fd, rc
-        integer(c_size_t)  :: n
-        integer :: ios, pos, pend, idx
+        character(kind=c_char, len=4096), target      :: buf
+        character(len=:),                 allocatable :: env
+        character(len=48)                             :: fname, prefix
+        integer(c_int)                                :: fd, rc
+        integer(c_size_t)                             :: n
+        integer                                       :: ios, pos, pend, idx
         read_mark = 0
         write(fname,'(a,i0,a)') '/proc/', pid, '/environ'
         write(prefix,'(a,i0,a)') MARKER//'=', dispatcher_pid, '.'
@@ -636,7 +636,7 @@ contains
         character(len=32)   :: fname
         character(len=1)    :: state
         integer(int64)      :: f(21)
-        integer :: funit, ios, pos
+        integer             :: funit, ios, pos
         read_stat = .false.
         sid = 0
         tck = 0_int64
@@ -692,8 +692,8 @@ contains
     subroutine set_test_environment( simple_path )
         character(len=:), allocatable, intent(out) :: simple_path
         character(len=4096) :: exe, path
-        integer :: n, status
-        logical :: l_exists
+        integer             :: n, status
+        logical             :: l_exists
         simple_path = ''
         inquire(file='/proc/self/exe', exist=l_exists)
         if( l_exists )then
@@ -734,7 +734,7 @@ contains
             end function c_readlink
         end interface
         character(kind=c_char) :: buf(len(path))
-        integer :: i
+        integer                :: i
         path = ''
         readlink_self = int(c_readlink('/proc/self/exe'//c_null_char, buf, int(len(path), c_size_t)))
         do i = 1, max(0, readlink_self)

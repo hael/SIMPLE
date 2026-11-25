@@ -20,8 +20,8 @@ character(len=78), parameter :: pdbfmt_anisou   = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A
 !>  \brief type for dealing with atomic structures
 type :: atoms
     private
-    integer                       :: n = 0
-    integer                       :: nres = 0
+    integer                       :: n       = 0
+    integer                       :: nres    = 0
     character(len=4), allocatable :: name(:)
     character(len=1), allocatable :: altloc(:)
     character(len=3), allocatable :: resname(:)
@@ -39,7 +39,7 @@ type :: atoms
     integer,          allocatable :: num(:)
     integer,          allocatable :: Z(:)
     logical,          allocatable :: het(:)
-    logical                       :: exists = .false.
+    logical                       :: exists  = .false.
     logical                       :: is_xpdb = .false.
   contains
     ! CONSTRUCTORS
@@ -48,7 +48,7 @@ type :: atoms
     procedure, private :: new_from_pdb
     procedure, private :: new_from_cif
     procedure, private :: new_from_file
-    generic            :: new => new_instance, new_from_file, new_from_molecule
+    generic            :: new           => new_instance, new_from_file, new_from_molecule
     generic            :: assignment(=) => copy
     procedure          :: copy
     procedure          :: extract_atom
@@ -199,7 +199,7 @@ contains
             elemental function strip_digits( name ) result( out )
                 character(len=*), intent(in) :: name
                 character(len=2) :: out
-                integer :: i, j
+                integer          :: i, j
                 out = '  '
                 j   = 0
                 do i = 1, len_trim(name)
@@ -230,13 +230,13 @@ contains
                 class(string), intent(in)  :: fname
                 logical,       intent(in)  :: fill
                 integer,       intent(out) :: natoms
-                integer               :: io_stat, filnum, j, ncol, ntok
-                integer,    parameter :: maxcol = 300, maxtok = 400
-                character(len=STDLEN) :: cols(maxcol), tok(maxtok)
-                character(len=STDLEN) :: line
-                logical               :: in_atom_loop
-                integer               :: c_id, c_name, c_alt, c_comp, c_chain, c_seq, c_x, c_y, c_z
-                integer               :: c_occ, c_b, c_elem, c_group, serial
+                integer                       :: io_stat, filnum, j, ncol, ntok
+                integer,          parameter   :: maxcol = 300, maxtok = 400
+                character(len=STDLEN)         :: cols(maxcol), tok(maxtok)
+                character(len=STDLEN)         :: line
+                logical                       :: in_atom_loop
+                integer                       :: c_id, c_name, c_alt, c_comp, c_chain, c_seq, c_x, c_y, c_z
+                integer                       :: c_occ, c_b, c_elem, c_group, serial
                 character(len=:), allocatable :: tmp
                 natoms = 0
                 call fopen(filnum, status='OLD', action='READ', file=fname, iostat=io_stat)
@@ -385,7 +385,7 @@ contains
             subroutine split_tokens( line, tok, ntok )
                 character(len=*),      intent(in)  :: line
                 character(len=STDLEN), intent(out) :: tok(:)
-                integer, intent(out)  :: ntok
+                integer,               intent(out) :: ntok
                 integer               :: i, l, t
                 character(len=STDLEN) :: cur
                 character             :: c, q
@@ -493,9 +493,9 @@ contains
     end subroutine new_from_molecule
 
     subroutine new_instance( self, n, dummy )
-        class(atoms),      intent(inout) :: self
-        integer,           intent(in)    :: n
-        logical, optional, intent(in)    :: dummy
+        class(atoms),      intent(inout)        :: self
+        integer,           intent(in)           :: n
+        logical,           optional, intent(in) :: dummy
         integer :: i
         logical :: ddummy
         ddummy = .false.
@@ -938,20 +938,20 @@ contains
     ! halo_bfac B_h subtract a q K(B + B_h), the halo
     subroutine convolve( self, vol, cutoff, lp, bfac_pdb, halo_amp, halo_bfac )
         use simple_image, only: image
-        class(atoms),      intent(in)    :: self
-        class(image),      intent(inout) :: vol
-        real,              intent(in)    :: cutoff
-        real,    optional, intent(in)    :: lp
-        logical, optional, intent(in)    :: bfac_pdb
-        real,    optional, intent(in)    :: halo_amp, halo_bfac
-        real, parameter   :: C = 2132.79 ! eq B.6, conversion to eV
-        real, parameter   :: fourpisq = 4.*PI*PI
+        class(atoms),      intent(in)           :: self
+        class(image),      intent(inout)        :: vol
+        real,              intent(in)           :: cutoff
+        real,              optional, intent(in) :: lp
+        logical,           optional, intent(in) :: bfac_pdb
+        real,              optional, intent(in) :: halo_amp, halo_bfac
+        real,    parameter   :: C        = 2132.79 ! eq B.6, conversion to eV
+        real,    parameter   :: fourpisq = 4.*PI*PI
         real,    allocatable :: rmat(:,:,:), atom_aterm(:,:), atom_b(:,:), atom_xyz(:,:), atom_scale(:)
         integer, allocatable :: atom_bbox(:,:,:)
         logical, allocatable :: atom_valid(:)
-        real    :: lp_here, a(5), b(5), aterm(5), xyz(3), smpd, r2, bfac, rjk2, cutoffsq, scale, h_amp, h_bfac
-        integer :: bbox(3,2), ldim(3), pos(3), i, j, k, l, jj, kk, z, icutoff
-        logical :: l_bfac_pdb, l_halo
+        real                 :: lp_here, a(5), b(5), aterm(5), xyz(3), smpd, r2, bfac, rjk2, cutoffsq, scale, h_amp, h_bfac
+        integer              :: bbox(3,2), ldim(3), pos(3), i, j, k, l, jj, kk, z, icutoff
+        logical              :: l_bfac_pdb, l_halo
         if( .not. vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space volumes')
         l_bfac_pdb = .false.
         if( present(bfac_pdb) ) l_bfac_pdb = bfac_pdb
@@ -1372,19 +1372,19 @@ contains
 
     subroutine pdb2mrc( self, pdbfile, volfile, smpd, center_pdb, pdb_out, vol_dim, mol )
         use simple_image, only: image
-        class(atoms),                  intent(inout) :: self
-        type(string),        optional, intent(in)    :: pdbfile, volfile
-        real,                          intent(in)    :: smpd
-        class(string),       optional, intent(in)    :: pdb_out
-        logical,             optional, intent(in)    :: center_pdb
-        integer,             optional, intent(in)    :: vol_dim(3)
-        type(molecule_data), optional, intent(in)    :: mol
+        class(atoms),                  intent(inout)        :: self
+        type(string),                  optional, intent(in) :: pdbfile, volfile
+        real,                          intent(in)           :: smpd
+        class(string),                 optional, intent(in) :: pdb_out
+        logical,                       optional, intent(in) :: center_pdb
+        integer,                       optional, intent(in) :: vol_dim(3)
+        type(molecule_data),           optional, intent(in) :: mol
         type(string)                                 :: pdb_file, vol_file
-        type(string) :: pdbfile_centered
-        type(image)  :: vol
-        real         :: mol_dim(3), center(3), max_dist, dist
-        integer      :: ldim(3), i_atom, j_atom
-        logical      :: use_center
+        type(string)                                 :: pdbfile_centered
+        type(image)                                  :: vol
+        real                                         :: mol_dim(3), center(3), max_dist, dist
+        integer                                      :: ldim(3), i_atom, j_atom
+        logical                                      :: use_center
         use_center = .false.
         call self%kill()
         if( present(pdbfile) )then
@@ -1454,8 +1454,8 @@ contains
     !>brief translate PDB coordinates to center of the volume
     subroutine center_pdbcoord( self, ldim, smpd )
         class(atoms),  intent(inout) :: self
-        integer, intent(in) :: ldim(3)
-        real, intent(in)    :: smpd
+        integer,       intent(in)    :: ldim(3)
+        real,          intent(in)    :: smpd
         real                :: center(3), half_box(3)
         center      = self%get_geom_center()
         ! the box centre is voxel ldim/2+1, at ldim/2*smpd (integer division keeps an odd box on its centre voxel)
@@ -1466,15 +1466,15 @@ contains
 
     subroutine map_validate( self, vol1, vol2, filename, smpd_target )
         use simple_image, only: image
-        class(atoms),            intent(inout) :: self
-        type(image),             intent(in)    :: vol1, vol2
-        class(string), optional, intent(in)    :: filename
-        real,          optional, intent(in)    :: smpd_target
-        type(image) :: vol_at1, vol_at2
-        type(atoms) :: atom
-        integer     :: i_atom, atom_box, box_scaled, i_res, funit, ldim(3)
-        real        :: atom_coord(3), smpd, smpd_work, cc, cc_score, cc_score_byres, sdev
-        logical     :: outside1, outside2
+        class(atoms),            intent(inout)        :: self
+        type(image),             intent(in)           :: vol1, vol2
+        class(string),           optional, intent(in) :: filename
+        real,                    optional, intent(in) :: smpd_target
+        type(image)          :: vol_at1, vol_at2
+        type(atoms)          :: atom
+        integer              :: i_atom, atom_box, box_scaled, i_res, funit, ldim(3)
+        real                 :: atom_coord(3), smpd, smpd_work, cc, cc_score, cc_score_byres, sdev
+        logical              :: outside1, outside2
         logical, allocatable :: mask_byres(:)
         smpd      = vol1%get_smpd()
         smpd_work = smpd
@@ -1600,15 +1600,15 @@ contains
 
     subroutine atom_validate( self, vol, filename, smpd_target )
         use simple_image, only: image
-        class(atoms),            intent(inout) :: self
-        type(image),             intent(in)    :: vol
-        class(string), optional, intent(in)    :: filename
-        real,          optional, intent(in)    :: smpd_target
-        type(image) :: vol_atom, vol_at
-        type(atoms) :: atom
-        integer     :: i_atom, atom_box, box_scaled, i_res, funit, ldim(3)
-        real        :: atom_coord(3), smpd, smpd_work, cc, cc_score, cc_score_byres, sdev
-        logical     :: outside
+        class(atoms),            intent(inout)        :: self
+        type(image),             intent(in)           :: vol
+        class(string),           optional, intent(in) :: filename
+        real,                    optional, intent(in) :: smpd_target
+        type(image)          :: vol_atom, vol_at
+        type(atoms)          :: atom
+        integer              :: i_atom, atom_box, box_scaled, i_res, funit, ldim(3)
+        real                 :: atom_coord(3), smpd, smpd_work, cc, cc_score, cc_score_byres, sdev
+        logical              :: outside
         logical, allocatable :: mask_byres(:)
         cc_score  = 0.
         smpd      = vol%get_smpd()
@@ -1682,7 +1682,7 @@ contains
         type(image), intent(inout) :: vol_out
         logical,     intent(out)   :: outside
         integer, parameter :: HALO = 8
-        type(image) :: vol_native, vol_fine
+        type(image)        :: vol_native, vol_fine
         real    :: anchor_coord(3), fine_coord(3), frac(3), grid(3), point(3), &
             &scale, smpd_fine, smpd_in, val, wx, wy, wz
         integer :: atom_vox(3), box_core, box_fine, box_native, center, corner_native(3), &
@@ -1831,13 +1831,13 @@ contains
     ! Non-fatal: false with errmsg on a value that is none of these. selector is blank unless one was given.
     logical function parse_element_list( str, symbols, selector, errmsg )
         use simple_string_utils, only: list_of_strs2arr
-        character(len=*),              intent(in)  :: str
-        character(len=2), allocatable, intent(out) :: symbols(:)
-        character(len=5),              intent(out) :: selector
-        type(string),                  intent(out) :: errmsg
+        character(len=*),              intent(in)               :: str
+        character(len=2),              allocatable, intent(out) :: symbols(:)
+        character(len=5),              intent(out)              :: selector
+        type(string),                  intent(out)              :: errmsg
         character(len=len(str)), allocatable :: entries(:)
-        character(len=5) :: el_ucase
-        integer          :: i, j, nent
+        character(len=5)                     :: el_ucase
+        integer                              :: i, j, nent
         parse_element_list = .false.
         selector = ''
         allocate(symbols(0))

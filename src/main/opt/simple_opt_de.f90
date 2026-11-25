@@ -17,13 +17,13 @@ real,    parameter :: X_COMMON = 0.5, X_GENERAL = 0.9813, X_VALLEY = 0.9211, X_M
 
 type, extends(optimizer) :: opt_de
     private
-    real, allocatable :: pop(:,:)          !< solution vector population
-    real, allocatable :: costs(:)          !< costs
-    integer           :: best              !< index of best population member
-    integer           :: worst             !< index of worst population member
-    real              :: F  = F_MULTIMODAL !< amplification factor
-    real              :: CR = X_MULTIMODAL !< cross-over rate
-    logical           :: exists = .false.  !< to indicate existence
+    real, allocatable :: pop(:,:)              !< solution vector population
+    real, allocatable :: costs(:)              !< costs
+    integer           :: best                  !< index of best population member
+    integer           :: worst                 !< index of worst population member
+    real              :: F      = F_MULTIMODAL !< amplification factor
+    real              :: CR     = X_MULTIMODAL !< cross-over rate
+    logical           :: exists = .false.      !< to indicate existence
   contains
     procedure :: new      => new_de
     procedure :: minimize => de_minimize

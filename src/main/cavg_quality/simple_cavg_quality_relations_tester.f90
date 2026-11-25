@@ -15,8 +15,8 @@ contains
 
     subroutine test_promoted_feature()
         real, parameter :: TOL = 1.0e-6
-        real    :: cc(4,4), distance(4,4), raw(4)
-        integer :: class_inds(4)
+        real            :: cc(4,4), distance(4,4), raw(4)
+        integer         :: class_inds(4)
         write(*,'(A)') 'test_promoted_feature'
         cc = 0.0
         distance = 0.0

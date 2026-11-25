@@ -19,28 +19,28 @@ public :: class_student, class_pred, CLASS_STUDENT_VERSION, run_all_class_studen
 private
 #include "simple_local_flags.inc"
 
-integer,  parameter :: CLASS_STUDENT_VERSION = 2     !< 2: the physical teacher, the log-sum-exp readout recorded
-real(sp), parameter :: CAND_MASS             = 0.99  !< the candidates hold this share of the posterior
-character(len=*), parameter :: MODEL_TITLE   = 'class student model'
+integer,          parameter :: CLASS_STUDENT_VERSION = 2    !< 2: the physical teacher, the log-sum-exp readout recorded
+real(sp),         parameter :: CAND_MASS             = 0.99 !< the candidates hold this share of the posterior
+character(len=*), parameter :: MODEL_TITLE           = 'class student model'
 
 !> the record of one prediction: the mode, the candidates (the smallest set of classes holding CAND_MASS, at most
 !! KMAX_CLASS) and their mass
 type :: class_pred
-    integer  :: mode  = 0     !< the class of largest mass
-    real(sp) :: pmax  = 0.    !< its mass
-    integer  :: k99   = 0     !< classes holding CAND_MASS
-    integer  :: ncand = 0     !< the candidates (k99 capped)
-    real(sp) :: conf  = 0.    !< the mass inside the candidates
+    integer  :: mode              = 0  !< the class of largest mass
+    real(sp) :: pmax              = 0. !< its mass
+    integer  :: k99               = 0  !< classes holding CAND_MASS
+    integer  :: ncand             = 0  !< the candidates (k99 capped)
+    real(sp) :: conf              = 0. !< the mass inside the candidates
     integer  :: cands(KMAX_CLASS) = 0
 end type class_pred
 
 type :: class_student
     private
-    type(polar_student), allocatable :: core   !< the network, the features, the band, the training, the common model file
-    integer :: ncls = 0
-    integer,  allocatable :: states(:)          !< (ncls) the classes' states in the teacher's project (0: rejected)
-    integer(int64) :: cavgs_hash = 0_int64      !< the teacher's class averages
-    logical :: exists = .false.
+    type(polar_student), allocatable :: core                 !< the network, the features, the band, the training, the common model file
+    integer                          :: ncls       = 0
+    integer,             allocatable :: states(:)            !< (ncls) the classes' states in the teacher's project (0: rejected)
+    integer(int64)                   :: cavgs_hash = 0_int64 !< the teacher's class averages
+    logical                          :: exists     = .false.
   contains
     procedure :: new
     procedure :: init_readout
@@ -115,16 +115,16 @@ contains
     !! readout's rotations (teacher_rot_bin, no reflection)
     subroutine train( self, n, x, ctf2, side, dists, temps, held, prob_beta, shift_aug_px, max_epochs, patience, &
         &nthr, log_unit, inpl_cls, inpl_rows )
-        class(class_student), intent(inout) :: self
-        integer,              intent(in)    :: n, max_epochs, patience, nthr, log_unit
-        real(sp),             intent(in)    :: x(:,:,:,:), ctf2(:,:), side(n)
-        logical,              intent(in)    :: held(n)
-        real(sp),             intent(in)    :: dists(self%ncls, n), temps(n), prob_beta, shift_aug_px
-        integer,  optional,   intent(in)    :: inpl_cls(:,:)
-        real(sp), optional,   intent(in)    :: inpl_rows(:,:,:)
+        class(class_student), intent(inout)          :: self
+        integer,              intent(in)             :: n, max_epochs, patience, nthr, log_unit
+        real(sp),             intent(in)             :: x(:,:,:,:), ctf2(:,:), side(n)
+        logical,              intent(in)             :: held(n)
+        real(sp),             intent(in)             :: dists(self%ncls, n), temps(n), prob_beta, shift_aug_px
+        integer,              optional,   intent(in) :: inpl_cls(:,:)
+        real(sp),             optional,   intent(in) :: inpl_rows(:,:,:)
         real(sp), allocatable :: targets(:,:), tq(:,:,:)
         integer,  allocatable :: tqc(:,:)
-        integer :: isample, kq, nrt
+        integer               :: isample, kq, nrt
         if( .not. self%exists ) THROW_HARD('student not constructed; class_student%train')
         allocate(targets(self%ncls, n))
         if( present(inpl_cls) )then
@@ -284,15 +284,15 @@ contains
     !> the header fname (key=value) and the weights beside it (the core's model file), with the classes' keys and the
     !! caller's after the core's
     subroutine write( self, fname, extra_keys, extra_vals )
-        class(class_student),       intent(in) :: self
-        class(string),              intent(in) :: fname
-        character(len=*), optional, intent(in) :: extra_keys(:), extra_vals(:)
-        integer, parameter :: NOWN = 5
+        class(class_student),       intent(in)           :: self
+        class(string),              intent(in)           :: fname
+        character(len=*),           optional, intent(in) :: extra_keys(:), extra_vals(:)
+        integer,             parameter   :: NOWN = 5
         character(len=64),   allocatable :: allkeys(:)
         character(len=:),    allocatable :: states_str
         character(len=4096), allocatable :: allvals(:)
-        character(len=16) :: tmp
-        integer :: nextra, i
+        character(len=16)                :: tmp
+        integer                          :: nextra, i
         if( .not. self%exists ) THROW_HARD('student not constructed; class_student%write')
         nextra = 0
         if( present(extra_keys) ) nextra = size(extra_keys)
@@ -321,12 +321,12 @@ contains
     subroutine read( self, fname )
         class(class_student), intent(inout) :: self
         class(string),        intent(in)    :: fname
-        type(polar_student_header) :: hdr
+        type(polar_student_header)    :: hdr
         character(len=:), allocatable :: key, val
-        integer, allocatable :: states(:)
-        integer(int64) :: cavgs_hash
-        integer :: ncls, i
-        logical :: l_states
+        integer,          allocatable :: states(:)
+        integer(int64)                :: cavgs_hash
+        integer                       :: ncls, i
+        logical                       :: l_states
         call hdr%read(fname)
         if( hdr%version /= CLASS_STUDENT_VERSION ) THROW_HARD('model_version mismatch; class_student%read')
         ncls       = 0
@@ -414,8 +414,8 @@ contains
     end function get_with_ctf
 
     subroutine get_weights( self, wk )
-        class(class_student),  intent(in)  :: self
-        real(sp), allocatable, intent(out) :: wk(:,:)
+        class(class_student),  intent(in)               :: self
+        real(sp),              allocatable, intent(out) :: wk(:,:)
         call self%core%get_weights(wk)
     end subroutine get_weights
 

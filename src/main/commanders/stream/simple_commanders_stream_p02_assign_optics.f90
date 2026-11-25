@@ -38,7 +38,7 @@ contains
 
     subroutine exec_stream_p02_assign_optics( self, cline )
         class(commander_stream_p02_assign_optics), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
+        class(cmdline),                            intent(inout) :: cline
         type(stream_stage_optics) :: stage
         call install_sigterm_handler()
         call cline%printline()

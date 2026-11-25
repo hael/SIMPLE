@@ -18,7 +18,7 @@ contains
         real,             intent(out) :: shiftx, shifty
         logical,          intent(out) :: l_ok
         character(len=:), allocatable :: doc, beamshift
-        logical :: l_okx, l_oky
+        logical                       :: l_okx, l_oky
         shiftx = 0.
         shifty = 0.
         l_ok   = .false.
@@ -35,8 +35,8 @@ contains
 
     !> the whole file as one string
     logical function read_text( fname, txt )
-        character(len=*),              intent(in)  :: fname
-        character(len=:), allocatable, intent(out) :: txt
+        character(len=*),              intent(in)               :: fname
+        character(len=:),              allocatable, intent(out) :: txt
         integer :: funit, fsize, ios
         read_text = .false.
         inquire(file=fname, size=fsize)
@@ -52,10 +52,10 @@ contains
 
     !> the text between the first <name> (or <name attributes>) start tag of txt and the next </name>
     logical function element_content( txt, name, content )
-        character(len=*),              intent(in)  :: txt, name
-        character(len=:), allocatable, intent(out) :: content
+        character(len=*),              intent(in)               :: txt, name
+        character(len=:),              allocatable, intent(out) :: content
         character(len=*), parameter :: AFTER_NAME = '>/ '//achar(9)//achar(10)//achar(13)
-        integer :: from, start, past_name, gt, endtag
+        integer                     :: from, start, past_name, gt, endtag
         element_content = .false.
         from = 1
         do
@@ -84,7 +84,7 @@ contains
         real,             intent(out) :: val
         logical,          intent(out) :: l_ok
         character(len=:), allocatable :: content
-        integer :: i, ios
+        integer                       :: i, ios
         val  = 0.
         l_ok = element_content(txt, name, content)
         if( .not. l_ok ) return

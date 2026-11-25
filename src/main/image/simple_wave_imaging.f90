@@ -19,51 +19,51 @@ public :: wave_imaging, WAVE_PROJECTION, WAVE_FIRST_BORN, WAVE_RYTOV, WAVE_MSLIC
 integer, parameter :: WAVE_PROJECTION = 1   !< exp(c u) of the central section
 integer, parameter :: WAVE_FIRST_BORN = 2   !< 1 + c u
 integer, parameter :: WAVE_RYTOV      = 3   !< exp(c u) of the paraboloid section
-integer, parameter :: WAVE_MSLICE = 4   !< the exit wave is given (simple_wave_multislice): lens and detection
+integer, parameter :: WAVE_MSLICE     = 4   !< the exit wave is given (simple_wave_multislice): lens and detection
 
 !> One thread's image formation from a native-disk spectrum s (volts times voxels, unnormalised native DFT):
 !! exit wave, lens, intensity, crop (wave_model_policy.md, section 3); forward stores psi and psi_T, linearize and
 !! adjoint act at that point under Re<a,b>. The fine grid's real-space origin is its first point
 type :: wave_imaging
     private
-    integer              :: nat   = 0
-    integer              :: R     = 0
-    integer              :: n     = 0
-    integer              :: osf   = 0
-    integer              :: model = 0
-    complex              :: c     = cmplx(0.,0.)  !< the scattering coefficient of the current particle
-    real                 :: wl    = 0.             !< the current particle's wavelength in native pixels
-    type(wave_field)     :: fpsi                  !< psi, the exit wave on the fine grid
-    type(wave_field)     :: fpt                   !< psi_T, the wave after the lens
-    type(wave_field)     :: fw                    !< work field
-    complex, allocatable :: tlens(:,:)            !< T P^-1 on the fine grid, FFT order
-    complex, allocatable :: pexit(:,:)            !< P on the native disk (Rytov), 1 otherwise
-    real,    allocatable :: fsq(:,:)              !< |k|^2 of the fine grid in native cycles per pixel
-    real,    allocatable :: c2ang(:,:), s2ang(:,:) !< cos and sin of twice the azimuth atan2(k,h) of the fine grid
-    real,    allocatable :: env(:,:)              !< the B-factor envelope of env_bfac at env_smpd
-    complex, allocatable :: pinv(:,:)             !< P^-1 on the fine grid, of pexit_wl and pexit_d
+    integer              :: nat      = 0
+    integer              :: R        = 0
+    integer              :: n        = 0
+    integer              :: osf      = 0
+    integer              :: model    = 0
+    complex              :: c        = cmplx(0.,0.)       !< the scattering coefficient of the current particle
+    real                 :: wl       = 0.                 !< the current particle's wavelength in native pixels
+    type(wave_field)     :: fpsi                          !< psi, the exit wave on the fine grid
+    type(wave_field)     :: fpt                           !< psi_T, the wave after the lens
+    type(wave_field)     :: fw                            !< work field
+    complex, allocatable :: tlens(:,:)                    !< T P^-1 on the fine grid, FFT order
+    complex, allocatable :: pexit(:,:)                    !< P on the native disk (Rytov), 1 otherwise
+    real,    allocatable :: fsq(:,:)                      !< |k|^2 of the fine grid in native cycles per pixel
+    real,    allocatable :: c2ang(:,:), s2ang(:,:)        !< cos and sin of twice the azimuth atan2(k,h) of the fine grid
+    real,    allocatable :: env(:,:)                      !< the B-factor envelope of env_bfac at env_smpd
+    complex, allocatable :: pinv(:,:)                     !< P^-1 on the fine grid, of pexit_wl and pexit_d
     real                 :: env_bfac = 0., env_smpd = 0.
     real                 :: pexit_wl = 0., pexit_d = 0.   !< the wavelength and depth of pexit
-    logical              :: l_env = .false., l_pexit = .false.
+    logical              :: l_env    = .false., l_pexit = .false.
     logical              :: l_optics = .false.
-    logical              :: l_point  = .false.   !< forward has stored a point
+    logical              :: l_point  = .false.            !< forward has stored a point
   contains
-    procedure :: new
-    procedure :: set_optics
-    procedure :: forward
-    procedure :: linearize
-    procedure :: adjoint
-    procedure :: get_exit_wave
-    procedure :: forward_wave
-    procedure :: linearize_wave
-    procedure :: adjoint_wave
-    procedure :: get_n
-    procedure :: get_c
-    procedure :: get_wl
+    procedure          :: new
+    procedure          :: set_optics
+    procedure          :: forward
+    procedure          :: linearize
+    procedure          :: adjoint
+    procedure          :: get_exit_wave
+    procedure          :: forward_wave
+    procedure          :: linearize_wave
+    procedure          :: adjoint_wave
+    procedure          :: get_n
+    procedure          :: get_c
+    procedure          :: get_wl
     procedure, private :: lens_forward
     procedure, private :: lens_linearize
     procedure, private :: lens_adjoint
-    procedure :: kill
+    procedure          :: kill
 end type wave_imaging
 
 contains
@@ -114,8 +114,8 @@ contains
         real,                intent(in)    :: bfac, exit_depth
         type(ctf)     :: tfun
         type(ctfvars) :: vars
-        real    :: sig, beta, ph, dprop, dsum, ddiff, ca, sa, pwl, hwl2cs
-        integer :: i, j, h, k
+        real          :: sig, beta, ph, dprop, dsum, ddiff, ca, sa, pwl, hwl2cs
+        integer       :: i, j, h, k
         if( self%n == 0 ) THROW_HARD('new has not been called; wave_imaging%set_optics')
         if( ctfparms%ctfflag == CTFFLAG_FLIP ) THROW_HARD('phase-flipped particles have no wave model; set_optics')
         if( ctfparms%fraca < 0. .or. ctfparms%fraca >= 1. ) THROW_HARD('fraca must be in [0,1); set_optics')
@@ -387,8 +387,8 @@ contains
         class(image), intent(inout) :: img
         real,         intent(in)    :: total_dose, noise_sdev
         real, allocatable :: intensity(:,:,:)
-        real    :: dose_per_pixel, expected
-        integer :: i, j, ldim(3)
+        real              :: dose_per_pixel, expected
+        integer           :: i, j, ldim(3)
         if( total_dose < 0. .or. noise_sdev < 0. ) THROW_HARD('total_dose and noise_sdev must be nonnegative; detect_intensity')
         ldim = img%get_ldim()
         intensity = img%get_rmat()

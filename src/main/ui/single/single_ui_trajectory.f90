@@ -4,14 +4,14 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('trajectory', 'Trajectory Analysis', 20)
-type(ui_program), target :: trajectory_extract_substk
-type(ui_program), target :: trajectory_graphene_subtr
-type(ui_program), target :: trajectory_import
-type(ui_program), target :: trajectory_denoise
-type(ui_program), target :: trajectory_make_projavgs
-type(ui_program), target :: trajectory_reconstruct3D
-type(ui_program), target :: trajectory_swap_stack
-type(ui_program), target :: trajectory_solve3D
+type(ui_program),          target    :: trajectory_extract_substk
+type(ui_program),          target    :: trajectory_graphene_subtr
+type(ui_program),          target    :: trajectory_import
+type(ui_program),          target    :: trajectory_denoise
+type(ui_program),          target    :: trajectory_make_projavgs
+type(ui_program),          target    :: trajectory_reconstruct3D
+type(ui_program),          target    :: trajectory_swap_stack
+type(ui_program),          target    :: trajectory_solve3D
 
 contains
 

@@ -172,8 +172,8 @@ contains
         class(commander_info_stktab), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(string), allocatable :: stkfnames(:)
-        type(parameters) :: params
-        integer          :: ldim(3), box, istk, np_stk
+        type(parameters)          :: params
+        integer                   :: ldim(3), box, istk, np_stk
         call params%new(cline)
         if( .not. file_exists(params%stktab) )then
             THROW_HARD('file: '//params%stktab%to_char()//' not in cwd; exec_info_stktab')

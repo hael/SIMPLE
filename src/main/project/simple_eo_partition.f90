@@ -15,12 +15,12 @@ public :: run_all_eo_partition_tests
 private
 #include "simple_local_flags.inc"
 
-integer,        parameter :: EO_COMPLETE = 0, EO_MISSING = 1, EO_PARTIAL = 2, EO_INCONSISTENT = 3
-integer(int64), parameter :: EO_SEED_DEFAULT = 20261014_int64   !< the transaction's own random stream
-integer(int64), parameter :: MINSTD_A = 48271_int64, MINSTD_M = 2147483647_int64
-integer,        parameter :: MIN_GROUPS_WARN = 20               !< fewer independent groups than this warns
-real,           parameter :: IMBALANCE_WARN  = 0.05             !< halves differing by more of the active warns
-character(len=*), parameter :: KEY_GROUP = 'eo_group', KEY_INDEX = 'eo_byindex'
+integer,          parameter :: EO_COMPLETE     = 0, EO_MISSING = 1, EO_PARTIAL = 2, EO_INCONSISTENT = 3
+integer(int64),   parameter :: EO_SEED_DEFAULT = 20261014_int64 !< the transaction's own random stream
+integer(int64),   parameter :: MINSTD_A        = 48271_int64, MINSTD_M = 2147483647_int64
+integer,          parameter :: MIN_GROUPS_WARN = 20             !< fewer independent groups than this warns
+real,             parameter :: IMBALANCE_WARN  = 0.05           !< halves differing by more of the active warns
+character(len=*), parameter :: KEY_GROUP       = 'eo_group', KEY_INDEX = 'eo_byindex'
 
 interface
     !> white-box tests (submodule simple_eo_partition_tester, built only with BUILD_TESTS=ON)
@@ -36,15 +36,15 @@ contains
     !! Class-average fields: the per-index routine (no micrograph groups by nature), written to the project.
     !! A distributed worker only checks that its field has halves.
     subroutine ensure_field_halves( spproj, oritype, projfile, seed )
-        class(sp_project),        intent(inout) :: spproj
-        character(len=*),         intent(in)    :: oritype
-        class(string),            intent(in)    :: projfile
-        integer(int64), optional, intent(in)    :: seed
+        class(sp_project),        intent(inout)        :: spproj
+        character(len=*),         intent(in)           :: oritype
+        class(string),            intent(in)           :: projfile
+        integer(int64),           optional, intent(in) :: seed
         type(sp_project), allocatable :: proj
-        class(oris), pointer :: field
-        character(len=STDLEN) :: msg
-        integer :: status
-        logical :: l_changed, l_recorded
+        class(oris),      pointer     :: field
+        character(len=STDLEN)         :: msg
+        integer                       :: status
+        logical                       :: l_changed, l_recorded
         if( l_distr_worker_glob )then
             ! a worker consumes the halves its master made
             call spproj%ptr2oritype(oritype, field)
@@ -101,12 +101,12 @@ contains
     !! (never changing a labelled one), the same labels in ptcl2D and ptcl3D, the provenance on the stack rows;
     !! l_changed when anything was labelled. Stops on an inconsistent partition.
     subroutine eo_transaction( spproj, l_changed, seed )
-        class(sp_project),        intent(inout) :: spproj
-        logical,                  intent(out)   :: l_changed
-        integer(int64), optional, intent(in)    :: seed
+        class(sp_project),        intent(inout)        :: spproj
+        logical,                  intent(out)          :: l_changed
+        integer(int64),           optional, intent(in) :: seed
         character(len=STDLEN) :: msg
-        integer(int64) :: rng
-        integer :: status
+        integer(int64)        :: rng
+        integer               :: status
         rng = EO_SEED_DEFAULT
         if( present(seed) ) rng = seed
         call run_transaction(spproj, rng, status, l_changed, msg)
@@ -118,11 +118,11 @@ contains
 
     subroutine repartition_selected_halves( spproj, groups )
         use simple_type_defs, only: class_sample
-        class(sp_project), intent(inout) :: spproj
-        type(class_sample), intent(in) :: groups(:)
-        logical, allocatable :: touched_stacks(:)
-        real(dp) :: direction_scores(0:1), total_scores(0:1)
-        integer :: counts(0:1), group, member, half, stack, status
+        class(sp_project),  intent(inout) :: spproj
+        type(class_sample), intent(in)    :: groups(:)
+        logical, allocatable  :: touched_stacks(:)
+        real(dp)              :: direction_scores(0:1), total_scores(0:1)
+        integer               :: counts(0:1), group, member, half, stack, status
         character(len=STDLEN) :: msg
         if( l_distr_worker_glob ) THROW_HARD('only the master may repartition selected particles')
         status = eo_partition_status(spproj,msg)
@@ -156,7 +156,7 @@ contains
     contains
         subroutine assign_half( particle, label, score )
             integer, intent(in) :: particle, label
-            real, intent(in) :: score
+            real,    intent(in) :: score
             call spproj%os_ptcl2D%set(particle,'eo',label)
             call spproj%os_ptcl3D%set(particle,'eo',label)
             touched_stacks(spproj%os_ptcl3D%get_int(particle,'stkind')) = .true.
@@ -173,7 +173,7 @@ contains
         character(len=*),  intent(out)   :: msg
         integer, allocatable :: stkind(:)
         logical, allocatable :: active(:)
-        integer :: nrows, nstks
+        integer              :: nrows, nstks
         call field_layout(spproj, nrows, nstks, stkind, active, status, msg)
         if( status /= EO_COMPLETE ) return
         call check_marked(spproj, nrows, nstks, stkind, active, status, msg)
@@ -189,8 +189,8 @@ contains
         character(len=*),  intent(out)   :: msg
         integer, allocatable :: stkind(:), stkpop(:), stkhalf(:), order(:)
         logical, allocatable :: active(:), unmarked(:)
-        integer :: nrows, nstks, i, s, k, nunmarked, half, pops(2), ngroups, nmics, nmic_with_ptcls, imic
-        logical :: l_groups, l_lab2, l_lab3
+        integer              :: nrows, nstks, i, s, k, nunmarked, half, pops(2), ngroups, nmics, nmic_with_ptcls, imic
+        logical              :: l_groups, l_lab2, l_lab3
         l_changed = .false.
         call field_layout(spproj, nrows, nstks, stkind, active, status, msg)
         if( status == EO_INCONSISTENT ) return
@@ -299,12 +299,12 @@ contains
 
     !> rows, stack rows, each row's stack row and activity (ptcl2D's state, ptcl3D's when there is no ptcl2D)
     subroutine field_layout( spproj, nrows, nstks, stkind, active, status, msg )
-        class(sp_project),    intent(inout) :: spproj
-        integer,              intent(out)   :: nrows, nstks
-        integer, allocatable, intent(out)   :: stkind(:)
-        logical, allocatable, intent(out)   :: active(:)
-        integer,              intent(out)   :: status
-        character(len=*),     intent(out)   :: msg
+        class(sp_project),    intent(inout)            :: spproj
+        integer,              intent(out)              :: nrows, nstks
+        integer,              allocatable, intent(out) :: stkind(:)
+        logical,              allocatable, intent(out) :: active(:)
+        integer,              intent(out)              :: status
+        character(len=*),     intent(out)              :: msg
         integer :: n2, n3, i
         status = EO_COMPLETE
         msg    = ''
@@ -344,7 +344,7 @@ contains
         integer,           intent(out)   :: status
         character(len=*),  intent(out)   :: msg
         logical, allocatable :: has_rows(:)
-        integer :: i, s, label, e2, e3, nmarked, nwith
+        integer              :: i, s, label, e2, e3, nmarked, nwith
         status = EO_COMPLETE
         msg    = ''
         if( nstks == 0 ) return
@@ -546,7 +546,7 @@ contains
         integer, intent(inout) :: v(:)
         integer, intent(in)    :: key(:)
         integer, allocatable :: tmp(:)
-        integer :: n, width, lo, mid, hi, i, j, k
+        integer              :: n, width, lo, mid, hi, i, j, k
         n = size(v)
         allocate(tmp(n))
         width = 1

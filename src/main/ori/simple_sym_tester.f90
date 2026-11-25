@@ -10,10 +10,10 @@ implicit none
 private
 public :: run_all_sym_tests
 
-real,    parameter :: DEG_TOL   = 1.0e-2 ! angle tolerance in degrees
-real,    parameter :: MAT_TOL   = 1.0e-3 ! rotation-matrix element tolerance
-integer, parameter :: NSPIRAL   = 400    ! projection directions per reference spiral (must be even)
-integer, parameter :: NTRIALS   = 20     ! random orientations per point group
+real,             parameter :: DEG_TOL   = 1.0e-2 ! angle tolerance in degrees
+real,             parameter :: MAT_TOL   = 1.0e-3 ! rotation-matrix element tolerance
+integer,          parameter :: NSPIRAL   = 400    ! projection directions per reference spiral (must be even)
+integer,          parameter :: NTRIALS   = 20     ! random orientations per point group
 character(len=3), parameter :: PGRPS(9)  = ['c1 ','c2 ','c4 ','c5 ','d2 ','d7 ','t  ','o  ','i  ']
 integer,          parameter :: NSYMS(9)  = [ 1,    2,    4,    5,    4,    14,   12,   24,   60  ]
 
@@ -176,11 +176,11 @@ contains
 
             subroutine check_group( pgrp )
                 character(len=*), intent(in) :: pgrp
-                type(sym) :: se
+                type(sym)         :: se
                 real, allocatable :: ops(:,:,:)
-                real    :: identity(3,3), prod(3,3)
-                integer :: n, i, j
-                logical :: orthonormal, distinct, closed
+                real              :: identity(3,3), prod(3,3)
+                integer           :: n, i, j
+                logical           :: orthonormal, distinct, closed
                 identity = 0.0
                 do i = 1,3
                     identity(i,i) = 1.0
@@ -483,17 +483,17 @@ contains
     ! against a brute-force scan over the symmetry-expanded distances; for c1 the
     ! sym forms delegate to the oris forms, which the same references cover
     subroutine test_neighbour_searches()
-        integer, parameter :: NSP = 200, NNN = 5, NPROBE = 3
-        integer, parameter :: PROBE_IND(NPROBE) = [1, 37, 120]
-        real,    parameter :: PROBE_JITTER(3,NPROBE) = reshape([3.0, 2.0, 0.0,  -4.0, 1.5, 25.0,  2.5, -3.0, 190.0], [3,NPROBE])
-        real,    parameter :: THRES_DEG = 15.0
-        character(len=2), parameter :: GROUPS(3) = ['c1', 'c2', 'd2']
-        type(sym)  :: se
-        type(oris) :: os
-        type(ori)  :: o, oasym, osym, orep
-        real       :: dmin(NSP), sorted(NSP), euls(3), euldist, inpldist, kth
-        integer    :: ig, ip, i, isym, closest, oris_closest, nsel
-        logical    :: lnns(NSP), lnns_oris(NSP), expected(NSP), ok
+        integer,          parameter :: NSP                    = 200, NNN = 5, NPROBE = 3
+        integer,          parameter :: PROBE_IND(NPROBE)      = [1, 37, 120]
+        real,             parameter :: PROBE_JITTER(3,NPROBE) = reshape([3.0, 2.0, 0.0,  -4.0, 1.5, 25.0,  2.5, -3.0, 190.0], [3,NPROBE])
+        real,             parameter :: THRES_DEG              = 15.0
+        character(len=2), parameter :: GROUPS(3)              = ['c1', 'c2', 'd2']
+        type(sym)                   :: se
+        type(oris)                  :: os
+        type(ori)                   :: o, oasym, osym, orep
+        real                        :: dmin(NSP), sorted(NSP), euls(3), euldist, inpldist, kth
+        integer                     :: ig, ip, i, isym, closest, oris_closest, nsel
+        logical                     :: lnns(NSP), lnns_oris(NSP), expected(NSP), ok
         write(*,'(A)') 'test_neighbour_searches'
         do ig = 1,size(GROUPS)
             call se%new(GROUPS(ig))
@@ -650,12 +650,12 @@ contains
     !! neighbours in both directions (what the subspace map of the 3D toolbox takes from the table)
     subroutine test_sym_dist_table()
         integer, parameter :: NREF = 24, NASYM = 90
-        type(sym)  :: se
-        type(oris) :: os_ref, os_asym
-        type(ori)  :: oref, oasym, osym
-        real       :: table(NREF,NASYM), pairwise(NREF,NASYM), dtmp, inplrotdist
-        integer    :: ig, i, j
-        logical    :: l_same_full2sub, l_same_sub2full
+        type(sym)          :: se
+        type(oris)         :: os_ref, os_asym
+        type(ori)          :: oref, oasym, osym
+        real               :: table(NREF,NASYM), pairwise(NREF,NASYM), dtmp, inplrotdist
+        integer            :: ig, i, j
+        logical            :: l_same_full2sub, l_same_sub2full
         write(*,'(A)') 'test_sym_dist_table'
         do ig = 1,size(PGRPS)
             call se%new(trim(PGRPS(ig)))

@@ -16,28 +16,28 @@ public :: run_all_dose_curve_tests
 private
 
 character(len=*), parameter :: VERSION_LINE = '# SIMPLE dose curve 1'
-integer,  parameter :: NHEADER   = 7         !< program kv dose_per_fraction band line contrast nknots
-real(dp), parameter :: KV_ATOL   = 1.e-3_dp
-real(dp), parameter :: DOSE_RTOL = 1.e-5_dp  !< the saved dose per fraction is single precision
+integer,          parameter :: NHEADER      = 7        !< program kv dose_per_fraction band line contrast nknots
+real(dp),         parameter :: KV_ATOL      = 1.e-3_dp
+real(dp),         parameter :: DOSE_RTOL    = 1.e-5_dp !< the saved dose per fraction is single precision
 
 type :: dose_curve
     private
-    integer  :: nknots = 0
-    real(dp) :: kv = 0._dp, dose_per_fraction = 0._dp, hp = 0._dp, lp = 0._dp
-    real(dp) :: b0 = 0._dp, beta = 0._dp, lnc0 = 0._dp, gamma = 0._dp
+    integer               :: nknots   = 0
+    real(dp)              :: kv       = 0._dp, dose_per_fraction = 0._dp, hp = 0._dp, lp = 0._dp
+    real(dp)              :: b0       = 0._dp, beta = 0._dp, lnc0 = 0._dp, gamma = 0._dp
     integer,  allocatable :: ffrom(:), fto(:)  !< (nknots) movie fractions of each window
     real(dp), allocatable :: dose(:)           !< (nknots) scaled dose at the window centre
     real(dp), allocatable :: c(:), b(:)        !< (nknots) contrast and B-factor relative to window 1
     logical,  allocatable :: used(:)           !< (nknots) the window's attenuation was fitted
-    logical  :: l_exists = .false.
+    logical               :: l_exists = .false.
   contains
-    procedure :: new
-    procedure :: set_knot
-    procedure :: write
-    procedure :: read
+    procedure          :: new
+    procedure          :: set_knot
+    procedure          :: write
+    procedure          :: read
     procedure, private :: check_movie
-    procedure :: fraction_weights
-    procedure :: kill
+    procedure          :: fraction_weights
+    procedure          :: kill
     procedure, private :: validate
     procedure, private :: evaluate
 end type dose_curve
@@ -131,11 +131,11 @@ contains
         character(len=LONGSTRLEN)     :: line
         character(len=:), allocatable :: txt
         character(len=32)             :: key, word
-        integer,  allocatable :: ffrom(:), fto(:), iused(:)
-        real(dp), allocatable :: dose(:), c(:), b(:)
-        real(dp) :: kv, dpf, band(2), line_par(2), contrast(2)
-        integer  :: unit, ios, nk, nrows, irow, i, slot
-        logical  :: seen(NHEADER)
+        integer,          allocatable :: ffrom(:), fto(:), iused(:)
+        real(dp),         allocatable :: dose(:), c(:), b(:)
+        real(dp)                      :: kv, dpf, band(2), line_par(2), contrast(2)
+        integer                       :: unit, ios, nk, nrows, irow, i, slot
+        logical                       :: seen(NHEADER)
         call self%kill
         ok = .false.
         open(newunit=unit, file=fname%to_char(), status='old', action='read', iostat=ios)
@@ -288,10 +288,10 @@ contains
 
     !> contrast and B-factor of each movie fraction, at the fraction's centre dose
     subroutine fraction_weights( self, nframes, dose_per_frame, kv, cfrac, bfrac )
-        class(dose_curve),     intent(in)    :: self
-        integer,               intent(in)    :: nframes
-        real(dp),              intent(in)    :: dose_per_frame, kv
-        real(dp), allocatable, intent(inout) :: cfrac(:), bfrac(:)
+        class(dose_curve),     intent(in)                 :: self
+        integer,               intent(in)                 :: nframes
+        real(dp),              intent(in)                 :: dose_per_frame, kv
+        real(dp),              allocatable, intent(inout) :: cfrac(:), bfrac(:)
         type(string) :: message
         integer      :: f
         if( .not. self%validate(message) )                        THROW_HARD(message%to_char())
@@ -313,8 +313,8 @@ contains
         real(dp),          intent(in)  :: x
         real(dp),          intent(out) :: c, b
         integer, allocatable :: k(:)
-        real(dp) :: t
-        integer  :: i, j, m
+        real(dp)             :: t
+        integer              :: i, j, m
         k = pack([(i, i = 1, self%nknots)], self%used)
         m = size(k)
         if( x >= self%dose(k(m)) )then

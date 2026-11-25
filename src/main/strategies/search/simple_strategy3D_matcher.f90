@@ -45,14 +45,14 @@ private
 type :: refine3D_ctrl
     character(len=:), allocatable :: refine_mode
     character(len=:), allocatable :: oritype
-    logical :: do_write_partial_recs
-    logical :: do_prob_align
-    logical :: do_sigma_mode
-    logical :: do_emit_sigma
-    logical :: do_write_oris
-    logical :: do_bench
-    logical :: do_buffer_records
-    logical :: do_pipeline   !< the probabilistic pipeline: the fill and the selection per batch, in this process
+    logical                       :: do_write_partial_recs
+    logical                       :: do_prob_align
+    logical                       :: do_sigma_mode
+    logical                       :: do_emit_sigma
+    logical                       :: do_write_oris
+    logical                       :: do_bench
+    logical                       :: do_buffer_records
+    logical                       :: do_pipeline !< the probabilistic pipeline: the fill and the selection per batch, in this process
   contains
     procedure :: print_flags
 end type refine3D_ctrl
@@ -63,17 +63,17 @@ contains
     !! file); empty in the other modes
     subroutine refine3D_exec( params, build, cline, which_iter, converged, l_write_partial_recs, readout )
         use simple_cartft_calc, only: cartft_calc
-        class(parameters), target, intent(inout) :: params
-        class(builder),    target, intent(inout) :: build
-        class(cmdline),            intent(inout) :: cline
-        integer,                   intent(in)    :: which_iter
-        logical,                   intent(inout) :: converged
-        logical,                   intent(in) :: l_write_partial_recs
-        type(prob_readout), optional, intent(out) :: readout
-        class(parameters), pointer :: p_ptr
-        class(builder),    pointer :: b_ptr
-        class(eul_prob_tab), allocatable, target :: eulprob_obj_part !< the part's assignment (a neighbourhood table on the pipeline's prob_neigh route)
-        type(prob_insert_poses), target :: extra_poses  !< the weighted insertion's poses of this part (topk > 1)
+        class(parameters),         target, intent(inout) :: params
+        class(builder),            target, intent(inout) :: build
+        class(cmdline),            intent(inout)         :: cline
+        integer,                   intent(in)            :: which_iter
+        logical,                   intent(inout)         :: converged
+        logical,                   intent(in)            :: l_write_partial_recs
+        type(prob_readout),        optional, intent(out) :: readout
+        class(parameters),       pointer             :: p_ptr
+        class(builder),          pointer             :: b_ptr
+        class(eul_prob_tab),     allocatable, target :: eulprob_obj_part !< the part's assignment (a neighbourhood table on the pipeline's prob_neigh route)
+        type(prob_insert_poses), target              :: extra_poses      !< the weighted insertion's poses of this part (topk > 1)
         type :: strategy3D_per_ptcl
             class(strategy3D), pointer :: ptr => null()
         end type strategy3D_per_ptcl
@@ -84,24 +84,24 @@ contains
         real,                      allocatable :: incr_shifts(:,:)
         ! the committed poses' view solves (cont_view): a valid solve's point gives the sigma2 residual on its own section;
         ! the extras' outcome per particle (topk > 1) for the bench and the readout
-        type(view_solve),          allocatable :: view_sol(:)
-        integer,                   allocatable :: view_nsolved(:), view_nins(:), view_nmerged(:)
-        real,                      allocatable :: view_wc(:)
-        logical,                   allocatable :: view_counted(:)
-        integer(int64)      :: view_counts(6)  !< view solves, sections cut, cost evaluations, extras solved, inserted, merged
-        integer             :: view_nptcls_ins
-        real(dp)            :: view_wc_sum
-        type(cartft_calc), allocatable, target :: cftc_view !< the B-spline references of the view refinement (cont_view)
-        type(ori)           :: orientation
-        type(refine3D_ctrl) :: ctrl
-        real                :: frac_greedy
-        integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz
-        integer             :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
-        logical             :: has_been_searched
-        logical             :: l_map_classic
+        type(view_solve),          allocatable         :: view_sol(:)
+        integer,                   allocatable         :: view_nsolved(:), view_nins(:), view_nmerged(:)
+        real,                      allocatable         :: view_wc(:)
+        logical,                   allocatable         :: view_counted(:)
+        integer(int64)                                 :: view_counts(6) !< view solves, sections cut, cost evaluations, extras solved, inserted, merged
+        integer                                        :: view_nptcls_ins
+        real(dp)                                       :: view_wc_sum
+        type(cartft_calc),         allocatable, target :: cftc_view      !< the B-spline references of the view refinement (cont_view)
+        type(ori)                                      :: orientation
+        type(refine3D_ctrl)                            :: ctrl
+        real                                           :: frac_greedy
+        integer                                        :: nbatches, batchsz_max, batch_start, batch_end, batchsz
+        integer                                        :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
+        logical                                        :: has_been_searched
+        logical                                        :: l_map_classic
         ! benchmarking
-        integer(int64) :: peak_rss, rss_after_teardown, rss_after_reconstruction
-        real(real64)    :: peak_rss_gib, rss_after_teardown_gib, rss_after_reconstruction_gib
+        integer(int64)          :: peak_rss, rss_after_teardown, rss_after_reconstruction
+        real(real64)            :: peak_rss_gib, rss_after_teardown_gib, rss_after_reconstruction_gib
         integer(timer_int_kind) :: t_startup, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
         integer(timer_int_kind) :: t_alloc_ptcl_imgs
         integer(timer_int_kind) :: t_prep_refs, t_memoize_refs, t_sigma2_write
@@ -116,17 +116,17 @@ contains
         real(timer_int_kind)    :: rt_fill, rt_cart_refs
         ! busy time of the search per thread, and the Cartesian solves' work per thread
         type(cartft_pose_work), allocatable :: cont_work(:)
-        type(cartft_pose_work)  :: cont_work_sum
-        real(dp),   allocatable :: ts_thr(:)
-        real(dp)                :: ts_search, wall_search, t_region, t_ptcl
-        integer(int64)          :: cart_ref_bytes, pipeline_bytes, pipeline_budget, fixed_bytes, particle_bytes
-        integer                 :: nthr_team
-        real(timer_int_kind)    :: rt_fill_tab, rt_assign
-        type(prob_fill_profile) :: fill_prof
-        integer(timer_int_kind) :: t_fill_tab, t_assign
-        real                    :: lp_cone
-        integer, allocatable    :: pinds_glob(:)
-        integer                 :: neff_nglob, neff_rank0
+        type(cartft_pose_work)              :: cont_work_sum
+        real(dp),               allocatable :: ts_thr(:)
+        real(dp)                            :: ts_search, wall_search, t_region, t_ptcl
+        integer(int64)                      :: cart_ref_bytes, pipeline_bytes, pipeline_budget, fixed_bytes, particle_bytes
+        integer                             :: nthr_team
+        real(timer_int_kind)                :: rt_fill_tab, rt_assign
+        type(prob_fill_profile)             :: fill_prof
+        integer(timer_int_kind)             :: t_fill_tab, t_assign
+        real                                :: lp_cone
+        integer,                allocatable :: pinds_glob(:)
+        integer                             :: neff_nglob, neff_rank0
         p_ptr => params
         b_ptr => build
         call check_pass_team('refine3D_exec')
@@ -541,8 +541,8 @@ contains
         end subroutine write_empty_readout
 
         subroutine sample_particles_for_update( pinds_local, nptcls )
-            integer, allocatable, intent(out) :: pinds_local(:)
-            integer,              intent(out) :: nptcls
+            integer,              allocatable, intent(out) :: pinds_local(:)
+            integer,              intent(out)              :: nptcls
             if( allocated(pinds_local) ) deallocate(pinds_local)
             if( p_ptr%l_cont_followup )then
                 ! the continuous followup pass refines the particle sample of the discrete pass it follows
@@ -687,7 +687,7 @@ contains
             integer, intent(in) :: iptcl, iptcl_batch, ithr
             logical, intent(in) :: has_been_searched
             type(ori) :: o_sigma ! procedure-local: thread-safe, unlike the host's orientation
-            real    :: shift_before(2)
+            real      :: shift_before(2)
             ! a Cartesian pass refines continuously; the discrete modes search the polar grid
             if( p_ptr%l_cart_refine )then
                 allocate(strategy3D_cont :: strategy3Dsrch(iptcl_batch)%ptr)
@@ -809,11 +809,11 @@ contains
     !! m_estimator=flex by the frozen weights of the project's state weight set
     subroutine write_partial_recs( params, build, cline, nptcls, pinds, extra )
         use simple_state_weight_set, only: state_weight_set
-        class(parameters),               intent(inout) :: params
-        class(builder),                  intent(inout) :: build
-        class(cmdline),                  intent(inout) :: cline
-        integer,                         intent(in)    :: nptcls, pinds(:)
-        type(prob_insert_poses), optional, intent(in)  :: extra  !< the weighted insertion's poses (topk > 1)
+        class(parameters),               intent(inout)        :: params
+        class(builder),                  intent(inout)        :: build
+        class(cmdline),                  intent(inout)        :: cline
+        integer,                         intent(in)           :: nptcls, pinds(:)
+        type(prob_insert_poses),         optional, intent(in) :: extra !< the weighted insertion's poses (topk > 1)
         type(state_weight_set) :: wset
         if( params%l_m_estimator_flex )then
             call wset%new(build%spproj, build%spproj_field)

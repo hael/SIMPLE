@@ -5,12 +5,12 @@ implicit none
 contains
 
     module subroutine add_cavgs2os_out( self, stk, smpd, imgkind, clspath, mskdiam )
-        class(sp_project),          intent(inout) :: self
-        class(string),              intent(in)    :: stk
-        real,                       intent(in)    :: smpd ! sampling distance of images in stk
-        character(len=*), optional, intent(in)    :: imgkind
-        logical,          optional, intent(in)    :: clspath
-        real,             optional, intent(in)    :: mskdiam
+        class(sp_project),          intent(inout)        :: self
+        class(string),              intent(in)           :: stk
+        real,                       intent(in)           :: smpd ! sampling distance of images in stk
+        character(len=*),           optional, intent(in) :: imgkind
+        logical,                    optional, intent(in) :: clspath
+        real,                       optional, intent(in) :: mskdiam
         type(string) :: iimgkind, abspath
         integer      :: ldim(3), nptcls, ind, i
         if( present(imgkind) )then
@@ -124,14 +124,14 @@ contains
     !> pop is the hard population; a weighted map adds the applied mass and the effective sample size
     !! of its state's weights (mass, ess), which an entry registered without them does not keep
     module subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box, pop, mass, ess )
-        class(sp_project), intent(inout) :: self
-        class(string),     intent(in)    :: vol
-        character(len=*),  intent(in)    :: which_imgkind
-        real,              intent(in)    :: smpd
-        integer,           intent(in)    :: state
-        integer, optional, intent(in)    :: box, pop
-        real,    optional, intent(in)    :: mass, ess
-        type(string) :: abspath
+        class(sp_project), intent(inout)        :: self
+        class(string),     intent(in)           :: vol
+        character(len=*),  intent(in)           :: which_imgkind
+        real,              intent(in)           :: smpd
+        integer,           intent(in)           :: state
+        integer,           optional, intent(in) :: box, pop
+        real,              optional, intent(in) :: mass, ess
+        type(string)                  :: abspath
         integer                       :: n_os_out, ind, ldim(3), ifoo
         select case(trim(which_imgkind))
             case('vol_cavg','vol','vol_msk')
@@ -214,9 +214,9 @@ contains
     end subroutine add_entry2os_out
 
     module integer function get_os_out_entry_index( self, which_imgkind, state )
-        class(sp_project), intent(in) :: self
-        character(len=*),  intent(in) :: which_imgkind
-        integer, optional, intent(in) :: state
+        class(sp_project), intent(in)           :: self
+        character(len=*),  intent(in)           :: which_imgkind
+        integer,           optional, intent(in) :: state
         type(string) :: imgkind
         integer      :: i, n_os_out
         get_os_out_entry_index = 0
@@ -383,7 +383,7 @@ contains
         class(string),     intent(inout) :: fsc_fname
         integer,           intent(out)   :: box
         type(string) :: imgkind_here
-        integer :: i, ind, cnt
+        integer      :: i, ind, cnt
         ! defaults
         call fsc_fname%kill
         fsc_fname =NIL
@@ -451,10 +451,10 @@ contains
     end subroutine get_all_fscs
 
     module subroutine get_frcs( self, frcs, which_imgkind, fail )
-        class(sp_project), intent(in)    :: self
-        class(string),     intent(inout) :: frcs
-        character(len=*),  intent(in)    :: which_imgkind
-        logical, optional, intent(in)    :: fail
+        class(sp_project), intent(in)           :: self
+        class(string),     intent(inout)        :: frcs
+        character(len=*),  intent(in)           :: which_imgkind
+        logical,           optional, intent(in) :: fail
         type(string) :: imgkind
         integer      :: n_os_out, ind, i, cnt
         logical      :: fail_here, found
@@ -506,7 +506,7 @@ contains
         character(len=*),  intent(in)  :: which_imgkind
         real,              intent(out) :: mskdiam
         type(string)                   :: imgkind_here
-        integer :: i, ind, cnt
+        integer                        :: i, ind, cnt
         mskdiam = 0.0
         ! fetch index
         ind   = 0
@@ -532,7 +532,7 @@ contains
         real,              intent(out)   :: smpd
         integer,           intent(out)   :: box, nptcls
         character(len=STDLEN) :: imgkind
-        integer :: i, nos
+        integer               :: i, nos
         nptcls = 0
         smpd   = 0.
         box    = 0
@@ -568,7 +568,7 @@ contains
         real,              intent(out)   :: smpd
         integer,           intent(out)   :: box
         character(len=STDLEN) :: imgkind_target, imgkind
-        integer :: i, nos
+        integer               :: i, nos
         smpd   = 0.
         box    = 0
         nos    = self%os_out%get_noris()

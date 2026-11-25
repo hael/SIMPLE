@@ -85,9 +85,9 @@ contains
 
     subroutine test_apod_closed_form()
         type(kbinterpol) :: kb
-        real    :: x, prev
-        integer :: i
-        logical :: symmetric, decreasing
+        real             :: x, prev
+        integer          :: i
+        logical          :: symmetric, decreasing
         write(*,'(A)') 'test_apod_closed_form'
         kb = standard_kernel()
         call assert_real(real(I0_BETA_REF / 3.0_dp), kb%apod(0.),      2.e-4, 'apod(0) = I0(beta)/W')
@@ -113,10 +113,10 @@ contains
     ! apod_fast is the I0 power series truncated at degree 14 in u = 1 - (2x/W)^2
     subroutine test_apod_fast_polynomial()
         type(kbinterpol) :: kb, other
-        real     :: x, w_exact, w_fast, max_abs, max_rel
-        real(dp) :: coeff
-        integer  :: i, k
-        logical  :: fallback_exact
+        real             :: x, w_exact, w_fast, max_abs, max_rel
+        real(dp)         :: coeff
+        integer          :: i, k
+        logical          :: fallback_exact
         write(*,'(A)') 'test_apod_fast_polynomial'
         kb = standard_kernel()
         ! the coefficients are (beta^2/4)^k / (k!)^2
@@ -150,9 +150,9 @@ contains
 
     subroutine test_apod_fast_value_deriv()
         type(kbinterpol) :: kb
-        real    :: x, value, deriv, vplus, vminus, fd, max_err, max_val
-        integer :: i
-        logical :: value_matches, antisymmetric
+        real             :: x, value, deriv, vplus, vminus, fd, max_err, max_val
+        integer          :: i
+        logical          :: value_matches, antisymmetric
         write(*,'(A)') 'test_apod_fast_value_deriv'
         kb = standard_kernel()
         value_matches = .true.
@@ -185,9 +185,9 @@ contains
     ! the non-polymorphic device forms must stay identical to the type-bound ones
     subroutine test_device_forms()
         type(kbinterpol) :: kb
-        real    :: x
-        integer :: i
-        logical :: same_apod, same_fast, same_kb15
+        real             :: x
+        integer          :: i
+        logical          :: same_apod, same_fast, same_kb15
         write(*,'(A)') 'test_device_forms'
         kb = standard_kernel()
         same_apod = .true.
@@ -241,10 +241,10 @@ contains
     end subroutine reference_3d
 
     subroutine test_apod_mat_2d()
-        real, parameter :: LOCS(2,5) = reshape([0.0, 0.0,  0.3, -0.7,  2.5, 1.25,  -3.1, 4.9,  0.49, -0.49], [2,5])
+        real, parameter  :: LOCS(2,5) = reshape([0.0, 0.0,  0.3, -0.7,  2.5, 1.25,  -3.1, 4.9,  0.49, -0.49], [2,5])
         type(kbinterpol) :: kb
-        real    :: kbw(WDIM,WDIM), ref(WDIM,WDIM)
-        integer :: iloc
+        real             :: kbw(WDIM,WDIM), ref(WDIM,WDIM)
+        integer          :: iloc
         write(*,'(A)') 'test_apod_mat_2d'
         kb = standard_kernel()
         do iloc = 1,size(LOCS, 2)
@@ -262,10 +262,10 @@ contains
     end subroutine test_apod_mat_2d
 
     subroutine test_apod_mat_3d()
-        real, parameter :: LOCS(3,4) = reshape([0.0, 0.0, 0.0,  0.3, -0.7, 1.2,  2.5, 1.25, -0.5,  -3.1, 4.9, 0.49], [3,4])
+        real, parameter  :: LOCS(3,4) = reshape([0.0, 0.0, 0.0,  0.3, -0.7, 1.2,  2.5, 1.25, -0.5,  -3.1, 4.9, 0.49], [3,4])
         type(kbinterpol) :: kb
-        real    :: kbw(WDIM,WDIM,WDIM), ref(WDIM,WDIM,WDIM)
-        integer :: iloc
+        real             :: kbw(WDIM,WDIM,WDIM), ref(WDIM,WDIM,WDIM)
+        integer          :: iloc
         write(*,'(A)') 'test_apod_mat_3d'
         kb = standard_kernel()
         do iloc = 1,size(LOCS, 2)
@@ -281,11 +281,11 @@ contains
     end subroutine test_apod_mat_3d
 
     subroutine test_fast_stencils()
-        real, parameter :: LOCS2(2,3) = reshape([0.3, -0.7,  2.5, 1.25,  -3.1, 4.9], [2,3])
-        real, parameter :: LOCS3(3,3) = reshape([0.3, -0.7, 1.2,  2.5, 1.25, -0.5,  -3.1, 4.9, 0.49], [3,3])
+        real, parameter  :: LOCS2(2,3) = reshape([0.3, -0.7,  2.5, 1.25,  -3.1, 4.9], [2,3])
+        real, parameter  :: LOCS3(3,3) = reshape([0.3, -0.7, 1.2,  2.5, 1.25, -0.5,  -3.1, 4.9, 0.49], [3,3])
         type(kbinterpol) :: kb
-        real    :: k2(WDIM,WDIM), f2(WDIM,WDIM), k3(WDIM,WDIM,WDIM), f3(WDIM,WDIM,WDIM)
-        integer :: iloc
+        real             :: k2(WDIM,WDIM), f2(WDIM,WDIM), k3(WDIM,WDIM,WDIM), f3(WDIM,WDIM,WDIM)
+        integer          :: iloc
         write(*,'(A)') 'test_fast_stencils'
         kb = standard_kernel()
         do iloc = 1,size(LOCS2, 2)
@@ -306,9 +306,9 @@ contains
 
     subroutine test_instr()
         type(kbinterpol) :: kb
-        real    :: x, prev
-        integer :: i
-        logical :: decreasing, symmetric
+        real             :: x, prev
+        integer          :: i
+        logical          :: decreasing, symmetric
         write(*,'(A)') 'test_instr'
         kb = standard_kernel()
         call assert_real(real(SINHC_REF), kb%instr(0.), 1.e-3, 'instr(0) = sinh(beta)/beta')

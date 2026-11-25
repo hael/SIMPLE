@@ -46,8 +46,8 @@ module simple_ipc_tcp_socket_client
 
   type :: ipc_tcp_socket_client
     private
-    integer               :: port       = -1
-    integer(kind=c_int)   :: fd         = -1
+    integer               :: port             = -1
+    integer(kind=c_int)   :: fd               = -1
     type(string)          :: server_ips
     type(string)          :: server_ip
     integer               :: retry_backoff_ms = TCP_TIMEOUT_MS  !< pause between send_recv_msg retries
@@ -64,8 +64,8 @@ module simple_ipc_tcp_socket_client
   !> Reset state and set the target server list and port.
   subroutine new(self, server_list, port)
     class(ipc_tcp_socket_client), intent(inout) :: self
-    type(string),          intent(in)    :: server_list
-    integer,               intent(in)    :: port
+    type(string),                 intent(in)    :: server_list
+    integer,                      intent(in)    :: port
     call self%kill()  ! close any existing connection and reset state
     self%port       = port
     self%server_ips = server_list
@@ -103,11 +103,11 @@ module simple_ipc_tcp_socket_client
     character(kind=c_char, len=65),      target :: ip_cstr
     integer(kind=c_int),                 target :: optval
     type(c_timeval),                     target :: tv
-    integer(kind=c_socklen_t)            :: addrlen, tv_sz
-    integer(kind=c_int)                  :: fd, rc
-    character(len=512)                   :: iplist
-    character(len=64)                    :: token
-    integer                              :: i, tok_start, iplen, tok_len, tlen
+    integer(kind=c_socklen_t)                   :: addrlen, tv_sz
+    integer(kind=c_int)                         :: fd, rc
+    character(len=512)                          :: iplist
+    character(len=64)                           :: token
+    integer                                     :: i, tok_start, iplen, tok_len, tlen
     if( self%port < 0 )                        return
     if( .not. self%server_ips%is_allocated() ) return
     ! reuse the existing connection if it is still open and healthy
@@ -241,11 +241,11 @@ module simple_ipc_tcp_socket_client
   ! end subroutine send_recv_msg
 
   subroutine send_recv_msg( self, snd_buffer, rcv_buffer, sent, nread )
-    class(ipc_tcp_socket_client),          intent(inout) :: self
-    character(kind=c_char),        target, intent(inout) :: rcv_buffer(TCP_MAX_MSG)
-    character(len=:), allocatable, target, intent(in)    :: snd_buffer
-    logical,                               intent(out)   :: sent
-    integer,                               intent(out)   :: nread
+    class(ipc_tcp_socket_client),          intent(inout)                   :: self
+    character(kind=c_char),                target, intent(inout)           :: rcv_buffer(TCP_MAX_MSG)
+    character(len=:),                      allocatable, target, intent(in) :: snd_buffer
+    logical,                               intent(out)                     :: sent
+    integer,                               intent(out)                     :: nread
     integer(kind=c_int)                                  :: rc
     integer(kind=c_size_t)                               :: nr
     integer                                              :: itry

@@ -17,13 +17,13 @@ private
 !> one per thread; the shift maps on the calculator are set up once before the parallel region (setup_shiftmap_srch)
 type :: class_student_align
     private
-    class(builder), pointer :: b_ptr => null()
-    type(shiftmap_srch)  :: smap
-    real,    allocatable :: vals(:)          !< a class's objective over the rotations at the stored shift
-    real,    allocatable :: corrs0(:)        !< per class of the list: the stored shift's best score
-    integer, allocatable :: irots0(:)        !< and its rotation
-    integer              :: nmax   = 0       !< the longest list align takes
-    logical              :: exists = .false.
+    class(builder), pointer     :: b_ptr  => null()
+    type(shiftmap_srch)         :: smap
+    real,           allocatable :: vals(:)    !< a class's objective over the rotations at the stored shift
+    real,           allocatable :: corrs0(:)  !< per class of the list: the stored shift's best score
+    integer,        allocatable :: irots0(:)  !< and its rotation
+    integer                     :: nmax   = 0 !< the longest list align takes
+    logical                     :: exists = .false.
 contains
     procedure :: new
     procedure :: align
@@ -34,10 +34,10 @@ contains
 
     !> the search objects for lists of at most nmax classes
     subroutine new( self, params, build, nmax )
-        class(class_student_align), intent(inout) :: self
-        class(parameters), target,  intent(in)    :: params
-        class(builder),    target,  intent(in)    :: build
-        integer,                    intent(in)    :: nmax
+        class(class_student_align), intent(inout)       :: self
+        class(parameters),          target,  intent(in) :: params
+        class(builder),             target,  intent(in) :: build
+        integer,                    intent(in)          :: nmax
         call self%kill
         if( nmax < 1 ) THROW_HARD('a list holds one class or more; class_student_align%new')
         self%b_ptr => build

@@ -80,7 +80,7 @@ abstract interface
         import :: ctf_estimate_strategy, parameters, cmdline
         class(ctf_estimate_strategy), intent(inout) :: self
         type(parameters),             intent(in)    :: params
-        class(cmdline),              intent(inout) :: cline
+        class(cmdline),               intent(inout) :: cline
     end subroutine finalize_interface
 
     subroutine cleanup_interface(self, params, cline)
@@ -106,7 +106,7 @@ contains
     function create_ctf_estimate_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
         class(ctf_estimate_strategy), allocatable :: strategy
-        logical :: is_master
+        logical                                   :: is_master
         ! Master heuristic: nparts defined, but no explicit worker range/part.
         is_master = cline%defined('nparts') .and. (.not.cline%defined('part')) &
                    .and. (.not.cline%defined('fromp')) .and. (.not.cline%defined('top'))
@@ -142,8 +142,8 @@ contains
 
     subroutine inmem_initialize(self, params, cline)
         class(ctf_estimate_inmem_strategy), intent(inout) :: self
-        type(parameters),                  intent(inout) :: params
-        class(cmdline),                    intent(inout) :: cline
+        type(parameters),                   intent(inout) :: params
+        class(cmdline),                     intent(inout) :: cline
         call set_ctf_estimate_defaults(cline)
         call params%new(cline)
     end subroutine inmem_initialize
@@ -230,15 +230,15 @@ contains
 
     subroutine inmem_finalize_run(self, params, cline)
         class(ctf_estimate_inmem_strategy), intent(inout) :: self
-        type(parameters),                  intent(in)    :: params
-        class(cmdline),                    intent(inout) :: cline
+        type(parameters),                   intent(in)    :: params
+        class(cmdline),                     intent(inout) :: cline
         call qsys_declare_part_finished(params, string('simple_commanders_preprocess :: exec_ctf_estimate'))
     end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params, cline)
         class(ctf_estimate_inmem_strategy), intent(inout) :: self
-        type(parameters),                  intent(in)    :: params
-        class(cmdline),                    intent(inout) :: cline
+        type(parameters),                   intent(in)    :: params
+        class(cmdline),                     intent(inout) :: cline
         ! No-op
     end subroutine inmem_cleanup
 
@@ -254,8 +254,8 @@ contains
 
     subroutine distr_initialize(self, params, cline)
         class(ctf_estimate_distr_strategy), intent(inout) :: self
-        type(parameters),                  intent(inout) :: params
-        class(cmdline),                    intent(inout) :: cline
+        type(parameters),                   intent(inout) :: params
+        class(cmdline),                     intent(inout) :: cline
         integer :: nintgs_local
         call set_ctf_estimate_defaults(cline)
         call params%new(cline)
@@ -286,8 +286,8 @@ contains
 
     subroutine distr_execute(self, params, cline)
         class(ctf_estimate_distr_strategy), intent(inout) :: self
-        type(parameters),                  intent(inout) :: params
-        class(cmdline),                    intent(inout) :: cline
+        type(parameters),                   intent(inout) :: params
+        class(cmdline),                     intent(inout) :: cline
         ! schedule
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, algnfbody=string(ALGN_FBODY), &
             &array=L_USE_SLURM_ARR, extra_params=params)
@@ -299,15 +299,15 @@ contains
 
     subroutine distr_finalize_run(self, params, cline)
         class(ctf_estimate_distr_strategy), intent(inout) :: self
-        type(parameters),                  intent(in)    :: params
-        class(cmdline),                    intent(inout) :: cline
+        type(parameters),                   intent(in)    :: params
+        class(cmdline),                     intent(inout) :: cline
         ! No-op
     end subroutine distr_finalize_run
 
     subroutine distr_cleanup(self, params, cline)
         class(ctf_estimate_distr_strategy), intent(inout) :: self
-        type(parameters),                  intent(in)    :: params
-        class(cmdline),                    intent(inout) :: cline
+        type(parameters),                   intent(in)    :: params
+        class(cmdline),                     intent(inout) :: cline
         call qsys_cleanup(params)
         call self%qenv%kill
         call self%job_descr%kill

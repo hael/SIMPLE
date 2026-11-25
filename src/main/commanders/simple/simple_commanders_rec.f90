@@ -75,12 +75,12 @@ contains
         use simple_state_weight_set,   only: state_weight_set
         class(commander_rec3D_worker), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(parameters)     :: params
-        type(builder)        :: build
+        type(parameters)       :: params
+        type(builder)          :: build
         type(state_weight_set) :: wset
-        integer, allocatable :: pinds(:)
-        integer              :: nptcls2update
-        logical              :: l_sigma_loaded
+        integer, allocatable   :: pinds(:)
+        integer                :: nptcls2update
+        logical                :: l_sigma_loaded
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_strategy3D_tbox(params)
         if( cline%defined('pindfile') )then
@@ -127,11 +127,11 @@ contains
 
     !> The rows of a row list (one index per line) that fall in fromto, in list order
     subroutine read_part_rows( fname, fromto, pinds )
-        class(string),        intent(in)  :: fname
-        integer,              intent(in)  :: fromto(2)
-        integer, allocatable, intent(out) :: pinds(:)
+        class(string),        intent(in)               :: fname
+        integer,              intent(in)               :: fromto(2)
+        integer,              allocatable, intent(out) :: pinds(:)
         integer, allocatable :: rows(:)
-        integer :: funit, io_stat, n, i
+        integer              :: funit, io_stat, n, i
         n = nlines(fname)
         allocate(rows(n))
         call fopen(funit, file=fname, status='OLD', action='READ', iostat=io_stat)

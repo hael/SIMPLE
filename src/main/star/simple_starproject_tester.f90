@@ -35,7 +35,7 @@ public :: run_all_starproject_tests
 character(len=*), parameter :: TMPDIR = "test_star_tmp"
 ! the origins fixture: particle i alone in stack i, optics group i, at ORIGINS_SMPDS(i) A per pixel
 real,             parameter :: ORIGINS_SMPDS(2) = [1.3, 0.9]
-real,             parameter :: ORIGINS_PX(2,2) = reshape([2., -1., -3., 0.5], [2,2]) ! (x|y, particle)
+real,             parameter :: ORIGINS_PX(2,2)  = reshape([2., -1., -3., 0.5], [2,2]) ! (x|y, particle)
 real,             parameter :: ORIGINS_EUL(3,2) = reshape([10., 20., 30., 40., 50., 60.], [3,2])
 
 !> a particle import in a child: 0 finalised once, 1 finalised twice, 2 exported unfinalised
@@ -107,7 +107,7 @@ contains
     !! pi would negate the transfer function relative to what RELION computes from the same STAR file
     subroutine test_relion_phase_shift()
         real, parameter :: PHASE_DEG = 45., BEYOND_PI_DEG = 250.
-        real :: phase_internal, phase_exported
+        real            :: phase_internal, phase_exported
         write(*,'(A)') 'test_relion_phase_shift'
         phase_internal = PHASE_DEG * RELION_PHASE_DEG2RAD
         call assert_real(PI/4., phase_internal, 1.e-6, 'RELION phase-shift import converts degrees to SIMPLE radians')
@@ -234,7 +234,7 @@ contains
         type(string), intent(in) :: fname
         integer,      intent(in) :: nexpected
         type(starfile_table_type) :: tbl
-        integer :: obj, count
+        integer                   :: obj, count
         write(*,'(A)') "test_particle_export_readback"
         count = 0
         call starfile_table__new(tbl)
@@ -281,12 +281,12 @@ contains
     ! 1.2: Write single-table optics block and read it back
     !-----------------------------------------------------------------------
     subroutine test_starfile_write_and_readback()
-        type(starfile)           :: sf
-        type(starfile_table_type):: tbl
-        type(string)             :: fname
-        real(dp)                 :: dv
-        integer                  :: iv
-        logical                  :: ok
+        type(starfile)            :: sf
+        type(starfile_table_type) :: tbl
+        type(string)              :: fname
+        real(dp)                  :: dv
+        integer                   :: iv
+        logical                   :: ok
         write(*,'(A)') "test_starfile_write_and_readback"
         fname = tmpfile("optics_write_test.star")
         call sf%init(fname, verbose=.false.)
@@ -360,8 +360,8 @@ contains
     subroutine test_starfile_multiple_tables()
         type(starfile)            :: sf
         type(starfile_table_type) :: t
-        type(string) :: fname
-        integer :: ok
+        type(string)              :: fname
+        integer                   :: ok
         write(*,'(A)') "test_starfile_multiple_tables"
         fname = tmpfile("multi_table.star")
         call sf%init(fname)
@@ -494,13 +494,13 @@ contains
     ! 2.5 write_corrected_micrographs_star
     !-----------------------------------------------------------------------
     subroutine test_relion_write_corrected_micrographs_star()
-        type(relion_project)      :: rp
-        type(sp_project)          :: proj
+        type(relion_project)           :: rp
+        type(sp_project)               :: proj
         class(sp_project), allocatable :: proj_without_state
-        type(cmdline)             :: cl
-        type(starfile_table_type) :: checktbl
-        type(string)              :: fname
-        integer :: i, ok
+        type(cmdline)                  :: cl
+        type(starfile_table_type)      :: checktbl
+        type(string)                   :: fname
+        integer                        :: i, ok
         write(*,'(A)') "test_relion_write_corrected_micrographs_star"
         call proj%os_mic%new(2, .false.)
         do i=1,2
@@ -545,13 +545,13 @@ contains
     ! 2.6 write_micrographs_star
     !-----------------------------------------------------------------------
     subroutine test_relion_write_micrographs_star()
-        type(relion_project)      :: rp
-        type(sp_project)          :: proj
+        type(relion_project)           :: rp
+        type(sp_project)               :: proj
         class(sp_project), allocatable :: proj_without_state
-        type(cmdline)             :: cl
-        type(starfile_table_type) :: checktbl
-        type(string)              :: fname
-        integer :: i, ok
+        type(cmdline)                  :: cl
+        type(starfile_table_type)      :: checktbl
+        type(string)                   :: fname
+        integer                        :: i, ok
         write(*,'(A)') "test_relion_write_micrographs_star"
         call proj%os_mic%new(2, .false.)
         do i=1,2
@@ -596,15 +596,15 @@ contains
     ! 2.7 write_particles2D_star
     !-----------------------------------------------------------------------
     subroutine test_relion_write_particles2D_star()
-        type(relion_project)      :: rp
-        type(sp_project)          :: proj
+        type(relion_project)           :: rp
+        type(sp_project)               :: proj
         class(sp_project), allocatable :: proj_without_state
-        type(cmdline)             :: cl
-        type(starfile_table_type) :: checktbl
-        type(string)              :: fname
-        character(:), allocatable :: image_name
-        logical :: found
-        integer :: i, ok
+        type(cmdline)                  :: cl
+        type(starfile_table_type)      :: checktbl
+        type(string)                   :: fname
+        character(:),      allocatable :: image_name
+        logical                        :: found
+        integer                        :: i, ok
         write(*,'(A)') "test_relion_write_particles2D_star"
         call proj%os_ptcl2D%new(3,.true.)
         call proj%os_stk%new(2,.false.)
@@ -670,16 +670,16 @@ contains
     end subroutine test_relion_write_particles2D_star
 
     subroutine test_relion_export_names()
-        type(relion_project)      :: rp
-        type(sp_project)          :: proj
-        type(cmdline)             :: cl
-        type(starfile_table_type) :: table
-        character(:), allocatable :: name, mic_name
-        logical :: found
-        integer :: obj
-        character(len=*), parameter :: MIC_SOURCE  = TMPDIR//'/relion_alias_intg.mrc'
-        character(len=*), parameter :: META_SOURCE = TMPDIR//'/relion_alias.star'
-        character(len=*), parameter :: STK_SOURCE  = TMPDIR//'/ptcls_from_relion_alias_intg.mrcs'
+        type(relion_project)          :: rp
+        type(sp_project)              :: proj
+        type(cmdline)                 :: cl
+        type(starfile_table_type)     :: table
+        character(:),     allocatable :: name, mic_name
+        logical                       :: found
+        integer                       :: obj
+        character(len=*), parameter   :: MIC_SOURCE  = TMPDIR//'/relion_alias_intg.mrc'
+        character(len=*), parameter   :: META_SOURCE = TMPDIR//'/relion_alias.star'
+        character(len=*), parameter   :: STK_SOURCE  = TMPDIR//'/ptcls_from_relion_alias_intg.mrcs'
 
         call write_textfile(MIC_SOURCE, 'micrograph')
         call write_textfile(META_SOURCE, 'metadata')
@@ -751,9 +751,9 @@ contains
     !-----------------------------------------------------------------------
     subroutine test_large_particle_table_export()
         type(starfile_table_type) :: tbl
-        type(string) :: outdir, fname
-        integer :: nptcls, i
-        logical :: exists
+        type(string)              :: outdir, fname
+        integer                   :: nptcls, i
+        logical                   :: exists
         write(*,'(A)') "test_large_particle_table_export"
         ! Create directory for output
         outdir = tmpfile("large_table_out")
@@ -786,11 +786,11 @@ contains
     !-----------------------------------------------------------------------
     subroutine test_write_omem_parallel_stability()
         use omp_lib
-        type(starfile_table_type) :: tbl
-        type(string) :: tmp
+        type(starfile_table_type)     :: tbl
+        type(string)                  :: tmp
         character(len=:), allocatable :: s
-        integer :: len1
-        integer :: i
+        integer                       :: len1
+        integer                       :: i
         write(*,'(A)') "test_write_omem_parallel_stability"
         tmp = tmpfile("test_write_omem.star")
         ! Build a big table for write_omem testing
@@ -882,7 +882,7 @@ contains
         type(starproject) :: sp
         type(sp_project)  :: proj
         type(string)      :: out
-        logical :: exists
+        logical           :: exists
         write(*,'(A)') "test_star_export_micrographs"
         out = tmpfile("export_mic_test")
         call exec_cmdline("mkdir -p " // out%to_char())
@@ -944,7 +944,7 @@ contains
         type(string)      :: xmldir, basename
         type(tilt_info)   :: t
         type(string)      :: fn
-        integer :: unit, i
+        integer           :: unit, i
         write(*,'(A)') "test_xml_tiltinfo"
         xmldir = tmpfile("xml_test")
         call exec_cmdline("mkdir -p " // xmldir%to_char())
@@ -982,8 +982,8 @@ contains
         type(relion_project) :: rp
         type(sp_project)     :: proj
         type(cmdline)        :: cl
-        logical :: exists
-        integer :: i
+        logical              :: exists
+        integer              :: i
         write(*,'(A)') "test_relion_writer_micrographs"
         ! Create micrographs in project
         call proj%os_mic%new(2,.false.)
@@ -1015,8 +1015,8 @@ contains
         type(sp_project)      :: proj1, proj2
         type(cmdline)         :: cl
         type(string)          :: fname, outdir, str_intg
-        logical :: exists
-        integer :: i
+        logical               :: exists
+        integer               :: i
         write(*,'(A)') "test_roundtrip_micrographs"
         outdir = tmpfile("rtrip_mic")
         call exec_cmdline("mkdir -p " // outdir%to_char())
@@ -1145,12 +1145,12 @@ contains
     ! every particle import path converts the origins once, by the pixel size of the particle's stack:
     ! import_starproject with import_type ptcl2D and ptcl3D (the commander's sequence), import_particles
     subroutine test_import_origins_angstrom()
-        type(starproject) :: sp
-        type(sp_project)  :: proj
+        type(starproject)              :: sp
+        type(sp_project)               :: proj
         class(sp_project), allocatable :: proj_read
-        type(cmdline)     :: cl
-        type(string)      :: dir, stknames(2), fname, projfile
-        integer           :: ipath, i
+        type(cmdline)                  :: cl
+        type(string)                   :: dir, stknames(2), fname, projfile
+        integer                        :: ipath, i
         write(*,'(A)') 'test_import_origins_angstrom'
         call make_origins_stacks(dir, stknames)
         fname = dir//'/particles31.star'
@@ -1198,12 +1198,12 @@ contains
     ! A selected STAR file keeps physical image indices while project rows become dense.
     subroutine test_import_sparse_stack_indices()
         class(starproject), allocatable :: sp
-        class(sp_project), allocatable :: proj
-        class(cmdline), allocatable :: cl
-        class(image), allocatable :: img
-        type(string) :: cwd, dir, stack, fname
-        integer, allocatable :: mic2stk(:), stk2mic(:)
-        integer :: funit, i
+        class(sp_project),  allocatable :: proj
+        class(cmdline),     allocatable :: cl
+        class(image),       allocatable :: img
+        type(string)                    :: cwd, dir, stack, fname
+        integer,            allocatable :: mic2stk(:), stk2mic(:)
+        integer                         :: funit, i
         write(*,'(A)') 'test_import_sparse_stack_indices'
         call simple_getcwd(cwd)
         dir = cwd//'/'//TMPDIR//'/sparse_stack'
@@ -1271,8 +1271,8 @@ contains
     ! finalise_ptcl_import runs once per import: a second finalise, or an export before it, stops
     subroutine test_finalise_once()
         type(star_import_child) :: child
-        type(string) :: stknames(2)
-        integer      :: what
+        type(string)            :: stknames(2)
+        integer                 :: what
         character(len=*), parameter :: MSGS(0:2) = [character(len=48) :: &
             &'an import finalised once runs', 'a second finalise_ptcl_import stops', &
             &'an export of an unfinalised import stops']
@@ -1416,8 +1416,8 @@ contains
         real(dp),      intent(out) :: vals(:)
         logical,       intent(out) :: found
         type(starfile_table_type) :: tbl
-        real(dp) :: v
-        integer  :: obj, n
+        real(dp)                  :: v
+        integer                   :: obj, n
         vals  = 0._dp
         found = .true.
         n     = 0
@@ -1441,7 +1441,7 @@ contains
     ! export_relion writes the 3D poses and origins when the 3D field holds poses, else the
     ! 2D field's in-plane angle and origins; origins in Angstrom
     subroutine test_relion_export_poses()
-        real, parameter :: X2D(2) = [1.5, -2.5], Y2D(2) = [0.5, 3.0], PSI2D(2) = [15., 25.]
+        real, parameter      :: X2D(2) = [1.5, -2.5], Y2D(2) = [0.5, 3.0], PSI2D(2) = [15., 25.]
         type(relion_project) :: rp
         type(sp_project)     :: proj
         type(cmdline)        :: cl

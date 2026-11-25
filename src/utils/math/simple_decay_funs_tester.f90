@@ -98,8 +98,8 @@ contains
     ! limit at it = maxits, monotone, and held at the upper limit past maxits
     subroutine test_inv_nsampl_decay()
         integer, parameter :: NPTCLS = 36000, MITS = 20
-        integer :: it, prev, cur
-        logical :: l_mono
+        integer            :: it, prev, cur
+        logical            :: l_mono
         write(*,'(A)') 'test_inv_nsampl_decay'
         call assert_int(10000, inv_nsampl_decay(0,  MITS, NPTCLS, NSAMPLE_MINMAX_DEFAULT), 'it = 0 samples the lower limit')
         call assert_int(10049, inv_nsampl_decay(1,  MITS, NPTCLS, NSAMPLE_MINMAX_DEFAULT), 'it = 1 has barely moved off the lower limit')

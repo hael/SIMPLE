@@ -35,7 +35,7 @@ contains
         real(dp), intent(in)  :: weight, rotation(3,3), seed(3,3)
         real(dp), intent(out) :: penalty, gradient(3), hessian(3,3)
         real(dp) :: residual(3,3), jacobian(3,3,3), generators(3,3,3)
-        integer :: i, j
+        integer  :: i, j
         generators = 0._dp
         generators(3,2,1) = 1._dp
         generators(2,3,1) = -1._dp
@@ -74,7 +74,7 @@ contains
     pure module function pose_data_observable( scaled_gradient, scaled_hessian ) result( observable )
         use simple_linalg, only: spd_solve_rel
         real(dp), intent(in) :: scaled_gradient(:), scaled_hessian(:,:)
-        logical :: observable
+        logical  :: observable
         real(dp) :: ignored_step(size(scaled_gradient))
         call spd_solve_rel(scaled_hessian, -scaled_gradient, ignored_step, observable)
     end function pose_data_observable
@@ -117,7 +117,7 @@ contains
     module function pose_problem_propose( self, step ) result( feasible )
         class(cartft_pose_problem), intent(inout) :: self
         real(dp),                   intent(in)    :: step(:)
-        logical :: feasible
+        logical  :: feasible
         real(dp) :: sine_half, cumulative_rotation, cumulative_shift
         self%trial_rotmat = right_increment_rotation(self%rotmat, step(1:3))
         self%trial_shift  = self%shift + step(4:5)

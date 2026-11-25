@@ -27,17 +27,17 @@ module simple_persistent_worker_server
     private
 
     ! Named constants for status reply codes sent to workers
-    integer, parameter :: WORKER_STATUS_IDLE  = 0       !< server has no pending task
-    integer, parameter :: WORKER_STATUS_ERROR = 2       !< message was malformed or invalid
-    integer, parameter :: TASK_QUEUE_SIZE     = 1000    !< max tasks per priority level; arbitrary large value
-    integer, parameter :: TCP_BUFSZ           = 1460    !< TCP MTU (1500) - IP header (20) - TCP header (20)
-    integer, parameter :: KILL_WAIT_TIME_US   = 2000000 !< longest wait in kill() for the workers to receive TERMINATE (us)
-    integer, parameter :: KILL_POLL_TIME_US    = 10000   !< how often kill() checks whether every worker has been told (us)
-    integer, parameter :: POLL_TIMEOUT_MS     = 100     !< timeout for poll() in milliseconds
-    integer, parameter :: SWEEP_PERIOD        = 1       !< sweep dead fds every N poll wakeups (1 = every wakeup)
-    integer, parameter :: SCALE_DOWN_COOLDOWN_S = 300   !< queue-pressure cooldown before idle worker scale-down (seconds)
-    integer, parameter :: SCALE_UP_COOLDOWN_S   = 15    !< queue-pressure cooldown before requesting worker warm-up (seconds)
-    logical, parameter :: DEBUG               = .false. !< set to .true. to enable verbose debug logging in the listener thread
+    integer, parameter :: WORKER_STATUS_IDLE    = 0       !< server has no pending task
+    integer, parameter :: WORKER_STATUS_ERROR   = 2       !< message was malformed or invalid
+    integer, parameter :: TASK_QUEUE_SIZE       = 1000    !< max tasks per priority level; arbitrary large value
+    integer, parameter :: TCP_BUFSZ             = 1460    !< TCP MTU (1500) - IP header (20) - TCP header (20)
+    integer, parameter :: KILL_WAIT_TIME_US     = 2000000 !< longest wait in kill() for the workers to receive TERMINATE (us)
+    integer, parameter :: KILL_POLL_TIME_US     = 10000   !< how often kill() checks whether every worker has been told (us)
+    integer, parameter :: POLL_TIMEOUT_MS       = 100     !< timeout for poll() in milliseconds
+    integer, parameter :: SWEEP_PERIOD          = 1       !< sweep dead fds every N poll wakeups (1 = every wakeup)
+    integer, parameter :: SCALE_DOWN_COOLDOWN_S = 300     !< queue-pressure cooldown before idle worker scale-down (seconds)
+    integer, parameter :: SCALE_UP_COOLDOWN_S   = 15      !< queue-pressure cooldown before requesting worker warm-up (seconds)
+    logical, parameter :: DEBUG                 = .false. !< set to .true. to enable verbose debug logging in the listener thread
 
     !> Module-level singleton tracking the persistent worker pool.
     !! Only accessed from the main (non-listener) thread; no mutex needed.
@@ -54,18 +54,18 @@ module simple_persistent_worker_server
     !> Shared state accessed by both the caller thread (new, kill, getters, setters)
     !> and the listener pthread — always under mutex protection.
     type persistent_worker_data
-        integer :: n_workers                        = 0       !< number of worker slots (valid worker_id 1..n_workers)
-        integer :: n_active_workers                 = 0       !< count of workers with a live identity; refreshed on every heartbeat
-        integer :: nthr_per_worker                  = 1       !< configured thread capacity per worker process
-        integer :: queue_pressure_workers_required  = 0       !< estimated workers needed for queued backlog + currently running tasks
-        integer :: queue_pressure_below_since       = 0       !< first heartbeat_time where pressure stayed below active workers
-        integer :: queue_pressure_above_since       = 0       !< first heartbeat_time where pressure exceeded active workers
-        integer :: n_warmup_worker_ids              = 0       !< number of worker slots requested for warm-up relaunch
-        integer :: warmup_worker_ids(TASK_QUEUE_SIZE) = 0      !< 1-based worker slot ids requested for warm-up relaunch
+        integer :: n_workers                                  = 0       !< number of worker slots (valid worker_id 1..n_workers)
+        integer :: n_active_workers                           = 0       !< count of workers with a live identity; refreshed on every heartbeat
+        integer :: nthr_per_worker                            = 1       !< configured thread capacity per worker process
+        integer :: queue_pressure_workers_required            = 0       !< estimated workers needed for queued backlog + currently running tasks
+        integer :: queue_pressure_below_since                 = 0       !< first heartbeat_time where pressure stayed below active workers
+        integer :: queue_pressure_above_since                 = 0       !< first heartbeat_time where pressure exceeded active workers
+        integer :: n_warmup_worker_ids                        = 0       !< number of worker slots requested for warm-up relaunch
+        integer :: warmup_worker_ids(TASK_QUEUE_SIZE)         = 0       !< 1-based worker slot ids requested for warm-up relaunch
         logical :: launch_pending_worker_ids(TASK_QUEUE_SIZE) = .false. !< .true. when a warm-up launch has been submitted for slot and worker has not connected yet
-        logical :: enable_warmup_cooldown           = .false. !< .true. enables queue-pressure warmup/cooldown autoscaling
-        logical :: l_terminate                      = .false. !< set .true. by kill(); listener sends TERMINATE to all workers
-        integer :: n_terminate_sent                 = 0       !< TERMINATE replies sent since l_terminate was set; kill() waits on it
+        logical :: enable_warmup_cooldown                     = .false. !< .true. enables queue-pressure warmup/cooldown autoscaling
+        logical :: l_terminate                                = .false. !< set .true. by kill(); listener sends TERMINATE to all workers
+        integer :: n_terminate_sent                           = 0       !< TERMINATE replies sent since l_terminate was set; kill() waits on it
     end type persistent_worker_data
 
     !> TCP accept-loop server that receives worker heartbeats and dispatches
@@ -73,7 +73,7 @@ module simple_persistent_worker_server
     !> stop with kill().
     type persistent_worker_server
         integer                               :: port          = 0        !< TCP listen port; 0 when not running
-        integer                               :: n_workers     = 0 
+        integer                               :: n_workers     = 0
         integer                               :: nthr_workers  = 0        !< total worker thread slots to support
         integer                               :: job_count     = 0        !< unused; job_ids come from the listener-local job_count
         type(string)                          :: host_ips                 !< comma-separated local IP addresses
@@ -82,17 +82,17 @@ module simple_persistent_worker_server
         type(listener_args),          pointer :: listener_args => null()  !< C-struct forwarded to the listener pthread
         type(persistent_worker_data), pointer :: worker_data   => null()  !< shared state (workers + queues); mutex-protected
     contains
-        procedure :: new          !< initialise server, bind socket, start listener thread
-        procedure :: kill         !< signal workers, join thread, destroy mutex, free memory
-        procedure :: queue_task   !< submit a task request to the listener thread
-        procedure :: get_port     !< return the TCP port being listened on
-        procedure :: get_host_ips !< return the local IP address list
+        procedure :: new                                 !< initialise server, bind socket, start listener thread
+        procedure :: kill                                !< signal workers, join thread, destroy mutex, free memory
+        procedure :: queue_task                          !< submit a task request to the listener thread
+        procedure :: get_port                            !< return the TCP port being listened on
+        procedure :: get_host_ips                        !< return the local IP address list
         procedure :: get_queue_pressure_workers_required !< estimated workers needed for queued backlog + running tasks
-        procedure :: get_n_active_workers !< number of currently connected/registered workers
-        procedure :: set_warmup_cooldown_enabled !< enable/disable listener-side warmup/cooldown autoscaling
-        procedure :: claim_warmup_worker_ids !< claim and clear pending warm-up worker slot requests
-        procedure :: mark_worker_slots_launch_pending !< mark worker slots as launch-pending prior to scheduler submission
-        procedure :: is_running   !< .true. while the listener thread is active
+        procedure :: get_n_active_workers                !< number of currently connected/registered workers
+        procedure :: set_warmup_cooldown_enabled         !< enable/disable listener-side warmup/cooldown autoscaling
+        procedure :: claim_warmup_worker_ids             !< claim and clear pending warm-up worker slot requests
+        procedure :: mark_worker_slots_launch_pending    !< mark worker slots as launch-pending prior to scheduler submission
+        procedure :: is_running                          !< .true. while the listener thread is active
     end type persistent_worker_server
 
 contains
@@ -117,11 +117,11 @@ contains
     !> ("host:port") only connect to an existing server. n_workers = worker slots, nthr_workers = threads
     !> per worker (both > 0). No-op if already running.
     subroutine new( self, n_workers, nthr_workers, client_only, enable_warmup_cooldown )
-        class(persistent_worker_server), intent(inout) :: self
-        integer,                            intent(in) :: n_workers
-        integer,                            intent(in) :: nthr_workers
-        type(string), optional,             intent(in) :: client_only
-        logical, optional,                  intent(in) :: enable_warmup_cooldown
+        class(persistent_worker_server),    intent(inout)                         :: self
+        integer,                            intent(in)                            :: n_workers
+        integer,                            intent(in)                            :: nthr_workers
+        type(string),                       optional,             intent(in)      :: client_only
+        logical,                            optional,                  intent(in) :: enable_warmup_cooldown
         integer(kind=c_int)                            :: rc
         character(len=STDLEN)                          :: addr_char, host_part, port_part
         integer                                        :: sep, ios
@@ -257,15 +257,15 @@ contains
     !> Returns .false. if no valid status reply is received or if the listener
     !> rejects the task.
     function queue_task( self, task, priority ) result( queued )
-        class(persistent_worker_server),      intent(inout) :: self
+        class(persistent_worker_server),           intent(inout) :: self
         type(qsys_persistent_worker_message_task), intent(inout) :: task
-        type(string),                   intent(in)    :: priority
-        logical                                       :: queued
-        type(qsys_persistent_worker_message_status)        :: status_reply
-        character(len=:), allocatable                :: snd_buffer
-        character(kind=c_char),                      target :: rcv_buffer(TCP_BUFSZ)
-        integer             :: nread, expected_status_bytes
-        logical             :: sent
+        type(string),                              intent(in)    :: priority
+        logical                                                  :: queued
+        type(qsys_persistent_worker_message_status)              :: status_reply
+        character(len=:),                            allocatable :: snd_buffer
+        character(kind=c_char),                      target      :: rcv_buffer(TCP_BUFSZ)
+        integer                                                  :: nread, expected_status_bytes
+        logical                                                  :: sent
         queued        = .false.
         task%msg_type = WORKER_NEW_TASK_MSG  ! set the message type for the listener to identify this as a new task submission from the master
         if( DEBUG ) write(logfhandle,'(A,A)') '>>> PERSISTENT_WORKER_SERVER queue_task: requested priority ', priority%to_char()
@@ -369,10 +369,10 @@ contains
     !> Claim and clear pending warm-up slot requests generated by the listener.
     !> Returns the requested worker slot ids in \\p worker_ids and count in \\p n_claimed.
     subroutine claim_warmup_worker_ids( self, worker_ids, n_claimed )
-        class(persistent_worker_server), intent(inout) :: self
-        integer, allocatable,            intent(inout) :: worker_ids(:)
-        integer,                         intent(out)   :: n_claimed
-        integer                                      :: i_claim
+        class(persistent_worker_server), intent(inout)                         :: self
+        integer,                         allocatable,            intent(inout) :: worker_ids(:)
+        integer,                         intent(out)                           :: n_claimed
+        integer                                        :: i_claim
         integer(kind=c_int)                            :: rc
         n_claimed = 0
         if( allocated(worker_ids) ) deallocate(worker_ids)
@@ -448,24 +448,24 @@ contains
     !>     during a blocking network write.
     subroutine worker_listener_thread( arg_ptr ) bind(c)
         type(c_ptr), value,                     intent(in) :: arg_ptr
-        type(listener_args),                       pointer :: args
-        type(persistent_worker_data),              pointer :: status
-        type(qsys_persistent_worker_message_heartbeat)     :: heartbeat_msg
+        type(listener_args),                            pointer         :: args
+        type(persistent_worker_data),                   pointer         :: status
+        type(qsys_persistent_worker_message_heartbeat)                  :: heartbeat_msg
         type(qsys_persistent_worker_message_heartbeat), allocatable     :: workers(:)
-        type(qsys_persistent_worker_message_status)        :: status_msg
-        type(qsys_persistent_worker_message_task)          :: dispatch_task
-        type(qsys_persistent_worker_message_task)          :: tasks_priority_high(TASK_QUEUE_SIZE)
-        type(qsys_persistent_worker_message_task)          :: tasks_priority_norm(TASK_QUEUE_SIZE)
-        type(qsys_persistent_worker_message_task)          :: tasks_priority_low(TASK_QUEUE_SIZE)
-        type(qsys_persistent_worker_message_terminate)     :: terminate_msg
-        character(kind=c_char, len=TCP_BUFSZ),      target :: buf
-        character(len=:),                      allocatable :: send_buffer
-        type(c_pollfd),                        allocatable :: fds(:), fds_tmp(:)
-        integer(kind=c_int)                                :: rc, conn_fd
-        integer(kind=c_size_t)                             :: nr
-        integer                                            :: nread, buffer_type, i, j, worker_id, nready, nfds
-        integer                                            :: n_high, n_norm, n_low, nthr_avail, sweep_counter, job_count
-        logical                                            :: ok, replied, shutdown, has_task, send_terminate
+        type(qsys_persistent_worker_message_status)                     :: status_msg
+        type(qsys_persistent_worker_message_task)                       :: dispatch_task
+        type(qsys_persistent_worker_message_task)                       :: tasks_priority_high(TASK_QUEUE_SIZE)
+        type(qsys_persistent_worker_message_task)                       :: tasks_priority_norm(TASK_QUEUE_SIZE)
+        type(qsys_persistent_worker_message_task)                       :: tasks_priority_low(TASK_QUEUE_SIZE)
+        type(qsys_persistent_worker_message_terminate)                  :: terminate_msg
+        character(kind=c_char, len=TCP_BUFSZ),          target          :: buf
+        character(len=:),                               allocatable     :: send_buffer
+        type(c_pollfd),                                 allocatable     :: fds(:), fds_tmp(:)
+        integer(kind=c_int)                                             :: rc, conn_fd
+        integer(kind=c_size_t)                                          :: nr
+        integer                                                         :: nread, buffer_type, i, j, worker_id, nready, nfds
+        integer                                                         :: n_high, n_norm, n_low, nthr_avail, sweep_counter, job_count
+        logical                                                         :: ok, replied, shutdown, has_task, send_terminate
 
         ! ------------------------------------------------------------------
         ! Initialise Fortran pointers from C void* arguments

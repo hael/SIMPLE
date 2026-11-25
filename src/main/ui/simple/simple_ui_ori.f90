@@ -4,11 +4,11 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('ori', 'Orientation Processing', 110)
-type(ui_program), target :: make_oris
-type(ui_program), target :: oriops
-type(ui_program), target :: oristats
-type(ui_program), target :: vizoris
-type(ui_program), target :: measure_projspace_angres
+type(ui_program),          target    :: make_oris
+type(ui_program),          target    :: oriops
+type(ui_program),          target    :: oristats
+type(ui_program),          target    :: vizoris
+type(ui_program),          target    :: measure_projspace_angres
 
 contains
 

@@ -7,8 +7,8 @@ private
 public :: FLEX_MAX_BW_GROW, FLEX_ACCUM_BYTE_BUDGET, FLEX_FSC_SIGNAL_THRESHOLD
 public :: COV_LP_OVER_NYQUIST, COV_LP_DEFAULT, COV_MINBOX, FLEX_PCG_MAXITS_DEFAULT, FLEX_PCG_RTOL_DEFAULT
 
-integer,  parameter :: FLEX_MAX_BW_GROW = 4
-real(dp), parameter :: FLEX_ACCUM_BYTE_BUDGET = 8.0d9
+integer,  parameter :: FLEX_MAX_BW_GROW          = 4
+real(dp), parameter :: FLEX_ACCUM_BYTE_BUDGET    = 8.0d9
 real(dp), parameter :: FLEX_FSC_SIGNAL_THRESHOLD = 0.143_dp
 
 ! flex_pca working sampling. 2*smpd_crop is the working Nyquist; the 1.25 safety factor keeps the

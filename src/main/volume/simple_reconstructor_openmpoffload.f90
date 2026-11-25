@@ -25,20 +25,20 @@ contains
 
     !> volumetric 3D reconstruction
     subroutine calc_3Drec_gpu( params, build, cline, nptcls, pinds )
-        class(parameters), target, intent(inout) :: params
-        type(builder),           intent(inout) :: build
-        class(cmdline),          intent(inout) :: cline
-        integer,                 intent(in)    :: nptcls
-        integer,                 intent(in)    :: pinds(nptcls)
+        class(parameters),       target, intent(inout) :: params
+        type(builder),           intent(inout)         :: build
+        class(cmdline),          intent(inout)         :: cline
+        integer,                 intent(in)            :: nptcls
+        integer,                 intent(in)            :: pinds(nptcls)
 #ifndef USE_OPENMP_OFFLOAD
         THROW_HARD('calc_3Drec_gpu is part of the GPU path. Use calc_3Drec instead')
 #else
-        type(fplane_type), allocatable :: fpls(:)
-        type(reconstructor) :: even_rec, odd_rec
+        type(fplane_type), allocatable         :: fpls(:)
+        type(reconstructor)                    :: even_rec, odd_rec
         real,              allocatable, target :: symmats(:,:,:), rotmats(:,:,:)
-        integer   :: vollims(3,2)
-        integer   :: cdim(3), clb(3), jsym, nsym, h_edge, nyq
-        integer(timer_int_kind) :: t, t0
+        integer                                :: vollims(3,2)
+        integer                                :: cdim(3), clb(3), jsym, nsym, h_edge, nyq
+        integer(timer_int_kind)                :: t, t0
         ! The offload kernel owns one expanded even/odd pair.  Multi-state
         ! work dispatches before this allocation to the common state/half-
         ! homogeneous CPU path until an equivalent half-local offload loop is
@@ -115,24 +115,24 @@ contains
     subroutine insert_all_slices(params, build, nptcls, pinds, fpls,&
             &cmatexp_e, cmatexp_o, rhoexp_e, rhoexp_o, cdim, clb,&
             &h_edge, nyq, symmats, rotmats, nsym)
-        class(parameters), intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: nptcls, cdim(3), clb(3), h_edge, nyq, nsym
-        integer,           intent(in)    :: pinds(nptcls)
-        type(fplane_type), intent(inout) :: fpls(MAXIMGBATCHSZ)
-        complex,   target, intent(inout) :: cmatexp_e(cdim(1),cdim(2),cdim(3))
-        complex,   target, intent(inout) :: cmatexp_o(cdim(1),cdim(2),cdim(3))
-        real,      target, intent(inout) :: rhoexp_e(cdim(1),cdim(2),cdim(3))
-        real,      target, intent(inout) :: rhoexp_o(cdim(1),cdim(2),cdim(3))
-        real,      target, intent(in)    :: symmats(3,3,nsym)
-        real,      target, intent(inout) :: rotmats(2,3,MAXIMGBATCHSZ)
+        class(parameters), intent(inout)         :: params
+        class(builder),    intent(inout)         :: build
+        integer,           intent(in)            :: nptcls, cdim(3), clb(3), h_edge, nyq, nsym
+        integer,           intent(in)            :: pinds(nptcls)
+        type(fplane_type), intent(inout)         :: fpls(MAXIMGBATCHSZ)
+        complex,           target, intent(inout) :: cmatexp_e(cdim(1),cdim(2),cdim(3))
+        complex,           target, intent(inout) :: cmatexp_o(cdim(1),cdim(2),cdim(3))
+        real,              target, intent(inout) :: rhoexp_e(cdim(1),cdim(2),cdim(3))
+        real,              target, intent(inout) :: rhoexp_o(cdim(1),cdim(2),cdim(3))
+        real,              target, intent(in)    :: symmats(3,3,nsym)
+        real,              target, intent(inout) :: rotmats(2,3,MAXIMGBATCHSZ)
         complex,    allocatable :: fplanes(:,:,:)
         real,       allocatable :: ctfsqplanes(:,:,:)
         logical,    allocatable :: even(:)
         integer(timer_int_kind) :: t, t_stage
         real(timer_int_kind)    :: dt_h2d, dt_launch, dt_wait
-        integer :: fpllims(3,2), fpllims_pd(3,2), cdim2D(2), clb2D(2), batchlims(2)
-        integer :: ibatch, batchsz, sz, nbatch, i, ihalf
+        integer                 :: fpllims(3,2), fpllims_pd(3,2), cdim2D(2), clb2D(2), batchlims(2)
+        integer                 :: ibatch, batchsz, sz, nbatch, i, ihalf
         type(ptcl_read_session) :: reads
         ! an inserted particle in no even/odd half stops (get_half), before the parallel batches
         do i = 1, nptcls
@@ -227,8 +227,8 @@ contains
         contains
 
             subroutine prep_batch( batchid, sz, lims )
-                integer, intent(in) :: batchid
-                integer, intent(out):: sz, lims(2)
+                integer, intent(in)  :: batchid
+                integer, intent(out) :: sz, lims(2)
                 integer(timer_int_kind) :: t_local
                 lims(1) = (batchid-1)*MAXIMGBATCHSZ + 1
                 lims(2) = min(nptcls, batchid*MAXIMGBATCHSZ)
@@ -248,25 +248,25 @@ contains
     subroutine insert_slices_batch(sz, cdim, cdim2D, clb2D, clb, fpllims, nsym,&
         &h_edge, nyq, even, rotmats, symmats, fplanes, ctfsqplanes,&
         &cmatexp_e, cmatexp_o, rhoexp_e, rhoexp_o)
-        integer,         intent(in)    :: sz, cdim(3), cdim2D(2), clb2D(2), clb(3), fpllims(3,2)
-        integer,         intent(in)    :: nsym, h_edge, nyq
-        logical,         intent(in)    :: even(MAXIMGBATCHSZ)
-        real,            intent(in)    :: rotmats(2,3,MAXIMGBATCHSZ)
-        real,            intent(in)    :: symmats(3,3,nsym)
-        complex,         intent(in)    :: fplanes(cdim2D(1),cdim2D(2),MAXIMGBATCHSZ)
-        real,            intent(in)    :: ctfsqplanes(cdim2D(1),cdim2D(2),MAXIMGBATCHSZ)
-        complex, target, intent(inout) :: cmatexp_e(cdim(1),cdim(2),cdim(3))
-        complex, target, intent(inout) :: cmatexp_o(cdim(1),cdim(2),cdim(3))
-        real,    target, intent(inout) :: rhoexp_e(cdim(1),cdim(2),cdim(3))
-        real,    target, intent(inout) :: rhoexp_o(cdim(1),cdim(2),cdim(3))
-        integer, parameter :: WDIM = 3
-        real,      pointer :: rho(:,:,:)
-        complex,   pointer :: cmat(:,:,:)
-        complex :: comp, w_comp
-        real    :: loc(3), base(3), wx(WDIM), wy(WDIM), wz(WDIM), w_ctfsq
-        real    :: pf2, r11, r12, r13, r21, r22, r23, sumx, sumy, sumz, ctfsq, wyz
-        integer :: win(3,2), nyqsq, iwinsz, h, i, k, l, m, isym, iy, iz, ky, mz
-        integer :: h_sq, k_max_h, k_lo, k_hi, hb, kb
+        integer,         intent(in)            :: sz, cdim(3), cdim2D(2), clb2D(2), clb(3), fpllims(3,2)
+        integer,         intent(in)            :: nsym, h_edge, nyq
+        logical,         intent(in)            :: even(MAXIMGBATCHSZ)
+        real,            intent(in)            :: rotmats(2,3,MAXIMGBATCHSZ)
+        real,            intent(in)            :: symmats(3,3,nsym)
+        complex,         intent(in)            :: fplanes(cdim2D(1),cdim2D(2),MAXIMGBATCHSZ)
+        real,            intent(in)            :: ctfsqplanes(cdim2D(1),cdim2D(2),MAXIMGBATCHSZ)
+        complex,         target, intent(inout) :: cmatexp_e(cdim(1),cdim(2),cdim(3))
+        complex,         target, intent(inout) :: cmatexp_o(cdim(1),cdim(2),cdim(3))
+        real,            target, intent(inout) :: rhoexp_e(cdim(1),cdim(2),cdim(3))
+        real,            target, intent(inout) :: rhoexp_o(cdim(1),cdim(2),cdim(3))
+        integer,   parameter :: WDIM = 3
+        real,      pointer   :: rho(:,:,:)
+        complex,   pointer   :: cmat(:,:,:)
+        complex              :: comp, w_comp
+        real                 :: loc(3), base(3), wx(WDIM), wy(WDIM), wz(WDIM), w_ctfsq
+        real                 :: pf2, r11, r12, r13, r21, r22, r23, sumx, sumy, sumz, ctfsq, wyz
+        integer              :: win(3,2), nyqsq, iwinsz, h, i, k, l, m, isym, iy, iz, ky, mz
+        integer              :: h_sq, k_max_h, k_lo, k_hi, hb, kb
         iwinsz = ceiling(KBWINSZ - 0.5)
         nyqsq  = nyq * (nyq + 1)
         pf2    = real(OSMPL_PAD_FAC**2)
@@ -371,8 +371,8 @@ contains
         complex,            intent(out) :: fplanes(:,:,:)
         real,               intent(out) :: ctfsqplanes(:,:,:)
         integer(timer_int_kind) :: t
-        real    :: rmat(3,3)
-        integer :: i,j,iptcl
+        real                    :: rmat(3,3)
+        integer                 :: i,j,iptcl
         if( DEBUG ) t = tic()
         !$omp parallel do proc_bind(close) private(i,j,iptcl,rmat) default(shared) schedule(static)
         do i = 1, bsz

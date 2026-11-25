@@ -39,21 +39,21 @@ contains
     ! nspecies: the class count, 0 from the data; with vol_even and vol_odd the measurement variance of ln I comes from
     ! the half maps' aperture intensities, and their label agreement is reported
     subroutine call_atomic_species( vol1, pdbfile, smpd, nspecies_in, names, vol_even, vol_odd )
-        class(string),              intent(in) :: vol1, pdbfile
-        real,                       intent(in) :: smpd
-        integer,                    intent(in) :: nspecies_in
-        character(len=2), optional, intent(in) :: names(:)
-        class(string),    optional, intent(in) :: vol_even, vol_odd
-        type(atoms)  :: atms
-        type(string) :: stem, csvfile, modelfile, fbody, errmsg
+        class(string),              intent(in)           :: vol1, pdbfile
+        real,                       intent(in)           :: smpd
+        integer,                    intent(in)           :: nspecies_in
+        character(len=2),           optional, intent(in) :: names(:)
+        class(string),              optional, intent(in) :: vol_even, vol_odd
+        type(atoms)          :: atms
+        type(string)         :: stem, csvfile, modelfile, fbody, errmsg
         real,    allocatable :: xyz(:,:), ints(:), bfacs(:), sd_lnint(:), valid(:), aper(:), x(:), s2(:), v(:), tau(:)
         real,    allocatable :: cov(:), post(:,:), mu(:), var(:), w(:), bic(:), sd_post(:), rad(:), tau_bins(:), tau_new(:)
         real,    allocatable :: ae(:), ao(:)
         integer, allocatable :: coord(:), labels(:), bin_lo(:)
         logical, allocatable :: strong(:), adm(:)
-        real    :: beta, d_nn, prune_rad, cen(3), cen_strong(3), med_int, s_i, half_agree, half_corr, s_half
-        integer :: n, K, j, nspecies, nstrong, iter, ntau_refits
-        logical :: l_halves
+        real                 :: beta, d_nn, prune_rad, cen(3), cen_strong(3), med_int, s_i, half_agree, half_corr, s_half
+        integer              :: n, K, j, nspecies, nstrong, iter, ntau_refits
+        logical              :: l_halves
         write(logfhandle,'(A)') '>>> ATOMIC SPECIES'
         l_halves = present(vol_even) .and. present(vol_odd)
         ! the atoms and their table, found beside the PDB as the atomicity prior finds it
@@ -240,7 +240,7 @@ contains
         subroutine half_apertures( ae_, ao_ )
             real, allocatable, intent(out) :: ae_(:), ao_(:)
             real, allocatable :: am(:), ratio(:)
-            real :: scale
+            real              :: scale
             am  = apertures(vol1)
             ae_ = apertures(vol_even)
             ao_ = apertures(vol_odd)
@@ -254,9 +254,9 @@ contains
         function apertures( fname ) result( ap )
             class(string), intent(in) :: fname
             real, allocatable :: ap(:), rmat(:,:,:)
-            type(image) :: img
-            integer :: ldim(3), nptcls, jj, lo(3), hi(3), ii, kk, ll
-            real    :: c(3), rv
+            type(image)       :: img
+            integer           :: ldim(3), nptcls, jj, lo(3), hi(3), ii, kk, ll
+            real              :: c(3), rv
             call find_ldim_nptcls(fname, ldim, nptcls)
             call img%new(ldim, smpd)
             call img%read(fname)
@@ -296,11 +296,11 @@ contains
 
         ! equal-count radial shells of class kc: first and last index into the radius order
         subroutine class_shells( kc, order, nsh, bnd )
-            integer,              intent(in)  :: kc
-            integer, allocatable, intent(out) :: order(:), bnd(:)
-            integer,              intent(out) :: nsh
+            integer,              intent(in)               :: kc
+            integer,              allocatable, intent(out) :: order(:), bnd(:)
+            integer,              intent(out)              :: nsh
             real,    allocatable :: rk(:)
-            integer :: jj, nk
+            integer              :: jj, nk
             order = pack([(jj, jj=1,n)], labels == kc)
             nk    = size(order)
             nsh   = max(1, min(NSHELL_MAX, nk / NSHELL_ATOMS))
@@ -318,8 +318,8 @@ contains
         subroutine write_radial_profiles
             integer, allocatable :: order(:), bnd(:), sel(:)
             real,    allocatable :: sig2(:), ii_(:)
-            integer :: funit, kc, ish, nsh, m
-            real    :: rms2, snr
+            integer              :: funit, kc, ish, nsh, m
+            real                 :: rms2, snr
             call fopen(funit, file=fbody//'_species_radial.csv', status='REPLACE', action='WRITE')
             write(funit,'(A)') 'CLASS,SHELL,NATOMS,MEAN_RADIUS,RMS_SIGMA,SE_SIGMA,B,MEAN_INT,SE_INT,MEAN_COORD,INT_SNR,LOW_SNR'
             do kc = 1,K
@@ -401,9 +401,9 @@ contains
         subroutine write_species_report
             integer, allocatable :: order(:), bnd(:)
             real,    allocatable :: r(:)
-            integer :: funit, kc, l, ninner, nsh, ish, nlow, nin
-            real    :: cn_inner, misclass, cn_out, frac_out
-            character(len=9) :: source
+            integer              :: funit, kc, l, ninner, nsh, ish, nlow, nin
+            real                 :: cn_inner, misclass, cn_out, frac_out
+            character(len=9)     :: source
             call fopen(funit, file=fbody//'_species.txt', status='REPLACE', action='WRITE')
             write(funit,'(A)') '# detect_atomic_species: the class call on the density model of detect_atoms, ln I = ln S_k + beta (c - 12)'
             call write_kv(funit, 'K', int2str(K))
@@ -505,14 +505,14 @@ contains
     ! the columns of _atoms.csv the species call reads, found by name: positions (A), intensity, width, coordination,
     ! the measurement spread of ln I, valid_corr, the aperture intensity, and whether the atom is strong
     subroutine read_atoms_table( fname, n, xyz, ints, bfacs, coord, sd_lnint, valid, aper, strong )
-        class(string),        intent(in)  :: fname
-        integer,              intent(in)  :: n
-        real,    allocatable, intent(out) :: xyz(:,:), ints(:), bfacs(:), sd_lnint(:), valid(:), aper(:)
-        integer, allocatable, intent(out) :: coord(:)
-        logical, allocatable, intent(out) :: strong(:)
+        class(string),        intent(in)               :: fname
+        integer,              intent(in)               :: n
+        real,                 allocatable, intent(out) :: xyz(:,:), ints(:), bfacs(:), sd_lnint(:), valid(:), aper(:)
+        integer,              allocatable, intent(out) :: coord(:)
+        logical,              allocatable, intent(out) :: strong(:)
         character(len=1024) :: line
         character(len=64)   :: fields(64)
-        integer :: funit, ios, nf, j, cx, cy, cz, ci, cb, cc, cs, cv, ca, cl
+        integer             :: funit, ios, nf, j, cx, cy, cz, ci, cb, cc, cs, cv, ca, cl
         call fopen(funit, file=fname, status='old', action='read', iostat=ios)
         call fileiochk('read_atoms_table opening '//fname%to_char(), ios)
         read(funit,'(A)', iostat=ios) line
@@ -544,7 +544,7 @@ contains
         integer function col( name )
             character(len=*), intent(in) :: name
             type(string) :: msg
-            integer :: k
+            integer      :: k
             col = 0
             do k = 1,nf
                 if( trim(adjustl(fields(k))) == name ) col = k
@@ -560,13 +560,13 @@ contains
     ! d_NN, the pruning zone radius and the coordination spread by bin (lowest coordination of each bin and its spread;
     ! none without profiles) of a _model.txt
     subroutine read_model( fname, d_nn, prune_rad, bin_lo, tau_bins )
-        class(string),        intent(in)  :: fname
-        real,                 intent(out) :: d_nn, prune_rad
-        integer, allocatable, intent(out) :: bin_lo(:)
-        real,    allocatable, intent(out) :: tau_bins(:)
+        class(string),        intent(in)               :: fname
+        real,                 intent(out)              :: d_nn, prune_rad
+        integer,              allocatable, intent(out) :: bin_lo(:)
+        real,                 allocatable, intent(out) :: tau_bins(:)
         character(len=256) :: line, key
-        integer :: funit, ios, ieq, nb, kb
-        real    :: val
+        integer            :: funit, ios, ieq, nb, kb
+        real               :: val
         d_nn      = 0.
         prune_rad = huge(1.)
         nb        = 0

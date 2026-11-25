@@ -24,11 +24,11 @@ contains
     !> the history a restart restores before the first watch is not counted as movies detected
     !! since: the rate counts only what is added after the first watch
     subroutine test_rate_after_restored_history()
-        integer, parameter   :: NRESTORED = 100
-        type(stream_watcher) :: watcher
+        integer,      parameter   :: NRESTORED = 100
+        type(stream_watcher)      :: watcher
         type(string), allocatable :: movies(:)
-        type(string)         :: cwd_saved, root, cwd
-        integer              :: nfail0, i, nmovies
+        type(string)              :: cwd_saved, root, cwd
+        integer                   :: nfail0, i, nmovies
         write(*,'(A)') 'test_rate_after_restored_history'
         nfail0 = tests_failed
         call enter_fixture('watcher_rate', cwd_saved, root)

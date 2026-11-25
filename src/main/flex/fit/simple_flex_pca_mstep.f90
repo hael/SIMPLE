@@ -16,24 +16,24 @@ private
 
 !> the M-step system: even/odd numerators and coupled densities, the PCG operator and its packed kernels, and the paired-merge snapshot
 type :: flex_fit_mstep
-    type(reconstructor), allocatable :: Yeven(:), Yodd(:)
-    real,     allocatable :: rho_e(:,:,:,:), rho_o(:,:,:,:)
-    integer :: npairs = 0
-    integer :: es(3) = 0
-    logical :: l_mg_stash = .false.  !< stash present (driver-gated)
-    integer :: mg_ncomp = 0, mg_npairs = 0  !< entry rank of the stashed iteration
-    complex,  allocatable :: mg_ye(:,:,:,:), mg_yo(:,:,:,:)  !< (es) x ncomp numerators
-    real,     allocatable :: mg_rhe(:,:,:,:), mg_rho(:,:,:,:)  !< (npairs, es) packed densities
-    real,     allocatable :: mg_kpe(:,:), mg_kpo(:,:)  !< (npairs, npk) packed PCG pair kernels on the band list (rec_backend=pcg)
-    complex,  allocatable :: mg_rpe(:,:), mg_rpo(:,:)  !< (ncomp, npk) packed PCG right-hand sides on the band list (rec_backend=pcg)
-    logical :: l_pcg = .false.  !< this fit solves its M-step by PCG
-    type(flex_pcg_environment), allocatable :: env  !< support/window state owned by this fit
-    type(flex_pcg_t) :: pcg  !< lattice, envelopes, support, finalized kernels
-    real,     allocatable :: kacc_e(:,:), kacc_o(:,:)  !< expanded-lattice accumulators on the band list (inserting processes)
-    real,     allocatable :: kpk_e(:,:), kpk_o(:,:)  !< packed pair kernels on the physical band list: transport, reduction and merge form
-    complex,  allocatable :: racc_e(:,:), racc_o(:,:)  !< right-hand-side accumulators on the band list
-    complex,  allocatable :: rpk_e(:,:), rpk_o(:,:)  !< packed right-hand sides on the physical band list
-    type(image), allocatable :: mg_prev(:)  !< entry-frame orthonormal basis images
+    type(reconstructor),        allocatable :: Yeven(:), Yodd(:)
+    real,                       allocatable :: rho_e(:,:,:,:), rho_o(:,:,:,:)
+    integer                                 :: npairs     = 0
+    integer                                 :: es(3)      = 0
+    logical                                 :: l_mg_stash = .false.             !< stash present (driver-gated)
+    integer                                 :: mg_ncomp   = 0, mg_npairs = 0    !< entry rank of the stashed iteration
+    complex,                    allocatable :: mg_ye(:,:,:,:), mg_yo(:,:,:,:)   !< (es) x ncomp numerators
+    real,                       allocatable :: mg_rhe(:,:,:,:), mg_rho(:,:,:,:) !< (npairs, es) packed densities
+    real,                       allocatable :: mg_kpe(:,:), mg_kpo(:,:)         !< (npairs, npk) packed PCG pair kernels on the band list (rec_backend=pcg)
+    complex,                    allocatable :: mg_rpe(:,:), mg_rpo(:,:)         !< (ncomp, npk) packed PCG right-hand sides on the band list (rec_backend=pcg)
+    logical                                 :: l_pcg      = .false.             !< this fit solves its M-step by PCG
+    type(flex_pcg_environment), allocatable :: env                              !< support/window state owned by this fit
+    type(flex_pcg_t)                        :: pcg                              !< lattice, envelopes, support, finalized kernels
+    real,                       allocatable :: kacc_e(:,:), kacc_o(:,:)         !< expanded-lattice accumulators on the band list (inserting processes)
+    real,                       allocatable :: kpk_e(:,:), kpk_o(:,:)           !< packed pair kernels on the physical band list: transport, reduction and merge form
+    complex,                    allocatable :: racc_e(:,:), racc_o(:,:)         !< right-hand-side accumulators on the band list
+    complex,                    allocatable :: rpk_e(:,:), rpk_o(:,:)           !< packed right-hand sides on the physical band list
+    type(image),                allocatable :: mg_prev(:)                       !< entry-frame orthonormal basis images
   contains
     ! ---- the M-step backend contract: storage and lifecycle of the coupled system, gridding
     ! (the existing coupled insertion and solve kernels) or PCG (flex_pcg_t) ----
@@ -227,9 +227,9 @@ contains
     !! iteration can turn out to be the last. prev_real holds the PREVIOUS iteration's delivered
     !! basis == the frame the statistics' latents live in.
     subroutine mstep_snapshot_for_pair_merge( self, ncomp, prev_real )
-        class(flex_fit_mstep),    intent(inout) :: self
-        integer,                  intent(in)    :: ncomp
-        type(image), allocatable, intent(in)    :: prev_real(:)
+        class(flex_fit_mstep),    intent(inout)           :: self
+        integer,                  intent(in)              :: ncomp
+        type(image),              allocatable, intent(in) :: prev_real(:)
         integer :: q, es(3)
         if( .not. (allocated(self%Yeven) .and. allocated(self%rho_e)) ) &
             &THROW_HARD('snapshot_for_pair_merge: no live M-step accumulators to stash')

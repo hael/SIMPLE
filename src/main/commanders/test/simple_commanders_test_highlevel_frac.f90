@@ -13,12 +13,12 @@ module subroutine exec_test_pcg_frac_update( self, cline )
     use simple_parameters, only: parameters
     use simple_eo_partition, only: ensure_field_halves
     use simple_test_state_fixture, only: state_fixture, FIX_KNOWN
-    class(commander_test_pcg_frac_update), intent(inout) :: self
+    class(commander_test_pcg_frac_update),  intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
-    class(parameters), allocatable:: params
-    class(builder), allocatable:: build
-    type(state_fixture) :: fix
-    integer             :: nthr_fix
+    class(parameters), allocatable :: params
+    class(builder),    allocatable :: build
+    type(state_fixture)            :: fix
+    integer                        :: nthr_fix
     allocate(params, build)
     if( .not. cline%defined('projfile') )then
         nthr_fix = 1
@@ -62,10 +62,10 @@ subroutine validate_rec3D_pcg_fractional_updates( params, build, cline )
     use simple_test_pcg_fixture,   only: compare_raw
     class(parameters), intent(inout) :: params
     class(builder),    intent(inout) :: build
-    class(cmdline),   intent(inout) :: cline
+    class(cmdline),    intent(inout) :: cline
     ! not derived: RAW_TOL where separately accumulated sums are compared, REPLAY_TOL where the same sums
     ! are rescaled or read back
-    real, parameter :: RAW_TOL = 2.0e-5, REPLAY_TOL = 2.0e-6
+    real,    parameter   :: RAW_TOL = 2.0e-5, REPLAY_TOL = 2.0e-6
     integer, allocatable :: selected_pinds(:), state_pinds(:), state_subset1(:), state_subset2(:)
     integer, allocatable :: half_pinds(:), subset1(:), subset2(:)
     logical              :: l_sigma_loaded
@@ -136,8 +136,8 @@ subroutine validate_rec3D_pcg_fractional_updates( params, build, cline )
 contains
 
     subroutine collect_state( state_here, pinds, selected )
-        integer,              intent(in)  :: state_here, pinds(:)
-        integer, allocatable, intent(out) :: selected(:)
+        integer,              intent(in)               :: state_here, pinds(:)
+        integer,              allocatable, intent(out) :: selected(:)
         integer :: i, n
         n = 0
         do i = 1, size(pinds)
@@ -153,8 +153,8 @@ contains
     end subroutine collect_state
 
     subroutine collect_state_half( state_here, eo_here, pinds, selected )
-        integer,              intent(in)  :: state_here, eo_here, pinds(:)
-        integer, allocatable, intent(out) :: selected(:)
+        integer,              intent(in)               :: state_here, eo_here, pinds(:)
+        integer,              allocatable, intent(out) :: selected(:)
         integer :: i, n, p
         n = 0
         do i = 1, size(pinds)
@@ -172,8 +172,8 @@ contains
     end subroutine collect_state_half
 
     subroutine split_complementary( pinds, first, second )
-        integer,              intent(in)  :: pinds(:)
-        integer, allocatable, intent(out) :: first(:), second(:)
+        integer,              intent(in)               :: pinds(:)
+        integer,              allocatable, intent(out) :: first(:), second(:)
         integer :: i, i1, i2
         ! Deliberately use an unequal one-third/two-thirds split. A 50/50
         ! split with the default u=0.5 would make u/f=1 and fail to exercise
@@ -322,15 +322,15 @@ contains
     subroutine accumulate_raw( pinds, eo_here, op )
         integer,                 intent(in)    :: pinds(:), eo_here
         type(reconstructor_pcg), intent(inout) :: op
-        type(oris)           :: selection
-        type(ori)            :: orientation
-        type(ctfparams)      :: ctfparms
-        type(image)          :: obs
-        complex, allocatable :: y_batch(:,:,:)
-        real, allocatable    :: inv_sig2(:)
-        integer              :: lims2(2,2), R, batchlims(2), batchsz, ih
-        integer              :: i, ii, iptcl, ibatch
-        real                 :: shift(2), crop_factor
+        type(oris)              :: selection
+        type(ori)               :: orientation
+        type(ctfparams)         :: ctfparms
+        type(image)             :: obs
+        complex, allocatable    :: y_batch(:,:,:)
+        real,    allocatable    :: inv_sig2(:)
+        integer                 :: lims2(2,2), R, batchlims(2), batchsz, ih
+        integer                 :: i, ii, iptcl, ibatch
+        real                    :: shift(2), crop_factor
         type(ptcl_read_session) :: reads
         call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
         call op%set_sym(build%pgrpsyms)
@@ -420,9 +420,9 @@ contains
     end subroutine build_blend
 
     subroutine finalize_and_solve( op, x, history, niters )
-        type(reconstructor_pcg), intent(inout) :: op
-        real, allocatable,       intent(out)   :: x(:,:,:), history(:)
-        integer,                 intent(out)   :: niters
+        type(reconstructor_pcg), intent(inout)                  :: op
+        real,                    allocatable,       intent(out) :: x(:,:,:), history(:)
+        integer,                 intent(out)                    :: niters
         type(pcg_solver_outcome) :: outcome
         allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
         call op%end_accum(.true.)

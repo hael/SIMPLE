@@ -4,8 +4,8 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('map', 'Map Analysis', 60)
-type(ui_program), target :: conv_atom_denoise
-type(ui_program), target :: tsegmaps_core_finder
+type(ui_program),          target    :: conv_atom_denoise
+type(ui_program),          target    :: tsegmaps_core_finder
 
 contains
 

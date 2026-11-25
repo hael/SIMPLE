@@ -71,14 +71,14 @@ contains
     !! GENFIRE/RESIRE convention with optional x y. Comment and blank lines are skipped in the numeric formats
     subroutine read_tilt_angles( fname, angconv, angs, shifts )
         use simple_ori_utils, only: genfire2euler
-        class(string),     intent(in)  :: fname
-        character(len=*),  intent(in)  :: angconv
-        real, allocatable, intent(out) :: angs(:,:), shifts(:,:)
-        integer, parameter :: TXT_READ = 1 ! nrtxtfile's OPEN_TO_READ
-        type(nrtxtfile)   :: tab
-        type(oris)        :: os
-        real, allocatable :: line(:)
-        integer           :: i, n, nrecs
+        class(string),     intent(in)               :: fname
+        character(len=*),  intent(in)               :: angconv
+        real,              allocatable, intent(out) :: angs(:,:), shifts(:,:)
+        integer, parameter   :: TXT_READ = 1 ! nrtxtfile's OPEN_TO_READ
+        type(nrtxtfile)      :: tab
+        type(oris)           :: os
+        real,    allocatable :: line(:)
+        integer              :: i, n, nrecs
         select case(trim(angconv))
             case('simple')
                 n = nlines(fname)
@@ -138,13 +138,13 @@ contains
         integer,          parameter :: NSTAGES_DEFAULT    = 1
         integer,          parameter :: MAXITS_DEFAULT     = 2
         integer,          parameter :: MAXITS_PCG_DEFAULT = 5
-        type(parameters)         :: params
-        type(commander_rec3D)    :: xrec3D
-        type(commander_refine3D) :: xrefine3D
-        type(cmdline)            :: cline_ref
-        type(string)             :: stage_vol
-        real    :: lp_sched, lp_stage, res0143
-        integer :: istage, iter
+        type(parameters)            :: params
+        type(commander_rec3D)       :: xrec3D
+        type(commander_refine3D)    :: xrefine3D
+        type(cmdline)               :: cline_ref
+        type(string)                :: stage_vol
+        real                        :: lp_sched, lp_stage, res0143
+        integer                     :: istage, iter
         ! the workflow's defaults; every one can be given on the command line
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',         LPSTART_DEFAULT)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',          LPSTOP_DEFAULT)
@@ -278,8 +278,8 @@ contains
         !> FSC 0.143 resolution of the last reconstruction in this directory (0 without one)
         real function map_res0143()
             real, allocatable :: fsc(:), res(:)
-            real    :: res05
-            integer :: n
+            real              :: res05
+            integer           :: n
             map_res0143 = 0.
             if( .not. file_exists(refine3D_fsc_fname(1)) ) return
             fsc = file2rarr(refine3D_fsc_fname(1))

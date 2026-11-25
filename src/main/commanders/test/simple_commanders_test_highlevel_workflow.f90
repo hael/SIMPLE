@@ -61,15 +61,15 @@ module subroutine exec_test_simulated_workflow( self, cline )
     ! A recovered map must correlate with its truth and have a resolved FSC crossing.
     real,             parameter :: MIN_VOL_CORR   = 0.80
     ! Pose recovery is checked against the planted particles up to frame, hand and point group.
-    real,             parameter :: MAX_PAIR_POSE_ERR = 15.0
-    real,             parameter :: MIN_PAIR_FRAC5    = 0.45
-    integer,          parameter :: MATCH_TOL         = EXTRACT_BOX / 4
-    real,             parameter :: MAX_FSC0143    = 6.0
-    real,             parameter :: DOCK_HP        = 100.0
-    real,             parameter :: DOCK_LP        = 20.0
-    class(cmdline), allocatable         :: cline_projection, cline_sim_mov, cline_new_project
-    class(cmdline), allocatable         :: cline_import_movies, cline_mot_corr, cline_ctf_est
-    class(cmdline), allocatable         :: cline_pick, cline_extract, cline_solve2D, cline_solve3D
+    real,              parameter        :: MAX_PAIR_POSE_ERR = 15.0
+    real,              parameter        :: MIN_PAIR_FRAC5    = 0.45
+    integer,           parameter        :: MATCH_TOL         = EXTRACT_BOX / 4
+    real,              parameter        :: MAX_FSC0143       = 6.0
+    real,              parameter        :: DOCK_HP           = 100.0
+    real,              parameter        :: DOCK_LP           = 20.0
+    class(cmdline),    allocatable      :: cline_projection, cline_sim_mov, cline_new_project
+    class(cmdline),    allocatable      :: cline_import_movies, cline_mot_corr, cline_ctf_est
+    class(cmdline),    allocatable      :: cline_pick, cline_extract, cline_solve2D, cline_solve3D
     type(commander_new_project)         :: xnew_project
     type(commander_reproject)           :: xreproject
     type(commander_simulate_movie)      :: xsimov
@@ -90,10 +90,10 @@ module subroutine exec_test_simulated_workflow( self, cline )
     type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname, ptcls_fname
     type(oris)                          :: reproj_poses
     type(string)                        :: truth_volume, solve3D_dir, solve3D_project, final_volume
-    type(string), allocatable           :: movie_files(:), ptcls_files(:)
+    type(string),      allocatable      :: movie_files(:), ptcls_files(:)
     character(len=XLONGSTRLEN)          :: workflow_root_path
     integer                             :: i, j, ldim(3), nprojs_stk, nmovies, nprojs, nper_movie
-    integer, allocatable                :: proj_inds(:), projection_order(:)
+    integer,           allocatable      :: proj_inds(:), projection_order(:)
     integer                             :: reproj_box, npickrefs, nptcls, ncls, status
     real                                :: pickref_smpd, pickref_width, sim_snr
     real                                :: volume_corr, volume_fsc0143
@@ -444,12 +444,12 @@ module subroutine exec_test_simulated_workflow( self, cline )
         class(sp_project), allocatable :: proj
         type(oris)                     :: truth_poses
         type(string)                   :: stkname
-        character(len=:), allocatable  :: stk
-        integer,          allocatable  :: inds(:), planted(:,:,:), eo_m(:)
-        real,             allocatable  :: ptcl_err(:)
-        real    :: err, frac5, err_even, err_odd, frac_even, frac_odd, te(3), ee(3)
-        integer :: funit, i, j, imov, istk, nptcls3D, coords(2), centre(2), corner(2), bx, by
-        integer :: best, d2, d2best, nmatched, pos, ios, neven, nodd
+        character(len=:),  allocatable :: stk
+        integer,           allocatable :: inds(:), planted(:,:,:), eo_m(:)
+        real,              allocatable :: ptcl_err(:)
+        real                           :: err, frac5, err_even, err_odd, frac_even, frac_odd, te(3), ee(3)
+        integer                        :: funit, i, j, imov, istk, nptcls3D, coords(2), centre(2), corner(2), bx, by
+        integer                        :: best, d2, d2best, nmatched, pos, ios, neven, nodd
         ! the planted centres (base-0) of every movie, in the order of its reprojection subset
         allocate(planted(2, nper_movie, nmovies), source=-1)
         do imov = 1, nmovies

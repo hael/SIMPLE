@@ -26,8 +26,8 @@ contains
 
     !> the stack index of n rows in consecutive stacks of stksz rows
     subroutine make_stacks( stkind, n, stksz )
-        integer, allocatable, intent(out) :: stkind(:)
-        integer,              intent(in)  :: n, stksz
+        integer,              allocatable, intent(out) :: stkind(:)
+        integer,              intent(in)               :: n, stksz
         integer :: i
         allocate(stkind(n))
         do i = 1, n
@@ -62,8 +62,8 @@ contains
     end subroutine test_chunk_nsample
 
     subroutine test_chunk_run_count()
-        integer :: nruns, status, n
-        logical :: l_bounds_kept
+        integer               :: nruns, status, n
+        logical               :: l_bounds_kept
         character(len=STDLEN) :: msg
         write(*,'(A)') 'test_chunk_run_count'
         call derive_chunk_run_count(100000, nruns, status, msg)
@@ -102,10 +102,10 @@ contains
     !> Runs are consecutive whole stacks in row order: stacks of 50 or 37 rows, unselected rows inside,
     !! base-only bounds, a cut that must fall inside a single large stack, and the refusals.
     subroutine test_balanced_partition()
-        logical, allocatable :: selected(:)
-        integer, allocatable :: part(:), stkind(:)
-        integer :: nchunks, ninside, status, i, sizes(0:2)
-        logical :: l_whole
+        logical, allocatable  :: selected(:)
+        integer, allocatable  :: part(:), stkind(:)
+        integer               :: nchunks, ninside, status, i, sizes(0:2)
+        logical               :: l_whole
         character(len=STDLEN) :: msg
         write(*,'(A)') 'test_balanced_partition'
         ! Four runs whose balanced cuts fall exactly on stack boundaries.
@@ -218,7 +218,7 @@ contains
     subroutine test_source_and_step_projects()
         type(sp_project)     :: source, step
         integer, allocatable :: part(:)
-        integer :: i, n2D, n3D
+        integer              :: i, n2D, n3D
         write(*,'(A)') 'test_source_and_step_projects'
         call make_project(source)
         call prepare_chunks_source(source)
@@ -271,11 +271,11 @@ contains
     end subroutine test_source_and_step_projects
 
     subroutine test_chunks_report()
-        type(chunks_report)  :: report
+        type(chunks_report)     :: report
         type(string)            :: fname
         character(len=STDLEN)   :: line
         character(len=2*STDLEN) :: all_lines
-        integer :: funit, io_stat
+        integer                 :: funit, io_stat
         write(*,'(A)') 'test_chunks_report'
         call report%new_chunks('simple_exec prg=solve3D_chunks', 'source.simple', [20001, 20000, 20000], 3, chunk_nsample(3), 0)
         fname = 'solve3D_chunks_report_test.txt'

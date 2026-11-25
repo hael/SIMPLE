@@ -12,8 +12,8 @@ private
 #include "simple_local_flags.inc"
 
 integer,         parameter :: max_colors = 256
-integer(kind=4), parameter :: boz_00ff = INT(z'000000ff',kind=4)
-integer(kind=4), parameter :: boz_ffff = INT(z'00ffffff',kind=4)
+integer(kind=4), parameter :: boz_00ff   = INT(z'000000ff',kind=4)
+integer(kind=4), parameter :: boz_ffff   = INT(z'00ffffff',kind=4)
 
 type jpg_img
     private
@@ -34,9 +34,9 @@ interface
         implicit none
         integer(c_int) :: stbi_write_jpg
         character(c_char),dimension(*),intent(in)    :: file_name
-        integer(c_int), intent(in), VALUE            :: w
-        integer(c_int), intent(in), VALUE            :: h
-        integer(c_int), intent(in), VALUE            :: comp     ! Each pixel contains 'comp' channels of data stored interleaved with 8-bits
+        integer(c_int),   intent(in), VALUE          :: w
+        integer(c_int),   intent(in), VALUE          :: h
+        integer(c_int),   intent(in), VALUE          :: comp     ! Each pixel contains 'comp' channels of data stored interleaved with 8-bits
         !   per channel, in the following order: 1=Y, 2=YA, 3=RGB, 4=RGBA. (Y is  monochrome color.)
         type (C_PTR), VALUE             :: data ! (const void *)
         integer(c_int), intent(in), value            :: quality  ! 1 to 100. Higher quality looks better but results in a bigger image.
@@ -61,13 +61,13 @@ contains
     !! is a false-colour ramp, not RGB; this writes the three channels as the stb writer expects them.
     subroutine write_rgb_jpeg( fname, rgb, quality )
         use, intrinsic :: iso_c_binding, only: c_ptr, c_loc, c_null_char
-        character(len=*),  intent(in) :: fname
-        real,              intent(in) :: rgb(:,:,:)
-        integer, optional, intent(in) :: quality
-        integer(1), pointer           :: buf(:) => NULL()
+        character(len=*),  intent(in)           :: fname
+        real,              intent(in)           :: rgb(:,:,:)
+        integer,           optional, intent(in) :: quality
+        integer(1),       pointer     :: buf(:) => NULL()
         character(len=:), allocatable :: fstr
-        type(c_ptr) :: img
-        integer     :: w, h, i, j, c, idx, q, status, v
+        type(c_ptr)                   :: img
+        integer                       :: w, h, i, j, c, idx, q, status, v
         w = size(rgb,2); h = size(rgb,3)
         if( size(rgb,1) /= 3 .or. w < 1 .or. h < 1 ) THROW_HARD('write_rgb_jpeg: rgb must be (3,w,h)')
         q = 90; if( present(quality) ) q = quality
@@ -95,9 +95,9 @@ contains
         integer,          intent(in), optional :: quality
         integer,          intent(in), optional :: colorspec
         character(len=:), allocatable :: fname_here
-        integer               ::  w,h,c,slice
-        integer               ::  status
-        character(len=STDLEN) ::  fstr
+        integer                       :: w,h,c,slice
+        integer                       :: status
+        character(len=STDLEN)         :: fstr
         status = 1
         fname_here = trim(adjustl(fname))
         c=4
@@ -111,16 +111,16 @@ contains
     end function save_jpeg_r4_3D
 
     function save_jpeg_r4(self, fname, in_buffer, quality, colorspec) result(status)
-        class(jpg_img),    intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
-        real,              intent(in)    :: in_buffer(:,:)
-        integer, optional, intent(in)    :: quality, colorspec
+        class(jpg_img),    intent(inout)        :: self
+        character(len=*),  intent(in)           :: fname
+        real,              intent(in)           :: in_buffer(:,:)
+        integer,           optional, intent(in) :: quality, colorspec
         type(c_ptr)                      :: img
-        real                          :: lo, hi
-        integer                       :: status, w, h,c, i, j, idx
-        integer(c_int)                :: pixel
-        character(len=:), allocatable :: fstr
-        integer(1),       pointer     :: img_buffer(:) => NULL()
+        real                             :: lo, hi
+        integer                          :: status, w, h,c, i, j, idx
+        integer(c_int)                   :: pixel
+        character(len=:), allocatable    :: fstr
+        integer(1),       pointer        :: img_buffer(:) => NULL()
         status = 1
         c      = 1
         self%width  = 0

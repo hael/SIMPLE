@@ -14,8 +14,8 @@ implicit none
 private
 public :: run_all_refine3D_local_tests
 
-integer, parameter :: BOX = 16
-real, parameter :: SMPD = 1.5
+integer, parameter :: BOX  = 16
+real,    parameter :: SMPD = 1.5
 character(len=24), parameter :: CASES(18) = [character(len=24) :: &
     &'missing_even', 'missing_odd', 'bad_dimensions', 'bad_sampling', 'bad_extent', 'bad_projection', &
     &'bad_angle', 'bad_shift', 'fractional_half', 'unassigned_half', 'one_half', 'no_active', &
@@ -24,20 +24,20 @@ character(len=20), parameter :: INPUTS(4) = [character(len=20) :: &
     &'source.simple', 'reference.mrc', 'reference_even.mrc', 'reference_odd.mrc']
 type :: file_snapshot
     integer(int8), allocatable :: bytes(:)
-    logical :: exists = .false.
+    logical                    :: exists = .false.
 end type file_snapshot
 
 contains
 
     ! Fatal checks run in isolated children; the parent checks exit, reason and source preservation.
     subroutine run_all_refine3D_local_tests()
-        type(test_dispatcher) :: dispatcher
-        type(test_execution) :: execution
-        type(file_snapshot) :: before(4), after
-        type(string) :: saved, root, case_dir, name
+        type(test_dispatcher)     :: dispatcher
+        type(test_execution)      :: execution
+        type(file_snapshot)       :: before(4), after
+        type(string)              :: saved, root, case_dir, name
         type(string), allocatable :: dirs(:)
-        integer :: icase, i, nfail0
-        logical :: interrupted
+        integer                   :: icase, i, nfail0
+        logical                   :: interrupted
 #if !defined(__linux__)
         write(*,'(A)') 'SKIP: local startup rejection tests require the Linux test dispatcher'
         return
@@ -98,8 +98,8 @@ contains
 
     ! The real public commander must reject before params%new, not a test-only copy of its checks.
     subroutine rejection_route( which, cline )
-        character(len=*), intent(in) :: which
-        class(cmdline), intent(inout) :: cline
+        character(len=*), intent(in)    :: which
+        class(cmdline),   intent(inout) :: cline
         class(commander_refine3D_local), allocatable :: command
         allocate(command)
         call cline%delete('test')
@@ -133,11 +133,11 @@ contains
         use simple_fileio, only: arr2file
         character(len=*), intent(in) :: which
         class(sp_project), allocatable :: project
-        class(image), allocatable :: volume
+        class(image),      allocatable :: volume
         class(parameters), allocatable :: params
-        type(string) :: halves(2)
-        integer :: i, dims(3), producer_state
-        real :: sampling, nan
+        type(string)                   :: halves(2)
+        integer                        :: i, dims(3), producer_state
+        real                           :: sampling, nan
         allocate(project, volume)
         call project%os_stk%new(1, is_ptcl=.false.)
         call project%os_stk%set(1, 'box', BOX)
@@ -240,10 +240,10 @@ contains
     end function expected_reason
 
     logical function log_has( name, expected ) result(found)
-        class(string), intent(in) :: name
+        class(string),    intent(in) :: name
         character(len=*), intent(in) :: expected
         character(len=2048) :: line
-        integer :: unit, ios
+        integer             :: unit, ios
         found = .false.
         open(newunit=unit, file=name%to_char(), status='old', action='read', iostat=ios)
         if( ios /= 0 ) return
@@ -256,7 +256,7 @@ contains
     end function log_has
 
     subroutine snapshot( name, saved )
-        class(string), intent(in) :: name
+        class(string),       intent(in)    :: name
         type(file_snapshot), intent(inout) :: saved
         integer :: unit, nbytes
         if( allocated(saved%bytes) ) deallocate(saved%bytes)

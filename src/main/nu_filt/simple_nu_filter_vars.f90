@@ -13,11 +13,11 @@ real,             allocatable :: dmats_mask(:,:)
 real,             allocatable :: raw_dmats_mask(:,:)
 ! The smoothing norm at each candidate's radius, mask-packed by setup_nu_dmats: optimize_nu_cutoff_finds smooths at the
 ! same radii and loads these instead of smoothing the mask again. Released with dmats_mask.
-real,             allocatable :: norms_mask(:,:)
-real,             allocatable :: bwfilters(:,:)
-real,             allocatable :: candidate_coords(:)
+real,                        allocatable :: norms_mask(:,:)
+real,                        allocatable :: bwfilters(:,:)
+real,                        allocatable :: candidate_coords(:)
 integer(kind=NU_LABEL_KIND), allocatable :: filtmap(:,:,:)
-integer,          allocatable :: cutoff_finds(:)
+integer,                     allocatable :: cutoff_finds(:)
 ! Raw coarsest-candidate (nu_ev_base) and best-candidate (nu_ev_best) unaries for envelope masking:
 ! dmats_mask's per-candidate radii (30 A for the coarsest) would erode the boundary, so
 ! calc_nu_evidence_margin smooths their difference once at the caller's scale.
@@ -31,7 +31,7 @@ integer,          allocatable :: nu_mask_vox(:,:)
 ! boundary conditions, not measurements, so the evidence compaction keeps
 ! them out of every calibration statistic and freezes them at the null label.
 logical,          allocatable :: nu_observed_mask(:)
-integer :: n_nu_observed = 0
+integer                       :: n_nu_observed = 0
 real,             allocatable :: nu_smooth_norm(:,:,:)
 ! Solvent-constraint clamp (pcg_priors_history.md dev item 4): the objective and null
 ! competition retain the broad spherical domain. The noise-level fit omits exact
@@ -41,7 +41,7 @@ real,             allocatable :: nu_smooth_norm(:,:,:)
 ! preserving coarse support while suppressing unsupported finer bands. Set by
 ! the caller after setup_nu_dmats; cleared by cleanup_nu_filter; absent = no clamp.
 logical,          allocatable :: nu_solvent_lmask(:,:,:) !< .true. = outside the envelope (solvent)
-logical :: nu_l_solvent_clamp = .false.
+logical                       :: nu_l_solvent_clamp = .false.
 ! Which envelope defines the filter-field background: the conservative
 ! density envelope (automsk=density|order, and automsk=nu without a valid
 ! evidence envelope) or the NU evidence envelope (automsk=nu, derived in the
@@ -50,29 +50,29 @@ character(len=32) :: nu_solvent_clamp_source = 'density_envelope'
 ! Evidence-envelope null. Spherical base pair: margin median/MAD over the observed support (no shell).
 ! Envelope-constrained pair (set_nu_evidence_null_shell): null on the density envelope's dilation
 ! ring at full base-support weight; labels free only on the observed density envelope.
-logical, allocatable :: nu_calib_lmask(:) !< labels free here; fixed solvent elsewhere
-logical, allocatable :: nu_null_lmask(:)  !< null statistics estimated here (the Euclidean shell)
-integer :: n_nu_calib = 0
-integer :: n_nu_null  = 0
-integer :: nu_bank_cap_find = 0 !< FSC-anchored static-bank cap in Fourier shells; 0 = uncapped (no fsc_res)
+logical,          allocatable :: nu_calib_lmask(:)         !< labels free here; fixed solvent elsewhere
+logical,          allocatable :: nu_null_lmask(:)          !< null statistics estimated here (the Euclidean shell)
+integer                       :: n_nu_calib            = 0
+integer                       :: n_nu_null             = 0
+integer                       :: nu_bank_cap_find      = 0 !< FSC-anchored static-bank cap in Fourier shells; 0 = uncapped (no fsc_res)
 type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
-integer :: ldim(3), box
-integer :: n_nu_mask = 0
-integer :: nu_smooth_norm_radius = -1
-real    :: smpd, nu_support_mskdiam = 0.
-logical :: nu_l_report = .true.
+integer                       :: ldim(3), box
+integer                       :: n_nu_mask             = 0
+integer                       :: nu_smooth_norm_radius = -1
+real                          :: smpd, nu_support_mskdiam = 0.
+logical                       :: nu_l_report           = .true.
 ! Global raw E/O noise level sigma_0 of the squared-error unary (image::nu_objective_noise_scale),
 ! computed once per setup_nu_dmats and reused by build_nu_evidence_state for its null candidate.
-real    :: nu_noise_scale_cached = 0.
-integer :: nu_aux_replacement_label = 0
-real    :: nu_aux_replacement_resolution = 0.
-logical :: nu_evidence_requested = .false.
-character(len=32) :: nu_evidence_source = ''
-real(kind=8) :: nu_evidence_source_fingerprint(6) = 0.d0
+real              :: nu_noise_scale_cached             = 0.
+integer           :: nu_aux_replacement_label          = 0
+real              :: nu_aux_replacement_resolution     = 0.
+logical           :: nu_evidence_requested             = .false.
+character(len=32) :: nu_evidence_source                = ''
+real(kind=8)      :: nu_evidence_source_fingerprint(6) = 0.d0
 ! Wall seconds of the current sequence (from setup_nu_dmats) under L_BENCH_GLOB, for the volume-assembly report:
 ! candidate filtering, the objective, the label optimisation (of it: the level smoothings and comparisons, the
 ! ordered-label Potts sweeps), the composition
-real(timer_int_kind) :: nu_rt_filtering = 0., nu_rt_objective = 0., nu_rt_optimise = 0., nu_rt_compose = 0.
+real(timer_int_kind) :: nu_rt_filtering  = 0., nu_rt_objective = 0., nu_rt_optimise = 0., nu_rt_compose = 0.
 real(timer_int_kind) :: nu_rt_opt_levels = 0., nu_rt_opt_potts = 0.
 
 end module simple_nu_filter_vars

@@ -98,25 +98,25 @@ contains
             &'Training the student (learn_class_student)', 'Prediction and alignment (predict_classes)', &
             &'Reference: the physical posterior''s best class', 'Class averages of the student''s alignment', &
             &'Statistics', 'Project copies and bookkeeping', 'Prediction at the reference''s shifts (details)']
-        integer, parameter :: PHASE_ORDER(NPHASES) = [1, 2, 3, 4, 5, 9, 6, 7, 8] !< the run's order
+        integer, parameter                  :: PHASE_ORDER(NPHASES) = [1, 2, 3, 4, 5, 9, 6, 7, 8] !< the run's order
         type(commander_solve2D)             :: xsolve2D
         type(commander_make_cavgs)          :: xmkcavgs
         type(commander_learn_class_student) :: xlearn
         type(commander_predict_classes)     :: xpredict
-        type(parameters)  :: params
-        type(sp_project)  :: spproj, res
-        type(cmdline)     :: cline_entry, cl
-        type(ran_tabu)    :: rt
-        type(string)      :: edir, result_proj, cavgs, sigma2_abs, model_abs, fname, dense_cavgs, student_cavgs
-        integer, allocatable :: pinds(:), cls_s(:), cls_d(:), ncand(:), route(:), cands(:,:)
-        integer, allocatable :: cls_i(:), ncand_i(:), route_i(:), cands_i(:,:)
-        logical, allocatable :: active(:), train(:), unseen(:)
-        real,    allocatable :: sh_s(:,:), sh_d(:,:), e3_s(:), e3_d(:)
-        real(timer_int_kind) :: rt_ph(NPHASES), rt_all
-        integer(timer_int_kind) :: t0, t_all
-        real    :: smpd_cavgs, t_pred, t_aln
-        integer :: nptcls, nactive, ntrain, nunseen, ncls_t, i, funit, dunit, io_stat
-        logical :: l_sigma2, l_times
+        type(parameters)                    :: params
+        type(sp_project)                    :: spproj, res
+        type(cmdline)                       :: cline_entry, cl
+        type(ran_tabu)                      :: rt
+        type(string)                        :: edir, result_proj, cavgs, sigma2_abs, model_abs, fname, dense_cavgs, student_cavgs
+        integer, allocatable                :: pinds(:), cls_s(:), cls_d(:), ncand(:), route(:), cands(:,:)
+        integer, allocatable                :: cls_i(:), ncand_i(:), route_i(:), cands_i(:,:)
+        logical, allocatable                :: active(:), train(:), unseen(:)
+        real,    allocatable                :: sh_s(:,:), sh_d(:,:), e3_s(:), e3_d(:)
+        real(timer_int_kind)                :: rt_ph(NPHASES), rt_all
+        integer(timer_int_kind)             :: t0, t_all
+        real                                :: smpd_cavgs, t_pred, t_aln
+        integer                             :: nptcls, nactive, ntrain, nunseen, ncls_t, i, funit, dunit, io_stat
+        logical                             :: l_sigma2, l_times
         t_all = tic()
         rt_ph = 0.
         ! ---- the command line: an execution directory, the training sample's size, the classes
@@ -394,8 +394,8 @@ contains
             class(string), intent(in)    :: table
             integer,       intent(inout) :: ncand_o(nptcls), route_o(nptcls), cands_o(KMAX_CLASS,nptcls)
             character(len=4096) :: line
-            integer :: u, ios, iptcl, eo, cls, kk, nc, rte, cstored, j
-            real    :: pmax, cf, e3, x, y
+            integer             :: u, ios, iptcl, eo, cls, kk, nc, rte, cstored, j
+            real                :: pmax, cf, e3, x, y
             call fopen(u, table, status='old', action='read', iostat=ios)
             call fileiochk('validate_class_student; open '//table%to_char(), ios)
             do
@@ -415,7 +415,7 @@ contains
             real,          intent(out) :: tp, ta
             logical,       intent(out) :: l_found
             character(len=256) :: line
-            integer :: u, ios, n
+            integer            :: u, ios, n
             tp = -1.
             ta = -1.
             l_found = file_exists(fname_t)
@@ -437,10 +437,10 @@ contains
             use simple_class_student, only: class_student
             integer, intent(in) :: u, ud
             character(len=96), parameter :: RULE = repeat('-', 96)
-            type(class_student) :: stu
-            real    :: thr, target, hs, hr, cost_p, cost_a, cost_r, cost_d, rdisk, va(NARM), vi(NARM)
-            real    :: av(NALN), frc(3,2), pick(2)
-            integer :: iu, units(2), ncmp
+            type(class_student)          :: stu
+            real                         :: thr, target, hs, hr, cost_p, cost_a, cost_r, cost_d, rdisk, va(NARM), vi(NARM)
+            real                         :: av(NALN), frc(3,2), pick(2)
+            integer                      :: iu, units(2), ncmp
             units = [u, logfhandle]
             va = arm_stats(ncand, route, cands)
             vi = arm_stats(ncand_i, route_i, cands_i)
@@ -581,7 +581,7 @@ contains
             real,    intent(in) :: x
             integer, intent(in) :: nd
             character(len=:), allocatable :: str
-            character(len=32) :: buf
+            character(len=32)             :: buf
             select case(nd)
                 case(1)
                     write(buf,'(f16.1)') x
@@ -699,11 +699,11 @@ contains
             use simple_image, only: image
             real,    intent(out) :: frc_o(3,2)
             integer, intent(out) :: ncmp
-            type(image)  :: t, a
-            type(string) :: stks(2)
+            type(image)       :: t, a
+            type(string)      :: stks(2)
             real, allocatable :: corrs(:), res_k(:), r05(:,:), r05i(:,:), band(:,:)
-            integer :: ldim(3), ldim_a(3), n, ic, k, nf, iside, ires
-            real    :: r0143, mskrad
+            integer           :: ldim(3), ldim_a(3), n, ic, k, nf, iside, ires
+            real              :: r0143, mskrad
             frc_o = -1.
             ncmp  = 0
             stks  = [student_cavgs, dense_cavgs]

@@ -17,15 +17,15 @@ type :: flex_run_session
     type(flex_latent)         :: latent   !< the embedding and its statistics
     type(flex_state_set)      :: states   !< the delivered state set
     type(flex_latent_readout) :: readout  !< UMAP readout coordinates for the state figure
-    logical :: sigma_loaded = .false., l_resume = .false., l_paired_states = .false.
-    integer, allocatable :: deconv_labels(:)
-    logical :: l_deconv_applied = .false., l_deconv_adopted = .false.
-    integer :: min_neff = 0, state_axis = 0, col_sep = 1, neigs_req = 0, nkern = 0
-    real(dp), allocatable :: pviews(:,:)
-    logical :: l_pop_floor = .false., l_merged = .false., l_state_rec = .true.
+    logical                   :: sigma_loaded     = .false., l_resume = .false., l_paired_states = .false.
+    integer,  allocatable     :: deconv_labels(:)
+    logical                   :: l_deconv_applied = .false., l_deconv_adopted = .false.
+    integer                   :: min_neff         = 0, state_axis = 0, col_sep = 1, neigs_req = 0, nkern = 0
+    real(dp), allocatable     :: pviews(:,:)
+    logical                   :: l_pop_floor      = .false., l_merged = .false., l_state_rec = .true.
   contains
     procedure :: clamp_state_axis => session_clamp_state_axis
-    procedure :: kill => session_kill
+    procedure :: kill             => session_kill
 end type flex_run_session
 
 contains

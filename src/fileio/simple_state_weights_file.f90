@@ -20,12 +20,12 @@ public :: state_weights_write_manifest, state_weights_read_manifest
 public :: STATE_WEIGHTS_MANIFEST_FNAME, STATE_WEIGHTS_KIND_PARTITION, STATE_WEIGHTS_KIND_KERNEL
 
 character(len=*),  parameter :: STATE_WEIGHTS_MANIFEST_FNAME       = 'state_weights.txt'
-character(len=*),  parameter :: STATE_WEIGHTS_FBODY          = 'state_weights_g'
-character(len=16), parameter :: FILE_MAGIC                   = 'SIMPLE_STWGT_V01'
-character(len=*),  parameter :: MANIFEST_FORMAT              = 'simple_state_weights'
-integer,           parameter :: MANIFEST_VERSION             = 2
-integer,           parameter :: NHEADER_WORDS                = 8
-integer(int64),    parameter :: HEADER_BYTES                 = 16_int64 + 8_int64 * NHEADER_WORDS
+character(len=*),  parameter :: STATE_WEIGHTS_FBODY                = 'state_weights_g'
+character(len=16), parameter :: FILE_MAGIC                         = 'SIMPLE_STWGT_V01'
+character(len=*),  parameter :: MANIFEST_FORMAT                    = 'simple_state_weights'
+integer,           parameter :: MANIFEST_VERSION                   = 2
+integer,           parameter :: NHEADER_WORDS                      = 8
+integer(int64),    parameter :: HEADER_BYTES                       = 16_int64 + 8_int64 * NHEADER_WORDS
 !> rows are mixture responsibilities: every weighted row sums to one across the states
 integer,           parameter :: STATE_WEIGHTS_KIND_PARTITION = 1
 !> rows are kernel coefficients in [0,1] that need not sum to one
@@ -128,12 +128,12 @@ contains
 
     !> Read one state file; the header must be consistent with the file's size
     subroutine state_weights_read_state_file( path, header, weights, flags, status, message )
-        class(string),                   intent(in)  :: path
-        type(state_weights_file_header), intent(out) :: header
-        real(real32),  allocatable,      intent(out) :: weights(:)
-        integer(int8), allocatable,      intent(out) :: flags(:)
-        integer,                         intent(out) :: status
-        character(len=*),                intent(out) :: message
+        class(string),                   intent(in)                    :: path
+        type(state_weights_file_header), intent(out)                   :: header
+        real(real32),                    allocatable,      intent(out) :: weights(:)
+        integer(int8),                   allocatable,      intent(out) :: flags(:)
+        integer,                         intent(out)                   :: status
+        character(len=*),                intent(out)                   :: message
         character(len=16) :: magic
         integer(int64)    :: words(NHEADER_WORDS), fsize
         integer           :: funit
@@ -178,7 +178,7 @@ contains
         integer,                      intent(out) :: status
         character(len=*),             intent(out) :: message
         type(string) :: tmp, dir
-        integer :: funit, s
+        integer      :: funit, s
         message = ''
         tmp = path%to_char()//'.tmp'
         call fopen(funit, file=tmp, status='REPLACE', action='WRITE', iostat=status)
@@ -223,7 +223,7 @@ contains
         character(len=1024) :: line
         character(len=64)   :: key, word
         character(len=512)  :: fname
-        integer :: funit, version, s, idx
+        integer             :: funit, version, s, idx
         message = ''
         status  = 1
         if( .not. file_exists(path) )then
@@ -284,7 +284,7 @@ contains
             character(len=*), intent(out) :: rest
             integer,          intent(out) :: io_stat
             character(len=1024) :: full
-            integer :: ipos
+            integer             :: ipos
             rest = ''
             read(funit,'(A)',iostat=io_stat) full
             if( io_stat /= 0 ) return

@@ -29,10 +29,10 @@ contains
 
     !> the map and its copy rotated by 90 degrees about z
     subroutine write_fixtures()
-        real, parameter :: CENTRES(3,4) = reshape([-10.,4.,2., 9.,-6.,0., 2.,11.,-8., -3.,-9.,7.], [3,4])
+        real, parameter   :: CENTRES(3,4) = reshape([-10.,4.,2., 9.,-6.,0., 2.,11.,-8., -3.,-9.,7.], [3,4])
         real, allocatable :: rmat(:,:,:), rot(:,:,:), noise(:,:,:)
-        real    :: d2
-        integer :: i, j, k, b, c
+        real              :: d2
+        integer           :: i, j, k, b, c
         call set_fixed_seed(SEED)
         allocate(rmat(BOX,BOX,BOX), rot(BOX,BOX,BOX), source=0.)
         allocate(noise(BOX,BOX,BOX))

@@ -34,8 +34,8 @@ contains
         type(commander_solve3D_addon) :: xsolve3D_addon
         type(parameters)              :: params
         type(sp_project)              :: spproj
-        type(chunks_report)        :: report
-        type(chunks_step)          :: step
+        type(chunks_report)           :: report
+        type(chunks_step)             :: step
         type(cmdline)                 :: cline_entry, cline_base, cline_add
         type(chash)                   :: job_descr
         type(ui_program), pointer     :: ui_addon => null(), ui_workflow => null()
@@ -46,8 +46,8 @@ contains
         logical,          allocatable :: selected(:)
         character(len=:), allocatable :: key
         character(len=STDLEN)         :: msg
-        integer(8) :: t0, t1, rate
-        integer    :: i, k, s, status, nchunks, nselected, nfrozen_sel, nstates, nsample, ninside, min_stage
+        integer(8)                    :: t0, t1, rate
+        integer                       :: i, k, s, status, nchunks, nselected, nfrozen_sel, nstates, nsample, ninside, min_stage
         ! ---- validate the public command line before setting the internal sampling target or writing anything
         call get_prg_ptr(string('solve3D_chunks'), ui_workflow)
         if( .not. associated(ui_workflow) ) THROW_HARD('the solve3D_chunks user interface is not registered')
@@ -219,9 +219,9 @@ contains
         !> Forward accepted, non-manifest inputs; the internal nsample is replayed from the base manifest.
         subroutine forward_keys( cline_dst )
             class(cmdline), intent(inout) :: cline_dst
-            type(string), allocatable :: ekeys(:)
+            type(string),     allocatable :: ekeys(:)
             character(len=:), allocatable :: ekey
-            integer :: j
+            integer                       :: j
             ekeys = cline_entry%get_keys()
             do j = 1, size(ekeys)
                 ekey = trim(ekeys(j)%to_char())
@@ -259,7 +259,7 @@ contains
         type(solve3D_manifest) :: man
         type(string)           :: manifest_abs, pname, tmpname
         character(len=STDLEN)  :: emsg
-        integer :: stat
+        integer                :: stat
         call proj%read(src)
         call man%read_registered(proj, src, stat, emsg)
         if( stat /= 0 ) THROW_HARD('the final result registers no solve3D manifest: '//trim(emsg))
@@ -289,17 +289,17 @@ contains
     !> Read the last stage and limits from the manifest, result FSCs and, for an add-on, its comparison report.
     subroutine collect_solve3D_step_stats( projfile, stp, l_addon )
         class(string),        intent(in)    :: projfile
-        type(chunks_step), intent(inout) :: stp
+        type(chunks_step),    intent(inout) :: stp
         logical,              intent(in)    :: l_addon
         type(sp_project)           :: proj
         type(solve3D_manifest)     :: man
         type(solve3D_stage_record) :: stage
         type(solve3D_addon_report) :: addon_report
         type(string)               :: run_dir, fsc_name, fsc_path, rep_fname
-        real, allocatable :: fsc(:), res(:)
-        real    :: fsc05, fsc0143
-        integer :: s, ns, box_fsc, stat
-        character(len=STDLEN) :: emsg
+        real, allocatable          :: fsc(:), res(:)
+        real                       :: fsc05, fsc0143
+        integer                    :: s, ns, box_fsc, stat
+        character(len=STDLEN)      :: emsg
         call proj%read(projfile)
         call man%read_registered(proj, projfile, stat, emsg)
         if( stat /= 0 ) THROW_HARD('the step result registers no solve3D manifest ('//trim(emsg)//'); a base run needs nstages >= 3')

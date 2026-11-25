@@ -105,11 +105,11 @@ contains
     module subroutine diststat_between( self1, self2, sumd, avgd, sdevd, mind, maxd )
         use simple_linalg, only: vector_angle_norm
         class(oris), intent(inout)  :: self1, self2
-        real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
+        real,        intent(out)    :: mind, maxd, avgd, sdevd, sumd
         real, allocatable :: onormals1(:,:),onormals2(:,:)
-        real    :: dists(self1%n), vard, x
-        integer :: i
-        logical :: err
+        real              :: dists(self1%n), vard, x
+        integer           :: i
+        logical           :: err
         if( self1%n /= self2%n )then
             THROW_HARD('cannot calculate distance between sets of different size; euldist_ori')
         endif
@@ -137,7 +137,7 @@ contains
         integer,          intent(in)    :: state
         real,    allocatable :: arr1(:), arr2(:), tmp(:), ows(:), states(:)
         logical, allocatable :: mask1(:), mask2(:)
-        integer :: n1, n2, sz, n_min, i
+        integer              :: n1, n2, sz, n_min, i
         overlap = 0.
         if( self1%n == 0 .or. self2%n == 0 ) return
         if( .not. self1%isthere(trim(which)) )then

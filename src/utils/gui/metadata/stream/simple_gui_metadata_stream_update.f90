@@ -21,22 +21,22 @@ integer, parameter :: MAX_SNAPSHOT_FNAME_LEN   = 128  ! characters of a snapshot
 
 type, extends(gui_metadata_base) :: gui_metadata_stream_update
   private
-  integer(kind=2)       :: pickrefs_selection(MAX_PICKREFS_SELECTION)     = 0 ! selected class indices
-  integer               :: pickrefs_cycle               = 0    ! current pickrefs cycle
-  integer               :: pickrefs_selection_length    = 0    ! number of classes in the selection
-  real                  :: ctfresupdate                 = 0.0  ! CTF resolution threshold (A); 0 = unset
-  real                  :: astigmatismupdate            = 0.0  ! astigmatism threshold (A);   0 = unset
-  real                  :: icescoreupdate               = 0.0  ! ice-contamination score;      0 = unset
-  real                  :: mskdiam2D                    = 0.0  ! mask diameter for 2D classification (A); 0 = unset
-  integer               :: snapshot2D_id                = 0    ! snapshot set ID; 0 = unset
-  integer               :: snapshot2D_iteration         = 0    ! 2D classification iteration to snapshot; 0 = unset
-  integer(kind=2)       :: snapshot2D_selection(MAX_SNAPSHOT2D_SELECTION) = 0 ! class indices included in the snapshot
-  integer               :: snapshot2D_selection_length  = 0    ! number of valid entries in snapshot2D_selection
-  character(len=MAX_SNAPSHOT_FNAME_LEN) :: snapshot2D_filename = '' ! project file name for the snapshot
-  integer               :: snapshot3D_id                = 0    ! 3D snapshot set ID; 0 = unset
-  integer               :: snapshot3D_selection(MAX_STATES_SOLVE3D_MULTISTATE) = 0 ! states included in the 3D snapshot
-  integer               :: snapshot3D_selection_length  = 0    ! number of valid entries in snapshot3D_selection
-  character(len=MAX_SNAPSHOT_FNAME_LEN) :: snapshot3D_filename = '' ! project file name for the 3D snapshot
+  integer(kind=2)                       :: pickrefs_selection(MAX_PICKREFS_SELECTION)          = 0   ! selected class indices
+  integer                               :: pickrefs_cycle                                      = 0   ! current pickrefs cycle
+  integer                               :: pickrefs_selection_length                           = 0   ! number of classes in the selection
+  real                                  :: ctfresupdate                                        = 0.0 ! CTF resolution threshold (A); 0 = unset
+  real                                  :: astigmatismupdate                                   = 0.0 ! astigmatism threshold (A);   0 = unset
+  real                                  :: icescoreupdate                                      = 0.0 ! ice-contamination score;      0 = unset
+  real                                  :: mskdiam2D                                           = 0.0 ! mask diameter for 2D classification (A); 0 = unset
+  integer                               :: snapshot2D_id                                       = 0   ! snapshot set ID; 0 = unset
+  integer                               :: snapshot2D_iteration                                = 0   ! 2D classification iteration to snapshot; 0 = unset
+  integer(kind=2)                       :: snapshot2D_selection(MAX_SNAPSHOT2D_SELECTION)      = 0   ! class indices included in the snapshot
+  integer                               :: snapshot2D_selection_length                         = 0   ! number of valid entries in snapshot2D_selection
+  character(len=MAX_SNAPSHOT_FNAME_LEN) :: snapshot2D_filename                                 = ''  ! project file name for the snapshot
+  integer                               :: snapshot3D_id                                       = 0   ! 3D snapshot set ID; 0 = unset
+  integer                               :: snapshot3D_selection(MAX_STATES_SOLVE3D_MULTISTATE) = 0   ! states included in the 3D snapshot
+  integer                               :: snapshot3D_selection_length                         = 0   ! number of valid entries in snapshot3D_selection
+  character(len=MAX_SNAPSHOT_FNAME_LEN) :: snapshot3D_filename                                 = ''  ! project file name for the 3D snapshot
 contains
   procedure :: kill => kill_override
   procedure :: set_ctfres_update
@@ -127,7 +127,7 @@ contains
   function get_pickrefs_selection( self ) result( selection )
     class(gui_metadata_stream_update), intent(in)  :: self
     integer, allocatable                           :: selection(:)
-    integer :: n
+    integer                                        :: n
     n = self%pickrefs_selection_length
     if( n < 0 ) THROW_HARD('pickrefs_selection_length is negative')
     if( n > size(self%pickrefs_selection) ) THROW_HARD('pickrefs_selection_length exceeds maximum size')
@@ -195,10 +195,10 @@ contains
 
   ! Retrieve the snapshot2D request fields.
   subroutine get_snapshot2D_update( self, snapshot_id, iteration, selection, filename )
-    class(gui_metadata_stream_update), intent(in)  :: self
-    integer,                           intent(out) :: snapshot_id, iteration
-    integer,           allocatable,    intent(out) :: selection(:)
-    type(string),                      intent(out) :: filename
+    class(gui_metadata_stream_update), intent(in)                  :: self
+    integer,                           intent(out)                 :: snapshot_id, iteration
+    integer,                           allocatable,    intent(out) :: selection(:)
+    type(string),                      intent(out)                 :: filename
     integer :: n
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     snapshot_id = self%snapshot2D_id
@@ -238,10 +238,10 @@ contains
 
   ! Retrieve the snapshot3D request fields.
   subroutine get_snapshot3D_update( self, snapshot_id, selection, filename )
-    class(gui_metadata_stream_update), intent(in)  :: self
-    integer,                           intent(out) :: snapshot_id
-    integer,           allocatable,    intent(out) :: selection(:)
-    type(string),                      intent(out) :: filename
+    class(gui_metadata_stream_update), intent(in)                  :: self
+    integer,                           intent(out)                 :: snapshot_id
+    integer,                           allocatable,    intent(out) :: selection(:)
+    type(string),                      intent(out)                 :: filename
     integer :: n
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     n = self%snapshot3D_selection_length

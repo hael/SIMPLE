@@ -8,14 +8,14 @@ use simple_stack_io,   only: stack_io
 contains
 
     subroutine mic2thumb( mic, jpgname, l_neg )
-        class(image),      intent(inout) :: mic
-        class(string),     intent(in)    :: jpgname
-        logical, optional, intent(in)    :: l_neg
-        type(image) :: thumb, padded
+        class(image),      intent(inout)        :: mic
+        class(string),     intent(in)           :: jpgname
+        logical,           optional, intent(in) :: l_neg
+        type(image)     :: thumb, padded
         real, parameter :: BACKGR = 128. ! taken as centre of [0.255] for jpegs
-        integer :: ldim(3), ldim_thumb(3), ldim_pad(3)
-        real    :: scale, smpd_thumb
-        logical :: ll_neg
+        integer         :: ldim(3), ldim_thumb(3), ldim_pad(3)
+        real            :: scale, smpd_thumb
+        logical         :: ll_neg
         ll_neg = .false.
         if( present(l_neg) ) ll_neg = l_neg
         ldim            = mic%get_ldim()
@@ -46,11 +46,11 @@ contains
 
     ! write tiled jpeg of mrc file
     subroutine mrc2jpeg_tiled(mrcfile, outfile, scale, ntiles, msk, n_xtiles, n_ytiles, mskdiam_px)
-        class(string),                  intent(in)  :: mrcfile, outfile
-        real,    optional,              intent(out) :: scale
-        integer, optional,              intent(out) :: ntiles, n_xtiles, n_ytiles
-        logical, optional, allocatable, intent(in)  :: msk(:)
-        integer, optional,              intent(in)  :: mskdiam_px
+        class(string),                  intent(in)                         :: mrcfile, outfile
+        real,                           optional,              intent(out) :: scale
+        integer,                        optional,              intent(out) :: ntiles, n_xtiles, n_ytiles
+        logical,                        optional, allocatable, intent(in)  :: msk(:)
+        integer,                        optional,              intent(in)  :: mskdiam_px
         type(image)    :: img, img_pad, img_jpeg
         type(stack_io) :: stkio_r
         integer        :: ldim_stk(3)

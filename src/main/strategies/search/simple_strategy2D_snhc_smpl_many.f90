@@ -25,16 +25,16 @@ contains
 
     subroutine new_snhc_smpl_many( self, params, spec, build )
         class(strategy2D_snhc_smpl_many), intent(inout) :: self
-        class(parameters),           intent(in)    :: params
-        class(strategy2D_spec),      intent(inout) :: spec
-        class(builder),              intent(in)    :: build
+        class(parameters),                intent(in)    :: params
+        class(strategy2D_spec),           intent(inout) :: spec
+        class(builder),                   intent(in)    :: build
         call self%s%new(params, spec, build)
         self%spec = spec
     end subroutine new_snhc_smpl_many
 
     subroutine srch_snhc_smpl_many( self, os )   
         class(strategy2D_snhc_smpl_many), intent(inout) :: self
-        class(oris),                 intent(inout) :: os
+        class(oris),                      intent(inout) :: os
         real    :: inpl_corrs(self%s%nrots)
         real    :: cls_corrs(self%s%nrefs)
         real    :: inpl_corr, inpl_dist

@@ -3,8 +3,8 @@ submodule (simple_refine3D_provenance) simple_refine3D_provenance_tester
 use simple_image,      only: image
 use simple_test_utils, only: assert_true, assert_false, assert_int, enter_fixture, leave_fixture, tests_failed
 implicit none
-integer, parameter :: BOX = 16
-real, parameter    :: SMPD = 1.5
+integer, parameter :: BOX  = 16
+real,    parameter :: SMPD = 1.5
 
 contains
 
@@ -25,10 +25,10 @@ contains
             &remove_support_provenance
         use simple_test_utils, only: assert_char
         character(len=8), parameter :: KINDS(5) = [character(len=8) :: 'sphere', 'none', 'density', 'nu', 'explicit']
-        type(string) :: fname
-        character(len=32) :: kind, solve
-        logical :: constrained, found, kind_found
-        integer :: i
+        type(string)                :: fname
+        character(len=32)           :: kind, solve
+        logical                     :: constrained, found, kind_found
+        integer                     :: i
         fname = 'support_roundtrip.mrc'
         do i = 1, size(KINDS)
             call write_support_provenance(fname, .false., 'gridding', support_kind=trim(KINDS(i)))
@@ -51,7 +51,7 @@ contains
         type(refine3D_provenance)      :: reference_record
         class(sp_project), allocatable :: project
         class(parameters), allocatable :: params
-        class(image), allocatable      :: volume
+        class(image),      allocatable :: volume
         type(string)                   :: sigma, chain, files(3), halves(2), merged, fsc, checked_fsc, record
         character(len=256)             :: message
         integer                        :: i, status

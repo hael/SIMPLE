@@ -27,8 +27,8 @@ private
 public :: run_all_pcg_halfset_tests
 
 integer, parameter :: TRUTH_VOLUME_BOX = 24
-integer, parameter :: BOX = TRUTH_VOLUME_BOX
-integer, parameter :: NBLOBS = 4
+integer, parameter :: BOX              = TRUTH_VOLUME_BOX
+integer, parameter :: NBLOBS           = 4
 real,    parameter :: CTRS(3,NBLOBS) = reshape([&
     &-5.0, -3.0,  2.0, &
     & 4.0,  5.0, -3.0, &
@@ -90,9 +90,9 @@ contains
 
     !> deterministic, non-overlapping even and odd orientation sets from one spiral
     subroutine build_disjoint_halves( nhalf, even_oris, odd_oris, even_ids, odd_ids )
-        integer,              intent(in)    :: nhalf
-        type(oris),           intent(inout) :: even_oris, odd_oris
-        integer, allocatable, intent(out)   :: even_ids(:), odd_ids(:)
+        integer,              intent(in)               :: nhalf
+        type(oris),           intent(inout)            :: even_oris, odd_oris
+        integer,              allocatable, intent(out) :: even_ids(:), odd_ids(:)
         type(ori)  :: o
         type(oris) :: all_oris
         integer    :: i
@@ -118,19 +118,19 @@ contains
     !! clip) and seeded white noise at the requested SNR; planes are native PCG observations
     subroutine build_observations( sampler, orientations, seed, snr, planes, clean_planes, &
                                   &clean_images, noisy_images, noise, realized_snr )
-        class(reconstructor_pcg), intent(in)    :: sampler
-        type(oris),               intent(inout) :: orientations
-        integer,                  intent(in)    :: seed
-        real,                     intent(in)    :: snr
-        complex, allocatable,     intent(out)   :: planes(:,:,:), clean_planes(:,:,:)
-        real,    allocatable,     intent(out)   :: clean_images(:,:,:), noisy_images(:,:,:), noise(:,:,:)
-        real(dp),                 intent(out)   :: realized_snr
-        type(image)     :: source_volume, padded_projection, projection
-        type(ori)       :: o
-        type(projector) :: truth_projector
+        class(reconstructor_pcg), intent(in)                   :: sampler
+        type(oris),               intent(inout)                :: orientations
+        integer,                  intent(in)                   :: seed
+        real,                     intent(in)                   :: snr
+        complex,                  allocatable,     intent(out) :: planes(:,:,:), clean_planes(:,:,:)
+        real,                     allocatable,     intent(out) :: clean_images(:,:,:), noisy_images(:,:,:), noise(:,:,:)
+        real(dp),                 intent(out)                  :: realized_snr
+        type(image)       :: source_volume, padded_projection, projection
+        type(ori)         :: o
+        type(projector)   :: truth_projector
         real, allocatable :: clean(:,:,:), noisy(:,:,:), phantom(:,:,:)
-        integer  :: i, lims2(2,2), nprojs
-        real(dp) :: clean_mean, noise_mean, noise_power, signal_power
+        integer           :: i, lims2(2,2), nprojs
+        real(dp)          :: clean_mean, noise_mean, noise_power, signal_power
         nprojs = orientations%get_noris()
         lims2  = sampler%get_lims2()
         allocate(planes(lims2(1,1):lims2(1,2),lims2(2,1):lims2(2,2),nprojs))
@@ -189,12 +189,12 @@ contains
     !> one half with the matrix-free PCG operator: fixed lambda, optional support,
     !! exactly maxits iterations (rtol=0 restarts at zero and never stops early)
     subroutine reconstruct_half( orientations, planes, lambda, maxits, mskrad, reconstruction, niters )
-        type(oris),        intent(inout) :: orientations
-        complex,           intent(in)    :: planes(-BOX/2:,-BOX/2:,:)
-        real,              intent(in)    :: lambda, mskrad
-        integer,           intent(in)    :: maxits
-        real, allocatable, intent(out)   :: reconstruction(:,:,:)
-        integer,           intent(out)   :: niters
+        type(oris),        intent(inout)            :: orientations
+        complex,           intent(in)               :: planes(-BOX/2:,-BOX/2:,:)
+        real,              intent(in)               :: lambda, mskrad
+        integer,           intent(in)               :: maxits
+        real,              allocatable, intent(out) :: reconstruction(:,:,:)
+        integer,           intent(out)              :: niters
         type(reconstructor_pcg) :: pcgop
         call pcgop%new(BOX, SMPD, lambda)
         if( mskrad > 0. ) call pcgop%set_window_sphere(mskrad)
@@ -217,13 +217,13 @@ contains
     !> matched clean and noisy solves of one half with one operator and residuals ||Ax-y||/||y||
     subroutine reconstruct_half_pair( orientations, clean_planes, noisy_planes, lambda, maxits, &
                                      &clean_rec, noisy_rec, niters, residuals )
-        type(oris),        intent(inout) :: orientations
-        complex,           intent(in)    :: clean_planes(-BOX/2:,-BOX/2:,:), noisy_planes(-BOX/2:,-BOX/2:,:)
-        real,              intent(in)    :: lambda
-        integer,           intent(in)    :: maxits
-        real, allocatable, intent(out)   :: clean_rec(:,:,:), noisy_rec(:,:,:)
-        integer,           intent(out)   :: niters(2)
-        real(dp),          intent(out)   :: residuals(2)
+        type(oris),        intent(inout)            :: orientations
+        complex,           intent(in)               :: clean_planes(-BOX/2:,-BOX/2:,:), noisy_planes(-BOX/2:,-BOX/2:,:)
+        real,              intent(in)               :: lambda
+        integer,           intent(in)               :: maxits
+        real,              allocatable, intent(out) :: clean_rec(:,:,:), noisy_rec(:,:,:)
+        integer,           intent(out)              :: niters(2)
+        real(dp),          intent(out)              :: residuals(2)
         type(reconstructor_pcg) :: pcgop
         call pcgop%new(BOX, SMPD, lambda)
         call pcgop%set_window_sphere(MSKRAD)
@@ -247,11 +247,11 @@ contains
         complex,                  intent(in)    :: planes(-BOX/2:,-BOX/2:,:)
         real,                     intent(in)    :: volume(BOX,BOX,BOX)
         real(dp),                 intent(out)   :: rel_resid
-        type(ori)   :: o
-        type(image) :: padded
+        type(ori)            :: o
+        type(image)          :: padded
         complex, allocatable :: predicted(:,:), cmat(:,:,:)
-        real(dp) :: num, den
-        integer  :: h, i, k
+        real(dp)             :: num, den
+        integer              :: h, i, k
         allocate(predicted(-BOX/2:BOX/2,-BOX/2:BOX/2))
         call o%new(.false.)
         call padded%new([pcgop%boxpd,pcgop%boxpd,pcgop%boxpd], SMPD, wthreads=.false.)
@@ -278,14 +278,14 @@ contains
 
     !> solutions of one operator at several fixed iteration counts
     subroutine reconstruct_half_trajectory( orientations, planes, its, mskrad, recs, niters )
-        type(oris),           intent(inout) :: orientations
-        complex,              intent(in)    :: planes(-BOX/2:,-BOX/2:,:)
-        integer,              intent(in)    :: its(:)
-        real,                 intent(in)    :: mskrad
-        real,    allocatable, intent(out)   :: recs(:,:,:,:)
-        integer, allocatable, intent(out)   :: niters(:)
+        type(oris),           intent(inout)            :: orientations
+        complex,              intent(in)               :: planes(-BOX/2:,-BOX/2:,:)
+        integer,              intent(in)               :: its(:)
+        real,                 intent(in)               :: mskrad
+        real,                 allocatable, intent(out) :: recs(:,:,:,:)
+        integer,              allocatable, intent(out) :: niters(:)
         type(reconstructor_pcg) :: pcgop
-        integer :: i
+        integer                 :: i
         call pcgop%new(BOX, SMPD, LAMBDA)
         if( mskrad > 0. ) call pcgop%set_window_sphere(mskrad)
         call pcgop%prep_particles(orientations, use_ctf=.false.)
@@ -300,19 +300,19 @@ contains
 
     !> one half through production gridding (KB insertion, no CTF), the A/B control
     subroutine reconstruct_half_gridding( orientations, observations, reconstruction )
-        type(oris),        intent(inout) :: orientations
-        real,              intent(in)    :: observations(:,:,:)
-        real, allocatable, intent(out)   :: reconstruction(:,:,:)
-        type(ctfparams)          :: ctfparms
-        type(fplane_type)        :: fplane
-        type(fplane_grid)        :: grid
-        type(image)              :: observation, observation_padded, restored
-        type(ori)                :: o
-        class(parameters), allocatable, target:: params
-        type(reconstructor)      :: gridder
-        class(sp_project), allocatable:: project
-        type(sym)                :: c1sym
-        integer :: i
+        type(oris),        intent(inout)            :: orientations
+        real,              intent(in)               :: observations(:,:,:)
+        real,              allocatable, intent(out) :: reconstruction(:,:,:)
+        type(ctfparams)                        :: ctfparms
+        type(fplane_type)                      :: fplane
+        type(fplane_grid)                      :: grid
+        type(image)                            :: observation, observation_padded, restored
+        type(ori)                              :: o
+        class(parameters), allocatable, target :: params
+        type(reconstructor)                    :: gridder
+        class(sp_project), allocatable         :: project
+        type(sym)                              :: c1sym
+        integer                                :: i
         allocate(params, project)
         params%box        = BOX
         params%box_crop   = BOX
@@ -371,8 +371,8 @@ contains
     end subroutine apply_support
 
     subroutine calc_fsc( even_volume, odd_volume, fsc )
-        real,              intent(in)  :: even_volume(:,:,:), odd_volume(:,:,:)
-        real, allocatable, intent(out) :: fsc(:)
+        real,              intent(in)               :: even_volume(:,:,:), odd_volume(:,:,:)
+        real,              allocatable, intent(out) :: fsc(:)
         type(image) :: even_img, odd_img
         call even_img%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
         call odd_img%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
@@ -427,7 +427,7 @@ contains
     !> the fixture is reproducible and asymmetric (a symmetric phantom hides orientation bugs)
     subroutine test_truth_volume_fixture()
         real, allocatable :: phantom(:,:,:), again(:,:,:)
-        real(dp) :: total, sumsq, den
+        real(dp)          :: total, sumsq, den
         write(*,'(A)') 'test_truth_volume_fixture'
         call build_truth_volume(phantom)
         call build_truth_volume(again)
@@ -449,14 +449,14 @@ contains
     !> the observation builder realises the requested SNR, draws independent noise per half
     !! and leaves the other half's data untouched
     subroutine test_independent_observations()
-        type(oris) :: even_oris, odd_oris
+        type(oris)              :: even_oris, odd_oris
         type(reconstructor_pcg) :: sampler
-        complex, allocatable :: even_planes(:,:,:), even_clean(:,:,:), even_snapshot(:,:,:)
-        complex, allocatable :: odd_planes(:,:,:), odd_clean(:,:,:)
-        real,    allocatable :: ec_img(:,:,:), en_img(:,:,:), oc_img(:,:,:), on_img(:,:,:)
-        real,    allocatable :: even_noise(:,:,:), odd_noise(:,:,:)
-        integer, allocatable :: even_ids(:), odd_ids(:)
-        real(dp) :: even_snr, odd_snr
+        complex, allocatable    :: even_planes(:,:,:), even_clean(:,:,:), even_snapshot(:,:,:)
+        complex, allocatable    :: odd_planes(:,:,:), odd_clean(:,:,:)
+        real,    allocatable    :: ec_img(:,:,:), en_img(:,:,:), oc_img(:,:,:), on_img(:,:,:)
+        real,    allocatable    :: even_noise(:,:,:), odd_noise(:,:,:)
+        integer, allocatable    :: even_ids(:), odd_ids(:)
+        real(dp)                :: even_snr, odd_snr
         write(*,'(A)') 'test_independent_observations'
         call build_disjoint_halves(24, even_oris, odd_oris, even_ids, odd_ids)
         call sampler%new(BOX, SMPD, LAMBDA)
@@ -477,20 +477,20 @@ contains
     !> 96 views per half, a well-determined system: PCG halves versus gridding halves, the
     !! FSC contract, noiseless recovery (24 views left the solve under-determined: 0.82)
     subroutine test_halfset_fsc_96()
-        integer, parameter :: NHALF = 96
-        integer, parameter :: TRAJ_ITS(6) = [1, 2, 4, 8, 16, 40]
-        type(oris) :: even_oris, odd_oris
+        integer, parameter      :: NHALF       = 96
+        integer, parameter      :: TRAJ_ITS(6) = [1, 2, 4, 8, 16, 40]
+        type(oris)              :: even_oris, odd_oris
         type(reconstructor_pcg) :: sampler
-        complex, allocatable :: even_planes(:,:,:), even_clean(:,:,:), odd_planes(:,:,:), odd_clean(:,:,:)
-        real,    allocatable :: ec_img(:,:,:), en_img(:,:,:), oc_img(:,:,:), on_img(:,:,:)
-        real,    allocatable :: even_noise(:,:,:), odd_noise(:,:,:), truth(:,:,:), fsc(:), grid_fsc(:)
-        real,    allocatable :: even_clean_vol(:,:,:), odd_clean_vol(:,:,:), even_vol(:,:,:), odd_vol(:,:,:)
-        real,    allocatable :: traj_even(:,:,:,:), traj_odd(:,:,:,:)
-        real,    allocatable :: g_even_clean(:,:,:), g_odd_clean(:,:,:), g_even(:,:,:), g_odd(:,:,:)
-        integer, allocatable :: even_ids(:), odd_ids(:), traj_even_niters(:), traj_odd_niters(:)
-        real(dp) :: even_snr, odd_snr, low, high, glow, ghigh
-        real(dp) :: traj_corr(2,6)
-        integer  :: ec_n, oc_n, e_n, o_n, i
+        complex, allocatable    :: even_planes(:,:,:), even_clean(:,:,:), odd_planes(:,:,:), odd_clean(:,:,:)
+        real,    allocatable    :: ec_img(:,:,:), en_img(:,:,:), oc_img(:,:,:), on_img(:,:,:)
+        real,    allocatable    :: even_noise(:,:,:), odd_noise(:,:,:), truth(:,:,:), fsc(:), grid_fsc(:)
+        real,    allocatable    :: even_clean_vol(:,:,:), odd_clean_vol(:,:,:), even_vol(:,:,:), odd_vol(:,:,:)
+        real,    allocatable    :: traj_even(:,:,:,:), traj_odd(:,:,:,:)
+        real,    allocatable    :: g_even_clean(:,:,:), g_odd_clean(:,:,:), g_even(:,:,:), g_odd(:,:,:)
+        integer, allocatable    :: even_ids(:), odd_ids(:), traj_even_niters(:), traj_odd_niters(:)
+        real(dp)                :: even_snr, odd_snr, low, high, glow, ghigh
+        real(dp)                :: traj_corr(2,6)
+        integer                 :: ec_n, oc_n, e_n, o_n, i
         write(*,'(A)') 'test_halfset_fsc_96'
         call build_disjoint_halves(NHALF, even_oris, odd_oris, even_ids, odd_ids)
         call sampler%new(BOX, SMPD, LAMBDA)
@@ -558,27 +558,27 @@ contains
     !! and the gridding control; the noisy raw-L2 optimum must be interior to the sweep and
     !! beat gridding
     subroutine test_halfset_matrix_48()
-        integer, parameter :: NHALF = 48
+        integer, parameter :: NHALF       = 48
         integer, parameter :: TRAJ_ITS(6) = [1, 2, 4, 8, 16, 40]
         integer, parameter :: OPEN_ITS(3) = [4, 8, 40]
         ! six values around the noisy raw-L2 optimum, enough to bracket it at a small solver cost
-        integer, parameter :: NLAMBDA = 6
-        real,    parameter :: LAMBDAS(NLAMBDA) = [0.1, 1., 3., 10., 30., 100.]
-        type(oris) :: even_oris, odd_oris
+        integer, parameter      :: NLAMBDA          = 6
+        real,    parameter      :: LAMBDAS(NLAMBDA) = [0.1, 1., 3., 10., 30., 100.]
+        type(oris)              :: even_oris, odd_oris
         type(reconstructor_pcg) :: sampler
-        complex, allocatable :: even_planes(:,:,:), even_clean(:,:,:), odd_planes(:,:,:), odd_clean(:,:,:)
-        real,    allocatable :: ec_img(:,:,:), en_img(:,:,:), oc_img(:,:,:), on_img(:,:,:)
-        real,    allocatable :: even_noise(:,:,:), odd_noise(:,:,:), truth(:,:,:), fsc(:)
-        real,    allocatable :: ce_traj(:,:,:,:), co_traj(:,:,:,:), ne_traj(:,:,:,:), no_traj(:,:,:,:)
-        real,    allocatable :: oce(:,:,:,:), oco(:,:,:,:), one(:,:,:,:), ono(:,:,:,:)
-        real,    allocatable :: ce(:,:,:), co(:,:,:), ne(:,:,:), no(:,:,:)
-        real,    allocatable :: g_ce(:,:,:), g_co(:,:,:), g_ne(:,:,:), g_no(:,:,:)
-        integer, allocatable :: even_ids(:), odd_ids(:), n1(:), n2(:), n3(:), n4(:), m1(:), m2(:), m3(:), m4(:)
-        real(dp) :: even_snr, odd_snr, noise_corr, traj_corr(4,6), open_corr(4,3), traj_fsc(2,6), open_fsc(2,3)
-        real(dp) :: lambda_corr(4,NLAMBDA), lambda_resid(4,NLAMBDA), lambda_err(4,NLAMBDA), lambda_fsc(2,NLAMBDA)
-        real(dp) :: grid_corr(4), grid_err(4), grid_fsc(2), e_res(2), o_res(2)
-        integer  :: i, e_n(2), o_n(2), best(2)
-        logical  :: its_ok
+        complex, allocatable    :: even_planes(:,:,:), even_clean(:,:,:), odd_planes(:,:,:), odd_clean(:,:,:)
+        real,    allocatable    :: ec_img(:,:,:), en_img(:,:,:), oc_img(:,:,:), on_img(:,:,:)
+        real,    allocatable    :: even_noise(:,:,:), odd_noise(:,:,:), truth(:,:,:), fsc(:)
+        real,    allocatable    :: ce_traj(:,:,:,:), co_traj(:,:,:,:), ne_traj(:,:,:,:), no_traj(:,:,:,:)
+        real,    allocatable    :: oce(:,:,:,:), oco(:,:,:,:), one(:,:,:,:), ono(:,:,:,:)
+        real,    allocatable    :: ce(:,:,:), co(:,:,:), ne(:,:,:), no(:,:,:)
+        real,    allocatable    :: g_ce(:,:,:), g_co(:,:,:), g_ne(:,:,:), g_no(:,:,:)
+        integer, allocatable    :: even_ids(:), odd_ids(:), n1(:), n2(:), n3(:), n4(:), m1(:), m2(:), m3(:), m4(:)
+        real(dp)                :: even_snr, odd_snr, noise_corr, traj_corr(4,6), open_corr(4,3), traj_fsc(2,6), open_fsc(2,3)
+        real(dp)                :: lambda_corr(4,NLAMBDA), lambda_resid(4,NLAMBDA), lambda_err(4,NLAMBDA), lambda_fsc(2,NLAMBDA)
+        real(dp)                :: grid_corr(4), grid_err(4), grid_fsc(2), e_res(2), o_res(2)
+        integer                 :: i, e_n(2), o_n(2), best(2)
+        logical                 :: its_ok
         write(*,'(A)') 'test_halfset_matrix_48'
         call build_disjoint_halves(NHALF, even_oris, odd_oris, even_ids, odd_ids)
         call sampler%new(BOX, SMPD, LAMBDA)
@@ -684,18 +684,18 @@ contains
     subroutine test_half_spectrum_weights()
         integer, parameter :: NP = 6
         ! not derived (global_sigma2_only.md)
-        real(dp), parameter :: RELTOL = 1.e-4_dp
+        real(dp), parameter     :: RELTOL = 1.e-4_dp
         type(reconstructor_pcg) :: pcgop, single
-        type(oris)      :: even_oris, odd_oris, one
-        type(ori)       :: o
-        type(ctfparams) :: ctfp
-        integer, allocatable :: even_ids(:), odd_ids(:)
-        complex, allocatable :: planes(:,:,:), clean_planes(:,:,:), b(:,:,:), bi(:,:,:), bsum(:,:,:)
-        real,    allocatable :: clean_images(:,:,:), noisy_images(:,:,:), noise(:,:,:)
-        real,    allocatable :: d(:,:,:), di(:,:,:), dsum(:,:,:), sig2(:)
-        real     :: w(NP)
-        real(dp) :: realized_snr
-        integer  :: i, R, lims2(2,2)
+        type(oris)              :: even_oris, odd_oris, one
+        type(ori)               :: o
+        type(ctfparams)         :: ctfp
+        integer,  allocatable   :: even_ids(:), odd_ids(:)
+        complex,  allocatable   :: planes(:,:,:), clean_planes(:,:,:), b(:,:,:), bi(:,:,:), bsum(:,:,:)
+        real,     allocatable   :: clean_images(:,:,:), noisy_images(:,:,:), noise(:,:,:)
+        real,     allocatable   :: d(:,:,:), di(:,:,:), dsum(:,:,:), sig2(:)
+        real                    :: w(NP)
+        real(dp)                :: realized_snr
+        integer                 :: i, R, lims2(2,2)
         write(*,'(A)') 'test_half_spectrum_weights'
         call build_disjoint_halves(NP, even_oris, odd_oris, even_ids, odd_ids)
         ! the CTF path whitens (the no-CTF path ignores the noise model); without a CTF to model

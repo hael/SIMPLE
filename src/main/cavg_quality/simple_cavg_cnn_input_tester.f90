@@ -36,11 +36,11 @@ contains
         integer,  intent(in) :: n
         real,     intent(in) :: smpd
         real(dp), intent(in) :: sigma
-        integer, parameter :: BOX = TBOX
-        type(cavg_cnn_input) :: inp
+        integer,  parameter   :: BOX = TBOX
+        type(cavg_cnn_input)  :: inp
         real(dp), allocatable :: img(:,:), out(:,:)
-        real(dp) :: eff, err, expected
-        integer  :: i, j, m
+        real(dp)              :: eff, err, expected
+        integer               :: i, j, m
         write(*,'(A,I0,A,F4.2,A)') 'test_resampling_exact, ', n, ' px at ', smpd, ' A'
         m   = nint(real(n, dp) * real(smpd, dp) / 2.d0)
         eff = real(n, dp) * real(smpd, dp) / real(m, dp)
@@ -67,10 +67,10 @@ contains
 
     !> a centred symmetric image keeps its maximum on the box's centre pixel (index box/2 from 0) at an odd size
     subroutine test_centre_pixel()
-        integer, parameter :: N = 54, BOX = TBOX
+        integer, parameter   :: N = 54, BOX = TBOX
         type(cavg_cnn_input) :: inp
-        real(dp) :: img(N,N), out(BOX,BOX)
-        integer  :: i, j, loc(2)
+        real(dp)             :: img(N,N), out(BOX,BOX)
+        integer              :: i, j, loc(2)
         write(*,'(A)') 'test_centre_pixel'
         do j = 1,N
             do i = 1,N
@@ -87,12 +87,12 @@ contains
     !> without resampling the average leaves at mean 0 and standard deviation 1 inside the inscribed circle, and the
     !! halves go through the same affine map
     subroutine test_scaling()
-        integer, parameter :: N = 24
+        integer, parameter   :: N = 24
         type(cavg_cnn_input) :: inp
-        real(sp) :: raw(N,N,3), x(N,N,3)
-        real(dp) :: mean, sdev, s1, s2, sd_ref
-        integer  :: i, j, nin
-        logical  :: empty
+        real(sp)             :: raw(N,N,3), x(N,N,3)
+        real(dp)             :: mean, sdev, s1, s2, sd_ref
+        integer              :: i, j, nin
+        logical              :: empty
         write(*,'(A)') 'test_scaling'
         do j = 1,N
             do i = 1,N
@@ -129,10 +129,10 @@ contains
 
     !> a constant average is empty and its input zero
     subroutine test_empty()
-        integer, parameter :: N = 16
+        integer, parameter   :: N = 16
         type(cavg_cnn_input) :: inp
-        real(sp) :: raw(N,N,3), x(N,N,3)
-        logical  :: empty
+        real(sp)             :: raw(N,N,3), x(N,N,3)
+        logical              :: empty
         write(*,'(A)') 'test_empty'
         raw = 0.
         raw(:,:,2) = 1.
@@ -146,11 +146,11 @@ contains
 
     !> preparing images concurrently from one object gives the serial result bit for bit
     subroutine test_team()
-        integer, parameter :: N = 54, BOX = TBOX, NIMG = 6, NTEAM = 3
+        integer, parameter   :: N = 54, BOX = TBOX, NIMG = 6, NTEAM = 3
         type(cavg_cnn_input) :: inp
-        real(sp) :: raw(N,N,1,NIMG), x1(BOX,BOX,1,NIMG), xn(BOX,BOX,1,NIMG)
-        logical  :: empty(NIMG)
-        integer  :: i, j, k, nthr_prev, limit, nteam_run
+        real(sp)             :: raw(N,N,1,NIMG), x1(BOX,BOX,1,NIMG), xn(BOX,BOX,1,NIMG)
+        logical              :: empty(NIMG)
+        integer              :: i, j, k, nthr_prev, limit, nteam_run
         write(*,'(A)') 'test_team'
         do k = 1,NIMG
             do j = 1,N

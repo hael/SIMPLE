@@ -11,7 +11,7 @@ private
 !> the particle selection: project rows in ascending order
 type :: flex_selection
     integer, allocatable :: pinds(:)
-    integer :: nptcls = 0
+    integer              :: nptcls = 0
   contains
     procedure :: kill => selection_kill
 end type flex_selection
@@ -20,11 +20,11 @@ end type flex_selection
 type :: flex_fit_model
     type(reconstructor), allocatable :: basis_recs(:)
     real(dp),            allocatable :: eigvals(:)
-    real(dp) :: sig2_eff = 0.d0  !< calibrated whitened-noise level (raw)
-    real(dp) :: sig2     = 0.d0  !< floored copy the solves consume
-    integer :: ncomp    = 0  !< can shrink at the M-step swap; per-fit
-    type(reconstructor) :: mean_rec  !< per-fit mean copy carrying the per-fit mean scale
-    real(dp), allocatable :: z(:,:)  !< (npp,ncomp at stage entry); never reallocated
+    real(dp)                         :: sig2_eff = 0.d0 !< calibrated whitened-noise level (raw)
+    real(dp)                         :: sig2     = 0.d0 !< floored copy the solves consume
+    integer                          :: ncomp    = 0    !< can shrink at the M-step swap; per-fit
+    type(reconstructor)              :: mean_rec        !< per-fit mean copy carrying the per-fit mean scale
+    real(dp),            allocatable :: z(:,:)          !< (npp,ncomp at stage entry); never reallocated
   contains
     procedure :: kill => flex_fit_model_kill
 end type flex_fit_model
@@ -46,7 +46,7 @@ end type flex_latent
 !> the state set: kernel weights per state, their targets, bandwidths, effective counts, hard
 !! labels, and the distances/floors the bandwidth selection rebuilds the weights from
 type :: flex_state_set
-    integer :: nstates = 0
+    integer               :: nstates = 0
     real,     allocatable :: weights(:,:)          !< (nptcls,nstates)
     real,     allocatable :: targets(:,:)          !< (ncomp,nstates)
     real,     allocatable :: bandwidths(:), neff(:)

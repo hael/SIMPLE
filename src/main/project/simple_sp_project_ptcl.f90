@@ -6,14 +6,14 @@ contains
 
     ! static for OpenMP safety
     module subroutine map_ptcl_ind2stk_ind( self, oritype, iptcl, stkind, ind_in_stk )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,                   intent(in)    :: iptcl
-        integer,                   intent(out)   :: stkind
-        integer,                   intent(out)   :: ind_in_stk
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
+        integer,                   intent(in)            :: iptcl
+        integer,                   intent(out)           :: stkind
+        integer,                   intent(out)           :: ind_in_stk
         class(oris), pointer                     :: ptcl_field
-        real    :: smpd
-        integer :: nptcls, nptcls_stk, box, nstks
+        real                                     :: smpd
+        integer                                  :: nptcls, nptcls_stk, box, nstks
         nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
@@ -133,7 +133,7 @@ contains
     ! starting model is used for initializing 3D refinement (nanoparticles)
     module subroutine map2Dshifts23D( self )
         class(sp_project), intent(inout) :: self
-        integer :: noris_ptcl3D, noris_ptcl2D
+        integer           :: noris_ptcl3D, noris_ptcl2D
         real, allocatable :: shifts(:)
         if( self%is_virgin_field('ptcl2D') )then
             return
@@ -161,9 +161,9 @@ contains
     module subroutine map2ptcls( self )
         class(sp_project), intent(inout) :: self
         integer, allocatable :: particles(:)
-        type(ori) :: ori2d, ori_comp, o
-        integer   :: ncls, icls, iptcl, pind, noris_ptcl3D, noris_ptcl2D
-        real      :: corr, rproj, rstate
+        type(ori)            :: ori2d, ori_comp, o
+        integer              :: ncls, icls, iptcl, pind, noris_ptcl3D, noris_ptcl2D
+        real                 :: corr, rproj, rstate
         if( self%is_virgin_field('cls3D') )then
             THROW_HARD('os_cls3D is virgin field; nothing to map back; map2ptcls')
         endif
@@ -223,13 +223,13 @@ contains
     ! this map2ptcls routine assumes that any selection of class averages is done
     ! exclusively by state=0 flagging without any physical deletion
     module subroutine map2ptcls_state( self, append, maxpop )
-        class(sp_project), intent(inout) :: self
-        logical, optional, intent(in)    :: append
-        integer, optional, intent(in)    :: maxpop
+        class(sp_project), intent(inout)        :: self
+        logical,           optional, intent(in) :: append
+        integer,           optional, intent(in) :: maxpop
         integer, allocatable             :: particles(:)
-        integer :: ncls, icls, iptcl, i, nptcls, noris_ptcl3D, noris_ptcl2D
-        integer :: maxnptcls, istate
-        logical :: l_append
+        integer                          :: ncls, icls, iptcl, i, nptcls, noris_ptcl3D, noris_ptcl2D
+        integer                          :: maxnptcls, istate
+        logical                          :: l_append
         noris_ptcl2D = self%os_ptcl2D%get_noris()
         if( noris_ptcl2D == 0 )then
             THROW_WARN('empty PTCL2D field. Nothing to do; map2ptcls_state')
@@ -311,8 +311,8 @@ contains
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: flag
         integer, allocatable             :: particles(:)
-        real    :: val
-        integer :: icls, iptcl, nptcl3D, nptcl2D, ncls2D, pind
+        real                             :: val
+        integer                          :: icls, iptcl, nptcl3D, nptcl2D, ncls2D, pind
         nptcl2D = self%os_ptcl2D%get_noris()
         nptcl3D = self%os_ptcl3D%get_noris()
         ncls2D  = self%os_cls2D%get_noris()
@@ -374,7 +374,7 @@ contains
     module subroutine map_ptcls_state_to_cls( self )
         class(sp_project), intent(inout) :: self
         integer, allocatable :: cls_states(:), cls_pops(:)
-        integer :: icls, iptcl, noris_ptcl2D, ncls2D, ncls3D
+        integer              :: icls, iptcl, noris_ptcl2D, ncls2D, ncls3D
         noris_ptcl2D = self%os_ptcl2D%get_noris()
         if( noris_ptcl2D == 0 ) return
         ncls2D = self%os_cls2D%get_noris()
@@ -549,12 +549,12 @@ contains
 
     module subroutine scale_projfile( self, smpd_target, new_projfile, cline, cline_scale, dir )
         ! this probably needs an oritype input for dealing with scale class averages
-        class(sp_project),       intent(inout) :: self
-        real,                    intent(inout) :: smpd_target
-        class(string),           intent(out)   :: new_projfile
-        class(cmdline),          intent(inout) :: cline
-        class(cmdline),          intent(out)   :: cline_scale
-        class(string), optional, intent(in)    :: dir
+        class(sp_project),       intent(inout)        :: self
+        real,                    intent(inout)        :: smpd_target
+        class(string),           intent(out)          :: new_projfile
+        class(cmdline),          intent(inout)        :: cline
+        class(cmdline),          intent(out)          :: cline_scale
+        class(string),           optional, intent(in) :: dir
         type(string) :: projfile, projname, new_projname, str_tmp
         real         :: scale_factor, smpd_sc, smpd
         integer      :: box, box_sc, istk, n_os_stk
@@ -658,10 +658,10 @@ contains
     end subroutine set_ptcl2D_thumb
 
     module logical function is_virgin_field( self, oritype )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
         class(oris), pointer :: os
-        integer :: i, n
+        integer              :: i, n
         nullify(os)
         is_virgin_field = .false.
         ! set field pointer
@@ -742,9 +742,9 @@ contains
     end function get_nptcls
 
     module subroutine get_boxcoords( self, iptcl, coords )
-        class(sp_project), target, intent(in)  :: self
-        integer,                   intent(in)  :: iptcl
-        integer,                   intent(out) :: coords(2)
+        class(sp_project),         target, intent(in) :: self
+        integer,                   intent(in)         :: iptcl
+        integer,                   intent(out)        :: coords(2)
         coords(1) = self%os_ptcl2D%get_int(iptcl,'xpos')
         coords(2) = self%os_ptcl2D%get_int(iptcl,'ypos')
     end subroutine get_boxcoords

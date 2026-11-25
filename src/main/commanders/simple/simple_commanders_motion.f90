@@ -24,9 +24,9 @@ contains
         use simple_parameters,                         only: parameters
         class(commander_refine_motion_model), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        class(refine_motion_model_strategy), allocatable :: strategy
+        class(refine_motion_model_strategy), allocatable   :: strategy
         type(parameters)                                   :: params
-        type(string) :: oritype
+        type(string)                                       :: oritype
         call cline%set('prg', 'refine_motion_model')
         call cline%set('wfloat16', 'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')

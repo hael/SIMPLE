@@ -28,7 +28,7 @@ contains
     subroutine new_coarray_env( self )
         class(qsys_coarray), intent(inout) :: self
         character(len=XLONGSTRLEN) :: submit_cmd
-        integer :: envlen, envstat
+        integer                    :: envlen, envstat
         call self%env%new(MAXENVITEMS)
         call get_environment_variable('SIMPLE_COARRAY_SUBMIT_CMD', value=submit_cmd, length=envlen, status=envstat)
         if( envstat == 0 .and. envlen > 0 )then
@@ -49,18 +49,18 @@ contains
     !> Coarray jobs are launched directly through simple_private_exec.  Generating
     !! scheduler script headers for this backend indicates a wrong execution path.
     subroutine write_coarray_header( self, q_descr, fhandle )
-        class(qsys_coarray), intent(in) :: self
-        class(chash),        intent(in) :: q_descr
-        integer, optional,   intent(in) :: fhandle
+        class(qsys_coarray), intent(in)             :: self
+        class(chash),        intent(in)             :: q_descr
+        integer,             optional,   intent(in) :: fhandle
         THROW_HARD('coarray backend does not write scheduler scripts; use simple_private_exec --coarray dispatch')
     end subroutine write_coarray_header
 
     !> Array scripts are not used by the coarray backend.
     subroutine write_coarray_array_header( self, q_descr, parts_fromto, fhandle, nactive )
-        class(qsys_coarray), intent(in) :: self
-        class(chash),        intent(in) :: q_descr
-        integer,             intent(in) :: parts_fromto(2)
-        integer, optional,   intent(in) :: fhandle, nactive
+        class(qsys_coarray), intent(in)             :: self
+        class(chash),        intent(in)             :: q_descr
+        integer,             intent(in)             :: parts_fromto(2)
+        integer,             optional,   intent(in) :: fhandle, nactive
         THROW_HARD('coarray backend does not write array scripts; use simple_private_exec --coarray dispatch')
     end subroutine write_coarray_array_header
 

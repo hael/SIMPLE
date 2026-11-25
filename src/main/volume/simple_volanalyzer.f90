@@ -12,18 +12,18 @@ public :: init_volanalyzer, calc_volpair_corrmat, dock_compare_volumes
 private
 #include "simple_local_flags.inc"
 
-class(parameters), pointer :: p_ptr => null()  !> parameters pointer
-type(string),  allocatable :: volnames(:)      !< names of volumes to analyze
-type(string),  allocatable :: volnames_mirr(:) !< names of mirrored volumes to analyze
-real,          allocatable :: corrmat(:,:)     !< similarity matrix
-type(dock_vols)            :: dvols
-integer                    :: nvols = 0, ldim(3) = 0
+class(parameters), pointer     :: p_ptr => null()  !> parameters pointer
+type(string),      allocatable :: volnames(:)      !< names of volumes to analyze
+type(string),      allocatable :: volnames_mirr(:) !< names of mirrored volumes to analyze
+real,              allocatable :: corrmat(:,:)     !< similarity matrix
+type(dock_vols)                :: dvols
+integer                        :: nvols = 0, ldim(3) = 0
 
 contains
 
     subroutine init_volanalyzer( params, voltab )
-        class(parameters), target, intent(in) :: params
-        class(string),             intent(in) :: voltab
+        class(parameters),         target, intent(in) :: params
+        class(string),             intent(in)         :: voltab
         type(image) :: vol_mirr
         integer     :: i, ifoo, ldim_read(3)
         p_ptr => params

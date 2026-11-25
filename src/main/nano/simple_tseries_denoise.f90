@@ -13,20 +13,20 @@ contains
     !> Denoise full frames without alignment or masking; retain their grid and individual means.
     subroutine flex_denoise_imgarr( imgs, den_imgs, ncomp, halfwin, l_eo )
         use simple_flex_traj_denoise, only: flex_traj_denoise
-        type(image),              intent(inout) :: imgs(:)
-        type(image), allocatable, intent(out)   :: den_imgs(:)
-        integer,                  intent(in)    :: ncomp, halfwin
-        logical,                  intent(in)    :: l_eo
-        integer, parameter :: SEED = 20261026, MIN_FRAMES = 12
-        type(image) :: work
+        type(image),              intent(inout)            :: imgs(:)
+        type(image),              allocatable, intent(out) :: den_imgs(:)
+        integer,                  intent(in)               :: ncomp, halfwin
+        logical,                  intent(in)               :: l_eo
+        integer,     parameter   :: SEED = 20261026, MIN_FRAMES = 12
+        type(image)              :: work
         complex(sp), allocatable :: y(:,:), yden(:,:)
         real(sp),    allocatable :: wq(:), means(:)
         real(dp),    allocatable :: ess(:), choice(:,:)
         integer,     allocatable :: hidx(:), kidx(:), shell(:)
-        integer :: n, ldim(3), i, j, h, k, nx, ny, ncoeff, kband, khere, kmate
-        real :: smpd, shell_scale
-        complex(sp) :: coeff
-        logical :: boundary, self_conjugate
+        integer                  :: n, ldim(3), i, j, h, k, nx, ny, ncoeff, kband, khere, kmate
+        real                     :: smpd, shell_scale
+        complex(sp)              :: coeff
+        logical                  :: boundary, self_conjugate
         n = size(imgs)
         if( n == 0 ) THROW_HARD('empty frame array; flex_denoise_imgarr')
         if( ncomp < 1 ) THROW_HARD('ncomp must be positive; flex_denoise_imgarr')

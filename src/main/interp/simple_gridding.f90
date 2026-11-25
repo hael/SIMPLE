@@ -70,12 +70,12 @@ contains
     !! at the Fourier origin (fractional offset 0) for a lattice of period n,
     !! normalized to unity at the centre (n/2+1).
     subroutine kb_stencil_envelope_1d( kbwin, n, env1d )
-        type(kbinterpol),  intent(in)  :: kbwin
-        integer,           intent(in)  :: n
-        real, allocatable, intent(out) :: env1d(:)
+        type(kbinterpol),  intent(in)               :: kbwin
+        integer,           intent(in)               :: n
+        real,              allocatable, intent(out) :: env1d(:)
         real, allocatable :: w(:)
-        real    :: s, arg, ctrval
-        integer :: wdim, iwinsz, i, q, x, c
+        real              :: s, arg, ctrval
+        integer           :: wdim, iwinsz, i, q, x, c
         wdim   = kbwin%get_wdim()
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         allocate(w(wdim))
@@ -101,12 +101,12 @@ contains
 
     !> Guarded reciprocal of kb_stencil_envelope_1d for the production KB window
     subroutine kb_stencil_inv_envelope_1d( n, inv1d )
-        integer,           intent(in)  :: n
-        real, allocatable, intent(out) :: inv1d(:)
+        integer,           intent(in)               :: n
+        real,              allocatable, intent(out) :: inv1d(:)
         real, parameter   :: EPS_DIV = 1.0e-8
         type(kbinterpol)  :: kbwin
         real, allocatable :: env1d(:)
-        integer :: i
+        integer           :: i
         kbwin = kbinterpol(KBWINSZ, KBALPHA)
         call kb_stencil_envelope_1d(kbwin, n, env1d)
         if( allocated(inv1d) ) deallocate(inv1d)
@@ -120,12 +120,12 @@ contains
     !> Guarded reciprocal of the padded-period KB envelope at the centered
     !! native-volume indices. The returned factors have native_box elements.
     subroutine kb_stencil_centered_crop_inv_envelope_1d( kbwin, padded_box, native_box, inv1d )
-        type(kbinterpol),  intent(in)  :: kbwin
-        integer,           intent(in)  :: padded_box, native_box
-        real, allocatable, intent(out) :: inv1d(:)
-        real, parameter :: EPS_DIV = 1.0e-8
+        type(kbinterpol),  intent(in)               :: kbwin
+        integer,           intent(in)               :: padded_box, native_box
+        real,              allocatable, intent(out) :: inv1d(:)
+        real, parameter   :: EPS_DIV = 1.0e-8
         real, allocatable :: padded_env(:)
-        integer :: i, offset
+        integer           :: i, offset
         if( native_box < 1 .or. native_box > padded_box .or. &
             &mod(padded_box-native_box,2) /= 0 ) &
             &error stop 'centered-crop envelope requires an even nonnegative size difference'
@@ -145,7 +145,7 @@ contains
         class(image), intent(inout) :: vol
         real,         intent(in)    :: inv1d(:)
         real, pointer :: rmat(:,:,:) => null()
-        integer :: ldim(3), i, j, k, n
+        integer       :: ldim(3), i, j, k, n
         ldim = vol%get_ldim()
         n    = ldim(1)
         if( ldim(2) /= n .or. ldim(3) /= n ) THROW_HARD('deapodize3D_inplace: volume must be cubic')
@@ -171,7 +171,7 @@ contains
         real,    intent(in) :: smpd_crop
         type(image)         :: img
         real, allocatable   :: inv1d(:)
-        integer :: i, j, k, n
+        integer             :: i, j, k, n
         n = ldim_crop(1)
         if( ldim_crop(2) /= n .or. ldim_crop(3) /= n )then
             THROW_HARD('prep3D_inv_kbenvelope4mul: ldim_crop must be cube (n x n x n)')

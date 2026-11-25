@@ -24,12 +24,12 @@ contains
         use simple_sigma2_anchor, only: sigma2_anchor_band_stats
         use simple_string_utils,  only: fmt_dec, log_item, int2str
         type(parameters), intent(in) :: params
-        type(builder), intent(in) :: build
-        integer, intent(in) :: band(2)
-        type(string) :: fname
-        real(real64) :: mean_log(2), edge_log(2)
-        integer :: nabove(2), status
-        logical :: found
+        type(builder),    intent(in) :: build
+        integer,          intent(in) :: band(2)
+        type(string)       :: fname
+        real(real64)       :: mean_log(2), edge_log(2)
+        integer            :: nabove(2), status
+        logical            :: found
         character(len=512) :: message
         if( trim(params%sigma2_anneal) == 'no' ) return
         if( trim(params%refine) == 'sigma' ) return
@@ -50,10 +50,10 @@ contains
     subroutine prepare_canonical_sigma_anchor( params, build )
         use simple_sigma2_anchor, only: prepare_sigma2_anchor
         type(parameters), intent(in) :: params
-        type(builder), intent(in) :: build
-        type(string) :: state_path
-        integer :: status
-        logical :: found
+        type(builder),    intent(in) :: build
+        type(string)          :: state_path
+        integer               :: status
+        logical               :: found
         character(len=STDLEN) :: message
         if( params%sigma2_anneal == 'no' ) return
         call build%spproj%get_sigma2_state_path(state_path, found)
@@ -72,11 +72,11 @@ contains
         use simple_syslib,            only: file_exists
         class(string), intent(in) :: projfile
         class(sp_project), allocatable :: spproj
-        type(sigma2_state_header) :: header
-        type(string) :: state_path
-        integer :: status
-        logical :: found
-        character(len=STDLEN) :: message
+        type(sigma2_state_header)      :: header
+        type(string)                   :: state_path
+        integer                        :: status
+        logical                        :: found
+        character(len=STDLEN)          :: message
         allocate(spproj)
         call spproj%read_segment('projinfo', projfile)
         call spproj%get_sigma2_state_path(state_path, found)
@@ -175,17 +175,17 @@ contains
         !> the streaming commit: a fresh candidate assembled from the workers' ranges in one pass that
         !! also forms the global spectra, then published; the ranges are deleted only after publication
         subroutine consolidate_canonical
-            type(string) :: state_path, candidate_path
+            type(string)              :: state_path, candidate_path
             type(string), allocatable :: range_paths(:)
             type(sigma2_state_header) :: header
-            logical, allocatable :: scheduled(:), active(:)
-            integer, allocatable :: eo_ids(:)
-            integer(int64) :: next_gen
-            integer(timer_int_kind) :: t_assemble, t_publish, t_tot
-            real(timer_int_kind)    :: rt_assemble, rt_publish, rt_tot
-            integer :: ipart, iptcl, status
-            logical :: found
-            character(len=STDLEN) :: message
+            logical,      allocatable :: scheduled(:), active(:)
+            integer,      allocatable :: eo_ids(:)
+            integer(int64)            :: next_gen
+            integer(timer_int_kind)   :: t_assemble, t_publish, t_tot
+            real(timer_int_kind)      :: rt_assemble, rt_publish, rt_tot
+            integer                   :: ipart, iptcl, status
+            logical                   :: found
+            character(len=STDLEN)     :: message
             if( L_BENCH_GLOB ) t_tot = tic()
             call build%spproj%get_sigma2_state_path(state_path, found)
             if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
@@ -238,7 +238,7 @@ contains
             integer,                   intent(in) :: nrows_merged
             real(timer_int_kind),      intent(in) :: rt_assemble, rt_publish, rt_tot
             real(timer_int_kind) :: rt_accounted
-            integer :: fnr
+            integer              :: fnr
             rt_accounted = 0.
             if( rt_tot > TINY ) rt_accounted = 100. * (rt_assemble + rt_publish) / rt_tot
             call open_bench_report(fnr, 'SIGMA2_COMMIT', iter=which_iter)

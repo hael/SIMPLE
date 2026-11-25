@@ -18,15 +18,15 @@ implicit none
 public :: exec_test_class_commander
 private
 
-type(commander_test_units)          :: xunits
-type(commander_test_unit_core)      :: xunit_core
-type(commander_test_unit_ori)       :: xunit_ori
-type(commander_test_unit_image)     :: xunit_image
-type(commander_test_unit_numerics)  :: xunit_numerics
-type(commander_test_unit_project)   :: xunit_project
-type(commander_test_unit_motion)    :: xunit_motion
-type(commander_test_unit_ui)        :: xunit_ui
-type(commander_test_unit_ipc)       :: xunit_ipc
+type(commander_test_units)               :: xunits
+type(commander_test_unit_core)           :: xunit_core
+type(commander_test_unit_ori)            :: xunit_ori
+type(commander_test_unit_image)          :: xunit_image
+type(commander_test_unit_numerics)       :: xunit_numerics
+type(commander_test_unit_project)        :: xunit_project
+type(commander_test_unit_motion)         :: xunit_motion
+type(commander_test_unit_ui)             :: xunit_ui
+type(commander_test_unit_ipc)            :: xunit_ipc
 type(commander_test_unit_reconstruction) :: xunit_reconstruction
 type(commander_test_lib_reconstruction)  :: xlib_reconstruction
 type(commander_test_unit_pftc_align2D3D) :: xunit_pftc_align2D3D
@@ -41,8 +41,8 @@ type(commander_test_lib_stream)          :: xlib_stream
 type(commander_test_stream_chains)       :: xstream_chains
 type(commander_test_lib_heterogeneity)   :: xlib_heterogeneity
 type(commander_test_openmp_offload)      :: xopenmp_offload
-type(commander_test_forked_process) :: xforked_process
-type(commander_test_gtk)            :: xgtk
+type(commander_test_forked_process)      :: xforked_process
+type(commander_test_gtk)                 :: xgtk
 
 contains
 

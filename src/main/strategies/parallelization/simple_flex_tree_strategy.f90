@@ -19,35 +19,35 @@ character(len=*), parameter :: TREE_STATE = 'tree_state.txt', STEP_DONE = 'TREE_
 
 type, abstract :: flex_tree_strategy
     private
-    type(flex_tree), allocatable :: tree
-    type(flex_tree_node), allocatable :: jparent
-    type(string) :: workdir
-    class(commander_base), pointer :: flex_runner => null(), refine_runner => null()
-    integer :: nrows = 0, part_nthr = 0
-    logical :: initialized = .false.
-    logical :: completed   = .false.
+    type(flex_tree),       allocatable :: tree
+    type(flex_tree_node),  allocatable :: jparent
+    type(string)                       :: workdir
+    class(commander_base), pointer     :: flex_runner => null(), refine_runner => null()
+    integer                            :: nrows = 0, part_nthr = 0
+    logical                            :: initialized = .false.
+    logical                            :: completed   = .false.
   contains
-    procedure(init_interface),     deferred :: initialize
-    procedure(exec_interface),     deferred :: execute
-    procedure :: finalize_run => tree_finalize_run
-    procedure :: cleanup      => tree_cleanup
-    procedure :: end_message  => tree_end_message
-    procedure :: set_runners
-    procedure :: get_tree
-    procedure, private :: tree_init
+    procedure(init_interface), deferred :: initialize
+    procedure(exec_interface), deferred :: execute
+    procedure                  :: finalize_run => tree_finalize_run
+    procedure                  :: cleanup      => tree_cleanup
+    procedure                  :: end_message  => tree_end_message
+    procedure                  :: set_runners
+    procedure                  :: get_tree
+    procedure, private         :: tree_init
     procedure, private, nopass :: validate_input
-    procedure, private :: initialize_root
-    procedure, private :: run_node
-    procedure, private :: write_state
-    procedure, private :: read_state
-    procedure, private :: node_dir
-    procedure, private :: run_node_flex
-    procedure, private :: refine_node
-    procedure, private :: split_node
-    procedure, private :: apply_node_decision
-    procedure, private :: publish_results
-    procedure, private :: stage_directory
-    procedure, private :: stage_command
+    procedure, private         :: initialize_root
+    procedure, private         :: run_node
+    procedure, private         :: write_state
+    procedure, private         :: read_state
+    procedure, private         :: node_dir
+    procedure, private         :: run_node_flex
+    procedure, private         :: refine_node
+    procedure, private         :: split_node
+    procedure, private         :: apply_node_decision
+    procedure, private         :: publish_results
+    procedure, private         :: stage_directory
+    procedure, private         :: stage_command
     procedure, private, nopass :: execute_stage
 end type flex_tree_strategy
 
@@ -106,9 +106,9 @@ contains
     ! The caller supplies normalized defaults and retains ownership of params/build.
     subroutine tree_init( self, params, build, cline )
         class(flex_tree_strategy), intent(inout) :: self
-        type(parameters),         intent(inout) :: params
-        type(builder),            intent(inout) :: build
-        class(cmdline),           intent(inout) :: cline
+        type(parameters),          intent(inout) :: params
+        type(builder),             intent(inout) :: build
+        class(cmdline),            intent(inout) :: cline
         if( self%initialized ) THROW_HARD('FLEX tree strategy is already initialized; call cleanup first')
         if( .not. cline%defined('projfile') ) THROW_HARD('FLEX tree initialization requires projfile')
         call build%init_params_and_build_spproj(cline, params)
@@ -169,7 +169,7 @@ contains
         use simple_parameters, only: parameters
         use simple_syslib,     only: simple_abspath
         class(flex_tree_strategy), intent(inout) :: self
-        type(parameters),         intent(in)    :: params
+        type(parameters),          intent(in)    :: params
         type(flex_tree_node) :: root
         root%name         = 'root'
         root%project_file = simple_abspath(params%projfile)
@@ -181,9 +181,9 @@ contains
     subroutine distr_execute( self, params, cline )
         use simple_syslib,         only: simple_getcwd, simple_mkdir, dir_exists, file_exists
         class(flex_tree_distr_strategy), intent(inout) :: self
-        type(parameters),               intent(in)    :: params
-        class(cmdline),                 intent(in)    :: cline
-        type(string) :: cwd
+        type(parameters),                intent(in)    :: params
+        class(cmdline),                  intent(in)    :: cline
+        type(string)                                   :: cwd
         if( .not. self%initialized ) THROW_HARD('FLEX tree strategy is not initialized')
         if( self%completed ) THROW_HARD('FLEX tree strategy has already completed')
         call simple_getcwd(cwd)
@@ -385,13 +385,13 @@ contains
     end subroutine inmem_execute
 
     subroutine run_node( self, params, cline, inode, node, decision, children )
-        class(flex_tree_strategy), intent(inout) :: self
-        type(parameters),         intent(in)    :: params
-        class(cmdline),           intent(in)    :: cline
-        integer,                  intent(in)    :: inode
-        type(flex_tree_node),     intent(inout) :: node
-        type(flex_tree_decision), intent(out)   :: decision
-        type(flex_tree_node), allocatable, intent(out) :: children(:)
+        class(flex_tree_strategy), intent(inout)            :: self
+        type(parameters),          intent(in)               :: params
+        class(cmdline),            intent(in)               :: cline
+        integer,                   intent(in)               :: inode
+        type(flex_tree_node),      intent(inout)            :: node
+        type(flex_tree_decision),  intent(out)              :: decision
+        type(flex_tree_node),      allocatable, intent(out) :: children(:)
         logical :: ready
         if( .not. associated(self%flex_runner) ) THROW_HARD('FLEX tree runners are not set')
         call self%run_node_flex(params, cline, self%flex_runner, inode, node, ready)
@@ -411,8 +411,8 @@ contains
         use simple_string_utils, only: int2str_pad
         use simple_syslib,       only: simple_mkdir
         class(flex_tree_strategy), intent(in) :: self
-        integer,                  intent(in) :: inode
-        type(string) :: dir
+        integer,                   intent(in) :: inode
+        type(string)                          :: dir
         dir = self%workdir%to_char()//'/node_'//int2str_pad(inode, 6)
         call simple_mkdir(dir)
     end function node_dir
@@ -423,7 +423,7 @@ contains
         class(flex_tree_strategy), intent(inout) :: self
         type(string),         allocatable :: head(:), tags(:)
         type(flex_tree_node), allocatable :: nodes(:)
-        integer :: i, n
+        integer                           :: i, n
         n = self%tree%get_nnodes()
         allocate(head(n), tags(n), nodes(n))
         do i = 1, n
@@ -440,9 +440,9 @@ contains
         class(flex_tree_strategy), intent(inout) :: self
         type(string),         allocatable :: lines(:)
         type(flex_tree_node), allocatable :: nodes(:)
-        integer, allocatable :: parents(:)
-        character(len=:), allocatable :: line
-        integer :: i, n, id, ip, k
+        integer,              allocatable :: parents(:)
+        character(len=:), allocatable     :: line
+        integer                           :: i, n, id, ip, k
         call read_tree_record(self%workdir//'/'//TREE_STATE, lines)
         n = count([(index(lines(i)%to_char(), 'tree parent ') == 1, i=1,size(lines))])
         allocate(parents(n), nodes(n))
@@ -492,18 +492,18 @@ contains
         use simple_flex_tree_project_gateway, only: prepare_tree_flex, collect_tree_fit, write_tree_mask, write_tree_groups, &
             &tree_node_rows
         class(flex_tree_strategy), intent(inout) :: self
-        type(parameters),         intent(in)    :: params
-        class(cmdline),           intent(in)    :: cline
-        class(commander_base),    intent(inout) :: flex_runner
-        integer,                  intent(in)    :: inode
-        type(flex_tree_node),     intent(inout) :: node
-        logical,                  intent(out)   :: ready
+        type(parameters),          intent(in)    :: params
+        class(cmdline),            intent(in)    :: cline
+        class(commander_base),     intent(inout) :: flex_runner
+        integer,                   intent(in)    :: inode
+        type(flex_tree_node),      intent(inout) :: node
+        logical,                   intent(out)   :: ready
         type(commander_rec3D)      :: xrec3D
         type(cmdline), allocatable :: rec_cline
         type(flex_tree_node)       :: parent
-        type(string) :: directory, project, mean, mask, gdir, gproj
-        integer      :: ngroups, nmaps
-        logical      :: l_done, l_gdone
+        type(string)               :: directory, project, mean, mask, gdir, gproj
+        integer                    :: ngroups, nmaps
+        logical                    :: l_done, l_gdone
         character(len=24), parameter :: keys(*) = [character(len=24) :: &
             'neigs', 'npreimages', 'preimage_auto', 'n_probe_iters', 'nkern', 'state_axis', &
             'state_placement', 'min_neff', 'min_state_frac', 'column_separation', 'rec_backend', &
@@ -561,7 +561,7 @@ contains
         subroutine fit( stage_dir, stage_project )
             type(string), intent(in) :: stage_dir, stage_project
             type(cmdline), allocatable :: flex_cline
-            integer :: i
+            integer                    :: i
             allocate(flex_cline)
             call self%stage_command(params, stage_project, 'flex_pca', flex_cline)
             do i = 1, size(keys)
@@ -586,15 +586,15 @@ contains
         use simple_string_utils,   only: int2str
         use simple_flex_tree_project_gateway, only: prepare_tree_refine
         class(flex_tree_strategy), intent(inout) :: self
-        type(parameters),         intent(in)    :: params
-        class(cmdline),           intent(in)    :: cline
-        class(commander_base),    intent(inout) :: refine_runner
-        integer,                  intent(in)    :: inode
-        type(flex_tree_node),     intent(inout) :: node
+        type(parameters),          intent(in)    :: params
+        class(cmdline),            intent(in)    :: cline
+        class(commander_base),     intent(inout) :: refine_runner
+        integer,                   intent(in)    :: inode
+        type(flex_tree_node),      intent(inout) :: node
         character(len=24), parameter :: keys(*) = [character(len=24) :: &
             'nspace_sub', 'trs', 'ml_reg', 'automsk', 'filt_mode', 'athres_cont']
         type(string) :: mask
-        logical :: l_done
+        logical      :: l_done
         mask = node%mask_file
         if( mask%is_blank() .and. .not. params%pcg_mskfile%is_blank() ) mask = params%pcg_mskfile
         call refine_stage('stageA', 15., 64, 2500, 3)
@@ -609,9 +609,9 @@ contains
             integer,          intent(in) :: box_crop, nspace, maxits
             type(cmdline), allocatable :: refine_cline
             type(string),  allocatable :: volumes(:)
-            type(string) :: directory, project
-            integer :: i
-            logical :: l_sdone
+            type(string)               :: directory, project
+            integer                    :: i
+            logical                    :: l_sdone
             directory = self%stage_directory(inode, stage, l_sdone)
             project = directory%to_char()//'/refine.simple'
             call prepare_tree_refine(node, project, volumes, l_write=.not. l_sdone)
@@ -657,10 +657,10 @@ contains
     ! Branching is determined by occupied states, with no fixed binary-tree assumption.
     subroutine split_node( self, node, decision, children )
         use simple_flex_tree_project_gateway, only: split_tree_states
-        class(flex_tree_strategy), intent(in)    :: self
-        type(flex_tree_node),     intent(inout) :: node
-        type(flex_tree_decision), intent(out)   :: decision
-        type(flex_tree_node), allocatable, intent(out) :: children(:)
+        class(flex_tree_strategy), intent(in)               :: self
+        type(flex_tree_node),      intent(inout)            :: node
+        type(flex_tree_decision),  intent(out)              :: decision
+        type(flex_tree_node),      allocatable, intent(out) :: children(:)
         call split_tree_states(node, decision, children)
     end subroutine split_node
 
@@ -669,11 +669,11 @@ contains
         use simple_string_utils, only: int2str
         use simple_syslib,       only: simple_mkdir, dir_exists, file_exists, simple_rename
         class(flex_tree_strategy), intent(in)  :: self
-        integer,                  intent(in)  :: inode
-        character(len=*),         intent(in)  :: stage
-        logical,                  intent(out) :: l_done
-        type(string) :: directory
-        integer :: k
+        integer,                   intent(in)  :: inode
+        character(len=*),          intent(in)  :: stage
+        logical,                   intent(out) :: l_done
+        type(string)                           :: directory
+        integer                                :: k
         directory = self%node_dir(inode)//'/'//stage
         l_done = file_exists(directory//'/'//STEP_DONE)
         if( l_done ) return
@@ -691,11 +691,11 @@ contains
     subroutine stage_command( self, params, project, program, cline )
         use simple_parameters, only: parameters
         use simple_cmdline,    only: cmdline
-        class(flex_tree_strategy), intent(in) :: self
-        type(parameters), intent(in)    :: params
-        type(string),     intent(in)    :: project
-        character(len=*), intent(in)    :: program
-        type(cmdline),    intent(inout) :: cline
+        class(flex_tree_strategy), intent(in)    :: self
+        type(parameters),          intent(in)    :: params
+        type(string),              intent(in)    :: project
+        character(len=*),          intent(in)    :: program
+        type(cmdline),             intent(inout) :: cline
         call cline%set('prg', program)
         call cline%set('projfile', project)
         call cline%set('mkdir', 'no')
@@ -717,9 +717,9 @@ contains
         class(commander_base), intent(inout) :: runner
         type(cmdline),         intent(inout) :: cline
         type(string),          intent(in)    :: directory
-        type(string) :: previous_cwd
+        type(string)                  :: previous_cwd
         character(len=:), allocatable :: previous_global, previous_origin
-        integer :: nthr, previous_nthr_glob
+        integer                       :: nthr, previous_nthr_glob
         call simple_getcwd(previous_cwd)
         if( allocated(CWD_GLOB) ) previous_global = CWD_GLOB
         if( allocated(CWD_GLOB_ORIG) ) previous_origin = CWD_GLOB_ORIG
@@ -747,11 +747,11 @@ contains
 
     ! Commit only the assessed outcome; child creation invalidates the stored parent decision.
     subroutine apply_node_decision( self, inode, node, decision, children )
-        class(flex_tree_strategy), intent(inout) :: self
-        integer,                  intent(in)    :: inode
-        type(flex_tree_node),     intent(inout) :: node
-        type(flex_tree_decision), intent(in)    :: decision
-        type(flex_tree_node), allocatable, intent(in) :: children(:)
+        class(flex_tree_strategy), intent(inout)           :: self
+        integer,                   intent(in)              :: inode
+        type(flex_tree_node),      intent(inout)           :: node
+        type(flex_tree_decision),  intent(in)              :: decision
+        type(flex_tree_node),      allocatable, intent(in) :: children(:)
         integer :: ichild, child_id
         select case( decision%outcome )
             case(TREE_SPLIT)

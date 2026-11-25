@@ -4,9 +4,9 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('sym', 'Symmetry', 160)
-type(ui_program), target :: symaxis_search
-type(ui_program), target :: symmetrize_map
-type(ui_program), target :: symmetry_test
+type(ui_program),          target    :: symaxis_search
+type(ui_program),          target    :: symmetrize_map
+type(ui_program),          target    :: symmetry_test
 
 contains
 

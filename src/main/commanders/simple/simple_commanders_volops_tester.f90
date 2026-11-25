@@ -14,13 +14,13 @@ implicit none
 private
 public :: run_all_volops_lib_tests
 
-integer, parameter :: BOX = 64, NSEED = 4, NTHR = 4
-real,    parameter :: SMPD = 2.0, MSKDIAM = 100., LP = 8., SIGMA = 3.0                !< A
+integer, parameter :: BOX           = 64, NSEED = 4, NTHR = 4
+real,    parameter :: SMPD          = 2.0, MSKDIAM = 100., LP = 8., SIGMA = 3.0         !< A
 real,    parameter :: SEED(3,NSEED) = reshape([12., 5., 3.,  -4., 14., 6.,  6., -9., 11.,  -10., -6., -8.], [3,NSEED])
 real,    parameter :: AMPS(NSEED)   = [1.0, 0.8, 0.6, 0.9]
-real,    parameter :: SEED_I(3,2) = reshape([24., 16., 13.,  -10., 22., -15.], [3,2])  !< 32 and 28 A out: 120 blobs apart
-real,    parameter :: CORR_FLOOR = 0.95  !< a map moved by the program back onto its exact target
-real,    parameter :: CONTROL_CEIL = 0.8 !< the same comparison before the program ran
+real,    parameter :: SEED_I(3,2)   = reshape([24., 16., 13.,  -10., 22., -15.], [3,2]) !< 32 and 28 A out: 120 blobs apart
+real,    parameter :: CORR_FLOOR    = 0.95                                              !< a map moved by the program back onto its exact target
+real,    parameter :: CONTROL_CEIL  = 0.8                                               !< the same comparison before the program ran
 
 contains
 
@@ -44,9 +44,9 @@ contains
     subroutine test_symaxis_search_d2()
         type(commander_symaxis_search)  :: xsymaxis
         class(cmdline), allocatable     :: cl
-        real, allocatable :: ops(:,:,:), pos(:,:)
-        real    :: rot(3,3), cc_aligned, cc_input, cc_larger
-        integer :: g, k, n
+        real,           allocatable     :: ops(:,:,:), pos(:,:)
+        real                            :: rot(3,3), cc_aligned, cc_input, cc_larger
+        integer                         :: g, k, n
         write(*,'(A)') 'test_symaxis_search_d2'
         ops = group_operators('d2')
         rot = axis_operator([1., 2., 3.] / norm2([1., 2., 3.]), 37.)
@@ -85,9 +85,9 @@ contains
     subroutine test_symaxis_search_i()
         type(commander_symaxis_search)  :: xsymaxis
         class(cmdline), allocatable     :: cl
-        real, allocatable :: ops(:,:,:), pos(:,:)
-        real    :: rot(3,3), cc_aligned, cc_input, cc_larger
-        integer :: g, k, n
+        real,           allocatable     :: ops(:,:,:), pos(:,:)
+        real                            :: rot(3,3), cc_aligned, cc_input, cc_larger
+        integer                         :: g, k, n
         write(*,'(A)') 'test_symaxis_search_i'
         ops = group_operators('i')
         rot = axis_operator([1., 2., 3.] / norm2([1., 2., 3.]), 37.)
@@ -125,8 +125,8 @@ contains
     subroutine test_dock_volpair()
         type(commander_dock_volpair) :: xdock
         class(cmdline), allocatable  :: cl
-        real    :: rot(3,3), shift(3), pos(3,NSEED), cc_docked, cc_input
-        integer :: k
+        real                         :: rot(3,3), shift(3), pos(3,NSEED), cc_docked, cc_input
+        integer                      :: k
         write(*,'(A)') 'test_dock_volpair'
         rot   = axis_operator([-2., 1., 2.] / 3., 52.)
         shift = [5., -4., 3.]
@@ -162,9 +162,9 @@ contains
     subroutine test_centervol()
         type(commander_centervol)   :: xcenter
         class(cmdline), allocatable :: cl
-        real, parameter :: OFFSET(3) = [6., -4., 5.]  !< A
-        real    :: com(3), pos(3,NSEED), off_in, off_out
-        integer :: k
+        real,           parameter   :: OFFSET(3) = [6., -4., 5.] !< A
+        real                        :: com(3), pos(3,NSEED), off_in, off_out
+        integer                     :: k
         write(*,'(A)') 'test_centervol'
         ! equal blobs: the centre of mass is the amplitude-weighted mean of their centres
         com = matmul(SEED, AMPS) / sum(AMPS)
@@ -193,10 +193,10 @@ contains
     subroutine write_blobs( fname, pos, amps )
         character(len=*), intent(in) :: fname
         real,             intent(in) :: pos(:,:), amps(:)
-        type(image) :: vol
+        type(image)       :: vol
         real, allocatable :: rmat(:,:,:)
-        real    :: c0(3), p(3)
-        integer :: i, j, k, b
+        real              :: c0(3), p(3)
+        integer           :: i, j, k, b
         allocate(rmat(BOX,BOX,BOX), source=0.)
         c0 = real(BOX / 2 + 1)
         do k = 1, BOX
@@ -230,11 +230,11 @@ contains
     !> the centre of mass of a map's positive density, in A from the box centre
     function mass_centre( fname ) result( com )
         character(len=*), intent(in) :: fname
-        real :: com(3)
-        type(image) :: vol
+        real              :: com(3)
+        type(image)       :: vol
         real, allocatable :: rmat(:,:,:)
-        real    :: c0(3), m
-        integer :: i, j, k
+        real              :: c0(3), m
+        integer           :: i, j, k
         call vol%new([BOX,BOX,BOX], SMPD)
         call vol%read(string(fname))
         rmat = vol%get_rmat()

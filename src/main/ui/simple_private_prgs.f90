@@ -78,7 +78,7 @@ contains
     function get_private_keys_required( prg ) result( keys_required )
         character(len=*), intent(in)  :: prg
         type(string), allocatable     :: keys_required(:)
-        integer :: iprg, i, nreq
+        integer                       :: iprg, i, nreq
         iprg = 0
         do i=1,n_private_prgs
             if( trim(prg) .eq. private_prgs(i)%name%to_char() )then
@@ -98,7 +98,7 @@ contains
     subroutine print_private_cmdline( prg )
         character(len=*), intent(in) :: prg
         character(len=KEYLEN), allocatable :: sorted_keys(:)
-        integer :: iprg, i, nreq, nopt
+        integer                            :: iprg, i, nreq, nopt
         iprg = 0
         do i=1,n_private_prgs
             if( trim(prg) .eq. private_prgs(i)%name%to_char() )then

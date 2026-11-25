@@ -46,11 +46,11 @@ integer,           parameter :: ARM_NBINS(NARMS)     = [1, 1, 1, 1, 4]
 integer,           parameter :: ARM_BOX_CROP(NARMS)  = [BOX, BOX, BOX, BOX, 48]
 
 type :: arm_result
-    integer :: nstates = 0
+    integer :: nstates        = 0
     real    :: label_accuracy = 0.0
-    real    :: pc_corr = 0.0
-    real    :: map_corr = 0.0
-    real    :: seconds = 0.0
+    real    :: pc_corr        = 0.0
+    real    :: map_corr       = 0.0
+    real    :: seconds        = 0.0
 end type arm_result
 
 contains
@@ -73,8 +73,8 @@ contains
     subroutine test_two_state_backend_matrix( root )
         class(string), intent(in) :: root
         type(arm_result) :: result(NARMS)
-        type(string) :: truth_a, truth_b, truth_mean, truth_diff, oritab, stack, arm_dir
-        integer :: arm
+        type(string)     :: truth_a, truth_b, truth_mean, truth_diff, oritab, stack, arm_dir
+        integer          :: arm
         call create_flex_pca_phantom_fixture(root, NTHR, truth_a, truth_b, truth_mean, truth_diff, oritab, stack)
         do arm = 1, NARMS
             arm_dir = root//'/'//trim(ARM_TAG(arm))
@@ -104,8 +104,8 @@ contains
         type(arm_result), intent(out) :: result
         class(cmdline),            allocatable :: cline
         class(commander_flex_pca), allocatable :: flex_pca
-        integer(timer_int_kind) :: started
-        integer :: levels_saved
+        integer(timer_int_kind)                :: started
+        integer                                :: levels_saved
         allocate(cline, flex_pca)
         result = arm_result()
         call configure_flex_pca_phantom(cline, truth_mean, basis_backend, state_backend, 1, NTHR, nbins=nbins, &
@@ -129,15 +129,15 @@ contains
         type(arm_result), intent(inout) :: result
         class(sp_project), allocatable :: project
         class(oris),       allocatable :: field
-        real(real32), allocatable :: weights(:,:)
-        integer,      allocatable :: labels(:)
-        integer, allocatable :: truth_counts(:,:)
-        real,    allocatable :: corr(:,:)
-        integer :: status, i, state, state_a, state_b, matched_a, matched_b, truth_label, predicted
-        integer :: nlabel_mismatch, nweight_mismatch, nselection_mismatch
-        character(len=STDLEN) :: message
-        character(len=STDLEN) :: state_tag
-        real :: best_score
+        real(real32),      allocatable :: weights(:,:)
+        integer,           allocatable :: labels(:)
+        integer,           allocatable :: truth_counts(:,:)
+        real,              allocatable :: corr(:,:)
+        integer                        :: status, i, state, state_a, state_b, matched_a, matched_b, truth_label, predicted
+        integer                        :: nlabel_mismatch, nweight_mismatch, nselection_mismatch
+        character(len=STDLEN)          :: message
+        character(len=STDLEN)          :: state_tag
+        real                           :: best_score
         allocate(project, field)
         call project%read(string('phantom.simple'))
         field = project%os_ptcl3D
@@ -229,7 +229,7 @@ contains
         real(real32),     intent(in) :: weights(:,:)   !< (nstates, nptcls)
         integer,          intent(in) :: labels(:)
         character(len=4096) :: dir
-        integer :: dirlen, status, u, i
+        integer             :: dirlen, status, u, i
         call get_environment_variable('SIMPLE_FLEX_AB_DIR', dir, dirlen, status)
         if( status /= 0 .or. dirlen == 0 ) return
         call simple_copy_file(string('flex_pca_embedding.bin'), string(trim(dir)//'/'//trim(tag)//'_embedding.bin'))
@@ -245,10 +245,10 @@ contains
         use simple_imghead, only: find_ldim_nptcls
         character(len=*), intent(in) :: tag
         class(string),    intent(in) :: truth_diff
-        type(image) :: truth, pc
+        type(image)  :: truth, pc
         type(string) :: pcfile
-        real    :: smpd_pc
-        integer :: ldim_pc(3), ifoo
+        real         :: smpd_pc
+        integer      :: ldim_pc(3), ifoo
         corr = 0.0
         pcfile = 'flex_pca_fullset_pc001.mrc'
         call assert_true(file_exists(pcfile), trim(tag)//': full-set leading eigenvolume is delivered')
@@ -270,8 +270,8 @@ contains
         character(len=*),  intent(in)  :: tag
         real,              intent(out) :: corr(2)
         type(string) :: map
-        real :: smpd, fsc05, fsc0143
-        integer :: box
+        real         :: smpd, fsc05, fsc0143
+        integer      :: box
         call project%get_vol('vol', state, map, smpd, box)
         call assert_true(file_exists(map), trim(tag)//': delivered state map exists')
         if( .not. file_exists(map) )then

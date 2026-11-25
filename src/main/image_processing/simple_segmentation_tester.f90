@@ -34,11 +34,11 @@ contains
     ! two well-separated Gaussian classes: the threshold falls between them, the
     ! classes come back the right size, and the three overloads agree
     subroutine test_otsu()
-        integer, parameter :: NPER = 500, N = 2*NPER
+        integer, parameter :: NPER    = 500, N = 2*NPER
         real,    parameter :: MEAN_LO = 0.0, MEAN_HI = 10.0, SDEV = 1.0
-        real    :: x(N), x_copy(N), x_out(N), thresh, thresh2
-        logical :: mask(N)
-        integer :: i, nhi
+        real               :: x(N), x_copy(N), x_out(N), thresh, thresh2
+        logical            :: mask(N)
+        integer            :: i, nhi
         write(*,'(A)') 'test_otsu'
         do i = 1,NPER
             x(i)      = gasdev(MEAN_LO, SDEV)
@@ -75,8 +75,8 @@ contains
     ! threshold and the count agree, and the min/max peak bounds are honoured
     subroutine test_peak_thres_fdr()
         integer, parameter :: N = 20
-        real    :: x_up(N), x_low(N), t
-        integer :: npeaks
+        real               :: x_up(N), x_low(N), t
+        integer            :: npeaks
         write(*,'(A)') 'test_peak_thres_fdr'
         ! upper tail: two clear high outliers
         x_up = [ -0.35, -0.25, -0.20, -0.12, -0.08, -0.03, 0.00, 0.01, 0.02, 0.03, &
@@ -105,9 +105,9 @@ contains
     ! a ramp image has one pixel per value, so every count is known exactly
     subroutine test_binarize()
         integer, parameter :: BOX = 32
-        type(image) :: img, out
-        logical     :: mask(BOX,BOX,1)
-        integer     :: i, j
+        type(image)        :: img, out
+        logical            :: mask(BOX,BOX,1)
+        integer            :: i, j
         write(*,'(A)') 'test_binarize'
         call img%new([BOX,BOX,1], 1.0)
         do j = 1,BOX
@@ -147,9 +147,9 @@ contains
     subroutine test_otsu_img()
         integer, parameter :: BOX = 64
         real,    parameter :: RAD = 12.0, RAD_CORE = 6.0, NOISE = 0.01
-        type(image) :: img
-        real    :: thresh
-        integer :: ndisc, ncore
+        type(image)        :: img
+        real               :: thresh
+        integer            :: ndisc, ncore
         write(*,'(A)') 'test_otsu_img'
         ! background 0, disc 1
         call two_level(img, BOX, RAD, 0.0, 1.0, NOISE, ndisc)
@@ -183,10 +183,10 @@ contains
     subroutine test_otsu_robust_fast()
         integer, parameter :: BOX = 64
         real,    parameter :: RAD = 14.0
-        type(image) :: img, clean
-        real    :: thresh(3), d
-        integer :: ndisc, i, j, c, nflip, nwrong_far, nwrong_in
-        logical :: is_in
+        type(image)        :: img, clean
+        real               :: thresh(3), d
+        integer            :: ndisc, i, j, c, nflip, nwrong_far, nwrong_in
+        logical            :: is_in
         write(*,'(A)') 'test_otsu_robust_fast'
         call two_level(clean, BOX, RAD, 0.0, 1.0, 0.01, ndisc)
         call img%copy(clean)
@@ -230,11 +230,11 @@ contains
     ! the local standard deviations are those of the clipped (2*winsz+1)^2 window, and the
     ! binarisation follows t = m * (1 + bias * (s/s_max - 1)) pixel by pixel
     subroutine test_sauvola()
-        integer, parameter :: BOX = 32, WINSZ = 2
+        integer, parameter :: BOX  = 32, WINSZ = 2
         real,    parameter :: BIAS = 0.34
-        type(image) :: img, sdevs
-        real    :: ref(BOX,BOX), avgs(BOX,BOX), sd(BOX,BOX), t, smax, maxdiff
-        integer :: i, j, i1, i2, j1, j2, np, nmismatch
+        type(image)        :: img, sdevs
+        real               :: ref(BOX,BOX), avgs(BOX,BOX), sd(BOX,BOX), t, smax, maxdiff
+        integer            :: i, j, i1, i2, j1, j2, np, nmismatch
         write(*,'(A)') 'test_sauvola'
         ! a step in x plus a slow ramp in y, so windows see both flat and edge regions
         do j = 1,BOX
@@ -293,9 +293,9 @@ contains
     ! thresholded gradient is a ring along the edge
     subroutine test_sobel()
         integer, parameter :: BOX = 64, HALF = 12
-        type(image) :: img
-        real    :: grad(BOX,BOX,1), v
-        integer :: i, j, c, nedge, nfar, d
+        type(image)        :: img
+        real               :: grad(BOX,BOX,1), v
+        integer            :: i, j, c, nedge, nfar, d
         write(*,'(A)') 'test_sobel'
         call img%new([BOX,BOX,1], 1.0)
         do j = 1,BOX
@@ -344,9 +344,9 @@ contains
     ! with explicit thresholds canny returns a thin closed edge along the square
     subroutine test_canny()
         integer, parameter :: BOX = 64, HALF = 14
-        type(image) :: img, edges
-        real    :: v
-        integer :: i, j, c, nedge, nfar, d, nfg
+        type(image)        :: img, edges
+        real               :: v
+        integer            :: i, j, c, nedge, nfar, d, nfg
         write(*,'(A)') 'test_canny'
         c = BOX/2 + 1
         call img%new([BOX,BOX,1], 1.0)
@@ -391,8 +391,8 @@ contains
     ! separate the peaks, and the count-based variants return exactly their count
     subroutine test_detect_peak_thres()
         integer, parameter :: NBG = 200, NPK = 20, N = NBG + NPK, NSPARSE = 4
-        real    :: x(N), x_sparse(NSPARSE), t, t1, t2, t3, t_sparse
-        integer :: i
+        real               :: x(N), x_sparse(NSPARSE), t, t1, t2, t3, t_sparse
+        integer            :: i
         write(*,'(A)') 'test_detect_peak_thres'
         do i = 1,NBG
             x(i) = real(i-1) / real(NBG)              ! 0 .. 0.995, distinct

@@ -31,7 +31,7 @@ type :: ptcl_extractor
     type(image)                   :: gain
     type(eer_decoder)             :: eer
     real(dp)                      :: polyx(POLYDIM), polyy(POLYDIM)
-    real                          :: smpd_physical = 0. ! original input sampling, before any EER upsampling or Fourier cropping
+    real                          :: smpd_physical   = 0. ! original input sampling, before any EER upsampling or Fourier cropping
     real                          :: smpd_out
     real                          :: scale
     real                          :: total_dose, doseperframe, kv
@@ -39,14 +39,14 @@ type :: ptcl_extractor
     integer                       :: nframes, nhotpix, align_frame
     integer                       :: eer_fraction, eer_upsampling=1
     logical                       :: l_dose_weighted = .false.
-    logical                       :: l_scale        = .false.
-    logical                       :: l_gain         = .false.
-    logical                       :: l_eer          = .false.
-    logical                       :: l_poly         = .false.
-    logical                       :: l_neg          = .true.
-    logical                       :: l_mov          = .true.
-    logical                       :: l_model        = .false.
-    logical                       :: exists         = .false.
+    logical                       :: l_scale         = .false.
+    logical                       :: l_gain          = .false.
+    logical                       :: l_eer           = .false.
+    logical                       :: l_poly          = .false.
+    logical                       :: l_neg           = .true.
+    logical                       :: l_mov           = .true.
+    logical                       :: l_model         = .false.
+    logical                       :: exists          = .false.
   contains
     procedure          :: init_model
     procedure          :: init_mov
@@ -94,9 +94,9 @@ contains
     subroutine init_model( self, omov, params )
         use simple_ori,        only: ori
         use simple_parameters, only: parameters
-        class(ptcl_extractor),     intent(inout) :: self
-        class(ori),                intent(in)    :: omov
-        class(parameters), target, intent(in)    :: params
+        class(ptcl_extractor),     intent(inout)      :: self
+        class(ori),                intent(in)         :: omov
+        class(parameters),         target, intent(in) :: params
         call self%kill
         if( .not. omov%isthere('mcmodel') ) THROW_HARD('Motion model entry is absent!')
         call omov%getter('mcmodel',self%docname)
@@ -128,10 +128,10 @@ contains
     subroutine init_mov( self, omic, params, curve )
         use simple_ori,        only: ori
         use simple_parameters, only: parameters
-        class(ptcl_extractor),       intent(inout) :: self
-        class(ori),                  intent(in)    :: omic
-        class(parameters), target,   intent(in)    :: params
-        class(dose_curve), optional, intent(in)    :: curve
+        class(ptcl_extractor),       intent(inout)        :: self
+        class(ori),                  intent(in)           :: omic
+        class(parameters),           target,   intent(in) :: params
+        class(dose_curve),           optional, intent(in) :: curve
         type(string) :: mcconvention
         call self%kill
         self%l_mov = .false.
@@ -203,8 +203,8 @@ contains
 
     subroutine load_model_metadata( self, params )
         use simple_parameters, only: parameters
-        class(ptcl_extractor),     intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
+        class(ptcl_extractor),     intent(inout)      :: self
+        class(parameters),         target, intent(in) :: params
         call self%mmodel%read(self%docname, params)
         if( self%mmodel%nframes < 1 ) THROW_HARD('Motion model contains no movie frames!')
         if( self%mmodel%binning <= 0. ) THROW_HARD('Invalid motion model binning!')
@@ -406,11 +406,11 @@ contains
     end subroutine display
 
     subroutine extract_particles( self, pinds, coords, particles, vmin, vmax, vmean, vsdev )
-        class(ptcl_extractor),    intent(inout) :: self
-        integer,     allocatable, intent(in)    :: pinds(:)
-        integer,                  intent(in)    :: coords(:,:)
-        type(image), allocatable, intent(inout) :: particles(:)
-        real,                     intent(out)   :: vmin, vmax, vmean, vsdev
+        class(ptcl_extractor),    intent(inout)              :: self
+        integer,                  allocatable, intent(in)    :: pinds(:)
+        integer,                  intent(in)                 :: coords(:,:)
+        type(image),              allocatable, intent(inout) :: particles(:)
+        real,                     intent(out)                :: vmin, vmax, vmean, vsdev
         real    :: rmin, rmax, rmean, rsdev
         integer :: i,j,n,cnt
         logical :: l_err
@@ -445,12 +445,12 @@ contains
     end subroutine extract_particles
 
     subroutine extract_particles_from_mic( self, mic, pinds, coords, particles, vmin, vmax, vmean, vsdev )
-        class(ptcl_extractor),    intent(inout) :: self
-        class(image),             intent(in)    :: mic
-        integer,     allocatable, intent(in)    :: pinds(:)
-        integer,                  intent(in)    :: coords(:,:)
-        type(image),              intent(inout) :: particles(:)
-        real,                     intent(out)   :: vmin, vmax, vmean, vsdev
+        class(ptcl_extractor),    intent(inout)           :: self
+        class(image),             intent(in)              :: mic
+        integer,                  allocatable, intent(in) :: pinds(:)
+        integer,                  intent(in)              :: coords(:,:)
+        type(image),              intent(inout)           :: particles(:)
+        real,                     intent(out)             :: vmin, vmax, vmean, vsdev
         real    :: rmin, rmax, rmean, rsdev, sdev_noise
         integer :: i,j,n,cnt,noutside
         logical :: l_err
@@ -613,9 +613,9 @@ contains
         integer,               intent(in)    :: ptcl_pos_in(2) ! top left corner, scaled
         class(image),          intent(inout) :: ptcl_out
         logical, parameter :: local_polynomial = .false.
-        real(dp)    :: cx,cy, polyx(POLYDIM), polyy(POLYDIM)
-        real        :: shift(2), aniso_shift(2), center(2), rpos(2)
-        integer     :: pos(2), foo, t, ithr
+        real(dp)           :: cx,cy, polyx(POLYDIM), polyy(POLYDIM)
+        real               :: shift(2), aniso_shift(2), center(2), rpos(2)
+        integer            :: pos(2), foo, t, ithr
         ithr = omp_get_thread_num() + 1
         ! sanity check
         if( any(ptcl_out%get_ldim() /= [self%box,self%box,1]) )then
@@ -690,9 +690,9 @@ contains
         class(ptcl_extractor), intent(inout) :: self
         real,    allocatable :: rsum(:,:)
         integer, allocatable :: outlier_coords(:,:)
-        real    :: ave, sdev, var, lthresh, uthresh
-        integer :: iframe, noutliers, noutliers_detected, i, j, k
-        logical :: outliers(self%ldim(1),self%ldim(2)), err
+        real                 :: ave, sdev, var, lthresh, uthresh
+        integer              :: iframe, noutliers, noutliers_detected, i, j, k
+        logical              :: outliers(self%ldim(1),self%ldim(2)), err
         allocate(rsum(self%ldim(1),self%ldim(2)), source=0.)
         write(logfhandle,'(a)') '>>> REMOVING DEAD/HOT PIXELS'
         do iframe = 1,self%nframes
@@ -741,7 +741,7 @@ contains
     subroutine add_eer_gain_defects( self )
         class(ptcl_extractor), intent(inout) :: self
         logical, allocatable :: outliers(:,:)
-        integer :: i, j, k, nmodel_outliers, noutliers
+        integer              :: i, j, k, nmodel_outliers, noutliers
         if( .not.self%gain%exists() ) THROW_HARD('EER gain image is absent!')
         allocate(outliers(self%ldim(1),self%ldim(2)), source=.false.)
         if( allocated(self%hotpix_coords) )then
@@ -785,9 +785,9 @@ contains
         class(ptcl_extractor), intent(inout) :: self
         integer,               intent(in)    :: outlier_coords(:,:)
         real, allocatable :: rsum(:,:)
-        real    :: ave, sdev, var
-        integer :: iframe, noutliers
-        logical :: err
+        real              :: ave, sdev, var
+        integer           :: iframe, noutliers
+        logical           :: err
         if( size(outlier_coords, dim=1) /= 2 )then
             THROW_HARD('Outlier coordinates must be a 2-by-N array!')
         endif
@@ -814,12 +814,12 @@ contains
         class(ptcl_extractor), intent(inout) :: self
         integer,               intent(in)    :: outlier_coords(:,:)
         real,                  intent(in)    :: sum_ave, sum_sdev
-        integer, parameter :: HWINSZ = 5
-        integer, parameter :: NVALS  = (2 * HWINSZ + 1)**2
-        real, allocatable :: new_vals(:,:)
-        real    :: vals(NVALS), ave, sdev, lthresh, uthresh, l, u, localave
-        integer :: iframe, noutliers, i, j, k, ii, jj, n
-        logical :: outliers(self%ldim(1),self%ldim(2))
+        integer, parameter   :: HWINSZ = 5
+        integer, parameter   :: NVALS  = (2 * HWINSZ + 1)**2
+        real,    allocatable :: new_vals(:,:)
+        real                 :: vals(NVALS), ave, sdev, lthresh, uthresh, l, u, localave
+        integer              :: iframe, noutliers, i, j, k, ii, jj, n
+        logical              :: outliers(self%ldim(1),self%ldim(2))
         if( size(outlier_coords, dim=1) /= 2 )then
             THROW_HARD('Outlier coordinates must be a 2-by-N array!')
         endif
@@ -931,8 +931,8 @@ contains
     end function does_exist
 
     pure subroutine get_particle_mask(self, mask)
-        class(ptcl_extractor), intent(in) :: self
-        logical, allocatable, intent(out) :: mask(:,:,:)
+        class(ptcl_extractor), intent(in)               :: self
+        logical,               allocatable, intent(out) :: mask(:,:,:)
         if( allocated(self%particle_mask) ) mask = self%particle_mask
     end subroutine get_particle_mask
 

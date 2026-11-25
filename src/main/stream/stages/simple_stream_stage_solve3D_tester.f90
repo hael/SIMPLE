@@ -26,7 +26,7 @@ character(len=*), parameter :: TEST_PROJFILE = 'test_solve3D.simple'
 character(len=*), parameter :: UPSTREAM      = 'pool2D' ! the pool 2D stage directory (dir_target)
 integer,          parameter :: NSTATES       = 3
 integer,          parameter :: VOL_BOX       = 16
-integer,          parameter :: DOCK_BOX      = 64   ! the docking's smallest box (dock_vols)
+integer,          parameter :: DOCK_BOX      = 64       ! the docking's smallest box (dock_vols)
 real,             parameter :: VOL_SMPD      = 2.0
 
 contains
@@ -66,15 +66,15 @@ contains
     !! as an independently refined state in another frame and hand would be, are near-duplicates
     subroutine test_reference_docking()
         class(stream_stage_solve3D), allocatable :: stage
-        class(cmdline), allocatable:: cline
-        class(sp_project), allocatable:: res
-        type(string)     :: cwd_saved, root
-        real, parameter  :: TRIPOD(3,3)     = reshape([12., 0., 0.,  -12., 4., 0.,  0., -6., 10.], [3,3])
-        real, parameter  :: TRIPOD_AMPS(3)  = [1.0, 0.6, 0.8], TRIPOD_SIGS(3) = [4.0, 2.5, 3.0]
-        real, parameter  :: CHAIN(3,4)      = reshape([-18., 0., 0.,  -6., 0., 0.,  6., 0., 0.,  18., 0., 0.], [3,4])
-        real, parameter  :: CHAIN_AMPS(4)   = 1., CHAIN_SIGS(4) = 3.
-        real    :: tripod_copy(3,3)
-        integer :: nfail0, i
+        class(cmdline),              allocatable :: cline
+        class(sp_project),           allocatable :: res
+        type(string)                             :: cwd_saved, root
+        real,                        parameter   :: TRIPOD(3,3)     = reshape([12., 0., 0.,  -12., 4., 0.,  0., -6., 10.], [3,3])
+        real,                        parameter   :: TRIPOD_AMPS(3)  = [1.0, 0.6, 0.8], TRIPOD_SIGS(3) = [4.0, 2.5, 3.0]
+        real,                        parameter   :: CHAIN(3,4)      = reshape([-18., 0., 0.,  -6., 0., 0.,  6., 0., 0.,  18., 0., 0.], [3,4])
+        real,                        parameter   :: CHAIN_AMPS(4)   = 1., CHAIN_SIGS(4) = 3.
+        real                                     :: tripod_copy(3,3)
+        integer                                  :: nfail0, i
         allocate(cline, res)
         allocate(stage)
         write(*,'(A)') 'test_reference_docking'
@@ -131,8 +131,8 @@ contains
             real,          intent(in) :: centres(:,:), amps(:), sigs(:)
             type(image)       :: vol
             real, allocatable :: rmat(:,:,:)
-            real    :: r(3)
-            integer :: x, y, z, k
+            real              :: r(3)
+            integer           :: x, y, z, k
             allocate(rmat(DOCK_BOX,DOCK_BOX,DOCK_BOX), source=0.)
             do z = 1,DOCK_BOX
                 do y = 1,DOCK_BOX
@@ -154,9 +154,9 @@ contains
 
     subroutine test_init_params()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(string)                  :: cwd_saved, root
-        integer                       :: nfail0
+        type(cmdline)                            :: cline
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_init_params'
         nfail0 = tests_failed
@@ -180,9 +180,9 @@ contains
     !> a restart removes a leftover termination file, which would end the restarted stage at once
     subroutine test_restart_removes_term_stream()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(string)                  :: cwd_saved, root
-        integer                       :: nfail0
+        type(cmdline)                            :: cline
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_restart_removes_term_stream'
         nfail0 = tests_failed
@@ -203,11 +203,11 @@ contains
     !> exports are taken in export order whatever order they are listed in, each once
     subroutine test_watch_order_and_mskdiam()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(rec_iterator)            :: it
-        type(chunk_rec)               :: crec
-        type(string)                  :: cwd_saved, root
-        integer                       :: nfail0
+        type(cmdline)                            :: cline
+        type(rec_iterator)                       :: it
+        type(chunk_rec)                          :: crec
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_watch_order_and_mskdiam'
         nfail0 = tests_failed
@@ -246,10 +246,10 @@ contains
     !! keeps its rows, deselected; the classes are the newest publication's
     subroutine test_merge_publications()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(sp_project)              :: set
-        type(string)                  :: cwd_saved, root
-        integer                       :: nfail0, i
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: set
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0, i
         allocate(stage)
         write(*,'(A)') 'test_merge_publications'
         nfail0 = tests_failed
@@ -320,13 +320,13 @@ contains
     !! stage's earlier ones, whose state volume stays; a publication without FRCs cannot be used
     subroutine test_take_cavgs()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)      :: cline
-        type(sp_project)   :: set
-        type(image)        :: img
-        type(string)       :: cwd_saved, root, stk, frcs, problem
-        real               :: smpd, mskdiam
-        integer            :: nfail0, ncls
-        integer, parameter :: NCLS_PUB = 4, NCLS_OLD = 2, BOX = 8
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: set
+        type(image)                              :: img
+        type(string)                             :: cwd_saved, root, stk, frcs, problem
+        real                                     :: smpd, mskdiam
+        integer                                  :: nfail0, ncls
+        integer,                     parameter   :: NCLS_PUB = 4, NCLS_OLD = 2, BOX = 8
         allocate(stage)
         write(*,'(A)') 'test_take_cavgs'
         nfail0 = tests_failed
@@ -400,10 +400,10 @@ contains
     !! other rows follow them
     subroutine test_first_publication()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(sp_project)              :: set
-        type(string)                  :: cwd_saved, root
-        integer                       :: nfail0
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: set
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_first_publication'
         nfail0 = tests_failed
@@ -451,10 +451,10 @@ contains
     !! a publication without one leaves it
     subroutine test_mskdiam_from_each_publication()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)    :: cline
-        type(sp_project) :: set
-        type(string)     :: cwd_saved, root
-        integer          :: nfail0
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: set
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_mskdiam_from_each_publication'
         nfail0 = tests_failed
@@ -481,10 +481,10 @@ contains
     !> a publication whose stacks disagree with the rows is found before anything is merged
     subroutine test_rows_problem()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)    :: cline
-        type(sp_project) :: set
-        type(string)     :: cwd_saved, root, problem
-        integer          :: nfail0
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: set
+        type(string)                             :: cwd_saved, root, problem
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_rows_problem'
         nfail0 = tests_failed
@@ -543,10 +543,10 @@ contains
     !! (the comparison of the states after docking: test_reference_docking, a library test)
     subroutine test_reference_volumes()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)    :: cline
-        type(sp_project) :: res
-        type(string)     :: cwd_saved, root
-        integer          :: nfail0
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: res
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_reference_volumes'
         nfail0 = tests_failed
@@ -599,10 +599,10 @@ contains
     !! references; without any volumes there are none
     subroutine test_failed_attempts()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)    :: cline
-        type(sp_project) :: res
-        type(string)     :: cwd_saved, root
-        integer          :: nfail0
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: res
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_failed_attempts'
         nfail0 = tests_failed
@@ -656,10 +656,10 @@ contains
     !! their sub-classes; a matching of other rows is not taken
     subroutine test_assignment()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)    :: cline
-        type(sp_project) :: set, res
-        type(string)     :: cwd_saved, root
-        integer          :: nfail0
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: set, res
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_assignment'
         nfail0 = tests_failed
@@ -755,16 +755,16 @@ contains
     !! from 1 (an empty state left out), with the refined poses; a result of other rows is not taken
     subroutine test_local_refinement()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)    :: cline
-        type(sp_project) :: set, res
-        type(ori)        :: o
-        type(image)      :: vol
-        type(string)     :: cwd_saved, root, volfile, fscfile
-        real, allocatable :: fsc(:)
-        integer, allocatable :: eo_rows(:)
-        integer, parameter :: STATES(5) = [1, 1, 3, 3, 0], JOB_STATES(5) = [1, 1, 2, 2, 0]
-        integer          :: nfail0, i, k
-        logical          :: l_valid
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: set, res
+        type(ori)                                :: o
+        type(image)                              :: vol
+        type(string)                             :: cwd_saved, root, volfile, fscfile
+        real,                        allocatable :: fsc(:)
+        integer,                     allocatable :: eo_rows(:)
+        integer,                     parameter   :: STATES(5) = [1, 1, 3, 3, 0], JOB_STATES(5) = [1, 1, 2, 2, 0]
+        integer                                  :: nfail0, i, k
+        logical                                  :: l_valid
         allocate(stage)
         write(*,'(A)') 'test_local_refinement'
         nfail0 = tests_failed
@@ -837,8 +837,8 @@ contains
     !! assignment; earlier assignments and folders set aside for unfinished jobs go
     subroutine test_retention()
         class(stream_stage_solve3D), allocatable :: stage
-        type(string) :: cwd_saved, root
-        integer      :: nfail0, i, funit
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0, i, funit
         allocate(stage)
         write(*,'(A)') 'test_retention'
         nfail0 = tests_failed
@@ -874,7 +874,7 @@ contains
 
     !> a publication flagged pool_final=yes in its out segment is the pool's final one
     subroutine check_final_publication()
-        type(sp_project) :: set
+        type(sp_project)                         :: set
         class(stream_stage_solve3D), allocatable :: stage
         allocate(stage)
         call add_cavgs_entry(set, 150.)
@@ -887,15 +887,15 @@ contains
     !> one status message per call, with the stage name, the phase and the particle count
     subroutine test_send_status()
         class(stream_stage_solve3D), allocatable                   :: stage
-        type(cmdline)                                   :: cline
-        type(stream_pipe)                               :: reader
-        type(gui_metadata_stream_solve3D_multistate) :: status
-        character(len=:), allocatable                   :: buffer
-        type(string)                                    :: cwd_saved, root, stage_name
-        integer(c_int)                                  :: fds(2)
-        integer :: nfail0, meta_type, solve3D_stage, refine_it, nstates_got, nimported, nlast, tlast
-        logical :: l_assigned
-        real    :: res
+        type(cmdline)                                              :: cline
+        type(stream_pipe)                                          :: reader
+        type(gui_metadata_stream_solve3D_multistate)               :: status
+        character(len=:),            allocatable                   :: buffer
+        type(string)                                               :: cwd_saved, root, stage_name
+        integer(c_int)                                             :: fds(2)
+        integer                                                    :: nfail0, meta_type, solve3D_stage, refine_it, nstates_got, nimported, nlast, tlast
+        logical                                                    :: l_assigned
+        real                                                       :: res
         allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
@@ -930,20 +930,20 @@ contains
     !! resolution is kept; a state without a volume is not sent, and a state without an FSC
     !! curve is sent without one (not with the previous state's)
     subroutine test_send_volumes()
-        class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(stream_pipe)             :: reader
-        type(image)                   :: vol
-        type(gui_metadata_vol3D)      :: meta_vol
+        class(stream_stage_solve3D), allocatable     :: stage
+        type(cmdline)                                :: cline
+        type(stream_pipe)                            :: reader
+        type(image)                                  :: vol
+        type(gui_metadata_vol3D)                     :: meta_vol
         type(gui_metadata_stream_solve3D_multistate) :: status
-        type(json_core)               :: json
-        type(json_value), pointer     :: json_ptr
-        character(len=:), allocatable :: buffer
-        real,             allocatable :: res(:), fsc(:), invres_got(:), fsc_got(:)
-        type(string)                  :: cwd_saved, root, volfile, fscfile
-        integer(c_int)                :: fds(2)
-        integer                       :: nfail0, meta_type, nvols, ntiles, iptcl, k, pop_got
-        logical                       :: l_fsc_state(2), l_found
+        type(json_core)                              :: json
+        type(json_value),            pointer         :: json_ptr
+        character(len=:),            allocatable     :: buffer
+        real,                        allocatable     :: res(:), fsc(:), invres_got(:), fsc_got(:)
+        type(string)                                 :: cwd_saved, root, volfile, fscfile
+        integer(c_int)                               :: fds(2)
+        integer                                      :: nfail0, meta_type, nvols, ntiles, iptcl, k, pop_got
+        logical                                      :: l_fsc_state(2), l_found
         allocate(stage)
         write(*,'(A)') 'test_send_volumes'
         nfail0 = tests_failed
@@ -1031,16 +1031,16 @@ contains
     !! orientations, with the reprojections copied beside them
     subroutine test_send_refs()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(sp_project)              :: res
-        type(stream_pipe)             :: reader
-        type(gui_metadata_vol3D)      :: meta_vol
-        character(len=:), allocatable :: buffer
-        real,             allocatable :: invres_got(:), fsc_got(:)
-        type(string)                  :: cwd_saved, root
-        integer(c_int)                :: fds(2)
-        integer                       :: nfail0, meta_type, nvols, ntiles
-        logical                       :: l_sent(3), l_fsc
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: res
+        type(stream_pipe)                        :: reader
+        type(gui_metadata_vol3D)                 :: meta_vol
+        character(len=:),            allocatable :: buffer
+        real,                        allocatable :: invres_got(:), fsc_got(:)
+        type(string)                             :: cwd_saved, root
+        integer(c_int)                           :: fds(2)
+        integer                                  :: nfail0, meta_type, nvols, ntiles
+        logical                                  :: l_sent(3), l_fsc
         allocate(stage)
         write(*,'(A)') 'test_send_refs'
         nfail0 = tests_failed
@@ -1089,18 +1089,18 @@ contains
     !! request is written once
     subroutine test_snapshot3D()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)                      :: cline
-        type(stream_pipe)                  :: writer, reader
-        type(gui_metadata_stream_update)   :: update
-        type(gui_metadata_stream_snapshot) :: report
-        type(sp_project)                   :: proj
-        type(image)                        :: vol
-        character(len=:), allocatable      :: buffer
-        integer,          allocatable      :: states(:)
-        type(string)                       :: cwd_saved, root, fname, volfile
-        integer(c_int)                     :: upd(2), gui(2)
-        integer                            :: nfail0, id, nptcls, tstamp, istate, iptcl
-        integer, parameter                 :: PTCL_STATES(6) = [1, 1, 2, 2, 3, 0]
+        type(cmdline)                            :: cline
+        type(stream_pipe)                        :: writer, reader
+        type(gui_metadata_stream_update)         :: update
+        type(gui_metadata_stream_snapshot)       :: report
+        type(sp_project)                         :: proj
+        type(image)                              :: vol
+        character(len=:),            allocatable :: buffer
+        integer,                     allocatable :: states(:)
+        type(string)                             :: cwd_saved, root, fname, volfile
+        integer(c_int)                           :: upd(2), gui(2)
+        integer                                  :: nfail0, id, nptcls, tstamp, istate, iptcl
+        integer,                     parameter   :: PTCL_STATES(6) = [1, 1, 2, 2, 3, 0]
         allocate(stage)
         write(*,'(A)') 'test_snapshot3D'
         nfail0 = tests_failed
@@ -1196,9 +1196,9 @@ contains
     !> the public loop waits for pool 2D's folder, then attaches; no job without particles
     subroutine test_iterate_waits()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(string)                  :: cwd_saved, root
-        integer                       :: nfail0
+        type(cmdline)                            :: cline
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_iterate_waits'
         nfail0 = tests_failed
@@ -1220,9 +1220,9 @@ contains
 
     subroutine test_finished()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(string)                  :: cwd_saved, root
-        integer                       :: nfail0
+        type(cmdline)                            :: cline
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
@@ -1254,7 +1254,7 @@ contains
     end subroutine set_test_cline
 
     subroutine make_test_stage( stage, cline )
-        class(stream_stage_solve3D), intent(inout) :: stage
+        class(stream_stage_solve3D),   intent(inout) :: stage
         type(cmdline),                 intent(inout) :: cline
         call stage%init_params(cline)
         call stage%init_gui(-1, -1)
@@ -1282,10 +1282,10 @@ contains
     end subroutine write_export
 
     subroutine make_set( set, stks, nptcls_stk, ncls, nrejected, icls )
-        type(sp_project),  intent(inout) :: set
-        character(len=1),  intent(in)    :: stks(:)
-        integer,           intent(in)    :: nptcls_stk(:), ncls
-        integer, optional, intent(in)    :: nrejected, icls
+        type(sp_project),  intent(inout)        :: set
+        character(len=1),  intent(in)           :: stks(:)
+        integer,           intent(in)           :: nptcls_stk(:), ncls
+        integer,           optional, intent(in) :: nrejected, icls
         integer :: istk, iptcl, fromp, nptcls
         nptcls = sum(nptcls_stk)
         call set%os_mic%new(size(stks), is_ptcl=.false.)
@@ -1333,15 +1333,15 @@ contains
     ! state 3. Each state's volume is a wave along its own axis (the fast tests compare no states:
     ! no docking).
     subroutine make_cavgs3D_result( res, angdist, overlap, angdist_median )
-        type(sp_project),  intent(inout) :: res
-        real,              intent(in)    :: angdist, overlap
-        real, optional,    intent(in)    :: angdist_median
-        integer, parameter :: CLS_STATES(4) = [3, 0, 1, 3]
-        real,    parameter :: TWOPI = 6.2831853
-        type(image)  :: vol
-        type(string) :: volfile
-        real, allocatable :: rmat(:,:,:)
-        integer      :: s, i, x, y, z, r(3)
+        type(sp_project),  intent(inout)           :: res
+        real,              intent(in)              :: angdist, overlap
+        real,              optional,    intent(in) :: angdist_median
+        integer, parameter   :: CLS_STATES(4) = [3, 0, 1, 3]
+        real,    parameter   :: TWOPI         = 6.2831853
+        type(image)          :: vol
+        type(string)         :: volfile
+        real,    allocatable :: rmat(:,:,:)
+        integer              :: s, i, x, y, z, r(3)
         allocate(rmat(VOL_BOX,VOL_BOX,VOL_BOX))
         call res%kill
         call res%os_cls3D%new(size(CLS_STATES), is_ptcl=.false.)

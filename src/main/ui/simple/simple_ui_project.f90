@@ -4,29 +4,29 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('project', 'Project Management', 10)
-type(ui_program), target :: consolidate_particles
-type(ui_program), target :: export_relion
-type(ui_program), target :: export_starproject
-type(ui_program), target :: extract_subproj
-type(ui_program), target :: import_boxes
-type(ui_program), target :: import_cavgs
-type(ui_program), target :: import_movies
-type(ui_program), target :: import_particles
-type(ui_program), target :: import_starproject
-type(ui_program), target :: merge_projects
-type(ui_program), target :: new_project
-type(ui_program), target :: print_project_field
-type(ui_program), target :: print_project_info
-type(ui_program), target :: prune_project
-type(ui_program), target :: replace_project_field
-type(ui_program), target :: selection
-type(ui_program), target :: select_micrographs
-type(ui_program), target :: select_particles
-type(ui_program), target :: update_project
-type(ui_program), target :: fix_projfile
-type(ui_program), target :: zero_project_shifts
-type(ui_program), target :: write_mic_filetab
-type(ui_program), target :: reimport_particles
+type(ui_program),          target    :: consolidate_particles
+type(ui_program),          target    :: export_relion
+type(ui_program),          target    :: export_starproject
+type(ui_program),          target    :: extract_subproj
+type(ui_program),          target    :: import_boxes
+type(ui_program),          target    :: import_cavgs
+type(ui_program),          target    :: import_movies
+type(ui_program),          target    :: import_particles
+type(ui_program),          target    :: import_starproject
+type(ui_program),          target    :: merge_projects
+type(ui_program),          target    :: new_project
+type(ui_program),          target    :: print_project_field
+type(ui_program),          target    :: print_project_info
+type(ui_program),          target    :: prune_project
+type(ui_program),          target    :: replace_project_field
+type(ui_program),          target    :: selection
+type(ui_program),          target    :: select_micrographs
+type(ui_program),          target    :: select_particles
+type(ui_program),          target    :: update_project
+type(ui_program),          target    :: fix_projfile
+type(ui_program),          target    :: zero_project_shifts
+type(ui_program),          target    :: write_mic_filetab
+type(ui_program),          target    :: reimport_particles
 
 contains
 

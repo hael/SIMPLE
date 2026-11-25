@@ -13,8 +13,8 @@ implicit none
 private
 public :: run_all_bspline_smoother_tests
 
-real,    parameter :: LAMBDAS(2) = [0.2, 5.]
-real(dp), parameter :: TWOPI_DP = 2.d0 * acos(-1.d0)
+real,     parameter :: LAMBDAS(2) = [0.2, 5.]
+real(dp), parameter :: TWOPI_DP   = 2.d0 * acos(-1.d0)
 
 contains
 
@@ -61,7 +61,7 @@ contains
         type(image), intent(inout) :: img
         integer,     intent(in)    :: n(3), k(3)
         real, allocatable :: rmat(:,:,:)
-        integer :: i, j, l
+        integer           :: i, j, l
         allocate(rmat(n(1),n(2),n(3)))
         do l = 1,n(3)
             do j = 1,n(2)
@@ -76,14 +76,14 @@ contains
 
     ! one smoother for both boxes: the kernels are remade when the box changes
     subroutine test_transfer_2d()
-        integer, parameter :: NBOX = 2, NFREQ = 5
-        integer, parameter :: BOXES(3,NBOX)  = reshape([64,64,1, 64,48,1], [3,NBOX])
-        integer, parameter :: FREQS(3,NFREQ) = reshape([0,0,0, 3,0,0, 5,7,0, 12,9,0, 0,11,0], [3,NFREQ])
+        integer, parameter     :: NBOX           = 2, NFREQ = 5
+        integer, parameter     :: BOXES(3,NBOX)  = reshape([64,64,1, 64,48,1], [3,NBOX])
+        integer, parameter     :: FREQS(3,NFREQ) = reshape([0,0,0, 3,0,0, 5,7,0, 12,9,0, 0,11,0], [3,NFREQ])
         type(bspline_smoother) :: bs
         type(image)            :: img
-        real, allocatable      :: before(:,:,:), after(:,:,:)
-        real    :: h
-        integer :: ib, il, ik
+        real,    allocatable   :: before(:,:,:), after(:,:,:)
+        real                   :: h
+        integer                :: ib, il, ik
         write(*,'(A)') 'test_transfer_2d'
         call bs%new
         do ib = 1,NBOX
@@ -105,13 +105,13 @@ contains
     end subroutine test_transfer_2d
 
     subroutine test_transfer_3d()
-        integer, parameter :: NFREQ = 3, N(3) = [32,32,32]
-        integer, parameter :: FREQS(3,NFREQ) = reshape([0,0,0, 3,2,1, 5,0,4], [3,NFREQ])
+        integer, parameter     :: NFREQ          = 3, N(3) = [32,32,32]
+        integer, parameter     :: FREQS(3,NFREQ) = reshape([0,0,0, 3,2,1, 5,0,4], [3,NFREQ])
         type(bspline_smoother) :: bs
         type(image)            :: img
-        real, allocatable      :: before(:,:,:), after(:,:,:)
-        real    :: h
-        integer :: il, ik
+        real,    allocatable   :: before(:,:,:), after(:,:,:)
+        real                   :: h
+        integer                :: il, ik
         write(*,'(A)') 'test_transfer_3d'
         call bs%new
         do il = 1,size(LAMBDAS)

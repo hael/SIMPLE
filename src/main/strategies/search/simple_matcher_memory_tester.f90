@@ -11,9 +11,9 @@ public :: run_all_matcher_memory_tests
 contains
 
     subroutine run_all_matcher_memory_tests()
-        integer(int64), parameter :: GIB = 1024_int64**3, SLOT = 256_int64*1024_int64
+        integer(int64),    parameter   :: GIB = 1024_int64**3, SLOT = 256_int64*1024_int64
         class(parameters), allocatable :: params
-        integer(int64) :: fixed, slot_bytes, larger_fixed, larger_slot
+        integer(int64)                 :: fixed, slot_bytes, larger_fixed, larger_slot
         write(*,'(A)') '**** running matcher memory tests ****'
         call assert_int(7, matcher_batch_capacity(1000000,1000,4,3*GIB+7*SLOT+17,3*GIB,SLOT), &
             &'capacity uses 64-bit byte counts and discards a partial slot')

@@ -25,7 +25,7 @@ integer,          parameter :: MANIFEST_VERSION      = 3
 character(len=*), parameter :: MANIFEST_FNAME        = 'solve3D_manifest.txt'
 character(len=*), parameter :: MANIFEST_PROJINFO_KEY = 'solve3D_manifest'
 character(len=*), parameter :: RUN_ID_PROJINFO_KEY   = 'solve3D_run_id'
-integer,          parameter :: KLEN = 24
+integer,          parameter :: KLEN                  = 24
 
 !> Keys of the base run's command line, as given at entry (before any default
 !! is injected), that the manifest records: the solution, reconstruction and
@@ -63,9 +63,9 @@ character(len=KLEN), parameter :: MANIFEST_OVERRIDABLE_KEYS(3) = [character(len=
 !> one stage of the ladder: the planned record and the limits actually
 !! emitted (0 = not on the stage line, -1 = a stage the run never ran)
 type :: solve3D_stage_record
-    real    :: lp_planned = 0., lp_emitted = 0., lpstop_emitted = 0.
-    real    :: smpd_crop = 0., scale = 1., trslim = 0., frc_crit = 0.
-    integer :: box_crop = 0
+    real    :: lp_planned  = 0., lp_emitted = 0., lpstop_emitted = 0.
+    real    :: smpd_crop   = 0., scale = 1., trslim = 0., frc_crit = 0.
+    integer :: box_crop    = 0
     logical :: l_autoscale = .false., l_lpset = .false.
 end type solve3D_stage_record
 
@@ -73,26 +73,26 @@ end type solve3D_stage_record
 type :: solve3D_manifest
     private
     type(string)       :: fname              !< the file it was read from
-    character(len=64)  :: run_id  = ''
-    character(len=32)  :: program = ''
+    character(len=64)  :: run_id   = ''
+    character(len=32)  :: program  = ''
     logical            :: complete = .false.
     logical            :: eligible = .false. !< may serve as a frozen input of solve3D_addon
     ! project and particle-layout identity
-    integer            :: nrows = 0
+    integer            :: nrows         = 0
     integer(int64)     :: layout_digest = 0_int64, stack_digest = 0_int64, optics_digest = 0_int64
     ! the solution
     integer            :: nstates = 0, box = 0
-    real               :: smpd = 0., mskdiam = 0.
-    character(len=16)  :: pgrp = ''
+    real               :: smpd    = 0., mskdiam = 0.
+    character(len=16)  :: pgrp    = ''
     ! effective and provenance values of the base population
-    integer            :: nsample = 0, nptcls_eff = 0
-    real               :: update_frac = 1.
+    integer            :: nsample       = 0, nptcls_eff = 0
+    real               :: update_frac   = 1.
     logical            :: full_sampling = .false.
     ! stage command-line shape at planning time
     logical            :: lp_on_line = .false., lpstop_on_line = .false.
-    real               :: lp_line = 0., lpstop_line = 0.
+    real               :: lp_line    = 0., lpstop_line = 0.
     ! the ladder
-    integer            :: first_stage = 0, last_stage = 0
+    integer                                 :: first_stage = 0, last_stage = 0
     type(solve3D_stage_record), allocatable :: stages(:)
     ! inputs as given
     character(len=KLEN), allocatable :: input_keys(:)
@@ -165,7 +165,7 @@ contains
     !! set_solution (before record_artifacts), set_sampling, set_stage_line,
     !! set_ladder, record_inputs.
     subroutine new( self, run_id, program_name, eligible, spproj )
-        class(solve3D_manifest), intent(inout) :: self
+        class(solve3D_manifest),    intent(inout) :: self
         character(len=*),           intent(in)    :: run_id, program_name
         logical,                    intent(in)    :: eligible
         class(sp_project),          intent(inout) :: spproj
@@ -182,7 +182,7 @@ contains
 
     !> the completed solution: state layout, point group, native grid and mask
     subroutine set_solution( self, nstates, pgrp, box, smpd, mskdiam )
-        class(solve3D_manifest), intent(inout) :: self
+        class(solve3D_manifest),    intent(inout) :: self
         integer,                    intent(in)    :: nstates, box
         character(len=*),           intent(in)    :: pgrp
         real,                       intent(in)    :: smpd, mskdiam
@@ -195,7 +195,7 @@ contains
 
     !> the effective sampling of the base population
     subroutine set_sampling( self, nsample, nptcls_eff, update_frac, full_sampling )
-        class(solve3D_manifest), intent(inout) :: self
+        class(solve3D_manifest),    intent(inout) :: self
         integer,                    intent(in)    :: nsample, nptcls_eff
         real,                       intent(in)    :: update_frac
         logical,                    intent(in)    :: full_sampling
@@ -207,7 +207,7 @@ contains
 
     !> the stage command line's shape at planning time: which limits were on it
     subroutine set_stage_line( self, lp_on_line, lp, lpstop_on_line, lpstop )
-        class(solve3D_manifest), intent(inout) :: self
+        class(solve3D_manifest),    intent(inout) :: self
         logical,                    intent(in)    :: lp_on_line, lpstop_on_line
         real,                       intent(in)    :: lp, lpstop
         self%lp_on_line     = lp_on_line
@@ -220,7 +220,7 @@ contains
     subroutine set_ladder( self, first_stage, last_stage, stages )
         class(solve3D_manifest),       intent(inout) :: self
         integer,                       intent(in)    :: first_stage, last_stage
-        type(solve3D_stage_record), intent(in)       :: stages(:)
+        type(solve3D_stage_record),    intent(in)    :: stages(:)
         self%first_stage = first_stage
         self%last_stage  = last_stage
         self%stages      = stages
@@ -231,12 +231,12 @@ contains
     !! the manifest defective: write then refuses to publish it, and the
     !! completed run is left as it is.
     subroutine record_inputs( self, cline )
-        class(solve3D_manifest), intent(inout) :: self
+        class(solve3D_manifest),    intent(inout) :: self
         class(cmdline),             intent(in)    :: cline
-        type(chash)  :: descr
-        type(string) :: val
+        type(chash)                   :: descr
+        type(string)                  :: val
         character(len=:), allocatable :: key, raw
-        integer :: i
+        integer                       :: i
         call cline%gen_job_descr(descr)
         do i = 1, size(MANIFEST_INPUT_KEYS)
             key = trim(MANIFEST_INPUT_KEYS(i))
@@ -259,14 +259,14 @@ contains
     !! small manifest (its sets' manifests hold their sizes): the sums
     !! themselves are never read for a digest.
     subroutine record_artifacts( self, spproj, carried_bundle )
-        class(solve3D_manifest), intent(inout) :: self
-        class(sp_project),          intent(inout) :: spproj
-        class(string), optional,    intent(in)    :: carried_bundle
-        type(string) :: fname, halfvol
+        class(solve3D_manifest),    intent(inout)           :: self
+        class(sp_project),          intent(inout)           :: spproj
+        class(string),              optional,    intent(in) :: carried_bundle
+        type(string)   :: fname, halfvol
         integer(int64) :: sigma_signature
-        integer :: state, box_vol
-        real    :: smpd_vol
-        logical :: found
+        integer        :: state, box_vol
+        real           :: smpd_vol
+        logical        :: found
         do state = 1, self%nstates
             if( .not. spproj%isthere_in_osout('vol', state) ) cycle
             call spproj%get_vol('vol', state, fname, smpd_vol, box_vol)
@@ -300,7 +300,7 @@ contains
     end subroutine record_artifacts
 
     subroutine add_input( self, key, val )
-        class(solve3D_manifest), intent(inout) :: self
+        class(solve3D_manifest),    intent(inout) :: self
         character(len=*),           intent(in)    :: key, val
         character(len=KLEN), allocatable :: keys(:)
         type(string),        allocatable :: vals(:)
@@ -319,7 +319,7 @@ contains
     end subroutine add_input
 
     subroutine add_artifact( self, kind, state, digest, path )
-        class(solve3D_manifest), intent(inout) :: self
+        class(solve3D_manifest),    intent(inout) :: self
         character(len=*),           intent(in)    :: kind
         integer,                    intent(in)    :: state
         integer(int64),             intent(in)    :: digest
@@ -349,7 +349,7 @@ contains
     !> Publish the manifest atomically (.tmp then rename). Never fatal: returns
     !! status /= 0 with a message, and a failed write leaves no manifest.
     subroutine write( self, fname, status, msg )
-        class(solve3D_manifest), intent(in)     :: self
+        class(solve3D_manifest),    intent(in)  :: self
         class(string),              intent(in)  :: fname
         integer,                    intent(out) :: status
         character(len=*),           intent(out) :: msg
@@ -398,11 +398,11 @@ contains
 
     !> the records of the manifest
     subroutine build_lines( self, lines )
-        class(solve3D_manifest), intent(in)     :: self
-        type(string), allocatable,  intent(out) :: lines(:)
+        class(solve3D_manifest), intent(in)                :: self
+        type(string),            allocatable,  intent(out) :: lines(:)
         type(string), allocatable     :: buf(:)
         integer                       :: n, i
-        type(solve3D_stage_record) :: st
+        type(solve3D_stage_record)    :: st
         n = 0
         allocate(buf(512))
         call push(MANIFEST_SCHEMA//' '//int2str(MANIFEST_VERSION))
@@ -476,7 +476,7 @@ contains
     !! preceding line, completion marker, no unknown field. Validation against
     !! a project is validate_frozen.
     subroutine read( self, fname, status, msg )
-        class(solve3D_manifest), intent(inout) :: self
+        class(solve3D_manifest),    intent(inout) :: self
         class(string),              intent(in)    :: fname
         integer,                    intent(out)   :: status
         character(len=*),           intent(out)   :: msg
@@ -674,7 +674,7 @@ contains
 
     !> register the manifest in the project by name, with its run identifier
     subroutine register( self, spproj, name )
-        class(solve3D_manifest), intent(in)       :: self
+        class(solve3D_manifest),    intent(in)    :: self
         class(sp_project),          intent(inout) :: spproj
         character(len=*),           intent(in)    :: name
         if( spproj%projinfo%get_noris() /= 1 ) call spproj%projinfo%new(1, is_ptcl=.false.)
@@ -688,15 +688,15 @@ contains
     !! project directory), and the manifest must carry the run identifier
     !! registered beside it.
     subroutine read_registered( self, spproj, projfile, status, msg )
-        class(solve3D_manifest), intent(inout) :: self
+        class(solve3D_manifest),    intent(inout) :: self
         class(sp_project),          intent(in)    :: spproj
         class(string),              intent(in)    :: projfile
         integer,                    intent(out)   :: status
         character(len=*),           intent(out)   :: msg
-        type(string) :: registered, projdir, path
+        type(string)                  :: registered, projdir, path
         character(len=:), allocatable :: raw
-        character(len=64) :: run_id_reg
-        logical :: l_registered
+        character(len=64)             :: run_id_reg
+        logical                       :: l_registered
         call self%kill
         status = 1
         msg    = ''
@@ -737,13 +737,13 @@ contains
     !! optics/CTF identity, and every registered state map with the recorded
     !! digest. The registered run identifier is checked by read_registered.
     subroutine validate_frozen( self, spproj, status, msg )
-        class(solve3D_manifest), intent(in)       :: self
+        class(solve3D_manifest),    intent(in)    :: self
         class(sp_project),          intent(inout) :: spproj
         integer,                    intent(out)   :: status
         character(len=*),           intent(out)   :: msg
         type(string) :: vol
-        integer :: state, box
-        real    :: smpd
+        integer      :: state, box
+        real         :: smpd
         status = 1
         msg    = ''
         if( trim(self%program) /= 'solve3D' .and. trim(self%program) /= 'solve3D_addon' )then
@@ -794,7 +794,7 @@ contains
     !! planning time (not the input text), and the completed solution (state
     !! layout, point group, mask, ladder end and effective nsample)
     subroutine replay( self, cline )
-        class(solve3D_manifest), intent(in)       :: self
+        class(solve3D_manifest),    intent(in)    :: self
         class(cmdline),             intent(inout) :: cline
         type(string) :: val
         logical      :: found
@@ -818,7 +818,7 @@ contains
 
     !> the recorded path of an artifact; found=.false. when none is recorded
     subroutine get_artifact( self, kind, state, fname, found )
-        class(solve3D_manifest), intent(in)       :: self
+        class(solve3D_manifest),    intent(in)    :: self
         character(len=*),           intent(in)    :: kind
         integer,                    intent(in)    :: state
         type(string),               intent(inout) :: fname
@@ -833,12 +833,12 @@ contains
     !> The file carries the recorded identity for artifact (kind, state).
     !! Sigma2 checks structure and file size, then compares the generation.
     logical function matches_artifact( self, kind, state, fname ) result( l_match )
-        class(solve3D_manifest), intent(in) :: self
+        class(solve3D_manifest),    intent(in) :: self
         character(len=*),           intent(in) :: kind
         integer,                    intent(in) :: state
         class(string),              intent(in) :: fname
         integer(int64) :: digest
-        integer :: ind
+        integer        :: ind
         l_match = .false.
         ind = self%find_artifact(kind, state)
         if( ind == 0 ) return
@@ -852,7 +852,7 @@ contains
 
     !> the recorded value of an input key; found=.false. when the base run did not give it
     subroutine get_input( self, key, val, found )
-        class(solve3D_manifest), intent(in)       :: self
+        class(solve3D_manifest),    intent(in)    :: self
         character(len=*),           intent(in)    :: key
         type(string),               intent(inout) :: val
         logical,                    intent(out)   :: found
@@ -870,7 +870,7 @@ contains
     end subroutine get_input
 
     integer function find_artifact( self, kind, state ) result( ind )
-        class(solve3D_manifest), intent(in) :: self
+        class(solve3D_manifest),    intent(in) :: self
         character(len=*),           intent(in) :: kind
         integer,                    intent(in) :: state
         integer :: i
@@ -940,7 +940,7 @@ contains
     end function get_nstages
 
     function get_stage( self, istage ) result( stage )
-        class(solve3D_manifest), intent(in) :: self
+        class(solve3D_manifest),    intent(in) :: self
         integer,                    intent(in) :: istage
         type(solve3D_stage_record) :: stage
         if( istage < 1 .or. istage > self%get_nstages() ) THROW_HARD('stage is outside the solve3D manifest ladder')
@@ -989,7 +989,7 @@ contains
     integer(int64) function stack_table_digest( spproj ) result( digest )
         class(sp_project), intent(in) :: spproj
         type(string) :: stk
-        integer :: i
+        integer      :: i
         digest = sigma2_state_digest_begin()
         do i = 1, spproj%os_stk%get_noris()
             stk = spproj%os_stk%get_str(i, 'stk')
@@ -1006,7 +1006,7 @@ contains
     integer(int64) function optics_ctf_digest( spproj ) result( digest )
         class(sp_project), intent(inout) :: spproj
         type(ctfparams) :: ctfvars
-        integer :: i
+        integer         :: i
         digest = sigma2_state_digest_begin()
         do i = 1, spproj%os_ptcl3D%get_noris()
             ctfvars = spproj%get_ctfparams('ptcl3D', i)

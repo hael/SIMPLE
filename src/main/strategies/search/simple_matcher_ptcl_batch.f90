@@ -35,11 +35,11 @@ contains
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         type(sigma2_state_header) :: header
-        type(string)      :: fname
-        integer(timer_int_kind) :: t_read
-        integer           :: status
-        logical           :: found
-        character(len=STDLEN) :: message
+        type(string)              :: fname
+        integer(timer_int_kind)   :: t_read
+        integer                   :: status
+        logical                   :: found
+        character(len=STDLEN)     :: message
         ! cc_emit_sigma is a CC-only update path. CC does not consume sigma,
         ! while Euclidean scoring requires the populated global sigma2 spectra.
         if( trim(params%cc_emit_sigma) == 'yes' .and. params%cc_objfun == OBJFUN_EUCLID )then
@@ -119,13 +119,13 @@ contains
     !!  the wrong sampling onto ptcl_match_imgs.
     subroutine alloc_ptcl_imgs( params, build, ptcl_imgs, ptcl_imgs_pad, batchsz, imgbatch_box, imgbatch_smpd )
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
-        class(parameters),        intent(inout) :: params
-        class(builder),           intent(inout) :: build
-        type(image), allocatable, intent(inout) :: ptcl_imgs(:)
-        type(image), allocatable, intent(inout) :: ptcl_imgs_pad(:)
-        integer,                  intent(in)    :: batchsz
-        integer, optional,        intent(in)    :: imgbatch_box
-        real,    optional,        intent(in)    :: imgbatch_smpd
+        class(parameters),        intent(inout)               :: params
+        class(builder),           intent(inout)               :: build
+        type(image),              allocatable, intent(inout)  :: ptcl_imgs(:)
+        type(image),              allocatable, intent(inout)  :: ptcl_imgs_pad(:)
+        integer,                  intent(in)                  :: batchsz
+        integer,                  optional,        intent(in) :: imgbatch_box
+        real,                     optional,        intent(in) :: imgbatch_smpd
         integer           :: ithr, nteam
         if( present(imgbatch_box) )then
             if( present(imgbatch_smpd) )then
@@ -153,7 +153,7 @@ contains
     subroutine check_pass_team( caller )
         character(len=*), intent(in) :: caller
         character(len=STDLEN) :: msg
-        integer :: nteam
+        integer               :: nteam
         nteam = 1
         !$ nteam = omp_get_max_threads()
         if( nteam > nthr_glob )then
@@ -169,11 +169,11 @@ contains
     !! pass is Cartesian (l_cart_refine). The Cartesian slots are prepared first, from copies,
     !! because the polar preparation normalizes the images in place.
     subroutine build_batch_particles3D( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, reads )
-        class(parameters),      intent(in)    :: params
-        class(builder),         intent(inout) :: build
-        integer,                intent(in)    :: nptcls_here
-        integer,                intent(in)    :: pinds_here(nptcls_here)
-        class(image),           intent(inout) :: tmp_imgs(:), tmp_imgs_pad(:)
+        class(parameters),        intent(in)    :: params
+        class(builder),           intent(inout) :: build
+        integer,                  intent(in)    :: nptcls_here
+        integer,                  intent(in)    :: pinds_here(nptcls_here)
+        class(image),             intent(inout) :: tmp_imgs(:), tmp_imgs_pad(:)
         class(ptcl_read_session), intent(inout) :: reads   !< the read session of the pass
         logical :: l_polar, l_cart
         l_polar   = .not. params%l_cart_refine
@@ -199,8 +199,8 @@ contains
         type(ctfparams), allocatable :: ctfparms(:)
         real,            allocatable :: crop_shifts(:,:)
         integer,         allocatable :: halves(:)
-        real    :: crop_factor
-        integer :: i, iptcl
+        real                         :: crop_factor
+        integer                      :: i, iptcl
         crop_factor = real(params%box_crop) / real(params%box)
         allocate(ctfparms(nptcls_here), crop_shifts(2,nptcls_here))
         do i = 1, nptcls_here
@@ -231,19 +231,19 @@ contains
     !! slots than nptcls.
     subroutine prep_cart_batch( cftc, nptcls, raw_imgs, noise_mask, box_crop, smpd_crop, mskrad, crop_shifts, &
         &ctfparms, kfromto, halves )
-        class(cartft_calc), intent(inout) :: cftc
-        integer,            intent(in)    :: nptcls, box_crop
-        class(image),       intent(in)    :: raw_imgs(nptcls)
-        logical,            intent(in)    :: noise_mask(:,:,:)
-        real,               intent(in)    :: smpd_crop, mskrad, crop_shifts(2,nptcls)
-        type(ctfparams),    intent(in)    :: ctfparms(nptcls)
-        integer,            intent(in)    :: kfromto(2)
-        integer, optional,  intent(in)    :: halves(:)
+        class(cartft_calc), intent(inout)         :: cftc
+        integer,            intent(in)            :: nptcls, box_crop
+        class(image),       intent(in)            :: raw_imgs(nptcls)
+        logical,            intent(in)            :: noise_mask(:,:,:)
+        real,               intent(in)            :: smpd_crop, mskrad, crop_shifts(2,nptcls)
+        type(ctfparams),    intent(in)            :: ctfparms(nptcls)
+        integer,            intent(in)            :: kfromto(2)
+        integer,            optional,  intent(in) :: halves(:)
         type(image), allocatable :: raw_work(:), out_work(:)
         type(ctfparams)          :: ctf_crop
         complex,     allocatable :: observed(:,:)
         real,        allocatable :: taper(:)
-        integer :: i, ithr, nworkers, ldim_raw(3)
+        integer                  :: i, ithr, nworkers, ldim_raw(3)
         if( nptcls < 1 ) return
         if( cftc%get_nptcls() < nptcls ) THROW_HARD('Cartesian calculator has fewer particle slots than the batch')
         if( present(halves) )then
@@ -295,8 +295,8 @@ contains
         class(image),           intent(inout) :: src_imgs(nptcls_here)
         class(image),           intent(inout) :: tmp_imgs(:), tmp_imgs_pad(:)
         type(image), allocatable :: rec_work(:)
-        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team, slot, ihalf
-        logical :: l_record
+        integer                  :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team, slot, ihalf
+        logical                  :: l_record
         l_record = records_open()
         if( l_record )then
             ! one record image per thread of the team the loop runs on
@@ -351,18 +351,18 @@ contains
     subroutine build_batch_particles2D( params, build, nptcls_here, pinds, reads, ptcl_imgs, ptcl_match_imgs, &
         &ptcl_match_imgs_pad, crop_sums )
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
-        class(parameters),        intent(in)    :: params
-        class(builder),           intent(inout) :: build
-        integer,                  intent(in)    :: nptcls_here
-        integer,                  intent(in)    :: pinds(nptcls_here)
-        class(ptcl_read_session), intent(inout) :: reads   !< the read session of the pass
-        class(image),   optional, intent(inout) :: ptcl_imgs(nptcls_here)
-        class(image),             intent(inout) :: ptcl_match_imgs(:)
-        class(image),             intent(inout) :: ptcl_match_imgs_pad(:)
-        logical,        optional, intent(in)    :: crop_sums !< cropped particles, made in memory (crop_particles2D)
+        class(parameters),        intent(in)              :: params
+        class(builder),           intent(inout)           :: build
+        integer,                  intent(in)              :: nptcls_here
+        integer,                  intent(in)              :: pinds(nptcls_here)
+        class(ptcl_read_session), intent(inout)           :: reads     !< the read session of the pass
+        class(image),             optional, intent(inout) :: ptcl_imgs(nptcls_here)
+        class(image),             intent(inout)           :: ptcl_match_imgs(:)
+        class(image),             intent(inout)           :: ptcl_match_imgs_pad(:)
+        logical,                  optional, intent(in)    :: crop_sums !< cropped particles, made in memory (crop_particles2D)
         type(image), allocatable :: crop_work(:)
-        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team, ihalf
-        logical :: l_keep_raw, l_crop_mem
+        integer                  :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team, ihalf
+        logical                  :: l_keep_raw, l_crop_mem
         l_keep_raw = present(ptcl_imgs)
         ! With crop_sums ptcl_imgs receives the Fourier-cropped particle rather than the
         ! full-size original, so callers that pass it must have sized it at box_crop and
@@ -429,8 +429,8 @@ contains
 
     subroutine clean_batch_particles2D( build, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad )
         use simple_imgarr_utils, only: dealloc_imgarr
-        class(builder),           intent(inout) :: build
-        type(image), allocatable, intent(inout) :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
+        class(builder),           intent(inout)              :: build
+        type(image),              allocatable, intent(inout) :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
         call killimgbatch(build)
         call dealloc_imgarr(ptcl_imgs)
         call dealloc_imgarr(ptcl_match_imgs)
@@ -439,9 +439,9 @@ contains
 
     subroutine clean_batch_particles3D( build, ptcl_imgs, ptcl_imgs_pad )
         use simple_imgarr_utils, only: dealloc_imgarr
-        class(builder),           intent(inout) :: build
-        type(image), allocatable, intent(inout) :: ptcl_imgs(:)
-        type(image), allocatable, intent(inout) :: ptcl_imgs_pad(:)
+        class(builder),           intent(inout)              :: build
+        type(image),              allocatable, intent(inout) :: ptcl_imgs(:)
+        type(image),              allocatable, intent(inout) :: ptcl_imgs_pad(:)
         call killimgbatch(build)
         call dealloc_imgarr(ptcl_imgs)
         call dealloc_imgarr(ptcl_imgs_pad)

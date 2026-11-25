@@ -42,13 +42,13 @@ contains
 
     ! keep serial
     module subroutine spectrum( self, which, spec, norm )
-        class(image),      intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        real, allocatable, intent(inout) :: spec(:)
-        logical, optional, intent(in)    :: norm
+        class(image),      intent(inout)              :: self
+        character(len=*),  intent(in)                 :: which
+        real,              allocatable, intent(inout) :: spec(:)
+        logical,           optional, intent(in)       :: norm
         real, allocatable :: counts(:)
-        integer :: lims(3,2), phys(3), sh, lfny, h, k, l
-        logical :: didft, nnorm
+        integer           :: lims(3,2), phys(3), sh, lfny, h, k, l
+        logical           :: didft, nnorm
         nnorm = .true.
         if( present(norm) ) nnorm = norm
         didft = .false.
@@ -229,8 +229,8 @@ contains
         class(image), intent(inout) :: self
         real,         intent(in)    :: hp, lp
         real, allocatable :: plot(:,:)
-        integer :: fromk, tok, nk
-        real    :: slope, intercept, corr, bfac
+        integer           :: fromk, tok, nk
+        real              :: slope, intercept, corr, bfac
         plot  = self%guinier(.false.)
         fromk = self%get_find(hp)
         tok   = self%get_find(lp)
@@ -310,9 +310,9 @@ contains
         complex(dp), allocatable :: nums(:)
         real(dp),    allocatable :: sumasq(:), sumbsq(:)
         integer,     allocatable :: cnt(:)
-        complex(dp) :: comp1, comp2
-        real(dp)    :: cos_half, dot, norm, dir(3)
-        integer     :: n, ndirs, lims(3,2), phys(3), sh, h, k, l, idir, min_count_eff
+        complex(dp)              :: comp1, comp2
+        real(dp)                 :: cos_half, dot, norm, dir(3)
+        integer                  :: n, ndirs, lims(3,2), phys(3), sh, h, k, l, idir, min_count_eff
         if( .not. (self1 .eqdims. self2) ) THROW_HARD('non-equal dimensions; conical_fsc')
         if( .not. self1%ft .or. .not. self2%ft ) THROW_HARD('input images must be Fourier transformed; conical_fsc')
         n     = self1%get_filtsz()
@@ -414,8 +414,8 @@ contains
     module subroutine frc_pspec( self1, self2, corrs )
         class(image), intent(inout) :: self1, self2
         real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)
-        integer     :: k, npix
-        type(image) :: maskimg
+        integer              :: k, npix
+        type(image)          :: maskimg
         logical, allocatable :: l_mask(:,:,:)
         corrs = 0.
         do k = 1, fdim(self1%ldim(1))-3
@@ -430,9 +430,9 @@ contains
     module subroutine fcomps_below_noise_power_stats( self, noise_vol )
         class(image), intent(inout) :: self, noise_vol
         real, allocatable :: res(:)
-        integer :: h, k, l, lims(3,2), phys(3), cnt, counts(self%get_filtsz())
-        integer :: sh, counts_all(self%get_filtsz()), filtsz
-        real    :: sig_pow, noise_pow
+        integer           :: h, k, l, lims(3,2), phys(3), cnt, counts(self%get_filtsz())
+        integer           :: sh, counts_all(self%get_filtsz()), filtsz
+        real              :: sig_pow, noise_pow
         lims  = self%fit%loop_lims(2)
         if( .not.self%is_ft() ) THROW_HARD('Instance need to be FTed')
         if( .not.self%is_ft() ) THROW_HARD('noise_vol need to be FTed')
@@ -494,11 +494,11 @@ contains
     end subroutine resmsk
 
     module subroutine img2spec( self, speckind, lp_backgr_subtr, img_out, postproc )
-        class(image),      intent(inout) :: self
-        character(len=*),  intent(in)    :: speckind
-        real,              intent(in)    :: lp_backgr_subtr
-        type(image),       intent(inout) :: img_out
-        logical, optional, intent(in)    :: postproc
+        class(image),      intent(inout)        :: self
+        character(len=*),  intent(in)           :: speckind
+        real,              intent(in)           :: lp_backgr_subtr
+        type(image),       intent(inout)        :: img_out
+        logical,           optional, intent(in) :: postproc
         type(image) :: tmp, tmp2
         logical     :: didft, l_postproc
         if( self%ldim(3) /= 1 ) THROW_HARD('only for 2D images')
@@ -525,12 +525,12 @@ contains
     end subroutine img2spec
 
     module subroutine mic2spec( self, box, speckind, lp_backgr_subtr, img_out, postproc )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: box
-        character(len=*),  intent(in)    :: speckind
-        real,              intent(in)    :: lp_backgr_subtr
-        type(image),       intent(inout) :: img_out
-        logical, optional, intent(in)    :: postproc
+        class(image),      intent(inout)        :: self
+        integer,           intent(in)           :: box
+        character(len=*),  intent(in)           :: speckind
+        real,              intent(in)           :: lp_backgr_subtr
+        type(image),       intent(inout)        :: img_out
+        logical,           optional, intent(in) :: postproc
         type(image) :: tmp, tmp2
         integer     :: xind, yind, cnt
         logical     :: didft, outside, l_postproc
@@ -575,10 +575,10 @@ contains
     !> \brief dampens the central cross of a powerspectrum by mean filtering
     module subroutine dampen_pspec_central_cross( self )
         class(image), intent(inout) :: self
-        integer, parameter :: HDAMPWINSZ=2
-        integer, parameter :: DAMPWINSZ =5
-        real :: medi(self%ldim(1)),medj(self%ldim(2)),vals(DAMPWINSZ**2)
-        integer :: h,mh,k,mk,lims(3,2),i,j,l,r,u,d,n
+        integer, parameter :: HDAMPWINSZ = 2
+        integer, parameter :: DAMPWINSZ  = 5
+        real               :: medi(self%ldim(1)),medj(self%ldim(2)),vals(DAMPWINSZ**2)
+        integer            :: h,mh,k,mk,lims(3,2),i,j,l,r,u,d,n
         if( self%ft )          THROW_HARD('not intended for FTs; dampen_pspec_central_cross')
         if( self%ldim(3) > 1 ) THROW_HARD('not intended for 3D imgs; dampen_pspec_central_cross')
         lims = self%loop_lims(3)

@@ -49,14 +49,14 @@ integer, parameter :: READ_CHUNK_BYTES = 65536  ! one read; a pipe holds no more
 
 type :: stream_pipe
     private
-    integer                       :: fd_read         = -1
-    integer                       :: fd_write        = -1
-    integer                       :: max_frame_bytes = 0
-    integer                       :: expected_len    = -1 ! payload bytes of the frame being assembled; -1 before its header
-    integer                       :: max_partial_retries = 0 ! EAGAIN retries before a part-written frame is abandoned; 0: no limit
-    logical                       :: l_broken        = .false. ! a frame was abandoned part-written: sends are dropped until discard
-    character(len=:), allocatable :: pending              ! bytes read and not yet returned
-    character(len=:), allocatable :: label                ! names the channel in diagnostics
+    integer                       :: fd_read             = -1
+    integer                       :: fd_write            = -1
+    integer                       :: max_frame_bytes     = 0
+    integer                       :: expected_len        = -1      ! payload bytes of the frame being assembled; -1 before its header
+    integer                       :: max_partial_retries = 0       ! EAGAIN retries before a part-written frame is abandoned; 0: no limit
+    logical                       :: l_broken            = .false. ! a frame was abandoned part-written: sends are dropped until discard
+    character(len=:), allocatable :: pending                       ! bytes read and not yet returned
+    character(len=:), allocatable :: label                         ! names the channel in diagnostics
 contains
     procedure          :: new
     procedure          :: send
@@ -108,9 +108,9 @@ contains
         character(len=*),   intent(in)    :: buffer
         character(kind=c_char), allocatable, target :: frame(:)
         character(len=:),       allocatable         :: warning
-        integer(c_int)    :: msg_len
-        integer(c_size_t) :: nwritten
-        integer           :: header_bytes, nbytes, nframe, sent, nretries, err_no, rc
+        integer(c_int)                              :: msg_len
+        integer(c_size_t)                           :: nwritten
+        integer                                     :: header_bytes, nbytes, nframe, sent, nretries, err_no, rc
         if( self%fd_write < 0 ) return
         if( self%l_broken ) return
         nbytes = len(buffer)
@@ -167,13 +167,13 @@ contains
 
     !> Returns .true. with the next complete frame in @p buffer; reads what the pipe holds when none is buffered.
     function receive( self, buffer ) result( got )
-        class(stream_pipe),            intent(inout) :: self
-        character(len=:), allocatable, intent(inout) :: buffer
-        logical :: got
+        class(stream_pipe),            intent(inout)              :: self
+        character(len=:),              allocatable, intent(inout) :: buffer
+        logical                                     :: got
         character(kind=c_char), allocatable, target :: raw(:)
         character(len=:),       allocatable         :: chunk
-        integer(c_size_t) :: nread
-        integer           :: n
+        integer(c_size_t)                           :: nread
+        integer                                     :: n
         got = .false.
         if( allocated(buffer) ) deallocate(buffer)
         if( self%fd_read < 0 ) return
@@ -200,7 +200,7 @@ contains
     subroutine discard( self )
         class(stream_pipe), intent(inout) :: self
         character(kind=c_char), allocatable, target :: raw(:)
-        integer(c_size_t) :: nread
+        integer(c_size_t)                           :: nread
         self%expected_len = -1
         self%l_broken     = .false.
         if( allocated(self%pending) ) deallocate(self%pending)
@@ -235,12 +235,12 @@ contains
 
     ! Moves the next complete frame from the pending bytes into buffer.
     function extract_frame( self, buffer ) result( got )
-        class(stream_pipe),            intent(inout) :: self
-        character(len=:), allocatable, intent(inout) :: buffer
-        logical :: got
+        class(stream_pipe),            intent(inout)              :: self
+        character(len=:),              allocatable, intent(inout) :: buffer
+        logical                       :: got
         character(len=:), allocatable :: error_message
-        integer(c_int) :: msg_len
-        integer        :: header_bytes
+        integer(c_int)                :: msg_len
+        integer                       :: header_bytes
         got = .false.
         if( .not. allocated(self%pending) ) return
         if( self%expected_len < 0 )then

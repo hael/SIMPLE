@@ -137,8 +137,8 @@ contains
         !! halfset disagreement — a per-pair noise scale for the merge decision.
         real(dp),    intent(out)   :: Rmin(nstates,nstates)
         real,     allocatable :: css(:,:), cst(:), cts(:)
-        real(dp) :: num_a, num_b, den, ratio, ratio_a, ratio_b
-        integer  :: s, t, l, nval
+        real(dp)              :: num_a, num_b, den, ratio, ratio_a, ratio_b
+        integer               :: s, t, l, nval
         allocate(css(nshell,nstates), source=0.)
         allocate(cst(nshell), cts(nshell), source=0.)
         do s = 1, nstates
@@ -192,17 +192,17 @@ contains
         integer,              intent(out) :: label_out(:)
         integer,              intent(out) :: nstates_out
         type(image), allocatable :: evols(:), ovols(:)
-        type(image) :: mskwarm
+        type(image)              :: mskwarm
         real(dp),    allocatable :: chi2(:), neff(:), effsz(:), work(:), R(:,:), Rmin(:,:)
         real(dp),    allocatable :: mass(:), dmerge(:,:), heights(:)
         logical,     allocatable :: view_bad(:), l_live(:)
         integer,     allocatable :: lab(:), remap(:), medoids(:), pairs(:,:)
-        type(hac)    :: hc
-        type(string) :: fn
-        real(dp) :: rbest, eff_med, eff_mad, eff_cut
-        real     :: mskrad
-        integer  :: s, t, m, nshell, tbest, nfail, nmerge, npair, nnear, lold, lnew
-        integer  :: nlive
+        type(hac)                :: hc
+        type(string)             :: fn
+        real(dp)                 :: rbest, eff_med, eff_mad, eff_cut
+        real                     :: mskrad
+        integer                  :: s, t, m, nshell, tbest, nfail, nmerge, npair, nnear, lold, lnew
+        integer                  :: nlive
         nptcls = size(states%weights,1)
         nstates_out = states%nstates
         do s = 1, states%nstates

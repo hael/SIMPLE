@@ -40,10 +40,10 @@ contains
     procedure :: execute => use_stale_slot
 end type stale_slot_user
 
-integer,  parameter :: TEST_BOX        = 24
-integer,  parameter :: SMALL_BOX       = 16
-integer(int64), parameter :: FIXTURE_DIGEST = 3301_int64
-real(dp), parameter :: GRADIENT_TOL    = 3.e-2_dp
+integer,        parameter :: TEST_BOX        = 24
+integer,        parameter :: SMALL_BOX       = 16
+integer(int64), parameter :: FIXTURE_DIGEST  = 3301_int64
+real(dp),       parameter :: GRADIENT_TOL    = 3.e-2_dp
 ! half-plane against full-disk kernels: single-precision models (the mirrored stencil's summation
 ! order, the shift phase) summed in double precision, a few hundred single-precision ulps
 real(dp), parameter :: HALF_PLANE_TOL  = 1.e-5_dp
@@ -121,13 +121,13 @@ contains
     !> Four Gaussian blobs in a TEST_BOX cube (the refiner tester's volume), or in a cube of
     !! box when given.
     subroutine build_test_volume( volume, box )
-        real, allocatable, intent(out) :: volume(:,:,:)
-        integer, optional, intent(in)  :: box
-        real, parameter :: centres(3,4) = reshape([-5., -3., 2., 4., 5., -3., 0., -6., -5., 3., -2., 6.], [3,4])
+        real,    allocatable, intent(out) :: volume(:,:,:)
+        integer, optional, intent(in)     :: box
+        real, parameter :: centres(3,4)  = reshape([-5., -3., 2., 4., 5., -3., 0., -6., -5., 3., -2., 6.], [3,4])
         real, parameter :: sigmas(4)     = [2., 2.5, 1.8, 2.2]
         real, parameter :: amplitudes(4) = [1., 0.8, 0.6, 0.5]
-        real    :: centre, dx, dy, dz
-        integer :: blob, i, j, k, n
+        real            :: centre, dx, dy, dz
+        integer         :: blob, i, j, k, n
         n = TEST_BOX
         if( present(box) ) n = box
         allocate(volume(n,n,n), source=0.)
@@ -171,12 +171,12 @@ contains
 
     !> Slot 1 for OBJFUN_EUCLID from an observation without CTF and with unit sigma2.
     subroutine set_unweighted_particle( calc, observed, kfromto )
-        type(cartft_calc), intent(inout) :: calc
-        complex,           intent(in)    :: observed(:,:)
-        integer, optional, intent(in)    :: kfromto(2)
-        type(ctfparams) :: no_ctf
+        type(cartft_calc), intent(inout)        :: calc
+        complex,           intent(in)           :: observed(:,:)
+        integer,           optional, intent(in) :: kfromto(2)
+        type(ctfparams)   :: no_ctf
         real, allocatable :: sigma2(:)
-        integer :: active_range(2), box
+        integer           :: active_range(2), box
         box = calc%get_box()
         allocate(sigma2(0:box/2), source=1.)
         no_ctf%ctfflag = CTFFLAG_NO
@@ -200,9 +200,9 @@ contains
     !> sum |X|^2/sigma2 over the pixels whose shell nint(|(h,k)|) lies in kfromto (unit sigma2
     !! when absent): the normalizer of the euclid loss.
     function whitened_power( observed, kfromto, sigma2 ) result( power )
-        complex,        intent(in) :: observed(-TEST_BOX/2:,-TEST_BOX/2:)
-        integer,        intent(in) :: kfromto(2)
-        real, optional, intent(in) :: sigma2(0:)
+        complex,        intent(in)           :: observed(-TEST_BOX/2:,-TEST_BOX/2:)
+        integer,        intent(in)           :: kfromto(2)
+        real,           optional, intent(in) :: sigma2(0:)
         real(dp) :: power
         integer  :: h, k, shell
         power = 0._dp
@@ -232,14 +232,14 @@ contains
     !> gather_ref, the point query of the polar continuous view refinement: at the pixels of the Nyquist disk it is the
     !! unshifted prediction bit for bit, and its gradient per native lattice unit matches central differences of itself
     subroutine test_gather_ref()
-        type(cartft_calc) :: calc
-        real, allocatable :: volume(:,:,:)
-        complex  :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2), val, grad(3), valp, valm, gtmp(3)
-        real(dp) :: rotation(3,3), err, gmax
-        real(sp) :: q(3), qd(3)
-        real(sp), parameter :: STEP = 1.e-2
-        integer  :: h, k, d
-        logical  :: same
+        type(cartft_calc)     :: calc
+        real,     allocatable :: volume(:,:,:)
+        complex               :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2), val, grad(3), valp, valm, gtmp(3)
+        real(dp)              :: rotation(3,3), err, gmax
+        real(sp)              :: q(3), qd(3)
+        real(sp), parameter   :: STEP = 1.e-2
+        integer               :: h, k, d
+        logical               :: same
         call build_test_volume(volume)
         call new_test_calc(calc, volume)
         rotation = real(euler2m([17., 31., 23.]), dp)
@@ -283,11 +283,11 @@ contains
         type(ctf)         :: tfun
         type(ctfvars)     :: ctfvals
         real, allocatable :: volume(:,:,:), sigma_contrib(:), ref_pow(:), ptcl_pow(:)
-        real     :: sigma2(0:TEST_BOX/2), angle, cval, v
-        complex  :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex  :: raw_observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real(dp) :: rotation(3,3), shift(2), objective, gradient(5), power
-        integer  :: h, k, shell
+        real              :: sigma2(0:TEST_BOX/2), angle, cval, v
+        complex           :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex           :: raw_observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real(dp)          :: rotation(3,3), shift(2), objective, gradient(5), power
+        integer           :: h, k, shell
         call build_test_volume(volume)
         call new_test_calc(calc, volume)
         rotation = real(euler2m([17., 31., 23.]), dp)
@@ -363,10 +363,10 @@ contains
         type(cartft_calc) :: calc
         type(ctfparams)   :: ctfparms
         real, allocatable :: volume(:,:,:)
-        real     :: sigma2(0:TEST_BOX/2), short_sigma2(0:TEST_BOX/2 - 2)
-        complex  :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real(dp) :: rotation(3,3), shift(2)
-        integer  :: effective_range(2)
+        real              :: sigma2(0:TEST_BOX/2), short_sigma2(0:TEST_BOX/2 - 2)
+        complex           :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real(dp)          :: rotation(3,3), shift(2)
+        integer           :: effective_range(2)
         call build_test_volume(volume)
         call new_test_calc(calc, volume)
         rotation = real(euler2m([17., 31., 23.]), dp)
@@ -391,14 +391,14 @@ contains
 
     ! E7
     subroutine test_shift_phase_sign()
-        type(cartft_calc) :: calc
-        real, allocatable :: volume(:,:,:)
-        complex     :: base(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex     :: shifted(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex(dp) :: expected, ratio
-        real(dp)    :: rotation(3,3), shift(2), argument
-        integer, parameter :: modes(2,3) = reshape([1, 0, 0, 1, 2, -1], [2,3])
-        integer     :: h, imode, k
+        type(cartft_calc)    :: calc
+        real,    allocatable :: volume(:,:,:)
+        complex              :: base(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex              :: shifted(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex(dp)          :: expected, ratio
+        real(dp)             :: rotation(3,3), shift(2), argument
+        integer, parameter   :: modes(2,3) = reshape([1, 0, 0, 1, 2, -1], [2,3])
+        integer              :: h, imode, k
         call build_test_volume(volume)
         call new_test_calc(calc, volume)
         rotation = identity_rotation()
@@ -425,15 +425,15 @@ contains
         type(cartft_calc) :: calc
         type(ctfparams)   :: no_ctf
         real, allocatable :: volume(:,:,:)
-        complex     :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex     :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex(dp) :: cross_sum, particle, model
-        real(dp)    :: truth_rotation(3,3), candidate_rotation(3,3)
-        real(dp)    :: truth_shift(2), candidate_shift(2), scales(3)
-        real(dp)    :: objective, oracle, baseline_objective
-        real(dp)    :: gradient(5), baseline_gradient(5)
-        real(dp)    :: particle_power, prediction_power
-        integer     :: h, i, k, shell
+        complex           :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex           :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex(dp)       :: cross_sum, particle, model
+        real(dp)          :: truth_rotation(3,3), candidate_rotation(3,3)
+        real(dp)          :: truth_shift(2), candidate_shift(2), scales(3)
+        real(dp)          :: objective, oracle, baseline_objective
+        real(dp)          :: gradient(5), baseline_gradient(5)
+        real(dp)          :: particle_power, prediction_power
+        integer           :: h, i, k, shell
         call build_test_volume(volume)
         call new_test_calc(calc, volume)
         no_ctf%ctfflag     = CTFFLAG_NO
@@ -482,10 +482,10 @@ contains
         type(cartft_calc) :: calc
         type(ctfparams)   :: no_ctf
         real, allocatable :: volume(:,:,:)
-        complex :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real :: sigma2(0:TEST_BOX/2), amplitude
-        real(dp) :: expected
-        integer :: h, k
+        complex           :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real              :: sigma2(0:TEST_BOX/2), amplitude
+        real(dp)          :: expected
+        integer           :: h, k
         call build_test_volume(volume)
         call new_test_calc(calc, volume)
         no_ctf%ctfflag = CTFFLAG_NO
@@ -519,18 +519,18 @@ contains
     ! range, against a brute-force sum with a shell-dependent sigma2; the score exp(-L); L is
     ! invariant to a uniform scaling of sigma2 and changes under a shell-dependent scaling
     subroutine test_euclid_objective_formula()
-        type(cartft_calc) :: calc
-        type(ctfparams)   :: no_ctf
-        real, allocatable :: volume(:,:,:)
-        complex     :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex     :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex(dp) :: particle, model
-        real        :: sigma2(0:TEST_BOX/2)
-        real(dp)    :: truth_rotation(3,3), candidate_rotation(3,3), truth_shift(2), candidate_shift(2)
-        real(dp)    :: objective, scaled_objective, reshaped_objective, oracle, gradient(5)
-        real(dp)    :: residual_sum, particle_sum
-        integer     :: h, k, shell
-        integer, parameter :: kfromto(2) = [2, 6]
+        type(cartft_calc)    :: calc
+        type(ctfparams)      :: no_ctf
+        real,    allocatable :: volume(:,:,:)
+        complex              :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex              :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex(dp)          :: particle, model
+        real                 :: sigma2(0:TEST_BOX/2)
+        real(dp)             :: truth_rotation(3,3), candidate_rotation(3,3), truth_shift(2), candidate_shift(2)
+        real(dp)             :: objective, scaled_objective, reshaped_objective, oracle, gradient(5)
+        real(dp)             :: residual_sum, particle_sum
+        integer              :: h, k, shell
+        integer, parameter   :: kfromto(2) = [2, 6]
         ! single-precision whitened samples: a uniform rescaling changes the rounding only
         real(dp), parameter :: SCALING_TOL = 1.e-5_dp
         call build_test_volume(volume)
@@ -578,19 +578,19 @@ contains
     ! differences, without CTF, with CTF (CTFFLAG_YES, the flipped observation) and with a
     ! phase-flipped stack (CTFFLAG_FLIP)
     subroutine test_five_parameter_gradient()
-        type(cartft_calc) :: calc
-        type(ctfparams)   :: ctfparms
-        type(ctf)         :: tfun
-        type(ctfvars)     :: ctfvals
-        real, allocatable :: volume(:,:,:)
-        complex  :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex  :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real     :: sigma2(0:TEST_BOX/2), angle
-        real(dp) :: rotation(3,3), truth_rotation(3,3), minus_rotation(3,3), plus_rotation(3,3)
-        real(dp) :: shift(2), truth_shift(2), minus_shift(2), plus_shift(2)
-        real(dp) :: objective, objective_minus, objective_plus, gradient(5), errors(5), basis(3), step
-        integer  :: axis, iobj, ictf, h, k, shell
-        integer, parameter :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID], ctfflags(3) = [CTFFLAG_NO, CTFFLAG_YES, CTFFLAG_FLIP]
+        type(cartft_calc)    :: calc
+        type(ctfparams)      :: ctfparms
+        type(ctf)            :: tfun
+        type(ctfvars)        :: ctfvals
+        real,    allocatable :: volume(:,:,:)
+        complex              :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex              :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real                 :: sigma2(0:TEST_BOX/2), angle
+        real(dp)             :: rotation(3,3), truth_rotation(3,3), minus_rotation(3,3), plus_rotation(3,3)
+        real(dp)             :: shift(2), truth_shift(2), minus_shift(2), plus_shift(2)
+        real(dp)             :: objective, objective_minus, objective_plus, gradient(5), errors(5), basis(3), step
+        integer              :: axis, iobj, ictf, h, k, shell
+        integer, parameter   :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID], ctfflags(3) = [CTFFLAG_NO, CTFFLAG_YES, CTFFLAG_FLIP]
         call build_test_volume(volume)
         call new_test_calc(calc, volume)
         rotation       = real(euler2m([17., 31., 23.]), dp)
@@ -662,17 +662,17 @@ contains
     ! evaluated pose scale both kernels' Gauss-Newton blocks, against those for data equal to the
     ! model, by the |f|^2-weighted slope of data on model and the normalizer's change
     subroutine test_curvature_scale()
-        type(cartft_calc) :: calc
-        type(ctfparams)   :: no_ctf
-        real, allocatable :: volume(:,:,:)
-        complex  :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex  :: filtered(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex(dp) :: model, particle
-        real(dp) :: rotation(3,3), shift(2), pose_model(5,5), pose_filtered(5,5), shift_model(2,2), shift_filtered(2,2)
-        real(dp) :: model_power, filtered_power, cross, weighted_cross, weighted_power, slope, scale
-        integer  :: h, k, shell, iobj
-        integer,  parameter :: kfromto(2) = [2, 6], objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID]
-        real(dp), parameter :: SCALE_TOL = 1.e-5_dp
+        type(cartft_calc)     :: calc
+        type(ctfparams)       :: no_ctf
+        real,     allocatable :: volume(:,:,:)
+        complex               :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex               :: filtered(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex(dp)           :: model, particle
+        real(dp)              :: rotation(3,3), shift(2), pose_model(5,5), pose_filtered(5,5), shift_model(2,2), shift_filtered(2,2)
+        real(dp)              :: model_power, filtered_power, cross, weighted_cross, weighted_power, slope, scale
+        integer               :: h, k, shell, iobj
+        integer,  parameter   :: kfromto(2) = [2, 6], objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID]
+        real(dp), parameter   :: SCALE_TOL  = 1.e-5_dp
         call build_test_volume(volume)
         call new_test_calc(calc, volume)
         no_ctf%ctfflag = CTFFLAG_NO
@@ -738,21 +738,21 @@ contains
     ! kernels' blocks are the objective's Hessian, here from second differences of objective values
     ! alone (the continuous gather has no jump to cross); cc, euclid; no CTF, CTF, phase-flipped
     subroutine test_gauss_newton_oracle()
-        type(cartft_calc) :: calc
-        type(ctfparams)   :: ctfparms
-        type(ctf)         :: tfun
-        type(ctfvars)     :: ctfvals
-        real, allocatable :: volume(:,:,:)
-        complex  :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex  :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real     :: transfer(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real     :: sigma2(0:TEST_BOX/2), angle
-        real(dp) :: rotation(3,3), shift(2), centre, objective, gradient(5), shift_gradient(2)
-        real(dp) :: pose_block(5,5), shift_block(2,2), oracle(5,5), steps(5)
-        real(dp) :: pose_error, shift_error, worst_pose, worst_shift
-        integer  :: iobj, ictf, h, k, shell, i, j
-        integer,  parameter :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID], ctfflags(3) = [CTFFLAG_NO, CTFFLAG_YES, CTFFLAG_FLIP]
-        integer,  parameter :: KFROMTO(2) = [2, 6]
+        type(cartft_calc)     :: calc
+        type(ctfparams)       :: ctfparms
+        type(ctf)             :: tfun
+        type(ctfvars)         :: ctfvals
+        real,     allocatable :: volume(:,:,:)
+        complex               :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex               :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real                  :: transfer(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real                  :: sigma2(0:TEST_BOX/2), angle
+        real(dp)              :: rotation(3,3), shift(2), centre, objective, gradient(5), shift_gradient(2)
+        real(dp)              :: pose_block(5,5), shift_block(2,2), oracle(5,5), steps(5)
+        real(dp)              :: pose_error, shift_error, worst_pose, worst_shift
+        integer               :: iobj, ictf, h, k, shell, i, j
+        integer,  parameter   :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID], ctfflags(3) = [CTFFLAG_NO, CTFFLAG_YES, CTFFLAG_FLIP]
+        integer,  parameter   :: KFROMTO(2) = [2, 6]
         ! radians and pixels: single-precision data and model (1e-7 over a relative change near 1e-2)
         ! and the O(step^2) truncation each leave about 1e-4 of the curvature
         real(dp), parameter :: ROT_STEP = 1.e-3_dp, SHIFT_STEP = 1.e-2_dp, ORACLE_TOL = 2.e-3_dp
@@ -847,24 +847,24 @@ contains
     ! replaced: a noisy Hermitian observation off its pose, cc and euclid, no CTF, CTF and flipped,
     ! bands from shell 2 and from the DC pixel; equal up to the rounding of single-precision models
     subroutine test_half_plane_kernels()
-        type(cartft_calc) :: calc
-        type(ctfparams)   :: ctfparms
-        type(ctf)         :: tfun
-        type(ctfvars)     :: ctfvals
-        real, allocatable :: volume(:,:,:)
-        integer, allocatable :: seed(:)
-        complex  :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex  :: noise(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex  :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real     :: sigma2(0:TEST_BOX/2), angle, uniform(2), rms
-        real(dp) :: truth(3,3), candidate(3,3), truth_shift(2), candidate_shift(2)
-        real(dp) :: objective, reference_objective, gradient(5), reference_gradient(5), hessian(5,5), reference_hessian(5,5)
-        real(dp) :: shift_objective, reference_shift_objective, shift_gradient(2), reference_shift_gradient(2)
-        real(dp) :: shift_hessian(2,2), reference_shift_hessian(2,2)
-        real(dp) :: objective_error, gradient_error, hessian_error
-        integer  :: iobj, ictf, iband, h, k, shell, nseed, a, b
-        integer,  parameter :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID], ctfflags(3) = [CTFFLAG_NO, CTFFLAG_YES, CTFFLAG_FLIP]
-        integer,  parameter :: BANDS(2,2) = reshape([2, 6, 0, 6], [2,2])
+        type(cartft_calc)     :: calc
+        type(ctfparams)       :: ctfparms
+        type(ctf)             :: tfun
+        type(ctfvars)         :: ctfvals
+        real,     allocatable :: volume(:,:,:)
+        integer,  allocatable :: seed(:)
+        complex               :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex               :: noise(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex               :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real                  :: sigma2(0:TEST_BOX/2), angle, uniform(2), rms
+        real(dp)              :: truth(3,3), candidate(3,3), truth_shift(2), candidate_shift(2)
+        real(dp)              :: objective, reference_objective, gradient(5), reference_gradient(5), hessian(5,5), reference_hessian(5,5)
+        real(dp)              :: shift_objective, reference_shift_objective, shift_gradient(2), reference_shift_gradient(2)
+        real(dp)              :: shift_hessian(2,2), reference_shift_hessian(2,2)
+        real(dp)              :: objective_error, gradient_error, hessian_error
+        integer               :: iobj, ictf, iband, h, k, shell, nseed, a, b
+        integer,  parameter   :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID], ctfflags(3) = [CTFFLAG_NO, CTFFLAG_YES, CTFFLAG_FLIP]
+        integer,  parameter   :: BANDS(2,2) = reshape([2, 6, 0, 6], [2,2])
         call build_test_volume(volume)
         call new_test_calc(calc, volume)
         truth           = real(euler2m([19., 37., 28.]), dp)
@@ -964,15 +964,15 @@ contains
     ! 6c) against the sigma pass at the same pose, for euclid slots with bands from shell 2 and
     ! from the DC pixel: equal up to rounding, sp outputs of dp sums of the same residuals
     subroutine test_sigma_from_shell_residual()
-        type(cartft_calc) :: calc
-        type(ctfparams)   :: no_ctf
-        real, allocatable :: volume(:,:,:), from_pass(:), from_residual(:)
-        complex  :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real     :: sigma2(0:TEST_BOX/2)
-        real(dp) :: rotation(3,3), objective, gradient(5), hessian(5,5), worst
+        type(cartft_calc)     :: calc
+        type(ctfparams)       :: no_ctf
+        real,     allocatable :: volume(:,:,:), from_pass(:), from_residual(:)
+        complex               :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real                  :: sigma2(0:TEST_BOX/2)
+        real(dp)              :: rotation(3,3), objective, gradient(5), hessian(5,5), worst
         real(dp), allocatable :: residual(:)
-        integer  :: iband, shell
-        integer, parameter :: BANDS(2,2) = reshape([2, TEST_BOX/2 - 1, 0, TEST_BOX/2 - 1], [2,2])
+        integer               :: iband, shell
+        integer,  parameter   :: BANDS(2,2) = reshape([2, TEST_BOX/2 - 1, 0, TEST_BOX/2 - 1], [2,2])
         call build_test_volume(volume)
         call new_test_calc(calc, volume)
         no_ctf%ctfflag = CTFFLAG_NO
@@ -1004,8 +1004,8 @@ contains
         type(image)       :: volume_image
         type(projector)   :: pftc_projector
         real, allocatable :: volume(:,:,:)
-        real(dp) :: correlation, gain, relative_l2
-        integer  :: irot
+        real(dp)          :: correlation, gain, relative_l2
+        integer           :: irot
         ! on-grid rotations map every sample to a lattice point; the third is off grid
         real,     parameter :: EULERS(3,3) = reshape([0., 0., 0., 90., 90., 0., 17., 31., 23.], [3,3])
         ! off grid each gather errs by about 4e-3 per axis against the exact transform (a 1-D model of
@@ -1102,11 +1102,11 @@ contains
     subroutine test_even_odd_references()
         type(cartft_calc) :: calc
         real, allocatable :: even_volume(:,:,:), odd_volume(:,:,:)
-        complex  :: even_pred(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex  :: odd_pred(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real(dp) :: rotation(3,3), shift(2)
-        real     :: scale
-        integer  :: icycle
+        complex           :: even_pred(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex           :: odd_pred(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real(dp)          :: rotation(3,3), shift(2)
+        real              :: scale
+        integer           :: icycle
         call build_test_volume(even_volume)
         odd_volume = -0.5*even_volume
         rotation   = real(euler2m([17., 31., 23.]), dp)
@@ -1136,10 +1136,10 @@ contains
     subroutine test_sigma_endpoint_contracts()
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
-        real, allocatable :: volume(:,:,:), terminal_sigma(:), seed_sigma(:), rollback_sigma(:), ref_pow(:), ptcl_pow(:)
-        complex  :: observed(-SMALL_BOX/2:SMALL_BOX/2,-SMALL_BOX/2:SMALL_BOX/2)
-        real(dp) :: truth_rotation(3,3), truth_shift(2), seed_rotation(3,3), seed_shift(2), rotation(3,3), shift(2)
-        real     :: v
+        real, allocatable     :: volume(:,:,:), terminal_sigma(:), seed_sigma(:), rollback_sigma(:), ref_pow(:), ptcl_pow(:)
+        complex               :: observed(-SMALL_BOX/2:SMALL_BOX/2,-SMALL_BOX/2:SMALL_BOX/2)
+        real(dp)              :: truth_rotation(3,3), truth_shift(2), seed_rotation(3,3), seed_shift(2), rotation(3,3), shift(2)
+        real                  :: v
         call build_small_volume(volume)
         call new_test_calc(calc, volume)
         truth_rotation = real(euler2m([19., 37., 28.]), dp)
@@ -1180,23 +1180,23 @@ contains
     ! to e3 = 360 - rot(irot), as assign_ori stores it. Expected value: the placed index.
     subroutine test_polar_grid_pose_agreement()
         ! parameters%new requires a box above 26
-        integer, parameter :: POLAR_BOX = 32, PLACED_INDEX = 7, KFROMTO(2) = [2, 10]
-        real,    parameter :: E1 = 37., E2 = 63.
-        type(cartft_calc)  :: calc
-        type(polarft_calc) :: pftc
+        integer,           parameter           :: POLAR_BOX       = 32, PLACED_INDEX = 7, KFROMTO(2) = [2, 10]
+        real,              parameter           :: E1              = 37., E2 = 63.
+        type(cartft_calc)                      :: calc
+        type(polarft_calc)                     :: pftc
         class(parameters), allocatable, target :: p
         class(cmdline),    allocatable         :: cline
-        type(ctfparams)    :: no_ctf
-        type(image)        :: ref_img, ptcl_img
-        real, allocatable  :: volume(:,:,:), vals(:), sigma2_noise(:,:)
-        complex  :: ref_plane(-POLAR_BOX/2:POLAR_BOX/2,-POLAR_BOX/2:POLAR_BOX/2)
-        complex  :: ptcl_plane(-POLAR_BOX/2:POLAR_BOX/2,-POLAR_BOX/2:POLAR_BOX/2)
-        real     :: sigma2(0:POLAR_BOX/2)
-        real(dp) :: objective, gradient(5)
-        real(dp), allocatable :: cart_objectives(:), polar_corrs(:)
-        integer  :: iobj, irot, nrots, pdim(3)
-        integer, parameter :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID]
-        character(len=6), parameter :: objfun_names(2) = ['cc    ', 'euclid']
+        type(ctfparams)                        :: no_ctf
+        type(image)                            :: ref_img, ptcl_img
+        real,              allocatable         :: volume(:,:,:), vals(:), sigma2_noise(:,:)
+        complex                                :: ref_plane(-POLAR_BOX/2:POLAR_BOX/2,-POLAR_BOX/2:POLAR_BOX/2)
+        complex                                :: ptcl_plane(-POLAR_BOX/2:POLAR_BOX/2,-POLAR_BOX/2:POLAR_BOX/2)
+        real                                   :: sigma2(0:POLAR_BOX/2)
+        real(dp)                               :: objective, gradient(5)
+        real(dp),          allocatable         :: cart_objectives(:), polar_corrs(:)
+        integer                                :: iobj, irot, nrots, pdim(3)
+        integer,           parameter           :: objfuns(2)      = [OBJFUN_CC, OBJFUN_EUCLID]
+        character(len=6),  parameter           :: objfun_names(2) = ['cc    ', 'euclid']
         allocate(p, cline)
         call build_test_volume(volume, POLAR_BOX)
         call new_test_calc(calc, volume)
@@ -1294,18 +1294,18 @@ contains
     ! response of polarize_oversamp's normalized stencil at an on-grid sample: the polar samples
     ! of the zero-padded masked image at 0 and 90 degrees equal the tapered observation.
     subroutine test_observation_preparation()
-        integer, parameter :: NATIVE_BOX = 2*SMALL_BOX, PFTSZ = 8, KFROMTO(2) = [2, SMALL_BOX/2 - 1]
-        real,    parameter :: CROP_SMPD = 1.5, MSKRAD = 6., NATIVE_SHIFT(2) = [1.5, -2.25]
-        type(cartft_calc) :: calc
-        type(image)       :: raw, oracle, work, oracle_work, padded_work, masked, padded
-        type(ctfparams)   :: ctf_native, ctf_crop, ctf_out
-        type(ctf)         :: tfun
+        integer, parameter   :: NATIVE_BOX = 2*SMALL_BOX, PFTSZ = 8, KFROMTO(2) = [2, SMALL_BOX/2 - 1]
+        real,    parameter   :: CROP_SMPD  = 1.5, MSKRAD = 6., NATIVE_SHIFT(2) = [1.5, -2.25]
+        type(cartft_calc)    :: calc
+        type(image)          :: raw, oracle, work, oracle_work, padded_work, masked, padded
+        type(ctfparams)      :: ctf_native, ctf_crop, ctf_out
+        type(ctf)            :: tfun
         logical, allocatable :: noise_mask(:,:,:)
         complex, allocatable :: observed(:,:), untapered(:,:), tapered(:,:)
         real,    allocatable :: taper(:), masked_rmat(:,:,:), padded_rmat(:,:,:), tapered_rmat(:,:,:), ones(:)
-        complex  :: pft(PFTSZ,KFROMTO(1):KFROMTO(2))
-        real     :: crop_shift(2), scale, shvec(2)
-        integer  :: i, j, k, offset
+        complex              :: pft(PFTSZ,KFROMTO(1):KFROMTO(2))
+        real                 :: crop_shift(2), scale, shvec(2)
+        integer              :: i, j, k, offset
         call calc%new(1, SMALL_BOX, 1)
         taper = calc%get_ptcl_taper()
         call assert_int(SMALL_BOX, size(taper), 'taper does not span the box')
@@ -1452,16 +1452,16 @@ contains
     ! a wrong version, box, state count, sampling, an out-of-range band, and even and odd
     ! headers that differ. Expected values: the written arrays; hand-built headers.
     subroutine test_reference_volume_file()
-        character(len=*), parameter :: FEVEN = 'tmp_cartft_calc_tester_refvols_even.bin'
-        character(len=*), parameter :: FODD  = 'tmp_cartft_calc_tester_refvols_odd.bin'
-        real,    parameter :: SMPD = 1.3
-        integer, parameter :: KFROMTO(2) = [2, 9]
-        type(cartft_calc) :: writer, reader, direct
-        type(string)      :: fname_even, fname_odd
-        real, allocatable :: volumes(:,:,:,:,:)
-        character(len=32) :: field
-        integer :: header(5), good(5), kfromto_read(2), state, ihalf, funit
-        real    :: smpd_read
+        character(len=*), parameter   :: FEVEN      = 'tmp_cartft_calc_tester_refvols_even.bin'
+        character(len=*), parameter   :: FODD       = 'tmp_cartft_calc_tester_refvols_odd.bin'
+        real,             parameter   :: SMPD       = 1.3
+        integer,          parameter   :: KFROMTO(2) = [2, 9]
+        type(cartft_calc)             :: writer, reader, direct
+        type(string)                  :: fname_even, fname_odd
+        real,             allocatable :: volumes(:,:,:,:,:)
+        character(len=32)             :: field
+        integer                       :: header(5), good(5), kfromto_read(2), state, ihalf, funit
+        real                          :: smpd_read
         call build_two_state_volumes(volumes)
         fname_even = FEVEN
         fname_odd  = FODD
@@ -1530,14 +1530,14 @@ contains
     ! of the same volumes, and the reader adopts kfromto and lp of the header; then
     ! remove_ref_section_files removes both files and no file of the test survives.
     subroutine test_reference_volume_handoff()
-        real,    parameter :: SMPD = 1.3
-        integer, parameter :: KFROMTO(2) = [3, 10]
-        type(cartft_calc) :: writer, direct
+        real,              parameter   :: SMPD       = 1.3
+        integer,           parameter   :: KFROMTO(2) = [3, 10]
+        type(cartft_calc)              :: writer, direct
         class(builder),    allocatable :: build
         class(parameters), allocatable :: params
-        type(string)      :: fname_even, fname_odd
-        real, allocatable :: volumes(:,:,:,:,:)
-        integer :: state, ihalf
+        type(string)                   :: fname_even, fname_odd
+        real,              allocatable :: volumes(:,:,:,:,:)
+        integer                        :: state, ihalf
         allocate(build, params)
         call build_two_state_volumes(volumes)
         fname_even = refine3D_cart_refvols_fname('even')
@@ -1593,10 +1593,10 @@ contains
     ! the established particle path (norm_noise_fft_clip_shift, ifft_mask_fft) on the full
     ! redundant disk, with the cropped sampling in its CTF parameters
     subroutine test_observation_established_path()
-        integer, parameter :: NATIVE_BOX = 32
-        real,    parameter :: CROP_SMPD = 1.5
-        type(image)        :: raw, oracle, work, oracle_work
-        type(ctfparams)    :: input_ctf, output_ctf
+        integer, parameter   :: NATIVE_BOX = 32
+        real,    parameter   :: CROP_SMPD  = 1.5
+        type(image)          :: raw, oracle, work, oracle_work
+        type(ctfparams)      :: input_ctf, output_ctf
         logical, allocatable :: noise_mask(:,:,:)
         complex, allocatable :: observed(:,:), expected(:,:)
         real,    allocatable :: unit_taper(:)
@@ -1627,14 +1627,14 @@ contains
     !! shifts on the cropped grid, CTF parameters, the two sigma2 spectra (one per half) and the
     !! particles' halves.
     subroutine build_batch_fixture( nb, raws, crop_shifts, ctfs, sigma2, halves, noise_mask )
-        integer,                      intent(in)  :: nb
-        type(image),     allocatable, intent(out) :: raws(:)
-        real,            allocatable, intent(out) :: crop_shifts(:,:), sigma2(:,:)
-        integer,         allocatable, intent(out) :: halves(:)
-        type(ctfparams), allocatable, intent(out) :: ctfs(:)
-        logical,         allocatable, intent(out) :: noise_mask(:,:,:)
+        integer,                      intent(in)               :: nb
+        type(image),                  allocatable, intent(out) :: raws(:)
+        real,                         allocatable, intent(out) :: crop_shifts(:,:), sigma2(:,:)
+        integer,                      allocatable, intent(out) :: halves(:)
+        type(ctfparams),              allocatable, intent(out) :: ctfs(:)
+        logical,                      allocatable, intent(out) :: noise_mask(:,:,:)
         type(image) :: masker
-        integer :: i, shell
+        integer     :: i, shell
         allocate(raws(nb), crop_shifts(2,nb), ctfs(nb), sigma2(0:SMALL_BOX/2,2), halves(nb))
         sigma2(:,1) = [(1. + 0.05*real(shell),   shell = 0, SMALL_BOX/2)]
         sigma2(:,2) = [(1. + 0.05*real(2*shell), shell = 0, SMALL_BOX/2)]
@@ -1686,19 +1686,19 @@ contains
     ! arrays across fills: one filled first under the other objective, half and band and then as the
     ! single-particle path fills it gives that path's objectives bit for bit.
     subroutine test_batch_preparation()
-        integer, parameter :: NB = 5, KFROMTO(2) = [2, SMALL_BOX/2 - 1]
-        real,    parameter :: CROP_SMPD = 1.5, MSKRAD = 6.
-        type(cartft_calc) :: batch_calc, single_calc, team_calc, copy_calc, refill_calc
+        integer,         parameter   :: NB        = 5, KFROMTO(2) = [2, SMALL_BOX/2 - 1]
+        real,            parameter   :: CROP_SMPD = 1.5, MSKRAD = 6.
+        type(cartft_calc)            :: batch_calc, single_calc, team_calc, copy_calc, refill_calc
         type(image),     allocatable :: raws(:)
-        type(image)      :: raw_copy, work
+        type(image)                  :: raw_copy, work
         type(ctfparams), allocatable :: ctfs(:)
-        type(ctfparams)  :: ctf_out
+        type(ctfparams)              :: ctf_out
         logical,         allocatable :: noise_mask(:,:,:)
         real,            allocatable :: crop_shifts(:,:), sigma2(:,:), volume(:,:,:), taper(:)
         integer,         allocatable :: halves(:)
         complex,         allocatable :: observed(:,:)
-        real(dp) :: batch_values(6,NB), single_values(6,NB), team_values(6,NB), copy_values(6,NB), refill_values(6,NB)
-        integer  :: i, iobj, nthr_saved
+        real(dp)                     :: batch_values(6,NB), single_values(6,NB), team_values(6,NB), copy_values(6,NB), refill_values(6,NB)
+        integer                      :: i, iobj, nthr_saved
         call build_small_volume(volume)
         call build_batch_fixture(NB, raws, crop_shifts, ctfs, sigma2, halves, noise_mask)
         nthr_saved = 1
@@ -1797,11 +1797,11 @@ contains
     !! not depend on them
     subroutine test_sigma2_invalidates_slots()
         type(stale_slot_user) :: child
-        type(cartft_calc) :: calc
-        type(ctfparams)   :: no_ctf
-        real, allocatable :: volume(:,:,:)
-        complex :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real    :: sigma2(0:TEST_BOX/2)
+        type(cartft_calc)     :: calc
+        type(ctfparams)       :: no_ctf
+        real, allocatable     :: volume(:,:,:)
+        complex               :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real                  :: sigma2(0:TEST_BOX/2)
         write(*,'(A)') 'test_sigma2_invalidates_slots'
         call build_test_volume(volume)
         call calc%new(1, TEST_BOX, 2)
@@ -1829,9 +1829,9 @@ contains
         type(cartft_calc) :: calc
         type(ctfparams)   :: no_ctf
         real, allocatable :: volume(:,:,:)
-        complex  :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real     :: sigma2(0:TEST_BOX/2)
-        logical  :: l_valid
+        complex           :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real              :: sigma2(0:TEST_BOX/2)
+        logical           :: l_valid
         !$ call omp_set_num_threads(1)
         call build_test_volume(volume)
         call calc%new(1, TEST_BOX, 2)
@@ -1847,15 +1847,15 @@ contains
     end subroutine use_stale_slot
 
     subroutine test_concurrent_evaluation()
-        integer, parameter :: NP = 24, NREPS = 20, NRES = 57, KFROMTO(2) = [2, TEST_BOX/2 - 1]
+        integer, parameter    :: NP = 24, NREPS = 20, NRES = 57, KFROMTO(2) = [2, TEST_BOX/2 - 1]
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opts(NP)
         type(ctfparams)       :: no_ctf
-        real, allocatable :: volume(:,:,:), sigma_single(:,:), sigma_team(:,:)
-        complex  :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real     :: sigma2(0:TEST_BOX/2)
-        real(dp) :: single(NRES,NP), team(NRES,NP)
-        integer  :: i, irep, shell, ndiff, nthr_prev, nthr_full
+        real,    allocatable  :: volume(:,:,:), sigma_single(:,:), sigma_team(:,:)
+        complex               :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real                  :: sigma2(0:TEST_BOX/2)
+        real(dp)              :: single(NRES,NP), team(NRES,NP)
+        integer               :: i, irep, shell, ndiff, nthr_prev, nthr_full
         call build_test_volume(volume)
         call calc%new(1, TEST_BOX, NP)
         call calc%set_ref(1, .true., volume)
@@ -1900,10 +1900,10 @@ contains
             real(dp), intent(out) :: res(NRES,NP)
             real,     intent(out) :: sig(KFROMTO(1):KFROMTO(2),NP)
             real, allocatable :: contrib(:), ref_pow(:), ptcl_pow(:)
-            real(dp) :: rotation(3,3), shift(2), gradient(5), hessian(5,5), shift_gradient(2), shift_hessian(2,2)
-            real(dp) :: before, after
-            real     :: v
-            integer  :: j
+            real(dp)          :: rotation(3,3), shift(2), gradient(5), hessian(5,5), shift_gradient(2), shift_hessian(2,2)
+            real(dp)          :: before, after
+            real              :: v
+            integer           :: j
             sig = 0.
             !$omp parallel do default(shared) schedule(dynamic) &
             !$omp private(j,rotation,shift,gradient,hessian,shift_gradient,shift_hessian,before,after,contrib,ref_pow,ptcl_pow,v)
@@ -1939,19 +1939,19 @@ contains
     ! test); an exact match stores zero. A Cartesian cc pass allocates, reads and writes no
     ! sigma2: prep_sigmas_objfun leaves the sigma owner unbuilt (C5).
     subroutine test_sigma_owner()
-        integer, parameter :: KFROMTO(2) = [2, 6]
-        type(cartft_calc)    :: calc
-        type(euclid_sigma2)  :: esig
+        integer,           parameter           :: KFROMTO(2) = [2, 6]
+        type(cartft_calc)                      :: calc
+        type(euclid_sigma2)                    :: esig
         class(parameters), allocatable, target :: params
         class(builder),    allocatable         :: build
-        type(ctfparams)      :: no_ctf
-        type(string)         :: fname
-        real, allocatable    :: volume(:,:,:), stored(:)
-        complex  :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        complex  :: model(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real     :: sigma2(0:TEST_BOX/2)
-        real(dp) :: truth(3,3), committed(3,3), oracle(KFROMTO(1):KFROMTO(2)), counts(KFROMTO(1):KFROMTO(2))
-        integer  :: h, k, shell
+        type(ctfparams)                        :: no_ctf
+        type(string)                           :: fname
+        real,              allocatable         :: volume(:,:,:), stored(:)
+        complex                                :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex                                :: model(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real                                   :: sigma2(0:TEST_BOX/2)
+        real(dp)                               :: truth(3,3), committed(3,3), oracle(KFROMTO(1):KFROMTO(2)), counts(KFROMTO(1):KFROMTO(2))
+        integer                                :: h, k, shell
         allocate(params, build)
         call build_test_volume(volume)
         call calc%new(1, TEST_BOX, 1)
@@ -2011,22 +2011,22 @@ contains
     subroutine test_polar_sigma_agreement()
         ! the box, sampling, mask and band of N6, so the polar calculator reuses its FFT plans
         ! (the fast tier's budget)
-        integer, parameter :: BOX = 32, KFROMTO(2) = [2, 10]
-        real,    parameter :: SMPD = 1.0, MSKRAD = 10.
-        type(cartft_calc)  :: calc
-        type(polarft_calc) :: pftc
+        integer,           parameter           :: BOX  = 32, KFROMTO(2) = [2, 10]
+        real,              parameter           :: SMPD = 1.0, MSKRAD = 10.
+        type(cartft_calc)                      :: calc
+        type(polarft_calc)                     :: pftc
         class(parameters), allocatable, target :: p
         class(cmdline),    allocatable         :: cline
-        type(image)        :: noise, polar_work, polar_pad, cart_work, zero_pad, masked
-        type(ctfparams)    :: no_ctf, ctf_out
-        logical, allocatable :: noise_mask(:,:,:)
-        complex, allocatable :: observed(:,:)
-        real,    allocatable :: zero_volume(:,:,:), taper(:), unit_taper(:), contrib(:), ref_pow(:), ptcl_pow(:)
-        real,    allocatable :: mrmat(:,:,:)
-        real     :: polar_sigma(KFROMTO(1):KFROMTO(2)), cart_tapered(KFROMTO(1):KFROMTO(2)), cart_plain(KFROMTO(1):KFROMTO(2))
-        real     :: sigma2(0:BOX/2), v
-        real(dp) :: se(KFROMTO(1):KFROMTO(2)), d(KFROMTO(1):KFROMTO(2)), factor, num, den
-        integer  :: pdim(3), h, k, shell, i, j, n_s(KFROMTO(1):KFROMTO(2))
+        type(image)                            :: noise, polar_work, polar_pad, cart_work, zero_pad, masked
+        type(ctfparams)                        :: no_ctf, ctf_out
+        logical,           allocatable         :: noise_mask(:,:,:)
+        complex,           allocatable         :: observed(:,:)
+        real,              allocatable         :: zero_volume(:,:,:), taper(:), unit_taper(:), contrib(:), ref_pow(:), ptcl_pow(:)
+        real,              allocatable         :: mrmat(:,:,:)
+        real                                   :: polar_sigma(KFROMTO(1):KFROMTO(2)), cart_tapered(KFROMTO(1):KFROMTO(2)), cart_plain(KFROMTO(1):KFROMTO(2))
+        real                                   :: sigma2(0:BOX/2), v
+        real(dp)                               :: se(KFROMTO(1):KFROMTO(2)), d(KFROMTO(1):KFROMTO(2)), factor, num, den
+        integer                                :: pdim(3), h, k, shell, i, j, n_s(KFROMTO(1):KFROMTO(2))
         allocate(p, cline)
         ! the polar calculator from parameters
         call cline%set('box',     real(BOX))
@@ -2129,23 +2129,23 @@ contains
     ! Cartesian slot is valid and keeps the discrete row of one whose slot is invalid; the candidate
     ! the transaction commits holds no row of the committed generation.
     subroutine test_followup_sigma_fallback()
-        integer, parameter :: NP = 3, KFROMTO(2) = [2, 6], NSHELL = TEST_BOX/2
-        real,    parameter :: COMMITTED_VALUE = 5.
-        character(len=*), parameter :: COMMITTED = 'tmp_cartft_followup_sigma2_state.bin'
-        type(cartft_calc)         :: calc
+        integer,           parameter           :: NP              = 3, KFROMTO(2) = [2, 6], NSHELL = TEST_BOX/2
+        real,              parameter           :: COMMITTED_VALUE = 5.
+        character(len=*),  parameter           :: COMMITTED       = 'tmp_cartft_followup_sigma2_state.bin'
+        type(cartft_calc)                      :: calc
         class(parameters), allocatable, target :: params
         class(builder),    allocatable, target :: build
-        type(ctfparams)           :: no_ctf
-        type(string)              :: candidate, range_path
-        real, allocatable         :: volume(:,:,:), refined(:)
-        real(real32), allocatable :: rows(:,:)
-        real(real32) :: discrete(NSHELL,NP)
-        complex      :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real         :: sigma2(0:TEST_BOX/2)
-        real(dp)     :: truth(3,3), committed_pose(3,3)
-        integer      :: i, status
-        logical      :: outside_band
-        character(len=128) :: message
+        type(ctfparams)                        :: no_ctf
+        type(string)                           :: candidate, range_path
+        real,              allocatable         :: volume(:,:,:), refined(:)
+        real(real32),      allocatable         :: rows(:,:)
+        real(real32)                           :: discrete(NSHELL,NP)
+        complex                                :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real                                   :: sigma2(0:TEST_BOX/2)
+        real(dp)                               :: truth(3,3), committed_pose(3,3)
+        integer                                :: i, status
+        logical                                :: outside_band
+        character(len=128)                     :: message
         allocate(params, build)
         call new_sigma2_fixture(COMMITTED, NP, TEST_BOX, COMMITTED_VALUE, params, build)
         ! the transaction the discrete pass opened and the residuals it wrote for part 1
@@ -2203,29 +2203,29 @@ contains
     ! 0.80-1.25): band total within 5 %, every shell within [0.75, 1.3]. The residual of a noise-free
     ! particle is all structure, which the two samplings need not agree on; it is printed only (N33).
     subroutine test_polar_sigma_signal()
-        integer,  parameter :: BOX = 48, KFROMTO(2) = [3, 10], PLACED_INDEX = 9
-        real,     parameter :: SMPD = 2.0, MSKRAD = 14., NOISE_RADIUS = 22., E1 = 37., E2 = 63.
-        real,     parameter :: PSI_OFFSET = 1.4, TRUE_SHIFT(2) = [0.43, -0.71], DFX = 0.15, DFY = 0.18, ANGAST = 31.
-        real(dp), parameter :: TOTAL_TOL = 0.05_dp, SHELL_RANGE(2) = [0.75_dp, 1.3_dp]
-        type(cartft_calc)  :: calc
-        type(polarft_calc) :: pftc
+        integer,           parameter           :: BOX        = 48, KFROMTO(2) = [3, 10], PLACED_INDEX = 9
+        real,              parameter           :: SMPD       = 2.0, MSKRAD = 14., NOISE_RADIUS = 22., E1 = 37., E2 = 63.
+        real,              parameter           :: PSI_OFFSET = 1.4, TRUE_SHIFT(2) = [0.43, -0.71], DFX = 0.15, DFY = 0.18, ANGAST = 31.
+        real(dp),          parameter           :: TOTAL_TOL  = 0.05_dp, SHELL_RANGE(2) = [0.75_dp, 1.3_dp]
+        type(cartft_calc)                      :: calc
+        type(polarft_calc)                     :: pftc
         class(parameters), allocatable, target :: p
         class(sp_project), allocatable, target :: spproj
         class(cmdline),    allocatable         :: cline
-        type(oris)         :: eulspace
-        type(projector)    :: vol_pad
-        type(image)        :: vol_img, ptcl, noise, masked, polar_work, polar_pad, cart_work
-        type(ctf)          :: tfun
-        type(ctfparams)    :: ctfparms, ctf_out
-        logical, allocatable :: noise_mask(:,:,:)
-        complex, allocatable :: observed(:,:)
-        real,    allocatable :: volume(:,:,:), taper(:), contrib(:), ref_pow(:), ptcl_pow(:), prmat(:,:,:), nrmat(:,:,:)
-        complex  :: plane(-BOX/2:BOX/2,-BOX/2:BOX/2)
-        real     :: polar_sigma(KFROMTO(1):KFROMTO(2)), sigma2(0:BOX/2), v, step, centre, e3
-        real     :: polar_ref_pow(KFROMTO(1):KFROMTO(2)), polar_ptcl_pow(KFROMTO(1):KFROMTO(2))
-        real(dp) :: ratio(KFROMTO(1):KFROMTO(2)), n_s(KFROMTO(1):KFROMTO(2)), truth(3,3), evaluated(3,3), total
-        real     :: noise_amp
-        integer  :: pdim(3), h, k, i, j, shell, n_noise, n_mask
+        type(oris)                             :: eulspace
+        type(projector)                        :: vol_pad
+        type(image)                            :: vol_img, ptcl, noise, masked, polar_work, polar_pad, cart_work
+        type(ctf)                              :: tfun
+        type(ctfparams)                        :: ctfparms, ctf_out
+        logical,           allocatable         :: noise_mask(:,:,:)
+        complex,           allocatable         :: observed(:,:)
+        real,              allocatable         :: volume(:,:,:), taper(:), contrib(:), ref_pow(:), ptcl_pow(:), prmat(:,:,:), nrmat(:,:,:)
+        complex                                :: plane(-BOX/2:BOX/2,-BOX/2:BOX/2)
+        real                                   :: polar_sigma(KFROMTO(1):KFROMTO(2)), sigma2(0:BOX/2), v, step, centre, e3
+        real                                   :: polar_ref_pow(KFROMTO(1):KFROMTO(2)), polar_ptcl_pow(KFROMTO(1):KFROMTO(2))
+        real(dp)                               :: ratio(KFROMTO(1):KFROMTO(2)), n_s(KFROMTO(1):KFROMTO(2)), truth(3,3), evaluated(3,3), total
+        real                                   :: noise_amp
+        integer                                :: pdim(3), h, k, i, j, shell, n_noise, n_mask
         allocate(p, spproj, cline)
         ! the polar calculator; its CTF matrices come from a one-particle project below
         call cline%set('box',     real(BOX))
@@ -2392,27 +2392,27 @@ contains
     ! mean_s |d_s|/SE_s <= 1 and max_s <= 3, d_s relative, SE_s = sqrt(2/(n_s*NG)). Both sides see
     ! the same noise, so d_s is mostly systematic and the gate bounds it at about SE_s (4-9 %).
     subroutine test_polar_sigma_group()
-        integer, parameter :: BOX = 48, KFROMTO(2) = [3, 10], PLACED_INDEX = 9, NG = 16
-        real,    parameter :: SMPD = 2.0, MSKRAD = 18., SNR = 0.1
-        type(cartft_calc)  :: calc
-        type(polarft_calc) :: pftc
+        integer,           parameter           :: BOX  = 48, KFROMTO(2) = [3, 10], PLACED_INDEX = 9, NG = 16
+        real,              parameter           :: SMPD = 2.0, MSKRAD = 18., SNR = 0.1
+        type(cartft_calc)                      :: calc
+        type(polarft_calc)                     :: pftc
         class(parameters), allocatable, target :: p
         class(sp_project), allocatable, target :: spproj
         class(cmdline),    allocatable         :: cline
-        type(oris)         :: eulspace
-        type(projector)    :: vol_pad
-        type(image)        :: vol_img, ptcl, noise, masked, polar_work, polar_pad, cart_work
-        type(ctf)          :: tfun
-        type(ctfparams)    :: ctfparms(NG), ctf_out
-        logical, allocatable :: noise_mask(:,:,:)
-        complex, allocatable :: observed(:,:)
-        real,    allocatable :: volume(:,:,:), taper(:), contrib(:), ref_pow(:), ptcl_pow(:), prmat(:,:,:), nrmat(:,:,:)
-        complex  :: plane(-BOX/2:BOX/2,-BOX/2:BOX/2)
-        real     :: polar_sigma(KFROMTO(1):KFROMTO(2)), sigma2(0:BOX/2), v, step, e3, gain, mean_sig, var_sig
-        real     :: e1(NG), e2(NG), psi_off(NG)
-        real(dp) :: polar_sum(KFROMTO(1):KFROMTO(2)), cart_sum(KFROMTO(1):KFROMTO(2)), n_s(KFROMTO(1):KFROMTO(2))
-        real(dp) :: d(KFROMTO(1):KFROMTO(2)), se(KFROMTO(1):KFROMTO(2)), truth(3,3), evaluated(3,3)
-        integer  :: pdim(3), h, k, i, shell
+        type(oris)                             :: eulspace
+        type(projector)                        :: vol_pad
+        type(image)                            :: vol_img, ptcl, noise, masked, polar_work, polar_pad, cart_work
+        type(ctf)                              :: tfun
+        type(ctfparams)                        :: ctfparms(NG), ctf_out
+        logical,           allocatable         :: noise_mask(:,:,:)
+        complex,           allocatable         :: observed(:,:)
+        real,              allocatable         :: volume(:,:,:), taper(:), contrib(:), ref_pow(:), ptcl_pow(:), prmat(:,:,:), nrmat(:,:,:)
+        complex                                :: plane(-BOX/2:BOX/2,-BOX/2:BOX/2)
+        real                                   :: polar_sigma(KFROMTO(1):KFROMTO(2)), sigma2(0:BOX/2), v, step, e3, gain, mean_sig, var_sig
+        real                                   :: e1(NG), e2(NG), psi_off(NG)
+        real(dp)                               :: polar_sum(KFROMTO(1):KFROMTO(2)), cart_sum(KFROMTO(1):KFROMTO(2)), n_s(KFROMTO(1):KFROMTO(2))
+        real(dp)                               :: d(KFROMTO(1):KFROMTO(2)), se(KFROMTO(1):KFROMTO(2)), truth(3,3), evaluated(3,3)
+        integer                                :: pdim(3), h, k, i, shell
         allocate(p, spproj, cline)
         call cline%set('box',     real(BOX))
         call cline%set('smpd',    SMPD)
@@ -2588,24 +2588,24 @@ contains
     ! empty there against a zero reference) stays in the particle rows, the reducer excludes it from
     ! the global spectra, and the reload holds the positive spectrum of each half.
     subroutine test_canonical_sigma_round_trip()
-        integer, parameter :: BOX = 32, NP = 4, KFROMTO(2) = [2, 10], NSHELL = BOX/2, ZERO_FROM = 4
-        real,    parameter :: SEED = 3.
-        character(len=*), parameter :: COMMITTED = 'tmp_cartft_round_trip_sigma2_state.bin'
-        type(cartft_calc)         :: calc
+        integer,           parameter           :: BOX       = 32, NP = 4, KFROMTO(2) = [2, 10], NSHELL = BOX/2, ZERO_FROM = 4
+        real,              parameter           :: SEED      = 3.
+        character(len=*),  parameter           :: COMMITTED = 'tmp_cartft_round_trip_sigma2_state.bin'
+        type(cartft_calc)                      :: calc
         class(parameters), allocatable, target :: p
         class(builder),    allocatable, target :: build
         class(cmdline),    allocatable         :: cline
-        type(ctfparams)           :: no_ctf
-        type(sigma2_state_header) :: header
-        type(string)              :: candidate, range_path
-        real, allocatable         :: volume(:,:,:), zero_volume(:,:,:), band(:)
-        real(real32), allocatable :: globals(:,:)
-        complex  :: observed(-BOX/2:BOX/2,-BOX/2:BOX/2)
-        real     :: sigma2(0:BOX/2), written(NSHELL,NP), mean_even(NSHELL)
-        real(dp) :: truth(3,3), committed_pose(3,3)
-        logical  :: active(NP)
-        integer  :: eo(NP), i, h, k, status
-        character(len=128) :: message
+        type(ctfparams)                        :: no_ctf
+        type(sigma2_state_header)              :: header
+        type(string)                           :: candidate, range_path
+        real,              allocatable         :: volume(:,:,:), zero_volume(:,:,:), band(:)
+        real(real32),      allocatable         :: globals(:,:)
+        complex                                :: observed(-BOX/2:BOX/2,-BOX/2:BOX/2)
+        real                                   :: sigma2(0:BOX/2), written(NSHELL,NP), mean_even(NSHELL)
+        real(dp)                               :: truth(3,3), committed_pose(3,3)
+        logical                                :: active(NP)
+        integer                                :: eo(NP), i, h, k, status
+        character(len=128)                     :: message
         allocate(p, build, cline)
         call cline%set('box',     real(BOX))
         call cline%set('smpd',    1.0)
@@ -2694,16 +2694,16 @@ contains
     !! np particles, every value seed) and a builder whose project registers it, np particles in
     !! state 1 with alternating halves; params gets what the sigma owner of a Cartesian euclid pass reads.
     subroutine new_sigma2_fixture( path, np, box, seed, params, build )
-        character(len=*),       intent(in)    :: path
-        integer,                intent(in)    :: np, box
-        real,                   intent(in)    :: seed
-        class(parameters),       intent(inout) :: params
-        class(builder),  target, intent(inout) :: build
+        character(len=*),        intent(in)            :: path
+        integer,                 intent(in)            :: np, box
+        real,                    intent(in)            :: seed
+        class(parameters),       intent(inout)         :: params
+        class(builder),          target, intent(inout) :: build
         type(sigma2_state_header) :: header
-        type(string) :: candidate
-        real(real32) :: spectra(box/2,np), globals(box/2,2)
-        integer      :: eo(np), i, status
-        character(len=128) :: message
+        type(string)              :: candidate
+        real(real32)              :: spectra(box/2,np), globals(box/2,2)
+        integer                   :: eo(np), i, status
+        character(len=128)        :: message
         call remove_sigma2_files(path, 3)
         candidate = sigma2_state_candidate_path(path, 1_int64)
         call sigma2_state_init_header(header, 1, box/2, np, box, 1.0, 1_int64, FIXTURE_DIGEST, SIGMA2_PROV_RESIDUAL)

@@ -26,11 +26,11 @@ end interface
 
 ! Convenience type to hold information about individual project files
 type, extends(rec) :: project_rec
-    type(string) :: projname            ! project file name
-    integer      :: micind     = 0      ! index of micrograph in project
-    integer      :: nptcls     = 0      ! # of particles
-    integer      :: nptcls_sel = 0      ! # of particles (state=1)
-    logical      :: included   = .false.! whether the record has been imported
+    type(string) :: projname             ! project file name
+    integer      :: micind     = 0       ! index of micrograph in project
+    integer      :: nptcls     = 0       ! # of particles
+    integer      :: nptcls_sel = 0       ! # of particles (state=1)
+    logical      :: included   = .false. ! whether the record has been imported
 contains
     procedure :: print => print_proj
 end type project_rec
@@ -70,7 +70,7 @@ contains
     procedure          :: next         => iter_next
     procedure          :: advance      => iter_advance
     procedure, private :: iter_get_rec, iter_get_project_rec, iter_get_process_rec, iter_get_chunk_rec
-    generic            :: get => iter_get_project_rec, iter_get_process_rec, iter_get_chunk_rec
+    generic            :: get          => iter_get_project_rec, iter_get_process_rec, iter_get_chunk_rec
     procedure          :: replace      => iter_replace
     procedure          :: equals       => iter_equals
     generic            :: operator(==) => equals
@@ -161,8 +161,8 @@ contains
     end subroutine iter_replace
 
     subroutine iter_get_rec(self, x)
-        class(rec_iterator),     intent(in)  :: self
-        class(rec), allocatable, intent(out) :: x
+        class(rec_iterator),     intent(in)               :: self
+        class(rec),              allocatable, intent(out) :: x
         class(*),   allocatable :: tmp
         call self%it%getter(tmp)
         select type(tmp)
@@ -278,9 +278,9 @@ contains
     end function size
 
     subroutine at_rec(self, idx, x)
-        class(rec_list), intent(in) :: self
-        integer,         intent(in) :: idx
-        class(rec), allocatable, intent(out) :: x
+        class(rec_list), intent(in)               :: self
+        integer,         intent(in)               :: idx
+        class(rec),      allocatable, intent(out) :: x
         class(*), allocatable :: tmp
         call self%list%at(idx, tmp)
         select type(tmp)
@@ -293,8 +293,8 @@ contains
     end subroutine at_rec
 
     subroutine at_project_rec(self, idx, x)
-        class(rec_list),   intent(in) :: self
-        integer,           intent(in) :: idx
+        class(rec_list),   intent(in)  :: self
+        integer,           intent(in)  :: idx
         type(project_rec), intent(out) :: x
         class(rec), allocatable :: tmp
         call self%at_rec(idx, tmp)
@@ -308,8 +308,8 @@ contains
     end subroutine at_project_rec
 
     subroutine at_process_rec(self, idx, x)
-        class(rec_list),   intent(in) :: self
-        integer,           intent(in) :: idx
+        class(rec_list),   intent(in)  :: self
+        integer,           intent(in)  :: idx
         type(process_rec), intent(out) :: x
         class(rec), allocatable :: tmp
         call self%at_rec(idx, tmp)
@@ -323,9 +323,9 @@ contains
     end subroutine at_process_rec
 
     subroutine at_chunk_rec(self, idx, x)
-        class(rec_list),   intent(in) :: self
-        integer,           intent(in) :: idx
-        type(chunk_rec), intent(out) :: x
+        class(rec_list),   intent(in)  :: self
+        integer,           intent(in)  :: idx
+        type(chunk_rec),   intent(out) :: x
         class(rec), allocatable :: tmp
         call self%at_rec(idx, tmp)
         select type(t => tmp)
@@ -408,7 +408,7 @@ contains
         integer,    allocatable     :: ids(:)
         class(rec), allocatable     :: r
         type(rec_iterator)          :: it
-        integer :: n, i
+        integer                     :: n, i
         n = self%size()
         if (n == 0) return
         allocate(ids(n), source=0)
@@ -452,10 +452,10 @@ contains
     !=====================================================================
     function get_included_flags(self) result(mask)
         class(rec_list), intent(in) :: self
-        logical, allocatable        :: mask(:)
+        logical,    allocatable     :: mask(:)
         type(rec_iterator)          :: it
         class(rec), allocatable     :: r
-        integer :: n, i
+        integer                     :: n, i
         n = self%size()
         allocate(mask(n))
         if (n == 0) return
@@ -480,10 +480,10 @@ contains
 
     function get_processed_flags(self) result(mask)
         class(rec_list), intent(in) :: self
-        logical, allocatable        :: mask(:)
+        logical,    allocatable     :: mask(:)
         type(rec_iterator)          :: it
         class(rec), allocatable     :: r
-        integer :: n, i
+        integer                     :: n, i
         n = self%size()
         allocate(mask(n))
         if (n == 0) return
@@ -504,10 +504,10 @@ contains
 
     function get_busy_flags(self) result(mask)
         class(rec_list), intent(in) :: self
-        logical, allocatable        :: mask(:)
+        logical,    allocatable     :: mask(:)
         type(rec_iterator)          :: it
         class(rec), allocatable     :: r
-        integer :: n, i
+        integer                     :: n, i
         n = self%size()
         allocate(mask(n))
         if (n == 0) return
@@ -531,11 +531,11 @@ contains
     ! Uses iterator replacement mechanics.
     !=====================================================================
     subroutine set_included_flags(self, fromto)
-        class(rec_list),   intent(inout) :: self
-        integer, optional, intent(in)    :: fromto(2)
-        type(rec_iterator) :: it
+        class(rec_list),   intent(inout)        :: self
+        integer,           optional, intent(in) :: fromto(2)
+        type(rec_iterator)      :: it
         class(rec), allocatable :: r
-        integer :: i, stop_idx
+        integer                 :: i, stop_idx
         if (self%size() == 0) return
         it = self%begin()
         i = 1
@@ -568,11 +568,11 @@ contains
     ! Sum total particles, optionally only count NOT included ones
     !=====================================================================
     integer function get_nptcls_tot(self, l_not_included) result(total)
-        class(rec_list),   intent(in) :: self
-        logical, optional, intent(in) :: l_not_included
-        type(rec_iterator) :: it
+        class(rec_list),   intent(in)           :: self
+        logical,           optional, intent(in) :: l_not_included
+        type(rec_iterator)      :: it
         class(rec), allocatable :: r
-        logical :: not_include_flag
+        logical                 :: not_include_flag
         total = 0
         if (self%size() == 0) return
         not_include_flag = .false.
@@ -599,7 +599,7 @@ contains
     !=====================================================================
     integer function get_nptcls_sel_tot(self) result(total)
         class(rec_list), intent(in) :: self
-        type(rec_iterator) :: it
+        type(rec_iterator)      :: it
         class(rec), allocatable :: r
         total = 0
         if (self%size() == 0) return
@@ -621,9 +621,9 @@ contains
         integer,         intent(in) :: fromto(2)
         type(string),   allocatable :: projfiles(:)
         class(rec),     allocatable :: r
-        type(rec_list)     :: tmplst
-        type(rec_iterator) :: it
-        integer            :: n, i
+        type(rec_list)              :: tmplst
+        type(rec_iterator)          :: it
+        integer                     :: n, i
         call self%slice(fromto(1), fromto(2), tmplst)
         n  = tmplst%size()
         allocate(projfiles(n))

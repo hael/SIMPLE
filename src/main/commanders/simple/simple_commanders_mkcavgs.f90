@@ -48,8 +48,8 @@ contains
         class(cmdline), intent(inout) :: cline
         logical,        intent(in)    :: from_distr_cmd
         class(make_cavgs_strategy), allocatable :: strategy
-        type(make_cavgs_hooks) :: hooks
-        type(parameters) :: params
+        type(make_cavgs_hooks)                  :: hooks
+        type(parameters)                        :: params
         ! Ensure distributed scripts see the correct program name.
         call cline%set('prg',    'make_cavgs')
         call cline%set('oritype','ptcl2D')
@@ -76,7 +76,7 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: nthr
         type(commander_cavgassemble) :: xcavgassemble
-        type(cmdline)               :: cline_cavgassemble
+        type(cmdline)                :: cline_cavgassemble
         cline_cavgassemble = cline
         call cline_cavgassemble%set('prg',  'cavgassemble')
         call cline_cavgassemble%set('nthr', nthr)
@@ -93,16 +93,16 @@ contains
     subroutine exec_write_classes( self, cline )
         class(commander_write_classes), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        type(image)      :: img_cavg
-        type(string)     :: cavgsstk, classname, stkname
+        type(parameters)                :: params
+        type(sp_project)                :: spproj
+        type(image)                     :: img_cavg
+        type(string)                    :: cavgsstk, classname, stkname
         type(image),        allocatable :: imgs_class(:)
         real,               allocatable :: states(:), inpls(:,:)
         integer,            allocatable :: pops(:), pinds(:)
         real(kind=c_float), allocatable :: rmat_rot(:,:,:)
-        integer :: ncls, n, ldim(3), icls, pop_max, ind_in_stk, i, cnt
-        real    :: smpd
+        integer                         :: ncls, n, ldim(3), icls, pop_max, ind_in_stk, i, cnt
+        real                            :: smpd
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call spproj%read(params%projfile)

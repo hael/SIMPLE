@@ -102,11 +102,11 @@ contains
     end function find_magic_boxes4scale
 
     subroutine autoscale( box_in, smpd_in, smpd_target, box_new, smpd_new, scale, minbox )
-        integer,           intent(in)  :: box_in
-        real,              intent(in)  :: smpd_in, smpd_target
-        integer,           intent(out) :: box_new
-        real,              intent(out) :: smpd_new, scale
-        integer, optional, intent(in)  :: minbox
+        integer,           intent(in)           :: box_in
+        real,              intent(in)           :: smpd_in, smpd_target
+        integer,           intent(out)          :: box_new
+        real,              intent(out)          :: smpd_new, scale
+        integer,           optional, intent(in) :: minbox
         if( smpd_in < smpd_target )then
             ! ok
         else

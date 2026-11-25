@@ -16,15 +16,15 @@ module simple_persistent_worker_message_task
     !> Carries job identity, lifecycle timestamps, scheduling hints,
     !> required thread count, and executable script path.
     type, extends(qsys_persistent_worker_message_base) :: qsys_persistent_worker_message_task
-        integer :: job_id     = 0                  !< unique job counter (>0 when active)
-        integer :: queue_time = 0                  !< UNIX time of enqueue
-        integer :: start_time = 0                  !< UNIX time worker started execution
-        integer :: end_time   = 0                  !< UNIX time of completion (0 = pending)
-        integer :: exit_code  = 0                  !< script exit status after completion
-        integer :: nthr       = 0                  !< thread slots required
-        logical :: submitted  = .false.            !< .true. once dispatched to a persistent worker
-        logical :: priority   = .false.            !< .true. if this task should be prioritised over others in the queue
-        character(len=STDLEN) :: script_path = ''  !< absolute path to the bash script
+        integer               :: job_id      = 0       !< unique job counter (>0 when active)
+        integer               :: queue_time  = 0       !< UNIX time of enqueue
+        integer               :: start_time  = 0       !< UNIX time worker started execution
+        integer               :: end_time    = 0       !< UNIX time of completion (0 = pending)
+        integer               :: exit_code   = 0       !< script exit status after completion
+        integer               :: nthr        = 0       !< thread slots required
+        logical               :: submitted   = .false. !< .true. once dispatched to a persistent worker
+        logical               :: priority    = .false. !< .true. if this task should be prioritised over others in the queue
+        character(len=STDLEN) :: script_path = ''      !< absolute path to the bash script
     contains
         procedure :: new       => new_qsys_persistent_worker_message_task       !< constructor
         procedure :: kill      => kill_qsys_persistent_worker_message_task      !< destructor
@@ -62,8 +62,8 @@ contains
     !> the complete qsys_persistent_worker_message_task layout — and filled with the
     !> raw storage representation of self via TRANSFER.
     subroutine serialise_qsys_persistent_worker_message_task( self, buffer )
-        class(qsys_persistent_worker_message_task), intent(in)    :: self
-        character(len=:), allocatable,        intent(inout) :: buffer
+        class(qsys_persistent_worker_message_task), intent(in)                        :: self
+        character(len=:),                           allocatable,        intent(inout) :: buffer
         if( allocated(buffer) ) deallocate(buffer)
         allocate(character(len=sizeof(self)) :: buffer)
         buffer = transfer(self, buffer)

@@ -13,7 +13,7 @@ type :: bspline_smoother
     type(image) :: r_img, b_img
     integer     :: img_dims(2), img_dims_3d(3)
 contains
-    procedure          :: new => new_bspline_smoother
+    procedure          :: new  => new_bspline_smoother
     procedure          :: smooth
     procedure          :: smooth_3d
     procedure          :: kill => kill_bspline_smoother
@@ -33,8 +33,8 @@ contains
 
     subroutine smooth( self, img, lambda )
         class(bspline_smoother),   intent(inout) :: self
-        class(image),      intent(inout) :: img
-        real,              intent(in)    :: lambda ! >0.; 0.1 is a starting point
+        class(image),              intent(inout) :: img
+        real,                      intent(in)    :: lambda ! >0.; 0.1 is a starting point
         integer :: img_ldim(3), rb_ldim(3)
         real    :: img_smpd, lambda_here
         logical :: img_ft_prev
@@ -72,8 +72,8 @@ contains
 
     subroutine smooth_3d( self, img, lambda )
         class(bspline_smoother),   intent(inout) :: self
-        class(image),      intent(inout) :: img
-        real,              intent(in)    :: lambda ! >0.; 0.1 is a starting point
+        class(image),              intent(inout) :: img
+        real,                      intent(in)    :: lambda ! >0.; 0.1 is a starting point
         integer :: img_ldim(3), rb_ldim(3)
         real    :: img_smpd, lambda_here
         logical :: img_ft_prev
@@ -214,7 +214,7 @@ contains
 
     subroutine fill_r(self)
         class(bspline_smoother), intent(inout) :: self
-        integer :: nonzero_x(5), nonzero_y(5)   ! indices of non-zero entries in x- and y-component
+        integer :: nonzero_x(5), nonzero_y(5)               ! indices of non-zero entries in x- and y-component
         real    :: nonzero_val_x_a0(5), nonzero_val_x_a2(5) ! values of non-zero entries
         real    :: nonzero_val_y_a0(5), nonzero_val_y_a2(5) ! values of non-zero entries
         integer :: i, j, x, y
@@ -303,9 +303,9 @@ contains
     subroutine fill_r_3d(self)
         class(bspline_smoother), intent(inout) :: self
         integer :: nonzero_x(5), nonzero_y(5), nonzero_z(5)   ! indices of non-zero entries in x-, y- and z-component
-        real    :: nonzero_val_x_a0(5), nonzero_val_x_a2(5) ! values of non-zero entries
-        real    :: nonzero_val_y_a0(5), nonzero_val_y_a2(5) ! values of non-zero entries
-        real    :: nonzero_val_z_a0(5), nonzero_val_z_a2(5) ! values of non-zero entries
+        real    :: nonzero_val_x_a0(5), nonzero_val_x_a2(5)   ! values of non-zero entries
+        real    :: nonzero_val_y_a0(5), nonzero_val_y_a2(5)   ! values of non-zero entries
+        real    :: nonzero_val_z_a0(5), nonzero_val_z_a2(5)   ! values of non-zero entries
         real    :: r
         integer :: i, j, k, x, y, z
         nonzero_x(1) = 1

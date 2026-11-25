@@ -17,18 +17,18 @@ integer, parameter :: ENTRY_GATE    = 1 !< a correctness gate, run by test=night
 integer, parameter :: ENTRY_PROFILE = 2 !< a robustness profile only, run by test=profile
 
 type :: test_entry
-    character(len=32)   :: name     = '' !< the CTest name
-    character(len=32)   :: prg      = '' !< simple_test_exec test=<prg>
-    character(len=64)   :: args     = '' !< the other keys of its command line
-    integer             :: nthr     = 1  !< OMP_NUM_THREADS of the entry
-    integer             :: nworkers = 0  !< worker processes it starts at its busiest
-    integer             :: wthr     = 0  !< OpenMP threads of each worker
-    integer             :: ncpu     = 1  !< peak CPU reservation
-    integer             :: deadline = 0  !< seconds, the CTest TIMEOUT
+    character(len=32)   :: name     = ''     !< the CTest name
+    character(len=32)   :: prg      = ''     !< simple_test_exec test=<prg>
+    character(len=64)   :: args     = ''     !< the other keys of its command line
+    integer             :: nthr     = 1      !< OMP_NUM_THREADS of the entry
+    integer             :: nworkers = 0      !< worker processes it starts at its busiest
+    integer             :: wthr     = 0      !< OpenMP threads of each worker
+    integer             :: ncpu     = 1      !< peak CPU reservation
+    integer             :: deadline = 0      !< seconds, the CTest TIMEOUT
     integer             :: kind     = ENTRY_GATE
-    character(len=1024) :: outputs  = '' !< blank-separated patterns relative to the run directory
-    real                :: mem_gb   = 0. !< peak resident memory (GiB), master and workers
-    real                :: disk_gb  = 0. !< what its run directory grows to (GiB)
+    character(len=1024) :: outputs  = ''     !< blank-separated patterns relative to the run directory
+    real                :: mem_gb   = 0.     !< peak resident memory (GiB), master and workers
+    real                :: disk_gb  = 0.     !< what its run directory grows to (GiB)
     logical             :: scales   = .true. !< its master threads follow nthr (a profile's thread count)
 end type test_entry
 
@@ -155,9 +155,9 @@ contains
     !> the blank-separated patterns of a workflow directory root
     function outputs_of( root, patterns ) result( outputs )
         character(len=*), intent(in) :: root, patterns(:)
-        character(len=1024) :: outputs
+        character(len=1024)           :: outputs
         character(len=:), allocatable :: joined
-        integer :: i
+        integer                       :: i
         joined = ''
         do i = 1, size(patterns)
             joined = joined//' '//root//trim(patterns(i))

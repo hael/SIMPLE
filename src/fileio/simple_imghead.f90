@@ -34,11 +34,11 @@ public :: MRC_MODE_FLOAT32, MRC_MODE_COMPLEX_FLOAT32, MRC_MODE_FLOAT16, MRC_NVER
 private
 #include "simple_local_flags.inc"
 
-integer, parameter         :: NREALS          = 104
-integer, parameter         :: NREMAINS        = 14
-integer, parameter         :: CLOSE2THEANSWER = 43
-integer, parameter         :: MRCHEADSZ       = 1024
-integer, parameter         :: NLABL           = 10
+integer, parameter         :: NREALS                   = 104
+integer, parameter         :: NREMAINS                 = 14
+integer, parameter         :: CLOSE2THEANSWER          = 43
+integer, parameter         :: MRCHEADSZ                = 1024
+integer, parameter         :: NLABL                    = 10
 integer, parameter         :: MRC_MODE_FLOAT32         = 2
 integer, parameter         :: MRC_MODE_COMPLEX_FLOAT32 = 4
 integer, parameter         :: MRC_MODE_FLOAT16         = 12
@@ -108,44 +108,44 @@ type, extends(ImgHead) :: MrcImgHead
     !!            3 transform: complex 16-bit integers
     !!            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
     !!           12 image: IEEE 754 binary16 reals
-    integer   :: nxstart      !< number of first column in map (default = 0)
-    integer   :: nystart      !< number of first row in map
-    integer   :: nzstart      !< number of first section in map
-    integer   :: mx           !< number of intervals along x
-    integer   :: my           !< number of intervals along y
-    integer   :: mz           !< number of intervals along z
-    real      :: cella1       !< cell dims in angstroms
-    real      :: cella2
-    real      :: cella3
-    real      :: cellb1       !< cell angles in degrees
-    real      :: cellb2
-    real      :: cellb3
-    integer   :: mapc         !< axis corresponding to columns  (1,2,3 for x,y,z)
-    integer   :: mapr         !< axis corresponding to rows     (1,2,3 for x,y,z)
-    integer   :: maps         !< axis corresponding to sections (1,2,3 for x,y,z)
-    real      :: dmin         !< minimum density value
-    real      :: dmax         !< maximum density value
-    real      :: dmean        !< mean density value
-    integer   :: ispg         !< space group number 0 or 1 (default=1)
-    integer   :: nsymbt       !< number of bytes used for symmetry data (0 or 80)
-    integer   :: extra        !< extra space used for anything - 0 by default
-    integer   :: nversion     !< MRC format version (word 28)
-    integer   :: originx      !< origin in x used for transforms
-    integer   :: originy      !< origin in y used for transforms
-    integer   :: originz      !< origin in z used for transforms
-    character(len=4)  :: map  !< character string 'map' to identify file type
-    integer   :: machst       !< machine stamp
-    real      :: rms          !< rms deviation of map from mean density
-    integer   :: nlabl        !< number of labels being used
+    integer           :: nxstart      !< number of first column in map (default = 0)
+    integer           :: nystart      !< number of first row in map
+    integer           :: nzstart      !< number of first section in map
+    integer           :: mx           !< number of intervals along x
+    integer           :: my           !< number of intervals along y
+    integer           :: mz           !< number of intervals along z
+    real              :: cella1       !< cell dims in angstroms
+    real              :: cella2
+    real              :: cella3
+    real              :: cellb1       !< cell angles in degrees
+    real              :: cellb2
+    real              :: cellb3
+    integer           :: mapc         !< axis corresponding to columns  (1,2,3 for x,y,z)
+    integer           :: mapr         !< axis corresponding to rows     (1,2,3 for x,y,z)
+    integer           :: maps         !< axis corresponding to sections (1,2,3 for x,y,z)
+    real              :: dmin         !< minimum density value
+    real              :: dmax         !< maximum density value
+    real              :: dmean        !< mean density value
+    integer           :: ispg         !< space group number 0 or 1 (default=1)
+    integer           :: nsymbt       !< number of bytes used for symmetry data (0 or 80)
+    integer           :: extra        !< extra space used for anything - 0 by default
+    integer           :: nversion     !< MRC format version (word 28)
+    integer           :: originx      !< origin in x used for transforms
+    integer           :: originy      !< origin in y used for transforms
+    integer           :: originz      !< origin in z used for transforms
+    character(len=4)  :: map          !< character string 'map' to identify file type
+    integer           :: machst       !< machine stamp
+    real              :: rms          !< rms deviation of map from mean density
+    integer           :: nlabl        !< number of labels being used
     character(len=80) :: label(NLABL) !< 10 80-character text labels
 end type MrcImgHead
 
 type, extends(ImgHead) :: TiffImgHead
     type(c_ptr) :: fhandle          = c_null_ptr !< file handle
     type(c_ptr) :: StripBuffer_cptr = c_null_ptr !< buffer
-    integer     :: nx = 0                 !< number of columns
-    integer     :: ny = 0                 !< number of rows
-    integer     :: nz = 0                 !< number of frames
+    integer     :: nx               = 0          !< number of columns
+    integer     :: ny               = 0          !< number of rows
+    integer     :: nz               = 0          !< number of frames
     integer     :: BitsPerSample    = 0
     integer     :: SamplesPerPixel  = 0
     integer     :: SampleFormat     = 0
@@ -154,8 +154,8 @@ type, extends(ImgHead) :: TiffImgHead
     integer     :: StripSize        = 0
     integer     :: MinVal           = 0
     integer     :: MaxVal           = 0
-    logical     :: isTiled = .true.       !< tiled is not supported
-    real        :: pixsiz  = 0.           !< ??
+    logical     :: isTiled          = .true.     !< tiled is not supported
+    real        :: pixsiz           = 0.         !< ??
 end type TiffImgHead
 
 type, extends(ImgHead) :: SpiImgHead
@@ -225,9 +225,9 @@ contains
 
     !>  \brief  create an imghead object
     subroutine new( self, ldim, length )
-        class(ImgHead), target, intent(inout) :: self    !< instance
-        integer, optional,      intent(in)    :: ldim(3) !< logical dims of image
-        integer, optional,      intent(in)    :: length  !< length of the header record.
+        class(ImgHead), target, intent(inout)     :: self    !< instance
+        integer,        optional,      intent(in) :: ldim(3) !< logical dims of image
+        integer,        optional,      intent(in) :: length  !< length of the header record.
         integer               :: llength
         call self%kill
         select type( self )
@@ -354,9 +354,9 @@ contains
 
     !>  \brief  Read the header data from disk
     subroutine read( self, lun, pos )
-        class(ImgHead),            intent(inout) :: self
-        integer,                   intent(in)    :: lun
-        integer(kind=8), optional, intent(in)    :: pos
+        class(ImgHead),            intent(inout)        :: self
+        integer,                   intent(in)           :: lun
+        integer(kind=8),           optional, intent(in) :: pos
         real(kind=4)       :: spihed(CLOSE2THEANSWER)
         integer(kind=8)    :: ppos
         integer            :: io_status
@@ -438,8 +438,8 @@ contains
         class(ImgHead), intent(inout) :: self
         class(string),  intent(in)    :: fname
         character(kind=c_char), allocatable :: filename_c(:), open_mode_c(:)
-        character(len=1) :: form
-        integer          :: io_status
+        character(len=1)                    :: form
+        integer                             :: io_status
         select type( self )
             type is( TiffImgHead )
                 filename_c  = to_cstring(fname%to_char())
@@ -473,12 +473,12 @@ contains
 
     !>  \brief write header data to disk
     subroutine write( self, lun, pos )
-        class(ImgHead),            intent(inout) :: self
-        integer,                   intent(in)    :: lun
-        integer(kind=8), optional, intent(in)    :: pos
+        class(ImgHead),            intent(inout)        :: self
+        integer,                   intent(in)           :: lun
+        integer(kind=8),           optional, intent(in) :: pos
         real(kind=4), allocatable :: spihed(:)
-        integer(kind=8) :: ppos
-        integer         :: io_status, nwords
+        integer(kind=8)           :: ppos
+        integer                   :: io_status, nwords
         if( self%exists )then
             ! all good
         else
@@ -935,8 +935,8 @@ contains
 
     !>  \brief  Set the minimum pixel value
     subroutine setMinPixVal(self,new_value)
-        class(ImgHead), intent(inout)  :: self
-        real,               intent(in) :: new_value
+        class(ImgHead),     intent(inout) :: self
+        real,               intent(in)    :: new_value
         select type(self)
             type is (MrcImgHead)
                 self%dmin = new_value
@@ -1176,7 +1176,7 @@ contains
     !>  \brief  Set the maximum nr of images in stack
     subroutine setMaxim( self, maxim )
         class(ImgHead), intent(inout) :: self
-        integer,        intent(in) :: maxim
+        integer,        intent(in)    :: maxim
         select type( self )
         type is( SpiImgHead )
                 self%maxim = maxim
@@ -1279,7 +1279,7 @@ contains
         real,             intent(out) :: smpd
         logical,          intent(in)  :: doprint
         class(imghead), allocatable   :: hed
-        integer :: filnum, ios
+        integer                       :: filnum, ios
         ldim = 0
         smpd = 0.
         if( file_exists(fname) )then
@@ -1335,7 +1335,7 @@ contains
         class(string), intent(in)  :: fname
         real,          intent(out) :: minval, maxval
         class(imghead), allocatable :: hed
-        integer :: filnum, ios
+        integer                     :: filnum, ios
         minval = 0.
         maxval = 0.
         if( .not. file_exists(fname) ) return
@@ -1391,8 +1391,8 @@ contains
         integer,       intent(out) :: ldim(3), nptcls
         logical,       intent(in)  :: doprint
         character(kind=c_char), allocatable :: filename_c(:), open_mode_c(:)
-        character(len=1) :: form
-        type(c_ptr)      :: fhandle = c_null_ptr
+        character(len=1)                    :: form
+        type(c_ptr)                         :: fhandle = c_null_ptr
         ldim   = 0
         nptcls = 0
         smpd_here = 0.
@@ -1416,7 +1416,7 @@ contains
         integer,       intent(out) :: ldim(3), nptcls
         logical,       intent(in)  :: doprint
         character(kind=c_char), allocatable :: filename_c(:), open_mode_c(:)
-        type(c_ptr) :: fhandle = c_null_ptr
+        type(c_ptr)                         :: fhandle = c_null_ptr
         ldim   = 0
         nptcls = 0
         smpd_here = 0.
@@ -1437,11 +1437,11 @@ contains
 
     !>  \brief  is for finding logical dimension and number of particles in stack
     subroutine find_ldim_nptcls( fname, ldim, nptcls, doprint, formatchar )
-        class(string),              intent(in)  :: fname      !< filename
-        integer,                    intent(out) :: ldim(3)    !< logical dimension
-        integer,                    intent(out) :: nptcls     !< number of particles
-        logical,          optional, intent(in)  :: doprint    !< do print or not
-        character(len=1), optional, intent(in)  :: formatchar !< input format
+        class(string),              intent(in)           :: fname      !< filename
+        integer,                    intent(out)          :: ldim(3)    !< logical dimension
+        integer,                    intent(out)          :: nptcls     !< number of particles
+        logical,                    optional, intent(in) :: doprint    !< do print or not
+        character(len=1),           optional, intent(in) :: formatchar !< input format
         real             :: smpd_ignore
         integer          :: iform
         character(len=1) :: form
@@ -1486,8 +1486,8 @@ contains
 
     !>  \brief  is for explicitly reading sampling distance from an image header
     real function find_img_smpd( fname, formatchar ) result( smpd )
-        class(string),              intent(in) :: fname      !< filename
-        character(len=1), optional, intent(in) :: formatchar !< input format
+        class(string),              intent(in)           :: fname      !< filename
+        character(len=1),           optional, intent(in) :: formatchar !< input format
         integer          :: ldim(3), nptcls, iform
         character(len=1) :: form
         logical          :: doprint
@@ -1535,7 +1535,7 @@ contains
         class(string), intent(in) :: fname
         integer,       intent(in) :: nimgs
         class(imghead), allocatable  :: hed
-        integer :: ldim(3),filnum, ios
+        integer                      :: ldim(3),filnum, ios
         if( file_exists(fname) )then
             select case(fname2format(fname))
                 case('M')

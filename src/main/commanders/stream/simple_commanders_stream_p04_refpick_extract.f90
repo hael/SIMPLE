@@ -39,7 +39,7 @@ contains
 
     subroutine exec_stream_p04_refpick_extract( self, cline )
         class(commander_stream_p04_refpick_extract), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
+        class(cmdline),                              intent(inout) :: cline
         type(stream_stage_refpick) :: stage
         call install_sigterm_handler()
         call set_refpick_cline(cline)

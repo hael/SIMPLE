@@ -41,9 +41,9 @@ contains
     !! labels go onto the active rows only
     subroutine test_memberless_halves()
         class(sp_project), allocatable :: spproj, work
-        type(cavgs_work_project) :: wp
-        type(string)             :: cwd_saved, fixture_root
-        integer :: icls, nfail_before, labels(NCAVGS)
+        type(cavgs_work_project)       :: wp
+        type(string)                   :: cwd_saved, fixture_root
+        integer                        :: icls, nfail_before, labels(NCAVGS)
         write(*,'(A)') 'test_memberless_halves'
         nfail_before = tests_failed
         call enter_fixture('tmp_cavgs_work_project_halves', cwd_saved, fixture_root)
@@ -89,8 +89,8 @@ contains
     subroutine make_input( spproj )
         class(sp_project), intent(inout) :: spproj
         character(len=5), parameter :: SUFFIXES(3) = [character(len=5) :: '', '_even', '_odd']
-        type(image) :: img
-        integer     :: i, isfx
+        type(image)                 :: img
+        integer                     :: i, isfx
         call img%new([BOX,BOX,1], SMPD)
         do isfx = 1,3
             do i = 1,NCAVGS
@@ -113,10 +113,10 @@ contains
 
     subroutine test_build()
         class(sp_project), allocatable :: spproj, work, info
-        type(cavgs_work_project) :: wp
-        type(string)             :: cwd_saved, fixture_root, sigma2_path
-        integer :: icls, irow, nfail_before, istate
-        logical :: l_found
+        type(cavgs_work_project)       :: wp
+        type(string)                   :: cwd_saved, fixture_root, sigma2_path
+        integer                        :: icls, irow, nfail_before, istate
+        logical                        :: l_found
         write(*,'(A)') 'test_build'
         nfail_before = tests_failed
         call enter_fixture('tmp_cavgs_work_project_build', cwd_saved, fixture_root)
@@ -179,9 +179,9 @@ contains
         class(parameters), allocatable :: params
         class(sp_project), allocatable :: spproj
         class(cmdline),    allocatable :: cline, cline_shmem
-        type(cavgs_work_project) :: wp
-        type(string)             :: cwd_saved, fixture_root
-        integer :: nfail_before
+        type(cavgs_work_project)       :: wp
+        type(string)                   :: cwd_saved, fixture_root
+        integer                        :: nfail_before
         write(*,'(A)') 'test_cap_nparts'
         nfail_before = tests_failed
         call enter_fixture('tmp_cavgs_work_project_nparts', cwd_saved, fixture_root)
@@ -220,10 +220,10 @@ contains
     subroutine test_eo_diagnostics()
         class(sp_project), allocatable :: spproj
         class(oris),       allocatable :: os
-        type(cavgs_work_project) :: wp
-        type(string)             :: cwd_saved, fixture_root
-        integer :: icls, istate, nfail_before
-        real    :: theta
+        type(cavgs_work_project)       :: wp
+        type(string)                   :: cwd_saved, fixture_root
+        integer                        :: icls, istate, nfail_before
+        real                           :: theta
         write(*,'(A)') 'test_eo_diagnostics'
         nfail_before = tests_failed
         call enter_fixture('tmp_cavgs_work_project_eo', cwd_saved, fixture_root)

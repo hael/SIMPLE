@@ -9,9 +9,9 @@ implicit none
 contains
 
     module subroutine new(self, cline, silent)
-        class(parameters), intent(inout) :: self
-        class(cmdline),    intent(inout) :: cline
-        logical, optional, intent(in)    :: silent
+        class(parameters), intent(inout)        :: self
+        class(cmdline),    intent(inout)        :: cline
+        logical,           optional, intent(in) :: silent
         character(len=1) :: checkupfile(50)
         integer          :: cntfile
         logical          :: ssilent
@@ -45,7 +45,7 @@ contains
         logical,           intent(in)    :: silent
         type(string), allocatable :: sp_files(:)
         type(string)              :: str_tmp, absname
-        integer :: i, idir, nsp_files
+        integer                   :: i, idir, nsp_files
         call simple_getcwd(self%cwd)
         if( .not. allocated(CWD_GLOB_ORIG) ) allocate(CWD_GLOB_ORIG, source=self%cwd%to_char())
         CWD_GLOB = self%cwd%to_char()
@@ -380,8 +380,8 @@ contains
     contains
 
         subroutine check_vol(volname, is_even)
-            class(string),     intent(inout) :: volname
-            logical, optional, intent(in)    :: is_even
+            class(string),     intent(inout)        :: volname
+            logical,           optional, intent(in) :: is_even
             type(string) :: vol, key
             if( present(is_even) )then
                 if( is_even )then
@@ -441,9 +441,9 @@ contains
         end subroutine check_file_formats
 
         subroutine double_check_file_formats
-            type(string) :: fname
+            type(string)     :: fname
             character(len=1) :: form
-            integer :: funit, io_stat, ios
+            integer          :: funit, io_stat, ios
             if( cntfile_loc == 0 )then
                 if( cline%defined('filetab') )then
                     if( trim(self%prg%to_char()) == 'model_cavgs_rejection' .and. &

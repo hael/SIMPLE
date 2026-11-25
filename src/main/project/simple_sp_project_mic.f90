@@ -5,12 +5,12 @@ implicit none
 contains
 
     module subroutine add_single_movie( self, moviename, ctfvars )
-        class(sp_project), target, intent(inout) :: self
-        class(string),             intent(in)    :: moviename
-        type(ctfparams),           intent(in)    :: ctfvars
+        class(sp_project),         target, intent(inout) :: self
+        class(string),             intent(in)            :: moviename
+        type(ctfparams),           intent(in)            :: ctfvars
         class(oris), pointer :: os_ptr
         type(string)         :: abs_fname
-        integer :: n_os_mic, ldim(3), nframes
+        integer              :: n_os_mic, ldim(3), nframes
         ! oris object pointer
         os_ptr => self%os_mic
         ! check that os_mic field is empty
@@ -56,16 +56,16 @@ contains
 
     !> Add/append movies or micrographs without ctf parameters
     module subroutine add_movies( self, movies_array, ctfvars, singleframe, verbose )
-        class(sp_project), target, intent(inout) :: self
-        type(string),              intent(in)    :: movies_array(:)
-        type(ctfparams),           intent(in)    :: ctfvars
-        logical,         optional, intent(in)    :: singleframe
-        logical,         optional, intent(in)    :: verbose
+        class(sp_project),         target, intent(inout) :: self
+        type(string),              intent(in)            :: movies_array(:)
+        type(ctfparams),           intent(in)            :: ctfvars
+        logical,                   optional, intent(in)  :: singleframe
+        logical,                   optional, intent(in)  :: verbose
         class(oris), pointer :: os_ptr
         type(ctfparams)      :: prev_ctfvars
         type(string)         :: name, abs_moviename
-        integer :: ldim_orig(3), imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot, nframes_first
-        logical :: is_movie, l_singleframe, l_verbose
+        integer              :: ldim_orig(3), imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot, nframes_first
+        logical              :: is_movie, l_singleframe, l_verbose
         l_verbose     = .true.
         if( present(verbose) ) l_verbose = verbose
         is_movie      = .true.
@@ -172,12 +172,12 @@ contains
 
     !> Add/append micrographs with ctf parameters
     module subroutine add_intgs( self, intgs_array, os, ctfvars )
-        class(sp_project), target, intent(inout) :: self
-        class(string),             intent(in)    :: intgs_array(:)
-        class(oris),               intent(in)    :: os
-        type(ctfparams),           intent(in)    :: ctfvars
+        class(sp_project),         target, intent(inout) :: self
+        class(string),             intent(in)            :: intgs_array(:)
+        class(oris),               intent(in)            :: os
+        type(ctfparams),           intent(in)            :: ctfvars
         type(ctfparams)           :: prev_ctfvars, ctfparms
-        type(string):: rel_micname
+        type(string)              :: rel_micname
         real                      :: intg_smpd
         integer                   :: imic,ldim(3),nframes,nintgs,nprev_intgs,nprev_mics,cnt,ntot
         nprev_mics  = self%os_mic%get_noris()
@@ -299,8 +299,8 @@ contains
 
     ! returns list of movies regardless of 'imgkind' key as it overrides movies
     module subroutine get_movies_table( self, moviestab )
-        class(sp_project),         intent(inout) :: self
-        type(string), allocatable, intent(out)   :: moviestab(:)
+        class(sp_project),         intent(inout)            :: self
+        type(string),              allocatable, intent(out) :: moviestab(:)
         integer :: i,n,cnt
         if(allocated(moviestab))deallocate(moviestab)
         n = 0
@@ -323,9 +323,9 @@ contains
     end subroutine get_movies_table
 
     module subroutine get_mics_table( self, micstab, orimap)
-        class(sp_project),         intent(inout) :: self
-        type(string), allocatable, intent(out)   :: micstab(:)
-        integer,      allocatable, intent(out)   :: orimap(:)
+        class(sp_project),         intent(inout)            :: self
+        type(string),              allocatable, intent(out) :: micstab(:)
+        integer,                   allocatable, intent(out) :: orimap(:)
         integer :: i,n,cnt
         if(allocated(micstab)) deallocate(micstab)
         if(allocated(orimap))  deallocate(orimap)
@@ -361,7 +361,7 @@ contains
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: iptcl
         character(len=XLONGSTRLEN) :: micname
-        integer :: imic
+        integer                    :: imic
         if(iptcl < 1 .or. iptcl > self%os_ptcl2D%get_noris()) then
             write(logfhandle,*) 'iptcl : ',  iptcl
             write(logfhandle,*) 'nptcl2D: ', self%os_ptcl2D%get_noris()
@@ -393,10 +393,10 @@ contains
     end function get_mic_kind
 
     module subroutine set_boxfile( self, i, boxfname, nptcls )
-        class(sp_project), intent(inout) :: self
-        integer,           intent(in)    :: i
-        class(string),     intent(in)    :: boxfname
-        integer, optional, intent(in)    :: nptcls
+        class(sp_project), intent(inout)        :: self
+        integer,           intent(in)           :: i
+        class(string),     intent(in)           :: boxfname
+        integer,           optional, intent(in) :: nptcls
         type(nrtxtfile) :: boxfile
         integer         :: nptcls_here
         if( present(nptcls) )then
@@ -417,7 +417,7 @@ contains
     module integer function get_nmovies( self )
         class(sp_project), target, intent(in) :: self
         type(string) :: imgkind
-        integer :: i
+        integer      :: i
         get_nmovies = 0
         do i=1,self%os_mic%get_noris()
             call self%os_mic%getter(i,'imgkind',imgkind)
@@ -444,8 +444,8 @@ contains
     end function get_nframes
 
     module subroutine get_mic2stk_inds( self, mic2stk_inds, stk2mic_inds )
-        class(sp_project),    intent(inout) :: self
-        integer, allocatable, intent(inout) :: mic2stk_inds(:), stk2mic_inds(:)
+        class(sp_project),    intent(inout)              :: self
+        integer,              allocatable, intent(inout) :: mic2stk_inds(:), stk2mic_inds(:)
         integer :: imic,istk,nmics,nstks,nptcls_mic,nptcls_stk,state_mic,state_stk
         if(allocated(mic2stk_inds))deallocate(mic2stk_inds)
         if(allocated(stk2mic_inds))deallocate(stk2mic_inds)

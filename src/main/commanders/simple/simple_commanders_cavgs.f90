@@ -104,9 +104,9 @@ contains
         use simple_clustering_utils, only: cluster_dmat
         class(commander_cluster_cavgs), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        logical,          parameter   :: DEBUG = .true.
+        logical,          parameter   :: DEBUG            = .true.
         real,             parameter   :: SCORE_THRES_INCL = 75.
-        integer,          parameter   :: NCLUST_MAX = 65
+        integer,          parameter   :: NCLUST_MAX       = 65
         type(image),      allocatable :: cavg_imgs(:)
         real,             allocatable :: mm(:,:), dmat(:,:), resvals_tmp(:), resvals(:)
         logical,          allocatable :: l_non_junk(:)
@@ -423,27 +423,27 @@ contains
     subroutine exec_model_cavgs_rejection( self, cline )
         class(commander_model_cavgs_rejection), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
-        type(parameters)          :: params
-        type(sp_project)          :: spproj
-        type(image), allocatable  :: cavg_imgs(:)
-        type(cavg_quality_model)  :: model
-        type(cavg_quality_result) :: quality
+        type(parameters)                     :: params
+        type(sp_project)                     :: spproj
+        type(image),  allocatable            :: cavg_imgs(:)
+        type(cavg_quality_model)             :: model
+        type(cavg_quality_result)            :: quality
         type(cavg_quality_relation_analysis) :: relation_analysis
-        type(string)              :: stkname
-        type(string), allocatable :: analysis_files(:)
-        integer, allocatable      :: reference_states(:)
-        integer                   :: ncls, nsel, nrej
-        integer, parameter        :: QUALITY_MODE_APPLY   = 1
-        integer, parameter        :: QUALITY_MODE_ANALYZE = 2
-        integer, parameter        :: QUALITY_MODE_LEARN   = 3
-        integer, parameter        :: QUALITY_MODE_EVALUATE = 4
-        integer, parameter        :: QUALITY_MODE_PROMOTE = 5
-        integer                   :: quality_mode
-        real                      :: smpd
-        character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname, model_source
-        character(len=16)         :: thres_str
-        character(len=32)         :: quality_context, context_source
-        logical                   :: l_nano
+        type(string)                         :: stkname
+        type(string), allocatable            :: analysis_files(:)
+        integer,      allocatable            :: reference_states(:)
+        integer                              :: ncls, nsel, nrej
+        integer,      parameter              :: QUALITY_MODE_APPLY    = 1
+        integer,      parameter              :: QUALITY_MODE_ANALYZE  = 2
+        integer,      parameter              :: QUALITY_MODE_LEARN    = 3
+        integer,      parameter              :: QUALITY_MODE_EVALUATE = 4
+        integer,      parameter              :: QUALITY_MODE_PROMOTE  = 5
+        integer                              :: quality_mode
+        real                                 :: smpd
+        character(len=LONGSTRLEN)            :: model_fname, report_fname, out_fname, model_source
+        character(len=16)                    :: thres_str
+        character(len=32)                    :: quality_context, context_source
+        logical                              :: l_nano
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',      'no')
         call cline%set('objfun',   'cc')
@@ -626,10 +626,10 @@ contains
             type(cavg_quality_result)            :: state_quality
             type(cavg_quality_relation_analysis) :: state_relation
             type(stats_struct)                   :: score_stats
-            integer, allocatable :: cls3d_states(:)
-            real,    allocatable :: state_scores(:)
-            integer :: imodel, istate, icls, ncls3d, nstates, nstate_cls, nscored, nhard_rejected, funit
-            character(len=*), parameter :: STATE_SCORE_FNAME = 'cavgs_quality_state_scores.txt'
+            integer,          allocatable        :: cls3d_states(:)
+            real,             allocatable        :: state_scores(:)
+            integer                              :: imodel, istate, icls, ncls3d, nstates, nstate_cls, nscored, nhard_rejected, funit
+            character(len=*), parameter          :: STATE_SCORE_FNAME = 'cavgs_quality_state_scores.txt'
 
             if( trim(params%projfile%to_char()) == '' ) &
                 THROW_HARD('model_cavgs_rejection score_states=yes requires projfile')
@@ -755,9 +755,9 @@ contains
         !! beside the mask diameter of the class-average entry of the out segment
         subroutine annotate_nano_diameters()
             real, allocatable :: diams(:)
-            type(string) :: cavgs_stk
-            integer :: icls, ncls_stk, out_ind
-            real    :: smpd_stk, diam_median
+            type(string)      :: cavgs_stk
+            integer           :: icls, ncls_stk, out_ind
+            real              :: smpd_stk, diam_median
             do icls = 1, ncls
                 if( quality%hard_reject(icls) ) cycle
                 call spproj%os_cls2D%set(icls, 'diam',         quality%raw(icls,LAT_SPOT_DIAM))
@@ -814,7 +814,7 @@ contains
             character(len=*), intent(in) :: rank_fname
             real,    allocatable :: sorted_scores(:)
             integer, allocatable :: order(:)
-            integer :: i, icls, istk, funit
+            integer              :: i, icls, istk, funit
             if( .not. allocated(quality%scores)      ) THROW_HARD('write_ranked_quality_stack: missing quality scores')
             if( .not. allocated(quality%states)      ) THROW_HARD('write_ranked_quality_stack: missing quality states')
             if( .not. allocated(quality%labels)      ) THROW_HARD('write_ranked_quality_stack: missing quality labels')
@@ -874,7 +874,7 @@ contains
         class(commander_cluster_cavgs_selection), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
         real,             parameter   :: LP_BIN = 20.
-        logical,          parameter   :: DEBUG = .true.
+        logical,          parameter   :: DEBUG  = .true.
         type(image),      allocatable :: cavg_imgs_state1(:), cavg_imgs_state0(:)
         real,             allocatable :: mm_state1(:,:), mm_state0(:,:), dmat_state1(:,:), dmat_state0(:,:)
         integer,          allocatable :: labels_state1(:), clsinds_state1(:), i_medoids_state1(:), clspops_state1(:)
@@ -882,12 +882,12 @@ contains
         integer,          allocatable :: labels(:), clsinds(:), labels_state0_copy(:)
         integer,          allocatable :: states(:), states_junk_filtered(:)
         logical,          allocatable :: l_non_junk(:)
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        integer          :: ncls, ncls_state1, ncls_state0, icls
-        integer          :: nclust, nclust_state1, nclust_state0, iclust
-        integer          :: ldim(3)
-        real             :: oa_minmax_state1(2), oa_minmax_state0(2), smpd
+        type(parameters)              :: params
+        type(sp_project)              :: spproj
+        integer                       :: ncls, ncls_state1, ncls_state0, icls
+        integer                       :: nclust, nclust_state1, nclust_state0, iclust
+        integer                       :: ldim(3)
+        real                          :: oa_minmax_state1(2), oa_minmax_state0(2), smpd
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
@@ -991,11 +991,11 @@ contains
     subroutine exec_select_clusters( self, cline )
         class(commander_select_clusters), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
+        type(parameters)     :: params
+        type(sp_project)     :: spproj
         integer, allocatable :: clustinds(:)
-        type(string) :: selflag
-        integer :: iclust, nclust_sel, nclust_max
+        type(string)         :: selflag
+        integer              :: iclust, nclust_sel, nclust_max
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',           'yes')
         if( .not. cline%defined('prune')       ) call cline%set('prune',           'yes')
         if( .not. cline%defined('select_flag') ) call cline%set('select_flag', 'cluster')
@@ -1054,7 +1054,7 @@ contains
         use simple_srch_sort_loc,    only: unique
         class(commander_match_cavgs), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        integer,                      parameter     :: NCLUST_MAX = 65
+        integer,                        parameter   :: NCLUST_MAX = 65
         type(parameters)                            :: params
         type(sp_project)                            :: spproj_match, spprojfile_ref
         type(cmdline)                               :: cline_cluster_cavgs
@@ -1205,9 +1205,9 @@ contains
         type(image),      allocatable :: imgs_sel(:), imgs_all(:)
         integer,          allocatable :: states(:)
         real,             allocatable :: correlations(:,:)
-        type(string) :: cavgstk
-        integer      :: iimg, isel, nall, nsel, loc(1), lfoo(3)
-        real         :: smpd
+        type(string)                  :: cavgstk
+        integer                       :: iimg, isel, nall, nsel, loc(1), lfoo(3)
+        real                          :: smpd
         call cline%set('dir_exec', 'selection')
         call cline%set('mkdir',    'yes')
         if( .not.cline%defined('prune')   ) call cline%set('prune',   'no')
@@ -1261,8 +1261,8 @@ contains
         real,         allocatable :: correlations(:,:)
         type(string), allocatable :: stkfnames(:)
         type(string)              :: cavgstk, fname
-        integer :: iimg, isel, nall, nsel, loc(1), lfoo(3), s
-        real    :: smpd
+        integer                   :: iimg, isel, nall, nsel, loc(1), lfoo(3), s
+        real                      :: smpd
         call cline%set('dir_exec', 'state_mapping')
         call cline%set('mkdir',    'yes')
         call build%init_params_and_build_spproj(cline,params)
@@ -1319,15 +1319,15 @@ contains
         use simple_cavgs_state_match, only: match_cavgs_to_states
         class(commander_assign_cavgs_states), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        real,    parameter :: LP_DEFAULT  = 15.   ! the matching low-pass limit (A)
-        real,    parameter :: TRS_DEFAULT = 10.   ! the shift limit (pixels)
-        integer, parameter :: NSPACE_DEFAULT = 1000
+        real,        parameter   :: LP_DEFAULT     = 15. ! the matching low-pass limit (A)
+        real,        parameter   :: TRS_DEFAULT    = 10. ! the shift limit (pixels)
+        integer,     parameter   :: NSPACE_DEFAULT = 1000
         type(parameters)         :: params
         type(sp_project)         :: spproj
         type(image), allocatable :: cavg_imgs(:), vols(:)
         integer,     allocatable :: states(:), cls_states(:), counts(:)
         real,        allocatable :: eulers(:,:), shifts(:,:), corrs(:), margins(:)
-        integer :: ncls, s, icls, ldim(3), nimgs
+        integer                  :: ncls, s, icls, ldim(3), nimgs
         call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('lp')     ) call cline%set('lp',     LP_DEFAULT)
@@ -1389,8 +1389,8 @@ contains
         logical,     allocatable :: l_non_junk(:)
         real,        allocatable :: diams(:), shifts(:,:), ints(:)
         integer,     allocatable :: pops(:), order(:), clsinds(:), cavg_inds(:)
-        integer :: ncls_sel, icls, ldim(3), i, irank, xtiles, ytiles
-        real    :: mskrad
+        integer                  :: ncls_sel, icls, ldim(3), i, irank, xtiles, ytiles
+        real                     :: mskrad
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         ! set defaults
         call set_automask2D_defaults(cline)

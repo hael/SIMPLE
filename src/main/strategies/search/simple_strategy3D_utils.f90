@@ -52,12 +52,12 @@ contains
 
     subroutine assign_ori( s, ref, inpl, corr, sh, continuous_coord, continuous_valid )
         use simple_ori_utils, only: euler_about_cell
-        class(strategy3D_srch), intent(inout) :: s
-        integer,                intent(in)    :: ref, inpl  ! ref here is multi-state ref index
-        real,                   intent(in)    :: corr
-        real,                   intent(in)    :: sh(2)
-        real,          optional, intent(in)    :: continuous_coord
-        logical,       optional, intent(in)    :: continuous_valid
+        class(strategy3D_srch), intent(inout)        :: s
+        integer,                intent(in)           :: ref, inpl ! ref here is multi-state ref index
+        real,                   intent(in)           :: corr
+        real,                   intent(in)           :: sh(2)
+        real,                   optional, intent(in) :: continuous_coord
+        logical,                optional, intent(in) :: continuous_valid
         type(ori) :: osym, o_prev, o_new
         integer   :: state, proj, neff_states, nrefs_eval, nrefs_tot
         real      :: euler(3), shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac
@@ -184,7 +184,7 @@ contains
 
     subroutine extract_peak_oris( s, npeaks )
         class(strategy3D_srch), intent(inout) :: s
-        integer,               intent(in)    :: npeaks
+        integer,                intent(in)    :: npeaks
         integer   :: refs(npeaks), state, proj, inpl, ipeak
         real      :: euler(3), shvec(2), corr
         logical   :: l_multistates

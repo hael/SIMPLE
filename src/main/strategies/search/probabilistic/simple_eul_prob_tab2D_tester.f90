@@ -22,11 +22,11 @@ private
 public :: run_all_eul_prob_tab2D_tests
 #include "simple_local_flags.inc"
 
-type(parameters), target :: params
-type(builder),    target :: build
-type(eul_prob_tab2D)     :: table
-integer, parameter :: NPTCLS = 3, NCLASSES = 2
-integer :: pinds(NPTCLS) = [10,20,30]   ! project indices of the three particles
+type(parameters), target    :: params
+type(builder),    target    :: build
+type(eul_prob_tab2D)        :: table
+integer,          parameter :: NPTCLS        = 3, NCLASSES = 2
+integer                     :: pinds(NPTCLS) = [10,20,30] ! project indices of the three particles
 
 contains
 
@@ -56,12 +56,12 @@ contains
     !! and the invalid one class 1; a particle without a temperature takes its argmin too; at T = 2 on distances
     !! in [0, 4] some particles leave the mode; the same seed gives the same assignment and another seed another
     subroutine test_dense_posterior_assignment()
-        integer, parameter :: NP = 150, NC = 20
-        type(eul_prob_tab2D) :: tab
-        real,    allocatable :: dists(:,:)
-        integer, allocatable :: pinds_t(:), icls_a(:), icls_b(:)
-        integer :: i, icls, nwrong, loc(1), ncls_prev, npeaks_prev
-        logical :: l_unique(NP)
+        integer, parameter                :: NP = 150, NC = 20
+        type(eul_prob_tab2D)              :: tab
+        real,    allocatable              :: dists(:,:)
+        integer, allocatable              :: pinds_t(:), icls_a(:), icls_b(:)
+        integer                           :: i, icls, nwrong, loc(1), ncls_prev, npeaks_prev
+        logical                           :: l_unique(NP)
         character(len=len(params%refine)) :: refine_prev
         write(*,'(A)') 'test_dense_posterior_assignment'
         ncls_prev   = params%ncls
@@ -143,7 +143,7 @@ contains
             type(eul_prob_tab2D), intent(inout) :: t
             real,                 intent(in)    :: temp
             type(prob_candidate) :: candidate
-            integer :: ip, ic
+            integer              :: ip, ic
             call t%new_pipeline(params, build, pinds_t)
             do ip = 1, NP
                 do ic = 1, NC
@@ -168,13 +168,13 @@ contains
     !! their fraction of the classes; at T = 2 some particles leave the mode; the same seed gives the same
     !! assignment and another seed another
     subroutine test_sparse_posterior_assignment()
-        integer, parameter :: NP = 300, NC = 20
+        integer,               parameter   :: NP = 300, NC = 20
         class(eul_prob_tab2D), allocatable :: tab
         type(prob_candidate),  allocatable :: cands(:)
-        integer, allocatable :: counts(:), pinds_t(:), icls_a(:), icls_b(:)
-        integer :: i, k, n, nwrong, npeaks, ncls_prev, npeaks_prev
-        real    :: best
-        character(len=len(params%refine)) :: refine_prev
+        integer,               allocatable :: counts(:), pinds_t(:), icls_a(:), icls_b(:)
+        integer                            :: i, k, n, nwrong, npeaks, ncls_prev, npeaks_prev
+        real                               :: best
+        character(len=len(params%refine))  :: refine_prev
         write(*,'(A)') 'test_sparse_posterior_assignment'
         ncls_prev   = params%ncls
         npeaks_prev = params%npeaks_inpl
@@ -285,7 +285,7 @@ contains
     !! distance, and a refined candidate keeps its shift through the batch's rows
     subroutine test_dense_batch()
         type(prob_candidate) :: candidates(6)
-        integer :: particle_indices(6)
+        integer              :: particle_indices(6)
         write(*,'(A)') 'test_dense_batch'
         params%refine = 'prob'
         call set_candidate(candidates(1),1,0.1)
@@ -307,7 +307,7 @@ contains
     !> refine=prob_neigh: the batch carries only the evaluated candidates, one or two per particle
     subroutine test_sparse_batch()
         type(prob_candidate) :: candidates(4)
-        integer :: particle_indices(4)
+        integer              :: particle_indices(4)
         write(*,'(A)') 'test_sparse_batch'
         params%refine = 'prob_neigh'
         call set_candidate(candidates(1),1,0.1)
@@ -322,11 +322,11 @@ contains
 
     !> Uneven batches preserve global IDs, seed/refined shifts and untouched rows outside the current batch.
     subroutine test_sparse_uneven_batches()
-        integer, parameter :: NP = 11, BS = 4
+        integer,               parameter   :: NP = 11, BS = 4
         class(eul_prob_tab2D), allocatable :: tab
-        type(prob_candidate) :: candidate
-        integer :: ids(NP), i, first, last, best_class
-        real    :: expected_x, expected_y
+        type(prob_candidate)               :: candidate
+        integer                            :: ids(NP), i, first, last, best_class
+        real                               :: expected_x, expected_y
         write(*,'(A)') 'test_sparse_uneven_batches'
         allocate(tab)
         params%refine    = 'prob_neigh'
@@ -385,7 +385,7 @@ contains
     !> two particles share their best class: at the sharp temperature both draw it, no class forced to be populated
     subroutine test_sparse_shared_best_class()
         type(prob_candidate) :: candidates(6)
-        integer :: particle_indices(6)
+        integer              :: particle_indices(6)
         write(*,'(A)') 'test_sparse_shared_best_class'
         params%refine = 'prob_neigh'
         call set_candidate(candidates(1),1,0.5)
@@ -417,12 +417,12 @@ contains
     !! otherwise leaves a residual that grows with the harmonic: K = 64 keeps 12.5 % of harmonic 40 at any phase
     !! (emulation: 0.1250 at the phases 0.3 and 0.7), and no harmonic up to 50 above that
     subroutine test_inpl_quadrature()
-        integer,  parameter :: N = 360, KMAX = 64
+        integer,  parameter :: N            = 360, KMAX = 64
         real,     parameter :: TOL_HARMONIC = 1.e-5, TOL_GAUSS = 0.02, TOL_QUANT = 0.05
-        real     :: dists(N), w(KMAX), neff, full(N)
-        integer  :: inds(KMAX), nent, m, j, k
-        real(dp) :: hq, hf
-        logical  :: l_ok
+        real                :: dists(N), w(KMAX), neff, full(N)
+        integer             :: inds(KMAX), nent, m, j, k
+        real(dp)            :: hq, hf
+        logical             :: l_ok
         write(*,'(A)') 'test_inpl_quadrature'
         ! a flat row, K = 8 at v = 0.3
         dists = 1.
@@ -604,7 +604,7 @@ contains
     !! its one entry, the counters add the batch's rows, entries (a collapsed row counts one) and collapsed rows and
     !! persist over batches while begin_batch clears the slots
     subroutine test_inpl_insert_channel()
-        type(prob_insert_inpl) :: ins
+        type(prob_insert_inpl)  :: ins
         integer,        pointer :: nent(:)
         real,           pointer :: e3(:,:), w(:,:)
         integer(int64)          :: nrows, npose, nsingle
@@ -646,11 +646,11 @@ contains
     !! the ratio exp(-T (L_2 - L_1)), the mode's class, distance, in-plane index and refined shift; a particle without
     !! a temperature read at its argmin; and the batch assigned from the kept rows as from the buffers
     subroutine test_dense_posterior_rows()
-        real, parameter :: TEMP = 2., BETA = 0.5
+        real, parameter       :: TEMP = 2., BETA = 0.5
         type(prob_candidate)  :: candidates(6)
         type(prob_row_record) :: rec
-        integer :: particle_indices(6), j
-        real    :: dists(NCLASSES), t_eff
+        integer               :: particle_indices(6), j
+        real                  :: dists(NCLASSES), t_eff
         write(*,'(A)') 'test_dense_posterior_rows'
         params%refine = 'prob'
         call set_candidate(candidates(1),1,0.1)

@@ -52,8 +52,8 @@ contains
         real,             allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
         logical,          allocatable :: state_mask(:)
         integer,          allocatable :: pinds(:)
-        integer :: ncavgs, i, j, cnt, cnt2, tmax, tmin, tstamp, funit
-        real    :: smpd
+        integer                       :: ncavgs, i, j, cnt, cnt2, tmax, tmin, tstamp, funit
+        real                          :: smpd
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgsproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
@@ -170,8 +170,8 @@ contains
         real,    allocatable :: rstates(:), rad_cc(:,:), rad_dists(:,:)
         logical, allocatable :: state_mask(:)
         integer, allocatable :: pinds(:)
-        integer :: ncavgs, i, j, cnt, tmax, tmin, tstamp, funit
-        real    :: smpd
+        integer              :: ncavgs, i, j, cnt, tmax, tmin, tstamp, funit
+        real                 :: smpd
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgseoproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
@@ -233,15 +233,15 @@ contains
         class(commander_ptclsproc_nano), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         integer,       allocatable :: pinds(:)
-        type(parameters)     :: params
-        type(builder)        :: build
-        type(image)          :: cavg_img
-        type(sp_project)     :: spproj
-        type(string)         :: command_plot
-        type(string)         :: cavgs_stk
-        integer              :: cnt, iptcl, icavgs, ncavgs, nptcls
-        real                 :: smpd, corr
-        type(ptcl_read_session) :: reads
+        type(parameters)           :: params
+        type(builder)              :: build
+        type(image)                :: cavg_img
+        type(sp_project)           :: spproj
+        type(string)               :: command_plot
+        type(string)               :: cavgs_stk
+        integer                    :: cnt, iptcl, icavgs, ncavgs, nptcls
+        real                       :: smpd, corr
+        type(ptcl_read_session)    :: reads
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_ptclsproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
@@ -290,14 +290,14 @@ contains
     subroutine exec_tsegmaps_core_finder( self, cline )
         use simple_opt_mask,  only: estimate_spher_mask
         class(commander_tsegmaps_core_finder), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline !< command line input
-        real, parameter   :: RAD_LB = 5.0 ! 5.0 A radial boundary for averaging
-        type(parameters)  :: params
-        integer           :: ivol, nvols, ldim(3), ifoo, loc(1), best_msk, mskfromto(2)
-        real, allocatable :: msk_in_pix(:)
-        real              :: diam
-        type(image_msk)   :: mskvol
-        type(image)       :: vol, vol_ref, mskimg, mskimg2, mskimg2inv, vol_sum, vol_sum2, vol_w
+        class(cmdline),                        intent(inout) :: cline !< command line input
+        real,         parameter   :: RAD_LB = 5.0 ! 5.0 A radial boundary for averaging
+        type(parameters)          :: params
+        integer                   :: ivol, nvols, ldim(3), ifoo, loc(1), best_msk, mskfromto(2)
+        real,         allocatable :: msk_in_pix(:)
+        real                      :: diam
+        type(image_msk)           :: mskvol
+        type(image)               :: vol, vol_ref, mskimg, mskimg2, mskimg2inv, vol_sum, vol_sum2, vol_w
         type(string), allocatable :: volnames(:)
         call params%new(cline)
         call read_filetable(params%filetab, volnames)
@@ -365,19 +365,19 @@ contains
         use simple_matcher_2Dprep
         use simple_matcher_ptcl_io, only: prepimgbatch, ptcl_read_session
         class(commander_trajectory_make_projavgs), intent(inout) :: self
-        class(cmdline),                         intent(inout) :: cline
+        class(cmdline),                            intent(inout) :: cline
         type(parameters)               :: params
         type(builder)                  :: build
         type(image),       allocatable :: pavgs(:), rot_imgs(:)
         real,              allocatable :: sumw(:), ref_weights(:,:)
         integer,           allocatable :: pinds(:), batches(:,:)
         logical,           allocatable :: ptcl_mask(:)
-        real    :: euls_ref(3), euls(3), x, y, sdev_noise, dist, dist_threshold, w
-        real    :: spiral_step
-        integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, cnt
-        integer :: iptcl, iref, ibatch, nptcls2update, i
-        logical :: fall_over
-        type(ptcl_read_session) :: reads
+        real                           :: euls_ref(3), euls(3), x, y, sdev_noise, dist, dist_threshold, w
+        real                           :: spiral_step
+        integer                        :: nbatches, batchsz_max, batch_start, batch_end, batchsz, cnt
+        integer                        :: iptcl, iref, ibatch, nptcls2update, i
+        logical                        :: fall_over
+        type(ptcl_read_session)        :: reads
         call cline%set('tseries', 'yes')
         call cline%set('pgrp',    'c1')
         call cline%set('oritype', 'ptcl3D')
@@ -524,8 +524,8 @@ contains
         type(string)                  :: cavgs_stk, fname_cvags_vs_reprojs
         real,             allocatable :: rstates(:)
         logical,          allocatable :: state_mask(:)
-        integer :: ncavgs, i, cnt
-        real    :: smpd
+        integer                       :: ncavgs, i, cnt
+        real                          :: smpd
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_cavgsproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../

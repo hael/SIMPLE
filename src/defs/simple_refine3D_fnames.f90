@@ -87,8 +87,8 @@ contains
     end function refine3D_state_vol_suffix_fname
 
     type(string) function refine3D_state_halfvol_fname( state, half, unfil ) result(fname)
-        integer,          intent(in) :: state
-        character(len=*), intent(in) :: half
+        integer,          intent(in)           :: state
+        character(len=*), intent(in)           :: half
         logical,          intent(in), optional :: unfil
         fname = refine3D_state_vol_fbody(state)//half_suffix(half)
         if( present(unfil) )then
@@ -109,8 +109,8 @@ contains
     end function refine3D_startvol_fname
 
     type(string) function refine3D_startvol_half_fname( state, half, unfil ) result(fname)
-        integer,          intent(in) :: state
-        character(len=*), intent(in) :: half
+        integer,          intent(in)           :: state
+        character(len=*), intent(in)           :: half
         logical,          intent(in), optional :: unfil
         fname = string(STARTVOL_FBODY)//state_tag(state)//half_suffix(half)
         if( present(unfil) )then
@@ -150,14 +150,14 @@ contains
     end function refine3D_fsc_plot_fbody
 
     type(string) function refine3D_resolution_txt_fbody( state, iter ) result(fname)
-        integer, intent(in) :: state
+        integer, intent(in)           :: state
         integer, intent(in), optional :: iter
         fname = string('RESOLUTION_STATE')//state_tag(state)
         if( present(iter) ) fname = fname//'_ITER'//iter_tag(iter)
     end function refine3D_resolution_txt_fbody
 
     type(string) function refine3D_iter_vol_fname( state, iter, suffix ) result(fname)
-        integer,          intent(in) :: state, iter
+        integer,          intent(in)           :: state, iter
         character(len=*), intent(in), optional :: suffix
         fname = refine3D_state_vol_fbody(state)//'_iter'//iter_tag(iter)
         if( present(suffix) ) fname = fname//trim(suffix)

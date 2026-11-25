@@ -4,11 +4,11 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('nano3d', '3D Reconstruction', 40)
-type(ui_program), target :: autorefine3D_nano
-type(ui_program), target :: refine3D_nano
-type(ui_program), target :: solve3D_nano
-type(ui_program), target :: import_tilt_series
-type(ui_program), target :: refine_tomo
+type(ui_program),          target    :: autorefine3D_nano
+type(ui_program),          target    :: refine3D_nano
+type(ui_program),          target    :: solve3D_nano
+type(ui_program),          target    :: import_tilt_series
+type(ui_program),          target    :: refine_tomo
 
 contains
 

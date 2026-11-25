@@ -4,14 +4,14 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('atom', 'Atom Analysis', 50)
-type(ui_program), target :: atoms_register
-type(ui_program), target :: atoms_rmsd
-type(ui_program), target :: atoms_stats
-type(ui_program), target :: core_atoms_analysis
-type(ui_program), target :: crys_score
-type(ui_program), target :: detect_atoms
-type(ui_program), target :: detect_atomic_species
-type(ui_program), target :: simulate_nanoparticle
+type(ui_program),          target    :: atoms_register
+type(ui_program),          target    :: atoms_rmsd
+type(ui_program),          target    :: atoms_stats
+type(ui_program),          target    :: core_atoms_analysis
+type(ui_program),          target    :: crys_score
+type(ui_program),          target    :: detect_atoms
+type(ui_program),          target    :: detect_atomic_species
+type(ui_program),          target    :: simulate_nanoparticle
 
 contains
 

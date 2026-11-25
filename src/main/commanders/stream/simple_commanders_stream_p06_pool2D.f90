@@ -40,7 +40,7 @@ contains
 
     subroutine exec_stream_p06_pool2D( self, cline )
         class(commander_stream_p06_pool2D), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
+        class(cmdline),                     intent(inout) :: cline
         type(stream_stage_pool2D) :: stage
         call install_sigterm_handler()
         call set_pool2D_cline(cline)

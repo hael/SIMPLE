@@ -23,74 +23,74 @@ integer, parameter :: CONT_ROUTE_NO_IMPROVEMENT = 2
 integer, parameter :: CONT_ROUTE_INVALID        = 3
 
 type strategy2D_spec
-    type(eul_prob_tab2D), pointer :: eulprob_obj_part2D => null()
-    type(prob_insert_inpl), pointer :: inpl_ins => null() !< the batch's posterior-weighted in-plane insertion, else null
-    real    :: stoch_bound = 0.
-    integer :: iptcl       = 0  ! global particle index
-    integer :: iptcl_batch = 0  ! maps to index in batch
-    integer :: iptcl_map   = 0  ! index in all contiguous batches
+    type(eul_prob_tab2D),   pointer :: eulprob_obj_part2D => null()
+    type(prob_insert_inpl), pointer :: inpl_ins           => null() !< the batch's posterior-weighted in-plane insertion, else null
+    real                            :: stoch_bound        = 0.
+    integer                         :: iptcl              = 0       ! global particle index
+    integer                         :: iptcl_batch        = 0       ! maps to index in batch
+    integer                         :: iptcl_map          = 0       ! index in all contiguous batches
 end type strategy2D_spec
 
 type strategy2D_srch
-    class(parameters), pointer :: p_ptr => null()     ! pointer to parameters
-    class(builder),    pointer :: b_ptr => null()     !< build handle for access to pftc
-    type(pftc_shsrch_grad) :: grad_shsrch_obj         !< origin shift search object, L-BFGS with gradient
-    type(pftc_shsrch_grad) :: grad_shsrch_obj2        !< fixed-angle origin shift search object
-    type(pftc_shsrch_grad) :: grad_shsrch_first_obj   !< initial shift search on the previous reference
-    type(pftc_shsrch_grad) :: joint_inpl_optimizer    !< continuous joint (sx,sy,rotind_frac) refinement
-    type(shiftmap_srch), allocatable :: smap         !< the polar shift map under the key (l_map_run)
-    integer                 :: nrefs           =  0   !< number of references
-    integer                 :: nrots           =  0   !< number of in-plane rotations in polar representation
-    integer                 :: nrefs_eval      =  0   !< nr of references evaluated
-    integer                 :: nsolns          =  0   !< # distinct refs with a stored solution this search
-    integer                 :: prev_class      =  0   !< previous class index
-    integer                 :: prev_class_mi   =  0   !< previous class used for overlap reporting
-    integer                 :: best_class      =  0   !< best class index found by search
-    integer                 :: best_rot        =  0   !< best in-plane rotation found by search
-    integer                 :: prev_rot        =  0   !< previous in-plane rotation found by search
-    integer                 :: iptcl           =  0   !< global particle index
-    integer                 :: iptcl_batch     =  0   !< index in pre-allocated batch array
-    integer                 :: iptcl_map       =  0   !< index in all contiguous batches combined
-    integer                 :: ithr            =  0   !< current thread
-    real                    :: prev_shvec(2)   =  0.  !< previous origin shift vector
-    real                    :: best_shvec(2)   =  0.  !< best shift vector found by search
-    real                    :: xy_first(2)     =  0.  !< initial shifts identified by searching the previous best reference
-    real                    :: xy_first_rot(2) =  0.  !< initial shifts identified by searching the previous best reference, rotated
-    real                    :: prev_corr       = -1.  !< previous best correlation
-    real                    :: best_corr       = -1.  !< best corr found by search
-    real                    :: trs             =  0.  !< shift boundary
-    logical                 :: l_sh_first      = .false. !< Whether to search the shifts on previous best reference
-    logical                 :: l_fresh_start   = .false. !< Whether previous alignment parameters are intentionally ignored
-    logical                 :: l_map_run       = .false. !< the classic search centres with the polar shift map (shift_sigma)
-    logical                 :: l_map           = .false. !< ... and searches this particle's shifts this iteration
-    logical                 :: l_peaks_mapped  = .false. !< the peaks' screen refined the classes this search
-    logical                 :: continuous_active = .false. !< selected candidates receive continuous refinement
-    logical                 :: has_continuous_e3 = .false. !< whether continuous_e3 is valid
-    real                    :: continuous_e3 = 0. !< continuous e3 angle for the selected candidate
-    integer                 :: continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED !< joint-route outcome for the selected candidate
+    class(parameters),   pointer     :: p_ptr                    => null()                  ! pointer to parameters
+    class(builder),      pointer     :: b_ptr                    => null()                  !< build handle for access to pftc
+    type(pftc_shsrch_grad)           :: grad_shsrch_obj                                     !< origin shift search object, L-BFGS with gradient
+    type(pftc_shsrch_grad)           :: grad_shsrch_obj2                                    !< fixed-angle origin shift search object
+    type(pftc_shsrch_grad)           :: grad_shsrch_first_obj                               !< initial shift search on the previous reference
+    type(pftc_shsrch_grad)           :: joint_inpl_optimizer                                !< continuous joint (sx,sy,rotind_frac) refinement
+    type(shiftmap_srch), allocatable :: smap                                                !< the polar shift map under the key (l_map_run)
+    integer                          :: nrefs                    =  0                       !< number of references
+    integer                          :: nrots                    =  0                       !< number of in-plane rotations in polar representation
+    integer                          :: nrefs_eval               =  0                       !< nr of references evaluated
+    integer                          :: nsolns                   =  0                       !< # distinct refs with a stored solution this search
+    integer                          :: prev_class               =  0                       !< previous class index
+    integer                          :: prev_class_mi            =  0                       !< previous class used for overlap reporting
+    integer                          :: best_class               =  0                       !< best class index found by search
+    integer                          :: best_rot                 =  0                       !< best in-plane rotation found by search
+    integer                          :: prev_rot                 =  0                       !< previous in-plane rotation found by search
+    integer                          :: iptcl                    =  0                       !< global particle index
+    integer                          :: iptcl_batch              =  0                       !< index in pre-allocated batch array
+    integer                          :: iptcl_map                =  0                       !< index in all contiguous batches combined
+    integer                          :: ithr                     =  0                       !< current thread
+    real                             :: prev_shvec(2)            =  0.                      !< previous origin shift vector
+    real                             :: best_shvec(2)            =  0.                      !< best shift vector found by search
+    real                             :: xy_first(2)              =  0.                      !< initial shifts identified by searching the previous best reference
+    real                             :: xy_first_rot(2)          =  0.                      !< initial shifts identified by searching the previous best reference, rotated
+    real                             :: prev_corr                = -1.                      !< previous best correlation
+    real                             :: best_corr                = -1.                      !< best corr found by search
+    real                             :: trs                      =  0.                      !< shift boundary
+    logical                          :: l_sh_first               = .false.                  !< Whether to search the shifts on previous best reference
+    logical                          :: l_fresh_start            = .false.                  !< Whether previous alignment parameters are intentionally ignored
+    logical                          :: l_map_run                = .false.                  !< the classic search centres with the polar shift map (shift_sigma)
+    logical                          :: l_map                    = .false.                  !< ... and searches this particle's shifts this iteration
+    logical                          :: l_peaks_mapped           = .false.                  !< the peaks' screen refined the classes this search
+    logical                          :: continuous_active        = .false.                  !< selected candidates receive continuous refinement
+    logical                          :: has_continuous_e3        = .false.                  !< whether continuous_e3 is valid
+    real                             :: continuous_e3            = 0.                       !< continuous e3 angle for the selected candidate
+    integer                          :: continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED !< joint-route outcome for the selected candidate
   contains
-    procedure :: new
-    procedure :: prep4srch
-    procedure :: inpl_srch_first
-    procedure :: inpl_srch
-    procedure :: refine_selected_continuously
-    procedure :: inpl_srch_peaks
+    procedure          :: new
+    procedure          :: prep4srch
+    procedure          :: inpl_srch_first
+    procedure          :: inpl_srch
+    procedure          :: refine_selected_continuously
+    procedure          :: inpl_srch_peaks
     procedure, private :: map_srch
-    procedure :: store_solution
-    procedure :: assign_ori
-    procedure :: uses_continuous_refinement
-    procedure :: continuous_pose_committed
-    procedure :: get_continuous_route_status
-    procedure :: kill
+    procedure          :: store_solution
+    procedure          :: assign_ori
+    procedure          :: uses_continuous_refinement
+    procedure          :: continuous_pose_committed
+    procedure          :: get_continuous_route_status
+    procedure          :: kill
 end type strategy2D_srch
 
 contains
 
     subroutine new( self, params, spec, build )
-        class(strategy2D_srch),    intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(strategy2D_spec),    intent(in)    :: spec
-        class(builder),    target, intent(in)    :: build
+        class(strategy2D_srch),    intent(inout)      :: self
+        class(parameters),         target, intent(in) :: params
+        class(strategy2D_spec),    intent(in)         :: spec
+        class(builder),            target, intent(in) :: build
         real    :: lims(2,2), lims_init(2,2), joint_lims(3,2)
         logical :: continuous_eligible
         call self%kill
@@ -346,9 +346,9 @@ contains
         logical,                intent(in)    :: l_peaks
         integer, allocatable :: refs(:), irots0(:)
         real,    allocatable :: corrs0(:)
-        real    :: corr, sh(2), sdev
-        integer :: iref, irot_m, i, n
-        logical :: found, valid
+        real                 :: corr, sh(2), sdev
+        integer              :: iref, irot_m, i, n
+        logical              :: found, valid
         n = count(s2D%cls_pops > 0 .and. s2D%class_space_inplinds(:,self%ithr) > 0)
         allocate(refs(n), irots0(n), corrs0(n))
         n = 0
@@ -393,8 +393,8 @@ contains
     !! An invalid solve retains the incoming assignment untouched; a valid
     !! non-improving solve retains the pose with its re-scored objective value.
     subroutine refine_selected_continuously( self, l_refine_shifts )
-        class(strategy2D_srch), intent(inout) :: self
-        logical, optional,      intent(in)    :: l_refine_shifts
+        class(strategy2D_srch), intent(inout)             :: self
+        logical,                optional,      intent(in) :: l_refine_shifts
         real    :: rotmat(2,2), xy_native(2)
         logical :: l_sh
         if( .not. self%continuous_active ) return
@@ -462,7 +462,7 @@ contains
     end subroutine refine_selected_continuously
 
     subroutine store_continuous_e3( self, rotind_frac )
-        class(strategy2D_srch), intent(inout) :: self
+        class(strategy2D_srch),  intent(inout) :: self
         real(dp),                intent(in)    :: rotind_frac
         real(dp) :: e3
         e3 = (rotind_frac - 1.d0) * real(self%b_ptr%pftc%get_dang(),dp)
@@ -562,9 +562,9 @@ contains
     subroutine assign_ori( self, os )
         class(strategy2D_srch), intent(in)    :: self
         class(oris),            intent(inout) :: os
-        real :: dist, mat(2,2), u(2), x1(2), x2(2)
-        real :: e3, mi_class, frac
-        real :: best_corr_local, shvec_incr(2), sh_m(2), corr_m, sdev
+        real    :: dist, mat(2,2), u(2), x1(2), x2(2)
+        real    :: e3, mi_class, frac
+        real    :: best_corr_local, shvec_incr(2), sh_m(2), corr_m, sdev
         integer :: iref, best_class_local, best_rot_local, irot_m
         logical :: found_valid, found, valid
         integer :: ithr

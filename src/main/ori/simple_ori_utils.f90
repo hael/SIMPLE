@@ -13,9 +13,9 @@ public :: genfire2euler, euler2genfire
 public :: canonical_mirror_frame_angle
 private
 
-real, parameter :: zvec(3) = [0.,0.,1.]
-real, parameter :: POLE_COS = 0.9999999 !< |cos e2| from which m2euler holds the whole in-plane angle in e1
-real, parameter :: EULER_DIR_TOL = 1.e-3 !< degrees: a pose within this of a cell's e1 and e2 has the cell's direction
+real, parameter :: zvec(3)       = [0.,0.,1.]
+real, parameter :: POLE_COS      = 0.9999999 !< |cos e2| from which m2euler holds the whole in-plane angle in e1
+real, parameter :: EULER_DIR_TOL = 1.e-3     !< degrees: a pose within this of a cell's e1 and e2 has the cell's direction
 
 contains
 
@@ -23,7 +23,7 @@ contains
     pure elemental function canonical_mirror_frame_angle(angle) result(psi)
         real, intent(in) :: angle
         real, parameter :: MIRROR_FRAME_TOL = 1.e-4
-        real(dp) :: psi
+        real(dp)        :: psi
         psi = modulo(real(angle,dp),360._dp)
         if( min(psi,360._dp-psi) <= MIRROR_FRAME_TOL )then
             psi = 0._dp
@@ -112,7 +112,7 @@ contains
     !>  \brief  returns the rotation matrix for _ang_ degrees of rotation
     !! around x,y or z for _choice_ = _1_,_2_ or _3_
     pure function rotmat( ang, choice ) result( r )
-        real, intent(in)           :: ang
+        real,    intent(in)        :: ang
         integer, intent(in)        :: choice
         real :: r(3,3)
         real :: ang_in_rad, cosang, sinang

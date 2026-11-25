@@ -20,11 +20,11 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     class(commander_test_mini_stream), intent(inout) :: self
     class(cmdline),                    intent(inout) :: cline
-    character(len=*), parameter :: MOVIE_FILE     = 'simulate_movie.mrc'
-    character(len=*), parameter :: OPTIMAL_FILE   = 'optimal_movie_average.mrc'
-    character(len=*), parameter :: PARAMS_FILE    = 'simulate_movie_params.txt'
-    character(len=*), parameter :: FILETAB_FILE   = 'mini_stream_micrographs.txt'
-    character(len=*), parameter :: PROJFILE       = 'mini_stream.simple'
+    character(len=*), parameter :: MOVIE_FILE      = 'simulate_movie.mrc'
+    character(len=*), parameter :: OPTIMAL_FILE    = 'optimal_movie_average.mrc'
+    character(len=*), parameter :: PARAMS_FILE     = 'simulate_movie_params.txt'
+    character(len=*), parameter :: FILETAB_FILE    = 'mini_stream_micrographs.txt'
+    character(len=*), parameter :: PROJFILE        = 'mini_stream.simple'
     real,             parameter :: SMPD            = 1.3
     real,             parameter :: CS              = 2.7
     real,             parameter :: KV              = 300.0
@@ -41,23 +41,23 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     ! - pick ratio: 6vxx median 0.333, s 0.093, worst 0.188, admissible up to 0.055 (floor 0.05);
     !   1jxy median 0.490, s 0.077, worst 0.396, admissible up to 0.258 (floor 0.25). The simulator
     !   saves no particle positions, so there is no control; the former 0.40 came from one unseeded run.
-    real,             parameter :: DEFOCUS_TOL     = 0.15
+    real,             parameter :: DEFOCUS_TOL          = 0.15
     real,             parameter :: PICK_RECALL_MIN_6VXX = 0.05
     real,             parameter :: PICK_RECALL_MIN_1JXY = 0.25
     ! a sanity ceiling against over-picking (not derived); the profile of 2026-10-16 never came near it (worst 0.65)
-    real,             parameter :: PICK_RATIO_MAX  = 1.50
-    real,             parameter :: MAX_AREA_FRACTION = 0.30
-    real,             parameter :: MSKDIAM         = 180.0
-    integer,          parameter :: PARTICLE_BOX    = 192
-    integer,          parameter :: MICROGRAPH_BOX_6VXX = 1024
-    integer,          parameter :: MICROGRAPH_BOX_1JXY = 1280
-    integer,          parameter :: NPARTICLES      = 8
-    integer,          parameter :: NMICROGRAPHS    = 6
-    integer,          parameter :: NFRAMES         = 8
+    real,              parameter   :: PICK_RATIO_MAX      = 1.50
+    real,              parameter   :: MAX_AREA_FRACTION   = 0.30
+    real,              parameter   :: MSKDIAM             = 180.0
+    integer,           parameter   :: PARTICLE_BOX        = 192
+    integer,           parameter   :: MICROGRAPH_BOX_6VXX = 1024
+    integer,           parameter   :: MICROGRAPH_BOX_1JXY = 1280
+    integer,           parameter   :: NPARTICLES          = 8
+    integer,           parameter   :: NMICROGRAPHS        = 6
+    integer,           parameter   :: NFRAMES             = 8
     type(commander_reproject)      :: xreproject
     type(commander_simulate_movie) :: xsim_movie
     type(commander_mini_stream)    :: xmini_stream
-    class(cmdline), allocatable    :: cline_reproj, cline_sim, cline_mini
+    class(cmdline),    allocatable :: cline_reproj, cline_sim, cline_mini
     type(atoms)                    :: molecule
     type(molecule_data)            :: mol
     type(image)                    :: cavg
@@ -69,12 +69,12 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     type(string)                   :: movie_name, params_name, value, cavg_stack
     type(string)                   :: requested_suite, system_name, vol_file, pgrp
     type(string)                   :: movie_paths(NMICROGRAPHS), params_paths(NMICROGRAPHS)
-    integer, allocatable           :: classes(:), populations(:), shape_ranks(:)
-    integer                       :: i, imic, isuite, rank, status, ldim(3), nimages, micrograph_box
-    integer                       :: npicked, nclasses, ncavgs, nranked, expected_particles
-    real                          :: dfx, dfy, truth_dfx, truth_dfy, defocus_error
-    real                          :: pick_ratio, cavg_smpd, cavg_variance, area_fraction, pick_recall_min, wrong_error
-    logical                       :: ok
+    integer,           allocatable :: classes(:), populations(:), shape_ranks(:)
+    integer                        :: i, imic, isuite, rank, status, ldim(3), nimages, micrograph_box
+    integer                        :: npicked, nclasses, ncavgs, nranked, expected_particles
+    real                           :: dfx, dfy, truth_dfx, truth_dfy, defocus_error
+    real                           :: pick_ratio, cavg_smpd, cavg_variance, area_fraction, pick_recall_min, wrong_error
+    logical                        :: ok
 
     allocate(cline_reproj, cline_sim, cline_mini, result)
     call make_ui
@@ -334,7 +334,7 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     integer function nrecords( fname )
         type(string), intent(in) :: fname
         character(len=256) :: line
-        integer :: funit, ios
+        integer            :: funit, ios
         nrecords = 0
         if( .not. file_exists(fname) ) return
         open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
@@ -350,7 +350,7 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     integer function find_simulation( micrograph_path ) result(ind)
         type(string), intent(in) :: micrograph_path
         type(string) :: observed_name, truth_name
-        integer :: isim
+        integer      :: isim
         ind = 0
         observed_name = basename(micrograph_path)
         do isim = 1, NMICROGRAPHS
@@ -377,18 +377,18 @@ module subroutine exec_test_simulate_particles( self, cline )
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     class(commander_test_simulate_particles), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
-    real,    parameter                  :: SMPD        = 1.3
-    real,    parameter                  :: MSKDIAM     = 180.
-    real,    parameter                  :: KV          = 300.0
-    real,    parameter                  :: CS          = 2.7
-    real,    parameter                  :: FRACA       = 0.1
-    real,    parameter                  :: DEFOCUS     = 2.0
-    real,    parameter                  :: DFERR       = 0.2
-    real,    parameter                  :: ASTIGERR    = 0.05
-    real,    parameter                  :: SHIFT_LIMIT = 2.0
-    integer, parameter                  :: NSPACE      = 100
-    integer, parameter                  :: NPTCLS_SIM  = 200
-    class(cmdline), allocatable         :: cline_reproj, cline_sim
+    real,              parameter        :: SMPD        = 1.3
+    real,              parameter        :: MSKDIAM     = 180.
+    real,              parameter        :: KV          = 300.0
+    real,              parameter        :: CS          = 2.7
+    real,              parameter        :: FRACA       = 0.1
+    real,              parameter        :: DEFOCUS     = 2.0
+    real,              parameter        :: DFERR       = 0.2
+    real,              parameter        :: ASTIGERR    = 0.05
+    real,              parameter        :: SHIFT_LIMIT = 2.0
+    integer,           parameter        :: NSPACE      = 100
+    integer,           parameter        :: NPTCLS_SIM  = 200
+    class(cmdline),    allocatable      :: cline_reproj, cline_sim
     class(parameters), allocatable      :: params
     type(commander_reproject)           :: xreproject
     type(commander_simulate_particles)  :: xsim_ptcls
@@ -505,14 +505,14 @@ module subroutine exec_test_simulate_particles( self, cline )
     subroutine check_images_against_projections
         use simple_simple_volinterp, only: reproject
         use simple_rnd,              only: shuffle
-        integer, parameter :: NIMG = 50
+        integer,        parameter   :: NIMG = 50
         class(cmdline), allocatable :: cl
-        type(oris)    :: os
-        type(image)   :: vol, img
-        type(image), allocatable :: projs(:)
-        integer, allocatable :: perm(:)
-        integer :: i, nwrong, ldimv(3), nsec
-        real    :: cc_own, cc_other, sum_own, sum_other
+        type(oris)                  :: os
+        type(image)                 :: vol, img
+        type(image),    allocatable :: projs(:)
+        integer,        allocatable :: perm(:)
+        integer                     :: i, nwrong, ldimv(3), nsec
+        real                        :: cc_own, cc_other, sum_own, sum_other
         write(logfhandle,'(a)') '>>> TEST_SIMULATE_PARTICLES: images against their reprojections'
         call simple_mkdir('images_vs_projections')
         call simple_chdir('images_vs_projections')
@@ -577,14 +577,14 @@ module subroutine exec_test_simulate_particles( self, cline )
         use simple_simple_volinterp,            only: reproject
         character(len=*), intent(in) :: pops, tag
         integer,          intent(in) :: n, counts(3)
-        type(string)  :: truths(3), tmean, tdiff, dir
+        type(string)                :: truths(3), tmean, tdiff, dir
         class(cmdline), allocatable :: cl
-        type(oris)    :: os
-        type(image)   :: vols(3), img
-        type(image), allocatable :: projs(:,:)
-        integer :: k, i, nwrong, ldimv(3), nsec
-        integer, allocatable :: states(:)
-        real    :: cc(3)
+        type(oris)                  :: os
+        type(image)                 :: vols(3), img
+        type(image),    allocatable :: projs(:,:)
+        integer                     :: k, i, nwrong, ldimv(3), nsec
+        integer,        allocatable :: states(:)
+        real                        :: cc(3)
         write(logfhandle,'(a)') '>>> TEST_SIMULATE_PARTICLES: mixture '//tag
         call simple_mkdir(tag)
         call simple_chdir(tag)
@@ -681,8 +681,8 @@ module subroutine exec_test_simulate_particles( self, cline )
         integer,          intent(in) :: nexpected
         character(len=*), intent(in) :: what
         type(image) :: img
-        integer :: iimg, ldim_stk(3), nimgs
-        real    :: img_variance, max_variance, min_variance, smpd_stk
+        integer     :: iimg, ldim_stk(3), nimgs
+        real        :: img_variance, max_variance, min_variance, smpd_stk
         write(logfhandle,'(a)') '>>> CHECK: '//what//' stack '//fname%to_char()
         if( .not. file_exists(fname) )then
             write(logfhandle,'(a)') '    FAIL: '//fname%to_char()//' not found'
@@ -732,16 +732,16 @@ module subroutine exec_test_simulate_particles( self, cline )
     !> The orientation table has one valid record per image. Particle metadata
     !! additionally has bounded CTF parameters and shifts matching the fixture.
     subroutine check_oris( fname, nexpected, what, check_ctf )
-        type(string),     intent(in) :: fname
-        integer,          intent(in) :: nexpected
-        character(len=*), intent(in) :: what
-        logical, optional, intent(in) :: check_ctf
-        type(oris) :: metadata
+        type(string),     intent(in)           :: fname
+        integer,          intent(in)           :: nexpected
+        character(len=*), intent(in)           :: what
+        logical,          optional, intent(in) :: check_ctf
+        type(oris)           :: metadata
         integer, allocatable :: states(:)
         real,    allocatable :: dfx(:), dfy(:), e1(:), e2(:), e3(:), xs(:), ys(:)
         real,    allocatable :: kvs(:), css(:), fracas(:)
-        integer :: nrecs
-        logical :: inspect_ctf
+        integer              :: nrecs
+        logical              :: inspect_ctf
         write(logfhandle,'(a)') '>>> CHECK: '//what//' orientations '//fname%to_char()
         if( .not. file_exists(fname) )then
             write(logfhandle,'(a)') '    FAIL: '//fname%to_char()//' not found'

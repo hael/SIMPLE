@@ -67,7 +67,7 @@ contains
 
     subroutine test_ragged_roundtrip()
         type(class_sample), allocatable :: cs(:), cs_read(:)
-        integer :: i
+        integer                         :: i
         write(*,'(A)') 'test_ragged_roundtrip'
         call make_ragged(cs)
         call del_file(string(CS_FILE))

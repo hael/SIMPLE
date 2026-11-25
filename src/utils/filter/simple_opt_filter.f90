@@ -17,15 +17,15 @@ end interface estimate_lplim
 contains
 
     subroutine estimate_lplim_find( odd, even, mskimg, kfromto, best_ind, odd_filt_out )
-        class(image),           intent(inout) :: odd, even, mskimg
-        integer,                intent(in)    :: kfromto(2)
-        integer,                intent(out)   :: best_ind
-        class(image), optional, intent(out)   :: odd_filt_out
+        class(image),           intent(inout)         :: odd, even, mskimg
+        integer,                intent(in)            :: kfromto(2)
+        integer,                intent(out)           :: best_ind
+        class(image),           optional, intent(out) :: odd_filt_out
         real,    allocatable :: cur_fil(:)
         logical, allocatable :: lmask(:,:,:)
-        type(image) :: odd_copy_cmat, odd_filt
-        integer     :: box, ldim(3), cutoff_find
-        real        :: smpd, cur_cost, best_cost
+        type(image)          :: odd_copy_cmat, odd_filt
+        integer              :: box, ldim(3), cutoff_find
+        real                 :: smpd, cur_cost, best_cost
         if( kfromto(1) == kfromto(2) )then  
             best_ind = kfromto(1)
             return
@@ -71,10 +71,10 @@ contains
     end subroutine estimate_lplim_find
 
     subroutine estimate_lplim_lp( odd, even, mskimg, lpstart, lpstop, lpopt, odd_filt_out )
-        class(image),           intent(inout) :: odd, even, mskimg
-        real,                   intent(in)    :: lpstart, lpstop
-        real,                   intent(out)   :: lpopt
-        class(image), optional, intent(out)   :: odd_filt_out
+        class(image),           intent(inout)         :: odd, even, mskimg
+        real,                   intent(in)            :: lpstart, lpstop
+        real,                   intent(out)           :: lpopt
+        class(image),           optional, intent(out) :: odd_filt_out
         integer :: ldim(3), box, kfromto(2), best_ind
         real    :: smpd
         ldim       = odd%get_ldim()
@@ -90,14 +90,14 @@ contains
     end subroutine estimate_lplim_lp
 
     subroutine estimate_lplim3D( odd, even, mskvol, lpstart, lpstop, lpopt, odd_filt_out )
-        class(image),           intent(in)  :: odd, even, mskvol
-        real,                   intent(in)  :: lpstart, lpstop
-        real,                   intent(out) :: lpopt
-        class(image), optional, intent(out) :: odd_filt_out
+        class(image),           intent(in)            :: odd, even, mskvol
+        real,                   intent(in)            :: lpstart, lpstop
+        real,                   intent(out)           :: lpopt
+        class(image),           optional, intent(out) :: odd_filt_out
         type(image)       :: odd_filt, even_cp, odd_cp
         real, allocatable :: cur_fil(:)
-        integer     :: ldim(3), box, kfromto(2), best_ind, cutoff_find
-        real        :: smpd, best_cost, curr_cost
+        integer           :: ldim(3), box, kfromto(2), best_ind, cutoff_find
+        real              :: smpd, best_cost, curr_cost
         ldim       = odd%get_ldim()
         box        = ldim(1)
         smpd       = odd%get_smpd()
@@ -158,13 +158,13 @@ contains
     end subroutine estimate_lplim3D
 
     subroutine estimate_lplims2D( odd, even, mskrad_px, lpstart, lpstop, lpsopt, odd_filt_out )
-        class(image),                       intent(inout) :: odd(:), even(:)
-        real,                               intent(in)    :: mskrad_px, lpstart, lpstop
-        real,                  allocatable, intent(inout) :: lpsopt(:)
-        type(image), optional, allocatable, intent(inout) :: odd_filt_out(:)
+        class(image),                       intent(inout)                        :: odd(:), even(:)
+        real,                               intent(in)                           :: mskrad_px, lpstart, lpstop
+        real,                               allocatable, intent(inout)           :: lpsopt(:)
+        type(image),                        optional, allocatable, intent(inout) :: odd_filt_out(:)
         type(image), allocatable :: masks(:)
-        real    :: smpd
-        integer :: iptcl, box, ldim(3), nptcls, npix
+        real                     :: smpd
+        integer                  :: iptcl, box, ldim(3), nptcls, npix
         write(logfhandle,'(A)') '>>> 2D UNIFORM FILTERING FOR LP ESTIMATION'
         ! init
         ldim    = odd(1)%get_ldim()

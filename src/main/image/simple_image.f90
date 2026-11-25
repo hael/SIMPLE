@@ -26,7 +26,7 @@ integer              :: mem_msk_box = 0
 real,    allocatable :: mem_msk_cs(:), mem_msk_cs2(:)
 
 ! calc_pspec geometry memoization
-integer              :: mem_pspec_box = 0
+integer              :: mem_pspec_box    = 0
 real                 :: mem_pspec_mskrad = -1.
 real,    allocatable :: mem_pspec_mask(:,:)
 logical, allocatable :: mem_pspec_bg(:,:)
@@ -34,20 +34,20 @@ integer, allocatable :: mem_pspec_shell(:,:), mem_pspec_counts(:)
 
 type :: image
     private
-    logical                                :: ft=.false.           !< Fourier transformed or not
-    integer                                :: ldim(3)=[1,1,1]      !< logical image dimensions
-    integer                                :: nc                   !< number of F-comps
-    real                                   :: smpd                 !< sampling distance
-    type(ftiter)                           :: fit                  !< Fourier iterator object
-    type(c_ptr)                            :: p                    !< c pointer for fftw allocation
-    real(kind=c_float),            pointer :: rmat(:,:,:)=>null()  !< image pixels/voxels (in data)
-    complex(kind=c_float_complex), pointer :: cmat(:,:,:)=>null()  !< Fourier components
-    real                                   :: shconst(3)           !< shift constant
-    type(c_ptr)                            :: plan_fwd             !< fftw plan for the image (fwd)
-    type(c_ptr)                            :: plan_bwd             !< fftw plan for the image (bwd)
-    integer                                :: array_shape(3)       !< shape of complex array
-    logical                                :: wthreads  = .false.  !< with threads flag
-    logical                                :: existence = .false.  !< indicates existence
+    logical                                :: ft          = .false. !< Fourier transformed or not
+    integer                                :: ldim(3)     = [1,1,1] !< logical image dimensions
+    integer                                :: nc                    !< number of F-comps
+    real                                   :: smpd                  !< sampling distance
+    type(ftiter)                           :: fit                   !< Fourier iterator object
+    type(c_ptr)                            :: p                     !< c pointer for fftw allocation
+    real(kind=c_float),            pointer :: rmat(:,:,:) => null() !< image pixels/voxels (in data)
+    complex(kind=c_float_complex), pointer :: cmat(:,:,:) => null() !< Fourier components
+    real                                   :: shconst(3)            !< shift constant
+    type(c_ptr)                            :: plan_fwd              !< fftw plan for the image (fwd)
+    type(c_ptr)                            :: plan_bwd              !< fftw plan for the image (bwd)
+    integer                                :: array_shape(3)        !< shape of complex array
+    logical                                :: wthreads    = .false. !< with threads flag
+    logical                                :: existence   = .false. !< indicates existence
 contains
     ! CONSTRUCTORS / LIFECYCLE, file: simple_image_core.f90
     procedure          :: new
@@ -66,22 +66,22 @@ contains
     procedure, private :: assign
     procedure, private :: assign_r2img
     procedure, private :: assign_c2img
-    generic :: assignment(=) => assign, assign_r2img, assign_c2img
+    generic            :: assignment(=) => assign, assign_r2img, assign_c2img
     procedure, private :: subtraction
-    generic :: operator(-) => subtraction
+    generic            :: operator(-)   => subtraction
     procedure, private :: addition
     procedure, private :: addition_const_real
-    generic :: operator(+) => addition, addition_const_real
+    generic            :: operator(+)   => addition, addition_const_real
     procedure, private :: multiplication
     procedure, private :: multiplication_const_real
     procedure, private :: multiplication_const_int
-    generic :: operator(*) => multiplication, multiplication_const_real, multiplication_const_int
+    generic            :: operator(*)   => multiplication, multiplication_const_real, multiplication_const_int
     procedure, private :: division
-    generic :: operator(/) => division
+    generic            :: operator(/)   => division
     procedure, private :: add_img, add_cmplx_at, add_real_at, add_cmplx_at_kdiv, add_scalar
-    generic            :: add => add_img, add_cmplx_at, add_real_at, add_cmplx_at_kdiv, add_scalar
+    generic            :: add           => add_img, add_cmplx_at, add_real_at, add_cmplx_at_kdiv, add_scalar
     procedure, private :: add_mat2cmat_cmplx, add_mat2cmat_real
-    generic            :: add_mat2cmat => add_mat2cmat_cmplx, add_mat2cmat_real
+    generic            :: add_mat2cmat  => add_mat2cmat_cmplx, add_mat2cmat_real
     procedure          :: add_rmat2mat_workshare
     procedure          :: add_dble_cmat2mat
     procedure, private :: add_workshare_img, add_workshare_weighted
@@ -89,23 +89,23 @@ contains
     procedure          :: sum_reduce_mats
     procedure          :: scale_mats
     procedure, private :: subtr_img, subtr_cmplx_at, subtr_cmplx_at_kdiv, subtr_scalar
-    generic            :: subtr => subtr_img, subtr_cmplx_at, subtr_cmplx_at_kdiv, subtr_scalar
+    generic            :: subtr         => subtr_img, subtr_cmplx_at, subtr_cmplx_at_kdiv, subtr_scalar
     procedure, private :: div_scalar, div_kernel_at, div_real_at, div_img
-    generic            :: div => div_scalar, div_kernel_at, div_real_at, div_img
+    generic            :: div           => div_scalar, div_kernel_at, div_real_at, div_img
     procedure, private :: mul_real_at, mul_scalar, mul_img, mul_img_lp, mul_cmplx_at
-    generic            :: mul => mul_real_at, mul_scalar, mul_img, mul_img_lp, mul_cmplx_at
+    generic            :: mul           => mul_real_at, mul_scalar, mul_img, mul_img_lp, mul_cmplx_at
     procedure          :: mul_rmat
     procedure, private :: conjugate
-    generic            :: conjg => conjugate
+    generic            :: conjg         => conjugate
     procedure          :: mul_rmat_at
     procedure          :: div_rmat_at
     procedure          :: add_cmat_at
     procedure, private :: mul_cmat_at_real, mul_cmat_at_cmplx
-    generic            :: mul_cmat_at => mul_cmat_at_real, mul_cmat_at_cmplx
+    generic            :: mul_cmat_at   => mul_cmat_at_real, mul_cmat_at_cmplx
     procedure, private :: mul_cmat_unmasked, mul_cmat_masked
-    generic            :: mul_cmat => mul_cmat_unmasked, mul_cmat_masked
+    generic            :: mul_cmat      => mul_cmat_unmasked, mul_cmat_masked
     procedure, private :: div_cmat_at_real, div_cmat_at_cmplx
-    generic            :: div_cmat_at => div_cmat_at_real, div_cmat_at_cmplx
+    generic            :: div_cmat_at   => div_cmat_at_real, div_cmat_at_cmplx
     procedure          :: add_cmats_to_cmat
     ! FFT, file: simple_image_fft.f90
     procedure          :: fft  => fwd_ft
@@ -159,7 +159,7 @@ contains
     procedure          :: get_fcomp2D
     ! Setters
     procedure, private :: set_real_at, set_img
-    generic            :: set => set_real_at, set_img
+    generic            :: set      => set_real_at, set_img
     procedure          :: set_rmat
     procedure          :: set_rmat_at
     procedure, private :: set_cmat_3d, set_cmat_scalar, set_cmat_img, set_cmat_2d
@@ -273,7 +273,7 @@ contains
     procedure          :: corr
     procedure          :: corr_shifted
     procedure, private :: real_corr_unmasked, real_corr_masked
-    generic            :: real_corr => real_corr_unmasked, real_corr_masked
+    generic            :: real_corr         => real_corr_unmasked, real_corr_masked
     procedure          :: phase_corr
     procedure          :: fcorr_shift, fcorr_shift3D
     procedure          :: prenorm4real_corr_sxx, prenorm4real_corr_sxx_masked, prenorm4real_corr_inplace
@@ -437,12 +437,12 @@ interface
     ! ===== Constructors/lifecycle =====
 
     module subroutine new( self, ldim, smpd, wthreads, fft_nthreads, fft_measure )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: ldim(3)
-        real,              intent(in)    :: smpd
-        logical, optional, intent(in)    :: wthreads
-        integer, optional, intent(in)    :: fft_nthreads
-        logical, optional, intent(in)    :: fft_measure
+        class(image),      intent(inout)        :: self
+        integer,           intent(in)           :: ldim(3)
+        real,              intent(in)           :: smpd
+        logical,           optional, intent(in) :: wthreads
+        integer,           optional, intent(in) :: fft_nthreads
+        logical,           optional, intent(in) :: fft_measure
     end subroutine new
 
     module subroutine set_wthreads( self, wthreads )
@@ -474,25 +474,25 @@ interface
     end subroutine copy_fast
 
     module subroutine disc_img( self, ldim, smpd, radius, npix )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: ldim(3)
-        real,              intent(in)    :: smpd, radius
-        integer, optional, intent(inout) :: npix
+        class(image),      intent(inout)           :: self
+        integer,           intent(in)              :: ldim(3)
+        real,              intent(in)              :: smpd, radius
+        integer,           optional, intent(inout) :: npix
     end subroutine disc_img
 
     module subroutine disc_lmsk( self, ldim, smpd, radius, lmsk, npix )
-        class(image),         intent(inout) :: self
-        integer,              intent(in)    :: ldim(3)
-        real,                 intent(in)    :: smpd, radius
-        logical, allocatable, intent(out)   :: lmsk(:,:,:)
-        integer, optional,    intent(inout) :: npix
+        class(image),         intent(inout)              :: self
+        integer,              intent(in)                 :: ldim(3)
+        real,                 intent(in)                 :: smpd, radius
+        logical,              allocatable, intent(out)   :: lmsk(:,:,:)
+        integer,              optional,    intent(inout) :: npix
     end subroutine disc_lmsk
 
     module subroutine ring( self, ldim, smpd, outer_radius, inner_radius, npix )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: ldim(3)
-        real,              intent(in)    :: smpd, outer_radius, inner_radius
-        integer, optional, intent(inout) :: npix
+        class(image),      intent(inout)           :: self
+        integer,           intent(in)              :: ldim(3)
+        real,              intent(in)              :: smpd, outer_radius, inner_radius
+        integer,           optional, intent(inout) :: npix
     end subroutine ring
 
     module subroutine soft_ring( self, ldim, smpd, radius )
@@ -577,17 +577,17 @@ interface
 
     !--- add_* family (adapt args to your real code) ---!
     module subroutine add_img( self, self_to_add, w )
-        class(image),   intent(inout) :: self
-        class(image),   intent(in)    :: self_to_add
-        real, optional, intent(in)    :: w
+        class(image),   intent(inout)        :: self
+        class(image),   intent(in)           :: self_to_add
+        real,           optional, intent(in) :: w
     end subroutine add_img
 
     module subroutine add_cmplx_at( self, logi, comp, phys_in, phys_out )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: logi(3)
-        complex,           intent(in)    :: comp
-        integer, optional, intent(in)    :: phys_in(3)
-        integer, optional, intent(out)   :: phys_out(3)
+        class(image),      intent(inout)         :: self
+        integer,           intent(in)            :: logi(3)
+        complex,           intent(in)            :: comp
+        integer,           optional, intent(in)  :: phys_in(3)
+        integer,           optional, intent(out) :: phys_out(3)
     end subroutine add_cmplx_at
 
     module subroutine add_real_at( self, rval, i, j, k )
@@ -656,17 +656,17 @@ interface
 
     !--- subtr_* ---!
     module subroutine subtr_img( self, self_to_subtr, w )
-        class(image),   intent(inout) :: self
-        class(image),   intent(in)    :: self_to_subtr
-        real, optional, intent(in)    :: w
+        class(image),   intent(inout)        :: self
+        class(image),   intent(in)           :: self_to_subtr
+        real,           optional, intent(in) :: w
     end subroutine subtr_img
 
     module subroutine subtr_cmplx_at( self, logi, comp, phys_in, phys_out )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: logi(3)
-        complex,           intent(in)    :: comp
-        integer, optional, intent(out)   :: phys_in(3)
-        integer, optional, intent(out)   :: phys_out(3)
+        class(image),      intent(inout)         :: self
+        integer,           intent(in)            :: logi(3)
+        complex,           intent(in)            :: comp
+        integer,           optional, intent(out) :: phys_in(3)
+        integer,           optional, intent(out) :: phys_out(3)
     end subroutine subtr_cmplx_at
 
     module subroutine subtr_cmplx_at_kdiv( self, logi, comp, w, k )
@@ -694,10 +694,10 @@ interface
     end subroutine div_kernel_at
 
     module subroutine div_real_at( self, logi, k, phys_in )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: logi(3)
-        real,              intent(in)    :: k
-        integer, optional, intent(in)    :: phys_in(3)
+        class(image),      intent(inout)        :: self
+        integer,           intent(in)           :: logi(3)
+        real,              intent(in)           :: k
+        integer,           optional, intent(in) :: phys_in(3)
     end subroutine div_real_at
 
     module subroutine div_img( self, self2div )
@@ -707,11 +707,11 @@ interface
 
     !--- mul_* ---!
     module subroutine mul_real_at( self, logi, rc, phys_in, phys_out )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: logi(3)
-        real,              intent(in)    :: rc
-        integer, optional, intent(in)    :: phys_in(3)
-        integer, optional, intent(out)   :: phys_out(3)
+        class(image),      intent(inout)         :: self
+        integer,           intent(in)            :: logi(3)
+        real,              intent(in)            :: rc
+        integer,           optional, intent(in)  :: phys_in(3)
+        integer,           optional, intent(out) :: phys_out(3)
     end subroutine mul_real_at
 
     module subroutine mul_scalar( self, rc )
@@ -844,10 +844,10 @@ interface
     end subroutine norm_noise_fft
 
     module subroutine norm_noise_taper_edge_pad_fft(self, lmsk, self_out, renorm)
-        class(image),      intent(inout) :: self
-        logical,           intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
-        class(image),      intent(inout) :: self_out
-        logical, optional, intent(in)    :: renorm
+        class(image),      intent(inout)        :: self
+        logical,           intent(in)           :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
+        class(image),      intent(inout)        :: self_out
+        logical,           optional, intent(in) :: renorm
     end subroutine norm_noise_taper_edge_pad_fft
 
     module subroutine norm_noise_fft_clip_shift_ctf_flip( self, lmsk, self_out, shvec, tfun, ctfparms )
@@ -917,19 +917,19 @@ interface
     ! ===== I/O procedure interfaces =====
 
     module subroutine open( self, fname, ioimg, formatchar, readhead, rwaction )
-        class(image),               intent(inout) :: self
-        class(string),              intent(in)    :: fname
-        class(imgfile),             intent(inout) :: ioimg
-        character(len=1), optional, intent(in)    :: formatchar
-        logical,          optional, intent(in)    :: readhead
-        character(len=*), optional, intent(in)    :: rwaction
+        class(image),               intent(inout)        :: self
+        class(string),              intent(in)           :: fname
+        class(imgfile),             intent(inout)        :: ioimg
+        character(len=1),           optional, intent(in) :: formatchar
+        logical,                    optional, intent(in) :: readhead
+        character(len=*),           optional, intent(in) :: rwaction
     end subroutine open
 
     module subroutine read( self, fname, i, readhead )
-        class(image),               intent(inout) :: self
-        class(string),              intent(in)    :: fname
-        integer,          optional, intent(in)    :: i
-        logical,          optional, intent(in)    :: readhead
+        class(image),               intent(inout)        :: self
+        class(string),              intent(in)           :: fname
+        integer,                    optional, intent(in) :: i
+        logical,                    optional, intent(in) :: readhead
     end subroutine read
 
     module subroutine read_raw_mrc( self, ioimg )
@@ -944,11 +944,11 @@ interface
     end subroutine read_single_mrc_image
 
     module subroutine write( self, fname, i, del_if_exists, wfloat16 )
-        class(image),      intent(inout) :: self
-        class(string),     intent(in)    :: fname
-        integer, optional, intent(in)    :: i
-        logical, optional, intent(in)    :: del_if_exists
-        logical, optional, intent(in)    :: wfloat16
+        class(image),      intent(inout)        :: self
+        class(string),     intent(in)           :: fname
+        integer,           optional, intent(in) :: i
+        logical,           optional, intent(in) :: del_if_exists
+        logical,           optional, intent(in) :: wfloat16
     end subroutine write
 
     module subroutine update_header_stats( self, fname, stats)
@@ -959,10 +959,10 @@ interface
 
     module subroutine write_jpg( self, fname, quality, colorspec, norm )
         use simple_jpg, only: jpg_img
-        class(image),               intent(inout) :: self
-        class(string),              intent(in)    :: fname
-        integer,          optional, intent(in)    :: quality, colorspec
-        logical,          optional, intent(in)    :: norm
+        class(image),               intent(inout)        :: self
+        class(string),              intent(in)           :: fname
+        integer,                    optional, intent(in) :: quality, colorspec
+        logical,                    optional, intent(in) :: norm
     end subroutine write_jpg
 
     ! ===== access procedure interfaces =====
@@ -1022,13 +1022,13 @@ interface
     end function get_rmat
 
     module subroutine get_rmat_ptr( self, rmat_ptr )
-        class(image), target,        intent(in)  :: self
-        real(kind=c_float), pointer, intent(out) :: rmat_ptr(:,:,:)
+        class(image),       target,        intent(in) :: self
+        real(kind=c_float), pointer, intent(out)      :: rmat_ptr(:,:,:)
     end subroutine get_rmat_ptr
 
     module subroutine get_rmat_ptr_padded( self, rmat_ptr )
-        class(image), target,        intent(in)  :: self
-        real(kind=c_float), pointer, intent(out) :: rmat_ptr(:,:,:)
+        class(image),       target,        intent(in) :: self
+        real(kind=c_float), pointer, intent(out)      :: rmat_ptr(:,:,:)
     end subroutine get_rmat_ptr_padded
 
     module pure subroutine get_rmat_sub( self, rmat )
@@ -1048,8 +1048,8 @@ interface
     end function get_cmat
 
     module subroutine get_cmat_ptr( self, cmat_ptr )
-        class(image), target,                   intent(in)  :: self
-        complex(kind=c_float_complex), pointer, intent(out) :: cmat_ptr(:,:,:)
+        class(image),                  target,                   intent(in) :: self
+        complex(kind=c_float_complex), pointer, intent(out)                 :: cmat_ptr(:,:,:)
     end subroutine get_cmat_ptr
 
     module pure subroutine get_cmat_sub( self, cmat )
@@ -1131,8 +1131,8 @@ interface
 
     module pure subroutine set_cmat_at( self, h, k, l, comp)
         class(image), intent(inout) :: self
-        integer, intent(in) :: h,k,l
-        complex, intent(in) :: comp
+        integer,      intent(in)    :: h,k,l
+        complex,      intent(in)    :: comp
     end subroutine set_cmat_at
 
     module subroutine set_fcomp( self, logi, phys, comp )
@@ -1279,9 +1279,9 @@ interface
     ! ===== filter procedure interfaces =====
 
     module subroutine bp( self, hplim, lplim, width )
-        class(image), intent(inout) :: self
-        real, intent(in)            :: hplim, lplim
-        real, intent(in), optional  :: width
+        class(image), intent(inout)        :: self
+        real,         intent(in)           :: hplim, lplim
+        real,         intent(in), optional :: width
     end subroutine bp
 
     module subroutine lp_background( self, mskvol, lp )
@@ -1307,9 +1307,9 @@ interface
     end subroutine gabor_filter2D
 
     module subroutine tophat( self, shell, halfwidth )
-        class(image),   intent(inout) :: self
-        integer,        intent(in)    :: shell
-        real, optional, intent(in)    :: halfwidth
+        class(image),   intent(inout)        :: self
+        integer,        intent(in)           :: shell
+        real,           optional, intent(in) :: halfwidth
     end subroutine tophat
 
     module subroutine phase_rand( self, lp )
@@ -1329,8 +1329,8 @@ interface
     end subroutine real_space_filter
 
     module function hannw( self, oshoot_in ) result( w )
-        class(image), intent(inout) :: self
-        real, intent(in), optional  :: oshoot_in
+        class(image), intent(inout)        :: self
+        real,         intent(in), optional :: oshoot_in
         real, allocatable           :: w(:)
     end function hannw
 
@@ -1355,11 +1355,11 @@ interface
     end subroutine apply_filter_serial
 
     module subroutine NLmean2D( self, msk, sdev_noise, patch_size, search_radius, gaussian_patch )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: msk
-        real, optional, intent(in)    :: sdev_noise
-        integer, optional, intent(in) :: patch_size, search_radius
-        logical, optional, intent(in) :: gaussian_patch
+        class(image),   intent(inout)        :: self
+        real,           optional, intent(in) :: msk
+        real,           optional, intent(in) :: sdev_noise
+        integer,        optional, intent(in) :: patch_size, search_radius
+        logical,        optional, intent(in) :: gaussian_patch
     end subroutine NLmean2D
 
     module subroutine NLmean2D_eo( even, odd, avg )
@@ -1367,9 +1367,9 @@ interface
     end subroutine NLmean2D_eo
 
     module subroutine NLmean3D( self, msk, sdev_noise )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: msk
-        real, optional, intent(in)    :: sdev_noise
+        class(image),   intent(inout)        :: self
+        real,           optional, intent(in) :: msk
+        real,           optional, intent(in) :: sdev_noise
     end subroutine NLmean3D
 
     module subroutine NLmean3D_eo( even, odd, avg )
@@ -1377,9 +1377,9 @@ interface
     end subroutine NLmean3D_eo
 
     module subroutine ICM2D( self, lambda, verbose )
-        class(image),      intent(inout) :: self
-        real,              intent(in)    :: lambda
-        logical, optional, intent(in)    :: verbose
+        class(image),      intent(inout)        :: self
+        real,              intent(in)           :: lambda
+        logical,           optional, intent(in) :: verbose
     end subroutine ICM2D
 
     module subroutine GLCM( self, nquanta, pmat )
@@ -1415,10 +1415,10 @@ interface
     end subroutine ccf_into
 
     module subroutine spectrum( self, which, spec, norm )
-        class(image),      intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        real, allocatable, intent(inout) :: spec(:)
-        logical, optional, intent(in)    :: norm
+        class(image),      intent(inout)              :: self
+        character(len=*),  intent(in)                 :: which
+        real,              allocatable, intent(inout) :: spec(:)
+        logical,           optional, intent(in)       :: norm
     end subroutine spectrum
 
     module subroutine power_spectrum( self, spec )
@@ -1478,20 +1478,20 @@ interface
     end subroutine resmsk
 
     module subroutine img2spec( self, speckind, lp_backgr_subtr, img_out, postproc )
-        class(image),      intent(inout) :: self
-        character(len=*),  intent(in)    :: speckind
-        real,              intent(in)    :: lp_backgr_subtr
-        type(image),       intent(inout) :: img_out
-        logical, optional, intent(in)    :: postproc
+        class(image),      intent(inout)        :: self
+        character(len=*),  intent(in)           :: speckind
+        real,              intent(in)           :: lp_backgr_subtr
+        type(image),       intent(inout)        :: img_out
+        logical,           optional, intent(in) :: postproc
     end subroutine img2spec
 
     module subroutine mic2spec( self, box, speckind, lp_backgr_subtr, img_out, postproc )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: box
-        character(len=*),  intent(in)    :: speckind
-        real,              intent(in)    :: lp_backgr_subtr
-        type(image),       intent(inout) :: img_out
-        logical, optional, intent(in)    :: postproc
+        class(image),      intent(inout)        :: self
+        integer,           intent(in)           :: box
+        character(len=*),  intent(in)           :: speckind
+        real,              intent(in)           :: lp_backgr_subtr
+        type(image),       intent(inout)        :: img_out
+        logical,           optional, intent(in) :: postproc
     end subroutine mic2spec
 
     module subroutine dampen_pspec_central_cross( self )
@@ -1508,16 +1508,16 @@ interface
     end function get_sum_int
 
     module function minmax( self, radius )result( mm )
-        class(image),   intent(in) :: self
-        real, optional, intent(in) :: radius
+        class(image),   intent(in)           :: self
+        real,           optional, intent(in) :: radius
         real    :: mm(2)
     end function minmax
 
     module subroutine loc_sdev( self, winsz, sdevimg, asdev )
-        class(image),   intent(in)    :: self
-        integer,        intent(in)    :: winsz
-        class(image),   intent(inout) :: sdevimg
-        real, optional, intent(inout) :: asdev
+        class(image),   intent(in)              :: self
+        integer,        intent(in)              :: winsz
+        class(image),   intent(inout)           :: sdevimg
+        real,           optional, intent(inout) :: asdev
     end subroutine loc_sdev
 
     module function avg_loc_sdev( self, winsz ) result( asdev )
@@ -1527,15 +1527,15 @@ interface
     end function avg_loc_sdev
 
     module subroutine loc_var( self, varimg, avar )
-        class(image),   intent(in)    :: self
-        class(image),   intent(inout) :: varimg
-        real, optional, intent(inout) :: avar
+        class(image),   intent(in)              :: self
+        class(image),   intent(inout)           :: varimg
+        real,           optional, intent(inout) :: avar
     end subroutine loc_var
 
     module subroutine loc_var3D( self, varimg, avar )
-        class(image),   intent(in)    :: self
-        class(image),   intent(inout) :: varimg
-        real, optional, intent(inout) :: avar
+        class(image),   intent(in)              :: self
+        class(image),   intent(inout)           :: varimg
+        real,           optional, intent(inout) :: avar
     end subroutine loc_var3D
 
     module subroutine loc_var_masked( self, bin_mask, hwin, var_fg, var_bg )
@@ -1546,26 +1546,26 @@ interface
     end subroutine loc_var_masked
 
     module subroutine rmsd( self, dev, mean )
-        class(image),   intent(inout) :: self
-        real,           intent(out)   :: dev
-        real, optional, intent(out)   :: mean
+        class(image),   intent(inout)         :: self
+        real,           intent(out)           :: dev
+        real,           optional, intent(out) :: mean
     end subroutine rmsd
 
     module subroutine stats_region( self, which, ave, sdev, maxv, minv, msk, med, errout )
-        class(image),      intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        real,              intent(out)   :: ave, sdev, maxv, minv
-        real,    optional, intent(in)    :: msk
-        real,    optional, intent(out)   :: med
-        logical, optional, intent(out)   :: errout
+        class(image),      intent(inout)         :: self
+        character(len=*),  intent(in)            :: which
+        real,              intent(out)           :: ave, sdev, maxv, minv
+        real,              optional, intent(in)  :: msk
+        real,              optional, intent(out) :: med
+        logical,           optional, intent(out) :: errout
     end subroutine stats_region
 
     module subroutine stats_mskimg( self, ave, sdev, maxv, minv, mskimg, med, errout )
-        class(image),           intent(inout) :: self
-        real,                   intent(out)   :: ave, sdev, maxv, minv
-        class(image), optional, intent(in)    :: mskimg
-        real,         optional, intent(out)   :: med
-        logical,      optional, intent(out)   :: errout
+        class(image),           intent(inout)         :: self
+        real,                   intent(out)           :: ave, sdev, maxv, minv
+        class(image),           optional, intent(in)  :: mskimg
+        real,                   optional, intent(out) :: med
+        logical,                optional, intent(out) :: errout
     end subroutine stats_mskimg
 
     module function variance( self ) result( var )
@@ -1574,13 +1574,13 @@ interface
     end function variance
 
     module real function skew( self, mask )
-        class(image),      intent(in)  :: self
-        logical, optional, intent(in)  :: mask(self%ldim(1),self%ldim(2))
+        class(image),      intent(in)           :: self
+        logical,           optional, intent(in) :: mask(self%ldim(1),self%ldim(2))
     end function skew
 
     module real function kurt( self, mask )
-        class(image),      intent(in)  :: self
-        logical, optional, intent(in)  :: mask(self%ldim(1),self%ldim(2))
+        class(image),      intent(in)           :: self
+        logical,           optional, intent(in) :: mask(self%ldim(1),self%ldim(2))
     end function kurt
 
     module real function snr( self )
@@ -1588,8 +1588,8 @@ interface
     end function snr
 
     module real function center_edge_snr( self, mskrad )
-        class(image), intent(inout) :: self
-        real, optional,  intent(in) :: mskrad
+        class(image), intent(inout)         :: self
+        real,         optional,  intent(in) :: mskrad
     end function center_edge_snr
 
     module real function presence( self )
@@ -1640,9 +1640,9 @@ interface
     !--- Gradients / geometry ---!
 
     module subroutine calc_gradient(self, grad, Dc, Dr)
-        class(image),   intent(inout) :: self
-        real,           intent(out)   :: grad(self%ldim(1), self%ldim(2), self%ldim(3)) ! gradient matrix
-        real, optional, intent(out)   :: Dc(self%ldim(1), self%ldim(2), self%ldim(3)), Dr(self%ldim(1), self%ldim(2), self%ldim(3)) ! derivates column and row matrices
+        class(image),   intent(inout)         :: self
+        real,           intent(out)           :: grad(self%ldim(1), self%ldim(2), self%ldim(3)) ! gradient matrix
+        real,           optional, intent(out) :: Dc(self%ldim(1), self%ldim(2), self%ldim(3)), Dr(self%ldim(1), self%ldim(2), self%ldim(3)) ! derivates column and row matrices
     end subroutine calc_gradient
 
     module subroutine gradients_magnitude( self, self_out )
@@ -1683,9 +1683,9 @@ interface
     !--- Physical coords helpers ---!
 
     module function loop_lims( self, mode, lp_dyn ) result( lims )
-        class(image), intent(in)   :: self
-        integer, intent(in)        :: mode
-        real, intent(in), optional :: lp_dyn
+        class(image), intent(in)           :: self
+        integer,      intent(in)           :: mode
+        real,         intent(in), optional :: lp_dyn
         integer                    :: lims(3,2)
     end function loop_lims
 
@@ -1716,15 +1716,15 @@ interface
     !--- Correlation / distances ---!
 
     module function corr( self1, self2, lp_dyn, hp_dyn ) result( r )
-        class(image),   intent(inout) :: self1, self2
-        real, optional, intent(in)    :: lp_dyn, hp_dyn
+        class(image),   intent(inout)        :: self1, self2
+        real,           optional, intent(in) :: lp_dyn, hp_dyn
         real :: r
     end function corr
 
     module function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
-        class(image),   intent(inout) :: self_ref, self_ptcl
-        real,           intent(in)    :: shvec(3)
-        real, optional, intent(in)    :: lp_dyn, hp_dyn
+        class(image),   intent(inout)        :: self_ref, self_ptcl
+        real,           intent(in)           :: shvec(3)
+        real,           optional, intent(in) :: lp_dyn, hp_dyn
         real :: r
     end function corr_shifted
 
@@ -1745,17 +1745,17 @@ interface
     end subroutine phase_corr
 
     module subroutine fcorr_shift( self1, self2, trs, shift, peak_interp )
-        class(image),      intent(inout) :: self1, self2
-        real,              intent(in)    :: trs
-        real,              intent(inout) :: shift(2)
-        logical, optional, intent(in)    :: peak_interp
+        class(image),      intent(inout)        :: self1, self2
+        real,              intent(in)           :: trs
+        real,              intent(inout)        :: shift(2)
+        logical,           optional, intent(in) :: peak_interp
     end subroutine fcorr_shift
 
     module subroutine fcorr_shift3D( self1, self2, trs, shift, peak_interp )
-        class(image),      intent(inout) :: self1, self2
-        real,              intent(in)    :: trs
-        real,              intent(inout) :: shift(3)
-        logical, optional, intent(in)    :: peak_interp
+        class(image),      intent(inout)        :: self1, self2
+        real,              intent(in)           :: trs
+        real,              intent(inout)        :: shift(3)
+        logical,           optional, intent(in) :: peak_interp
     end subroutine fcorr_shift3D
 
     module subroutine prenorm4real_corr_sxx( self, sxx )
@@ -1792,9 +1792,9 @@ interface
     end function real_corr_prenorm_inplace
 
     module subroutine radial_cc( self1, self2, self_w, smpd, rad_corrs, rad_dists )
-        class(image), intent(inout):: self1, self2, self_w
-        real,         intent(in)   :: smpd
-        real,         intent(out)  :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
+        class(image), intent(inout) :: self1, self2, self_w
+        real,         intent(in)    :: smpd
+        real,         intent(out)   :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
     end subroutine radial_cc
 
     module function sqeuclid( self1, self2, mask ) result( r )
@@ -1881,9 +1881,9 @@ interface
     end function oshift_int
 
     module function gen_argtransf_comp( self, logi, ldim ) result( arg )
-        class(image), intent(in)      :: self
-        real, intent(in)              :: logi(3)
-        integer, intent(in), optional :: ldim
+        class(image), intent(in)           :: self
+        real,         intent(in)           :: logi(3)
+        integer,      intent(in), optional :: ldim
         real                          :: arg(3)
     end function gen_argtransf_comp
 
@@ -1898,20 +1898,20 @@ interface
     end subroutine print_rmat
 
     module subroutine vis( self, sect, geomorsphr )
-        class(image),      intent(in) :: self
-        integer, optional, intent(in) :: sect
-        logical, optional, intent(in) :: geomorsphr !< geometrical or spherical complex format
+        class(image),      intent(in)           :: self
+        integer,           optional, intent(in) :: sect
+        logical,           optional, intent(in) :: geomorsphr !< geometrical or spherical complex format
     end subroutine vis
 
     module subroutine before_after( left, right, ba, mask )
-        class(image),      intent(in)    :: left, right
-        type(image),       intent(inout) :: ba
-        logical, optional, intent(in)    :: mask(left%ldim(1),left%ldim(2),left%ldim(3))
+        class(image),      intent(in)           :: left, right
+        type(image),       intent(inout)        :: ba
+        logical,           optional, intent(in) :: mask(left%ldim(1),left%ldim(2),left%ldim(3))
     end subroutine before_after
 
     module subroutine scale_pspec4viz( self, rsmpd4viz )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: rsmpd4viz
+        class(image),   intent(inout)        :: self
+        real,           optional, intent(in) :: rsmpd4viz
     end subroutine scale_pspec4viz
 
     module subroutine generate_orthogonal_reprojs( self, reprojs )
@@ -1942,9 +1942,9 @@ interface
     end function nbackground
 
     module subroutine binarize_thres( self_in, thres, self_out )
-        class(image),           intent(inout) :: self_in
-        real,                   intent(in)    :: thres
-        class(image), optional, intent(inout) :: self_out
+        class(image),           intent(inout)           :: self_in
+        real,                   intent(in)              :: thres
+        class(image),           optional, intent(inout) :: self_out
     end subroutine binarize_thres
 
     module subroutine binarize_npix( self, npix )
@@ -1959,8 +1959,8 @@ interface
     end subroutine binarize_thres_mask
 
     module subroutine cendist( self, c_point )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: c_point(3)
+        class(image),   intent(inout)        :: self
+        real,           optional, intent(in) :: c_point(3)
     end subroutine cendist
 
     module subroutine distance_transform( self )
@@ -2002,12 +2002,12 @@ interface
     module subroutine calc_bin_thres( self, frac_fg_target, thres )
         class(image), intent(inout) :: self
         real,         intent(in)    :: frac_fg_target
-        real,         intent(out)   :: thres 
+        real,         intent(out)   :: thres
     end subroutine calc_bin_thres
 
     module subroutine memoize_mask_coords( self, box )
-        class(image),      intent(in) :: self
-        integer, optional, intent(in) :: box
+        class(image),      intent(in)           :: self
+        integer,           optional, intent(in) :: box
     end subroutine memoize_mask_coords
 
     module subroutine memoize_powspec_coords( self, mskrad )
@@ -2016,15 +2016,15 @@ interface
     end subroutine memoize_powspec_coords
 
     module subroutine mask2D_soft(self, mskrad, backgr)
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: backgr
+        class(image),     intent(inout)          :: self
+        real,             intent(in)             :: mskrad
+        real,             optional,   intent(in) :: backgr
     end subroutine mask2D_soft
 
     module subroutine mask2D_softavg(self, mskrad, backgr)
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: backgr
+        class(image),     intent(inout)          :: self
+        real,             intent(in)             :: mskrad
+        real,             optional,   intent(in) :: backgr
     end subroutine mask2D_softavg
 
     module subroutine mask2D_hard(self, mskrad)
@@ -2033,15 +2033,15 @@ interface
     end subroutine mask2D_hard
 
     module subroutine mask3D_soft(self, mskrad, backgr)
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: backgr
+        class(image),     intent(inout)          :: self
+        real,             intent(in)             :: mskrad
+        real,             optional,   intent(in) :: backgr
     end subroutine mask3D_soft
 
     module subroutine mask3D_softavg(self, mskrad, backgr)
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: mskrad
-        real, optional,   intent(in)    :: backgr
+        class(image),     intent(inout)          :: self
+        real,             intent(in)             :: mskrad
+        real,             optional,   intent(in) :: backgr
     end subroutine mask3D_softavg
 
     module subroutine mask3D_hard(self, mskrad)
@@ -2073,14 +2073,14 @@ interface
     ! ===== image CTF procedure interfaces =====
 
     module subroutine apply_ctf_wpad( self, tfun, dfx, mode, phshift, dfy, angast, bfac )
-        class(image),     intent(inout) :: self   !< instance
-        class(ctf),       intent(inout) :: tfun   !< CTF object
-        real,             intent(in)    :: dfx    !< defocus x-axis
-        character(len=*), intent(in)    :: mode   !< abs, ctf, flip, flipneg, neg, square
-        real,             intent(in)    :: phshift !< additive phase shift (radians)
-        real, optional,   intent(in)    :: dfy    !< defocus y-axis
-        real, optional,   intent(in)    :: angast !< angle of astigmatism
-        real, optional,   intent(in)    :: bfac   !< bfactor
+        class(image),     intent(inout)          :: self    !< instance
+        class(ctf),       intent(inout)          :: tfun    !< CTF object
+        real,             intent(in)             :: dfx     !< defocus x-axis
+        character(len=*), intent(in)             :: mode    !< abs, ctf, flip, flipneg, neg, square
+        real,             intent(in)             :: phshift !< additive phase shift (radians)
+        real,             optional,   intent(in) :: dfy     !< defocus y-axis
+        real,             optional,   intent(in) :: angast  !< angle of astigmatism
+        real,             optional,   intent(in) :: bfac    !< bfactor
     end subroutine apply_ctf_wpad
 
     module subroutine apply_ctf( self, tfun, mode, ctfparms )
@@ -2091,32 +2091,32 @@ interface
     end subroutine apply_ctf
 
     module subroutine apply_ctf_wiener( self, tfun, ctfparms, wiener_const, noise_to_signal )
-        class(image),     intent(inout) :: self
-        class(ctf),       intent(inout) :: tfun
-        type(ctfparams),  intent(in)    :: ctfparms
-        real,             intent(in)    :: wiener_const
-        real, optional,   intent(in)    :: noise_to_signal(:)
+        class(image),     intent(inout)          :: self
+        class(ctf),       intent(inout)          :: tfun
+        type(ctfparams),  intent(in)             :: ctfparms
+        real,             intent(in)             :: wiener_const
+        real,             optional,   intent(in) :: noise_to_signal(:)
     end subroutine apply_ctf_wiener
 
     module subroutine apply_ctf_wiener_wpad( self, tfun, ctfparms, wiener_const, noise_to_signal )
-        class(image),     intent(inout) :: self
-        class(ctf),       intent(inout) :: tfun
-        type(ctfparams),  intent(in)    :: ctfparms
-        real,             intent(in)    :: wiener_const
-        real, optional,   intent(in)    :: noise_to_signal(:)
+        class(image),     intent(inout)          :: self
+        class(ctf),       intent(inout)          :: tfun
+        type(ctfparams),  intent(in)             :: ctfparms
+        real,             intent(in)             :: wiener_const
+        real,             optional,   intent(in) :: noise_to_signal(:)
     end subroutine apply_ctf_wiener_wpad
 
     module subroutine gen_fplane4rec( self, smpd_crop, ctfparms, shift, fplane, grid, half, &
         &store_transfer, observation_model )
-        class(image),      intent(inout) :: self
-        real,              intent(in)    :: smpd_crop
-        class(ctfparams),  intent(in)    :: ctfparms
-        real,              intent(in)    :: shift(2)
-        type(fplane_type), intent(out)   :: fplane
-        type(fplane_grid), intent(in)    :: grid
-        integer, optional, intent(in)    :: half
-        logical, optional, intent(in)    :: store_transfer
-        logical, optional, intent(in)    :: observation_model
+        class(image),      intent(inout)        :: self
+        real,              intent(in)           :: smpd_crop
+        class(ctfparams),  intent(in)           :: ctfparms
+        real,              intent(in)           :: shift(2)
+        type(fplane_type), intent(out)          :: fplane
+        type(fplane_grid), intent(in)           :: grid
+        integer,           optional, intent(in) :: half
+        logical,           optional, intent(in) :: store_transfer
+        logical,           optional, intent(in) :: observation_model
     end subroutine gen_fplane4rec
 
     module subroutine calc_ice_frac( self, tfun, ctfparms, score )
@@ -2156,8 +2156,8 @@ interface
     !--- Noise ---!
 
     module subroutine ran( self, b )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: b
+        class(image),   intent(inout)        :: self
+        real,           optional, intent(in) :: b
     end subroutine ran
 
     module subroutine gauran( self, mean, sdev )
@@ -2195,9 +2195,9 @@ interface
     end subroutine subtr_backgr_ramp
 
     module subroutine subtract_background( self, freq, mode )
-        class(image),               intent(inout) :: self
-        real,                       intent(in)    :: freq
-        character(len=*), optional, intent(in)    :: mode
+        class(image),               intent(inout)        :: self
+        real,                       intent(in)           :: freq
+        character(len=*),           optional, intent(in) :: mode
     end subroutine subtract_background
 
     module subroutine upsample_square_background( self, ldim )
@@ -2320,14 +2320,14 @@ interface
     end subroutine memoize4polarize_oversamp
 
     module subroutine polarize( self, pdim, pft )
-        class(image),      intent(in)    :: self     !< image instance to polarize
-        integer,           intent(in)    :: pdim(3)  !< pftsz,kfrom,kto: must be the memoised geometry
+        class(image),      intent(in)    :: self                         !< image instance to polarize
+        integer,           intent(in)    :: pdim(3)                      !< pftsz,kfrom,kto: must be the memoised geometry
         complex,           intent(inout) :: pft(pdim(1),pdim(2):pdim(3)) !< polarft to be filled
     end subroutine polarize
 
     module subroutine polarize_oversamp( self, pdim, pft )
-        class(image),      intent(in)    :: self           !< padded image instance to polarize
-        integer,           intent(in)    :: pdim(3)        !< pftsz,kfrom,kto: must be the memoised geometry
+        class(image),      intent(in)    :: self                         !< padded image instance to polarize
+        integer,           intent(in)    :: pdim(3)                      !< pftsz,kfrom,kto: must be the memoised geometry
         complex,           intent(inout) :: pft(pdim(1),pdim(2):pdim(3)) !< polarft (original image dims)
     end subroutine polarize_oversamp
 
@@ -2336,10 +2336,10 @@ interface
     !--- windowing ---!
 
     module subroutine window( self_in, coord, box, self_out, noutside )
-        class(image),      intent(in)    :: self_in
-        integer,           intent(in)    :: coord(2), box
-        class(image),      intent(inout) :: self_out
-        integer, optional, intent(inout) :: noutside
+        class(image),      intent(in)              :: self_in
+        integer,           intent(in)              :: coord(2), box
+        class(image),      intent(inout)           :: self_out
+        integer,           optional, intent(inout) :: noutside
     end subroutine window
 
     module subroutine window_slim( self_in, coord, box, self_out, outside )
@@ -2350,10 +2350,10 @@ interface
     end subroutine window_slim
 
     module subroutine add_window( self, imgwin, coord, offset )
-        class(image),      intent(inout) :: self
-        class(image),      intent(in)    :: imgwin
-        integer,           intent(in)    :: coord(2)
-        integer, optional, intent(in)    :: offset 
+        class(image),      intent(inout)        :: self
+        class(image),      intent(in)           :: imgwin
+        integer,           intent(in)           :: coord(2)
+        integer,           optional, intent(in) :: offset
     end subroutine add_window
 
     module function win2arr( self, i, j, k, winsz ) result( pixels )
@@ -2380,13 +2380,13 @@ interface
 
     module subroutine corners( self, sqrad )
         class(image), intent(inout) :: self
-        integer, intent(in)         :: sqrad
+        integer,      intent(in)    :: sqrad
     end subroutine corners
 
     module subroutine gauimg_center( self, wsz , alpha )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: wsz
-        real, intent(in), optional  :: alpha
+        class(image), intent(inout)        :: self
+        integer,      intent(in)           :: wsz
+        real,         intent(in), optional :: alpha
     end subroutine gauimg_center
 
     module subroutine gauimg_offset( self, wsz, offx,offy)
@@ -2395,30 +2395,30 @@ interface
     end subroutine gauimg_offset
 
     module subroutine gauimg2D( self, xsigma, ysigma, cutoff )
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: xsigma, ysigma
-        real, optional, intent(in)    :: cutoff
+        class(image),   intent(inout)        :: self
+        real,           intent(in)           :: xsigma, ysigma
+        real,           optional, intent(in) :: cutoff
     end subroutine gauimg2D
 
     module subroutine gauimg3D( self, xsigma, ysigma, zsigma, cutoff )
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: xsigma, ysigma, zsigma
-        real, optional, intent(in)    :: cutoff
+        class(image),   intent(inout)        :: self
+        real,           intent(in)           :: xsigma, ysigma, zsigma
+        real,           optional, intent(in) :: cutoff
     end subroutine gauimg3D
     
     !--- pad/clip/crop ---!
 
     module subroutine pad( self_in, self_out, backgr, antialiasing )
-        class(image),      intent(inout) :: self_in, self_out
-        real,    optional, intent(in)    :: backgr
-        logical, optional, intent(in)    :: antialiasing
+        class(image),      intent(inout)        :: self_in, self_out
+        real,              optional, intent(in) :: backgr
+        logical,           optional, intent(in) :: antialiasing
     end subroutine pad
 
     module subroutine pad_inplace( self, ldim, backgr, antialiasing )
-        class(image),   intent(inout) :: self
-        integer,           intent(in) :: ldim(3)
-        real,    optional, intent(in) :: backgr
-        logical, optional, intent(in) :: antialiasing
+        class(image),      intent(inout)        :: self
+        integer,           intent(in)           :: ldim(3)
+        real,              optional, intent(in) :: backgr
+        logical,           optional, intent(in) :: antialiasing
     end subroutine pad_inplace
 
     module subroutine pad_mirr_into( self_in, self_out )
@@ -2461,37 +2461,37 @@ interface
     end subroutine flip
 
     module subroutine mirror( self, md, fourier )
-        class(image),      intent(inout) :: self
-        character(len=*),  intent(in)    :: md
-        logical, optional, intent(in)    :: fourier
+        class(image),      intent(inout)        :: self
+        character(len=*),  intent(in)           :: md
+        logical,           optional, intent(in) :: fourier
     end subroutine mirror
 
     module function calc_shiftcen( self, lp, msk, hp ) result( xyz )
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: lp
-        real, optional, intent(in)    :: msk, hp
+        class(image),   intent(inout)        :: self
+        real,           intent(in)           :: lp
+        real,           optional, intent(in) :: msk, hp
         real :: xyz(3)
     end function calc_shiftcen
 
     module function calc_shiftcen_serial( self, lp, msk, hp ) result( xyz )
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: lp
-        real,           intent(in)    :: msk
-        real, optional, intent(in)    :: hp
+        class(image),   intent(inout)        :: self
+        real,           intent(in)           :: lp
+        real,           intent(in)           :: msk
+        real,           optional, intent(in) :: hp
         real :: xyz(3)
     end function calc_shiftcen_serial
 
     module subroutine roavg( self, angstep, avg, ang_stop )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: angstep
-        class(image),      intent(inout) :: avg
-        integer, optional, intent(in)    :: ang_stop
+        class(image),      intent(inout)        :: self
+        integer,           intent(in)           :: angstep
+        class(image),      intent(inout)        :: avg
+        integer,           optional, intent(in) :: ang_stop
     end subroutine roavg
 
     module subroutine rtsq( self_in, ang, shxi, shyi, self_out )
-        class(image),           intent(inout) :: self_in
-        real,                   intent(in)    :: ang,shxi,shyi
-        class(image), optional, intent(inout) :: self_out
+        class(image),           intent(inout)           :: self_in
+        real,                   intent(in)              :: ang,shxi,shyi
+        class(image),           optional, intent(inout) :: self_out
     end subroutine rtsq
 
     module subroutine rtsq_serial( self_in, ang, shxi, shyi, rmat_out )
@@ -2525,9 +2525,9 @@ interface
     end subroutine shift2Dserial_into
 
     module subroutine masscen( self, xyz, mask_in )
-        class(image),      intent(inout) :: self
-        real        ,      intent(out)   :: xyz(3)
-        logical, optional, intent(in)    :: mask_in(:,:,:)
+        class(image),      intent(inout)        :: self
+        real,              intent(out)          :: xyz(3)
+        logical,           optional, intent(in) :: mask_in(:,:,:)
     end subroutine masscen
 
     module subroutine warp_frames_and_sum( self, interp_fixed_frame, fixed_frame, fromtof,&
@@ -2544,14 +2544,14 @@ interface
     ! ===== normalization procedure interfaces =====
 
     module subroutine scale_pixels(self, new_range, ssc, oold_range)
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: new_range(2)
-        real, optional, intent(out)   :: oold_range(2), ssc
+        class(image),   intent(inout)         :: self
+        real,           intent(in)            :: new_range(2)
+        real,           optional, intent(out) :: oold_range(2), ssc
     end subroutine scale_pixels
 
     module subroutine norm( self, a_s )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: a_s(2)
+        class(image),   intent(inout)        :: self
+        real,           optional, intent(in) :: a_s(2)
     end subroutine norm
 
     module subroutine norm_minmax( self  )
@@ -2559,9 +2559,9 @@ interface
     end subroutine norm_minmax
 
     module subroutine norm4viz( self, brightness, maxmin)
-        class(image),      intent(inout) :: self
-        real,    optional, intent(in)    :: brightness
-        logical, optional, intent(in)    :: maxmin
+        class(image),      intent(inout)        :: self
+        real,              optional, intent(in) :: brightness
+        logical,           optional, intent(in) :: maxmin
     end subroutine norm4viz
 
     module subroutine norm_ext( self, avg, sdev )
@@ -2581,11 +2581,11 @@ interface
     end subroutine norm_within
 
     module subroutine cure_outliers( self, ncured, nsigma, deadhot, outliers )
-        class(image),                   intent(inout) :: self
-        integer,                        intent(inout) :: ncured
-        real,                           intent(in)    :: nsigma
-        integer,                        intent(out)   :: deadhot(2)
-        logical, allocatable, optional, intent(out)   :: outliers(:,:)
+        class(image),                   intent(inout)                      :: self
+        integer,                        intent(inout)                      :: ncured
+        real,                           intent(in)                         :: nsigma
+        integer,                        intent(out)                        :: deadhot(2)
+        logical,                        allocatable, optional, intent(out) :: outliers(:,:)
     end subroutine cure_outliers
 
     module subroutine inv_gain( self )
@@ -2620,9 +2620,9 @@ contains
 
     !>  \brief  is a constructor
     function constructor( ldim, smpd, wthreads ) result( self ) !(FAILS W PRESENT GFORTRAN)
-        integer,           intent(in) :: ldim(:)
-        real,              intent(in) :: smpd
-        logical, optional, intent(in) :: wthreads
+        integer,           intent(in)           :: ldim(:)
+        real,              intent(in)           :: smpd
+        logical,           optional, intent(in) :: wthreads
         type(image) :: self
         call self%new( ldim, smpd, wthreads )
     end function constructor
@@ -2633,11 +2633,11 @@ contains
     !    It has the optiono f rotating the ellipse. The ellipse is built 'on top' of the image,
     !    it doesn't cancel what is already present
     subroutine ellipse(self, center, axes, hole)
-        class(image),               intent(inout) :: self
-        real,                       intent(in)    :: axes(2)
-        integer,                    intent(in)    :: center(2)
-        character(len=*), optional, intent(in)    :: hole
-        integer :: i, j
+        class(image),               intent(inout)        :: self
+        real,                       intent(in)           :: axes(2)
+        integer,                    intent(in)           :: center(2)
+        character(len=*),           optional, intent(in) :: hole
+        integer           :: i, j
         real, allocatable :: rmat_t(:,:,:)
         if(.not. self%existence) THROW_HARD('Image has to be created before; ellipse')
         if(self%ldim(3) /= 1) THROW_HARD('For 2D images only; ellipse')

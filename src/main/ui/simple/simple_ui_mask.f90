@@ -4,10 +4,10 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('mask', 'Masking', 100)
-type(ui_program), target :: auto_spher_mask
-type(ui_program), target :: automask2D
-type(ui_program), target :: mask
-type(ui_program), target :: automask
+type(ui_program),          target    :: auto_spher_mask
+type(ui_program),          target    :: automask2D
+type(ui_program),          target    :: mask
+type(ui_program),          target    :: automask
 
 contains
 

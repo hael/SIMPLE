@@ -8,8 +8,8 @@ private
 #include "simple_local_flags.inc"
 
 type :: node
-    class(*), allocatable :: value
-    type(node), pointer   :: next => null()
+    class(*),   allocatable :: value
+    type(node), pointer     :: next => null()
 contains
     final :: kill_node
 end type node
@@ -138,9 +138,9 @@ contains
     end subroutine push_back_char
 
     subroutine pop_front(self, x, had_value)
-        class(linked_list),    intent(inout) :: self
-        class(*), allocatable, intent(inout) :: x
-        logical, optional,     intent(out)   :: had_value
+        class(linked_list),    intent(inout)              :: self
+        class(*),              allocatable, intent(inout) :: x
+        logical,               optional,     intent(out)  :: had_value
         type(node), pointer :: p
         if (.not. associated(self%head)) then
             if (present(had_value)) had_value = .false.
@@ -187,27 +187,27 @@ contains
     !======================
 
     subroutine front(self, x)
-        class(linked_list),    intent(in)    :: self
-        class(*), allocatable, intent(inout) :: x
+        class(linked_list),    intent(in)                 :: self
+        class(*),              allocatable, intent(inout) :: x
         if (.not. associated(self%head)) THROW_HARD('list is empty')
         if( allocated(x) ) deallocate(x)
         allocate(x, source=self%head%value)
     end subroutine front
 
     subroutine back(self, x)
-        class(linked_list),     intent(in)    :: self
-        class(*), allocatable,  intent(inout) :: x
+        class(linked_list),     intent(in)                  :: self
+        class(*),               allocatable,  intent(inout) :: x
         if (.not. associated(self%tail)) THROW_HARD('list is empty')
         if( allocated(x) ) deallocate(x)
         allocate(x, source=self%tail%value)
     end subroutine back
 
     subroutine at(self, idx, x)
-        class(linked_list),    intent(in)    :: self
-        integer,               intent(in)    :: idx   ! 1-based index
-        class(*), allocatable, intent(inout) :: x
+        class(linked_list),    intent(in)                 :: self
+        integer,               intent(in)                 :: idx ! 1-based index
+        class(*),              allocatable, intent(inout) :: x
         type(node), pointer :: p
-        integer :: i
+        integer             :: i
         if (idx < 1 .or. idx > self%n) THROW_HARD('index out of range')
         p => self%head
         do i = 2, idx
@@ -278,9 +278,9 @@ contains
     end subroutine at_logical
 
     subroutine at_char(self, idx, val)
-        class(linked_list),        intent(in)  :: self
-        integer,                   intent(in)  :: idx
-        character(:), allocatable, intent(out) :: val
+        class(linked_list),        intent(in)               :: self
+        integer,                   intent(in)               :: idx
+        character(:),              allocatable, intent(out) :: val
         class(*), allocatable :: tmp
         call self%at(idx, tmp)
         select type(t => tmp)
@@ -348,11 +348,11 @@ contains
     !======================
 
     subroutine slice(self, i1, i2, this)
-        class(linked_list), intent(in)    :: self
+        class(linked_list),  intent(in)   :: self
         integer,             intent(in)   :: i1, i2
         type(linked_list),   intent(out)  :: this
         type(node), pointer :: p
-        integer :: i
+        integer             :: i
         if (i1 < 1 .or. i2 > self%n .or. i1 > i2) THROW_HARD('invalid range')
         call this%kill()
         p => self%head
@@ -375,7 +375,7 @@ contains
         integer,            intent(in)    :: idx
         class(*),           intent(in)    :: x
         type(node), pointer :: old, prev, succ, pnew, p
-        integer :: i
+        integer             :: i
         if (idx < 1 .or. idx > self%n) then
             THROW_HARD('replace_at: index out of range')
         end if
@@ -522,8 +522,8 @@ contains
     end subroutine next
 
     subroutine getter(self, x)
-        class(list_iterator),  intent(in)    :: self
-        class(*), allocatable, intent(inout) :: x
+        class(list_iterator),  intent(in)                 :: self
+        class(*),              allocatable, intent(inout) :: x
         if (.not. associated(self%current)) THROW_HARD('iterator: dereferencing end()')
         if( allocated(x) ) deallocate(x)
         allocate(x, source=self%current%value)
@@ -536,7 +536,7 @@ contains
 
     subroutine advance(self, n)
         class(list_iterator), intent(inout) :: self
-        integer, intent(in) :: n
+        integer,              intent(in)    :: n
         integer :: i
         do i = 1, n
             if (.not. associated(self%current)) exit

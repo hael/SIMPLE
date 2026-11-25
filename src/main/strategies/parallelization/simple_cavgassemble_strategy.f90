@@ -49,15 +49,15 @@ contains
         use simple_starproject,  only: starproject
         use simple_stream_utils, only: terminate_stream
         !$ use omp_lib,          only: omp_set_num_threads
-        class(parameters),    intent(inout) :: params
-        class(builder),       intent(inout) :: build
-        class(cmdline),       intent(inout) :: cline
-        real(timer_int_kind), intent(in)    :: rt_init
-        integer,              intent(in)    :: nthr
-        logical, optional,    intent(in)    :: prev_frcs
-        type(starproject)  :: starproj
-        real, allocatable  :: states(:)
-        integer            :: iter, io_stat, fnr
+        class(parameters),    intent(inout)           :: params
+        class(builder),       intent(inout)           :: build
+        class(cmdline),       intent(inout)           :: cline
+        real(timer_int_kind), intent(in)              :: rt_init
+        integer,              intent(in)              :: nthr
+        logical,              optional,    intent(in) :: prev_frcs
+        type(starproject)       :: starproj
+        real, allocatable       :: states(:)
+        integer                 :: iter, io_stat, fnr
         integer(timer_int_kind) :: t_tot, t_phase
         real(timer_int_kind)    :: rt_reduce_partials, rt_classdoc, rt_write_cavgs
         real(timer_int_kind)    :: rt_export_star, rt_project_update, rt_cleanup, rt_tot

@@ -28,14 +28,14 @@ contains
     !! The map must reproduce it on every grid point and off the grid, peak at s0 when s0 is a grid point, be
     !! direction-independent at zero magnitude (order 0 only), and keep at least ceiling(z) orders at every magnitude.
     subroutine test_closed_form_ramp()
-        integer,  parameter :: PFTSZ = 40, BOX = 64, NALPHA = 24, NRHO = 6
-        integer,  parameter :: KFROMTO(2) = [1, 12]
-        real(dp), parameter :: RHOS(NRHO) = [0.d0, 1.d0, 2.5d0, 5.d0, 8.d0, 12.d0]
+        integer,     parameter   :: PFTSZ      = 40, BOX = 64, NALPHA = 24, NRHO = 6
+        integer,     parameter   :: KFROMTO(2) = [1, 12]
+        real(dp),    parameter   :: RHOS(NRHO) = [0.d0, 1.d0, 2.5d0, 5.d0, 8.d0, 12.d0]
         type(polar_shiftmap)     :: sm
         real(dp),    allocatable :: ax(:,:), ay(:,:), w(:), cmap(:,:)
         complex(dp), allocatable :: Q(:,:), A(:,:)
-        real(dp) :: s0(2), s(2), expected, scale, maxerr, alpha, z, val
-        integer  :: k, ir, j, irho, ialpha, nmax, itrial
+        real(dp)                 :: s0(2), s(2), expected, scale, maxerr, alpha, z, val
+        integer                  :: k, ir, j, irho, ialpha, nmax, itrial
         write(*,'(A)') 'test_closed_form_ramp'
         call set_fixed_seed(20261030)
         allocate(ax(PFTSZ,KFROMTO(1):KFROMTO(2)), ay(PFTSZ,KFROMTO(1):KFROMTO(2)), w(KFROMTO(1):KFROMTO(2)),&
@@ -99,13 +99,13 @@ contains
 
     !> the calculator's fixture of these tests: random band-limited polar sections, objfun=cc, no CTF
     subroutine make_pftc( p, pftc, ref, ptcl, kfromto, pftsz, box )
-        class(parameters), target, intent(inout) :: p
-        class(polarft_calc),       intent(inout) :: pftc
-        complex(sp), allocatable,  intent(out)   :: ref(:,:), ptcl(:,:)
-        integer,                   intent(out)   :: kfromto(2), pftsz, box
+        class(parameters),         target, intent(inout)     :: p
+        class(polarft_calc),       intent(inout)             :: pftc
+        complex(sp),               allocatable,  intent(out) :: ref(:,:), ptcl(:,:)
+        integer,                   intent(out)               :: kfromto(2), pftsz, box
         integer, parameter :: BOXSZ = 64, PFTSIZE = 48, KHI = 10
-        type(cmdline) :: cline
-        integer :: k, pp, pdim(3)
+        type(cmdline)      :: cline
+        integer            :: k, pp, pdim(3)
         call cline%set('box',     real(BOXSZ))
         call cline%set('smpd',    1.0)
         call cline%set('mskdiam', 48.0)
@@ -149,18 +149,18 @@ contains
     !! and at random rotations, magnitudes and directions. The calculator builds its shift arguments from
     !! single-precision angles, so the agreement is to 1e-6 (the double-precision exactness is the closed form's).
     subroutine test_against_pftc_cc()
-        integer,  parameter :: NALPHA = 20, NRHO = 5, NTRIALS = 40
-        real(dp), parameter :: RHOS(NRHO) = [0.d0, 1.5d0, 4.d0, 9.d0, 15.d0]
+        integer,             parameter           :: NALPHA     = 20, NRHO = 5, NTRIALS = 40
+        real(dp),            parameter           :: RHOS(NRHO) = [0.d0, 1.5d0, 4.d0, 9.d0, 15.d0]
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
-        type(polar_shiftmap)       :: sm
-        complex(sp), allocatable   :: ref(:,:), ptcl(:,:)
-        real(sp),    allocatable   :: ctf(:,:)
-        real(dp),    allocatable   :: w(:)
-        complex(dp), allocatable   :: Q(:,:), A(:,:)
-        real(dp) :: s(2), norm, cc_ref, cc_map, maxerr
-        integer  :: kfromto(2), pftsz, box, nrots, nmax, k, itrial, irot, ir, j
-        integer  :: branch_rots(4)
+        type(polar_shiftmap)                     :: sm
+        complex(sp),         allocatable         :: ref(:,:), ptcl(:,:)
+        real(sp),            allocatable         :: ctf(:,:)
+        real(dp),            allocatable         :: w(:)
+        complex(dp),         allocatable         :: Q(:,:), A(:,:)
+        real(dp)                                 :: s(2), norm, cc_ref, cc_map, maxerr
+        integer                                  :: kfromto(2), pftsz, box, nrots, nmax, k, itrial, irot, ir, j
+        integer                                  :: branch_rots(4)
         write(*,'(A)') 'test_against_pftc_cc'
         call set_fixed_seed(20261031)
         allocate(p, pftc)
@@ -208,18 +208,18 @@ contains
     !! at that pose is 1 (the construction follows its conventions), and the map's largest value over every
     !! rotation and grid point is at that pose, exact and with white noise of the signal's power added.
     subroutine test_peak_recovery()
-        integer,  parameter :: NALPHA = 24, NRHO = 9
-        real(dp), parameter :: RHOS(NRHO) = [0.d0, 1.d0, 2.d0, 3.d0, 4.d0, 6.d0, 8.d0, 11.d0, 14.d0]
-        integer,  parameter :: IRHO_TRUE = 6, IALPHA_TRUE = 17, IROT_TRUE = 61
+        integer,             parameter           :: NALPHA     = 24, NRHO = 9
+        real(dp),            parameter           :: RHOS(NRHO) = [0.d0, 1.d0, 2.d0, 3.d0, 4.d0, 6.d0, 8.d0, 11.d0, 14.d0]
+        integer,             parameter           :: IRHO_TRUE  = 6, IALPHA_TRUE = 17, IROT_TRUE = 61
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
-        type(polar_shiftmap)       :: sm
-        complex(sp), allocatable   :: ref(:,:), ptcl(:,:), shifted(:,:)
-        real(sp),    allocatable   :: ctf(:,:)
-        real(dp),    allocatable   :: w(:), ax(:,:), ay(:,:), cmap(:,:)
-        complex(dp), allocatable   :: Q(:,:), A(:,:)
-        real(dp) :: s_true(2), cc_true, best, val, sig
-        integer  :: kfromto(2), pftsz, box, nrots, nmax, k, pp, irot, irho, ialpha, best_pose(3), ipass
+        type(polar_shiftmap)                     :: sm
+        complex(sp),         allocatable         :: ref(:,:), ptcl(:,:), shifted(:,:)
+        real(sp),            allocatable         :: ctf(:,:)
+        real(dp),            allocatable         :: w(:), ax(:,:), ay(:,:), cmap(:,:)
+        complex(dp),         allocatable         :: Q(:,:), A(:,:)
+        real(dp)                                 :: s_true(2), cc_true, best, val, sig
+        integer                                  :: kfromto(2), pftsz, box, nrots, nmax, k, pp, irot, irho, ialpha, best_pose(3), ipass
         write(*,'(A)') 'test_peak_recovery'
         call set_fixed_seed(20261101)
         allocate(p, pftc)
@@ -288,11 +288,11 @@ contains
     end subroutine test_peak_recovery
 
     subroutine test_cell_areas()
-        integer,  parameter :: NALPHA = 12, NRHO = 5
-        real(dp), parameter :: RHOS(NRHO) = [0.d0, 2.d0, 4.d0, 6.d0, 8.d0], SHUF(NRHO) = [6.d0, 0.d0, 8.d0, 2.d0, 4.d0]
+        integer,  parameter  :: NALPHA     = 12, NRHO = 5
+        real(dp), parameter  :: RHOS(NRHO) = [0.d0, 2.d0, 4.d0, 6.d0, 8.d0], SHUF(NRHO) = [6.d0, 0.d0, 8.d0, 2.d0, 4.d0]
         type(polar_shiftmap) :: sm, sm2
-        real(dp) :: total, origin, expected
-        integer  :: ir, j
+        real(dp)             :: total, origin, expected
+        integer              :: ir, j
         write(*,'(A)') 'test_cell_areas'
         call sm%new(40, [1, 10], 64, RHOS, NALPHA)
         total  = 0.d0

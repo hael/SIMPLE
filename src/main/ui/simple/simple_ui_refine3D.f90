@@ -4,9 +4,9 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('refine3d', 'Refine 3D Workflows', 60)
-type(ui_program), target :: refine3D
-type(ui_program), target :: refine3D_auto
-type(ui_program), target :: refine3D_local
+type(ui_program),          target    :: refine3D
+type(ui_program),          target    :: refine3D_auto
+type(ui_program),          target    :: refine3D_local
 
 contains
 

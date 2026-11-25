@@ -22,7 +22,7 @@ type :: motion_align_nano
     real,        allocatable :: weights(:,:)                !< weight matrix (b-factor*band-pass)
     real,        allocatable :: opt_shifts(:,:)             !< shifts identified
     real,        allocatable :: frameweights(:)             !< array of frameweights
-    real                     :: hp=-1., lp=-1.              !< high/low pass value
+    real                     :: hp           = -1., lp=-1.  !< high/low pass value
     real                     :: bfactor      = -1.          !< b-factor for alignment weights
     real                     :: smpd         = 0.           !< sampling distance
     real                     :: trs          = 10.          !< half correlation discrete search bound
@@ -56,9 +56,9 @@ end type motion_align_nano
 contains
 
     subroutine new( self, params, frames_ptr )
-        class(motion_align_nano),         intent(inout) :: self
-        class(parameters),                intent(in)    :: params
-        type(image), allocatable, target, intent(in)    :: frames_ptr(:)
+        class(motion_align_nano),         intent(inout)                   :: self
+        class(parameters),                intent(in)                      :: params
+        type(image),                      allocatable, target, intent(in) :: frames_ptr(:)
         call self%kill
         self%trs            = params%trs
         self%maxits_dcorr   = MAXITS_DCORR
@@ -122,9 +122,9 @@ contains
     ! Alignment routines
 
     subroutine align( self, reference, ini_shifts )
-        class(motion_align_nano), intent(inout)   :: self
-        class(image),     optional, intent(inout) :: reference
-        real,             optional, intent(in)    :: ini_shifts(self%nframes,2)
+        class(motion_align_nano), intent(inout)           :: self
+        class(image),             optional, intent(inout) :: reference
+        real,                     optional, intent(in)    :: ini_shifts(self%nframes,2)
         if ( .not. self%existence ) then
             THROW_HARD('not instantiated; simple_motion_align_nano: align')
         end if
@@ -138,9 +138,9 @@ contains
 
     ! semi-discrete correlation based alignment
     subroutine align_dcorr( self, reference, ini_shifts )
-        class(motion_align_nano), intent(inout) :: self
-        class(image),   optional, intent(inout) :: reference
-        real,           optional, intent(in)    :: ini_shifts(self%nframes,2)
+        class(motion_align_nano), intent(inout)           :: self
+        class(image),             optional, intent(inout) :: reference
+        real,                     optional, intent(in)    :: ini_shifts(self%nframes,2)
         real    :: frameweights_saved(self%nframes), opt_shifts_prev(self%nframes,2), rmsd
         integer :: iter, iframe
         logical :: l_refset
@@ -197,8 +197,8 @@ contains
         class(motion_align_nano), intent(inout) :: self
         integer,                  intent(in)    :: iframe
         real,    pointer :: pcorrs(:,:,:)
-        real     :: dshift(2),alpha,beta,gamma,weight
-        integer  :: pos(2),center(2),trs
+        real             :: dshift(2),alpha,beta,gamma,weight
+        integer          :: pos(2),center(2),trs
         weight = self%frameweights(iframe)
         trs    = max(1, min(floor(self%trs),minval(self%ldim(1:2)/2)))
         ! correlations
@@ -226,7 +226,7 @@ contains
     ! Getters/setters
 
     subroutine set_reslims( self, hp, lp )
-        class(motion_align_nano), intent(inout) :: self
+        class(motion_align_nano),   intent(inout) :: self
         real,                       intent(in)    :: hp, lp
         if (.not. self%existence) then
             THROW_HARD('not instantiated; simple_motion_align_nano: set_reslims')
@@ -253,8 +253,8 @@ contains
     end subroutine get_reference
 
     subroutine get_opt_shifts( self, opt_shifts )
-        class(motion_align_nano), intent(inout) :: self
-        real, allocatable,          intent(out)   :: opt_shifts(:,:)
+        class(motion_align_nano), intent(inout)                     :: self
+        real,                     allocatable,          intent(out) :: opt_shifts(:,:)
         allocate( opt_shifts(self%nframes, 2), source=self%opt_shifts )
     end subroutine get_opt_shifts
 
@@ -265,7 +265,7 @@ contains
     !end subroutine set_maxits
 
     subroutine set_bfactor( self, bfac )
-        class(motion_align_nano), intent(inout) :: self
+        class(motion_align_nano),   intent(inout) :: self
         real,                       intent(in)    :: bfac
         self%l_bfac = bfac > 1.e-6
         if( self%l_bfac ) self%bfactor = bfac

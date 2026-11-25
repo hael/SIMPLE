@@ -23,18 +23,18 @@ public :: calculate_promoted_feature
 character(len=*), parameter :: CAVG_RELATIONAL_FEATURE_NAME = 'signal_stats_anchor_topk_mean'
 
 type, public :: cavg_quality_relation_analysis
-    integer :: ncls        = 0
-    integer :: nfit        = 0
-    integer :: k_requested = 0
-    real    :: hp          = 0.0
-    real    :: lp          = 0.0
-    real    :: trs         = 0.0
-    real    :: signal_msk  = 0.0
-    real    :: signal_oa_minmax(2) = 0.0
-    logical, allocatable :: eligible(:)
-    integer, allocatable :: class_inds(:)
-    real,    allocatable :: raw(:)
-    real,    allocatable :: feature(:)
+    integer                      :: ncls                = 0
+    integer                      :: nfit                = 0
+    integer                      :: k_requested         = 0
+    real                         :: hp                  = 0.0
+    real                         :: lp                  = 0.0
+    real                         :: trs                 = 0.0
+    real                         :: signal_msk          = 0.0
+    real                         :: signal_oa_minmax(2) = 0.0
+    logical, allocatable         :: eligible(:)
+    integer, allocatable         :: class_inds(:)
+    real,    allocatable         :: raw(:)
+    real,    allocatable         :: feature(:)
     type(cavg_sigstats_matrices) :: signal
 contains
     procedure :: calculate => calculate_relation_analysis
@@ -58,10 +58,10 @@ contains
         real,                                  intent(in)    :: hp, lp, trs
         type(image),       allocatable :: fit_imgs(:)
         type(inpl_struct), allocatable :: matches(:,:)
-        type(parameters) :: pair_params
+        type(parameters)               :: pair_params
         real,              allocatable :: cc(:,:), distance(:,:)
-        real :: mm(2)
-        integer :: i, j
+        real                           :: mm(2)
+        integer                        :: i, j
 
         call self%kill()
         self%ncls        = size(imgs)
@@ -119,7 +119,7 @@ contains
         real,    intent(inout) :: raw(:)
         integer, allocatable :: order(:)
         real,    allocatable :: corrs(:)
-        integer :: ipacked, icls, k
+        integer              :: ipacked, icls, k
         if( size(cc,dim=1) /= size(cc,dim=2) .or. any(shape(distance) /= shape(cc)) ) &
             THROW_HARD('calculate_promoted_feature: pairwise matrix size mismatch')
         if( size(class_inds) /= size(cc,dim=1) ) THROW_HARD('calculate_promoted_feature: class map size mismatch')
@@ -133,13 +133,13 @@ contains
     end subroutine calculate_promoted_feature
 
     subroutine sorted_cc_neighbours( cc, ipacked, order, corrs )
-        real,    intent(in)  :: cc(:,:)
-        integer, intent(in)  :: ipacked
+        real,    intent(in)               :: cc(:,:)
+        integer, intent(in)               :: ipacked
         integer, allocatable, intent(out) :: order(:)
         real,    allocatable, intent(out) :: corrs(:)
         integer, allocatable :: asc_order(:)
         real,    allocatable :: asc_corrs(:)
-        integer :: i, cnt, n
+        integer              :: i, cnt, n
         n = size(cc,dim=1) - 1
         allocate(asc_order(n), asc_corrs(n), order(n), corrs(n))
         cnt = 0
@@ -162,7 +162,7 @@ contains
         logical, intent(in)  :: eligible(:)
         real,    intent(out) :: normalized(:)
         real, allocatable :: vals(:)
-        real :: med, dev
+        real              :: med, dev
         normalized = -CLIP_Z
         if( count(eligible) == 0 ) return
         if( count(eligible) == 1 )then

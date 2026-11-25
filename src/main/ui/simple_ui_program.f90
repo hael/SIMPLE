@@ -11,11 +11,11 @@ use simple_ui_default_values,   only: get_ui_default
 implicit none
 #include "simple_local_flags.inc"
 
-integer, parameter :: UI_IMG=1, UI_PARM=2, UI_FILE=3, UI_SRCH=4, UI_FILT=5, UI_MASK=6, UI_COMP=7
-integer, parameter :: UI_SUMMARY_MIN_LEN = 30
-integer, parameter :: UI_SUMMARY_MAX_LEN = 100
-integer, parameter :: UI_DISPLAY_NAME_MAX_LEN = 100
-character(len=*), parameter :: UI_JSON_REAL_FORMAT = '(ss,G0.6)'
+integer,          parameter :: UI_IMG                  = 1, UI_PARM=2, UI_FILE=3, UI_SRCH=4, UI_FILT=5, UI_MASK=6, UI_COMP=7
+integer,          parameter :: UI_SUMMARY_MIN_LEN      = 30
+integer,          parameter :: UI_SUMMARY_MAX_LEN      = 100
+integer,          parameter :: UI_DISPLAY_NAME_MAX_LEN = 100
+character(len=*), parameter :: UI_JSON_REAL_FORMAT     = '(ss,G0.6)'
 !> The execution environment a launcher passes to any program beside the
 !! program's declared inputs: the queue system, NICE and the stream's
 !! persistent workers. A program that holds its command line to its UI
@@ -28,9 +28,9 @@ character(len=*), parameter :: UI_ENVIRONMENT_KEYS(18) = [character(len=19) :: &
 public :: ui_cli_param_choices, ui_cli_param_summary
 
 type :: category_descriptor
-    character(len=32) :: id = ''
+    character(len=32) :: id           = ''
     character(len=64) :: display_name = ''
-    integer           :: order = 0
+    integer           :: order        = 0
 end type category_descriptor
 
 type :: ui_input_group
@@ -40,22 +40,22 @@ type :: ui_input_group
 end type ui_input_group
 
 type :: ui_activation
-    type(string) :: key
+    type(string)              :: key
     type(string), allocatable :: equals_any(:)
 end type ui_activation
 
 type :: ui_requirement_group
-    type(string) :: id
-    type(string) :: label
-    type(string) :: help
+    type(string)              :: id
+    type(string)              :: label
+    type(string)              :: help
     type(string), allocatable :: keys(:)
-    integer :: min_selected = 1
-    integer :: max_selected = 1
+    integer                   :: min_selected = 1
+    integer                   :: max_selected = 1
 end type ui_requirement_group
 
 type :: ui_program_input
     type(ui_param)       :: param
-    integer              :: section = 0
+    integer              :: section    = 0
     type(ui_input_group) :: group
     integer              :: visibility = UI_VIS_DEVELOPER
     type(ui_activation)  :: activation
@@ -63,16 +63,16 @@ end type ui_program_input
 
 ! production-level program interface for simple_exec, single_exec & simple_stream executables
 type :: ui_program
-    type(string) :: name
-    type(string) :: category
-    type(string) :: category_display_name
-    integer      :: category_order = 0
-    type(string) :: display_name
-    type(string) :: summary
-    type(string) :: help
-    type(string) :: executable
-    integer      :: visibility = UI_VIS_DEVELOPER
-    type(ui_input_group), allocatable :: groups(:)
+    type(string)                            :: name
+    type(string)                            :: category
+    type(string)                            :: category_display_name
+    integer                                 :: category_order = 0
+    type(string)                            :: display_name
+    type(string)                            :: summary
+    type(string)                            :: help
+    type(string)                            :: executable
+    integer                                 :: visibility     = UI_VIS_DEVELOPER
+    type(ui_input_group),       allocatable :: groups(:)
     type(ui_requirement_group), allocatable :: requirements(:)
     ! image input/output
     type(linked_list) :: img_ios
@@ -121,11 +121,11 @@ end type ui_program
 contains
 
     subroutine new( self, name, summary, help, executable, sp_required, visibility, display_name )
-        class(ui_program),          intent(inout) :: self
-        character(len=*),           intent(in)    :: name, summary, help, executable
-        logical,                    intent(in)    :: sp_required
-        integer,          optional, intent(in)    :: visibility
-        character(len=*),           intent(in)    :: display_name
+        class(ui_program),          intent(inout)        :: self
+        character(len=*),           intent(in)           :: name, summary, help, executable
+        logical,                    intent(in)           :: sp_required
+        integer,                    optional, intent(in) :: visibility
+        character(len=*),           intent(in)           :: display_name
         call self%kill
         self%name        = trim(name)
         if( len_trim(summary) > UI_SUMMARY_MAX_LEN )then
@@ -153,16 +153,16 @@ contains
 
     subroutine add_input_num( self, which, key, keytype, label, help, placeholder, required, default_value, &
                             group, visibility, activation, choices, preserve_default )
-        class(ui_program),          intent(inout) :: self
-        integer,                    intent(in)    :: which
-        character(len=*),           intent(in)    :: key, keytype, label, help, placeholder
-        logical,                    intent(in)    :: required
-        real,                       intent(in)    :: default_value
-        character(len=*), optional, intent(in)    :: group
-        integer,          optional, intent(in)    :: visibility
-        type(ui_activation), optional, intent(in) :: activation
-        type(ui_choice), optional, intent(in) :: choices(:)
-        logical, optional, intent(in) :: preserve_default
+        class(ui_program),          intent(inout)        :: self
+        integer,                    intent(in)           :: which
+        character(len=*),           intent(in)           :: key, keytype, label, help, placeholder
+        logical,                    intent(in)           :: required
+        real,                       intent(in)           :: default_value
+        character(len=*),           optional, intent(in) :: group
+        integer,                    optional, intent(in) :: visibility
+        type(ui_activation),        optional, intent(in) :: activation
+        type(ui_choice),            optional, intent(in) :: choices(:)
+        logical,                    optional, intent(in) :: preserve_default
         type(ui_param)         :: p
         type(ui_program_input) :: input
         call p%set_param(key, keytype, label, help, placeholder, required, default_value, choices)
@@ -173,16 +173,16 @@ contains
 
     subroutine add_input_str( self, which, key, keytype, label, help, placeholder, required, default_value, &
                             group, visibility, activation, choices, preserve_default )
-        class(ui_program),          intent(inout) :: self
-        integer,                    intent(in)    :: which
-        character(len=*),           intent(in)    :: key, keytype, label, help, placeholder
-        logical,                    intent(in)    :: required
-        character(len=*),           intent(in)    :: default_value
-        character(len=*), optional, intent(in)    :: group
-        integer,          optional, intent(in)    :: visibility
-        type(ui_activation), optional, intent(in) :: activation
-        type(ui_choice), optional, intent(in) :: choices(:)
-        logical, optional, intent(in) :: preserve_default
+        class(ui_program),          intent(inout)        :: self
+        integer,                    intent(in)           :: which
+        character(len=*),           intent(in)           :: key, keytype, label, help, placeholder
+        logical,                    intent(in)           :: required
+        character(len=*),           intent(in)           :: default_value
+        character(len=*),           optional, intent(in) :: group
+        integer,                    optional, intent(in) :: visibility
+        type(ui_activation),        optional, intent(in) :: activation
+        type(ui_choice),            optional, intent(in) :: choices(:)
+        logical,                    optional, intent(in) :: preserve_default
         type(ui_param)         :: p
         type(ui_program_input) :: input
         call p%set_param(key, keytype, label, help, placeholder, required, default_value, choices)
@@ -193,16 +193,16 @@ contains
 
     subroutine add_input_param( self, which, param, label_override, help_override, placeholder_override,&
     &required_override, group, visibility, activation, choices_override, preserve_default )
-        class(ui_program),          intent(inout) :: self
-        integer,                    intent(in)    :: which
-        type(ui_param),             intent(in)    :: param
-        character(len=*), optional, intent(in)    :: label_override, help_override, placeholder_override
-        logical,          optional, intent(in)    :: required_override
-        character(len=*), optional, intent(in)    :: group
-        integer,          optional, intent(in)    :: visibility
-        type(ui_activation), optional, intent(in) :: activation
-        type(ui_choice), optional, intent(in) :: choices_override(:)
-        logical, optional, intent(in) :: preserve_default
+        class(ui_program),          intent(inout)        :: self
+        integer,                    intent(in)           :: which
+        type(ui_param),             intent(in)           :: param
+        character(len=*),           optional, intent(in) :: label_override, help_override, placeholder_override
+        logical,                    optional, intent(in) :: required_override
+        character(len=*),           optional, intent(in) :: group
+        integer,                    optional, intent(in) :: visibility
+        type(ui_activation),        optional, intent(in) :: activation
+        type(ui_choice),            optional, intent(in) :: choices_override(:)
+        logical,                    optional, intent(in) :: preserve_default
         type(ui_param)         :: p
         type(ui_program_input) :: input
         p = param
@@ -224,9 +224,9 @@ contains
     end subroutine add_input_param
 
     subroutine apply_generated_default(self, param, preserve_default)
-        class(ui_program), intent(in)    :: self
-        type(ui_param),    intent(inout) :: param
-        logical, optional,  intent(in)    :: preserve_default
+        class(ui_program), intent(in)            :: self
+        type(ui_param),    intent(inout)         :: param
+        logical,           optional,  intent(in) :: preserve_default
         character(len=128) :: value
         logical            :: found
         if( present(preserve_default) )then
@@ -240,7 +240,7 @@ contains
         character(len=*), intent(in) :: key
         character(len=*), intent(in) :: values(:)
         type(ui_activation) :: activation
-        integer :: i
+        integer             :: i
         if( len_trim(key) == 0 )then
             THROW_HARD('ui_activation_equals_any received an empty key')
         endif
@@ -258,13 +258,13 @@ contains
     end function ui_activation_equals_any
 
     subroutine bind_input( self, input, section, param, group, visibility, activation )
-        class(ui_program),          intent(inout) :: self
-        type(ui_program_input),     intent(out)   :: input
-        integer,                    intent(in)    :: section
-        type(ui_param),             intent(in)    :: param
-        character(len=*), optional, intent(in)    :: group
-        integer,          optional, intent(in)    :: visibility
-        type(ui_activation), optional, intent(in) :: activation
+        class(ui_program),          intent(inout)        :: self
+        type(ui_program_input),     intent(out)          :: input
+        integer,                    intent(in)           :: section
+        type(ui_param),             intent(in)           :: param
+        character(len=*),           optional, intent(in) :: group
+        integer,                    optional, intent(in) :: visibility
+        type(ui_activation),        optional, intent(in) :: activation
         input%param   = param
         input%section = section
         if( present(visibility) )then
@@ -306,12 +306,12 @@ contains
     end subroutine append_input
 
     subroutine add_requirement(self, id, label, help, keys, min_selected, max_selected)
-        class(ui_program), intent(inout) :: self
-        character(len=*),  intent(in)    :: id, label, help
-        character(len=*),  intent(in)    :: keys(:)
-        integer, optional, intent(in)    :: min_selected, max_selected
+        class(ui_program), intent(inout)        :: self
+        character(len=*),  intent(in)           :: id, label, help
+        character(len=*),  intent(in)           :: keys(:)
+        integer,           optional, intent(in) :: min_selected, max_selected
         type(ui_requirement_group), allocatable :: requirements(:)
-        integer :: i, j, min_keys, max_keys, nrequirements
+        integer                                 :: i, j, min_keys, max_keys, nrequirements
         if (.not. self%exists) THROW_HARD('ui_program%add_requirement called before ui_program%new')
         if (len_trim(id) == 0 .or. len_trim(label) == 0 .or. len_trim(help) == 0) then
             THROW_HARD('ui_program%add_requirement requires id, label, and help')
@@ -376,7 +376,7 @@ contains
         character(len=*),       intent(in)    :: group_id
         type(ui_input_group),   intent(out)   :: group
         type(ui_input_group), allocatable :: expanded_groups(:)
-        integer :: i, ngroups
+        integer                           :: i, ngroups
         if( len_trim(group_id) == 0 )then
             THROW_HARD('ui_program%register_group received an empty group id')
         endif
@@ -422,11 +422,11 @@ contains
 
     subroutine add_program_groups_json( json, program, groups )
         use json_module
-        class(json_core),                    intent(inout) :: json
-        type(json_value), pointer,           intent(inout) :: program
-        type(ui_input_group), allocatable,   intent(in)    :: groups(:)
+        class(json_core),                    intent(inout)                    :: json
+        type(json_value),                    pointer,           intent(inout) :: program
+        type(ui_input_group),                allocatable,   intent(in)        :: groups(:)
         type(json_value), pointer :: group_entries, group_entry
-        integer :: i
+        integer                   :: i
         if( .not. allocated(groups) ) return
         call json%create_array(group_entries, 'groups')
         do i = 1, size(groups)
@@ -441,11 +441,11 @@ contains
 
     subroutine add_program_input_json( json, entry, input )
         use json_module
-        class(json_core),          intent(inout) :: json
-        type(json_value), pointer, intent(inout) :: entry
-        type(ui_program_input),    intent(in)    :: input
+        class(json_core),          intent(inout)          :: json
+        type(json_value),          pointer, intent(inout) :: entry
+        type(ui_program_input),    intent(in)             :: input
         type(json_value), pointer :: group_entry, activation_entry, activation_values, options
-        integer :: i
+        integer                   :: i
         call json%add(entry, 'key',         input%param%key%to_char())
         call json%add(entry, 'keytype',     input%param%keytype%to_char())
         call json%add(entry, 'label',       input%param%label%to_char())
@@ -546,8 +546,8 @@ contains
     end subroutine print_ui
 
     subroutine print_cmdline( self, defined_keys )
-        class(ui_program), intent(in) :: self
-        type(string), optional, intent(in) :: defined_keys(:)
+        class(ui_program), intent(in)           :: self
+        type(string),      optional, intent(in) :: defined_keys(:)
         ! type(string), intent(in) :: exec_cmd
         write(logfhandle,'(a)') format_str('USAGE', C_UNDERLINED)
         ! select case(exec_cmd%to_char())
@@ -616,13 +616,13 @@ contains
 
     subroutine create_json_entry(self, json, program_entry, entry_name, program_name, requirements_first)
         use json_module
-        class(ui_program), intent(in) :: self
-        class(json_core), intent(inout) :: json
-        type(json_value), pointer, intent(out) :: program_entry
-        character(len=*), intent(in) :: entry_name, program_name
-        logical, optional, intent(in) :: requirements_first
+        class(ui_program), intent(in)           :: self
+        class(json_core),  intent(inout)        :: json
+        type(json_value),  pointer, intent(out) :: program_entry
+        character(len=*),  intent(in)           :: entry_name, program_name
+        logical,           optional, intent(in) :: requirements_first
         type(json_value), pointer :: program
-        logical :: add_requirements_first
+        logical                   :: add_requirements_first
 
         add_requirements_first = .true.
         if (present(requirements_first)) add_requirements_first = requirements_first
@@ -675,8 +675,8 @@ contains
     end function get_executable
 
     subroutine set_category( self, category )
-        class(ui_program), intent(inout) :: self
-        type(category_descriptor), intent(in) :: category
+        class(ui_program),         intent(inout) :: self
+        type(category_descriptor), intent(in)    :: category
         if( len_trim(category%id) == 0 )then
             THROW_HARD('ui_program%set_category received an empty category')
         endif
@@ -819,10 +819,10 @@ contains
         character(len=KEYLEN), allocatable :: keys(:), sorted_keys(:), rearranged_keys(:)
         logical,               allocatable :: req(:), sorted_req(:)
         integer,               allocatable :: inds(:)
-        type(chash)            :: ch
-        type(list_iterator)    :: it
-        class(*), allocatable  :: tmp
-        integer :: i, nparams, nreq, iopt
+        type(chash)                        :: ch
+        type(list_iterator)                :: it
+        class(*),              allocatable :: tmp
+        integer                            :: i, nparams, nreq, iopt
         if (lst%is_empty()) return
         nparams = lst%size()
         call ch%new(nparams)
@@ -888,9 +888,9 @@ contains
 
     function ui_cli_param_choices( param ) result( choices_text )
         type(ui_param), intent(in) :: param
-        type(string)              :: choices_text
+        type(string)                  :: choices_text
         character(len=:), allocatable :: text
-        integer :: i
+        integer                       :: i
         text = ''
         if( .not. allocated(param%choices) )then
             choices_text = text
@@ -910,8 +910,8 @@ contains
 
     function ui_cli_param_summary( param ) result( summary )
         type(ui_param), intent(in) :: param
-        type(string)              :: summary
-        type(string)              :: choices_text
+        type(string)                  :: summary
+        type(string)                  :: choices_text
         character(len=:), allocatable :: text
         text = param%label%to_char()
         choices_text = ui_cli_param_choices(param)
@@ -927,13 +927,13 @@ contains
 
     subroutine create_section_from_list( json, program_entry, name, lst )
         use json_module
-        class(json_core),          intent(inout) :: json
-        type(json_value), pointer, intent(inout) :: program_entry
-        character(len=*),          intent(in)    :: name
-        class(linked_list),        intent(in)    :: lst
-        type(json_value), pointer :: entry, section
-        type(list_iterator)       :: it
-        class(*), allocatable     :: tmp
+        class(json_core),          intent(inout)          :: json
+        type(json_value),          pointer, intent(inout) :: program_entry
+        character(len=*),          intent(in)             :: name
+        class(linked_list),        intent(in)             :: lst
+        type(json_value), pointer     :: entry, section
+        type(list_iterator)           :: it
+        class(*),         allocatable :: tmp
         call json%create_array(section, trim(name))
         if (.not. lst%is_empty()) then
             it = lst%begin()
@@ -957,11 +957,11 @@ contains
 
     subroutine add_program_requirements_json(json, program, requirements)
         use json_module
-        class(json_core), intent(inout) :: json
-        type(json_value), pointer, intent(inout) :: program
+        class(json_core),           intent(inout)           :: json
+        type(json_value),           pointer, intent(inout)  :: program
         type(ui_requirement_group), allocatable, intent(in) :: requirements(:)
         type(json_value), pointer :: requirement, requirement_list, keys
-        integer :: i, j
+        integer                   :: i, j
         call json%create_array(requirement_list, 'requirements')
         if (allocated(requirements)) then
             do i = 1, size(requirements)
@@ -983,8 +983,8 @@ contains
     end subroutine add_program_requirements_json
 
     subroutine print_requirement_groups(self, defined_keys)
-        class(ui_program), intent(in) :: self
-        type(string), optional, intent(in) :: defined_keys(:)
+        class(ui_program), intent(in)           :: self
+        type(string),      optional, intent(in) :: defined_keys(:)
         integer :: i, j, nselected
         if (.not. allocated(self%requirements)) return
         write(logfhandle,'(a)') ''
@@ -1012,7 +1012,7 @@ contains
 
     logical function has_input_key(self, key)
         class(ui_program), intent(in) :: self
-        character(len=*), intent(in) :: key
+        character(len=*),  intent(in) :: key
         has_input_key = list_has_input_key(self%img_ios, key) .or. &
             list_has_input_key(self%file_ios, key) .or. &
             list_has_input_key(self%parm_ios, key) .or. list_has_input_key(self%srch_ctrls, key) .or. &
@@ -1022,8 +1022,8 @@ contains
 
     logical function list_has_input_key(lst, key)
         class(linked_list), intent(in) :: lst
-        character(len=*), intent(in) :: key
-        type(list_iterator) :: it
+        character(len=*),   intent(in) :: key
+        type(list_iterator)   :: it
         class(*), allocatable :: tmp
         list_has_input_key = .false.
         if (lst%is_empty()) return
@@ -1060,10 +1060,10 @@ contains
     end function key_is_defined
 
     subroutine print_requirement_inputs(self, requirement)
-        class(ui_program), intent(in) :: self
+        class(ui_program),          intent(in) :: self
         type(ui_requirement_group), intent(in) :: requirement
         type(chash) :: inputs
-        integer :: i
+        integer     :: i
         call inputs%new(size(requirement%keys))
         do i = 1, size(requirement%keys)
             call inputs%push(requirement%keys(i)%to_char(), &
@@ -1075,9 +1075,9 @@ contains
 
     function input_text_for_key(self, key) result(text)
         class(ui_program), intent(in) :: self
-        character(len=*), intent(in) :: key
+        character(len=*),  intent(in) :: key
         character(len=XLONGSTRLEN) :: text
-        logical :: found
+        logical                    :: found
         text = ''
         found = .false.
         call find_input_text(self%img_ios, key, text, found)
@@ -1091,11 +1091,11 @@ contains
     end function input_text_for_key
 
     subroutine find_input_text(lst, key, text, found)
-        class(linked_list), intent(in) :: lst
-        character(len=*), intent(in) :: key
-        character(len=*), intent(out) :: text
-        logical, intent(inout) :: found
-        type(list_iterator) :: it
+        class(linked_list), intent(in)    :: lst
+        character(len=*),   intent(in)    :: key
+        character(len=*),   intent(out)   :: text
+        logical,            intent(inout) :: found
+        type(list_iterator)   :: it
         class(*), allocatable :: item
         if (found .or. lst%is_empty()) return
         it = lst%begin()

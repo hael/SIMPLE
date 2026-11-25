@@ -4,16 +4,16 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('refine2d', 'Refine 2D Workflows', 30)
-type(ui_program), target :: solve2D
-type(ui_program), target :: refine2D
-type(ui_program), target :: solve2D_chunks
-type(ui_program), target :: make_cavgs
-type(ui_program), target :: map_cavgs_selection
-type(ui_program), target :: sample_classes
-type(ui_program), target :: write_classes
-type(ui_program), target :: cls_expansion
-type(ui_program), target :: center_ptcls
-type(ui_program), target :: validate_class_student
+type(ui_program),          target    :: solve2D
+type(ui_program),          target    :: refine2D
+type(ui_program),          target    :: solve2D_chunks
+type(ui_program),          target    :: make_cavgs
+type(ui_program),          target    :: map_cavgs_selection
+type(ui_program),          target    :: sample_classes
+type(ui_program),          target    :: write_classes
+type(ui_program),          target    :: cls_expansion
+type(ui_program),          target    :: center_ptcls
+type(ui_program),          target    :: validate_class_student
 
 contains
 
@@ -122,8 +122,8 @@ contains
 
     subroutine new_solve2D_descriptor( program, name, summary, help, visibility, display_name )
         type(ui_program), intent(inout) :: program
-        character(len=*), intent(in) :: name, summary, help, display_name
-        integer, intent(in) :: visibility
+        character(len=*), intent(in)    :: name, summary, help, display_name
+        integer,          intent(in)    :: visibility
         ! PROGRAM SPECIFICATION
         call program%new(&
         &name,&                                                                         ! name

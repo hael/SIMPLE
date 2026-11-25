@@ -77,9 +77,9 @@ contains
     !> Closed-form values and finite differences at a nonzero transaction seed.
     subroutine test_shift_prior_terms()
         real(dp), parameter :: weight = 0.25_dp, step = 1.e-5_dp
-        real(dp) :: seed(2), shift(2), trial(2), penalty, gradient(2), hessian(2,2)
-        real(dp) :: plus, minus, trial_gradient(2), plus_gradient(2), trial_hessian(2,2)
-        integer :: axis
+        real(dp)            :: seed(2), shift(2), trial(2), penalty, gradient(2), hessian(2,2)
+        real(dp)            :: plus, minus, trial_gradient(2), plus_gradient(2), trial_hessian(2,2)
+        integer             :: axis
         seed = [3._dp, -2._dp]
         shift = [5._dp, 1._dp]
         call shift_prior_terms(weight, shift, seed, penalty, gradient, hessian)
@@ -123,13 +123,13 @@ contains
 
     !> The stage reports the penalized objective, while the transaction reports data loss.
     subroutine test_prior_transactions()
-        type(cartft_calc) :: calc
+        type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
-        type(fixture_record) :: fix
-        real, allocatable :: volume(:,:,:)
-        real(dp) :: rotation(3,3), shift(2), seed(2), before, after
-        real(dp) :: rstep, sstep, stage_before, stage_after, expected_penalty
-        integer :: status, niter, nattempted, naccepted, nbound_hits, mode
+        type(fixture_record)  :: fix
+        real, allocatable     :: volume(:,:,:)
+        real(dp)              :: rotation(3,3), shift(2), seed(2), before, after
+        real(dp)              :: rstep, sstep, stage_before, stage_after, expected_penalty
+        integer               :: status, niter, nattempted, naccepted, nbound_hits, mode
         call build_test_volume(volume)
         call new_fixture(calc, volume, [2, TEST_BOX/2], 1., OBJFUN_EUCLID, fix)
         do mode = 1, 2
@@ -162,8 +162,8 @@ contains
     !> A shift prior must not rescue a data system with an unobservable active shift.
     subroutine test_prior_identifiability()
         real(dp) :: gradient(5), hessian(5,5), sg(5), sh(5,5), direction(5)
-        logical :: identifiable, rescued
-        integer :: i
+        logical  :: identifiable, rescued
+        integer  :: i
         gradient = 0._dp
         hessian = 0._dp
         do i = 1, 5
@@ -185,12 +185,12 @@ contains
 
     !> Configuring and clearing a prior must retain the same prior-off transaction bit for bit.
     subroutine test_prior_off_reuse()
-        type(cartft_calc) :: calc
+        type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: first, second
-        type(fixture_record) :: fix
-        real, allocatable :: volume(:,:,:)
-        real(dp) :: rot_a(3,3), rot_b(3,3), shift_a(2), shift_b(2)
-        real(dp) :: before_a, after_a, before_b, after_b, rm_a, sm_a, rm_b, sm_b
+        type(fixture_record)  :: fix
+        real, allocatable     :: volume(:,:,:)
+        real(dp)              :: rot_a(3,3), rot_b(3,3), shift_a(2), shift_b(2)
+        real(dp)              :: before_a, after_a, before_b, after_b, rm_a, sm_a, rm_b, sm_b
         call build_test_volume(volume)
         call new_fixture(calc, volume, [2, TEST_BOX/2], 1., OBJFUN_EUCLID, fix)
         call first%new(TEST_BOX, TEST_BOX, 5., 15., maxits=20)
@@ -219,11 +219,11 @@ contains
     !> A tighter prior should limit shift pose update; an exact seed must remain unchanged.
     subroutine test_prior_widths_and_rollback()
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-        type(cartft_calc) :: calc
+        type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
-        type(fixture_record) :: fix
-        real, allocatable :: volume(:,:,:)
-        real(dp) :: rotation(3,3), shift(2), seed(2), tight_update, loose_update, before, after
+        type(fixture_record)  :: fix
+        real, allocatable     :: volume(:,:,:)
+        real(dp)              :: rotation(3,3), shift(2), seed(2), tight_update, loose_update, before, after
         call build_test_volume(volume)
         call new_fixture(calc, volume, [2, TEST_BOX/2], 1., OBJFUN_EUCLID, fix)
         call opt%new(TEST_BOX, TEST_BOX, 5., 15., maxits=40)
@@ -259,9 +259,9 @@ contains
     !> Finite differences use the established right-increment update at a nonidentity seed.
     subroutine test_rotation_prior_terms()
         real(dp), parameter :: weight = 0.5_dp, step = 1.e-6_dp
-        real(dp) :: seed(3,3), rotation(3,3), trial(3,3), offset(3)
-        real(dp) :: penalty, gradient(3), hessian(3,3), plus, minus, tg(3), th(3,3)
-        integer :: i
+        real(dp)            :: seed(3,3), rotation(3,3), trial(3,3), offset(3)
+        real(dp)            :: penalty, gradient(3), hessian(3,3), plus, minus, tg(3), th(3,3)
+        integer             :: i
         seed = right_increment_rotation(identity_rotation(), [0.2_dp,-0.1_dp,0.3_dp])
         rotation = right_increment_rotation(seed, [0.1_dp,0.05_dp,-0.02_dp])
         call rotation_prior_terms(weight, rotation, seed, penalty, gradient, hessian)
@@ -285,8 +285,8 @@ contains
 
     !> One independent complex residual (3,4), variance 4 per component, has NLL 25/8.
     subroutine test_prior_likelihood_units()
-        real(dp), parameter :: power = 52.25_dp
-        real(dp) :: loss, temperature, penalty, gradient(2), hessian(2,2)
+        real(dp), parameter   :: power = 52.25_dp
+        real(dp)              :: loss, temperature, penalty, gradient(2), hessian(2,2)
         type(cartft_pose_opt) :: opt
         temperature = power/4._dp
         loss = (2._dp*25._dp/4._dp)/power
@@ -307,11 +307,11 @@ contains
     !> Four Gaussian blobs in a TEST_BOX cube (the refiner tester's volume).
     subroutine build_test_volume( volume )
         real, allocatable, intent(out) :: volume(:,:,:)
-        real, parameter :: centres(3,4) = reshape([-5., -3., 2., 4., 5., -3., 0., -6., -5., 3., -2., 6.], [3,4])
+        real, parameter :: centres(3,4)  = reshape([-5., -3., 2., 4., 5., -3., 0., -6., -5., 3., -2., 6.], [3,4])
         real, parameter :: sigmas(4)     = [2., 2.5, 1.8, 2.2]
         real, parameter :: amplitudes(4) = [1., 0.8, 0.6, 0.5]
-        real    :: centre, dx, dy, dz
-        integer :: blob, i, j, k
+        real            :: centre, dx, dy, dz
+        integer         :: blob, i, j, k
         allocate(volume(TEST_BOX,TEST_BOX,TEST_BOX), source=0.)
         centre = real(TEST_BOX)/2. + 0.5
         do k = 1, TEST_BOX
@@ -356,7 +356,7 @@ contains
         type(ctfparams)      :: no_ctf
         complex, allocatable :: observed(:,:)
         real,    allocatable :: sigma2(:)
-        integer :: box
+        integer              :: box
         box = size(volume,1)
         call calc%new(1, box, 1)
         call calc%set_ref(1, .true.,  volume)
@@ -388,7 +388,7 @@ contains
         type(ctfparams)      :: no_ctf
         complex, allocatable :: observed(:,:)
         real,    allocatable :: sigma2(:)
-        integer :: box
+        integer              :: box
         box = calc%get_box()
         allocate(observed(-box/2:box/2,-box/2:box/2))
         call calc%predict(1, .true., fix%truth_rotation, fix%truth_shift - seed_shift, observed)
@@ -440,9 +440,9 @@ contains
     ! E11
     subroutine test_rotation_increment()
         real(dp), parameter :: angle = 0.02_dp
-        real(dp) :: rotation(3,3), updated(3,3), identity(3,3)
-        real(dp) :: axis_rotation(3,3), expected(3,3)
-        real(dp) :: determinant, input_determinant, input_orthogonality, updated_orthogonality
+        real(dp)            :: rotation(3,3), updated(3,3), identity(3,3)
+        real(dp)            :: axis_rotation(3,3), expected(3,3)
+        real(dp)            :: determinant, input_determinant, input_orthogonality, updated_orthogonality
         rotation = real(euler2m([19., 37., 28.]), dp)
         updated  = right_increment_rotation(rotation, [angle, 0._dp, 0._dp])
         identity = identity_rotation()
@@ -469,10 +469,10 @@ contains
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
         type(fixture_record)  :: fix
-        real, allocatable :: volume(:,:,:)
-        real(dp) :: shift(2), max_rotation_step, max_shift_step, objective_before, objective_after
-        real(dp) :: gradient_exact(5)
-        integer  :: status, niter, nattempted, naccepted, nbound_hits
+        real, allocatable     :: volume(:,:,:)
+        real(dp)              :: shift(2), max_rotation_step, max_shift_step, objective_before, objective_after
+        real(dp)              :: gradient_exact(5)
+        integer               :: status, niter, nattempted, naccepted, nbound_hits
         call build_test_volume(volume)
         call new_fixture(calc, volume, [2, TEST_BOX/2], 1., OBJFUN_EUCLID, fix)
         call opt%new(TEST_BOX, TEST_BOX, 5., 15., maxits=20, shift_step_bound=1._dp)
@@ -504,11 +504,11 @@ contains
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
         type(fixture_record)  :: fix
-        real, allocatable :: volume(:,:,:)
-        real(dp) :: rotation(3,3), frozen_rotation(3,3), shift(2), frozen_shift(2)
-        real(dp) :: objective_before, objective_after, gradient(5)
-        real(dp) :: max_rotation_step, max_shift_step, stage_before, stage_after
-        integer  :: status, niter, nattempted, naccepted, nbound_hits
+        real, allocatable     :: volume(:,:,:)
+        real(dp)              :: rotation(3,3), frozen_rotation(3,3), shift(2), frozen_shift(2)
+        real(dp)              :: objective_before, objective_after, gradient(5)
+        real(dp)              :: max_rotation_step, max_shift_step, stage_before, stage_after
+        integer               :: status, niter, nattempted, naccepted, nbound_hits
         call build_test_volume(volume)
         call new_fixture(calc, volume, [2, TEST_BOX/2], 1., OBJFUN_EUCLID, fix)
         call opt%new(TEST_BOX, TEST_BOX, 5., 15., maxits=20, rotation_scale=0.10_dp, shift_step_bound=1._dp)
@@ -584,12 +584,12 @@ contains
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
         type(fixture_record)  :: fix
-        real, allocatable     :: volume(:,:,:)
+        real,     allocatable :: volume(:,:,:)
         real(dp), allocatable :: kept(:)
-        real(dp) :: rotation(3,3), shift(2), objective, gradient(5), hessian(5,5)
-        real(dp) :: fresh(2:TEST_BOX/2)
-        integer  :: icase
-        integer, parameter :: KFROMTO(2) = [2, TEST_BOX/2]
+        real(dp)              :: rotation(3,3), shift(2), objective, gradient(5), hessian(5,5)
+        real(dp)              :: fresh(2:TEST_BOX/2)
+        integer               :: icase
+        integer,  parameter   :: KFROMTO(2) = [2, TEST_BOX/2]
         call build_test_volume(volume)
         call new_fixture(calc, volume, KFROMTO, 2., OBJFUN_EUCLID, fix)
         do icase = 1, 2
@@ -614,11 +614,11 @@ contains
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
         type(fixture_record)  :: fix
-        real, allocatable :: volume(:,:,:)
-        real(dp) :: rotation(3,3), frozen_rotation(3,3), shift(2), initial_shift(2)
-        real(dp) :: objective_before, objective_after, relative_reduction, gradient(5)
-        real(dp) :: max_rotation_step, max_shift_step, stage_before, stage_after
-        integer  :: status, niter, nattempted, naccepted, nbound_hits
+        real, allocatable     :: volume(:,:,:)
+        real(dp)              :: rotation(3,3), frozen_rotation(3,3), shift(2), initial_shift(2)
+        real(dp)              :: objective_before, objective_after, relative_reduction, gradient(5)
+        real(dp)              :: max_rotation_step, max_shift_step, stage_before, stage_after
+        integer               :: status, niter, nattempted, naccepted, nbound_hits
         call build_test_volume(volume)
         call new_fixture(calc, volume, [2, TEST_BOX/2], 1., OBJFUN_EUCLID, fix)
         rotation        = fix%seed_rotation
@@ -645,8 +645,8 @@ contains
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
         type(fixture_record)  :: fix
-        real, allocatable :: volume(:,:,:)
-        real(dp) :: rotation(3,3), shift(2), objective_before, objective_after, gradient(5)
+        real, allocatable     :: volume(:,:,:)
+        real(dp)              :: rotation(3,3), shift(2), objective_before, objective_after, gradient(5)
         call build_test_volume(volume)
         call new_fixture(calc, volume, [2, TEST_BOX/2], 2., OBJFUN_CC, fix)
         call opt%new(TEST_BOX, TEST_BOX, 5., 15., maxits=20, rotation_scale=0.10_dp, shift_step_bound=1._dp)
@@ -668,9 +668,9 @@ contains
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
         type(ctfparams)       :: no_ctf
-        real     :: sigma2(0:TEST_BOX/2), zero_volume(TEST_BOX,TEST_BOX,TEST_BOX)
-        complex  :: zero_plane(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
-        real(dp) :: rotation(3,3), original_rotation(3,3), shift(2), original_shift(2)
+        real                  :: sigma2(0:TEST_BOX/2), zero_volume(TEST_BOX,TEST_BOX,TEST_BOX)
+        complex               :: zero_plane(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real(dp)              :: rotation(3,3), original_rotation(3,3), shift(2), original_shift(2)
         zero_volume    = 0.
         zero_plane     = cmplx(0., 0.)
         no_ctf%ctfflag = CTFFLAG_NO
@@ -706,10 +706,10 @@ contains
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
         type(fixture_record)  :: fix
-        real, allocatable :: volume(:,:,:)
-        real(dp) :: rotation(3,3), shift(2), objective_before, objective_after, rot_update, shift_update
-        real(dp) :: sh_rot_step, sh_shift_step, sh_before, sh_after, jt_rot_step, jt_shift_step, jt_before, jt_after
-        integer  :: sh_status, sh_niter, sh_att, sh_acc, sh_hits, jt_status, jt_niter, jt_att, jt_acc, jt_hits
+        real, allocatable     :: volume(:,:,:)
+        real(dp)              :: rotation(3,3), shift(2), objective_before, objective_after, rot_update, shift_update
+        real(dp)              :: sh_rot_step, sh_shift_step, sh_before, sh_after, jt_rot_step, jt_shift_step, jt_before, jt_after
+        integer               :: sh_status, sh_niter, sh_att, sh_acc, sh_hits, jt_status, jt_niter, jt_att, jt_acc, jt_hits
         call build_small_volume(volume)
         call new_fixture(calc, volume, [2, SMALL_BOX/2 - 1], 1., OBJFUN_CC, fix)
         call assert_true(calc%ptcl_is_valid(1) .and. all(calc%get_ptcl_kfromto(1) == [2, SMALL_BOX/2 - 1]), &
@@ -740,9 +740,9 @@ contains
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
         type(fixture_record)  :: fix
-        real, allocatable :: volume(:,:,:)
-        real(dp) :: rotation(3,3), shift(2), max_rotation_step, max_shift_step, stage_before, stage_after
-        integer  :: status, niter, nattempted, naccepted, sh_hits, jt_hits
+        real, allocatable     :: volume(:,:,:)
+        real(dp)              :: rotation(3,3), shift(2), max_rotation_step, max_shift_step, stage_before, stage_after
+        integer               :: status, niter, nattempted, naccepted, sh_hits, jt_hits
         call build_small_volume(volume)
         call new_fixture(calc, volume, [2, SMALL_BOX/2 - 1], 1., OBJFUN_CC, fix)
         call opt%new(SMALL_BOX, SMALL_BOX, 1.e-30, 15.)
@@ -780,15 +780,15 @@ contains
     ! truth expressed in native pixels; only Euler angles and shift change; a rejected solve
     ! leaves the record bit-identical.
     subroutine test_ori_round_trip()
-        integer, parameter :: NATIVE_BOX = 2*SMALL_BOX
+        integer, parameter    :: NATIVE_BOX = 2*SMALL_BOX
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
         type(fixture_record)  :: fix
         type(ori)             :: o
-        real, allocatable :: volume(:,:,:)
-        real     :: prec_before(N_PTCL_ORIPARAMS), prec_after(N_PTCL_ORIPARAMS), native_scale
-        logical  :: pose_slot(N_PTCL_ORIPARAMS)
-        integer  :: eo
+        real,    allocatable  :: volume(:,:,:)
+        real                  :: prec_before(N_PTCL_ORIPARAMS), prec_after(N_PTCL_ORIPARAMS), native_scale
+        logical               :: pose_slot(N_PTCL_ORIPARAMS)
+        integer               :: eo
         call build_small_volume(volume)
         call new_fixture(calc, volume, [2, SMALL_BOX/2 - 1], 1., OBJFUN_CC, fix)
         native_scale = real(NATIVE_BOX)/real(SMALL_BOX)
@@ -830,16 +830,16 @@ contains
     ! stored shift, the solve from a zero increment committing stored shift plus increment.
     ! Expected value: the injected (truth) pose in native pixels.
     subroutine test_objective_recovery()
-        integer, parameter :: NATIVE_BOX = 2*TEST_BOX
-        integer, parameter :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID]
+        integer, parameter    :: NATIVE_BOX = 2*TEST_BOX
+        integer, parameter    :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID]
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
         type(fixture_record)  :: fix
         type(ori)             :: o
-        real, allocatable :: volume(:,:,:)
-        real(dp) :: objective_before, objective_after
-        real     :: native_scale
-        integer  :: iobj
+        real,    allocatable  :: volume(:,:,:)
+        real(dp)              :: objective_before, objective_after
+        real                  :: native_scale
+        integer               :: iobj
         call build_test_volume(volume)
         native_scale = real(NATIVE_BOX)/real(TEST_BOX)
         do iobj = 1, size(objfuns)
@@ -868,14 +868,14 @@ contains
     ! accepted pose update within the rotation bound; the 1.8 degree seed error rejected under a
     ! 0.5 degree bound only if no improving pose exists inside it.
     subroutine test_parameter_bounds()
-        integer, parameter :: NATIVE_BOX = 2*SMALL_BOX
+        integer, parameter    :: NATIVE_BOX = 2*SMALL_BOX
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
         type(fixture_record)  :: fix
         type(ori)             :: o
-        real, allocatable :: volume(:,:,:)
-        real(dp) :: rotation(3,3), shift(2), rot_update, shift_update
-        real     :: seed_native(2), native_scale
+        real,    allocatable  :: volume(:,:,:)
+        real(dp)              :: rotation(3,3), shift(2), rot_update, shift_update
+        real                  :: seed_native(2), native_scale
         call build_small_volume(volume)
         call new_fixture(calc, volume, [2, SMALL_BOX/2 - 1], 1., OBJFUN_CC, fix)
         native_scale = real(NATIVE_BOX)/real(SMALL_BOX)

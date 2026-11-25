@@ -7,9 +7,9 @@ use simple_test_utils,  only: assert_true, assert_int, assert_real, assert_strin
 implicit none
 private
 public :: run_all_ptcl_subset_tests
-character(len=*), parameter :: SOURCE1 = 'ptcl_subset_source1.mrc', SOURCE2 = 'ptcl_subset_source2.mrc'
+character(len=*), parameter :: SOURCE1        = 'ptcl_subset_source1.mrc', SOURCE2 = 'ptcl_subset_source2.mrc'
 character(len=*), parameter :: SOURCE_PROJECT = 'ptcl_subset_source.simple', SUBSET_PROJECT = 'ptcl_subset_selected.simple'
-character(len=*), parameter :: SUBSET_STACK = 'ptcl_subset_selected.mrc', SUBSET_TABLE = 'ptcl_subset_selected.txt'
+character(len=*), parameter :: SUBSET_STACK   = 'ptcl_subset_selected.mrc', SUBSET_TABLE = 'ptcl_subset_selected.txt'
 
 contains
 
@@ -49,13 +49,13 @@ contains
         use simple_eo_partition, only: eo_transaction
         class(sp_project), intent(inout) :: project
         class(image), allocatable :: img
-        class(oris), allocatable :: directions
-        type(sym) :: symmetry
-        type(ctfparams) :: ctfvars
-        type(string) :: filename
-        real :: pixels(8,8,1)
-        integer :: stack, local_index, particle, bin
-        logical :: changed
+        class(oris),  allocatable :: directions
+        type(sym)                 :: symmetry
+        type(ctfparams)           :: ctfvars
+        type(string)              :: filename
+        real                      :: pixels(8,8,1)
+        integer                   :: stack, local_index, particle, bin
+        logical                   :: changed
         allocate(img,directions)
         call img%new([8,8,1],1.5)
         call directions%new(8,is_ptcl=.false.)
@@ -114,8 +114,8 @@ contains
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
         class(sp_project), intent(inout) :: project
         logical, allocatable :: selected(:)
-        character(len=512) :: message
-        integer :: status
+        character(len=512)   :: message
+        integer              :: status
         call select_ptcl_subset(project,4,8,'c1','corr',2,selected,status,message)
         call assert_int(0,status,'polar direction-balanced selection succeeds')
         call assert_true(all(selected .eqv. [.false.,.false.,.false.,.false.,.true.,.true.,.true.,.true.]), &
@@ -167,17 +167,17 @@ contains
         use simple_syslib,  only: simple_abspath
         use simple_eo_partition, only: eo_partition_status, EO_COMPLETE
         class(sp_project), intent(inout) :: project
-        logical, intent(in) :: rebalance_eo
+        logical,           intent(in)    :: rebalance_eo
         class(sp_project), allocatable :: restored, source
-        class(oris), allocatable :: table
-        class(image), allocatable :: img
-        type(string) :: stackfile, tablefile, mappedfile
-        logical, allocatable :: selected(:)
-        real, allocatable :: pixels(:,:,:)
-        real :: eulers(3,4), shifts(2,4)
-        integer :: halves(4), old_halves(4), status, row, original, stack, physical_index, dims(3), nimages
-        integer, parameter :: ORIGINALS(4) = [1,2,7,8], PIXEL_VALUES(4) = [104,103,202,201]
-        character(len=512) :: message
+        class(oris),       allocatable :: table
+        class(image),      allocatable :: img
+        type(string)                   :: stackfile, tablefile, mappedfile
+        logical,           allocatable :: selected(:)
+        real,              allocatable :: pixels(:,:,:)
+        real                           :: eulers(3,4), shifts(2,4)
+        integer                        :: halves(4), old_halves(4), status, row, original, stack, physical_index, dims(3), nimages
+        integer,           parameter   :: ORIGINALS(4) = [1,2,7,8], PIXEL_VALUES(4) = [104,103,202,201]
+        character(len=512)             :: message
         allocate(restored,source,table,img)
         do row = 1,4
             old_halves(row) = project%os_ptcl3D%get_eo(ORIGINALS(row))

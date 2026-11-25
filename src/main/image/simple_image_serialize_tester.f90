@@ -41,8 +41,8 @@ contains
 
     !> pixel (i,j) holds i + 100 j, so no two pixels are equal
     subroutine make_distinct_image( img, orig )
-        type(image),          intent(inout) :: img
-        real,    allocatable, intent(out)   :: orig(:,:,:)
+        type(image),          intent(inout)            :: img
+        real,                 allocatable, intent(out) :: orig(:,:,:)
         integer :: i, j
         allocate(orig(BOX,BOX,1))
         do j = 1, BOX

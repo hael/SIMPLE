@@ -50,7 +50,7 @@ type :: qsys_async_job
     type(string) :: exit_code_fname ! absolute
     integer      :: last_check = 0  ! the latest liveness check (check_job_lost)
     integer      :: nmisses    = 0  ! liveness checks in a row that found the job gone
-    logical      :: l_started = .false.
+    logical      :: l_started  = .false.
 contains
     procedure :: start
     procedure :: start_seq
@@ -66,12 +66,12 @@ contains
     !> Submits @p cline through @p qenv to run in @p dir; @p label names the script, the log and
     !! the exit-status file. A stale exit-status file from an earlier run is removed first.
     subroutine start( self, qenv, cline, dir, label, exec_bin )
-        class(qsys_async_job),   intent(inout) :: self
-        class(qsys_env),         intent(inout) :: qenv
-        class(cmdline),          intent(in)    :: cline
-        class(string),           intent(in)    :: dir
-        character(len=*),        intent(in)    :: label
-        class(string), optional, intent(in)    :: exec_bin
+        class(qsys_async_job),   intent(inout)        :: self
+        class(qsys_env),         intent(inout)        :: qenv
+        class(cmdline),          intent(in)           :: cline
+        class(string),           intent(in)           :: dir
+        character(len=*),        intent(in)           :: label
+        class(string),           optional, intent(in) :: exec_bin
         type(string) :: cwd, cwd_job
         call self%kill()
         call simple_getcwd(cwd)
@@ -94,11 +94,11 @@ contains
     !> As start, with the programs @p clines run one after the other in one script, which stops at
     !! the first that fails; the exit status is that one's, or the last one's.
     subroutine start_seq( self, qenv, clines, dir, label )
-        class(qsys_async_job),      intent(inout) :: self
-        class(qsys_env),            intent(inout) :: qenv
-        type(cmdline), allocatable, intent(in)    :: clines(:)
-        class(string),              intent(in)    :: dir
-        character(len=*),           intent(in)    :: label
+        class(qsys_async_job),      intent(inout)           :: self
+        class(qsys_env),            intent(inout)           :: qenv
+        type(cmdline),              allocatable, intent(in) :: clines(:)
+        class(string),              intent(in)              :: dir
+        character(len=*),           intent(in)              :: label
         type(string) :: cwd, cwd_job
         call self%kill()
         call simple_getcwd(cwd)

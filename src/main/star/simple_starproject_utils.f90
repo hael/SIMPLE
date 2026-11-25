@@ -10,9 +10,9 @@ public :: VERBOSE_OUTPUT
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: LEN_FLAG = 64
+integer, parameter :: LEN_FLAG             = 64
 real,    parameter :: RELION_PHASE_DEG2RAD = PI/180.
-logical            :: VERBOSE_OUTPUT =.false.
+logical            :: VERBOSE_OUTPUT       = .false.
 
 type star_flag
     character(LEN=LEN_FLAG) :: rlnflag
@@ -46,13 +46,13 @@ type star_file
     type(star_data)      :: particles3D
     type(star_data)      :: clusters2D
     integer, allocatable :: opticsmap(:)
-    integer, allocatable :: stkmap(:,:) ! per STAR line: (stack id, project particle index, z in stack)
+    integer, allocatable :: stkmap(:,:)                ! per STAR line: (stack id, project particle index, z in stack)
     integer, allocatable :: stkstates(:)
     integer              :: stkptclcount
     integer              :: fd
-    logical              :: initialised   = .false.
-    logical              :: origins_angst  = .false. ! imported particle origins still in Angstrom
-    logical              :: coords_centred = .false. ! imported particle coordinates still the centre
+    logical              :: initialised      = .false.
+    logical              :: origins_angst    = .false. ! imported particle origins still in Angstrom
+    logical              :: coords_centred   = .false. ! imported particle coordinates still the centre
     logical              :: ptcl_import_open = .false. ! a particle import awaits finalise_ptcl_import
 end type star_file
 
@@ -60,22 +60,22 @@ type tilt_info
     type(string) :: basename
     integer      :: initialtiltgroupid = 1
     integer      :: finaltiltgroupid   = 1
-    real         :: tiltx = 0.0
-    real         :: tilty = 0.0
-    real         :: smpd  = 0.0
-    real         :: kv    = 0.0
-    real         :: fraca = 0.0
-    real         :: cs    = 0.0
-    real         :: box   = 0.0
-    real         :: centroidx = 0.0
-    real         :: centroidy = 0.0
+    real         :: tiltx              = 0.0
+    real         :: tilty              = 0.0
+    real         :: smpd               = 0.0
+    real         :: kv                 = 0.0
+    real         :: fraca              = 0.0
+    real         :: cs                 = 0.0
+    real         :: box                = 0.0
+    real         :: centroidx          = 0.0
+    real         :: centroidy          = 0.0
 end type tilt_info
 
 contains
 
     subroutine enable_rlnflag(rlnflag, flags, flagindex)
         type(star_flag), intent(inout) :: flags(:)
-        character(LEN=*) :: rlnflag
+        character(LEN=*)        :: rlnflag
         integer                 :: flagindex, i
         do i = 1, size(flags)
             if(index(flags(i)%rlnflag, trim(adjustl(rlnflag))) > 0 .AND. len_trim(flags(i)%splflag) > 0) then
@@ -106,8 +106,8 @@ contains
         class(oris),     intent(inout) :: sporis
         type(star_flag), intent(inout) :: flags(:)
         type(string), allocatable :: keys(:)
-        type(ori) :: testori
-        integer   :: iori, ikey, testcount
+        type(ori)                 :: testori
+        integer                   :: iori, ikey, testcount
         do iori = 1, size(flags)
             flags(iori)%present = .false.
         end do
@@ -134,13 +134,13 @@ contains
     end subroutine enable_splflags
 
     subroutine split_dataline(line, splitline, fieldmask)
-        class(string),  intent(in)    :: line
-        class(string),  intent(inout) :: splitline(:)
-        logical, optional, intent(in) :: fieldmask(:)
-        character(len=2), parameter :: DELIMITERS = ' '//achar(9)
+        class(string),  intent(in)           :: line
+        class(string),  intent(inout)        :: splitline(:)
+        logical,        optional, intent(in) :: fieldmask(:)
+        character(len=2), parameter   :: DELIMITERS = ' '//achar(9)
         character(len=:), allocatable :: linechar
-        integer :: istart, flagid, lineend, delimiter
-        logical :: copyfield
+        integer                       :: istart, flagid, lineend, delimiter
+        logical                       :: copyfield
         flagid = 1
         istart = 1
         linechar = line%raw()
@@ -163,16 +163,16 @@ contains
     ! distance threshold based yerarchical clustering
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
     subroutine h_clust(data_in, thresh,labels, centroids, populations)
-        real,                 intent(in)  :: data_in(:,:)   ! input data, point coords
-        real,                 intent(in)  :: thresh         ! threshold for class merging
-        integer,              intent(out) :: labels(:)      ! labels of the elements in vec
-        real,    allocatable, intent(out) :: centroids(:,:) ! centroids of the classes
-        integer, allocatable, intent(out) :: populations(:) ! number of elements belonging to each class
+        real,                 intent(in)               :: data_in(:,:)   ! input data, point coords
+        real,                 intent(in)               :: thresh         ! threshold for class merging
+        integer,              intent(out)              :: labels(:)      ! labels of the elements in vec
+        real,                 allocatable, intent(out) :: centroids(:,:) ! centroids of the classes
+        integer,              allocatable, intent(out) :: populations(:) ! number of elements belonging to each class
         real,    allocatable :: mat(:,:)                    ! pariwise distances matrix
         logical, allocatable :: mask(:), outliers(:)
-        integer :: N, i, j, cnt, ncls
-        integer :: index(1), loc1(1), loc2(1)
-        real    :: d
+        integer              :: N, i, j, cnt, ncls
+        integer              :: index(1), loc1(1), loc2(1)
+        real                 :: d
         if( size(data_in, dim = 2) .ne. 2 )then
             THROW_HARD('Input data should be two dimensional!; h_clust')
         endif
@@ -268,8 +268,8 @@ contains
     end subroutine h_clust
     
     subroutine find_separators(seppos, path)
-        integer, allocatable, intent(inout) :: seppos(:)
-        class(string),        intent(in)    :: path
+        integer,              allocatable, intent(inout) :: seppos(:)
+        class(string),        intent(in)                 :: path
         integer :: i
         do i=1, path%strlen()
             if(path%to_char([i,i]) == "/") seppos = [seppos, i]
@@ -279,9 +279,9 @@ contains
     subroutine resolve_stack_path(path, exists)
         class(string), intent(inout) :: path
         logical,       intent(out)   :: exists
-        type(string) :: candidate
+        type(string)         :: candidate
         integer, allocatable :: seppos(:)
-        integer :: sepstart, sepend
+        integer              :: sepstart, sepend
         exists = file_exists(path)
         if( exists ) return
         allocate(seppos(0))

@@ -80,9 +80,9 @@ contains
       contains
 
         subroutine persistence_test
-            integer,  parameter :: n = 1000000
+            integer,  parameter                 :: n = 1000000
             real(dp), dimension(:), allocatable :: a, b
-            integer :: i
+            integer                             :: i
             call banner('TEST: Memory persistence test')
             allocate(a(n), b(n))
             a = 1.0d0
@@ -114,10 +114,10 @@ contains
         end subroutine persistence_test
 
         subroutine persistence_test2
-            integer,  parameter :: n = 256
+            integer,  parameter                 :: n = 256
             real(sp), dimension(:), allocatable :: b
-            type(dummytype) :: dt
-            integer :: i
+            type(dummytype)                     :: dt
+            integer                             :: i
             call banner('TEST: Memory persistence test of type bound allocatable')
             ! dummy type init
             dt%i = 42
@@ -151,9 +151,9 @@ contains
         end subroutine persistence_test2
 
         subroutine numerical_test
-            integer, parameter :: N = 10000
-            real, allocatable :: a(:,:), b(:,:), c(:,:), d(:,:)
-            integer :: i,j
+            integer, parameter   :: N = 10000
+            real,    allocatable :: a(:,:), b(:,:), c(:,:), d(:,:)
+            integer              :: i,j
             call banner('TEST: Numerical test and benchmark')
             allocate(a(N,N), b(N,N), c(N,N), d(N,N), source=0.)
             a(:,1) = (/(real(10*i), i=1,N)/) / real(N)
@@ -249,11 +249,11 @@ contains
         end subroutine numerical_test
 
         subroutine async_test
-            integer,    parameter :: n = 500000
-            integer,    parameter :: repeats = 10
-            real(dp), allocatable :: a(:), b(:), c(:)
-            real(dp) :: tcpu, tgpu, tserial, tasync
-            integer  :: i,j
+            integer,    parameter   :: n       = 500000
+            integer,    parameter   :: repeats = 10
+            real(dp),   allocatable :: a(:), b(:), c(:)
+            real(dp)                :: tcpu, tgpu, tserial, tasync
+            integer                 :: i,j
             call banner('TEST: Asynchronous execution test')
             allocate(a(n),b(n),c(n))
             a(:) = (/(real(i,dp)/real(n,dp), i = 1, n)/)
@@ -344,9 +344,9 @@ contains
         end subroutine banner
 
         subroutine report_fftw(label, err, tol_local, passed)
-            character(len=*), intent(in) :: label
-            real(sp), intent(in) :: err, tol_local
-            logical, intent(out) :: passed
+            character(len=*), intent(in)  :: label
+            real(sp),         intent(in)  :: err, tol_local
+            logical,          intent(out) :: passed
             passed = (err <= tol_local)
             if (passed) then
                 print *, 'PASS: ', trim(label), '  max error = ', err, '  tol = ', tol_local
@@ -372,8 +372,8 @@ contains
 
         subroutine print_cpair(label, a, b, nshow)
             character(len=*), intent(in) :: label
-            complex(sp), intent(in) :: a(:), b(:)
-            integer, intent(in) :: nshow
+            complex(sp),      intent(in) :: a(:), b(:)
+            integer,          intent(in) :: nshow
             integer :: k
             print *, trim(label)
             print *, '  index        CUFFT R2C output(real,imag)   FFTW R2C output(real,imag)'
@@ -384,8 +384,8 @@ contains
         end subroutine print_cpair
 
         subroutine init_dummy_1d(x, n, offset)
-            real(sp), intent(out) :: x(:)
-            integer,  intent(in)  :: n
+            real(sp), intent(out)          :: x(:)
+            integer,  intent(in)           :: n
             real(sp), intent(in), optional :: offset
             real(sp) :: off
             integer  :: i
@@ -398,8 +398,8 @@ contains
         end subroutine init_dummy_1d
 
         subroutine init_dummy_2d(x, nx, ny, offset)
-            real(sp), intent(out) :: x(:,:)
-            integer,  intent(in)  :: nx, ny
+            real(sp), intent(out)          :: x(:,:)
+            integer,  intent(in)           :: nx, ny
             real(sp), intent(in), optional :: offset
             real(sp) :: off
             integer  :: i, j
@@ -429,17 +429,17 @@ contains
         end subroutine init_dummy_3d
 
         subroutine test_fftw_vs_cufft_1d_in_place
-            integer, parameter :: n1   = 16
-            integer, parameter :: n1c  = n1/2 + 1
-            integer, parameter :: n1pad = 2*n1c
-            real(sp), parameter :: tol_cmp = 1.0e-4_sp
-            integer(c_int) :: plan_cufft
-            type(c_ptr)    :: plan_fftw, p_r, p_c
-            integer(c_int) :: ierr
-            real(sp), allocatable, target :: buf1_cufft(:), buf1_fftw(:)
-            complex(sp), pointer :: buf1_cufft_c(:), buf1_fftw_c(:)
-            real(sp) :: maxerr
-            logical  :: passed
+            integer,     parameter           :: n1      = 16
+            integer,     parameter           :: n1c     = n1/2 + 1
+            integer,     parameter           :: n1pad   = 2*n1c
+            real(sp),    parameter           :: tol_cmp = 1.0e-4_sp
+            integer(c_int)                   :: plan_cufft
+            type(c_ptr)                      :: plan_fftw, p_r, p_c
+            integer(c_int)                   :: ierr
+            real(sp),    allocatable, target :: buf1_cufft(:), buf1_fftw(:)
+            complex(sp), pointer             :: buf1_cufft_c(:), buf1_fftw_c(:)
+            real(sp)                         :: maxerr
+            logical                          :: passed
             call banner('TEST: FFTW VS CUFFT 1D IN-PLACE R2C')
             allocate(buf1_cufft(n1pad), buf1_fftw(n1pad))
             call c_f_pointer(c_loc(buf1_cufft(1)), buf1_cufft_c, [n1c])
@@ -475,18 +475,18 @@ contains
         end subroutine test_fftw_vs_cufft_1d_in_place
 
         subroutine test_fftw_vs_cufft_2d_in_place
-            integer, parameter :: nx     = 4096
-            integer, parameter :: ny     = 4096
-            integer, parameter :: n2cx   = nx/2 + 1
-            integer, parameter :: n2padx = 2*n2cx
-            real(sp), parameter :: tol_cmp = 1.0e-4_sp
-            integer(c_int) :: plan_cufft
-            type(c_ptr)    :: plan_fftw, p_r, p_c
-            integer(c_int) :: ierr
-            real(sp), allocatable, target :: buf2_cufft(:,:), buf2_fftw(:,:)
-            complex(sp), pointer :: buf2_cufft_c(:,:), buf2_fftw_c(:,:)
-            real(sp) :: maxerr
-            logical  :: passed
+            integer,     parameter           :: nx      = 4096
+            integer,     parameter           :: ny      = 4096
+            integer,     parameter           :: n2cx    = nx/2 + 1
+            integer,     parameter           :: n2padx  = 2*n2cx
+            real(sp),    parameter           :: tol_cmp = 1.0e-4_sp
+            integer(c_int)                   :: plan_cufft
+            type(c_ptr)                      :: plan_fftw, p_r, p_c
+            integer(c_int)                   :: ierr
+            real(sp),    allocatable, target :: buf2_cufft(:,:), buf2_fftw(:,:)
+            complex(sp), pointer             :: buf2_cufft_c(:,:), buf2_fftw_c(:,:)
+            real(sp)                         :: maxerr
+            logical                          :: passed
             call banner('TEST: FFTW VS CUFFT 2D IN-PLACE R2C')
             allocate(buf2_cufft(n2padx,ny), buf2_fftw(n2padx,ny))
             call c_f_pointer(c_loc(buf2_cufft(1,1)), buf2_cufft_c, [n2cx,ny])
@@ -523,23 +523,23 @@ contains
         end subroutine test_fftw_vs_cufft_2d_in_place
 
         subroutine test_fftw_vs_cufft_2d_in_place_roundtrip_timing
-            integer, parameter :: nx     = 4096
-            integer, parameter :: ny     = 4096
-            integer, parameter :: n2cx   = nx/2 + 1
-            integer, parameter :: n2padx = 2*n2cx
-            integer, parameter :: repeats = 5
-            real(sp), parameter :: tol_cmp = 1.0e-4_sp
-            real(sp), parameter :: scale = 1.0_sp / real(nx*ny, sp)
-            integer(c_int) :: plan_cufft_fwd, plan_cufft_inv
-            type(c_ptr)    :: plan_fftw_fwd, plan_fftw_inv, p_r, p_c
-            integer(c_int) :: ierr
-            integer        :: i, j, rep
-            real(sp), allocatable, target :: buf2_cufft(:,:), buf2_fftw(:,:)
-            real(sp), allocatable :: xref(:,:)
-            complex(sp), pointer :: buf2_fftw_c(:,:)
-            real(sp) :: maxerr, maxdiff
-            real(dp) :: fftw_time, cufft_time
-            logical  :: passed
+            integer,     parameter           :: nx      = 4096
+            integer,     parameter           :: ny      = 4096
+            integer,     parameter           :: n2cx    = nx/2 + 1
+            integer,     parameter           :: n2padx  = 2*n2cx
+            integer,     parameter           :: repeats = 5
+            real(sp),    parameter           :: tol_cmp = 1.0e-4_sp
+            real(sp),    parameter           :: scale   = 1.0_sp / real(nx*ny, sp)
+            integer(c_int)                   :: plan_cufft_fwd, plan_cufft_inv
+            type(c_ptr)                      :: plan_fftw_fwd, plan_fftw_inv, p_r, p_c
+            integer(c_int)                   :: ierr
+            integer                          :: i, j, rep
+            real(sp),    allocatable, target :: buf2_cufft(:,:), buf2_fftw(:,:)
+            real(sp),    allocatable         :: xref(:,:)
+            complex(sp), pointer             :: buf2_fftw_c(:,:)
+            real(sp)                         :: maxerr, maxdiff
+            real(dp)                         :: fftw_time, cufft_time
+            logical                          :: passed
             call banner('TEST: FFTW VS CUFFT 2D IN-PLACE R2C->C2R TIMING')
             allocate(buf2_cufft(n2padx,ny), buf2_fftw(n2padx,ny), xref(nx,ny))
             call c_f_pointer(c_loc(buf2_fftw(1,1)), buf2_fftw_c, [n2cx,ny])
@@ -610,24 +610,24 @@ contains
         end subroutine test_fftw_vs_cufft_2d_in_place_roundtrip_timing
 
         subroutine test_fftw_vs_cufft_3d_in_place_roundtrip_timing
-            integer, parameter :: nx     = 256
-            integer, parameter :: ny     = 256
-            integer, parameter :: nz     = 256
-            integer, parameter :: n3cx   = nx/2 + 1
-            integer, parameter :: n3padx = 2*n3cx
-            integer, parameter :: repeats = 3
-            real(sp), parameter :: tol_cmp = 1.0e-4_sp
-            real(sp), parameter :: scale = 1.0_sp / real(nx*ny*nz, sp)
-            integer(c_int) :: plan_cufft_fwd, plan_cufft_inv
-            type(c_ptr)    :: plan_fftw_fwd, plan_fftw_inv, p_r, p_c
-            integer(c_int) :: ierr
-            integer        :: i, j, k, rep
-            real(sp), allocatable, target :: buf3_cufft(:,:,:), buf3_fftw(:,:,:)
-            real(sp), allocatable :: xref(:,:,:)
-            complex(sp), pointer :: buf3_fftw_c(:,:,:)
-            real(sp) :: maxerr, maxdiff
-            real(dp) :: fftw_time, cufft_time
-            logical  :: passed
+            integer,     parameter           :: nx      = 256
+            integer,     parameter           :: ny      = 256
+            integer,     parameter           :: nz      = 256
+            integer,     parameter           :: n3cx    = nx/2 + 1
+            integer,     parameter           :: n3padx  = 2*n3cx
+            integer,     parameter           :: repeats = 3
+            real(sp),    parameter           :: tol_cmp = 1.0e-4_sp
+            real(sp),    parameter           :: scale   = 1.0_sp / real(nx*ny*nz, sp)
+            integer(c_int)                   :: plan_cufft_fwd, plan_cufft_inv
+            type(c_ptr)                      :: plan_fftw_fwd, plan_fftw_inv, p_r, p_c
+            integer(c_int)                   :: ierr
+            integer                          :: i, j, k, rep
+            real(sp),    allocatable, target :: buf3_cufft(:,:,:), buf3_fftw(:,:,:)
+            real(sp),    allocatable         :: xref(:,:,:)
+            complex(sp), pointer             :: buf3_fftw_c(:,:,:)
+            real(sp)                         :: maxerr, maxdiff
+            real(dp)                         :: fftw_time, cufft_time
+            logical                          :: passed
             call banner('TEST: FFTW VS CUFFT 3D IN-PLACE R2C->C2R TIMING')
             allocate(buf3_cufft(n3padx,ny,nz), buf3_fftw(n3padx,ny,nz), xref(nx,ny,nz))
             call c_f_pointer(c_loc(buf3_fftw(1,1,1)), buf3_fftw_c, [n3cx,ny,nz])
@@ -702,21 +702,21 @@ contains
         end subroutine test_fftw_vs_cufft_3d_in_place_roundtrip_timing
 
         subroutine test_fftw_vs_cufft_1d_many
-            integer, parameter :: n1 = 16
-            integer, parameter :: n1c = n1/2 + 1
-            integer, parameter :: n1pad = 2*n1c
-            integer, parameter :: nbatch = 3
-            real(sp), parameter :: tol_cmp = 1.0e-4_sp
-            integer(c_int) :: plan_cufft
-            type(c_ptr)    :: plan_fftw, p_r, p_c
-            integer(c_int) :: ierr
-            integer(c_int) :: n(1), inembed(1), onembed(1)
-            integer(c_int) :: rank, howmany, istride, ostride, idist, odist
-            integer :: batch_idx
-            real(sp), allocatable, target :: buf1_cufft(:,:), buf1_fftw(:,:)
-            complex(sp), pointer :: buf1_cufft_c(:,:), buf1_fftw_c(:,:)
-            real(sp) :: maxerr
-            logical  :: passed
+            integer,     parameter           :: n1      = 16
+            integer,     parameter           :: n1c     = n1/2 + 1
+            integer,     parameter           :: n1pad   = 2*n1c
+            integer,     parameter           :: nbatch  = 3
+            real(sp),    parameter           :: tol_cmp = 1.0e-4_sp
+            integer(c_int)                   :: plan_cufft
+            type(c_ptr)                      :: plan_fftw, p_r, p_c
+            integer(c_int)                   :: ierr
+            integer(c_int)                   :: n(1), inembed(1), onembed(1)
+            integer(c_int)                   :: rank, howmany, istride, ostride, idist, odist
+            integer                          :: batch_idx
+            real(sp),    allocatable, target :: buf1_cufft(:,:), buf1_fftw(:,:)
+            complex(sp), pointer             :: buf1_cufft_c(:,:), buf1_fftw_c(:,:)
+            real(sp)                         :: maxerr
+            logical                          :: passed
             call banner('TEST: FFTW VS CUFFT 1D MANY IN-PLACE R2C')
             allocate(buf1_cufft(n1pad,nbatch), buf1_fftw(n1pad,nbatch))
             call c_f_pointer(c_loc(buf1_cufft(1,1)), buf1_cufft_c, [n1c,nbatch])
@@ -765,22 +765,22 @@ contains
         end subroutine test_fftw_vs_cufft_1d_many
 
         subroutine test_fftw_vs_cufft_2d_many
-            integer, parameter :: nx = 32
-            integer, parameter :: ny = 24
-            integer, parameter :: n2cx = nx/2 + 1
-            integer, parameter :: n2padx = 2*n2cx
-            integer, parameter :: nbatch = 2
-            real(sp), parameter :: tol_cmp = 1.0e-4_sp
-            integer(c_int) :: plan_cufft
-            type(c_ptr)    :: plan_fftw, p_r, p_c
-            integer(c_int) :: ierr
-            integer(c_int) :: n(2), inembed(2), onembed(2)
-            integer(c_int) :: rank, howmany, istride, ostride, idist, odist
-            integer :: batch_idx
-            real(sp), allocatable, target :: buf2_cufft(:,:,:), buf2_fftw(:,:,:)
-            complex(sp), pointer :: buf2_cufft_c(:,:,:), buf2_fftw_c(:,:,:)
-            real(sp) :: maxerr
-            logical  :: passed
+            integer,     parameter           :: nx      = 32
+            integer,     parameter           :: ny      = 24
+            integer,     parameter           :: n2cx    = nx/2 + 1
+            integer,     parameter           :: n2padx  = 2*n2cx
+            integer,     parameter           :: nbatch  = 2
+            real(sp),    parameter           :: tol_cmp = 1.0e-4_sp
+            integer(c_int)                   :: plan_cufft
+            type(c_ptr)                      :: plan_fftw, p_r, p_c
+            integer(c_int)                   :: ierr
+            integer(c_int)                   :: n(2), inembed(2), onembed(2)
+            integer(c_int)                   :: rank, howmany, istride, ostride, idist, odist
+            integer                          :: batch_idx
+            real(sp),    allocatable, target :: buf2_cufft(:,:,:), buf2_fftw(:,:,:)
+            complex(sp), pointer             :: buf2_cufft_c(:,:,:), buf2_fftw_c(:,:,:)
+            real(sp)                         :: maxerr
+            logical                          :: passed
             call banner('TEST: FFTW VS CUFFT 2D MANY IN-PLACE R2C')
             allocate(buf2_cufft(n2padx,ny,nbatch), buf2_fftw(n2padx,ny,nbatch))
             call c_f_pointer(c_loc(buf2_cufft(1,1,1)), buf2_cufft_c, [n2cx,ny,nbatch])
@@ -826,21 +826,21 @@ contains
         end subroutine test_fftw_vs_cufft_2d_many
 
         subroutine test_fftw_vs_cufft_1d_many_c2r
-            integer, parameter :: n1 = 16
-            integer, parameter :: n1c = n1/2 + 1
-            integer, parameter :: n1pad = 2*n1c
-            integer, parameter :: nbatch = 3
-            real(sp), parameter :: tol_cmp = 1.0e-4_sp
-            integer(c_int) :: plan_cufft_inv
-            type(c_ptr)    :: plan_fftw_fwd, plan_fftw_inv, p_r, p_c
-            integer(c_int) :: ierr
-            integer(c_int) :: n(1), inembed(1), onembed(1)
-            integer(c_int) :: rank, howmany, istride, ostride, idist, odist
-            integer :: batch_idx
-            real(sp), allocatable, target :: buf1_cufft(:,:), buf1_fftw(:,:)
-            complex(sp), pointer :: buf1_cufft_c(:,:), buf1_fftw_c(:,:)
-            real(sp) :: maxerr
-            logical  :: passed
+            integer,     parameter           :: n1      = 16
+            integer,     parameter           :: n1c     = n1/2 + 1
+            integer,     parameter           :: n1pad   = 2*n1c
+            integer,     parameter           :: nbatch  = 3
+            real(sp),    parameter           :: tol_cmp = 1.0e-4_sp
+            integer(c_int)                   :: plan_cufft_inv
+            type(c_ptr)                      :: plan_fftw_fwd, plan_fftw_inv, p_r, p_c
+            integer(c_int)                   :: ierr
+            integer(c_int)                   :: n(1), inembed(1), onembed(1)
+            integer(c_int)                   :: rank, howmany, istride, ostride, idist, odist
+            integer                          :: batch_idx
+            real(sp),    allocatable, target :: buf1_cufft(:,:), buf1_fftw(:,:)
+            complex(sp), pointer             :: buf1_cufft_c(:,:), buf1_fftw_c(:,:)
+            real(sp)                         :: maxerr
+            logical                          :: passed
             call banner('TEST: FFTW VS CUFFT 1D MANY IN-PLACE C2R')
             allocate(buf1_cufft(n1pad,nbatch), buf1_fftw(n1pad,nbatch))
             call c_f_pointer(c_loc(buf1_cufft(1,1)), buf1_cufft_c, [n1c,nbatch])
@@ -896,20 +896,20 @@ contains
         end subroutine test_fftw_vs_cufft_1d_many_c2r
 
         subroutine test_fftw_vs_cufft_movie
-            integer,            parameter :: nx      = 4096
-            integer,            parameter :: ny      = 4096
-            integer,            parameter :: nxsc    = 2048
-            integer,            parameter :: nysc    = 2048
-            integer,            parameter :: nframes = 50
-            integer,            parameter :: n2cx    = nx/2 + 1
-            integer,            parameter :: n2padx  = 2*n2cx
-            real(sp),           parameter :: tol_cmp = 1.0e-4_sp
-            real(sp), allocatable, target :: buf2_cufft(:,:,:), buf2_fftw(:,:,:)
-            complex(sp),          pointer :: buf2_cufft_c(:,:,:), buf2_fftw_c(:,:,:)
-            type(c_ptr)    :: plan_fftw_r2c, p_r, p_c
-            integer(c_int) :: plan_cu_r2c
-            integer(c_int) :: ierr
-            integer        :: i
+            integer,              parameter           :: nx      = 4096
+            integer,              parameter           :: ny      = 4096
+            integer,              parameter           :: nxsc    = 2048
+            integer,              parameter           :: nysc    = 2048
+            integer,              parameter           :: nframes = 50
+            integer,              parameter           :: n2cx    = nx/2 + 1
+            integer,              parameter           :: n2padx  = 2*n2cx
+            real(sp),             parameter           :: tol_cmp = 1.0e-4_sp
+            real(sp),             allocatable, target :: buf2_cufft(:,:,:), buf2_fftw(:,:,:)
+            complex(sp),          pointer             :: buf2_cufft_c(:,:,:), buf2_fftw_c(:,:,:)
+            type(c_ptr)                               :: plan_fftw_r2c, p_r, p_c
+            integer(c_int)                            :: plan_cu_r2c
+            integer(c_int)                            :: ierr
+            integer                                   :: i
             call banner('BENCH: FFTW VS CUFFT 2D R2C 50 FRAMES')
             allocate(buf2_cufft(n2padx,ny,nframes), buf2_fftw(n2padx,ny,nframes))
             call c_f_pointer(c_loc(buf2_cufft(1,1,1)), buf2_cufft_c, [n2cx,ny,nframes])
@@ -955,14 +955,14 @@ contains
         end subroutine test_fftw_vs_cufft_movie
 
         subroutine test_cublas_sgemm
-            integer, parameter :: m = 4
-            integer, parameter :: n = 5
-            integer, parameter :: k = 3
+            integer,       parameter           :: m = 4
+            integer,       parameter           :: n = 5
+            integer,       parameter           :: k = 3
             real(c_float), allocatable, target :: a(:,:), b(:,:), c(:,:), cref(:,:)
-            real(c_float) :: alpha, beta, maxerr
-            type(c_ptr) :: handle, d_a, d_b, d_c
-            integer(c_int) :: ierr
-            integer :: i, j, id
+            real(c_float)                      :: alpha, beta, maxerr
+            type(c_ptr)                        :: handle, d_a, d_b, d_c
+            integer(c_int)                     :: ierr
+            integer                            :: i, j, id
             call banner('TEST: CUBLAS SGEMM')
             id = p%device
             allocate(a(m,k), b(k,n), c(m,n), cref(m,n))
@@ -1008,11 +1008,11 @@ contains
 
         subroutine test_kb
           use simple_kbinterpol, only: apod_device
-          integer, parameter :: n = 15
-          type(kbinterpol) :: kb
-          real,allocatable :: x(:),y(:)
-          real    :: z, diff
-          integer :: i
+          integer, parameter   :: n = 15
+          type(kbinterpol)     :: kb
+          real,    allocatable :: x(:),y(:)
+          real                 :: z, diff
+          integer              :: i
           call banner('TEST: KB INTERPOLATION')
           allocate(x(n),y(n),source=0.0)
           kb = kbinterpol(KBWINSZ,KBALPHA)
@@ -1039,15 +1039,15 @@ contains
         end subroutine test_kb
 
         subroutine test_pointers
-            integer,  parameter :: nx      = 64
-            integer,  parameter :: ny      = nx
-            integer,  parameter :: nz      = nx
-            real,    allocatable :: reven(:,:,:), rodd(:,:,:)
-            complex, allocatable :: ceven(:,:,:), codd(:,:,:)
-            complex :: cavg_even, cavg_odd
-            real    :: avg_even, avg_odd
-            logical :: flag(nx), passed
-            integer :: i
+            integer,  parameter   :: nx      = 64
+            integer,  parameter   :: ny      = nx
+            integer,  parameter   :: nz      = nx
+            real,     allocatable :: reven(:,:,:), rodd(:,:,:)
+            complex,  allocatable :: ceven(:,:,:), codd(:,:,:)
+            complex               :: cavg_even, cavg_odd
+            real                  :: avg_even, avg_odd
+            logical               :: flag(nx), passed
+            integer               :: i
             call banner('TEST: POINTER')
             allocate(reven(nx,ny,nz), rodd(nx,ny,nz), source=0.)
             allocate(ceven(nx,ny,nz), codd(nx,ny,nz), source=CMPLX_ZERO)
@@ -1112,13 +1112,13 @@ contains
         end subroutine test_pointers
 
         subroutine pointer_kernel(nx,ny,nz, re, ro, ce, co, flag)
-            integer,         intent(in)    :: nx, ny, nz
-            real,    target, intent(inout) :: re(nx,ny,nz), ro(nx,ny,nz)
-            complex, target, intent(inout) :: ce(nx,ny,nz), co(nx,ny,nz)
-            logical,         intent(in)    :: flag(nx)
+            integer,         intent(in)            :: nx, ny, nz
+            real,            target, intent(inout) :: re(nx,ny,nz), ro(nx,ny,nz)
+            complex,         target, intent(inout) :: ce(nx,ny,nz), co(nx,ny,nz)
+            logical,         intent(in)            :: flag(nx)
             real,    pointer :: p_r(:,:,:)
             complex, pointer :: p_c(:,:,:)
-            integer :: i,j,k
+            integer          :: i,j,k
             !$omp target enter data map(to: re, ro, ce, co)
             !$omp target teams distribute parallel do&
             !$omp& map(to: flag) default(shared) private(i,j,k,p_r,p_c)

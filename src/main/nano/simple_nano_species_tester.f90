@@ -39,9 +39,9 @@ contains
     subroutine test_enclosed_fraction()
         integer, parameter :: NSTEP = 2000
         real,    parameter :: TS(5) = [0.5, 1., 2., 3., 4.]
-        real(dp) :: h, s, f
-        integer  :: it, i
-        logical  :: ok
+        real(dp)           :: h, s, f
+        integer            :: it, i
+        logical            :: ok
         write(*,'(A)') 'test_enclosed_fraction'
         call assert_real(0., enclosed_fraction(0.), 0., 'enclosed_fraction(0) is 0')
         ok = .true.
@@ -67,14 +67,14 @@ contains
 
     ! 400 intensities of one class: K = 1 with the closed-form BIC; nspecies forces K = 2
     subroutine test_one_class()
-        integer, parameter :: N = 400
-        real,    parameter :: MU0 = 1., SD0 = 0.05
-        real, allocatable  :: post(:,:), mu(:), var(:)
+        integer, parameter   :: N   = 400
+        real,    parameter   :: MU0 = 1., SD0 = 0.05
+        real,    allocatable :: post(:,:), mu(:), var(:)
         real,    allocatable :: bic(:)
         logical, allocatable :: adm(:)
-        real     :: x(N)
-        real(dp) :: m, v, lnl, bic1
-        integer  :: labels(N), K
+        real                 :: x(N)
+        real(dp)             :: m, v, lnl, bic1
+        integer              :: labels(N), K
         write(*,'(A)') 'test_one_class'
         call set_fixed_seed(20261001)
         call draw(x, 0, N, MU0, SD0)
@@ -101,14 +101,14 @@ contains
     ! atom, two classes (ln S 0 and ln 0.5, fractions 0.7 and 0.3), beta 0.05: K = 2, the class values and beta within four
     ! standard errors of their weighted least-squares closed forms at the true labels, the labels right on 98% or more
     subroutine test_multiplicative_classes()
-        integer,  parameter :: N = 400
-        real,     parameter :: BETA0 = 0.05, LNS(2) = [0., -0.6931472]
-        integer,  parameter :: CVALS(6) = [5, 7, 8, 9, 11, 12]
-        real, allocatable :: post(:,:), mu(:), var(:), w(:), bic(:)
-        logical, allocatable :: adm(:)
-        real     :: x(N), s2(N), c(N), tau, v, slope
-        integer  :: labels(N), truth(N), K, i, k_true, nright
-        real(dp) :: sw(2), swc, swcc, se_mu(2), se_beta, wt
+        integer,  parameter   :: N        = 400
+        real,     parameter   :: BETA0    = 0.05, LNS(2) = [0., -0.6931472]
+        integer,  parameter   :: CVALS(6) = [5, 7, 8, 9, 11, 12]
+        real,     allocatable :: post(:,:), mu(:), var(:), w(:), bic(:)
+        logical,  allocatable :: adm(:)
+        real                  :: x(N), s2(N), c(N), tau, v, slope
+        integer               :: labels(N), truth(N), K, i, k_true, nright
+        real(dp)              :: sw(2), swc, swcc, se_mu(2), se_beta, wt
         write(*,'(A)') 'test_multiplicative_classes'
         call set_fixed_seed(20261027)
         do i = 1,N
@@ -157,8 +157,8 @@ contains
     ! and its standard error from the measurement noise v of x is P (1 - P) |m1 - m2| / s2 sqrt(v)
     subroutine test_posterior_error()
         real, parameter :: M(2) = [0., -0.7], S2 = 0.04, V = 0.02
-        real    :: post(2), sd, x, p_ref, sd_ref, err_p, err_sd
-        integer :: label, i
+        real            :: post(2), sd, x, p_ref, sd_ref, err_p, err_sd
+        integer         :: label, i
         write(*,'(A)') 'test_posterior_error'
         err_p  = 0.
         err_sd = 0.
@@ -178,13 +178,13 @@ contains
     ! two classes of 200, spread SD0 each: at D = 2.5 the two-class fit is inadmissible and K = 1;
     ! at D = 4 K = 2 and the labels follow the generating classes up to the Bayes error (2.3%)
     subroutine test_separation()
-        integer, parameter :: NC = 200, N = 2*NC
-        real,    parameter :: SD0 = 0.05
-        real, allocatable  :: post(:,:), mu(:), var(:)
+        integer, parameter   :: NC  = 200, N = 2*NC
+        real,    parameter   :: SD0 = 0.05
+        real,    allocatable :: post(:,:), mu(:), var(:)
         real,    allocatable :: bic(:)
         logical, allocatable :: adm(:)
-        real    :: x(N)
-        integer :: labels(N), truth(N), K
+        real                 :: x(N)
+        integer              :: labels(N), truth(N), K
         write(*,'(A)') 'test_separation'
         truth(1:NC)   = 1
         truth(NC+1:N) = 2
@@ -212,13 +212,13 @@ contains
     ! N = 400 sets the size floor at max(8, 0.02 N) = 8 atoms: a distinct class of 5 is not admitted,
     ! one of 8 is, and its atoms are labelled 2
     subroutine test_size_floor()
-        integer, parameter :: N = 400
-        real,    parameter :: SD0 = 0.05
-        real, allocatable  :: post(:,:), mu(:), var(:)
+        integer, parameter   :: N   = 400
+        real,    parameter   :: SD0 = 0.05
+        real,    allocatable :: post(:,:), mu(:), var(:)
         real,    allocatable :: bic(:)
         logical, allocatable :: adm(:)
-        real    :: x(N)
-        integer :: labels(N), K
+        real                 :: x(N)
+        integer              :: labels(N), K
         write(*,'(A)') 'test_size_floor'
         call set_fixed_seed(20261004)
         call draw(x,     0, N-5, 1.0, SD0)
@@ -239,13 +239,13 @@ contains
     ! class under a slope gives its slope and its value at 12 contacts; two classes 0.25 apart under the same slope,
     ! which spreads each over 0.35, are found with their labels (numpy check of this method: 16 draws of 16)
     subroutine test_coordination_term()
-        integer, parameter :: N = 200, N2 = 50
-        real,    parameter :: SLOPE0 = 0.05, SD0 = 0.04
-        real, allocatable  :: post(:,:), mu(:), var(:)
+        integer, parameter   :: N      = 200, N2 = 50
+        real,    parameter   :: SLOPE0 = 0.05, SD0 = 0.04
+        real,    allocatable :: post(:,:), mu(:), var(:)
         real,    allocatable :: bic(:)
         logical, allocatable :: adm(:)
-        real    :: x(N), c(N), slope
-        integer :: labels(N), truth(N), K, i
+        real                 :: x(N), c(N), slope
+        integer              :: labels(N), truth(N), K, i
         write(*,'(A)') 'test_coordination_term'
         do i = 1,N
             c(i) = real(mod(i, 8)) - 7.
@@ -273,13 +273,13 @@ contains
 
     ! case 12 of the plan: 264, 132 and 132 atoms at intensities 1, 0.5 and 0.167, spread 0.04 (D >= 8)
     subroutine test_three_classes()
-        integer, parameter :: N1 = 264, N2 = 132, N3 = 132, N = N1+N2+N3
-        real,    parameter :: SD0 = 0.04, MUS(3) = [1., 0.5, 0.167]
-        real, allocatable  :: post(:,:), mu(:), var(:)
+        integer, parameter   :: N1  = 264, N2 = 132, N3 = 132, N = N1+N2+N3
+        real,    parameter   :: SD0 = 0.04, MUS(3) = [1., 0.5, 0.167]
+        real,    allocatable :: post(:,:), mu(:), var(:)
         real,    allocatable :: bic(:)
         logical, allocatable :: adm(:)
-        real    :: x(N)
-        integer :: labels(N), truth(N), K
+        real                 :: x(N)
+        integer              :: labels(N), truth(N), K
         write(*,'(A)') 'test_three_classes'
         call set_fixed_seed(20261006)
         ! drawn in the order 3, 1, 2 so that class numbers cannot follow the input order
@@ -301,13 +301,13 @@ contains
     ! four classes of 100 at intensities 1, 0.6, 0.35 and 0.2, spread 0.02: nspecies = 4 sizes the fit to four
     ! classes; the automatic search stops at its ceiling MAX_NSPECIES
     subroutine test_four_classes()
-        integer, parameter :: NC = 100, N = 4*NC
-        real,    parameter :: SD0 = 0.02, MUS(4) = [1., 0.6, 0.35, 0.2]
-        integer, parameter :: ORDER(4) = [4, 2, 1, 3]
+        integer, parameter   :: NC       = 100, N = 4*NC
+        real,    parameter   :: SD0      = 0.02, MUS(4) = [1., 0.6, 0.35, 0.2]
+        integer, parameter   :: ORDER(4) = [4, 2, 1, 3]
         real,    allocatable :: post(:,:), mu(:), var(:), bic(:)
         logical, allocatable :: adm(:)
-        real    :: x(N)
-        integer :: labels(N), truth(N), K, ic
+        real                 :: x(N)
+        integer              :: labels(N), truth(N), K, ic
         write(*,'(A)') 'test_four_classes'
         call set_fixed_seed(20261007)
         ! drawn in the order 4, 2, 1, 3 so that class numbers cannot follow the input order
@@ -333,9 +333,9 @@ contains
     ! white-noise region counts of section 8.8 of the plan (154.5, 38.0, 7.2 maxima above 2.5, 3.0, 3.5;
     ! search-to-region volume ratio 3.628); the plan's independent script gave C = 2105 and k = 4.99
     subroutine test_calibration()
-        real, parameter :: U(3) = [2.5, 3.0, 3.5], COUNTS(3) = [154.5, 38.0, 7.2]
+        real, parameter :: U(3)  = [2.5, 3.0, 3.5], COUNTS(3) = [154.5, 38.0, 7.2]
         real, parameter :: RATIO = 3.628, TARGET = 0.2, C0 = 1000.
-        real :: k, c_search, k2, c2
+        real            :: k, c_search, k2, c2
         write(*,'(A)') 'test_calibration'
         call calibrate_threshold(U, COUNTS, RATIO, TARGET, k, c_search)
         call assert_real(2105.3, c_search, 2., 'calibration: Poisson estimate of C from the section 8.8 counts')
@@ -351,11 +351,11 @@ contains
 
     ! samples of A exp(-4 pi**2 r**2 / B) on the 0.358 A grid within 1.38 A of a voxel centre
     subroutine gauss_samples( amp, bfac, y, r2 )
-        real,              intent(in)  :: amp, bfac
-        real, allocatable, intent(out) :: y(:), r2(:)
+        real,              intent(in)               :: amp, bfac
+        real,              allocatable, intent(out) :: y(:), r2(:)
         real, parameter :: SMPD = 0.358, RAD = 1.38
-        real    :: d2(15**3)
-        integer :: i, j, k, n
+        real            :: d2(15**3)
+        integer         :: i, j, k, n
         n = 0
         do k = -7,7
             do j = -7,7
@@ -374,7 +374,7 @@ contains
     ! tie decides; the tied amplitude integrates to the class intensity
     subroutine test_gauss_width()
         real, allocatable :: y(:), r2(:)
-        real :: amp, bfac, ic
+        real              :: amp, bfac, ic
         write(*,'(A)') 'test_gauss_width'
         call gauss_samples(2.0, 15.0, y, r2)
         call fit_gauss_width(y, r2, 1.e-6, log(13.9), 0.5, amp, bfac)
@@ -393,12 +393,12 @@ contains
 
     ! two isolated bumps above threshold and one below; a lone spike lacks neighbours above threshold
     subroutine test_local_maxima()
-        integer, parameter :: N = 24
+        integer, parameter   :: N = 24
         real,    allocatable :: vals(:)
         integer, allocatable :: ijk(:,:)
-        real    :: z(N,N,N)
-        logical :: mask(N,N,N)
-        integer :: i, j, k
+        real                 :: z(N,N,N)
+        logical              :: mask(N,N,N)
+        integer              :: i, j, k
         write(*,'(A)') 'test_local_maxima'
         do k = 1,N
             do j = 1,N

@@ -6,16 +6,16 @@ implicit none
 contains
 
     module subroutine create_polar_absctfmats(self, spproj, oritype, pfromto)
-        class(polarft_calc),       intent(inout) :: self
-        class(sp_project), target, intent(inout) :: spproj
-        character(len=*),          intent(in)    :: oritype
-        integer, optional,         intent(in)    :: pfromto(2)
+        class(polarft_calc),       intent(inout)                :: self
+        class(sp_project),         target, intent(inout)        :: spproj
+        character(len=*),          intent(in)                   :: oritype
+        integer,                   optional,         intent(in) :: pfromto(2)
         type(ctfparams), allocatable :: ctfparms(:)
         type(ctf),       allocatable :: tfuns(:)
-        real(sp)        :: spaFreqSq_mat(self%pftsz,self%kfromto(1):self%interpklim)
-        real(sp)        :: ang_mat(self%pftsz,self%kfromto(1):self%interpklim), hinv,kinv
-        integer         :: i,irot,k,iptcl,ithr,ppfromto(2),ctfmatind,nthr_team
-        logical         :: present_pfromto
+        real(sp)                     :: spaFreqSq_mat(self%pftsz,self%kfromto(1):self%interpklim)
+        real(sp)                     :: ang_mat(self%pftsz,self%kfromto(1):self%interpklim), hinv,kinv
+        integer                      :: i,irot,k,iptcl,ithr,ppfromto(2),ctfmatind,nthr_team
+        logical                      :: present_pfromto
         present_pfromto = present(pfromto)
         ppfromto = self%pfromto
         if( present_pfromto ) ppfromto = pfromto

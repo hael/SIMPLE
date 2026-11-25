@@ -159,10 +159,10 @@ contains
     ! get_keys / get_str
     !---------------------------
     subroutine test_get_keys_and_get_str()
-        type(hash)   :: h
+        type(hash)                :: h
         type(string), allocatable :: ks(:)
-        integer      :: n, idx
-        type(string) :: s
+        integer                   :: n, idx
+        type(string)              :: s
         h = hash()
         call h%set('k1', 1.0_dp)
         call h%set('k2', 2.0_dp)

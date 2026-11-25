@@ -104,19 +104,19 @@ module simple_ptcl_sieve
 
   type :: chunk2D_state
     private
-    type(string)  :: projfile
-    type(string)  :: folder
-    type(cmdline), allocatable :: cline   ! the chunk's 2D job command line (generate_chunk_*_cline)
-    type(qsys_async_job) :: job           ! the chunk's 2D job, while this process runs it
-    integer       :: id                  = 0
-    integer       :: nptcls              = 0
-    integer       :: nptcls_selected     = 0
-    integer       :: nattempts           = 0       ! submissions of the 2D job: a failed first is retried once
-    logical       :: solve2D_running     = .false.
-    logical       :: solve2D_complete = .false.
-    logical       :: rejection_complete  = .false.
-    logical       :: complete            = .false.
-    logical       :: failed              = .false.
+    type(string)               :: projfile
+    type(string)               :: folder
+    type(cmdline), allocatable :: cline                   ! the chunk's 2D job command line (generate_chunk_*_cline)
+    type(qsys_async_job)       :: job                     ! the chunk's 2D job, while this process runs it
+    integer                    :: id                  = 0
+    integer                    :: nptcls              = 0
+    integer                    :: nptcls_selected     = 0
+    integer                    :: nattempts           = 0 ! submissions of the 2D job: a failed first is retried once
+    logical                    :: solve2D_running     = .false.
+    logical                    :: solve2D_complete    = .false.
+    logical                    :: rejection_complete  = .false.
+    logical                    :: complete            = .false.
+    logical                    :: failed              = .false.
   end type chunk2D_state
 
   ! What the sieve reads, filled by the stage that drives it (stream fix plan, decision 12): the
@@ -176,76 +176,76 @@ module simple_ptcl_sieve
     type(class_compatibility)         :: fine_compatibility_model
     type(chunk2D_coarse_defaults)     :: coarse_defaults
     type(chunk2D_fine_defaults)       :: fine_defaults
-    type(qsys_env), allocatable       :: qenv                    ! new..kill (compile-time policy)
+    type(qsys_env),      allocatable  :: qenv                        ! new..kill (compile-time policy)
     type(string)                      :: outdir_chunks_coarse
     type(string)                      :: outdir_chunks_fine
     type(string)                      :: completedir
-    type(string)                      :: optics_dir              ! optics maps for the handed-off chunks; empty: none
-    type(string)                      :: partition               ! queue partition of the chunk jobs; empty: the environment's
+    type(string)                      :: optics_dir                  ! optics maps for the handed-off chunks; empty: none
+    type(string)                      :: partition                   ! queue partition of the chunk jobs; empty: the environment's
     type(string)                      :: latest_jpeg
     type(string)                      :: latest_stkname
     logical                           :: coarse_only             = .false.
     logical                           :: pre_chunked             = .false.
     logical                           :: final_ingestion         = .false.
     logical                           :: model_rejection_enabled = .true.
-    integer                           :: nparallel          = 1
-    integer                           :: nthr               = 1
-    integer                           :: nparts             = 1
+    integer                           :: nparallel               = 1
+    integer                           :: nthr                    = 1
+    integer                           :: nparts                  = 1
     integer                           :: n_coarse_accepted_ptcls = 0
     integer                           :: n_coarse_rejected_ptcls = 0
     integer                           :: n_fine_accepted_ptcls   = 0
     integer                           :: n_fine_rejected_ptcls   = 0
-    integer                           :: n_accepted_ptcls   = 0
-    integer                           :: n_accepted_mics    = 0
-    integer                           :: n_rejected_ptcls   = 0
-    integer                           :: n_failed_chunks    = 0 ! chunks dropped after a failed retry
-    integer                           :: n_failed_ptcls     = 0 ! their particles, never handed on
-    integer                           :: latest_jpeg_xtiles = 0
-    integer                           :: latest_jpeg_ytiles = 0
-    integer                           :: last_id_coarse     = 0 ! the highest chunk id on disk or made
-    integer                           :: last_id_fine       = 0
-    real                              :: mskdiam            = 0.0
+    integer                           :: n_accepted_ptcls        = 0
+    integer                           :: n_accepted_mics         = 0
+    integer                           :: n_rejected_ptcls        = 0
+    integer                           :: n_failed_chunks         = 0 ! chunks dropped after a failed retry
+    integer                           :: n_failed_ptcls          = 0 ! their particles, never handed on
+    integer                           :: latest_jpeg_xtiles      = 0
+    integer                           :: latest_jpeg_ytiles      = 0
+    integer                           :: last_id_coarse          = 0 ! the highest chunk id on disk or made
+    integer                           :: last_id_fine            = 0
+    real                              :: mskdiam                 = 0.0
   contains
-    procedure :: new
-    procedure :: kill
-    procedure :: cycle
-    procedure :: import_existing_chunks_coarse
-    procedure :: import_existing_chunks_fine
-    procedure :: reconcile_consumed_coarse
-    procedure :: restore_counters
-    procedure :: get_n_chunks_coarse
+    procedure          :: new
+    procedure          :: kill
+    procedure          :: cycle
+    procedure          :: import_existing_chunks_coarse
+    procedure          :: import_existing_chunks_fine
+    procedure          :: reconcile_consumed_coarse
+    procedure          :: restore_counters
+    procedure          :: get_n_chunks_coarse
     procedure, private :: get_n_chunks_fine
     procedure, private :: get_n_chunks_running
     procedure, private :: get_n_pass_1_non_rejected_ptcls
-    procedure :: get_n_pass_2_non_rejected_ptcls
-    procedure :: get_n_coarse_accepted_ptcls
-    procedure :: get_n_coarse_rejected_ptcls
-    procedure :: get_n_fine_accepted_ptcls
-    procedure :: get_n_accepted_ptcls
-    procedure :: get_n_accepted_micrographs
-    procedure :: get_n_rejected_ptcls
-    procedure :: get_n_total_particles
-    procedure :: get_n_failed_chunks
-    procedure :: get_n_failed_ptcls
-    procedure :: get_latest
-    procedure :: get_finished
-    procedure :: set_final_ingestion
-    procedure :: unset_final_ingestion
-    procedure :: append_chunk_coarse
-    procedure :: append_chunk_fine
+    procedure          :: get_n_pass_2_non_rejected_ptcls
+    procedure          :: get_n_coarse_accepted_ptcls
+    procedure          :: get_n_coarse_rejected_ptcls
+    procedure          :: get_n_fine_accepted_ptcls
+    procedure          :: get_n_accepted_ptcls
+    procedure          :: get_n_accepted_micrographs
+    procedure          :: get_n_rejected_ptcls
+    procedure          :: get_n_total_particles
+    procedure          :: get_n_failed_chunks
+    procedure          :: get_n_failed_ptcls
+    procedure          :: get_latest
+    procedure          :: get_finished
+    procedure          :: set_final_ingestion
+    procedure          :: unset_final_ingestion
+    procedure          :: append_chunk_coarse
+    procedure          :: append_chunk_fine
     procedure, private :: generate_chunks_coarse
-    procedure :: generate_chunk_coarse_cline
-    procedure :: generate_chunks_fine
-    procedure :: generate_chunk_fine_cline
-    procedure :: combine_completed_chunks
-    procedure :: submit
-    procedure :: cancel
+    procedure          :: generate_chunk_coarse_cline
+    procedure          :: generate_chunks_fine
+    procedure          :: generate_chunk_fine_cline
+    procedure          :: combine_completed_chunks
+    procedure          :: submit
+    procedure          :: cancel
     procedure, private :: collect_and_reject
-    procedure :: reject_cavgs
-    procedure :: fail_chunk
-    procedure :: cleanup_chunk
-    procedure :: hand_off
-    procedure :: hand_off_final_set
+    procedure          :: reject_cavgs
+    procedure          :: fail_chunk
+    procedure          :: cleanup_chunk
+    procedure          :: hand_off
+    procedure          :: hand_off_final_set
   end type ptcl_sieve
 
   interface
@@ -265,12 +265,12 @@ contains
   ! directories under the CWD; starts the queue environment and pretrains the compatibility
   ! models when settings%refs exists.
   subroutine new( self, params, settings, completedir, pre_chunked, optics_dir )
-    class(ptcl_sieve), intent(inout) :: self
-    type(parameters),           intent(in)    :: params
-    type(ptcl_sieve_settings),  intent(in)    :: settings
-    type(string),               intent(in)    :: completedir
-    logical,          optional, intent(in)    :: pre_chunked
-    class(string),    optional, intent(in)    :: optics_dir
+    class(ptcl_sieve),          intent(inout)        :: self
+    type(parameters),           intent(in)           :: params
+    type(ptcl_sieve_settings),  intent(in)           :: settings
+    type(string),               intent(in)           :: completedir
+    logical,                    optional, intent(in) :: pre_chunked
+    class(string),              optional, intent(in) :: optics_dir
     type(string)                              :: cwd
     integer(timer_int_kind)                   :: t0
     t0 = timer_start()
@@ -521,7 +521,7 @@ contains
   subroutine reconcile_consumed_coarse( self )
     class(ptcl_sieve), intent(inout) :: self
     integer, allocatable :: consumed(:)
-    integer :: i, j, k
+    integer              :: i, j, k
     do i = 1, self%get_n_chunks_fine()
       call read_consumed_coarse(self%chunks_fine(i)%folder//'/'//CONSUMED_COARSE, consumed)
       do j = 1, size(consumed)
@@ -546,7 +546,7 @@ contains
   subroutine restore_counters( self )
     class(ptcl_sieve), intent(inout) :: self
     type(sp_project) :: spproj
-    integer :: i
+    integer          :: i
     do i = 1, self%get_n_chunks_coarse()
       call count_chunk(self%chunks_coarse(i), .true.)
     end do
@@ -602,7 +602,7 @@ contains
   ! and runs rejection, generates new chunks at all tiers in tier order, then
   ! submits any pending chunks to the queue.
   subroutine cycle( self, project_list )
-    class(ptcl_sieve), intent(inout) :: self
+    class(ptcl_sieve),     intent(inout) :: self
     type(rec_list),        intent(inout) :: project_list
     integer(timer_int_kind) :: t0
     t0 = timer_start()
@@ -741,11 +741,11 @@ contains
   end function get_n_failed_ptcls
 
   logical function get_latest( self, jpeg_inds, jpeg_pops, jpeg_res, jpeg, stk, xtiles, ytiles, selection )
-    class(ptcl_sieve), intent(in)    :: self
-    integer,      allocatable,  intent(inout) :: jpeg_inds(:), jpeg_pops(:), selection(:)  ! class indices and populations in the JPEG tile order
-    real,         allocatable,  intent(inout) :: jpeg_res(:)                               ! resolution (Angstrom) per class, same order
-    type(string),               intent(out)   :: jpeg, stk                                 ! paths to the JPEG contact sheet and MRC reference stack
-    integer,                    intent(out)   :: xtiles, ytiles                            ! tile grid dimensions of the JPEG contact sheet
+    class(ptcl_sieve),          intent(in)                  :: self
+    integer,                    allocatable,  intent(inout) :: jpeg_inds(:), jpeg_pops(:), selection(:) ! class indices and populations in the JPEG tile order
+    real,                       allocatable,  intent(inout) :: jpeg_res(:)                              ! resolution (Angstrom) per class, same order
+    type(string),               intent(out)                 :: jpeg, stk                                ! paths to the JPEG contact sheet and MRC reference stack
+    integer,                    intent(out)                 :: xtiles, ytiles                           ! tile grid dimensions of the JPEG contact sheet
     ! release any prior allocations so the caller gets a clean result on .false. return
     if( allocated(jpeg_inds)  ) deallocate(jpeg_inds)
     if( allocated(jpeg_pops)  ) deallocate(jpeg_pops)
@@ -807,7 +807,7 @@ contains
     class(ptcl_sieve),   intent(inout) :: self
     type(chunk2D_state), intent(in)    :: new_chunk
     type(chunk2D_state), allocatable   :: tmp(:)
-    integer :: i, n
+    integer                            :: i, n
     n = self%get_n_chunks_coarse()
     allocate(tmp(n + 1))
     do i = 1, n
@@ -822,7 +822,7 @@ contains
     class(ptcl_sieve),   intent(inout) :: self
     type(chunk2D_state), intent(in)    :: new_chunk
     type(chunk2D_state), allocatable   :: tmp(:)
-    integer :: i, n
+    integer                            :: i, n
     n = self%get_n_chunks_fine()
     allocate(tmp(n + 1))
     do i = 1, n
@@ -1273,9 +1273,9 @@ contains
   ! coarse chunks; otherwise combines complete fine chunks.
   ! No-op if no eligible chunks exist or if the combined file already exists.
   subroutine combine_completed_chunks( self, combined_projfile, with_sigma2 )
-    class(ptcl_sieve), intent(inout) :: self
-    type(string),      intent(in)    :: combined_projfile
-    logical, intent(in), optional :: with_sigma2
+    class(ptcl_sieve), intent(inout)        :: self
+    type(string),      intent(in)           :: combined_projfile
+    logical,           intent(in), optional :: with_sigma2
     type(string),     allocatable :: projfiles(:)
     type(sp_project)              :: combined_project
     integer(timer_int_kind)       :: t0
@@ -1443,10 +1443,10 @@ contains
   subroutine collect_and_reject( self )
     class(ptcl_sieve), intent(inout) :: self
     logical,                      allocatable :: cls_msk(:)
-    type(sp_project)        :: spproj
-    integer(timer_int_kind) :: t0
-    integer                 :: i, non_zero, ncls
-    real                    :: smpd_dummy
+    type(sp_project)                          :: spproj
+    integer(timer_int_kind)                   :: t0
+    integer                                   :: i, non_zero, ncls
+    real                                      :: smpd_dummy
     t0 = timer_start()
 
     do i = 1, self%get_n_chunks_coarse()
@@ -1589,13 +1589,13 @@ contains
     ! allocatable: a plain local is set from gfortran's default-initialiser copy, whose array
     ! descriptors -Wuninitialized reports at -O3 as read before set
     type(cavg_quality_result), allocatable :: quality
-    type(cavg_quality_model)           :: model
-    type(sp_project)                   :: spproj
-    type(string)                       :: stkname, jpgname, stk_score
-    integer(timer_int_kind)            :: t0
-    integer                            :: iimg, nout, non_zero_ptcls, n_total_ptcls, ncls_score
-    real                               :: smpd_score
-    type(string),        allocatable   :: overlay_reasons(:)
+    type(cavg_quality_model)               :: model
+    type(sp_project)                       :: spproj
+    type(string)                           :: stkname, jpgname, stk_score
+    integer(timer_int_kind)                :: t0
+    integer                                :: iimg, nout, non_zero_ptcls, n_total_ptcls, ncls_score
+    real                                   :: smpd_score
+    type(string),              allocatable :: overlay_reasons(:)
 
     if( .not. chunk%solve2D_complete ) return
     if( chunk%failed )                    return
@@ -1914,7 +1914,7 @@ contains
     pure integer function iter_jpeg_index( fname )
       type(string), intent(in) :: fname
       character(len=:), allocatable :: s
-      integer :: n, p_iter, i, ch
+      integer                       :: n, p_iter, i, ch
 
       iter_jpeg_index = -1
       s = fname%to_char()
@@ -1944,7 +1944,7 @@ contains
     pure integer function iter_stack_index( fname )
       type(string), intent(in) :: fname
       character(len=:), allocatable :: s
-      integer :: n, p_iter, i, ch
+      integer                       :: n, p_iter, i, ch
 
       iter_stack_index = -1
       s = fname%to_char()
@@ -1976,7 +1976,7 @@ contains
     pure integer function sigma_file_rank( fname )
       type(string), intent(in) :: fname
       character(len=:), allocatable :: s
-      integer :: n, p_iter, i, ch, iter_val, ndigits
+      integer                       :: n, p_iter, i, ch, iter_val, ndigits
 
       sigma_file_rank = -1
       s = fname%to_char()
@@ -2030,12 +2030,12 @@ contains
   ! Writes a third JPEG containing all class averages with reason-coded borders
   ! and emits a sidecar key file documenting the color mapping.
   subroutine write_rejection_reason_overlay_jpg( chunk, label, cavg_imgs, states, quality, rejection_reasons )
-    type(chunk2D_state), intent(in)    :: chunk
-    type(string),        intent(in)    :: label
-    type(image),         intent(inout) :: cavg_imgs(:)
-    integer,             intent(in)    :: states(:)
-    type(cavg_quality_result), intent(in) :: quality
-    type(string),        intent(in)    :: rejection_reasons(:)
+    type(chunk2D_state),       intent(in)    :: chunk
+    type(string),              intent(in)    :: label
+    type(image),               intent(inout) :: cavg_imgs(:)
+    integer,                   intent(in)    :: states(:)
+    type(cavg_quality_result), intent(in)    :: quality
+    type(string),              intent(in)    :: rejection_reasons(:)
     type(image)                      :: tile_img, work_img
     type(string)                     :: jpgname, keyname
     real, allocatable                :: rgb_map(:,:,:)
@@ -2204,8 +2204,8 @@ contains
       integer,     intent(in)    :: x_start, y_start
       type(image)                :: local_img, mask_img
       type(image_bin)            :: mask_bin, cc_img
-      real, allocatable          :: mask_vals(:,:,:)
-      real, allocatable          :: weight_vals(:,:,:)
+      real,    allocatable       :: mask_vals(:,:,:)
+      real,    allocatable       :: weight_vals(:,:,:)
       integer, allocatable       :: cc_sizes(:)
       integer                    :: ldim_local(3), i, j, imorph
       integer                    :: nx, ny
@@ -2337,8 +2337,8 @@ contains
   function remove_duplicates( arr ) result( unique )
     type(string), allocatable, intent(in) :: arr(:)
     type(string), allocatable             :: unique(:)
-    integer :: i, j, n, new_size
-    logical :: is_duplicate
+    integer                               :: i, j, n, new_size
+    logical                               :: is_duplicate
     n        = size(arr)
     new_size = 0
     allocate(unique(n))
@@ -2462,7 +2462,7 @@ contains
     type(rec_list), intent(inout) :: chunk_list
     type(rec_iterator) :: it
     type(project_rec)  :: prec
-    integer :: funit, ios
+    integer            :: funit, ios
     open(newunit=funit, file=fname%to_char(), status='replace', action='write', iostat=ios)
     if( ios /= 0 )then
       THROW_WARN('cannot write '//fname%to_char())
@@ -2482,11 +2482,11 @@ contains
   ! so a crash between a chunk's project and CHUNKED_MICS neither imports its micrographs again nor
   ! loses them. Left as it is when a chunk that exists has no list.
   subroutine rebuild_chunked_mics()
-    character(len=4096) :: line
+    character(len=4096)  :: line
     integer, allocatable :: ids(:)
-    type(string) :: dir, folder, projfile
-    integer      :: i, funit_out, funit_in, ios
-    logical      :: l_chunk
+    type(string)         :: dir, folder, projfile
+    integer              :: i, funit_out, funit_in, ios
+    logical              :: l_chunk
     dir = string('chunks_coarse')
     if( .not. dir_exists(dir) ) return
     ids = chunk_folder_ids(dir, COARSE_PREFIX)
@@ -2549,8 +2549,8 @@ contains
 
   ! The coarse chunk ids in @p fname (a CONSUMED_COARSE); none when it is missing.
   subroutine read_consumed_coarse( fname, ids )
-    class(string),        intent(in)  :: fname
-    integer, allocatable, intent(out) :: ids(:)
+    class(string),        intent(in)               :: fname
+    integer,              allocatable, intent(out) :: ids(:)
     integer :: funit, ios, id, n
     allocate(ids(0))
     if( .not. file_exists(fname) ) return
@@ -2577,11 +2577,11 @@ contains
   function chunk_folder_ids( dir, prefix ) result( ids )
     class(string),    intent(in) :: dir
     character(len=*), intent(in) :: prefix
-    integer,      allocatable :: ids(:)
-    type(string), allocatable :: dirs(:)
+    integer,          allocatable :: ids(:)
+    type(string),     allocatable :: dirs(:)
     type(string)                  :: bname
     character(len=:), allocatable :: name
-    integer :: i, j, id, ios, n
+    integer                       :: i, j, id, ios, n
     allocate(ids(0))
     if( .not. dir_exists(dir) ) return
     dirs = simple_list_dirs(dir)
@@ -2622,9 +2622,9 @@ contains
 
   function underscores_for_blanks( txt ) result( token )
     character(len=*), intent(in) :: txt
-    type(string) :: token
+    type(string)                 :: token
     character(len=len_trim(txt)) :: buf
-    integer :: i
+    integer                      :: i
     buf = trim(txt)
     do i = 1, len(buf)
       if( buf(i:i) == ' ' ) buf(i:i) = '_'
@@ -2634,9 +2634,9 @@ contains
 
   function blanks_for_underscores( txt ) result( token )
     character(len=*), intent(in) :: txt
-    type(string) :: token
+    type(string)                 :: token
     character(len=len_trim(txt)) :: buf
-    integer :: i
+    integer                      :: i
     buf = trim(txt)
     do i = 1, len(buf)
       if( buf(i:i) == '_' ) buf(i:i) = ' '
@@ -2650,7 +2650,7 @@ contains
     type(rec_list), intent(in) :: project_list
     type(rec_iterator) :: it
     type(project_rec)  :: prec
-    integer :: funit, ios
+    integer            :: funit, ios
     call check_included_prefix(project_list)
     open(newunit=funit, file=CHUNKED_MICS//'.tmp', status='replace', action='write', iostat=ios)
     if( ios /= 0 )then
@@ -2671,8 +2671,8 @@ contains
   subroutine check_included_prefix( project_list )
     type(rec_list), intent(in) :: project_list
     logical, allocatable :: included(:)
-    type(string) :: msg
-    integer :: n_inc
+    type(string)         :: msg
+    integer              :: n_inc
     included = project_list%get_included_flags()
     n_inc    = count(included)
     if( all(included(:n_inc)) ) return
@@ -2685,11 +2685,11 @@ contains
   ! files and micrograph indices, in the order they were chunked. Unallocated when the file is
   ! missing.
   subroutine read_chunked_mics( fname, projnames, micinds )
-    class(string),             intent(in)    :: fname
-    type(string), allocatable, intent(inout) :: projnames(:)
-    integer,      allocatable, intent(inout) :: micinds(:)
+    class(string),             intent(in)                 :: fname
+    type(string),              allocatable, intent(inout) :: projnames(:)
+    integer,                   allocatable, intent(inout) :: micinds(:)
     character(len=4096) :: line
-    integer :: funit, ios, n, i, isep
+    integer             :: funit, ios, n, i, isep
     if( allocated(projnames) ) deallocate(projnames)
     if( allocated(micinds)   ) deallocate(micinds)
     if( .not. file_exists(fname) ) return

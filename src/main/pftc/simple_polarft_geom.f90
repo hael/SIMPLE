@@ -32,13 +32,13 @@ contains
         use simple_ori_utils, only: canonical_mirror_frame_angle
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
         class(polarft_calc), intent(inout) :: self
-        complex(sp),        intent(inout) :: refs(:,:,:)
-        integer,            intent(in)    :: partners(:)
-        real,               intent(in)    :: frame_angles(:)
-        integer :: iproj, m, ir, jr, kk, ithr, mode, freq, nhalf
-        real(dp) :: psi, arg
+        complex(sp),         intent(inout) :: refs(:,:,:)
+        integer,             intent(in)    :: partners(:)
+        real,                intent(in)    :: frame_angles(:)
+        integer     :: iproj, m, ir, jr, kk, ithr, mode, freq, nhalf
+        real(dp)    :: psi, arg
         complex(sp) :: phase
-        logical :: half_turn
+        logical     :: half_turn
         nhalf = size(partners)
         if( OMP_IN_PARALLEL() ) THROW_HARD('No bank mirroring inside OpenMP regions')
         if( .not. self%existence ) THROW_HARD('bank mirroring requires an initialized polar calculator')
@@ -85,10 +85,10 @@ contains
     !>  Generate polar shift matrix by means of de Moivre's formula, for alignment: only the searched shells
     !>  [kfromto(1);kfromto(2)] are set, the only ones its consumers read
     module subroutine gen_shmat4aln(self, ithr, shift, shmat)
-        class(polarft_calc),  intent(inout) :: self
-        integer,              intent(in)    :: ithr
-        real(sp),             intent(in)    :: shift(2)
-        complex(sp), pointer, intent(inout) :: shmat(:,:)
+        class(polarft_calc),  intent(inout)          :: self
+        integer,              intent(in)             :: ithr
+        real(sp),             intent(in)             :: shift(2)
+        complex(sp),          pointer, intent(inout) :: shmat(:,:)
         call self%gen_shmat4aln_8(ithr, real(shift,dp), self%heap_vars(ithr)%shmat_8)
         shmat(:,self%kfromto(1):self%kfromto(2)) = cmplx(self%heap_vars(ithr)%shmat_8(:,self%kfromto(1):self%kfromto(2)))
     end subroutine gen_shmat4aln
@@ -96,10 +96,10 @@ contains
     !>  Generate polar shift matrix by means of de Moivre's formula, double precision
     !>  To be used only for alignment as it is band-passed within [kfromto(1);kfromto(2)]
     module subroutine gen_shmat4aln_8(self, ithr, shift_8, shmat_8)
-        class(polarft_calc),  intent(inout) :: self
-        integer,              intent(in)    :: ithr
-        real(dp),             intent(in)    :: shift_8(2)
-        complex(dp), pointer, intent(inout) :: shmat_8(:,:)
+        class(polarft_calc),  intent(inout)          :: self
+        integer,              intent(in)             :: ithr
+        real(dp),             intent(in)             :: shift_8(2)
+        complex(dp),          pointer, intent(inout) :: shmat_8(:,:)
         real(dp) :: rarg
         integer  :: k,p
         ! per shell multiplicative increment
@@ -129,7 +129,7 @@ contains
         integer,             intent(in)    :: iptcl
         real(sp),            intent(in)    :: shvec(2)
         complex(sp), pointer :: shmat(:,:)
-        integer :: ithr, i, klo, khi
+        integer              :: ithr, i, klo, khi
         ithr  = omp_get_thread_num() + 1
         i     = self%pinds(iptcl)
         klo   = self%kfromto(1)

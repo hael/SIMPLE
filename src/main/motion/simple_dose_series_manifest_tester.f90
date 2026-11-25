@@ -11,7 +11,7 @@ use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 implicit none
 private
 public :: run_all_dose_series_manifest_tests
-integer, parameter :: BOX = 8
+integer,  parameter :: BOX  = 8
 real(dp), parameter :: SMPD = 1.5_dp, DPF = 1.25_dp
 
 contains
@@ -19,7 +19,7 @@ contains
     !> Run hermetic manifest checks in the reconstruction area.
     subroutine run_all_dose_series_manifest_tests()
         type(string) :: saved, root
-        integer :: failures
+        integer      :: failures
         failures = tests_failed
         call enter_fixture('dose_series_manifest', saved, root)
         call make_maps()
@@ -34,8 +34,8 @@ contains
     !> Write six distinct half maps on one known grid; the manifest carries their dose coordinates.
     subroutine make_maps()
         class(image), allocatable :: vol
-        integer :: i
-        type(string) :: name
+        integer                   :: i
+        type(string)              :: name
         allocate(vol)
         call simple_mkdir('data')
         call simple_mkdir('data/volume_dir')
@@ -60,10 +60,10 @@ contains
     !> Round-trip physical doses, select the final overlap and relocate the complete input directory.
     subroutine test_roundtrip()
         type(dose_series_manifest) :: original, loaded
-        type(string) :: message, even, odd
-        integer :: box, a, b
-        real(dp) :: smpd, kv, lo, hi
-        logical :: ok
+        type(string)               :: message, even, odd
+        integer                    :: box, a, b
+        real(dp)                   :: smpd, kv, lo, hi
+        logical                    :: ok
         call make_series(original)
         ok = original%write(string('data/dose_series.txt'),message)
         call assert_true(ok,'manifest write: '//message%to_char())
@@ -102,9 +102,9 @@ contains
     !> Exercise parse failures and scientific invariants through recoverable reader errors.
     subroutine test_bad_metadata()
         type(dose_series_manifest) :: series
-        type(string) :: message
-        integer :: which
-        logical :: ok
+        type(string)               :: message
+        integer                    :: which
+        logical                    :: ok
         do which = 1,16
             call write_case(which)
             ok = series%read(string('data/case.txt'),message)
@@ -185,11 +185,11 @@ contains
     !> Modify actual header words and payload size, ensuring preallocated image geometry cannot hide errors.
     subroutine test_bad_headers()
         type(dose_series_manifest) :: series
-        type(string) :: message
-        integer(int8) :: original(1024)
-        integer :: unit, which
-        logical :: ok
-        real :: nan
+        type(string)               :: message
+        integer(int8)              :: original(1024)
+        integer                    :: unit, which
+        logical                    :: ok
+        real                       :: nan
         open(newunit=unit,file='data/half1.mrc',status='old',access='stream',form='unformatted')
         read(unit,pos=1) original
         close(unit)
@@ -235,10 +235,10 @@ contains
     !> Failed publication does not expose a partial series or overwrite somebody else's temporary file.
     subroutine test_publication()
         type(dose_series_manifest) :: series
-        type(string) :: message
-        integer :: unit
-        logical :: ok
-        character(len=32) :: content
+        type(string)               :: message
+        integer                    :: unit
+        logical                    :: ok
+        character(len=32)          :: content
         call make_series(series)
         open(newunit=unit,file='data/new.txt.tmp',status='new')
         write(unit,'(A)') 'owned by another attempt'
@@ -256,11 +256,11 @@ contains
 
     !> A complete last row without a terminating newline is still a complete manifest.
     subroutine test_final_line()
-        type(dose_series_manifest) :: series
-        type(string) :: message
+        type(dose_series_manifest)    :: series
+        type(string)                  :: message
         character(len=:), allocatable :: content
-        integer :: unit, length
-        logical :: ok
+        integer                       :: unit, length
+        logical                       :: ok
         call write_case(0)
         inquire(file='data/case.txt',size=length)
         allocate(character(len=length) :: content)

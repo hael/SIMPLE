@@ -30,7 +30,7 @@ module subroutine exec_test_rec3D_backends( self, cline )
     class(commander_test_rec3D_backends), intent(inout) :: self
     class(cmdline),                       intent(inout) :: cline
     type(backends_run_summary) :: summary
-    logical :: l_mlreg
+    logical                    :: l_mlreg
     ! prior-capable defaults: a bare invocation (projfile, pgrp, mskdiam,
     ! nthr) runs a single euclid+ml_reg comparison at the
     ! production-representative budget; every default is overridable
@@ -52,27 +52,27 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
     class(cmdline),              intent(inout) :: cline
     type(backends_run_summary),  intent(out)   :: summary
     logical,                     intent(in)    :: l_abort_on_fail
-    character(len=8), parameter :: BACKENDS(2) = [character(len=8) :: 'gridding', 'pcg']
-    integer,          parameter :: NRBINS = 16
-    type(commander_rec3D) :: xrec3D
-    type(cmdline)         :: cline_rec
-    type(sp_project)      :: spproj
-    type(image)           :: vols(2)
-    type(string)          :: projfile, vol_fname, out_fnames(2)
-    real,    allocatable  :: spec(:,:), spec_tmp(:), corrs(:), radprof(:,:), ratios(:)
-    real,    allocatable  :: tprof(:,:), fscs(:)
-    integer               :: nfail, nfsc, kgate
-    real                  :: med_fsc, tg
-    integer, allocatable  :: radcnt(:)
-    real,    pointer      :: rmat(:,:,:) => null()
-    type(image)           :: truth, tvols(2)
-    type(string)          :: truth_fname, exec_dir, dirbody
-    real    :: smpd, smpd_out, mskrad, rbin_width, r, l2(2), rr, rnorm, rmin, rmax, med, lp_here, bg, hp_here
-    real    :: r05_tmp, r0143_tmp
-    real,    allocatable  :: tspec(:), tcorr(:,:), tspec_b(:,:)
-    type(string)          :: cwd_orig
-    integer :: ldim(3), ib, state, nptcls, k, lfny, irb, i, j, l, c(3), nrb_msk, n, box, kagree, nrb_used, it
-    logical :: l_truth, l_gate_ls, l_mkdir, l_rr_nonfinite
+    character(len=8), parameter   :: BACKENDS(2) = [character(len=8) :: 'gridding', 'pcg']
+    integer,          parameter   :: NRBINS      = 16
+    type(commander_rec3D)         :: xrec3D
+    type(cmdline)                 :: cline_rec
+    type(sp_project)              :: spproj
+    type(image)                   :: vols(2)
+    type(string)                  :: projfile, vol_fname, out_fnames(2)
+    real,             allocatable :: spec(:,:), spec_tmp(:), corrs(:), radprof(:,:), ratios(:)
+    real,             allocatable :: tprof(:,:), fscs(:)
+    integer                       :: nfail, nfsc, kgate
+    real                          :: med_fsc, tg
+    integer,          allocatable :: radcnt(:)
+    real,             pointer     :: rmat(:,:,:) => null()
+    type(image)                   :: truth, tvols(2)
+    type(string)                  :: truth_fname, exec_dir, dirbody
+    real                          :: smpd, smpd_out, mskrad, rbin_width, r, l2(2), rr, rnorm, rmin, rmax, med, lp_here, bg, hp_here
+    real                          :: r05_tmp, r0143_tmp
+    real,             allocatable :: tspec(:), tcorr(:,:), tspec_b(:,:)
+    type(string)                  :: cwd_orig
+    integer                       :: ldim(3), ib, state, nptcls, k, lfny, irb, i, j, l, c(3), nrb_msk, n, box, kagree, nrb_used, it
+    logical                       :: l_truth, l_gate_ls, l_mkdir, l_rr_nonfinite
     if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)
     if( .not. cline%defined('mskdiam') ) THROW_HARD('mskdiam is required; exec_test_rec3D_backends')
     l_mkdir = .true.
@@ -507,9 +507,9 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
             real,         intent(in)    :: tm(:,:,:)
             real,         intent(out)   :: prof(NRBINS)
             real, pointer :: rm(:,:,:) => null()
-            real(dp) :: num(NRBINS), den(NRBINS)
-            integer  :: ii, jj, ll, ib_loc
-            real     :: rad
+            real(dp)      :: num(NRBINS), den(NRBINS)
+            integer       :: ii, jj, ll, ib_loc
+            real          :: rad
             call vol_in%get_rmat_ptr(rm)
             num = 0.d0; den = 0.d0
             do ll = 1, ldim(3)
@@ -531,7 +531,7 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         function real2str_trim( x ) result( str )
             real, intent(in) :: x
             character(len=:), allocatable :: str
-            character(len=32) :: buf
+            character(len=32)             :: buf
             write(buf,'(F0.1)') x
             str = trim(adjustl(buf))
         end function real2str_trim
@@ -541,7 +541,7 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         function cline_tok( key ) result( tok )
             character(len=*), intent(in)  :: key
             character(len=:), allocatable :: tok
-            type(string) :: sval
+            type(string)                  :: sval
             sval = cline%get_carg(key)
             tok  = trim(adjustl(sval%to_char()))
             call sval%kill
@@ -556,11 +556,11 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
             character(len=*), intent(in)  :: backend, label
             logical,          intent(in)  :: l_unfil
             real,             intent(out) :: r05_out, r0143_out
-            type(image)  :: he, ho
-            type(string) :: fe, fo
+            type(image)       :: he, ho
+            type(string)      :: fe, fo
             real, allocatable :: corrs(:), res_h(:)
-            integer :: ldim_h(3), nvols, nyq
-            real    :: smpd_h, r05, r0143, mskrad_h
+            integer           :: ldim_h(3), nvols, nyq
+            real              :: smpd_h, r05, r0143, mskrad_h
             r05_out   = 0.
             r0143_out = 0.
             fe = refine3D_state_halfvol_fname(state, 'even', unfil=l_unfil)
@@ -604,7 +604,7 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         function real_tok( x ) result( tok )
             real, intent(in) :: x
             character(len=:), allocatable :: tok
-            character(len=32) :: buf
+            character(len=32)             :: buf
             if( x == 0.0 )then
                 tok = '0'
             else if( abs(x) >= 0.01 .and. abs(x) < 1000.0 )then

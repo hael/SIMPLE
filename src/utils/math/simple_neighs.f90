@@ -741,7 +741,7 @@ contains
         integer, intent(in)    :: ldim(3), px(3)
         real,    intent(in)    :: rmat(ldim(1),ldim(2),ldim(3))
         real,    intent(inout) :: neigh_8(27)
-        integer, intent(out) :: nsz
+        integer, intent(out)   :: nsz
         integer :: i, j, k
         logical :: i_ok, j_ok, k_ok
         i       = px(1)

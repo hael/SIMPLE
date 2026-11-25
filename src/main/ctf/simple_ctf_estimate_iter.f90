@@ -29,10 +29,10 @@ contains
         class(string),            intent(in)    :: dir_out
         logical,                  intent(in)    :: l_gen_thumb
         type(ctf_estimate_fit) :: ctffit
-        type(string) :: fname_diag, moviename_thumb, docname, tmpl_fname
-        integer      :: nframes, ldim(3)
-        real         :: phlim_lo, phlim_hi
-        character(len=STDLEN) :: phmsg
+        type(string)           :: fname_diag, moviename_thumb, docname, tmpl_fname
+        integer                :: nframes, ldim(3)
+        real                   :: phlim_lo, phlim_hi
+        character(len=STDLEN)  :: phmsg
         if( .not. file_exists(moviename_forctf) )&
         & write(logfhandle,*) 'inputted micrograph does not exist: ', moviename_forctf%to_char()
         call find_ldim_nptcls(moviename_forctf, ldim, nframes)

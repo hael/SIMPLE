@@ -20,17 +20,17 @@ integer, parameter :: MANIFEST_VERSION          = 4   ! 4: the density files car
 
 type :: trail_chain_manifest
     private
-    integer         :: box      = 0
-    real            :: smpd     = 0.
-    integer         :: nptcls   = 0
-    integer         :: nstates  = 0
-    integer         :: state    = 0
-    integer         :: gen      = 0
-    integer(kind=8) :: sizes(4) = 0_8
-    real            :: mrep     = 0.
-    integer         :: ncontrib = 0
+    integer         :: box        = 0
+    real            :: smpd       = 0.
+    integer         :: nptcls     = 0
+    integer         :: nstates    = 0
+    integer         :: state      = 0
+    integer         :: gen        = 0
+    integer(kind=8) :: sizes(4)   = 0_8
+    real            :: mrep       = 0.
+    integer         :: ncontrib   = 0
     integer(kind=8) :: wset_id(2) = 0_8
-    logical         :: exists   = .false.
+    logical         :: exists     = .false.
   contains
     procedure :: new
     procedure :: write
@@ -98,7 +98,7 @@ contains
         class(string),               intent(in)    :: fname
         integer,                     intent(out)   :: status
         character(len=1024) :: line
-        integer :: funit, io_stat, version
+        integer             :: funit, io_stat, version
         call self%kill
         status = TRAIL_MANIFEST_MISSING
         if( .not. file_exists(fname) ) return
@@ -124,11 +124,11 @@ contains
 
     ! Compare identity and geometry only; each caller owns rejection and cleanup.
     logical function compatible( self, nptcls, nstates, state, box, smpd, sizes, wset_id, message ) result(valid)
-        class(trail_chain_manifest), intent(in) :: self
-        integer, intent(in)                     :: nptcls, nstates, state, box
-        real, intent(in)                        :: smpd
-        integer(kind=8), intent(in)             :: sizes(:), wset_id(2)
-        character(len=*), intent(out)           :: message
+        class(trail_chain_manifest), intent(in)  :: self
+        integer,                     intent(in)  :: nptcls, nstates, state, box
+        real,                        intent(in)  :: smpd
+        integer(kind=8),             intent(in)  :: sizes(:), wset_id(2)
+        character(len=*),            intent(out) :: message
         real    :: extent_chain, extent_current
         integer :: i
         valid = .false.

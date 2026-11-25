@@ -66,40 +66,40 @@ integer, parameter :: NMAPS_KEPT          = 5  ! optics maps left on disk for th
 ! and run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_optics
     type(parameters), allocatable               :: params
-    type(sp_project), allocatable               :: spproj           ! every imported micrograph and the optics groups (new..kill)
-    type(stream_watcher)                        :: project_buff     ! completed preprocessing projects
+    type(sp_project), allocatable               :: spproj                ! every imported micrograph and the optics groups (new..kill)
+    type(stream_watcher)                        :: project_buff          ! completed preprocessing projects
     type(starproject_stream)                    :: starproj_stream
-    type(stream_pipe)                           :: pipe             ! to the master
+    type(stream_pipe)                           :: pipe                  ! to the master
     type(gui_metadata_stream_optics_assignment) :: meta_status
     type(gui_metadata_optics_group)             :: meta_group
-    type(string)                                :: map_dir          ! absolute; where the optics maps are published
-    integer :: map_id            = 0
-    integer :: last_ogid         = 0        ! the highest optics group id given; ids are kept across passes
+    type(string)                                :: map_dir               ! absolute; where the optics maps are published
+    integer                                     :: map_id            = 0
+    integer                                     :: last_ogid         = 0 ! the highest optics group id given; ids are kept across passes
     ! on a restart: the newest map's group id of each import index (0: not listed), the micrographs
     ! it lists not imported again yet, and whether no map is published until they are
     integer, allocatable :: restored_ogid(:)
-    integer :: n_restore_left    = 0
-    logical :: l_restoring       = .false.
-    logical :: l_ungrouped       = .false.  ! micrographs imported while restoring, not grouped yet
-    logical :: l_attached        = .false.  ! the upstream completed-projects folder exists and is watched
-    logical :: l_waiting_logged  = .false.
-    logical :: l_nmics_reached   = .false.
-    logical :: l_exists          = .false.
+    integer              :: n_restore_left    = 0
+    logical              :: l_restoring       = .false.
+    logical              :: l_ungrouped       = .false. ! micrographs imported while restoring, not grouped yet
+    logical              :: l_attached        = .false. ! the upstream completed-projects folder exists and is watched
+    logical              :: l_waiting_logged  = .false.
+    logical              :: l_nmics_reached   = .false.
+    logical              :: l_exists          = .false.
     ! waits (s); tests set them to 0, and settle_s to -1 to take files written in the same second
     integer :: settle_s          = SHORTWAIT ! an upstream project is taken once untouched longer than this;
                                              ! preprocessing moves finished projects in with a rename
     integer :: wait_s            = WAITTIME  ! pause in a pass that imports nothing
 contains
-    procedure :: new
-    procedure :: iterate
-    procedure :: finished
-    procedure :: finalize
-    procedure :: kill
+    procedure          :: new
+    procedure          :: iterate
+    procedure          :: finished
+    procedure          :: finalize
+    procedure          :: kill
     procedure, private :: attach_upstream
     procedure, private :: import_new_projects
     procedure, private :: assign_and_publish
-    procedure :: restore_groups
-    procedure :: end_restore
+    procedure          :: restore_groups
+    procedure          :: end_restore
     procedure, private :: send_group_shifts
     procedure, private :: send_status
 end type stream_stage_optics
@@ -266,7 +266,7 @@ contains
         class(stream_stage_optics), intent(inout) :: self
         integer,                    intent(out)   :: nimported
         type(string), allocatable :: projects(:)
-        integer :: nprojects, nbefore, imic, importind, ogid
+        integer                   :: nprojects, nbefore, imic, importind, ogid
         nimported = 0
         call self%project_buff%watch(nprojects, projects, max_nmovies=MAX_PROJECTS_IMPORT)
         if( nprojects == 0 ) return
@@ -292,7 +292,7 @@ contains
     subroutine restore_groups( self )
         class(stream_stage_optics), intent(inout) :: self
         integer, allocatable :: importinds(:), ogids(:)
-        integer :: id, i
+        integer              :: id, i
         id = latest_optics_map_table(self%map_dir, importinds, ogids)
         if( size(importinds) == 0 ) return
         allocate(self%restored_ogid(max(1, maxval(importinds))), source=0)
@@ -336,7 +336,7 @@ contains
         class(stream_stage_optics), intent(inout) :: self
         real,    allocatable :: xshifts(:,:), yshifts(:,:), xs(:), ys(:)
         integer, allocatable :: npoints(:)
-        integer :: ngroups, igroup
+        integer              :: ngroups, igroup
         call recent_shifts_by_optics_group(self%spproj%os_mic, self%spproj%os_optics, MAX_OPTICS_SHIFTS,&
             &xshifts, yshifts, npoints)
         ngroups = size(npoints)

@@ -6,9 +6,9 @@ implicit none
 contains
 
     module subroutine scale_pixels(self, new_range, ssc, oold_range)
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: new_range(2)
-        real, optional, intent(out)   :: oold_range(2), ssc
+        class(image),   intent(inout)         :: self
+        real,           intent(in)            :: new_range(2)
+        real,           optional, intent(out) :: oold_range(2), ssc
         real :: old_range(2), sc
         old_range(1) = minval(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
         old_range(2) = maxval(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
@@ -19,8 +19,8 @@ contains
     end subroutine scale_pixels
 
     module subroutine norm( self, a_s )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: a_s(2)
+        class(image),   intent(inout)        :: self
+        real,           optional, intent(in) :: a_s(2)
         integer :: npix
         real    :: ave, var, ep
         npix   = product(self%ldim)
@@ -49,9 +49,9 @@ contains
     end subroutine norm_minmax
 
     module subroutine norm4viz( self, brightness, maxmin)
-        class(image),      intent(inout) :: self
-        real,    optional, intent(in)    :: brightness
-        logical, optional, intent(in)    :: maxmin
+        class(image),      intent(inout)        :: self
+        real,              optional, intent(in) :: brightness
+        logical,           optional, intent(in) :: maxmin
         real    :: brightness_l
         logical :: maxmin_l
         brightness_l = 128.0
@@ -133,15 +133,15 @@ contains
     !! \param deadhot output index of corrected pixels
     !! \param outliers
     module subroutine cure_outliers( self, ncured, nsigma, deadhot, outliers )
-        class(image),                   intent(inout) :: self
-        integer,                        intent(inout) :: ncured
-        real,                           intent(in)    :: nsigma
-        integer,                        intent(out)   :: deadhot(2)
-        logical, allocatable, optional, intent(out)   :: outliers(:,:)
+        class(image),                   intent(inout)                      :: self
+        integer,                        intent(inout)                      :: ncured
+        real,                           intent(in)                         :: nsigma
+        integer,                        intent(out)                        :: deadhot(2)
+        logical,                        allocatable, optional, intent(out) :: outliers(:,:)
         real, allocatable :: win(:,:), rmat_pad(:,:)
-        real    :: ave, sdev, var, lthresh, uthresh
-        integer :: i, j, hwinsz, winsz
-        logical :: was_fted, err, present_outliers
+        real              :: ave, sdev, var, lthresh, uthresh
+        integer           :: i, j, hwinsz, winsz
+        logical           :: was_fted, err, present_outliers
         if( self%ldim(3)>1 )THROW_HARD('for 2D images only; cure_outliers')
         was_fted = self%is_ft()
         if( was_fted )THROW_HARD('for real space images only; cure_outliers')
@@ -204,8 +204,8 @@ contains
         integer,      intent(in)    :: nquanta
         real,         intent(inout) :: transl_tab(nquanta)
         real, allocatable :: pixvals(:)
-        integer :: i, j, k, ind
-        real    :: dist
+        integer           :: i, j, k, ind
+        real              :: dist
         pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
         if( self%ldim(3) > 1 )then
             call quantize_vec(pixvals, nquanta, transl_tab)

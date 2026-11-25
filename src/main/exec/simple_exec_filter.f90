@@ -15,7 +15,7 @@ private
 type(commander_filter)           :: xfilter
 type(commander_uniform_filter2D) :: xuniform_filter2D
 type(commander_uniform_filter3D) :: xuniform_filter3D
-type(commander_nu_filt3D):: xnu_filt3D
+type(commander_nu_filt3D)        :: xnu_filt3D
 type(commander_dose_filter3D)    :: xdose_filter3D
 type(commander_postprocess_nu)   :: xpostprocess_nu
 type(commander_postprocess_pdb)  :: xpostprocess_pdb

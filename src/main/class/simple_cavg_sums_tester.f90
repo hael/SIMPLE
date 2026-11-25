@@ -25,10 +25,10 @@ contains
     subroutine fill( sums, seed )
         type(cavg_sums), intent(inout) :: sums
         integer,         intent(in)    :: seed
-        complex(sp) :: ce(fdim(BOX),BOX,NCLS), co(fdim(BOX),BOX,NCLS)
-        real        :: te(fdim(BOX),BOX,NCLS), to(fdim(BOX),BOX,NCLS)
+        complex(sp)     :: ce(fdim(BOX),BOX,NCLS), co(fdim(BOX),BOX,NCLS)
+        real            :: te(fdim(BOX),BOX,NCLS), to(fdim(BOX),BOX,NCLS)
         integer(kind=8) :: state
-        integer :: i, j, k
+        integer         :: i, j, k
         state = int(seed, 8)
         do k = 1, NCLS
             do j = 1, BOX
@@ -66,7 +66,7 @@ contains
         type(string)         :: fname
         real,    allocatable :: mrep(:), offsets(:,:)
         integer, allocatable :: pops(:,:)
-        integer :: status
+        integer              :: status
         write(*,'(A)') 'test_cavg_sums_roundtrip'
         fname = 'cavg_sums_test_state.bin'
         call a%new(CAVG_SUMS_STATE, NCLS, BOX, SMPD)
@@ -104,11 +104,11 @@ contains
 
     ! Every unusable set is refused with a status that selects a full update
     subroutine test_cavg_sums_refusals()
-        type(cavg_sums)  :: a, b
-        type(string)     :: fname
+        type(cavg_sums)               :: a, b
+        type(string)                  :: fname
         character(len=1), allocatable :: bytes(:)
-        integer(kind=8)  :: fsize
-        integer :: status, funit, ios
+        integer(kind=8)               :: fsize
+        integer                       :: status, funit, ios
         write(*,'(A)') 'test_cavg_sums_refusals'
         fname = 'cavg_sums_test_refuse.bin'
         call del_file(fname)
@@ -160,15 +160,15 @@ contains
     ! gives the single-process result up to summation order. The centering shift is applied once
     ! to the previous set: a result with the shift applied twice differs.
     subroutine test_owner_blend_split()
-        real, parameter :: S(NCLS) = [1., 1., 2.]
-        real, parameter :: W(NCLS) = [0.9, 1.25, 0.]
-        real, parameter :: OFFSETS(2,NCLS) = reshape([1.5,-0.5, 0.,0., -2.,3.], [2,NCLS])
-        integer, parameter :: NSPLIT(3) = [1, 2, 4]
-        type(cavg_sums) :: cur, prev, ref, total, part_sums, twice
-        complex(sp) :: ce(fdim(BOX),BOX,NCLS), co(fdim(BOX),BOX,NCLS)
-        real        :: te(fdim(BOX),BOX,NCLS), to(fdim(BOX),BOX,NCLS)
-        real        :: frac
-        integer     :: isplit, ipart, icls, status, nparts
+        real,    parameter :: S(NCLS)         = [1., 1., 2.]
+        real,    parameter :: W(NCLS)         = [0.9, 1.25, 0.]
+        real,    parameter :: OFFSETS(2,NCLS) = reshape([1.5,-0.5, 0.,0., -2.,3.], [2,NCLS])
+        integer, parameter :: NSPLIT(3)       = [1, 2, 4]
+        type(cavg_sums)    :: cur, prev, ref, total, part_sums, twice
+        complex(sp)        :: ce(fdim(BOX),BOX,NCLS), co(fdim(BOX),BOX,NCLS)
+        real               :: te(fdim(BOX),BOX,NCLS), to(fdim(BOX),BOX,NCLS)
+        real               :: frac
+        integer            :: isplit, ipart, icls, status, nparts
         write(*,'(A)') 'test_owner_blend_split'
         call cur%new(CAVG_SUMS_STATE, NCLS, BOX, SMPD)
         call fill(cur, 21)
@@ -250,17 +250,17 @@ contains
     ! agrees with the legacy per-part padding summed over parts. Padding keeps every logical
     ! Fourier component, zero-fills the new ones, and keeps M(c).
     subroutine test_cavg_sums_pad()
-        integer, parameter :: BOX_PD = 24
-        type(cavg_sums) :: a, b, total, padsum
-        complex(sp) :: ce(fdim(BOX),BOX,NCLS), co(fdim(BOX),BOX,NCLS)
-        real        :: te(fdim(BOX),BOX,NCLS), to(fdim(BOX),BOX,NCLS)
-        complex(sp) :: pe(fdim(BOX_PD),BOX_PD,NCLS), po(fdim(BOX_PD),BOX_PD,NCLS)
-        real        :: pte(fdim(BOX_PD),BOX_PD,NCLS), pto(fdim(BOX_PD),BOX_PD,NCLS)
-        complex(sp) :: qe(fdim(BOX_PD),BOX_PD,NCLS), qo(fdim(BOX_PD),BOX_PD,NCLS)
-        real        :: qte(fdim(BOX_PD),BOX_PD,NCLS), qto(fdim(BOX_PD),BOX_PD,NCLS)
-        real, allocatable :: mrep(:)
-        real    :: smpd_pd
-        integer :: nonzero
+        integer, parameter   :: BOX_PD = 24
+        type(cavg_sums)      :: a, b, total, padsum
+        complex(sp)          :: ce(fdim(BOX),BOX,NCLS), co(fdim(BOX),BOX,NCLS)
+        real                 :: te(fdim(BOX),BOX,NCLS), to(fdim(BOX),BOX,NCLS)
+        complex(sp)          :: pe(fdim(BOX_PD),BOX_PD,NCLS), po(fdim(BOX_PD),BOX_PD,NCLS)
+        real                 :: pte(fdim(BOX_PD),BOX_PD,NCLS), pto(fdim(BOX_PD),BOX_PD,NCLS)
+        complex(sp)          :: qe(fdim(BOX_PD),BOX_PD,NCLS), qo(fdim(BOX_PD),BOX_PD,NCLS)
+        real                 :: qte(fdim(BOX_PD),BOX_PD,NCLS), qto(fdim(BOX_PD),BOX_PD,NCLS)
+        real,    allocatable :: mrep(:)
+        real                 :: smpd_pd
+        integer              :: nonzero
         write(*,'(A)') 'test_cavg_sums_pad'
         smpd_pd = SMPD * real(BOX) / real(BOX_PD)
         call a%new(CAVG_SUMS_STATE, NCLS, BOX, SMPD)

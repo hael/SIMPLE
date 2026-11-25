@@ -33,14 +33,14 @@ subroutine exec_test_stream_preproc( self, cline )
     use, intrinsic :: iso_c_binding,      only: C_long, C_double
     use, intrinsic :: ieee_arithmetic,    only: ieee_is_finite
     class(commander_test_stream_preproc), intent(inout) :: self
-    class(cmdline),                intent(inout) :: cline
-    character(len=*), parameter :: MOVIE_FILE      = 'simulate_movie.mrc'
-    character(len=*), parameter :: OPTIMAL_FILE    = 'optimal_movie_average.mrc'
-    character(len=*), parameter :: PARAMS_FILE     = 'simulate_movie_params.txt'
-    character(len=*), parameter :: PARTICLE_STACK  = 'synthetic_particles.mrcs'
-    character(len=*), parameter :: TEST_PROJFILE   = 'test_preproc.simple'
-    character(len=*), parameter :: TEST_OUTDIR     = 'stream_preproc'
-    character(len=*), parameter :: TRUTH_DIRNAME   = 'simulation_truth'
+    class(cmdline),                       intent(inout) :: cline
+    character(len=*), parameter :: MOVIE_FILE       = 'simulate_movie.mrc'
+    character(len=*), parameter :: OPTIMAL_FILE     = 'optimal_movie_average.mrc'
+    character(len=*), parameter :: PARAMS_FILE      = 'simulate_movie_params.txt'
+    character(len=*), parameter :: PARTICLE_STACK   = 'synthetic_particles.mrcs'
+    character(len=*), parameter :: TEST_PROJFILE    = 'test_preproc.simple'
+    character(len=*), parameter :: TEST_OUTDIR      = 'stream_preproc'
+    character(len=*), parameter :: TRUTH_DIRNAME    = 'simulation_truth'
     real,             parameter :: SMPD             = 1.3
     real,             parameter :: CS               = 2.7
     real,             parameter :: KV               = 300.0
@@ -53,28 +53,28 @@ subroutine exec_test_stream_preproc( self, cline )
     ! the drift ceiling and the image floors date from the first version (not derived); the profile of
     ! 2026-10-16 (20 seeds) admits them: drift median 0.06-0.11 px, worst 0.36; correlation median
     ! 0.85-0.92, worst 0.82, against the wrong movie 0.001-0.010
-    real,             parameter :: MOTION_TOL       = 0.50
-    real,             parameter :: CORR_FLOOR       = 0.50
-    real,             parameter :: CORR_MARGIN      = 0.05
-    integer,          parameter :: PARTICLE_BOX     = 64
-    integer,          parameter :: NPARTICLES       = 12
-    integer,          parameter :: MOVIE_DIM        = 512
-    integer,          parameter :: NFRAMES          = 8
+    real,              parameter           :: MOTION_TOL       = 0.50
+    real,              parameter           :: CORR_FLOOR       = 0.50
+    real,              parameter           :: CORR_MARGIN      = 0.05
+    integer,           parameter           :: PARTICLE_BOX     = 64
+    integer,           parameter           :: NPARTICLES       = 12
+    integer,           parameter           :: MOVIE_DIM        = 512
+    integer,           parameter           :: NFRAMES          = 8
     type(commander_stream_p01_preprocess)  :: xpreproc
-    type(commander_simulate_movie) :: xsimov
-    class(cmdline), allocatable  :: cline_preproc, cline_sim_mov
-    type(image)                  :: particle, feature, integrated, optimal, wrong_optimal
-    type(oris)                   :: simulation_truth
-    class(sp_project), allocatable:: spproj
-    type(test_gate)              :: gate
-    type(string)                 :: cwd_root, fixture_root, movies_dir, truth_dir, particle_stack_path
-    type(string)                 :: project_path, movie_name, optimal_name, params_name, value
-    type(string)                 :: movie_paths(STREAM_NMOVS_SET), optimal_paths(STREAM_NMOVS_SET)
-    type(string)                 :: params_paths(STREAM_NMOVS_SET)
-    character(len=XLONGSTRLEN)   :: fixture_root_path
-    integer                      :: i, imovie, wrong_movie, status, ldim(3), nimages
-    real                         :: dfx, dfy, ctfres, truth_dfx, truth_dfy, defocus_error, wrong_error
-    real                         :: motion_error, image_corr, wrong_corr
+    type(commander_simulate_movie)         :: xsimov
+    class(cmdline),    allocatable         :: cline_preproc, cline_sim_mov
+    type(image)                            :: particle, feature, integrated, optimal, wrong_optimal
+    type(oris)                             :: simulation_truth
+    class(sp_project), allocatable         :: spproj
+    type(test_gate)                        :: gate
+    type(string)                           :: cwd_root, fixture_root, movies_dir, truth_dir, particle_stack_path
+    type(string)                           :: project_path, movie_name, optimal_name, params_name, value
+    type(string)                           :: movie_paths(STREAM_NMOVS_SET), optimal_paths(STREAM_NMOVS_SET)
+    type(string)                           :: params_paths(STREAM_NMOVS_SET)
+    character(len=XLONGSTRLEN)             :: fixture_root_path
+    integer                                :: i, imovie, wrong_movie, status, ldim(3), nimages
+    real                                   :: dfx, dfy, ctfres, truth_dfx, truth_dfy, defocus_error, wrong_error
+    real                                   :: motion_error, image_corr, wrong_corr
 
     ! simple_test_exec initializes only test-program metadata.  The movie
     ! simulator uses the production UI while constructing its parameters.
@@ -285,7 +285,7 @@ subroutine exec_test_stream_preproc( self, cline )
     subroutine check_worker_jobs
         use simple_syslib, only: simple_list_files
         type(string), allocatable :: finished(:), codes(:)
-        integer :: i, funit, ios, code, njobs, nbad
+        integer                   :: i, funit, ios, code, njobs, nbad
         call simple_list_files(TEST_OUTDIR//'/spprojs/JOB_FINISHED_*', finished)
         call simple_list_files(TEST_OUTDIR//'/spprojs/EXIT_CODE_JOB_*', codes)
         njobs = 0
@@ -335,7 +335,7 @@ subroutine exec_test_stream_preproc( self, cline )
     integer function find_simulation( movie_path ) result(ind)
         type(string), intent(in) :: movie_path
         type(string) :: movie_basename, truth_basename
-        integer :: isim
+        integer      :: isim
         ind = 0
         movie_basename = basename(movie_path)
         do isim = 1, STREAM_NMOVS_SET
@@ -351,11 +351,11 @@ subroutine exec_test_stream_preproc( self, cline )
         type(string), intent(in) :: star_path
         type(oris),   intent(in) :: truth
         type(starfile_table_type) :: table
-        integer(C_long) :: object_id, num_objects
-        real(C_double)  :: shift_x_dp, shift_y_dp
-        real :: estimated(NFRAMES,2), expected(NFRAMES,2)
-        integer :: iframe, fixed_frame
-        logical :: got_x, got_y
+        integer(C_long)           :: object_id, num_objects
+        real(C_double)            :: shift_x_dp, shift_y_dp
+        real                      :: estimated(NFRAMES,2), expected(NFRAMES,2)
+        integer                   :: iframe, fixed_frame
+        logical                   :: got_x, got_y
 
         call starfile_table__new(table)
         call starfile_table__read(table, star_path, 'global_shift')

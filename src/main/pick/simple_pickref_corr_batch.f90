@@ -13,16 +13,16 @@ integer, parameter :: DEFAULT_BATCH_SIZE = 256
 
 type :: pickref_corr_batch
     private
-    integer :: nx = 0, ny = 0, box = 0, npix = 0, nrefs = 0, batch_size = 0
-    real, allocatable :: mic(:,:), refs(:,:), ref_sums(:)
-    real, allocatable :: windows(:,:,:), dots(:,:,:)   !< (npix|nrefs, batch_size, team) per thread
+    integer               :: nx                = 0, ny = 0, box = 0, npix = 0, nrefs = 0, batch_size = 0
+    real,     allocatable :: mic(:,:), refs(:,:), ref_sums(:)
+    real,     allocatable :: windows(:,:,:), dots(:,:,:) !< (npix|nrefs, batch_size, team) per thread
     real(dp), allocatable :: sat(:,:), sat2(:,:)
-    real(dp) :: mic_scale = 1.0_dp
-    real(dp) :: prepare_seconds = 0.0_dp, gather_seconds = 0.0_dp
-    real(dp) :: gemm_seconds = 0.0_dp, reduce_seconds = 0.0_dp
-    integer(kind=8) :: candidates_scored = 0_8
-    logical, allocatable :: ref_valid(:)
-    logical :: exists = .false.
+    real(dp)              :: mic_scale         = 1.0_dp
+    real(dp)              :: prepare_seconds   = 0.0_dp, gather_seconds = 0.0_dp
+    real(dp)              :: gemm_seconds      = 0.0_dp, reduce_seconds = 0.0_dp
+    integer(kind=8)       :: candidates_scored = 0_8
+    logical,  allocatable :: ref_valid(:)
+    logical               :: exists            = .false.
 contains
     procedure :: new
     procedure :: score_positions
@@ -33,14 +33,14 @@ end type pickref_corr_batch
 contains
 
     subroutine new( self, mic, refs, ref_valid, batch_size )
-        class(pickref_corr_batch), intent(inout) :: self
-        class(image),              intent(in)    :: mic
-        class(image),              intent(in)    :: refs(:)
-        logical,                   intent(in)    :: ref_valid(:)
-        integer, optional,         intent(in)    :: batch_size
+        class(pickref_corr_batch), intent(inout)                :: self
+        class(image),              intent(in)                   :: mic
+        class(image),              intent(in)                   :: refs(:)
+        logical,                   intent(in)                   :: ref_valid(:)
+        integer,                   optional,         intent(in) :: batch_size
         real, allocatable :: rmat(:,:,:)
-        real(dp) :: mean_mic, amp, val, t0
-        integer :: ldim(3), i, j, iref
+        real(dp)          :: mean_mic, amp, val, t0
+        integer           :: ldim(3), i, j, iref
         if( self%exists ) call self%kill
         t0 = tic_omp()
         ldim = mic%get_ldim()
@@ -103,11 +103,11 @@ contains
         real(dp), allocatable   :: means(:,:), sigmas(:,:), tgather(:), tgemm(:), treduce(:)
         logical,  allocatable   :: valid(:,:)
         integer(timer_int_kind) :: t0
-        logical  :: have_score
-        real(dp) :: sum_win, sumsq_win, variance, rnpix
-        real     :: score, best_score
-        integer  :: nthr, ithr, nbatches, ib, ibeg, iend, nbatch, icol, ipos, iref, x, y
-        integer  :: i0, i1, j0, j1, jwin, ivec
+        logical                 :: have_score
+        real(dp)                :: sum_win, sumsq_win, variance, rnpix
+        real                    :: score, best_score
+        integer                 :: nthr, ithr, nbatches, ib, ibeg, iend, nbatch, icol, ipos, iref, x, y
+        integer                 :: i0, i1, j0, j1, jwin, ivec
         if( .not. self%exists ) error stop 'pickref_corr_batch: score_positions before new'
         if( size(positions,2) /= 2 ) error stop 'pickref_corr_batch: positions must have two columns'
         scores = -1.0

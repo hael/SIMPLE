@@ -15,17 +15,17 @@ public :: flex_plane_store
 
 type :: flex_plane_store
     private
-    type(fplane_type), allocatable :: held(:)        !< by project row; held when cmplx_plane is allocated
+    type(fplane_type),          allocatable :: held(:)                !< by project row; held when cmplx_plane is allocated
     type(flex_pca_plane_cache), allocatable :: cache
-    logical  :: l_on         = .false.
-    logical  :: l_full       = .false.               !< budget reached: no more rows are stored
-    logical  :: l_key_set    = .false.
-    logical  :: l_cached_key = .false.               !< read path the held planes came from
-    integer  :: nheld        = 0
-    integer  :: nserved      = 0                     !< batches served from the store
-    integer  :: nprepped     = 0                     !< batches read and prepped
-    real(dp) :: gb_held      = 0.d0
-    real(dp) :: gb_budget    = 0.d0
+    logical                                 :: l_on         = .false.
+    logical                                 :: l_full       = .false. !< budget reached: no more rows are stored
+    logical                                 :: l_key_set    = .false.
+    logical                                 :: l_cached_key = .false. !< read path the held planes came from
+    integer                                 :: nheld        = 0
+    integer                                 :: nserved      = 0       !< batches served from the store
+    integer                                 :: nprepped     = 0       !< batches read and prepped
+    real(dp)                                :: gb_held      = 0.d0
+    real(dp)                                :: gb_budget    = 0.d0
   contains
     procedure, public :: ensure_cache      => plane_store_ensure_cache
     procedure, public :: adopt_cache       => plane_store_adopt_cache
@@ -85,7 +85,7 @@ contains
 
     subroutine plane_store_enable( self, nrows )
         class(flex_plane_store), intent(inout) :: self
-        integer, intent(in) :: nrows
+        integer,                 intent(in)    :: nrows
         real(dp) :: gb_avail
         if( self%l_on ) return
         if( .not. self%cache_in_use() )then
@@ -110,14 +110,14 @@ contains
     !> Fetch rows when the whole batch is resident. The read-path key prevents reuse across
     !! incompatible cached/native preparations.
     subroutine plane_store_fetch( self, rows, fpls, cached, found, sec_read )
-        class(flex_plane_store),        intent(inout) :: self
-        integer,                        intent(in)    :: rows(:)
-        type(fplane_type),              intent(inout) :: fpls(:)
-        logical,                        intent(in)    :: cached
-        logical,                        intent(out)   :: found
-        real(timer_int_kind), optional, intent(inout) :: sec_read
+        class(flex_plane_store),        intent(inout)           :: self
+        integer,                        intent(in)              :: rows(:)
+        type(fplane_type),              intent(inout)           :: fpls(:)
+        logical,                        intent(in)              :: cached
+        logical,                        intent(out)             :: found
+        real(timer_int_kind),           optional, intent(inout) :: sec_read
         integer(timer_int_kind) :: t
-        integer :: i
+        integer                 :: i
         found = .false.
         if( .not. self%l_on ) return
         if( .not. self%l_key_set )then
@@ -140,7 +140,7 @@ contains
 
     logical function all_held( self, batchsz, rows )
         class(flex_plane_store), intent(in) :: self
-        integer, intent(in) :: batchsz, rows(batchsz)
+        integer,                 intent(in) :: batchsz, rows(batchsz)
         integer :: i
         all_held = .false.
         do i = 1, batchsz
@@ -219,7 +219,7 @@ contains
     !> MemAvailable from /proc/meminfo in GB; zero when unreadable (non-Linux).
     real(dp) function mem_available_gb()
         character(len=256) :: line
-        integer  :: funit, ios, kb
+        integer            :: funit, ios, kb
         mem_available_gb = 0.d0
         open(newunit=funit, file='/proc/meminfo', status='old', action='read', iostat=ios)
         if( ios /= 0 ) return

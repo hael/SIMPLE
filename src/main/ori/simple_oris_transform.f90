@@ -116,9 +116,9 @@ contains
     end subroutine rot_transp_by_ind
 
     module subroutine map3dshift22d_all( self, sh3d, state )
-        class(oris),       intent(inout) :: self
-        real,              intent(in)    :: sh3d(3)
-        integer, optional, intent(in)    :: state
+        class(oris),       intent(inout)        :: self
+        real,              intent(in)           :: sh3d(3)
+        integer,           optional, intent(in) :: state
         integer :: i
         do i=1,self%n
             call self%map3dshift22d_by_ind(i, sh3d, state)
@@ -126,10 +126,10 @@ contains
     end subroutine map3dshift22d_all
 
     module subroutine map3dshift22d_by_ind( self, i, sh3d, state )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: i
-        real,              intent(in)    :: sh3d(3)
-        integer, optional, intent(in)    :: state
+        class(oris),       intent(inout)        :: self
+        integer,           intent(in)           :: i
+        real,              intent(in)           :: sh3d(3)
+        integer,           optional, intent(in) :: state
         integer :: mystate
         if( present(state) )then
             mystate = self%o(i)%get_state()
@@ -165,17 +165,17 @@ contains
     end subroutine calc_avg_offset2D
 
     module subroutine calc_avg_offset3D( self, offset_avg, state )
-        class(oris),       intent(inout)    :: self
-        real,              intent(inout) :: offset_avg(3)
-        integer, optional, intent(in)    :: state
-        integer,    parameter :: N = 300
-        integer,    parameter :: PROJDIRMINPOP = 10
-        type(oris)            :: spiral
-        type(ori)             :: o, oxy, oxz, oyz
-        integer,  allocatable :: closest_proj(:)
-        real(dp) :: avg(3), offset(3), w(3), sumw(3)
-        real     :: sh3d(3)
-        integer  :: i,j, istate, pop, npop
+        class(oris),       intent(inout)        :: self
+        real,              intent(inout)        :: offset_avg(3)
+        integer,           optional, intent(in) :: state
+        integer,    parameter   :: N             = 300
+        integer,    parameter   :: PROJDIRMINPOP = 10
+        type(oris)              :: spiral
+        type(ori)               :: o, oxy, oxz, oyz
+        integer,    allocatable :: closest_proj(:)
+        real(dp)                :: avg(3), offset(3), w(3), sumw(3)
+        real                    :: sh3d(3)
+        integer                 :: i,j, istate, pop, npop
         istate = 1
         if( present(state) ) istate = state
         call spiral%new(N,.true.)

@@ -31,16 +31,16 @@ contains
 
     subroutine terminate_stream( params, msg )
         class(parameters), intent(in) :: params
-        character(len=*), intent(in) :: msg
+        character(len=*),  intent(in) :: msg
         if(trim(params%async).eq.'yes') then
             if( file_exists(TERM_STREAM) ) call simple_end('**** '//trim(msg)//' ****', print_simple=.false.)
         endif
     end subroutine terminate_stream
 
     subroutine create_stream_project( spproj, cline, projname )
-        type(sp_project),  intent(inout) :: spproj
-        type(cmdline),     intent(inout) :: cline
-        type(string),         intent(in) :: projname
+        type(sp_project),     intent(inout) :: spproj
+        type(cmdline),        intent(inout) :: cline
+        type(string),         intent(in)    :: projname
         if( .not. cline%defined('projfile') ) then
             call cline%set('projname', projname)
             call cline%set('projfile', string(projname%to_char() // METADATA_EXT))
@@ -59,9 +59,9 @@ contains
     end function upstream_done
 
     subroutine init_stream_qenv( params, qenv, envvar )
-        type(parameters), intent(inout) :: params
-        type(qsys_env),   intent(inout) :: qenv
-        type(string),        intent(in) :: envvar
+        type(parameters),    intent(inout) :: params
+        type(qsys_env),      intent(inout) :: qenv
+        type(string),        intent(in)    :: envvar
         character(len=STDLEN)           :: chunk_part_env
         integer                         :: envlen
         call get_environment_variable(envvar%to_char(), chunk_part_env, envlen)
@@ -73,15 +73,15 @@ contains
     end subroutine init_stream_qenv 
 
     subroutine import_new_projects( project_list, projects, n_mics_imported, n_ptcls_imported, ignore_ptcls, check_state )
-        type(rec_list),              intent(inout) :: project_list
-        type(string),   allocatable, intent(inout) :: projects(:)
-        integer,                     intent(inout) :: n_mics_imported, n_ptcls_imported
-        logical,        optional,       intent(in) :: ignore_ptcls, check_state
+        type(rec_list),              intent(inout)              :: project_list
+        type(string),                allocatable, intent(inout) :: projects(:)
+        integer,                     intent(inout)              :: n_mics_imported, n_ptcls_imported
+        logical,                     optional,       intent(in) :: ignore_ptcls, check_state
         type(project_rec)                          :: prec
         type(sp_project)                           :: spproj
         type(string)                               :: projabspath
-        integer :: iproj, imic
-        logical :: l_check_state, l_ignore_ptcls
+        integer                                    :: iproj, imic
+        logical                                    :: l_check_state, l_ignore_ptcls
         l_check_state  = .false.
         l_ignore_ptcls = .false.
         if( present(check_state)  ) l_check_state  = check_state
@@ -123,8 +123,8 @@ contains
     function get_latest_optics_map_id(optics_dir) result (lastmap)
         class(string), optional, intent(in)   :: optics_dir
         type(string), allocatable :: map_list(:)
-        type(string) :: map_str, map_i_str
-        integer      :: imap, prefix_len, testmap, lastmap
+        type(string)              :: map_str, map_i_str
+        integer                   :: imap, prefix_len, testmap, lastmap
         lastmap = 0
         if(optics_dir .ne. "") then
             if(dir_exists(optics_dir)) call simple_list_files(optics_dir%to_char()//'/'// OPTICS_MAP_PREFIX //'*'//TXT_EXT, map_list)

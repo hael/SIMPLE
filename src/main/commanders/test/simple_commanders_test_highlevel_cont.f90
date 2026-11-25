@@ -16,10 +16,10 @@ contains
 module subroutine exec_test_cont_refine3D_1jxy( self, cline )
     class(commander_test_cont_refine3D_1jxy), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
-    class(parameters), allocatable:: params
-    type(string)     :: cwd_saved, fixture_root
-    integer          :: status
-    logical          :: all_ok, nu_handoff_only
+    class(parameters), allocatable :: params
+    type(string)                   :: cwd_saved, fixture_root
+    integer                        :: status
+    logical                        :: all_ok, nu_handoff_only
     allocate(params)
     call simple_getcwd(cwd_saved)
     fixture_root = filepath(cwd_saved, 'test_cont_refine3D_1jxy_'//int2str(get_process_id()))
@@ -115,28 +115,28 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     class(string), intent(in)    :: metrics_file
     logical,       intent(inout) :: all_ok
     logical,       intent(in)    :: nu_handoff_only
-    character(len=*), parameter :: GATE_DIR   = 'cont_refine3D_gate'
-    character(len=*), parameter :: ATOM_VOL   = '1JYX_atoms.mrc'
-    character(len=*), parameter :: TRUTH_VOL  = '1JYX.mrc'
-    character(len=*), parameter :: PTCL_STK   = 'simulated_particles.mrc'
-    character(len=*), parameter :: TRUTH_ORIS = 'simulated_oris.txt'
-    character(len=*), parameter :: PROJNAME   = 'cont_gate'
-    integer, parameter :: BOX        = 144
-    integer, parameter :: NPTCLS     = 1000
-    real,    parameter :: SMPD       = 1.3
-    real,    parameter :: MSKDIAM    = 120.
-    real,    parameter :: MSKRAD     = 46.          !< pixels, the soft mask of the truth reference (E25)
-    real,    parameter :: SNR        = 1.
-    real,    parameter :: LP         = 8.
-    real,    parameter :: TRS        = 5., ATHRES_CONT = 15.   !< the bounds of E25 and of Phase 0 (O6)
-    real,    parameter :: ROT_ERR    = 15.          !< injected rotation (deg)
-    real,    parameter :: SH_ERR     = 2.           !< injected shift (pixels)
-    integer, parameter :: PERTURBATION_SEED = 20260915
-    integer, parameter :: NPAIRS     = 20000
-    integer, parameter :: GATE_SEED  = 20260930
-    integer, parameter :: AUTO_MAXITS = 4, AUTO_NSAMPLE = 500, CONT_MAXITS = 2
-    integer, parameter :: FOLLOWUP_MAXITS = 2
-    real,    parameter :: FOLLOWUP_UPDATE_FRAC = 0.3
+    character(len=*), parameter :: GATE_DIR             = 'cont_refine3D_gate'
+    character(len=*), parameter :: ATOM_VOL             = '1JYX_atoms.mrc'
+    character(len=*), parameter :: TRUTH_VOL            = '1JYX.mrc'
+    character(len=*), parameter :: PTCL_STK             = 'simulated_particles.mrc'
+    character(len=*), parameter :: TRUTH_ORIS           = 'simulated_oris.txt'
+    character(len=*), parameter :: PROJNAME             = 'cont_gate'
+    integer,          parameter :: BOX                  = 144
+    integer,          parameter :: NPTCLS               = 1000
+    real,             parameter :: SMPD                 = 1.3
+    real,             parameter :: MSKDIAM              = 120.
+    real,             parameter :: MSKRAD               = 46.                   !< pixels, the soft mask of the truth reference (E25)
+    real,             parameter :: SNR                  = 1.
+    real,             parameter :: LP                   = 8.
+    real,             parameter :: TRS                  = 5., ATHRES_CONT = 15. !< the bounds of E25 and of Phase 0 (O6)
+    real,             parameter :: ROT_ERR              = 15.                   !< injected rotation (deg)
+    real,             parameter :: SH_ERR               = 2.                    !< injected shift (pixels)
+    integer,          parameter :: PERTURBATION_SEED    = 20260915
+    integer,          parameter :: NPAIRS               = 20000
+    integer,          parameter :: GATE_SEED            = 20260930
+    integer,          parameter :: AUTO_MAXITS          = 4, AUTO_NSAMPLE = 500, CONT_MAXITS = 2
+    integer,          parameter :: FOLLOWUP_MAXITS      = 2
+    real,             parameter :: FOLLOWUP_UPDATE_FRAC = 0.3
     ! Floors, declared before the first run (section 10.1; ruling R5: no map or FSC floor).
     ! Stages a-c run E25 through the production path: E25's floors at 8 A apply, F1 a tenth of
     ! the injected error (median rotation <= 1.5 deg, median shift <= 0.2 px) and F2 the
@@ -175,24 +175,24 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     type(commander_refine3D)           :: xrefine3D
     type(commander_refine3D_auto)      :: xauto
     type(commander_refine3D_local)     :: xlocal
-    class(cmdline), allocatable:: cl
-    type(atoms)         :: molecule
-    type(molecule_data) :: mol
-    type(image)         :: vol
-    class(sp_project), allocatable:: seeded, out_a, out_c, run_proj
-    type(oris)          :: truth, shuffled, stats
-    type(ori)           :: o_shuffled
-    type(ctfparams)     :: ctfvars
-    type(test_gate)     :: gate
-    type(string)        :: root, gate_root, stk_abs, truth_abs, proj_dir
-    integer, allocatable :: inds(:), before_updates(:)
-    real    :: med_rot, med_sh, basin, seed_rot, seed_sh, pair_seed, pair_before, pair_after, frac5
-    real    :: sym_seed, sym_before, sym_after, sym_nofollowup, sym_followup, d2ops(3,3,4), o(3), f(3,3)
-    real    :: corr_mean
-    logical :: updated(NPTCLS), l_sample_ok, l_finite
-    class(sp_project), allocatable:: out_f
-    real    :: diffs(NPTCLS)
-    integer :: i, status, fsc_bytes
+    class(cmdline),    allocatable     :: cl
+    type(atoms)                        :: molecule
+    type(molecule_data)                :: mol
+    type(image)                        :: vol
+    class(sp_project), allocatable     :: seeded, out_a, out_c, run_proj
+    type(oris)                         :: truth, shuffled, stats
+    type(ori)                          :: o_shuffled
+    type(ctfparams)                    :: ctfvars
+    type(test_gate)                    :: gate
+    type(string)                       :: root, gate_root, stk_abs, truth_abs, proj_dir
+    integer,           allocatable     :: inds(:), before_updates(:)
+    real                               :: med_rot, med_sh, basin, seed_rot, seed_sh, pair_seed, pair_before, pair_after, frac5
+    real                               :: sym_seed, sym_before, sym_after, sym_nofollowup, sym_followup, d2ops(3,3,4), o(3), f(3,3)
+    real                               :: corr_mean
+    logical                            :: updated(NPTCLS), l_sample_ok, l_finite
+    class(sp_project), allocatable     :: out_f
+    real                               :: diffs(NPTCLS)
+    integer                            :: i, status, fsc_bytes
     allocate(cl, seeded, out_a, out_c, run_proj, out_f)
     call make_ui
     write(logfhandle,'(a)') '>>> TEST_CONT_REFINE3D_1JXY: refine=cont gate'
@@ -509,12 +509,12 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         use simple_refine3D_provenance, only: refine3D_provenance, provenance_file, local_import_marker, REFSET_OK
         use simple_sigma2_state_file, only: sigma2_state_digest_file
         type(refine3D_provenance) :: source_reference
-        type(string) :: source_files(12), staged_files(4), staged_base, producer_dir
-        integer(int64) :: digests(12)
-        integer :: j, ref_status, vol_box, halves(NPTCLS)
-        real :: vol_smpd, saved_lp, used_lp, expected_lp
-        logical :: support_verified, sigma_found
-        character(len=STDLEN) :: message
+        type(string)              :: source_files(12), staged_files(4), staged_base, producer_dir
+        integer(int64)            :: digests(12)
+        integer                   :: j, ref_status, vol_box, halves(NPTCLS)
+        real                      :: vol_smpd, saved_lp, used_lp, expected_lp
+        logical                   :: support_verified, sigma_found
+        character(len=STDLEN)     :: message
         write(logfhandle,'(A)') '>>> CONT_REFINE3D_1JXY STAGE nu_handoff'
         call run_refine3D_cont('k_nu_producer', 'euclid', 0, run_proj, l_nu_producer=.true.)
         producer_dir = filepath(gate_root, 'k_nu_producer')
@@ -635,10 +635,10 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     !> median rotation (deg) and shift (pixels) errors against the truth (or against ref), and the
     !! fraction of particles inside the basin width at LP
     subroutine pose_errors( os, med_rot_out, med_sh_out, basin_out, ref )
-        class(oris),           intent(in)  :: os
-        real,                  intent(out) :: med_rot_out, med_sh_out, basin_out
-        class(oris), optional, intent(in)  :: ref
-        real :: rot(NPTCLS), sh(NPTCLS)
+        class(oris),           intent(in)           :: os
+        real,                  intent(out)          :: med_rot_out, med_sh_out, basin_out
+        class(oris),           optional, intent(in) :: ref
+        real    :: rot(NPTCLS), sh(NPTCLS)
         integer :: j
         do j = 1, NPTCLS
             if( present(ref) )then
@@ -657,8 +657,8 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     !> The median rotation error (deg) against the truth up to the declared D2 of 1JYX, over the
     !! particles sel (all by default)
     real function sym_err( os, sel )
-        class(oris),       intent(in) :: os
-        logical, optional, intent(in) :: sel(NPTCLS)
+        class(oris),       intent(in)           :: os
+        logical,           optional, intent(in) :: sel(NPTCLS)
         real    :: re(3,3,NPTCLS), rt(3,3,NPTCLS), errs(NPTCLS)
         logical :: lsel(NPTCLS)
         integer :: j
@@ -685,10 +685,10 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     !! nparts > 0 distributes it
     subroutine run_refine3D_cont( dir, objfun, nparts, out, l_nu_producer )
         use simple_syslib, only: simple_list_files
-        character(len=*),  intent(in)    :: dir, objfun
-        integer,           intent(in)    :: nparts
-        class(sp_project),  intent(inout) :: out
-        logical, optional, intent(in)    :: l_nu_producer
+        character(len=*),   intent(in)           :: dir, objfun
+        integer,            intent(in)           :: nparts
+        class(sp_project),  intent(inout)        :: out
+        logical,            optional, intent(in) :: l_nu_producer
         type(string), allocatable :: bench_parts(:)
         call enter_stage(dir)
         call cl%set('prg',      'refine3D')
@@ -732,11 +732,11 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     !> two trailing refine3D refine=neigh iterations over 30% samples, with or without the continuous pass
     !! (stage f); the last assembly must represent the N of the final project (C1 of the aftermath)
     subroutine run_refine3D_discrete( dir, pose_cont, out )
-        character(len=*), intent(in)    :: dir, pose_cont
+        character(len=*),  intent(in)    :: dir, pose_cont
         class(sp_project), intent(inout) :: out
         type(trail_chain_manifest) :: manifest
-        integer, allocatable :: nrep(:), nsmp(:)
-        integer :: mstatus
+        integer, allocatable       :: nrep(:), nsmp(:)
+        integer                    :: mstatus
         call enter_stage(dir)
         call cl%set('prg',         'refine3D')
         call cl%set('projfile',    simple_abspath(string(PROJNAME//'.simple')))
@@ -769,7 +769,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     !> the floors of E25 at 8 A on the poses of a refine3D refine=cont pass, and its negative
     !! control: the same poses against the shuffled truth fail the rotation and basin floors
     subroutine gate_e25( tag, out )
-        character(len=*), intent(in)    :: tag
+        character(len=*),  intent(in)    :: tag
         class(sp_project), intent(inout) :: out
         call pose_errors(out%os_ptcl3D, med_rot, med_sh, basin)
         call gate%metric(tag//'_median_rotation_error_deg', med_rot, MAX_MED_ROT, med_rot <= MAX_MED_ROT, upper=.true.)
@@ -786,11 +786,11 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     !> stage d: no polar reprojection model, no readout record of a probabilistic part, and the seed's
     !! projection direction in every particle (a discrete pass would assign its own)
     subroutine check_no_polar( tag, out )
-        character(len=*), intent(in) :: tag
+        character(len=*),  intent(in) :: tag
         class(sp_project), intent(in) :: out
         type(string), allocatable :: files(:)
-        integer :: j, npolar
-        logical :: l_seed_proj
+        integer                   :: j, npolar
+        logical                   :: l_seed_proj
         npolar = 0
         if( file_exists(refine3D_reproj_model_fname('even')) ) npolar = npolar + 1
         if( file_exists(refine3D_reproj_model_fname('odd'))  ) npolar = npolar + 1
@@ -816,9 +816,9 @@ module subroutine exec_test_cont_refine3D_bench( self, cline )
     class(commander_test_cont_refine3D_bench), intent(inout) :: self
     class(cmdline),                            intent(inout) :: cline
     class(parameters), allocatable :: params
-    type(string) :: cwd_saved, root, suite, objfun
-    integer      :: nthr, nparts, nptcls, status
-    real         :: snr
+    type(string)                   :: cwd_saved, root, suite, objfun
+    integer                        :: nthr, nparts, nptcls, status
+    real                           :: snr
     suite  = ''
     objfun = ''
     nparts = 0
@@ -892,26 +892,26 @@ subroutine run_cont_refine3D_bench( suite, objfun, nthr, nparts, nptcls, snr )
     character(len=*), parameter :: TRUTH_ORIS = 'simulated_oris.txt'
     character(len=*), parameter :: PROJNAME   = 'cont_bench'
     character(len=*), parameter :: REF_DIR    = 'reference'
-    real,    parameter :: MSKDIAM  = 120.           !< Angstroms, as E25
-    real,    parameter :: TRS_A    = 6.5            !< Angstroms, E25's 5 pixels
-    real,    parameter :: LOCAL_ROT  = 2.,  LOCAL_SH_A  = 1.,  LOCAL_LP  = 3.
+    real,             parameter :: MSKDIAM    = 120. !< Angstroms, as E25
+    real,             parameter :: TRS_A      = 6.5  !< Angstroms, E25's 5 pixels
+    real,             parameter :: LOCAL_ROT  = 2.,  LOCAL_SH_A  = 1.,  LOCAL_LP  = 3.
     ! the capture bound clears the seed error, so no particle's optimum lies against it
-    real,    parameter :: CAPTURE_ROT = 15., CAPTURE_SH_A = 2.6, CAPTURE_LP = 8., CAPTURE_ATHRES = 20.
-    integer, parameter :: PERTURBATION_SEED = 20260915
+    real,              parameter       :: CAPTURE_ROT       = 15., CAPTURE_SH_A = 2.6, CAPTURE_LP = 8., CAPTURE_ATHRES = 20.
+    integer,           parameter       :: PERTURBATION_SEED = 20260915
     type(commander_simulate_particles) :: xsim
     type(commander_new_project)        :: xnew_project
     type(commander_rec3D)              :: xrec
     type(commander_refine3D)           :: xrefine3D
-    class(cmdline), allocatable:: cl
-    type(atoms)         :: molecule
-    type(molecule_data) :: mol
-    class(sp_project), allocatable:: seeded, out
-    type(oris)          :: truth
-    type(ctfparams)     :: ctfvars
-    type(test_gate)     :: gate
-    type(string)        :: bench_root, stk_abs, ref_abs
-    real    :: smpd, med_rot, med_sh, basin
-    integer :: i, status
+    class(cmdline),    allocatable     :: cl
+    type(atoms)                        :: molecule
+    type(molecule_data)                :: mol
+    class(sp_project), allocatable     :: seeded, out
+    type(oris)                         :: truth
+    type(ctfparams)                    :: ctfvars
+    type(test_gate)                    :: gate
+    type(string)                       :: bench_root, stk_abs, ref_abs
+    real                               :: smpd, med_rot, med_sh, basin
+    integer                            :: i, status
     allocate(cl, seeded, out)
     smpd = CONT_BENCH_EXTENT/real(CONT_BENCH_BOX)
     write(logfhandle,'(a)') '>>> CONT_REFINE3D_BENCH: refine=cont benchmark'
@@ -1092,8 +1092,8 @@ subroutine run_cont_refine3D_bench( suite, objfun, nthr, nparts, nptcls, snr )
         real,        intent(in)  :: lp
         real,        intent(out) :: med_rot_out, med_sh_out, basin_out
         real, allocatable :: rot(:), sh(:)
-        real(dp) :: m1(3,3), m2(3,3)
-        integer  :: j
+        real(dp)          :: m1(3,3), m2(3,3)
+        integer           :: j
         allocate(rot(nptcls), sh(nptcls))
         do j = 1, nptcls
             m1 = real(os%get_mat(j), dp)

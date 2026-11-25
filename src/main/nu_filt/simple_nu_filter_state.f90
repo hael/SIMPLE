@@ -40,10 +40,10 @@ contains
     end subroutine get_nu_filter_timings
 
     module subroutine init_nu_filter( vol_even, vol_odd, fsc_res )
-        class(image), intent(in) :: vol_even, vol_odd
-        real,    optional, intent(in) :: fsc_res
+        class(image), intent(in)           :: vol_even, vol_odd
+        real,         optional, intent(in) :: fsc_res
         integer, allocatable :: cutoff_finds_tmp(:)
-        integer :: i, n_static
+        integer              :: i, n_static
         ldim = vol_even%get_ldim()
         smpd = vol_even%get_smpd()
         box  = ldim(1)
@@ -226,10 +226,10 @@ contains
     !! spherical-support calibration statistics, then treats this background
     !! as a fixed coarsest-label boundary condition in its Potts field.
     module subroutine set_nu_solvent_envelope( envmask, source )
-        class(image),               intent(in) :: envmask
-        character(len=*), optional, intent(in) :: source
+        class(image),               intent(in)           :: envmask
+        character(len=*),           optional, intent(in) :: source
         real, allocatable :: env_rmat(:,:,:)
-        integer :: env_ldim(3)
+        integer           :: env_ldim(3)
         if( box < 1 ) THROW_HARD('set_nu_solvent_envelope requires setup_nu_dmats first')
         env_ldim = envmask%get_ldim()
         if( any(env_ldim /= ldim) ) THROW_HARD('solvent envelope dimensions differ from NU setup')
@@ -262,8 +262,8 @@ contains
     module subroutine set_nu_evidence_null_shell( envmask, core, dilated, base_support )
         class(image), target, intent(in) :: envmask, core, dilated, base_support
         real(kind=c_float), pointer :: env_rmat(:,:,:), core_rmat(:,:,:), dil_rmat(:,:,:), sup_rmat(:,:,:)
-        integer :: imask, i, j, k, n_env, n_env_in_sup, n_sup, n_ring, n_ring_full
-        logical :: l_env, l_sup, l_ring
+        integer                     :: imask, i, j, k, n_env, n_env_in_sup, n_sup, n_ring, n_ring_full
+        logical                     :: l_env, l_sup, l_ring
         if( box < 1 ) THROW_HARD('set_nu_evidence_null_shell requires setup_nu_dmats first')
         if( .not.allocated(nu_observed_mask) ) &
             &THROW_HARD('set_nu_evidence_null_shell requires the observed mask; setup_nu_dmats first')
@@ -382,7 +382,7 @@ contains
     module subroutine setup_nu_observed_mask( vol_even, vol_odd )
         class(image), intent(in) :: vol_even, vol_odd
         real(kind=c_float), pointer :: rmat_even(:,:,:), rmat_odd(:,:,:)
-        integer :: imask, i, j, k
+        integer                     :: imask, i, j, k
         if( .not.allocated(nu_mask_vox) ) THROW_HARD('nu_mask_vox not allocated; setup_nu_observed_mask')
         if( allocated(nu_observed_mask) ) deallocate(nu_observed_mask)
         allocate(nu_observed_mask(n_nu_mask), source=.true.)
@@ -446,7 +446,7 @@ contains
         real, intent(inout) :: tmp(:,:,:)
         real, intent(in)    :: lp_angstrom
         integer :: i, j, k, radius_px, n_nonfinite, n_negative
-        real :: smoothed, x
+        real    :: smoothed, x
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; smooth_nu_objective')
         if( any(shape(dmat) /= ldim) ) THROW_HARD('dmat shape mismatch; smooth_nu_objective')
         if( any(shape(tmp)  /= ldim) ) THROW_HARD('tmp shape mismatch; smooth_nu_objective')

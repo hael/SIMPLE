@@ -19,9 +19,9 @@ contains
         class(flex_pca_rounds), intent(inout) :: rounds
         class(parameters),      intent(in)    :: params
         type(flex_probe_fit),   intent(inout) :: fits(2)
-        type(flex_probe_part) :: acc(2)
-        type(string) :: fname
-        integer :: ipart, funit, f, q
+        type(flex_probe_part)   :: acc(2)
+        type(string)            :: fname
+        integer                 :: ipart, funit, f, q
         integer(timer_int_kind) :: t_red
         t_red = tic()
         do f = 1, 2
@@ -74,11 +74,11 @@ contains
 
     !> Fold single-fit parts through the shared streaming codec.
     module subroutine reduce_probe_parts( params, rounds, part )
-        class(parameters),     intent(in)    :: params
+        class(parameters),      intent(in)    :: params
         class(flex_pca_rounds), intent(inout) :: rounds
-        type(flex_probe_part), intent(inout) :: part
-        type(string) :: fname
-        integer :: ipart, funit
+        type(flex_probe_part),  intent(inout) :: part
+        type(string)            :: fname
+        integer                 :: ipart, funit
         integer(timer_int_kind) :: t_red
         t_red = tic()
         do ipart = 1, rounds%nparts()
@@ -114,7 +114,7 @@ contains
     module subroutine write_probe_part_fit( funit, part )
         integer,               intent(in) :: funit
         type(flex_probe_part), intent(in) :: part
-        integer :: io_stat, subhdr(7), q, kmix_w, t, pnnz
+        integer              :: io_stat, subhdr(7), q, kmix_w, t, pnnz
         logical, allocatable :: pm(:,:,:)
         integer, allocatable :: pii(:), pjj(:), pkk(:)
         complex, allocatable :: gce(:), gco(:)
@@ -228,9 +228,9 @@ contains
     !> flatten the union mask into the three coordinate lists the payload is gathered on.
     !! An empty mask keeps ONE voxel so every extent stays positive; folding one zero is a no-op.
     subroutine pk_mask_to_idx( m, ii, jj, kk, nnz )
-        logical,              intent(in)  :: m(:,:,:)
-        integer, allocatable, intent(out) :: ii(:), jj(:), kk(:)
-        integer,              intent(out) :: nnz
+        logical,              intent(in)               :: m(:,:,:)
+        integer,              allocatable, intent(out) :: ii(:), jj(:), kk(:)
+        integer,              intent(out)              :: nnz
         integer :: i, j, k, t
         nnz = count(m)
         if( nnz == 0 )then
@@ -256,10 +256,10 @@ contains
     !! process derives the same list from (box, band, rank), so the reader adds by slot; the list
     !! length travels in the shape and is checked.
     subroutine write_probe_part_kernels( funit, kpk_e, kpk_o, rpk_e, rpk_o, who )
-        integer,              intent(in) :: funit
-        real,    allocatable, intent(in) :: kpk_e(:,:), kpk_o(:,:)
-        complex, allocatable, intent(in) :: rpk_e(:,:), rpk_o(:,:)
-        character(len=*),     intent(in) :: who
+        integer,              intent(in)              :: funit
+        real,                 allocatable, intent(in) :: kpk_e(:,:), kpk_o(:,:)
+        complex,              allocatable, intent(in) :: rpk_e(:,:), rpk_o(:,:)
+        character(len=*),     intent(in)              :: who
         integer :: io_stat, nkp, nrp
         nkp = 0
         if( allocated(kpk_e) .and. allocated(kpk_o) ) nkp = size(kpk_e,1)
@@ -284,11 +284,11 @@ contains
     !> read one fit's trailing PCG kernel block and ADD it into the packed sums (a part written by a
     !! non-PCG fit carries a zero count; a PCG part folded into a non-PCG reduce is a mismatch)
     subroutine fold_probe_part_kernels( funit, kpk_e, kpk_o, rpk_e, rpk_o, who )
-        integer,              intent(in)    :: funit
-        real,    allocatable, intent(inout) :: kpk_e(:,:), kpk_o(:,:)
-        complex, allocatable, intent(inout) :: rpk_e(:,:), rpk_o(:,:)
-        character(len=*),     intent(in)    :: who
-        integer :: io_stat, nkp, nrp, kshape(2)
+        integer,              intent(in)                 :: funit
+        real,                 allocatable, intent(inout) :: kpk_e(:,:), kpk_o(:,:)
+        complex,              allocatable, intent(inout) :: rpk_e(:,:), rpk_o(:,:)
+        character(len=*),     intent(in)                 :: who
+        integer              :: io_stat, nkp, nrp, kshape(2)
         real,    allocatable :: gke(:,:), gko(:,:)
         complex, allocatable :: gqe(:,:), gqo(:,:)
         read(funit, iostat=io_stat) nkp
@@ -363,11 +363,11 @@ contains
         type(flex_probe_part), intent(inout) :: part
         real(dp), allocatable :: gbuf(:), zbuf(:,:)
         real(dp), allocatable :: msr(:), msm(:,:), msmm(:,:,:), msai(:,:)
-        real(dp) :: nllbuf
-        integer  :: io_stat, subhdr(7), q, nz_part, t, pnnz
-        integer, allocatable :: pii(:), pjj(:), pkk(:)
-        complex, allocatable :: gce(:), gco(:)
-        real,    allocatable :: gre(:), gro(:), gpe(:,:), gpo(:,:)
+        real(dp)              :: nllbuf
+        integer               :: io_stat, subhdr(7), q, nz_part, t, pnnz
+        integer,  allocatable :: pii(:), pjj(:), pkk(:)
+        complex,  allocatable :: gce(:), gco(:)
+        real,     allocatable :: gre(:), gro(:), gpe(:,:), gpo(:,:)
         read(funit, iostat=io_stat) subhdr
         call fileiochk('fold_probe_part_fit; sub-header', io_stat)
         if( subhdr(1) /= part%ncomp ) THROW_HARD('probe part per-fit ncomp mismatch')
@@ -475,23 +475,23 @@ contains
     !! (fit_engine_iterate), and handed back.
     module subroutine probe_subspace_iteration( params, build, plane_store, pcg_env, model, sel, niters, it_glob, &
         &niters_glob, fprefix, meta_fname, rounds )
-        type(flex_fit_model),       intent(inout), target :: model   !< mean in; basis, prior variances, rank refined in place
-        type(flex_selection),       intent(in)            :: sel
-        class(flex_pca_rounds),     intent(inout)         :: rounds
-        class(parameters),          intent(inout)         :: params
-        type(builder),              intent(inout)         :: build
-        class(flex_plane_store),    intent(inout)         :: plane_store
-        class(flex_pcg_environment), intent(in)           :: pcg_env
-        integer,                    intent(in)            :: niters
+        type(flex_fit_model),        intent(inout), target :: model  !< mean in; basis, prior variances, rank refined in place
+        type(flex_selection),        intent(in)            :: sel
+        class(flex_pca_rounds),      intent(inout)         :: rounds
+        class(parameters),           intent(inout)         :: params
+        type(builder),               intent(inout)         :: build
+        class(flex_plane_store),     intent(inout)         :: plane_store
+        class(flex_pcg_environment), intent(in)            :: pcg_env
+        integer,                     intent(in)            :: niters
         !> master's global-iteration stamp, passed by a distributed probe worker whose own loop
         !! runs once per relaunch; absent (or 0) in shared-memory runs and on the master itself
         integer,          optional, intent(in)            :: it_glob, niters_glob
         !> file namespace override (merge full-set pass: never clobber fit A's delivery)
         character(len=*), optional, intent(in)            :: fprefix, meta_fname
-        type(flex_probe_fit), target :: fits(1)
-        type(flex_mean_ref) :: means(1)
-        character(len=:), allocatable :: pfx_l, meta_l
-        integer :: it_glob_l, niters_glob_l
+        type(flex_probe_fit), target      :: fits(1)
+        type(flex_mean_ref)               :: means(1)
+        character(len=:),     allocatable :: pfx_l, meta_l
+        integer                           :: it_glob_l, niters_glob_l
         pfx_l  = 'flex_pca_pc'
         meta_l = COV_PROBE_META
         if( present(fprefix) )    pfx_l  = trim(fprefix)
@@ -553,11 +553,11 @@ contains
         logical,                intent(in)    :: l_merge_stash
         !> cross-fit-FSC driver context: the paired master writes paired=1 records every
         !! iteration (the single-fit engine writes none); the ridge is their only consumer
-        type(xfsc_ctx_t) :: xfctx
+        type(xfsc_ctx_t)              :: xfctx
         character(len=:), allocatable :: xtag
-        integer  :: it, it_eff, niters_eff, f, nthr
-        logical  :: l_distr
-        integer(timer_int_kind) :: t_it
+        integer                       :: it, it_eff, niters_eff, f, nthr
+        logical                       :: l_distr
+        integer(timer_int_kind)       :: t_it
         nthr = omp_get_max_threads()
         ! ---- per-fit stage config: the E-step formulation and every per-fit policy value ----
         do f = 1, nfits
@@ -707,11 +707,11 @@ contains
     !! (the MCFA reduce buffers sized to the current rank first; the fit's own accumulators fold
     !! in place -- borrowed into the payload value, never copied).
     subroutine reduce_single_fit_parts( params, fit, rounds )
-        class(parameters),    intent(in)    :: params
-        type(flex_probe_fit), intent(inout) :: fit
+        class(parameters),      intent(in)    :: params
+        type(flex_probe_fit),   intent(inout) :: fit
         class(flex_pca_rounds), intent(inout) :: rounds
         type(flex_probe_part) :: part
-        integer :: q
+        integer               :: q
         allocate(part%cmat_e(fit%mstep%es(1),fit%mstep%es(2),fit%mstep%es(3),fit%model%ncomp), &
             &part%cmat_o(fit%mstep%es(1),fit%mstep%es(2),fit%mstep%es(3),fit%model%ncomp), source=(0.,0.))
         allocate(part%rho_ex(fit%mstep%es(1),fit%mstep%es(2),fit%mstep%es(3),fit%model%ncomp), &
@@ -746,13 +746,13 @@ contains
     !> A worker's part for this iteration: one container holding one fit, or both fits'
     !! accumulator blocks in fit order for the paired engine.
     subroutine write_worker_parts( params, fits, nfits, nthr, rounds )
-        class(parameters),    intent(in)    :: params
-        integer,              intent(in)    :: nfits, nthr
-        type(flex_probe_fit), intent(inout) :: fits(nfits)
+        class(parameters),      intent(in)    :: params
+        integer,                intent(in)    :: nfits, nthr
+        type(flex_probe_fit),   intent(inout) :: fits(nfits)
         class(flex_pca_rounds), intent(inout) :: rounds
         type(flex_probe_part) :: part
-        type(string) :: pfname, tmp_fname
-        integer :: f, q, funit
+        type(string)          :: pfname, tmp_fname
+        integer               :: f, q, funit
         pfname = rounds%part_fname('probe', params%part, params%numlen)
         call open_probe_part_write(pfname, nfits, funit, tmp_fname)
         do f = 1, nfits

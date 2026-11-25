@@ -10,17 +10,17 @@ implicit none
 private
 public :: run_all_mrc2jpeg_tests
 
-integer, parameter :: WIDTH = 32, HEIGHT = 24, NSECTIONS = 3
-real,    parameter :: SMPD = 1.5
+integer,          parameter :: WIDTH    = 32, HEIGHT = 24, NSECTIONS = 3
+real,             parameter :: SMPD     = 1.5
 character(len=*), parameter :: MRC_FILE = 'tmp_mrc2jpeg_input.mrc'
 
 interface
     function stbi_load(filename, width, height, components, desired_components) result(result) &
         &bind(C, name='stbi_load')
         import :: c_char, c_int, c_ptr
-        character(c_char), intent(in) :: filename(*)
-        integer(c_int),    intent(out) :: width, height, components
-        integer(c_int), value, intent(in) :: desired_components
+        character(c_char), intent(in)        :: filename(*)
+        integer(c_int),    intent(out)       :: width, height, components
+        integer(c_int),    value, intent(in) :: desired_components
         type(c_ptr) :: result
     end function stbi_load
 
@@ -74,12 +74,12 @@ contains
     subroutine verify_jpeg(section)
         integer, intent(in) :: section
         character(kind=c_char, len=:), allocatable :: c_filename
-        integer(c_signed_char), pointer :: pixels(:)
-        type(c_ptr)    :: buffer
-        integer(c_int) :: width_read, height_read, components
-        integer        :: x, y, channel, idx, actual, expected, max_error, max_channel_delta, rgb(3)
-        real           :: mean_abs_error
-        character(len=:), allocatable :: filename
+        integer(c_signed_char),        pointer     :: pixels(:)
+        type(c_ptr)                                :: buffer
+        integer(c_int)                             :: width_read, height_read, components
+        integer                                    :: x, y, channel, idx, actual, expected, max_error, max_channel_delta, rgb(3)
+        real                                       :: mean_abs_error
+        character(len=:),              allocatable :: filename
         filename = jpeg_name(section)
         call assert_true(file_exists(string(filename)), 'mrc2jpeg writes section '//section_name(section))
         if( .not. file_exists(string(filename)) ) return

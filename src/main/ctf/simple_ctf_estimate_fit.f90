@@ -14,56 +14,56 @@ public :: ctf_estimate_fit
 private
 #include "simple_local_flags.inc"
 
-real,    parameter :: TOL   = 1.e-5
-integer, parameter :: NSTEPS = 200, NBINS=6, POLYDIM = 10
+real,    parameter :: TOL        = 1.e-5
+integer, parameter :: NSTEPS     = 200, NBINS=6, POLYDIM = 10
 logical, parameter :: DEBUG_HERE = .false.
 logical, parameter :: BENCH      = .false.
 integer            :: glob_count = 0 ! debug only
 
 type ctf_estimate_fit
     private
-    class(image),        pointer  :: micrograph
-    type(image),     allocatable  :: tiles(:,:)              ! for storing all tiles used to build power spectra
-    type(image),     allocatable  :: pspec_patch(:,:)        ! patches micrograph powerspec
-    type(image)                   :: pspec                   ! all micrograph powerspec
-    type(image)                   :: pspec_ctf               ! CTF powerspec
-    type(image)                   :: pspec4ctfres            ! powerspec for CTFres calculation
-    type(ctf)                     :: tfun                    ! transfer function object
-    type(ctfparams)               :: parms                   ! for storing ctf parameters
-    type(ctfparams), allocatable  :: parms_patch(:,:)        ! for storing patch ctf parameters
-    type(ctf_estimate_cost2D)     :: cost2D                  ! 2D discrete optimization object
-    type(ctf_estimate_cost4Dcont) :: costcont                ! 4D continuous optimization object
-    real,            allocatable  :: roavg_spec1d(:)         ! 1D rotational average spectrum
-    integer,         allocatable  :: inds_msk(:,:)           ! indices of pixels within resolution mask
-    integer,         allocatable  :: tiles_centers(:,:,:)    ! location of tiles centers
-    logical,         allocatable  :: cc_msk(:,:,:)           ! redundant (including Friedel symmetry) resolution mask
-    logical,         allocatable  :: resmsk1D(:)             ! 1D resolution mask 
-    integer,         allocatable  :: centers(:,:,:)
-    real(dp)                      :: polyx(POLYDIM), polyy(POLYDIM)
-    real                          :: smpd         = 0.
-    real                          :: df_lims(2)   = [DFMIN_DEFAULT, DFMAX_DEFAULT]! defocus range
-    real                          :: df_step      = 0.05     ! defocus step for grid search
-    real                          :: astigtol     = 0.05     ! tolerated astigmatism
-    real                          :: phshift_lims(2) = [0., PI] ! phase-shift fitting range (radians)
-    real                          :: phshift_step = 0.174532925 ! initial phase grid step (radians)
-    real                          :: hp           = 0.       ! high-pass limit
-    real                          :: lp           = 0.       ! low-pass limit
-    real                          :: cc_fit       = -1.
-    real                          :: ctfres       = -1.
-    real                          :: icefrac      = 0.
-    integer                       :: box          = 0        ! box size
-    integer                       :: ntiles(2)    = 0        ! # tiles along x/y
-    integer                       :: ntotpatch    = 0
-    integer                       :: npatches(2)  = 0
-    integer                       :: flims(3,2)   = 0        ! fourier dimensions
-    integer                       :: flims1d(2)   = 0        ! fourier dimensions
-    integer                       :: freslims1d(2)= 0        ! fourier dimensions
-    integer                       :: ldim_box(3)  = 0        ! box logical dimensions
-    integer                       :: ldim_mic(3)  = 0        ! logical dimensions
-    integer                       :: npix_msk     = 0        ! # pixels in non-redudant resolution mask
-    logical                       :: exists       = .false.
-    integer(timer_int_kind)       :: t, t_tot
-    real(timer_int_kind)          :: rt_gen_tiles, rt_mic2spec, rt_2Dprep, rt_2D, rt_stats, rt_tot, rt_patch, rt_icefrac
+    class(image),        pointer     :: micrograph
+    type(image),         allocatable :: tiles(:,:)                                       ! for storing all tiles used to build power spectra
+    type(image),         allocatable :: pspec_patch(:,:)                                 ! patches micrograph powerspec
+    type(image)                      :: pspec                                            ! all micrograph powerspec
+    type(image)                      :: pspec_ctf                                        ! CTF powerspec
+    type(image)                      :: pspec4ctfres                                     ! powerspec for CTFres calculation
+    type(ctf)                        :: tfun                                             ! transfer function object
+    type(ctfparams)                  :: parms                                            ! for storing ctf parameters
+    type(ctfparams),     allocatable :: parms_patch(:,:)                                 ! for storing patch ctf parameters
+    type(ctf_estimate_cost2D)        :: cost2D                                           ! 2D discrete optimization object
+    type(ctf_estimate_cost4Dcont)    :: costcont                                         ! 4D continuous optimization object
+    real,                allocatable :: roavg_spec1d(:)                                  ! 1D rotational average spectrum
+    integer,             allocatable :: inds_msk(:,:)                                    ! indices of pixels within resolution mask
+    integer,             allocatable :: tiles_centers(:,:,:)                             ! location of tiles centers
+    logical,             allocatable :: cc_msk(:,:,:)                                    ! redundant (including Friedel symmetry) resolution mask
+    logical,             allocatable :: resmsk1D(:)                                      ! 1D resolution mask
+    integer,             allocatable :: centers(:,:,:)
+    real(dp)                         :: polyx(POLYDIM), polyy(POLYDIM)
+    real                             :: smpd            = 0.
+    real                             :: df_lims(2)      = [DFMIN_DEFAULT, DFMAX_DEFAULT] ! defocus range
+    real                             :: df_step         = 0.05                           ! defocus step for grid search
+    real                             :: astigtol        = 0.05                           ! tolerated astigmatism
+    real                             :: phshift_lims(2) = [0., PI]                       ! phase-shift fitting range (radians)
+    real                             :: phshift_step    = 0.174532925                    ! initial phase grid step (radians)
+    real                             :: hp              = 0.                             ! high-pass limit
+    real                             :: lp              = 0.                             ! low-pass limit
+    real                             :: cc_fit          = -1.
+    real                             :: ctfres          = -1.
+    real                             :: icefrac         = 0.
+    integer                          :: box             = 0                              ! box size
+    integer                          :: ntiles(2)       = 0                              ! # tiles along x/y
+    integer                          :: ntotpatch       = 0
+    integer                          :: npatches(2)     = 0
+    integer                          :: flims(3,2)      = 0                              ! fourier dimensions
+    integer                          :: flims1d(2)      = 0                              ! fourier dimensions
+    integer                          :: freslims1d(2)   = 0                              ! fourier dimensions
+    integer                          :: ldim_box(3)     = 0                              ! box logical dimensions
+    integer                          :: ldim_mic(3)     = 0                              ! logical dimensions
+    integer                          :: npix_msk        = 0                              ! # pixels in non-redudant resolution mask
+    logical                          :: exists          = .false.
+    integer(timer_int_kind)          :: t, t_tot
+    real(timer_int_kind)             :: rt_gen_tiles, rt_mic2spec, rt_2Dprep, rt_2D, rt_stats, rt_tot, rt_patch, rt_icefrac
 contains
     ! constructor
     procedure          :: new
@@ -107,15 +107,15 @@ end type ctf_estimate_fit
 contains
 
     subroutine new( self, micrograph, box, parms, dfrange, resrange, astigtol_in, phshift_lims, phshift_step)
-        class(ctf_estimate_fit), intent(inout) :: self
-        class(image), target, intent(inout) :: micrograph       !< all micrograph powerspec
-        integer,              intent(in)    :: box
-        class(ctfparams),     intent(in)    :: parms
-        real,                 intent(in)    :: dfrange(2)  !< defocus range, [30.0,5.0] default
-        real,                 intent(in)    :: resrange(2) !< resolution range, [30.0,5.0] default
-        real,                 intent(in)    :: astigtol_in !< tolerated astigmatism, 0.05 microns default
-        real,                 intent(in)    :: phshift_lims(2) !< phase-shift range (radians)
-        real,                 intent(in)    :: phshift_step !< phase-shift grid step (radians)
+        class(ctf_estimate_fit), intent(inout)         :: self
+        class(image),            target, intent(inout) :: micrograph      !< all micrograph powerspec
+        integer,                 intent(in)            :: box
+        class(ctfparams),        intent(in)            :: parms
+        real,                    intent(in)            :: dfrange(2)      !< defocus range, [30.0,5.0] default
+        real,                    intent(in)            :: resrange(2)     !< resolution range, [30.0,5.0] default
+        real,                    intent(in)            :: astigtol_in     !< tolerated astigmatism, 0.05 microns default
+        real,                    intent(in)            :: phshift_lims(2) !< phase-shift range (radians)
+        real,                    intent(in)            :: phshift_step    !< phase-shift grid step (radians)
         integer :: i,j,sh
         call self%kill
         if( BENCH ) self%t_tot = tic()
@@ -344,10 +344,10 @@ contains
 
     !>  Performs initial grid search & 2D refinement, calculate stats
     subroutine fit( self, parms, ctfresthreshold, nano)
-        class(ctf_estimate_fit), intent(inout) :: self
-        type(ctfparams),         intent(inout) :: parms
-        real,                    intent(in)    :: ctfresthreshold
-        logical,       optional, intent(in)    :: nano
+        class(ctf_estimate_fit), intent(inout)        :: self
+        type(ctfparams),         intent(inout)        :: parms
+        real,                    intent(in)           :: ctfresthreshold
+        logical,                 optional, intent(in) :: nano
         integer :: freslims1d(2)
         logical :: l_nano
         if( BENCH ) self%t_tot = tic()
@@ -394,8 +394,8 @@ contains
     subroutine fit_patches( self )
         class(ctf_estimate_fit), intent(inout) :: self
         type(ctf_estimate_cost4Dcont) :: costcont_patch(self%npatches(1),self%npatches(2))
-        real    :: limits(2,2), cc, sumw, w, dist
-        integer :: pi,pj,i,j
+        real                          :: limits(2,2), cc, sumw, w, dist
+        integer                       :: pi,pj,i,j
         if( BENCH )self%t = tic()
         if( self%ntotpatch <= 0 ) return
         limits(1,1) = max(self%df_lims(1),self%parms%dfx-1.)
@@ -519,8 +519,8 @@ contains
 
     !>  \brief  Generates and normalize 1D rotational average spectrum
     subroutine gen_roavspec1d( self, center )
-        class(ctf_estimate_fit), intent(inout) :: self
-        logical,       optional, intent(in)    :: center
+        class(ctf_estimate_fit), intent(inout)        :: self
+        logical,                 optional, intent(in) :: center
         real    :: cnt(self%flims1d(1):self%flims1d(2)),avg,sdev
         integer :: i,j,h,k, mh,mk, sh, shlim, n
         logical :: center_here
@@ -615,9 +615,9 @@ contains
 
     ! make & write half-n-half diagnostic
     subroutine write_diagnostic( self, diagfname, nano )
-        class(ctf_estimate_fit), intent(inout) :: self
-        class(string),           intent(in)    :: diagfname
-        logical,       optional, intent(in)    :: nano
+        class(ctf_estimate_fit), intent(inout)        :: self
+        class(string),           intent(in)           :: diagfname
+        logical,                 optional, intent(in) :: nano
         type(image) :: pspec_half_n_half, tmp
         logical     :: l_msk(1:self%box,1:self%box,1), l_nano
         integer     :: i,logicen
@@ -811,11 +811,11 @@ contains
     !>  \brief  is for making a |CTF| spectrum image
     subroutine ctf2pspecimg( self, img, dfx, dfy, angast, phshift )
         class(ctf_estimate_fit), intent(inout) :: self
-        class(image),   intent(inout) :: img         !< image (output)
-        real,           intent(in)    :: dfx         !< defocus x-axis
-        real,           intent(in)    :: dfy         !< defocus y-axis
-        real,           intent(in)    :: angast      !< angle of astigmatism
-        real,           intent(in)    :: phshift !< additive phase shift (radians)
+        class(image),            intent(inout) :: img     !< image (output)
+        real,                    intent(in)    :: dfx     !< defocus x-axis
+        real,                    intent(in)    :: dfy     !< defocus y-axis
+        real,                    intent(in)    :: angast  !< angle of astigmatism
+        real,                    intent(in)    :: phshift !< additive phase shift (radians)
         real    :: ang, tval, spaFreqSq, hinv, kinv, inv_ldim(3), canonical_phase
         integer :: lims(3,2),h,mh,k,mk,ldim(3), i,j
         ! initialize
@@ -876,9 +876,9 @@ contains
         type(image)          :: pspec_clip, pspec
         real,    allocatable :: spec1d(:),spec1d_fit(:),spec1d_rank(:),ctf1d(:),nextrema1d(:),frc(:)
         integer, allocatable :: nvals1d(:)
-        real    :: ave, sdev, start, end, end_rad,start_rad,phshift, smpd_sc, hp_rad, lp_rad
-        real    :: mid_angast,mid_angast_rad, angdist_axes, spaFreq,spaFreqSq, scale
-        integer :: ish,sh,n,nshells,cenbox,box_sc
+        real                 :: ave, sdev, start, end, end_rad,start_rad,phshift, smpd_sc, hp_rad, lp_rad
+        real                 :: mid_angast,mid_angast_rad, angdist_axes, spaFreq,spaFreqSq, scale
+        integer              :: ish,sh,n,nshells,cenbox,box_sc
         phshift = self%parms%phshift
         if( self%parms%l_fit_phshift ) phshift = modulo(phshift, PI)
         pspec   = self%pspec4ctfres
@@ -992,8 +992,8 @@ contains
             integer function ctfres_shell()
                 real, parameter :: low_threshold          = 0.1
                 real, parameter :: significance_threshold = 0.5
-                integer :: h, n_abovelow, n_abovesig, hstart
-                logical :: found
+                integer         :: h, n_abovelow, n_abovesig, hstart
+                logical         :: found
                 found        = .false.
                 n_abovelow   = 0
                 n_abovesig   = 0
@@ -1495,7 +1495,7 @@ contains
         class(string),           intent(in)    :: fname
         type(starfile_table_type) :: mc_starfile
         type(string)              :: fname_abs
-        integer :: i
+        integer                   :: i
         call starfile_table__new( mc_starfile )
         call starfile_table__open_ofile(mc_starfile, fname%to_char())
         call starfile_table__addObject(mc_starfile)

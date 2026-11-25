@@ -25,8 +25,8 @@ contains
         class(commander_flex_pca), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         class(flex_pca_strategy), allocatable :: strategy
-        type(parameters) :: params
-        type(builder)    :: build
+        type(parameters)                      :: params
+        type(builder)                         :: build
         ! defaults are the commander's; role logic is the strategy's (nparts>1 -> master, else shared
         ! memory), exactly as rec3D/refine3D; the canonical sigma2 state is settled in initialize
         call apply_flex_pca_defaults(cline)
@@ -45,8 +45,8 @@ contains
         class(commander_flex_pca_worker), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(flex_pca_worker_strategy) :: strategy
-        type(parameters) :: params
-        type(builder)    :: build
+        type(parameters)               :: params
+        type(builder)                  :: build
         if( .not. cline%defined('part') ) THROW_HARD('a flex_pca worker needs part=')
         call apply_flex_pca_defaults(cline)
         call strategy%initialize(params, build, cline)
@@ -132,12 +132,12 @@ contains
     subroutine pickup_project_consensus_volume( cline )
         class(cmdline), intent(inout) :: cline
         character(len=*), parameter :: NATIVE_MEAN_FNAME = 'flex_pca_consensus_native.mrc'
-        type(sp_project) :: spproj
-        type(image)      :: img
-        type(string)     :: projfile, vol1
-        character(len=8) :: imgkind
-        real             :: smpd, vol_smpd
-        integer          :: box, vol_box
+        type(sp_project)            :: spproj
+        type(image)                 :: img
+        type(string)                :: projfile, vol1
+        character(len=8)            :: imgkind
+        real                        :: smpd, vol_smpd
+        integer                     :: box, vol_box
         if( cline%defined('vol1') ) return
         projfile = cline%get_carg('projfile')
         call spproj%read_segment('out', projfile)
@@ -183,10 +183,10 @@ contains
     subroutine derive_flex_pca_sampling( cline )
         use simple_magic_boxes, only: autoscale
         class(cmdline), intent(inout) :: cline
-        type(sp_project) :: spproj
-        type(string)     :: projfile
-        real    :: smpd, smpd_target, smpd_crop, scale
-        integer :: box, box_crop
+        type(sp_project)              :: spproj
+        type(string)                  :: projfile
+        real                          :: smpd, smpd_target, smpd_crop, scale
+        integer                       :: box, box_crop
         character(len=:), allocatable :: src
         if( cline%defined('box_crop') )then
             write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA working box: explicit box_crop=', &

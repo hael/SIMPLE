@@ -18,48 +18,48 @@ public :: gui_metadata_vol3D, MAX_FSC_VOL3D, ORIDIST_NBINS_X, ORIDIST_NBINS_Y
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: MAX_FSC_VOL3D    = 1000 ! points an FSC curve holds
+integer, parameter :: MAX_FSC_VOL3D    = 1000                    ! points an FSC curve holds
 integer, parameter :: ORIDIST_BINWIDTH = 5
 integer, parameter :: ORIDIST_NBINS_X  = 360 / ORIDIST_BINWIDTH  ! azimuth,   -180..180
 integer, parameter :: ORIDIST_NBINS_Y  = 180 / ORIDIST_BINWIDTH  ! elevation, -90..90
 
 type, extends( gui_metadata_base ) :: gui_metadata_vol3D
   private
-  character(len=LONGSTRLEN) :: reprojpath    = ''    ! absolute path to the reprojections image
-  character(len=LONGSTRLEN) :: volpath       = ''    ! absolute path to the raw reconstructed volume
-  character(len=LONGSTRLEN) :: pprocpath     = ''    ! absolute path to the postprocessed volume (_pproc)
-  character(len=LONGSTRLEN) :: lppath        = ''    ! absolute path to the low-pass filtered volume (_lp)
-  character(len=LONGSTRLEN) :: pprocmirrpath = ''    ! absolute path to the mirrored postprocessed volume (_pproc_mirr)
-  character(len=LONGSTRLEN) :: oridistpath   = ''    ! absolute path to the orientation-distribution histogram image; empty means unset
-  integer                   :: state      = 1     ! state index (multistate reconstructions)
-  integer                   :: box        = 0     ! volume box size in pixels
-  real                      :: smpd       = 0.0   ! pixel size (Angstroms)
-  real                      :: res0143    = 0.0   ! FSC=0.143 resolution estimate (Angstroms); valid only when l_res0143
-  real                      :: res05      = 0.0   ! FSC=0.5 resolution estimate (Angstroms); valid only when l_res05
-  real                      :: cfar       = 0.0   ! conical FSC area ratio of the half maps (anisotropy, 0..1); set when > 0
-  integer                   :: pop        = 0     ! particle population count; valid only when l_pop
-  logical                   :: l_res0143  = .false.
-  logical                   :: l_res05    = .false.
-  logical                   :: l_pop      = .false.
-  real                      :: fsc_invres(MAX_FSC_VOL3D) = 0.0  ! FSC curve x-axis, 1/resolution
-  real                      :: fsc_corr(MAX_FSC_VOL3D)   = 0.0  ! FSC curve correlation values
-  integer                   :: n_fsc      = 0     ! number of populated FSC points
-  integer                   :: oridist(ORIDIST_NBINS_X, ORIDIST_NBINS_Y) = 0  ! orientation distribution histogram
-  logical                   :: l_oridist  = .false.
-  type(gui_metadata_cavg2D), allocatable :: reprojtiles(:)  ! orthogonal reprojection sprite-sheet tiles; unset when unallocated
-  integer                   :: i          = 1     ! index of this entry within the current batch (IPC routing)
-  integer                   :: i_max      = 1     ! total entries in the current batch (IPC routing)
+  character(len=LONGSTRLEN)              :: reprojpath                                = ''  ! absolute path to the reprojections image
+  character(len=LONGSTRLEN)              :: volpath                                   = ''  ! absolute path to the raw reconstructed volume
+  character(len=LONGSTRLEN)              :: pprocpath                                 = ''  ! absolute path to the postprocessed volume (_pproc)
+  character(len=LONGSTRLEN)              :: lppath                                    = ''  ! absolute path to the low-pass filtered volume (_lp)
+  character(len=LONGSTRLEN)              :: pprocmirrpath                             = ''  ! absolute path to the mirrored postprocessed volume (_pproc_mirr)
+  character(len=LONGSTRLEN)              :: oridistpath                               = ''  ! absolute path to the orientation-distribution histogram image; empty means unset
+  integer                                :: state                                     = 1   ! state index (multistate reconstructions)
+  integer                                :: box                                       = 0   ! volume box size in pixels
+  real                                   :: smpd                                      = 0.0 ! pixel size (Angstroms)
+  real                                   :: res0143                                   = 0.0 ! FSC=0.143 resolution estimate (Angstroms); valid only when l_res0143
+  real                                   :: res05                                     = 0.0 ! FSC=0.5 resolution estimate (Angstroms); valid only when l_res05
+  real                                   :: cfar                                      = 0.0 ! conical FSC area ratio of the half maps (anisotropy, 0..1); set when > 0
+  integer                                :: pop                                       = 0   ! particle population count; valid only when l_pop
+  logical                                :: l_res0143                                 = .false.
+  logical                                :: l_res05                                   = .false.
+  logical                                :: l_pop                                     = .false.
+  real                                   :: fsc_invres(MAX_FSC_VOL3D)                 = 0.0 ! FSC curve x-axis, 1/resolution
+  real                                   :: fsc_corr(MAX_FSC_VOL3D)                   = 0.0 ! FSC curve correlation values
+  integer                                :: n_fsc                                     = 0   ! number of populated FSC points
+  integer                                :: oridist(ORIDIST_NBINS_X, ORIDIST_NBINS_Y) = 0   ! orientation distribution histogram
+  logical                                :: l_oridist                                 = .false.
+  type(gui_metadata_cavg2D), allocatable :: reprojtiles(:)                                  ! orthogonal reprojection sprite-sheet tiles; unset when unallocated
+  integer                                :: i                                         = 1   ! index of this entry within the current batch (IPC routing)
+  integer                                :: i_max                                     = 1   ! total entries in the current batch (IPC routing)
   ! per-kind MRC header min/max (dmin/dmax); recorded only for kinds present on disk
-  real                      :: volpath_min = 0.0, volpath_max = 0.0
-  real                      :: pprocpath_min = 0.0, pprocpath_max = 0.0
-  real                      :: lppath_min = 0.0, lppath_max = 0.0
-  real                      :: pprocmirrpath_min = 0.0, pprocmirrpath_max = 0.0
-  logical                   :: l_volpath_minmax = .false.
-  logical                   :: l_pprocpath_minmax = .false.
-  logical                   :: l_lppath_minmax = .false.
+  real                      :: volpath_min            = 0.0, volpath_max = 0.0
+  real                      :: pprocpath_min          = 0.0, pprocpath_max = 0.0
+  real                      :: lppath_min             = 0.0, lppath_max = 0.0
+  real                      :: pprocmirrpath_min      = 0.0, pprocmirrpath_max = 0.0
+  logical                   :: l_volpath_minmax       = .false.
+  logical                   :: l_pprocpath_minmax     = .false.
+  logical                   :: l_lppath_minmax        = .false.
   logical                   :: l_pprocmirrpath_minmax = .false.
 contains
-  procedure :: kill => kill_override
+  procedure :: kill      => kill_override
   procedure :: set
   procedure :: set_fsc
   procedure :: set_oridist
@@ -72,7 +72,7 @@ contains
   procedure :: get_i
   procedure :: get_i_max
   procedure :: serialise => serialise_override
-  procedure :: jsonise => jsonise_override
+  procedure :: jsonise   => jsonise_override
 end type gui_metadata_vol3D
 
 contains
@@ -85,8 +85,8 @@ contains
   ! is sent never holds them. Tiles travel as their own messages, and the
   ! in-process reprojtiles are jsonised, not serialised.
   subroutine serialise_override( self, buffer )
-    class(gui_metadata_vol3D),             intent(in)    :: self
-    character(len=:),         allocatable, intent(inout) :: buffer
+    class(gui_metadata_vol3D),             intent(in)                 :: self
+    character(len=:),                      allocatable, intent(inout) :: buffer
     type(gui_metadata_vol3D) :: sent
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     select type( self )
@@ -108,14 +108,14 @@ contains
   ! An omitted oridistpath keeps its previous value.
   ! i and i_max are required IPC routing fields (batch index / batch size).
   subroutine set( self, reprojpath, volpath, pprocpath, lppath, pprocmirrpath, state, box, smpd, i, i_max, res0143, res05, cfar, pop, oridistpath )
-    class(gui_metadata_vol3D), intent(inout) :: self
-    type(string),               intent(in)    :: reprojpath, volpath, pprocpath, lppath, pprocmirrpath
-    integer,                    intent(in)    :: state, box
-    real,                       intent(in)    :: smpd
-    integer,                    intent(in)    :: i, i_max
-    real,    optional,          intent(in)    :: res0143, res05, cfar
-    integer, optional,          intent(in)    :: pop
-    type(string), optional,     intent(in)    :: oridistpath
+    class(gui_metadata_vol3D),  intent(inout)                 :: self
+    type(string),               intent(in)                    :: reprojpath, volpath, pprocpath, lppath, pprocmirrpath
+    integer,                    intent(in)                    :: state, box
+    real,                       intent(in)                    :: smpd
+    integer,                    intent(in)                    :: i, i_max
+    real,                       optional,          intent(in) :: res0143, res05, cfar
+    integer,                    optional,          intent(in) :: pop
+    type(string),               optional,     intent(in)      :: oridistpath
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned    = .true.
     self%reprojpath    = reprojpath%to_char()
@@ -142,7 +142,7 @@ contains
   ! Store the FSC curve. invres and corr must be the same length and not
   ! exceed MAX_FSC_VOL3D points.
   subroutine set_fsc( self, invres, corr )
-    class(gui_metadata_vol3D), intent(inout) :: self
+    class(gui_metadata_vol3D),  intent(inout) :: self
     real,                       intent(in)    :: invres(:), corr(:)
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( size(invres) /= size(corr) ) THROW_HARD('invres and corr differ in size')
@@ -156,7 +156,7 @@ contains
   ! Store the orientation distribution histogram. hist must be shaped
   ! (ORIDIST_NBINS_X, ORIDIST_NBINS_Y) (azimuth x elevation, 5 degree bins).
   subroutine set_oridist( self, hist )
-    class(gui_metadata_vol3D), intent(inout) :: self
+    class(gui_metadata_vol3D),  intent(inout) :: self
     integer,                    intent(in)    :: hist(ORIDIST_NBINS_X, ORIDIST_NBINS_Y)
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned = .true.
@@ -168,7 +168,7 @@ contains
   ! as a 'reprojtiles' array by jsonise_override; matches the streaming assembler's
   ! merge of gui_metadata_cavg2D reprojection tiles into each state_volumes entry.
   subroutine set_reprojtiles( self, tiles )
-    class(gui_metadata_vol3D), intent(inout) :: self
+    class(gui_metadata_vol3D),  intent(inout) :: self
     type(gui_metadata_cavg2D),  intent(in)    :: tiles(:)
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned   = .true.
@@ -180,8 +180,8 @@ contains
   ! 'pprocmirrpath'. Only call for kinds actually present on disk; callers
   ! typically source minval/maxval from simple_imghead's get_mrc_minmax.
   subroutine set_minmax( self, kind, minval, maxval )
-    class(gui_metadata_vol3D), intent(inout) :: self
-    character(len=*),          intent(in)    :: kind
+    class(gui_metadata_vol3D),  intent(inout) :: self
+    character(len=*),           intent(in)    :: kind
     real,                       intent(in)    :: minval, maxval
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned = .true.
@@ -205,13 +205,13 @@ contains
   ! res0143, res05, pop and oridistpath are set only when the corresponding
   ! optional was supplied to set() (oridistpath returns '' otherwise), cfar only when positive.
   function get( self, reprojpath, volpath, pprocpath, lppath, pprocmirrpath, state, box, smpd, res0143, res05, cfar, pop, oridistpath ) result( l_assigned )
-    class(gui_metadata_vol3D), intent(in)  :: self
-    type(string),               intent(out) :: reprojpath, volpath, pprocpath, lppath, pprocmirrpath
-    integer,                    intent(out) :: state, box
-    real,                       intent(out) :: smpd
-    real,    optional,          intent(out) :: res0143, res05, cfar
-    integer, optional,          intent(out) :: pop
-    type(string), optional,     intent(out) :: oridistpath
+    class(gui_metadata_vol3D),  intent(in)                     :: self
+    type(string),               intent(out)                    :: reprojpath, volpath, pprocpath, lppath, pprocmirrpath
+    integer,                    intent(out)                    :: state, box
+    real,                       intent(out)                    :: smpd
+    real,                       optional,          intent(out) :: res0143, res05, cfar
+    integer,                    optional,          intent(out) :: pop
+    type(string),               optional,     intent(out)      :: oridistpath
     logical                                 :: l_assigned
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned    = self%l_assigned
@@ -232,8 +232,8 @@ contains
 
   ! Return the FSC curve; result is .true. if a curve has been set.
   function get_fsc( self, invres, corr ) result( l_set )
-    class(gui_metadata_vol3D), intent(in)  :: self
-    real,          allocatable, intent(out) :: invres(:), corr(:)
+    class(gui_metadata_vol3D), intent(in)               :: self
+    real,                      allocatable, intent(out) :: invres(:), corr(:)
     logical                                 :: l_set
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_set = self%n_fsc > 0
@@ -244,7 +244,7 @@ contains
 
   ! Return the orientation distribution histogram; result is .true. if set.
   function get_oridist( self, hist ) result( l_set )
-    class(gui_metadata_vol3D), intent(in)  :: self
+    class(gui_metadata_vol3D),  intent(in)  :: self
     integer,                    intent(out) :: hist(ORIDIST_NBINS_X, ORIDIST_NBINS_Y)
     logical                                 :: l_set
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
@@ -280,8 +280,8 @@ contains
   function jsonise_override( self ) result( json_ptr )
     class(gui_metadata_vol3D), intent(in)    :: self
     type(json_core)                           :: json
-    type(json_value),          pointer       :: json_ptr, json_invres_ptr, json_corr_ptr
-    type(json_value),          pointer       :: json_oridist_ptr, json_row_ptr, json_tiles_ptr
+    type(json_value),          pointer        :: json_ptr, json_invres_ptr, json_corr_ptr
+    type(json_value),          pointer        :: json_oridist_ptr, json_row_ptr, json_tiles_ptr
     integer                                   :: i_fsc, ix, iy, i_tile
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( .not.self%l_assigned ) then

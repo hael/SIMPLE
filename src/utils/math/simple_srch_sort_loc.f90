@@ -339,7 +339,7 @@ contains
     !!         j=0 or j=n is returned to indicate that x is out of range, from numerical recepies
     pure function locate_real( arr, n, x ) result( j )
         integer, intent(in) :: n
-        real, intent(in)    :: arr(n), x
+        real,    intent(in) :: arr(n), x
         integer             :: jl, jm, ju, j
         jl = 0                ! initialize lower
         ju = n+1              ! and upper limits
@@ -428,7 +428,7 @@ contains
     !> sort and return the 3 lowest
     function min3( rarr ) result(min_3)
         real, intent(in) :: rarr(:)
-        real :: min_3(3)
+        real    :: min_3(3)
         integer :: j, n
         real    :: ra
         n = size(rarr)
@@ -495,7 +495,7 @@ contains
     function peakfinder( vals ) result( peakpos )
         real,    intent(in)  :: vals(:)
         logical, allocatable :: peakpos(:)
-        integer :: n, i
+        integer              :: n, i
         n = size(vals)
         allocate(peakpos(n), source=.false.)
         if( vals(1) > vals(2) )  peakpos(1) = .true.
@@ -605,7 +605,7 @@ contains
         integer, intent(in)    :: k,n
         real,    intent(inout) :: arr(:)
         integer :: i,ir,j,l,mid
-        real :: a,temp
+        real    :: a,temp
         l  = 1
         ir = n
         do
@@ -668,9 +668,9 @@ contains
     end function selec_sp
 
     real(dp) function selec_dp(k,n,arr)
-        integer, intent(in)    :: k,n
+        integer,  intent(in)    :: k,n
         real(dp), intent(inout) :: arr(:)
-        integer :: i,ir,j,l,mid
+        integer  :: i,ir,j,l,mid
         real(dp) :: a,temp
         l  = 1
         ir = n
@@ -735,8 +735,8 @@ contains
 
     ! Returns the sorted unique values of input vector
     subroutine unique( vec, vec_unique )
-        integer,              intent(in)    :: vec(:)
-        integer, allocatable, intent(inout) :: vec_unique(:)
+        integer,              intent(in)                 :: vec(:)
+        integer,              allocatable, intent(inout) :: vec_unique(:)
         integer :: sorted(size(vec))
         logical :: mask(size(vec))
         integer :: i, n
@@ -756,7 +756,7 @@ contains
         real,     intent(in) :: scores(:)
         integer, allocatable :: order(:)
         real,    allocatable :: tmp(:)
-        integer :: i, n
+        integer              :: i, n
         n = size(scores)
         allocate(tmp(n),   source=scores)
         allocate(order(n), source=(/(i,i=1,n)/))
@@ -768,7 +768,7 @@ contains
         real,     intent(in) :: dists(:)
         integer, allocatable :: order(:)
         real,    allocatable :: tmp(:)
-        integer :: i, n
+        integer              :: i, n
         n = size(dists)
         allocate(tmp(n),   source=dists)
         allocate(order(n), source=(/(i,i=1,n)/))
@@ -816,7 +816,7 @@ contains
     pure function mask2inds( mask ) result( inds )
         logical, intent(in)  :: mask(:)
         integer, allocatable :: inds(:)
-        integer :: i, n
+        integer              :: i, n
         n = size(mask)
         allocate(inds(n), source=(/(i,i=1,n)/))
         inds = pack(inds, mask=mask)
@@ -826,7 +826,7 @@ contains
         real,    intent(inout) :: arr(:)
         integer, intent(in)    :: order(:)
         real, allocatable :: tmp(:)
-        integer :: sz, i
+        integer           :: sz, i
         sz = size(arr)
         if( size(order) /= sz )&
         &call simple_exception('Nonconforming array sizes', __FILENAME__ , __LINE__)
@@ -842,7 +842,7 @@ contains
         integer, intent(inout) :: arr(:)
         integer, intent(in)    :: order(:)
         integer, allocatable :: tmp(:)
-        integer :: sz, i
+        integer              :: sz, i
         sz = size(arr)
         if( size(order) /= sz )&
         &call simple_exception('Nonconforming array sizes', __FILENAME__ , __LINE__)

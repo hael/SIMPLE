@@ -27,17 +27,17 @@ public :: create_cls_expansion_strategy
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: FLEX_CLS_NEIGS_DEFAULT  = 16   !< rank of the per-class covariance model
-integer, parameter :: FLEX_CLS_SEED_BASE      = 20260930 !< per-class random seed = base + class index
-real,    parameter :: FLEX_CLS_BAND_FIRST_LP  = 20.  !< the band-selection fit stops here at most (A); lp= sets the band
-character(len=*), parameter :: FLEX_CLS_MAP_FILE     = 'cls_expansion_class_map.txt'  !< subclass parent local pop neff sep repro
-character(len=*), parameter :: FLEX_CLS_ALLOC_FILE   = 'cls_expansion_allocation.txt' !< class group pop nsub: the split's budget
-character(len=*), parameter :: FLEX_CLS_GROUPS_FBODY = 'cls_expansion_groups'         !< class-average groups: stacks and table
-character(len=*), parameter :: FLEX_CLS_CAVGS_FILE   = 'cls_expansion_cavgs.mrc'      !< kernel sub-class averages, filtered
-character(len=*), parameter :: FLEX_CLS_CAVGS_EVEN   = 'cls_expansion_cavgs_even.mrc' !< the same over the even members, unfiltered
-character(len=*), parameter :: FLEX_CLS_CAVGS_ODD    = 'cls_expansion_cavgs_odd.mrc'  !< the same over the odd members, unfiltered
-character(len=*), parameter :: FLEX_CLS_FRCS_TXT     = 'cls_expansion_frcs.txt'       !< even/odd FRC per subclass (row frc(1:nyq))
-character(len=*), parameter :: FLEX_CLS_FRCS         = 'cls_expansion_frcs.bin'       !< the same as class FRCs (frc2D)
+integer,          parameter :: FLEX_CLS_NEIGS_DEFAULT  = 16                             !< rank of the per-class covariance model
+integer,          parameter :: FLEX_CLS_SEED_BASE      = 20260930                       !< per-class random seed = base + class index
+real,             parameter :: FLEX_CLS_BAND_FIRST_LP  = 20.                            !< the band-selection fit stops here at most (A); lp= sets the band
+character(len=*), parameter :: FLEX_CLS_MAP_FILE       = 'cls_expansion_class_map.txt'  !< subclass parent local pop neff sep repro
+character(len=*), parameter :: FLEX_CLS_ALLOC_FILE     = 'cls_expansion_allocation.txt' !< class group pop nsub: the split's budget
+character(len=*), parameter :: FLEX_CLS_GROUPS_FBODY   = 'cls_expansion_groups'         !< class-average groups: stacks and table
+character(len=*), parameter :: FLEX_CLS_CAVGS_FILE     = 'cls_expansion_cavgs.mrc'      !< kernel sub-class averages, filtered
+character(len=*), parameter :: FLEX_CLS_CAVGS_EVEN     = 'cls_expansion_cavgs_even.mrc' !< the same over the even members, unfiltered
+character(len=*), parameter :: FLEX_CLS_CAVGS_ODD      = 'cls_expansion_cavgs_odd.mrc'  !< the same over the odd members, unfiltered
+character(len=*), parameter :: FLEX_CLS_FRCS_TXT       = 'cls_expansion_frcs.txt'       !< even/odd FRC per subclass (row frc(1:nyq))
+character(len=*), parameter :: FLEX_CLS_FRCS           = 'cls_expansion_frcs.bin'       !< the same as class FRCs (frc2D)
 
 type, abstract :: cls_expansion_strategy
 contains
@@ -67,7 +67,7 @@ type, extends(cls_expansion_strategy) :: cls_expansion_master_strategy
     type(qsys_env)                :: qenv
     type(chash)                   :: job_descr
     type(chash), allocatable      :: part_params(:)
-    integer                       :: nparts_run = 1
+    integer                       :: nparts_run  = 1
     integer                       :: nthr_master = 1
 contains
     procedure :: initialize   => master_initialize
@@ -80,31 +80,31 @@ abstract interface
     subroutine init_interface(self, params, build, cline)
         import :: cls_expansion_strategy, parameters, builder, cmdline
         class(cls_expansion_strategy), intent(inout) :: self
-        type(parameters),          intent(inout) :: params
-        type(builder),             intent(inout) :: build
-        class(cmdline),            intent(inout) :: cline
+        type(parameters),              intent(inout) :: params
+        type(builder),                 intent(inout) :: build
+        class(cmdline),                intent(inout) :: cline
     end subroutine init_interface
 
     subroutine exec_interface(self, params, build, cline)
         import :: cls_expansion_strategy, parameters, builder, cmdline
         class(cls_expansion_strategy), intent(inout) :: self
-        type(parameters),          intent(inout) :: params
-        type(builder),             intent(inout) :: build
-        class(cmdline),            intent(inout) :: cline
+        type(parameters),              intent(inout) :: params
+        type(builder),                 intent(inout) :: build
+        class(cmdline),                intent(inout) :: cline
     end subroutine exec_interface
 
     subroutine finalize_interface(self, params, build, cline)
         import :: cls_expansion_strategy, parameters, builder, cmdline
         class(cls_expansion_strategy), intent(inout) :: self
-        type(parameters),          intent(in)    :: params
-        type(builder),             intent(inout) :: build
-        class(cmdline),            intent(inout) :: cline
+        type(parameters),              intent(in)    :: params
+        type(builder),                 intent(inout) :: build
+        class(cmdline),                intent(inout) :: cline
     end subroutine finalize_interface
 
     subroutine cleanup_interface(self, params)
         import :: cls_expansion_strategy, parameters
         class(cls_expansion_strategy), intent(inout) :: self
-        type(parameters),          intent(in)    :: params
+        type(parameters),              intent(in)    :: params
     end subroutine cleanup_interface
 end interface
 
@@ -113,8 +113,8 @@ contains
     function create_cls_expansion_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
         class(cls_expansion_strategy), allocatable :: strategy
-        integer :: nparts
-        logical :: is_worker, is_master
+        integer                                    :: nparts
+        logical                                    :: is_worker, is_master
         nparts = 1
         if( cline%defined('nparts') ) nparts = max(1, cline%get_iarg('nparts'))
         is_worker = cline%defined('part')
@@ -160,17 +160,17 @@ contains
 
     subroutine shmem_initialize(self, params, build, cline)
         class(cls_expansion_shmem_strategy), intent(inout) :: self
-        type(parameters),                intent(inout) :: params
-        type(builder),                   intent(inout) :: build
-        class(cmdline),                  intent(inout) :: cline
+        type(parameters),                    intent(inout) :: params
+        type(builder),                       intent(inout) :: build
+        class(cmdline),                      intent(inout) :: cline
         call init_common(params, build, cline)
     end subroutine shmem_initialize
 
     subroutine shmem_execute(self, params, build, cline)
         class(cls_expansion_shmem_strategy), intent(inout) :: self
-        type(parameters),                intent(inout) :: params
-        type(builder),                   intent(inout) :: build
-        class(cmdline),                  intent(inout) :: cline
+        type(parameters),                    intent(inout) :: params
+        type(builder),                       intent(inout) :: build
+        class(cmdline),                      intent(inout) :: cline
         type(sp_project) :: spproj
         call spproj%read(params%projfile)
         call run_local_split(params, build, cline, spproj, part=0, l_write_project=.true.)
@@ -179,21 +179,21 @@ contains
 
     subroutine shmem_finalize_run(self, params, build, cline)
         class(cls_expansion_shmem_strategy), intent(inout) :: self
-        type(parameters),                intent(in)    :: params
-        type(builder),                   intent(inout) :: build
-        class(cmdline),                  intent(inout) :: cline
+        type(parameters),                    intent(in)    :: params
+        type(builder),                       intent(inout) :: build
+        class(cmdline),                      intent(inout) :: cline
     end subroutine shmem_finalize_run
 
     subroutine shmem_cleanup(self, params)
         class(cls_expansion_shmem_strategy), intent(inout) :: self
-        type(parameters),                intent(in)    :: params
+        type(parameters),                    intent(in)    :: params
     end subroutine shmem_cleanup
 
     subroutine worker_initialize(self, params, build, cline)
         class(cls_expansion_worker_strategy), intent(inout) :: self
-        type(parameters),                 intent(inout) :: params
-        type(builder),                    intent(inout) :: build
-        class(cmdline),                   intent(inout) :: cline
+        type(parameters),                     intent(inout) :: params
+        type(builder),                        intent(inout) :: build
+        class(cmdline),                       intent(inout) :: cline
         call init_common(params, build, cline)
         if( .not. cline%defined('part') ) THROW_HARD('PART must be defined for cls_expansion worker execution')
         if( .not. cline%defined('class_assignment') ) THROW_HARD('CLASS_ASSIGNMENT must be defined for cls_expansion worker execution')
@@ -202,9 +202,9 @@ contains
     subroutine worker_execute(self, params, build, cline)
         use simple_qsys_funs, only: qsys_declare_part_finished
         class(cls_expansion_worker_strategy), intent(inout) :: self
-        type(parameters),                 intent(inout) :: params
-        type(builder),                    intent(inout) :: build
-        class(cmdline),                   intent(inout) :: cline
+        type(parameters),                     intent(inout) :: params
+        type(builder),                        intent(inout) :: build
+        class(cmdline),                       intent(inout) :: cline
         type(sp_project) :: spproj
         call spproj%read(params%projfile)
         call run_local_split(params, build, cline, spproj, part=params%part, l_write_project=.false.)
@@ -215,23 +215,23 @@ contains
     subroutine worker_finalize_run(self, params, build, cline)
         use simple_qsys_funs, only: qsys_declare_part_finished
         class(cls_expansion_worker_strategy), intent(inout) :: self
-        type(parameters),                 intent(in)    :: params
-        type(builder),                    intent(inout) :: build
-        class(cmdline),                   intent(inout) :: cline
+        type(parameters),                     intent(in)    :: params
+        type(builder),                        intent(inout) :: build
+        class(cmdline),                       intent(inout) :: cline
         call qsys_declare_part_finished(params, string('simple_commanders_denoise :: exec_cls_expansion'))
     end subroutine worker_finalize_run
 
     subroutine worker_cleanup(self, params)
         class(cls_expansion_worker_strategy), intent(inout) :: self
-        type(parameters),                 intent(in)    :: params
+        type(parameters),                     intent(in)    :: params
     end subroutine worker_cleanup
 
     subroutine master_initialize(self, params, build, cline)
         use simple_exec_helpers, only: set_master_num_threads
         class(cls_expansion_master_strategy), intent(inout) :: self
-        type(parameters),                 intent(inout) :: params
-        type(builder),                    intent(inout) :: build
-        class(cmdline),                   intent(inout) :: cline
+        type(parameters),                     intent(inout) :: params
+        type(builder),                        intent(inout) :: build
+        class(cmdline),                       intent(inout) :: cline
         type(sp_project)     :: spproj
         integer, allocatable :: cls_inds(:), cls_pops(:), nsub(:)
         call init_common(params, build, cline)
@@ -264,9 +264,9 @@ contains
 
     subroutine master_execute(self, params, build, cline)
         class(cls_expansion_master_strategy), intent(inout) :: self
-        type(parameters),                 intent(inout) :: params
-        type(builder),                    intent(inout) :: build
-        class(cmdline),                   intent(inout) :: cline
+        type(parameters),                     intent(inout) :: params
+        type(builder),                        intent(inout) :: build
+        class(cmdline),                       intent(inout) :: cline
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, part_params=self%part_params, &
                                                      array=L_USE_SLURM_ARR, extra_params=params)
         call merge_worker_outputs(params, self%nparts_run)
@@ -274,15 +274,15 @@ contains
 
     subroutine master_finalize_run(self, params, build, cline)
         class(cls_expansion_master_strategy), intent(inout) :: self
-        type(parameters),                 intent(in)    :: params
-        type(builder),                    intent(inout) :: build
-        class(cmdline),                   intent(inout) :: cline
+        type(parameters),                     intent(in)    :: params
+        type(builder),                        intent(inout) :: build
+        class(cmdline),                       intent(inout) :: cline
     end subroutine master_finalize_run
 
     subroutine master_cleanup(self, params)
         use simple_qsys_funs, only: qsys_cleanup
         class(cls_expansion_master_strategy), intent(inout) :: self
-        type(parameters),                 intent(in)    :: params
+        type(parameters),                     intent(in)    :: params
         integer :: ipart
         call self%qenv%kill
         call qsys_cleanup(params)
@@ -297,14 +297,14 @@ contains
 
     subroutine prepare_class_partitions(self, params, cline, cls_inds, cls_pops)
         class(cls_expansion_master_strategy), intent(inout) :: self
-        type(parameters),                 intent(in)    :: params
-        class(cmdline),                   intent(inout) :: cline
-        integer,                          intent(in)    :: cls_inds(:), cls_pops(:)
-        integer :: order(size(cls_inds))
-        integer, allocatable :: part_counts(:), part_cls(:,:)
+        type(parameters),                     intent(in)    :: params
+        class(cmdline),                       intent(inout) :: cline
+        integer,                              intent(in)    :: cls_inds(:), cls_pops(:)
+        integer                      :: order(size(cls_inds))
+        integer,         allocatable :: part_counts(:), part_cls(:,:)
         integer(kind=8), allocatable :: part_weights(:)
-        integer :: ncls, ipart, iord, icls, lightest
-        type(string) :: fname
+        integer                      :: ncls, ipart, iord, icls, lightest
+        type(string)                 :: fname
         ncls = size(cls_inds)
         allocate(part_counts(self%nparts_run), part_cls(ncls, self%nparts_run), part_weights(self%nparts_run))
         order = [(icls, icls=1,ncls)]
@@ -332,14 +332,14 @@ contains
     end subroutine prepare_class_partitions
 
     subroutine collect_split_classes(cline, params, build, cls_inds, cls_pops)
-        class(cmdline),       intent(inout) :: cline
-        type(parameters),     intent(inout) :: params
-        type(builder),        intent(inout) :: build
-        integer, allocatable, intent(out)   :: cls_inds(:), cls_pops(:)
+        class(cmdline),       intent(inout)            :: cline
+        type(parameters),     intent(inout)            :: params
+        type(builder),        intent(inout)            :: build
+        integer,              allocatable, intent(out) :: cls_inds(:), cls_pops(:)
         integer, allocatable :: pinds(:), assigned_classes(:)
         logical, allocatable :: keep_mask(:)
-        type(string) :: label
-        integer :: i
+        type(string)         :: label
+        integer              :: i
         label = 'class'
         ! the distinct values of the label among the active particles
         cls_inds = split_label_inds(build, label)
@@ -375,7 +375,7 @@ contains
         type(string),  intent(in)    :: label
         integer, allocatable :: inds(:)
         logical, allocatable :: isthere(:)
-        integer :: i, v, vmax
+        integer              :: i, v, vmax
         vmax = 0
         do i = 1, build%spproj_field%get_noris()
             if( build%spproj_field%get_state(i) <= 0 ) cycle
@@ -405,9 +405,9 @@ contains
         integer,     allocatable :: new_class(:), new_parent(:), parent_of_subcls(:), pop_of_subcls(:)
         integer,     allocatable :: pop_even_of_subcls(:), pop_odd_of_subcls(:)
         real,        allocatable :: repro(:), frcs(:,:), neff_of_subcls(:), sep_of_subcls(:), repro_of_subcls(:), neffs(:)
-        real    :: separation
-        integer :: i, iglob, ntot_sub, funit_map, funit_assign, funit_frc, kfit, nsplit
-        logical :: l_sigma
+        real                     :: separation
+        integer                  :: i, iglob, ntot_sub, funit_map, funit_assign, funit_frc, kfit, nsplit
+        logical                  :: l_sigma
         call collect_split_classes(cline, params, build, cls_inds, cls_pops)
         if( l_write_project )then
             call allocate_subclasses(params, spproj, cls_inds, cls_pops, params%nthr, nsub)
@@ -495,13 +495,13 @@ contains
         !> one class into the map, FRCs, stacks and assignments (part) or project arrays (whole run); neff is the Kish
         !! effective population of the kernel weights (the population of a class kept whole)
         subroutine record_class( cls_id, nsplit, pinds, labels, cavgs, separation, repro, cavgs_even, cavgs_odd, neffs )
-            integer,                  intent(in)    :: cls_id, nsplit
-            integer,                  intent(in)    :: pinds(:), labels(:)
-            type(image), allocatable, intent(inout) :: cavgs(:)
-            real,                     intent(in)    :: separation
-            real,        allocatable, intent(in)    :: repro(:)
-            type(image), allocatable, intent(inout) :: cavgs_even(:), cavgs_odd(:)
-            real,                     intent(in)    :: neffs(:)
+            integer,                  intent(in)                 :: cls_id, nsplit
+            integer,                  intent(in)                 :: pinds(:), labels(:)
+            type(image),              allocatable, intent(inout) :: cavgs(:)
+            real,                     intent(in)                 :: separation
+            real,                     allocatable, intent(in)    :: repro(:)
+            type(image),              allocatable, intent(inout) :: cavgs_even(:), cavgs_odd(:)
+            real,                     intent(in)                 :: neffs(:)
             integer :: j, k
             write(logfhandle,'(A,I8,A,I8,A,I8)') 'Cls expansion summary: class=', cls_id, ' nptcls=', size(labels), ' nsubcls=', nsplit
             call flush(logfhandle)
@@ -542,14 +542,14 @@ contains
     subroutine allocate_subclasses( params, spproj, cls_inds, cls_pops, nthr, nsub )
         use simple_view_partition_sampling, only: has_clusterable_cavgs, cluster_cavgs_into_groups
         use simple_flex_cls_expansion,      only: flex_cls_allocate_subclasses, flex_cls_split_floor
-        type(parameters),     intent(in)    :: params
-        type(sp_project),     intent(inout) :: spproj
-        integer,              intent(in)    :: cls_inds(:), cls_pops(:), nthr
-        integer, allocatable, intent(out)   :: nsub(:)
+        type(parameters),     intent(in)               :: params
+        type(sp_project),     intent(inout)            :: spproj
+        integer,              intent(in)               :: cls_inds(:), cls_pops(:), nthr
+        integer,              allocatable, intent(out) :: nsub(:)
         integer, allocatable  :: groups(:)
         logical, allocatable  :: l_sel(:)
         character(len=STDLEN) :: msg
-        integer :: m, ncls2D, minsplit, ngot, ngroups, funit, i, g
+        integer               :: m, ncls2D, minsplit, ngot, ngroups, funit, i, g
         m = size(cls_inds)
         if( params%ncls < m )then
             write(msg,'(A,I0,A,I0,A)') 'cls_expansion: ncls=', params%ncls, ' (the total number of subclasses) is below the ', &
@@ -599,10 +599,10 @@ contains
 
     !> a worker's subclass counts, from the master's budget file
     subroutine read_allocation( cls_inds, nsub )
-        integer,              intent(in)  :: cls_inds(:)
-        integer, allocatable, intent(out) :: nsub(:)
+        integer,              intent(in)               :: cls_inds(:)
+        integer,              allocatable, intent(out) :: nsub(:)
         character(len=XLONGSTRLEN) :: line
-        integer :: funit, ios, cls, grp, pop, n, i
+        integer                    :: funit, ios, cls, grp, pop, n, i
         allocate(nsub(size(cls_inds)), source=0)
         open(newunit=funit, file=FLEX_CLS_ALLOC_FILE, status='old', action='read', iostat=ios)
         call fileiochk('read_allocation opening '//FLEX_CLS_ALLOC_FILE, ios)
@@ -622,8 +622,8 @@ contains
     ! ===== the flex model
 
     function flex_cavgs_part_fname( part, numlen, which ) result( fname )
-        integer,                    intent(in) :: part, numlen
-        character(len=*), optional, intent(in) :: which   !< 'even' or 'odd' for the half stacks
+        integer,                    intent(in)           :: part, numlen
+        character(len=*),           optional, intent(in) :: which !< 'even' or 'odd' for the half stacks
         type(string) :: fname
         if( present(which) )then
             fname = string('cls_expansion_cavgs_'//trim(which)//'_part')//int2str_pad(part, numlen)//MRC_EXT
@@ -676,26 +676,26 @@ contains
         use simple_euclid_sigma2,       only: sigma2_half
         use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps, ft_map_lims, ft_map_phys_addrh, ft_map_phys_addrk
         use simple_ctf,             only: ctf
-        type(parameters),         intent(inout) :: params
-        type(builder),            intent(inout) :: build
-        type(sp_project),         intent(inout) :: spproj
-        integer,                  intent(in)    :: cls_id, kfit
-        logical,                  intent(in)    :: l_sigma
-        integer,     allocatable, intent(out)   :: pinds(:), hidx(:), kidx(:), shell(:)
-        complex(sp), allocatable, intent(out)   :: y(:,:)
-        real(sp),    allocatable, intent(out)   :: c(:,:), w(:,:), wq(:)
-        logical,     allocatable, intent(out)   :: fitmask(:)
-        type(image),              intent(inout) :: gridcorr_img
-        integer,                  intent(out)   :: ldim(3), ncoeff, nptcls
+        type(parameters),         intent(inout)            :: params
+        type(builder),            intent(inout)            :: build
+        type(sp_project),         intent(inout)            :: spproj
+        integer,                  intent(in)               :: cls_id, kfit
+        logical,                  intent(in)               :: l_sigma
+        integer,                  allocatable, intent(out) :: pinds(:), hidx(:), kidx(:), shell(:)
+        complex(sp),              allocatable, intent(out) :: y(:,:)
+        real(sp),                 allocatable, intent(out) :: c(:,:), w(:,:), wq(:)
+        logical,                  allocatable, intent(out) :: fitmask(:)
+        type(image),              intent(inout)            :: gridcorr_img
+        integer,                  intent(out)              :: ldim(3), ncoeff, nptcls
         type(image), allocatable :: imgs(:)
-        type(ctfparams)      :: ctfparms
-        type(ctf)            :: tfun
-        type(ctfvars)        :: ctfvals
+        type(ctfparams)          :: ctfparms
+        type(ctf)                :: tfun
+        type(ctfvars)            :: ctfvals
         real(sp),    allocatable :: s2(:)
-        real    :: mat(2,2), loc(2), sfsq, ang, df, tval, e3, sum_df, diff_df, angast, phshift, amp_contr, wl, half_wl2_cs
-        integer :: lims(3,2), nyq, i, j, h, k, sh, iptcl, ih
-        logical :: l_ctf, l_flip
-        integer, allocatable :: members(:)
+        real                     :: mat(2,2), loc(2), sfsq, ang, df, tval, e3, sum_df, diff_df, angast, phshift, amp_contr, wl, half_wl2_cs
+        integer                  :: lims(3,2), nyq, i, j, h, k, sh, iptcl, ih
+        logical                  :: l_ctf, l_flip
+        integer,     allocatable :: members(:)
         nptcls = 0
         ncoeff = 0
         if( allocated(pinds) ) deallocate(pinds)
@@ -830,22 +830,22 @@ contains
         use simple_flex_cls_expansion, only: flex_cls_ctf_mean, flex_cls_shell_frc
         use simple_estimate_ssnr,      only: fsc2optlp_sub
         use simple_memoize_ft_maps,    only: memoize_ft_maps, forget_ft_maps
-        type(parameters),         intent(in)    :: params
-        integer,                  intent(in)    :: cls_id, ldim(3)
-        complex(sp),              intent(in)    :: y(:,:)
-        real(sp),                 intent(in)    :: c(:,:), w(:,:)
-        logical,                  intent(in)    :: even(:)
-        integer,                  intent(in)    :: shell(:), hidx(:), kidx(:)
-        type(image),              intent(inout) :: gridcorr_img
-        type(image), allocatable, intent(inout) :: cavgs(:), cavgs_even(:), cavgs_odd(:)
-        real,        allocatable, intent(inout) :: frcs(:,:)
-        real,        allocatable, intent(out)   :: repro(:)
+        type(parameters),         intent(in)                 :: params
+        integer,                  intent(in)                 :: cls_id, ldim(3)
+        complex(sp),              intent(in)                 :: y(:,:)
+        real(sp),                 intent(in)                 :: c(:,:), w(:,:)
+        logical,                  intent(in)                 :: even(:)
+        integer,                  intent(in)                 :: shell(:), hidx(:), kidx(:)
+        type(image),              intent(inout)              :: gridcorr_img
+        type(image),              allocatable, intent(inout) :: cavgs(:), cavgs_even(:), cavgs_odd(:)
+        real,                     allocatable, intent(inout) :: frcs(:,:)
+        real,                     allocatable, intent(out)   :: repro(:)
         complex(sp), allocatable :: planes(:,:), yh(:,:)
         real(sp),    allocatable :: ch(:,:), wh(:,:)
         integer,     allocatable :: idx(:)
-        real    :: filt(maxval(shell))
-        integer :: ncoeff, nsh, n, h, i, j, sh
-        integer(timer_int_kind) :: t0
+        real                     :: filt(maxval(shell))
+        integer                  :: ncoeff, nsh, n, h, i, j, sh
+        integer(timer_int_kind)  :: t0
         t0 = tic()
         ncoeff = size(y,1); n = size(y,2); nsh = maxval(shell)
         ! the parent, then the even and the odd half parents (the halves share no particles)
@@ -901,11 +901,11 @@ contains
     !! Fourier maps of ldim (memoize_ft_maps)
     subroutine flex_planes_to_images( params, pl, hidx, kidx, ldim, gridcorr_img, imgs )
         use simple_memoize_ft_maps, only: ft_map_phys_addrh, ft_map_phys_addrk
-        type(parameters),         intent(in)    :: params
-        complex(sp),              intent(in)    :: pl(:,:)
-        integer,                  intent(in)    :: hidx(:), kidx(:), ldim(3)
-        type(image),              intent(inout) :: gridcorr_img
-        type(image), allocatable, intent(inout) :: imgs(:)
+        type(parameters),         intent(in)                 :: params
+        complex(sp),              intent(in)                 :: pl(:,:)
+        integer,                  intent(in)                 :: hidx(:), kidx(:), ldim(3)
+        type(image),              intent(inout)              :: gridcorr_img
+        type(image),              allocatable, intent(inout) :: imgs(:)
         integer :: jj, ss
         if( allocated(imgs) ) call dealloc_imgarr(imgs)
         call alloc_imgarr(size(pl,2), ldim, params%smpd, imgs)
@@ -940,27 +940,27 @@ contains
         use simple_flex_cls_expansion,  only: flex_cls_model, flex_cls_fit, flex_cls_half_frc, flex_cls_frc_cutoff, &
             &flex_cls_extend_basis, flex_cls_weighted_mean, flex_cls_pose_tangents, flex_cls_split_floor
         use simple_rnd,             only: seed_rnd_fixed
-        type(parameters),         intent(inout) :: params
-        type(builder),            intent(inout) :: build
-        type(sp_project),         intent(inout) :: spproj
-        integer,                  intent(in)    :: cls_id, nsub, ncomp, kfit
-        logical,                  intent(in)    :: l_sigma
-        integer,     allocatable, intent(out)   :: pinds(:), labels(:)
-        type(image), allocatable, intent(inout) :: cavgs(:)
-        real,                     intent(out)   :: separation
-        real,        allocatable, intent(out)   :: repro(:)
-        type(image), allocatable, intent(inout) :: cavgs_even(:), cavgs_odd(:)
-        real,        allocatable, intent(inout) :: frcs(:,:)
-        integer,     allocatable, intent(out)   :: half_pops(:,:) !< (2,nsplit) members of each subclass in the even, odd half
-        integer,                  intent(out)   :: nsplit   !< subclasses delivered (the budget; 1 when the class is kept whole)
-        real,        allocatable, intent(out)   :: neffs(:) !< (nsplit) effective population of every delivered subclass
-        type(image)          :: gridcorr_img
-        type(flex_cls_model) :: model
+        type(parameters),         intent(inout)              :: params
+        type(builder),            intent(inout)              :: build
+        type(sp_project),         intent(inout)              :: spproj
+        integer,                  intent(in)                 :: cls_id, nsub, ncomp, kfit
+        logical,                  intent(in)                 :: l_sigma
+        integer,                  allocatable, intent(out)   :: pinds(:), labels(:)
+        type(image),              allocatable, intent(inout) :: cavgs(:)
+        real,                     intent(out)                :: separation
+        real,                     allocatable, intent(out)   :: repro(:)
+        type(image),              allocatable, intent(inout) :: cavgs_even(:), cavgs_odd(:)
+        real,                     allocatable, intent(inout) :: frcs(:,:)
+        integer,                  allocatable, intent(out)   :: half_pops(:,:) !< (2,nsplit) members of each subclass in the even, odd half
+        integer,                  intent(out)                :: nsplit         !< subclasses delivered (the budget; 1 when the class is kept whole)
+        real,                     allocatable, intent(out)   :: neffs(:)       !< (nsplit) effective population of every delivered subclass
+        type(image)              :: gridcorr_img
+        type(flex_cls_model)     :: model
         complex(sp), allocatable :: y(:,:), nuis(:,:)
         real(sp),    allocatable :: c(:,:), w(:,:), wq(:)
         integer,     allocatable :: hidx(:), kidx(:), shell(:)
         logical,     allocatable :: fitmask(:), even(:)
-        integer :: ldim(3), ncoeff, nptcls, j
+        integer                  :: ldim(3), ncoeff, nptcls, j
         separation = 0.
         if( allocated(cavgs) ) call dealloc_imgarr(cavgs)
         call flex_class_planes(params, build, spproj, cls_id, kfit, l_sigma, pinds, y, c, w, wq, &
@@ -1009,7 +1009,7 @@ contains
             complex(dp), allocatable :: uext(:,:), mu_all(:)
             real(dp),    allocatable :: frc(:)
             integer(timer_int_kind)  :: t0
-            integer :: nsh, k0, kres, kglob
+            integer                  :: nsh, k0, kres, kglob
             t0  = tic()
             nsh = maxval(shell)
             ! nuisance columns: the in-plane pose tangents of the class mean (d/dx, d/dy, d/dtheta) and the class mean
@@ -1063,9 +1063,9 @@ contains
             type(flex_cls_kernel)    :: kern
             complex(sp), allocatable :: planes(:,:), parh(:,:), de(:), do_(:)
             logical,     allocatable :: l_all(:)
-            real    :: filt(maxval(shell))
-            integer :: nrep, nsh, s, jj, sh
-            integer(timer_int_kind) :: t0
+            real                     :: filt(maxval(shell))
+            integer                  :: nrep, nsh, s, jj, sh
+            integer(timer_int_kind)  :: t0
             t0 = tic()
             call kern%new(model, nuis, y, c, w, wq, hidx, kidx, FLEX_CLS_SEED_BASE + cls_id + 2000)
             call kern%select(nsub, params%minpop)
@@ -1161,14 +1161,14 @@ contains
     !! rows map to global subclasses directly, or through row_global(:,ifile) for part files
     subroutine flex_frcs_txt2bin( params, fnames, ntot, row_global )
         use simple_class_frcs, only: class_frcs
-        type(parameters),  intent(in) :: params
-        type(string),      intent(in) :: fnames(:)
-        integer,           intent(in) :: ntot
-        integer, optional, intent(in) :: row_global(:,:)
-        type(class_frcs)  :: frcs
-        real, allocatable :: frc(:)
+        type(parameters),  intent(in)           :: params
+        type(string),      intent(in)           :: fnames(:)
+        integer,           intent(in)           :: ntot
+        integer,           optional, intent(in) :: row_global(:,:)
+        type(class_frcs)           :: frcs
+        real, allocatable          :: frc(:)
         character(len=XLONGSTRLEN) :: line
-        integer :: ifile, funit, ios, row, iglob, nyq
+        integer                    :: ifile, funit, ios, row, iglob, nyq
         if( ntot < 1 ) return
         nyq = fdim(params%box) - 1
         call frcs%new(ntot, params%box, params%smpd)
@@ -1214,11 +1214,11 @@ contains
         integer,          intent(in)    :: nsplit
         integer,          intent(in)    :: new_class(:), new_parent(:)
         integer,          intent(in)    :: parent_of_subcls(:), pop_of_subcls(:)
-        real,             intent(in)    :: neff_of_subcls(:)  !< the hard population
-        real,             intent(in)    :: sep_of_subcls(:)   !< Ashman's D of the parent's split (same for its subclasses)
-        real,             intent(in)    :: repro_of_subcls(:) !< cross-half reproducibility of the subclass difference
+        real,             intent(in)    :: neff_of_subcls(:)                           !< the hard population
+        real,             intent(in)    :: sep_of_subcls(:)                            !< Ashman's D of the parent's split (same for its subclasses)
+        real,             intent(in)    :: repro_of_subcls(:)                          !< cross-half reproducibility of the subclass difference
         integer,          intent(in)    :: pop_even_of_subcls(:), pop_odd_of_subcls(:) !< members in the even, odd half
-        type(string),     intent(in)    :: cavgs_stk          !< the sub-class average stack to register
+        type(string),     intent(in)    :: cavgs_stk                                   !< the sub-class average stack to register
         integer :: i
         call spproj%os_ptcl2D%set_all2single('class',   0)
         call spproj%os_ptcl2D%set_all2single('cluster', 0)
@@ -1254,16 +1254,16 @@ contains
     subroutine merge_worker_outputs(params, nparts_run)
         type(parameters), intent(inout) :: params
         integer,          intent(in)    :: nparts_run
-        type(sp_project) :: spproj
-        integer, allocatable :: part_counts(:), part_parent(:,:), part_local(:,:), part_pop(:,:), part_global(:,:)
-        real,    allocatable :: part_neff(:,:), part_sep(:,:), part_repro(:,:)
-        integer, allocatable :: part_pop_even(:,:), part_pop_odd(:,:), pop_even(:), pop_odd(:)
-        integer, allocatable :: comb_part(:), comb_row(:), comb_parent(:), comb_local(:), comb_pop(:)
-        integer, allocatable :: new_class(:), new_parent(:), first_glob(:), nsub_of(:)
-        real,    allocatable :: neff(:), sep(:), repro(:)
-        type(string) :: map_fname, assign_fname
-        type(string), allocatable :: frc_fnames(:)
-        integer :: ipart, nlocal, total, max_count, idx, i, funit, ios, pind, parent_cls, local_cls, p
+        type(sp_project)           :: spproj
+        integer,      allocatable  :: part_counts(:), part_parent(:,:), part_local(:,:), part_pop(:,:), part_global(:,:)
+        real,         allocatable  :: part_neff(:,:), part_sep(:,:), part_repro(:,:)
+        integer,      allocatable  :: part_pop_even(:,:), part_pop_odd(:,:), pop_even(:), pop_odd(:)
+        integer,      allocatable  :: comb_part(:), comb_row(:), comb_parent(:), comb_local(:), comb_pop(:)
+        integer,      allocatable  :: new_class(:), new_parent(:), first_glob(:), nsub_of(:)
+        real,         allocatable  :: neff(:), sep(:), repro(:)
+        type(string)               :: map_fname, assign_fname
+        type(string), allocatable  :: frc_fnames(:)
+        integer                    :: ipart, nlocal, total, max_count, idx, i, funit, ios, pind, parent_cls, local_cls, p
         character(len=XLONGSTRLEN) :: line
         call spproj%read(params%projfile)
         write(logfhandle,'(A,I8)') 'Cls expansion merge: start nparts=', nparts_run
@@ -1386,7 +1386,7 @@ contains
         integer,          intent(in)    :: nparts_run, part_counts(:), part_global(:,:)
         type(string) :: stk_fname, out_stk
         type(image)  :: img
-        integer :: ipart, irow, ldim(3), nimgs, ieo
+        integer      :: ipart, irow, ldim(3), nimgs, ieo
         do ieo = 0, 2
             select case(ieo)
                 case(0); out_stk = string(FLEX_CLS_CAVGS_FILE)
@@ -1417,7 +1417,7 @@ contains
     subroutine count_data_lines(fname, nlines)
         type(string), intent(in)  :: fname
         integer,      intent(out) :: nlines
-        integer :: funit, ios
+        integer                    :: funit, ios
         character(len=XLONGSTRLEN) :: line
         nlines = 0
         open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
@@ -1437,7 +1437,7 @@ contains
         integer,      intent(in)  :: nrows
         integer,      intent(out) :: parents(:), locals(:), pops(:), pops_even(:), pops_odd(:)
         real,         intent(out) :: neffs(:), seps(:), repros(:)
-        integer :: funit, ios, irow, row
+        integer                    :: funit, ios, irow, row
         character(len=XLONGSTRLEN) :: line
         open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
         call fileiochk('read_part_map opening '//fname%to_char(), ios)
@@ -1456,9 +1456,9 @@ contains
     end subroutine read_part_map
 
     subroutine read_int_file(fname, vals)
-        type(string),         intent(in)  :: fname
-        integer, allocatable, intent(out) :: vals(:)
-        integer :: nvals, funit, ios, i
+        type(string),         intent(in)               :: fname
+        integer,              allocatable, intent(out) :: vals(:)
+        integer                    :: nvals, funit, ios, i
         character(len=XLONGSTRLEN) :: line
         call count_data_lines(fname, nvals)
         allocate(vals(nvals))

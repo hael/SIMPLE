@@ -44,19 +44,19 @@ private
 
 type :: refine2D_ctrl
     character(len=:), allocatable :: refine_flag
-    logical :: l_sample_updates
-    logical :: l_frac_restore
-    logical :: l_ctf
-    logical :: l_snhc
-    logical :: l_stream
-    logical :: l_greedy
-    logical :: l_np_cls_defined
-    logical :: l_prob_align
-    logical :: l_restore_cavgs
-    logical :: l_require_full_assignment
-    logical :: l_crop_sums
-    logical :: l_pipeline   !< the probabilistic pipeline: the fill, the class draw and the in-plane insertion per batch
-    logical :: do_bench
+    logical                       :: l_sample_updates
+    logical                       :: l_frac_restore
+    logical                       :: l_ctf
+    logical                       :: l_snhc
+    logical                       :: l_stream
+    logical                       :: l_greedy
+    logical                       :: l_np_cls_defined
+    logical                       :: l_prob_align
+    logical                       :: l_restore_cavgs
+    logical                       :: l_require_full_assignment
+    logical                       :: l_crop_sums
+    logical                       :: l_pipeline !< the probabilistic pipeline: the fill, the class draw and the in-plane insertion per batch
+    logical                       :: do_bench
 end type refine2D_ctrl
 
 contains
@@ -66,41 +66,41 @@ contains
     !!  the class averager for the strategy to restore. l_frac: whether this iteration blends carried class sums
     subroutine refine2D_exec( params, build, cline, which_iter, l_frac )
         use simple_decay_funs,  only: extremal_decay2D
-        class(parameters), target, intent(inout) :: params
-        class(builder),    target, intent(inout) :: build
-        class(cmdline),            intent(inout) :: cline
-        integer,                   intent(in)    :: which_iter
-        logical,                   intent(out)   :: l_frac
+        class(parameters),         target, intent(inout) :: params
+        class(builder),            target, intent(inout) :: build
+        class(cmdline),            intent(inout)         :: cline
+        integer,                   intent(in)            :: which_iter
+        logical,                   intent(out)           :: l_frac
         type(strategy2D_per_ptcl), allocatable   :: strategy2Dsrch(:)
         real,                      allocatable   :: incr_shifts(:,:)
         integer,                   allocatable   :: pinds(:), batches(:,:)
         type(eul_prob_tab2D),      target        :: eulprob_obj_part
         type(prob_insert_inpl),    target        :: inpl_ins
         type(refine2D_ctrl)                      :: ctrl
-        type(ori)             :: orientation
-        type(strategy2D_spec) :: strategy2Dspec
-        logical :: attempted, improved, no_improvement, invalid
-        real    :: frac_srch_space, neigh_frac
-        logical :: l_map_classic
-        integer :: iptcl, fnr, iptcl_map, iptcl_batch, ibatch, nptcls2update, inpl_mmax
-        integer, allocatable :: pinds_glob(:)
-        integer :: neff_nglob, neff_rank0
-        integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end, ithr, nthr_team
-        real(dp), allocatable  :: ts_thr(:)
-        real(dp)               :: t_region, t_ptcl
-        type(ptcl_read_counts) :: reads0, reads_srch
-        type(ptcl_read_session) :: reads
-        integer(int64)          :: pipeline_bytes, pipeline_budget, fixed_bytes, particle_bytes
-        type(image), allocatable :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
-        class(builder),    pointer :: b_ptr
-        class(parameters), pointer :: p_ptr
-        real(timer_int_kind)    :: rt_startup, rt_alloc_ptcl_imgs2D, rt_prep_pftc_refs2D
-        real(timer_int_kind)    :: rt_build_batch_particles2D, rt_align, rt_cavg, rt_tot
-        real(timer_int_kind)    :: rt_cavg_interp_splat, rt_sigma2_write, rt_fill_tab, rt_assign
-        type(prob_fill_profile) :: fill_prof
-        real(dp)               :: ts_search, wall_search, ts_sums, wall_sums
-        integer(timer_int_kind) :: t_startup, t_alloc_ptcl_imgs2D, t_prep_pftc_refs2D
-        integer(timer_int_kind) :: t_build_batch_particles2D, t_align, t_cavg, t_tot, t_sigma2_write, t_fill_tab, t_assign
+        type(ori)                                :: orientation
+        type(strategy2D_spec)                    :: strategy2Dspec
+        logical                                  :: attempted, improved, no_improvement, invalid
+        real                                     :: frac_srch_space, neigh_frac
+        logical                                  :: l_map_classic
+        integer                                  :: iptcl, fnr, iptcl_map, iptcl_batch, ibatch, nptcls2update, inpl_mmax
+        integer,                   allocatable   :: pinds_glob(:)
+        integer                                  :: neff_nglob, neff_rank0
+        integer                                  :: batchsz_max, batchsz, nbatches, batch_start, batch_end, ithr, nthr_team
+        real(dp),                  allocatable   :: ts_thr(:)
+        real(dp)                                 :: t_region, t_ptcl
+        type(ptcl_read_counts)                   :: reads0, reads_srch
+        type(ptcl_read_session)                  :: reads
+        integer(int64)                           :: pipeline_bytes, pipeline_budget, fixed_bytes, particle_bytes
+        type(image),               allocatable   :: ptcl_imgs(:), ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
+        class(builder),            pointer       :: b_ptr
+        class(parameters),         pointer       :: p_ptr
+        real(timer_int_kind)                     :: rt_startup, rt_alloc_ptcl_imgs2D, rt_prep_pftc_refs2D
+        real(timer_int_kind)                     :: rt_build_batch_particles2D, rt_align, rt_cavg, rt_tot
+        real(timer_int_kind)                     :: rt_cavg_interp_splat, rt_sigma2_write, rt_fill_tab, rt_assign
+        type(prob_fill_profile)                  :: fill_prof
+        real(dp)                                 :: ts_search, wall_search, ts_sums, wall_sums
+        integer(timer_int_kind)                  :: t_startup, t_alloc_ptcl_imgs2D, t_prep_pftc_refs2D
+        integer(timer_int_kind)                  :: t_build_batch_particles2D, t_align, t_cavg, t_tot, t_sigma2_write, t_fill_tab, t_assign
         p_ptr => params
         b_ptr => build
         call check_pass_team('refine2D_exec')
@@ -526,8 +526,8 @@ contains
 
         subroutine restore_class_averages_for_batch()
             integer(timer_int_kind) :: t_update
-            integer, pointer :: ent_n(:)
-            real,    pointer :: ent_e3(:,:), ent_w(:,:)
+            integer, pointer        :: ent_n(:)
+            real,    pointer        :: ent_e3(:,:), ent_w(:,:)
             call cavger_transf_oridat(batchsz, pinds(batch_start:batch_end), updated_only=.true.)
             if( ctrl%do_bench ) t_update = tic()
             if( ctrl%l_pipeline )then
@@ -541,9 +541,9 @@ contains
 
         subroutine cleanup_search_state(strategy2Dsrch, pinds, batches, eulprob_obj_part, orientation)
             type(strategy2D_per_ptcl), allocatable, intent(inout) :: strategy2Dsrch(:)
-            integer, allocatable, intent(inout) :: pinds(:), batches(:,:)
-            type(eul_prob_tab2D), intent(inout) :: eulprob_obj_part
-            type(ori),            intent(inout) :: orientation
+            integer,                   allocatable, intent(inout) :: pinds(:), batches(:,:)
+            type(eul_prob_tab2D),      intent(inout)              :: eulprob_obj_part
+            type(ori),                 intent(inout)              :: orientation
             call clean_strategy2D
             call orientation%kill
             call clean_batch_particles2D(b_ptr, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
@@ -565,7 +565,7 @@ contains
             use, intrinsic :: iso_fortran_env, only: int64, real64
             use simple_bench_io, only: open_bench_report
             integer, intent(in) :: which_iter
-            integer(int64) :: peak_rss
+            integer(int64)  :: peak_rss
             real(real64)    :: peak_rss_gib
             if( .not. ctrl%do_bench ) return
             rt_tot = toc(t_tot)

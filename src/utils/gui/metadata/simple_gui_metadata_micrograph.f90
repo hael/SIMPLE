@@ -19,20 +19,20 @@ integer, parameter :: MAX_MIC_COORDINATES = 5000 ! box centres a micrograph hold
 
 type, extends( gui_metadata_base ) :: gui_metadata_micrograph
   private
-  character(len=LONGSTRLEN) :: path          = ''    ! absolute path to the micrograph file
-  character(len=LONGSTRLEN) :: ctfimg        = ''    ! absolute path to the CTF image file
-  real                      :: dfx           = 0.0   ! defocus value along x (Angstroms)
-  real                      :: dfy           = 0.0   ! defocus value along y (Angstroms)
-  real                      :: ctfres        = 0.0   ! CTF resolution estimate (Angstroms)
-  integer                   :: i             = 1     ! index of this micrograph within the current batch
-  integer                   :: i_max         = 1     ! total micrographs in the current batch
-  integer                   :: xdim          = 0     ! micrograph width in pixels
-  integer                   :: ydim          = 0     ! micrograph height in pixels
-  integer                   :: n_coordinates = 0     ! number of populated coordinate entries
+  character(len=LONGSTRLEN) :: path                               = ''  ! absolute path to the micrograph file
+  character(len=LONGSTRLEN) :: ctfimg                             = ''  ! absolute path to the CTF image file
+  real                      :: dfx                                = 0.0 ! defocus value along x (Angstroms)
+  real                      :: dfy                                = 0.0 ! defocus value along y (Angstroms)
+  real                      :: ctfres                             = 0.0 ! CTF resolution estimate (Angstroms)
+  integer                   :: i                                  = 1   ! index of this micrograph within the current batch
+  integer                   :: i_max                              = 1   ! total micrographs in the current batch
+  integer                   :: xdim                               = 0   ! micrograph width in pixels
+  integer                   :: ydim                               = 0   ! micrograph height in pixels
+  integer                   :: n_coordinates                      = 0   ! number of populated coordinate entries
   integer(kind=2)           :: x_coordinates(MAX_MIC_COORDINATES) = 0_2 ! particle box centre x (int16, limits transfer size)
   integer(kind=2)           :: y_coordinates(MAX_MIC_COORDINATES) = 0_2 ! particle box centre y (int16, limits transfer size)
 contains
-  procedure :: kill => kill_override
+  procedure :: kill    => kill_override
   procedure :: set
   procedure :: set_coordinate
   procedure :: clear_coordinates
@@ -48,11 +48,11 @@ contains
 
   ! Set scalar micrograph fields and mark the object as assigned.
   subroutine set( self, path, i, i_max, dfx, dfy, ctfres, ctfimg )
-    class(gui_metadata_micrograph), intent(inout) :: self
-    type(string),                   intent(in)    :: path
-    integer,                        intent(in)    :: i, i_max
-    real,                 optional, intent(in)    :: dfx, dfy, ctfres
-    type(string),         optional, intent(in)    :: ctfimg
+    class(gui_metadata_micrograph), intent(inout)        :: self
+    type(string),                   intent(in)           :: path
+    integer,                        intent(in)           :: i, i_max
+    real,                           optional, intent(in) :: dfx, dfy, ctfres
+    type(string),                   optional, intent(in) :: ctfimg
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned = .true.
     self%path       = path%to_char()

@@ -265,8 +265,8 @@ contains
 
     function assert_eqn(nn,string)
         implicit none
-        character(len=*),      intent(in) :: string
-        integer, dimension(:), intent(in) :: nn
+        character(len=*),      intent(in)               :: string
+        integer,               dimension(:), intent(in) :: nn
         integer :: assert_eqn
         if (all(nn(2:) == nn(1))) then
             assert_eqn=nn(1)

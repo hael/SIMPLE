@@ -36,7 +36,7 @@ contains
         type(ui_hash)              :: tab
         type(ui_program), target   :: prg1, prg2
         type(ui_program), pointer  :: p
-        logical :: found
+        logical                    :: found
         write(*,'(A)') 'test_set_get_by_key'
         call make_prg(prg1, 'solve2D')
         call make_prg(prg2, 'refine3D')
@@ -60,7 +60,7 @@ contains
         type(ui_hash)              :: tab
         type(ui_program), target   :: prg1
         type(ui_program), pointer  :: p
-        logical :: found
+        logical                    :: found
         write(*,'(A)') 'test_missing_key_is_a_typed_miss'
         call make_prg(prg1, 'solve2D')
         call tab%set_ui_program('solve2D', prg1)
@@ -76,7 +76,7 @@ contains
         type(ui_hash)              :: tab
         integer,          target   :: not_a_program
         type(ui_program), pointer  :: p
-        logical :: found
+        logical                    :: found
         write(*,'(A)') 'test_wrong_dynamic_type_is_a_typed_miss'
         not_a_program = 7
         ! stored through the vrefhash base as a polymorphic reference of the wrong type
@@ -93,7 +93,7 @@ contains
         type(ui_hash)              :: tab
         type(ui_program), target   :: old_prg, new_prg
         type(ui_program), pointer  :: p
-        logical :: found
+        logical                    :: found
         write(*,'(A)') 'test_overwrite_retargets_pointer'
         call make_prg(old_prg, 'refine2D')
         call make_prg(new_prg, 'refine2D')
@@ -113,7 +113,7 @@ contains
         type(ui_hash)              :: tab
         type(ui_program), target   :: prg1
         type(ui_program), pointer  :: p
-        logical :: found
+        logical                    :: found
         write(*,'(A)') 'test_keys_are_trimmed'
         call make_prg(prg1, 'symmetrize_map')
         call tab%set_ui_program('   symmetrize_map  ', prg1)

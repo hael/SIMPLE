@@ -81,10 +81,10 @@ contains
 
     !> Zeroed sums of a given kind for ncls classes of box_crop x box_crop at smpd_crop
     subroutine new( self, kind, ncls, box_crop, smpd_crop, part )
-        class(cavg_sums),  intent(inout) :: self
-        integer,           intent(in)    :: kind, ncls, box_crop
-        real,              intent(in)    :: smpd_crop
-        integer, optional, intent(in)    :: part
+        class(cavg_sums),  intent(inout)        :: self
+        integer,           intent(in)           :: kind, ncls, box_crop
+        real,              intent(in)           :: smpd_crop
+        integer,           optional, intent(in) :: part
         call self%kill
         if( kind /= CAVG_SUMS_STATE .and. kind /= CAVG_SUMS_CONTRIB ) THROW_HARD('unknown cavg_sums kind')
         if( ncls < 1 .or. box_crop < 2 ) THROW_HARD('invalid cavg_sums dimensions')
@@ -148,8 +148,8 @@ contains
     end subroutine set_mrep
 
     subroutine get_mrep( self, mrep )
-        class(cavg_sums),  intent(in)    :: self
-        real, allocatable, intent(inout) :: mrep(:)
+        class(cavg_sums),  intent(in)                 :: self
+        real,              allocatable, intent(inout) :: mrep(:)
         if( allocated(mrep) ) deallocate(mrep)
         allocate(mrep, source=self%mrep)
     end subroutine get_mrep
@@ -170,15 +170,15 @@ contains
     end subroutine set_contrib_meta
 
     subroutine get_offsets( self, offsets )
-        class(cavg_sums),  intent(in)    :: self
-        real, allocatable, intent(inout) :: offsets(:,:)
+        class(cavg_sums),  intent(in)                 :: self
+        real,              allocatable, intent(inout) :: offsets(:,:)
         if( allocated(offsets) ) deallocate(offsets)
         allocate(offsets, source=self%offsets)
     end subroutine get_offsets
 
     subroutine get_eo_pops( self, eo_pops )
-        class(cavg_sums),     intent(in)    :: self
-        integer, allocatable, intent(inout) :: eo_pops(:,:)
+        class(cavg_sums),     intent(in)                 :: self
+        integer,              allocatable, intent(inout) :: eo_pops(:,:)
         if( allocated(eo_pops) ) deallocate(eo_pops)
         allocate(eo_pops, source=self%eo_pops)
     end subroutine get_eo_pops
@@ -222,11 +222,11 @@ contains
         class(cavg_sums), intent(inout) :: self
         integer,          intent(in)    :: icls
         real,             intent(in)    :: offset(2)
-        type(ftiter) :: fit
+        type(ftiter)             :: fit
         complex(dp), allocatable :: ph_h(:), ph_k(:)
-        complex(dp) :: w1, w2
-        real(dp)    :: sh(2)
-        integer     :: lims(3,2), h, k, hphys, kphys, ieo
+        complex(dp)              :: w1, w2
+        real(dp)                 :: sh(2)
+        integer                  :: lims(3,2), h, k, hphys, kphys, ieo
         if( icls < 1 .or. icls > self%ncls ) THROW_HARD('class index out of range; shift_class')
         if( all(abs(offset) < TINY) ) return
         fit   = ftiter([self%box_crop, self%box_crop, 1], 1.0)
@@ -282,8 +282,8 @@ contains
         real,             intent(in)    :: smpd_crop
         complex(sp), allocatable :: cmat(:,:,:,:)
         real,        allocatable :: ctfsq(:,:,:,:)
-        type(ftiter) :: fit_old, fit_new
-        integer      :: flims(3,2), h, k, phys(2), phys_pd(2), cshape_new(2)
+        type(ftiter)             :: fit_old, fit_new
+        integer                  :: flims(3,2), h, k, phys(2), phys_pd(2), cshape_new(2)
         if( box_crop == self%box_crop ) return
         if( box_crop <  self%box_crop ) THROW_HARD('Fourier cropping of class sums is not supported; pad_to')
         fit_old    = ftiter([self%box_crop, self%box_crop, 1], 1.0)
@@ -309,8 +309,8 @@ contains
 
     !> Sampling mass of each class: the sum of its even and odd CTF^2 accumulators
     subroutine class_mass( self, mass )
-        class(cavg_sums),      intent(in)    :: self
-        real(dp), allocatable, intent(inout) :: mass(:)
+        class(cavg_sums),      intent(in)                 :: self
+        real(dp),              allocatable, intent(inout) :: mass(:)
         integer :: icls
         if( allocated(mass) ) deallocate(mass)
         allocate(mass(self%ncls), source=0._dp)
@@ -353,8 +353,8 @@ contains
         integer,          intent(out)   :: status
         character(len=16) :: magic_read
         integer(kind=8)   :: nbytes, fsize
-        integer :: funit, ios, version, kind_read, ncls, box_crop, cshape(2), part, ifrac
-        real    :: smpd_crop
+        integer           :: funit, ios, version, kind_read, ncls, box_crop, cshape(2), part, ifrac
+        real              :: smpd_crop
         call self%kill
         status = CAVG_SUMS_MISSING
         if( .not. file_exists(fname) ) return

@@ -47,7 +47,7 @@ contains
         type(gui_metadata_timeplot) :: meta
         type(oris)                  :: os
         real, allocatable           :: labels(:), data(:), data2(:)
-        integer :: n
+        integer                     :: n
         write(*,'(A)') 'test_timeplot_widens'
         n = 2 * MAX_TIMEPLOT_POINTS
         call make_oris(os, n)
@@ -80,7 +80,7 @@ contains
         type(gui_metadata_timeplot) :: meta
         real,    allocatable        :: labels(:), data(:), data2(:)
         integer, allocatable        :: rates(:)
-        integer :: i, n
+        integer                     :: i, n
         write(*,'(A)') 'test_rate_timeplot_newest'
         n = MAX_TIMEPLOT_POINTS + 10
         rates = [(i, i = 1,n)]
@@ -109,8 +109,8 @@ contains
     end subroutine make_oris
 
     subroutine get_plot( meta, labels, data, data2 )
-        type(gui_metadata_timeplot), intent(in)  :: meta
-        real, allocatable,           intent(out) :: labels(:), data(:), data2(:)
+        type(gui_metadata_timeplot), intent(in)                         :: meta
+        real,                        allocatable,           intent(out) :: labels(:), data(:), data2(:)
         type(string) :: name
         call assert_true(meta%get(name, labels, data, data2), 'the plot is set')
     end subroutine get_plot

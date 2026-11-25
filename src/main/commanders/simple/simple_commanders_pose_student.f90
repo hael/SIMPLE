@@ -134,20 +134,20 @@ contains
         type(sp_project)                   :: spproj, res, tproj
         type(cmdline)                      :: cline_entry, cl
         type(class_sample), allocatable    :: clssmp(:)
-        type(string) :: edir, result_proj, vol_fname, model_abs, table_abs, times_abs, fname, teacher_dir
-        integer, allocatable :: states(:)
-        logical, allocatable :: active(:), train(:), unseen(:), has_ref(:)
-        real,    allocatable :: sh_2D(:,:), euls_ref(:,:), sh_ref(:,:)
-        real,    allocatable :: euls_sk(:,:), sh_sk(:,:)
-        real(dp) :: ref_cost(2)               ! the reference pass per particle (s): the table fill; setup, particles and fill
-        real     :: rec_res(4,NRECS)          ! per map: FSC 0.5 and 0.143 against the teacher's map, then of its halves
-        real     :: times(2)                  ! the prediction's and the alignment's walls (s)
-        integer  :: rec_n(NRECS)
-        real(timer_int_kind) :: rt(NPHASES), rt_all
-        integer(timer_int_kind) :: t0, t_all
-        real    :: smpd_vol
-        integer :: nptcls, navail, ntrain, nactive, nunseen, i, box_vol, funit, dunit, fnr, io_stat, ncls2D
-        logical :: l_frozen
+        type(string)                       :: edir, result_proj, vol_fname, model_abs, table_abs, times_abs, fname, teacher_dir
+        integer,            allocatable    :: states(:)
+        logical,            allocatable    :: active(:), train(:), unseen(:), has_ref(:)
+        real,               allocatable    :: sh_2D(:,:), euls_ref(:,:), sh_ref(:,:)
+        real,               allocatable    :: euls_sk(:,:), sh_sk(:,:)
+        real(dp)                           :: ref_cost(2)      ! the reference pass per particle (s): the table fill; setup, particles and fill
+        real                               :: rec_res(4,NRECS) ! per map: FSC 0.5 and 0.143 against the teacher's map, then of its halves
+        real                               :: times(2)         ! the prediction's and the alignment's walls (s)
+        integer                            :: rec_n(NRECS)
+        real(timer_int_kind)               :: rt(NPHASES), rt_all
+        integer(timer_int_kind)            :: t0, t_all
+        real                               :: smpd_vol
+        integer                            :: nptcls, navail, ntrain, nactive, nunseen, i, box_vol, funit, dunit, fnr, io_stat, ncls2D
+        logical                            :: l_frozen
         t_all = tic()
         rt    = 0.
         ! ---- the command line: one state, an execution directory, the training sample's size
@@ -456,7 +456,7 @@ contains
             real,    intent(in) :: euls(3,nptcls), shifts(2,nptcls)
             type(sp_project) :: proj
             type(string)     :: dir, recname, even, odd
-            integer :: j
+            integer          :: j
             dir = 'rec_'//trim(REC_NAMES(ir))
             call enter_subdir(dir%to_char())
             call proj%read(string(edir%to_char()//'/predict/'//STUDENT_UNSEEN_PROJ))
@@ -521,7 +521,7 @@ contains
         subroutine write_timings( u )
             integer, intent(in) :: u
             character(len=200) :: line
-            integer :: j, iu, units(2)
+            integer            :: j, iu, units(2)
             units = [u, logfhandle]
             do iu = 1,2
                 write(units(iu),'(a)') '*** TIMINGS (s) ***'
@@ -554,8 +554,8 @@ contains
         real,          intent(inout) :: euls(3,nptcls), shs(2,nptcls)
         real(dp),      intent(out)   :: cost(2)
         character(len=1024) :: line
-        real    :: v(6)
-        integer :: u, ios, iptcl, j
+        real                :: v(6)
+        integer             :: u, ios, iptcl, j
         cost = -1.d0
         call fopen(u, fname, status='old', action='read', iostat=ios)
         call fileiochk('validate_pose_student; open '//fname%to_char(), ios)
@@ -586,7 +586,7 @@ contains
         class(string), intent(in)  :: fname
         real,          intent(out) :: times(2)
         character(len=256) :: line
-        integer :: u, ios, n
+        integer            :: u, ios, n
         times = -1.
         n     = 0
         ! a distributed prediction's parts time themselves: no table of the whole run
@@ -629,17 +629,17 @@ contains
         real,             intent(in)  :: euls_ref(3,nptcls), sh_ref(2,nptcls), sh_in(2,nptcls)
         real(dp),         intent(in)  :: ref_cost(2)
         real,             intent(out) :: euls_sk(3,nptcls), sh_sk(2,nptcls)
-        integer,          parameter   :: NARMS = 2
+        integer,          parameter   :: NARMS       = 2
         character(len=2), parameter   :: ARMS(NARMS) = ['RO', 'SK']
-        type(pose_student) :: student
-        type(sym) :: symop
-        type(ori) :: o_ref, o_st, o_sym
-        integer, allocatable :: mode(:), k99(:), route(:), in_cone(:), rank_ref(:)
-        real,    allocatable :: conf(:), dist_mode(:), euls_ro(:,:), euls(:,:), sh(:,:), d_dir(:), d_inpl(:), d_sh(:)
-        logical, allocatable :: m(:), has(:)
-        real    :: vals(22), q(16), conf_threshold, conf_fraction, heldout_seeded, heldout_recovered
-        integer :: ia, i, funit, io_stat, iptcl, n, iu, units(2)
-        character(len=1024) :: line
+        type(pose_student)            :: student
+        type(sym)                     :: symop
+        type(ori)                     :: o_ref, o_st, o_sym
+        integer,          allocatable :: mode(:), k99(:), route(:), in_cone(:), rank_ref(:)
+        real,             allocatable :: conf(:), dist_mode(:), euls_ro(:,:), euls(:,:), sh(:,:), d_dir(:), d_inpl(:), d_sh(:)
+        logical,          allocatable :: m(:), has(:)
+        real                          :: vals(22), q(16), conf_threshold, conf_fraction, heldout_seeded, heldout_recovered
+        integer                       :: ia, i, funit, io_stat, iptcl, n, iu, units(2)
+        character(len=1024)           :: line
         call student%read(model)
         call student%get_threshold(conf_threshold, conf_fraction, heldout_seeded, heldout_recovered)
         call student%kill
@@ -763,7 +763,7 @@ contains
             real, intent(in)  :: x(:)
             real, intent(out) :: qq(:)
             real, allocatable :: y(:)
-            integer :: nn
+            integer           :: nn
             qq = -1.
             nn = size(x)
             if( nn < 1 ) return
@@ -785,9 +785,9 @@ contains
         integer,       intent(in)  :: box
         real,          intent(in)  :: smpd, mskrad
         real,          intent(out) :: r05, r0143
-        type(image) :: a, b
+        type(image)       :: a, b
         real, allocatable :: corrs(:), res(:)
-        integer :: k, n
+        integer           :: k, n
         call a%new([box,box,box], smpd)
         call b%new([box,box,box], smpd)
         call a%read(f1)

@@ -55,14 +55,14 @@ contains
 
     subroutine exec_refine3D_auto( self, cline )
         class(commander_refine3D_auto), intent(inout) :: self
-        class(cmdline), intent(inout)                 :: cline
+        class(cmdline),                 intent(inout) :: cline
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         call exec_refine3D_workflow(cline, .false.)
     end subroutine exec_refine3D_auto
 
     subroutine exec_refine3D_local( self, cline )
         class(commander_refine3D_local), intent(inout) :: self
-        class(cmdline), intent(inout)                  :: cline
+        class(cmdline),                  intent(inout) :: cline
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'no')
         call exec_refine3D_workflow(cline, .true.)
     end subroutine exec_refine3D_local
@@ -84,7 +84,7 @@ contains
         use simple_sp_project,                   only: sp_project
         use simple_error,                        only: simple_exception
         class(cmdline), intent(inout) :: cline
-        logical, intent(in)           :: l_local
+        logical,        intent(in)    :: l_local
         type(refine3D_workflow_controller) :: controller
         type(commander_refine3D)           :: xrefine3D
         type(commander_bootstrap_rec3D)    :: xbootstrap_rec3D
@@ -93,7 +93,7 @@ contains
         type(gui_communicator)             :: gui_comm
         class(parameters), allocatable     :: params
         class(sp_project), allocatable     :: spproj
-        class(cmdline), allocatable        :: cline_boot
+        class(cmdline),    allocatable     :: cline_boot
         type(string)                       :: pose_cont_arg, refine_arg, init_vol, pose_init_refs(1), pose_init_checkpoint(1)
         integer                            :: maxits_user, nactive
         logical                            :: l_followup, l_have_init_vol, l_external_input, l_maxits_defined
@@ -351,14 +351,14 @@ contains
         use simple_parameters,  only: parameters
         use simple_cmdline,     only: cmdline
         use simple_defs_conv,   only: AHELIX_WIDTH
-        class(parameters), intent(in) :: params
-        class(cmdline), intent(inout) :: cline
-        logical, intent(in)           :: l_local
-        integer, intent(out)          :: box_crop
-        real, intent(out)             :: smpd_crop
+        class(parameters), intent(in)    :: params
+        class(cmdline),    intent(inout) :: cline
+        logical,           intent(in)    :: l_local
+        integer,           intent(out)   :: box_crop
+        real,              intent(out)   :: smpd_crop
         real               :: smpd_target, scale, trslim
         logical            :: l_autoscale
-        logical, parameter :: DEBUG = .true.
+        logical, parameter :: DEBUG  = .true.
         integer, parameter :: MINBOX = 256
         smpd_target = 1.3
         if( cline%defined('box_crop') )then
@@ -414,9 +414,9 @@ contains
         use simple_cmdline,                 only: cmdline
         use simple_defs,                    only: logfhandle
         use simple_error,                   only: simple_exception
-        character(len=*), intent(in)     :: workflow_label
+        character(len=*),  intent(in)    :: workflow_label
         class(parameters), intent(inout) :: params
-        class(cmdline), intent(inout)    :: cline
+        class(cmdline),    intent(inout) :: cline
         class(sp_project), intent(inout) :: work
         type(commander_selection) :: xselection
         type(cmdline)             :: cline_sel
@@ -533,15 +533,15 @@ contains
         use simple_cmdline,    only: cmdline
         use simple_defs,       only: logfhandle
         use simple_error,      only: simple_exception
-        character(len=*), intent(in)     :: workflow_label
-        logical, intent(in)              :: l_maxits_defined
+        character(len=*),  intent(in)    :: workflow_label
+        logical,           intent(in)    :: l_maxits_defined
         class(parameters), intent(inout) :: params
-        class(cmdline), intent(inout)    :: cline
+        class(cmdline),    intent(inout) :: cline
         class(sp_project), intent(inout) :: project
         integer            :: maxits_auto, nptcls_per_iter, nsample_target, nptcls_eff
         real               :: update_frac_auto
-        integer, parameter :: MAXITS_REFINE3D_CAP = 50
-        real, parameter    :: TARGET_UPDATES_PER_PARTICLE_REFINE3D = 4.0
+        integer, parameter :: MAXITS_REFINE3D_CAP                  = 50
+        real,    parameter :: TARGET_UPDATES_PER_PARTICLE_REFINE3D = 4.0
         nsample_target = params%nsample
         if( nsample_target < 1 ) THROW_HARD('nsample must be >= 1 for '//workflow_label)
         nptcls_eff = project%count_state_gt_zero()
@@ -602,9 +602,9 @@ contains
         use simple_cmdline,         only: cmdline
         use simple_defs,            only: TINY, logfhandle
         use simple_error,           only: simple_exception
-        character(len=*), intent(in)     :: workflow_label
+        character(len=*),  intent(in)    :: workflow_label
         class(parameters), intent(inout) :: params
-        class(cmdline), intent(inout)    :: cline
+        class(cmdline),    intent(inout) :: cline
         type(sp_project)  :: seed_proj
         type(string)      :: fsc_fname
         real, allocatable :: fsc(:), res(:)
@@ -649,7 +649,7 @@ contains
 
     subroutine require_refine3D_local_value( cline, key, expected )
         use simple_error, only: simple_exception
-        class(cmdline), intent(in)   :: cline
+        class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: key, expected
         if( .not. cline%defined(key) ) return
         if( cline%get_carg(key) /= expected ) THROW_HARD('refine3D_local requires '//key//'='//expected)
@@ -674,20 +674,20 @@ contains
         use simple_defs,            only: TINY, logfhandle
         use simple_error,           only: simple_exception
         use simple_default_clines,  only: strip_sigma2_anneal_args
-        class(parameters), intent(in)        :: params
-        class(cmdline), intent(inout)        :: cline
+        class(parameters),     intent(in)    :: params
+        class(cmdline),        intent(inout) :: cline
         class(commander_base), intent(inout) :: xrefine3D
-        character(len=*), intent(in)         :: workflow_label
-        integer, parameter :: REGPASS_NSPACE = 5000
-        type(cmdline)      :: cline_pass
-        type(sp_project)   :: pass_proj
-        type(oris)         :: os_before, os_after
-        type(ori)          :: o_before
-        type(string)       :: fsc_fname
-        real, allocatable  :: fsc(:), res(:)
-        real               :: res_pass, delta, dist, sh_before(2), sh_after(2), user_lpstop
-        integer            :: fsc_box, i, n, n_active, n_moved1, n_moved2, n_shift
-        logical            :: l_user_lpstop
+        character(len=*),      intent(in)    :: workflow_label
+        integer, parameter   :: REGPASS_NSPACE = 5000
+        type(cmdline)        :: cline_pass
+        type(sp_project)     :: pass_proj
+        type(oris)           :: os_before, os_after
+        type(ori)            :: o_before
+        type(string)         :: fsc_fname
+        real,    allocatable :: fsc(:), res(:)
+        real                 :: res_pass, delta, dist, sh_before(2), sh_after(2), user_lpstop
+        integer              :: fsc_box, i, n, n_active, n_moved1, n_moved2, n_shift
+        logical              :: l_user_lpstop
         if( .not. params%l_regpass ) return
         ! A user lpstop can only make this pass coarser.
         l_user_lpstop = cline%defined('lpstop')
@@ -803,11 +803,11 @@ contains
         type(refine3D_states_controller) :: states_ctrl
         type(refine3D_states_policy)     :: policy
         type(string)                     :: m_estimator_arg
-        real,             parameter :: STATE_OVERLAP_NEIGH_REFINE3D_STATES = 0.99
-        real,             parameter :: LPSTART_REFINE3D_STATES             = 10.0
-        real,             parameter :: LPSTOP_REFINE3D_STATES              = 6.0
-        character(len=*), parameter :: WORKFLOW_LABEL                      = 'REFINE3D_STATES'
-        logical :: l_gui_comm_active
+        real,             parameter      :: STATE_OVERLAP_NEIGH_REFINE3D_STATES = 0.99
+        real,             parameter      :: LPSTART_REFINE3D_STATES             = 10.0
+        real,             parameter      :: LPSTOP_REFINE3D_STATES              = 6.0
+        character(len=*), parameter      :: WORKFLOW_LABEL                      = 'REFINE3D_STATES'
+        logical                          :: l_gui_comm_active
         ! commanders
         type(commander_rec3D)           :: xrec3D
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
@@ -891,20 +891,20 @@ contains
         logical,             allocatable :: ptcl_active(:)
         integer,             allocatable :: cls_label(:), cls_state(:), new_state(:)
         real,                allocatable :: cls_euls(:,:), cls_shifts(:,:), cls_corr(:), cls_proj(:)
-        real,             parameter :: STATE_OVERLAP_TARGET = 0.99
-        real,             parameter :: LPSTART_DEFAULT      = 10.0
-        real,             parameter :: LPSTOP_DEFAULT       = 6.0
-        real,             parameter :: MIN_STATE_FRAC       = 0.1
-        real,             parameter :: SMPD_TOL             = 0.001
-        integer,          parameter :: MIN_SUBAVGS          = 100
-        integer,          parameter :: FLEX_MIN_NEFF        = 20
-        integer,          parameter :: FLEX_MIN_FIT_ROWS    = 100
-        character(len=*), parameter :: WORKFLOW_LABEL       = 'REFINE3D_STATES_CAVGS'
-        character(len=*), parameter :: WORK_PROJFILE        = 'refine3D_states_cavgs_tmpproj.simple'
-        character(len=*), parameter :: WORK_SIGMA2_STATE    = 'refine3D_states_cavgs_sigma2_state.bin'
-        character(len=*), parameter :: MEAN_VOL_FNAME       = 'refine3D_states_cavgs_mean.mrc'
-        integer :: ncavgs, nsel
-        logical :: l_gui_comm_active, l_cls3D_labels
+        real,                parameter   :: STATE_OVERLAP_TARGET = 0.99
+        real,                parameter   :: LPSTART_DEFAULT      = 10.0
+        real,                parameter   :: LPSTOP_DEFAULT       = 6.0
+        real,                parameter   :: MIN_STATE_FRAC       = 0.1
+        real,                parameter   :: SMPD_TOL             = 0.001
+        integer,             parameter   :: MIN_SUBAVGS          = 100
+        integer,             parameter   :: FLEX_MIN_NEFF        = 20
+        integer,             parameter   :: FLEX_MIN_FIT_ROWS    = 100
+        character(len=*),    parameter   :: WORKFLOW_LABEL       = 'REFINE3D_STATES_CAVGS'
+        character(len=*),    parameter   :: WORK_PROJFILE        = 'refine3D_states_cavgs_tmpproj.simple'
+        character(len=*),    parameter   :: WORK_SIGMA2_STATE    = 'refine3D_states_cavgs_sigma2_state.bin'
+        character(len=*),    parameter   :: MEAN_VOL_FNAME       = 'refine3D_states_cavgs_mean.mrc'
+        integer                          :: ncavgs, nsel
+        logical                          :: l_gui_comm_active, l_cls3D_labels
         ! commanders
         type(commander_rec3D)           :: xrec3D
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
@@ -1064,8 +1064,8 @@ contains
             type(string)                  :: stk, stk_eo(2), ext, consensus_vol
             integer,          allocatable :: cls2D_states(:), cls3D_states(:), ptcl2D_states(:), ptcl3D_states(:)
             character(len=:), allocatable :: errmsg
-            integer :: ncls_stk, ldim(3), nimgs, vol_box, nrows, nmin, ieo, state, nlabels, icls
-            real    :: smpd_stk, smpd_hdr, vol_smpd
+            integer                       :: ncls_stk, ldim(3), nimgs, vol_box, nrows, nmin, ieo, state, nlabels, icls
+            real                          :: smpd_stk, smpd_hdr, vol_smpd
             call spproj%get_cavgs_stk(stk, ncls_stk, smpd_stk)
             if( spproj%os_cls2D%get_noris() /= ncls_stk .or. spproj%os_cls3D%get_noris() /= ncls_stk )then
                 THROW_HARD(WORKFLOW_LABEL//' needs a cls2D and a cls3D row for every class average')
@@ -1171,7 +1171,7 @@ contains
         subroutine check_flex_fits()
             use simple_flex_pca_stages, only: flex_pca_half_of
             character(len=:), allocatable :: errmsg
-            integer :: irow, nfit(2)
+            integer                       :: irow, nfit(2)
             call work_proj%read_segment('ptcl3D', params%projfile)
             nfit = 0
             do irow = 1,work_proj%os_ptcl3D%get_noris()
@@ -1253,8 +1253,8 @@ contains
             use simple_solve3D_utils,       only: solve3D_rec_fbody, solve3D_state_fsc_lowpass, &
                 &write_solve3D_lowpass_snapshot
             type(string) :: vol_name, vol_final_lp
-            real    :: lp_snapshot
-            integer :: state
+            real         :: lp_snapshot
+            integer      :: state
             allocate(final_vols(params%nstates))
             call work_proj%read_segment('out', params%projfile)
             do state = 1,params%nstates
@@ -1334,26 +1334,26 @@ contains
         use simple_commanders_rec, only: commander_rec3D
         use simple_estimate_ssnr,  only: lpstages_setlims
         class(commander_classify3D_refs), intent(inout) :: self
-        class(cmdline),                intent(inout)    :: cline
-        integer, parameter :: NSAMPLE_PER_STATE_CLASSIFY3D_REFS = 10000
-        integer, parameter :: NSAMPLE_CLASSIFY3D_REFS_CAP = 100000
-        integer, parameter :: NSPACE                      = 5000
-        integer, parameter :: NSPACE_SUB                  = 500
-        integer, parameter :: MINITS_CLASSIFY3D_REFS      = 10
-        integer, parameter :: MAXITS_CLASSIFY3D_REFS      = 50
-        real,    parameter :: TARGET_UPDATES_PER_PARTICLE = 4.0
-        real,    parameter :: LPSTART_CLASSIFY3D_REFS     = 10.0
-        real,    parameter :: LPSTOP_CLASSIFY3D_REFS      = 6.0
-        character(len=*), parameter :: WORKFLOW_LABEL     = 'CLASSIFY3D_REFS'
+        class(cmdline),                   intent(inout) :: cline
+        integer,          parameter     :: NSAMPLE_PER_STATE_CLASSIFY3D_REFS = 10000
+        integer,          parameter     :: NSAMPLE_CLASSIFY3D_REFS_CAP       = 100000
+        integer,          parameter     :: NSPACE                            = 5000
+        integer,          parameter     :: NSPACE_SUB                        = 500
+        integer,          parameter     :: MINITS_CLASSIFY3D_REFS            = 10
+        integer,          parameter     :: MAXITS_CLASSIFY3D_REFS            = 50
+        real,             parameter     :: TARGET_UPDATES_PER_PARTICLE       = 4.0
+        real,             parameter     :: LPSTART_CLASSIFY3D_REFS           = 10.0
+        real,             parameter     :: LPSTOP_CLASSIFY3D_REFS            = 6.0
+        character(len=*), parameter     :: WORKFLOW_LABEL                    = 'CLASSIFY3D_REFS'
         type(commander_rec3D)           :: xrec3D
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
-        type(commander_refine3D)  :: xrefine3D
-        type(parameters)          :: params
-        type(sp_project)          :: spproj
-        type(lp_crop_inf)         :: lpinfo_master(1)
-        type(string), allocatable :: init_vols(:)
-        integer,      allocatable :: state_pops(:)
-        integer :: nptcls_eff, iter_glob, state
+        type(commander_refine3D)        :: xrefine3D
+        type(parameters)                :: params
+        type(sp_project)                :: spproj
+        type(lp_crop_inf)               :: lpinfo_master(1)
+        type(string),     allocatable   :: init_vols(:)
+        integer,          allocatable   :: state_pops(:)
+        integer                         :: nptcls_eff, iter_glob, state
         call cline%set('prg', 'classify3D_refs')
         ! hard defaults (balance falls back to none without selected class averages)
         call cline%set('balance',         'class')
@@ -1423,8 +1423,8 @@ contains
     contains
 
         subroutine set_classify3D_refs_nstates( nptcls_eff, state_pops )
-            integer,              intent(inout) :: nptcls_eff
-            integer, allocatable, intent(inout) :: state_pops(:)
+            integer,              intent(inout)              :: nptcls_eff
+            integer,              allocatable, intent(inout) :: state_pops(:)
             integer :: state, nstates_labels
             nptcls_eff = spproj%os_ptcl3D%count_state_gt_zero()
             if( nptcls_eff < 1 ) THROW_HARD('no active particles available for '//WORKFLOW_LABEL)
@@ -1559,8 +1559,8 @@ contains
 
         subroutine initialize_state_volumes()
             type(string), allocatable :: checkpoint_vols(:)
-            logical :: vols_defined(params%nstates)
-            integer :: state
+            logical                   :: vols_defined(params%nstates)
+            integer                   :: state
             do state = 1,params%nstates
                 vols_defined(state) = cline%defined('vol'//int2str(state))
             enddo
@@ -1586,8 +1586,8 @@ contains
 
         subroutine validate_input_volumes()
             type(string) :: vol
-            integer :: state, ldim(3), nptcls_dummy
-            real    :: vol_smpd
+            integer      :: state, ldim(3), nptcls_dummy
+            real         :: vol_smpd
             do state = 1,params%nstates
                 vol = params%vols(state)
                 if( .not. file_exists(vol) ) THROW_HARD('Input volume does not exist: '//vol%to_char())
@@ -1601,9 +1601,9 @@ contains
         end subroutine validate_input_volumes
 
         subroutine run_classify3D_refs()
-            integer, parameter  :: STEP_IT = 3
+            integer,                         parameter   :: STEP_IT = 3
             type(refine3D_stage_plan_entry), allocatable :: stages(:)
-            integer :: startit, lastit, stage
+            integer                                      :: startit, lastit, stage
             call plan_refine3D_frequency_stages(params%box, params%smpd, params%lpstart, params%lpstop, &
                 &params%maxits, STEP_IT, iter_glob + 1, lpinfo_master(1), stages)
             write(logfhandle,'(A,I0,A,F7.2,A,F7.2)') &
@@ -1721,13 +1721,13 @@ contains
         class(commander_refine3D), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         class(refine3D_strategy), allocatable :: strategy
-        type(parameters) :: params
-        type(builder)    :: build
-        type(string)     :: filt_mode_arg, refine_arg
-        character(len=STDLEN) :: errmsg
-        logical          :: converged, l_anneal
-        integer          :: niters, it_tail, nits_sigma2_ramp
-        real             :: beta_start
+        type(parameters)                      :: params
+        type(builder)                         :: build
+        type(string)                          :: filt_mode_arg, refine_arg
+        character(len=STDLEN)                 :: errmsg
+        logical                               :: converged, l_anneal
+        integer                               :: niters, it_tail, nits_sigma2_ramp
+        real                                  :: beta_start
         ! the modes the 3D matcher implements, refused here so that a distributed master never
         ! waits for workers that stop on an unknown mode
         if( cline%defined('refine') )then
@@ -2006,9 +2006,9 @@ contains
         end subroutine prepare_bootstrap_rec_cline
 
         subroutine register_bootstrap_rec_outputs()
-            type(sp_project) :: spproj
-            type(string)     :: volname, fscname
-            integer          :: istate, pop
+            type(sp_project)  :: spproj
+            type(string)      :: volname, fscname
+            integer           :: istate, pop
             character(len=16) :: imgkind
             call spproj%read_segment('out', params%projfile)
             call spproj%read_segment(params%oritype, params%projfile)

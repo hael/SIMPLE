@@ -23,8 +23,8 @@ contains
     !! of another state; 0 margin with one state
     subroutine test_reduce_state_matches()
         integer, parameter :: NSTATES = 2, NSPACE = 3, NCLS = 2
-        real    :: corr(NSTATES*NSPACE,NCLS), best_corr(NCLS), margin(NCLS)
-        integer :: best_state(NCLS), best_ref(NCLS)
+        real               :: corr(NSTATES*NSPACE,NCLS), best_corr(NCLS), margin(NCLS)
+        integer            :: best_state(NCLS), best_ref(NCLS)
         write(*,'(A)') 'test_reduce_state_matches'
         ! class 1 fits state 2's second direction; class 2 state 1's third, narrowly
         corr(:,1) = [0.30, 0.50, 0.40,   0.20, 0.90, 0.60]
@@ -59,19 +59,19 @@ contains
     !> projections of two volumes, each matched to its own at its own pose; a mirrored one to the
     !! opposite view
     subroutine test_two_volumes()
-        integer, parameter :: BOX = 40, NSPACE = 500, NTARG = 6
-        real,    parameter :: SMPD = 3., LP = 9., TRS = 3., MSKDIAM = 84.
-        real,    parameter :: ANG_TOL = 5., MIRR_ANG_TOL = 12., SHIFT_TOL = 1.
-        integer, parameter :: IDIRS(5)   = [17, 101, 163, 255, 389]
-        real,    parameter :: PSIS(5)    = [40., 200., 300., 90., 10.]
-        integer, parameter :: EXPECTED(NTARG) = [1, 1, 1, 2, 2, 1]
+        integer,     parameter   :: BOX             = 40, NSPACE = 500, NTARG = 6
+        real,        parameter   :: SMPD            = 3., LP = 9., TRS = 3., MSKDIAM = 84.
+        real,        parameter   :: ANG_TOL         = 5., MIRR_ANG_TOL = 12., SHIFT_TOL = 1.
+        integer,     parameter   :: IDIRS(5)        = [17, 101, 163, 255, 389]
+        real,        parameter   :: PSIS(5)         = [40., 200., 300., 90., 10.]
+        integer,     parameter   :: EXPECTED(NTARG) = [1, 1, 1, 2, 2, 1]
         type(image), allocatable :: vols(:), targs(:), projs(:)
-        type(oris)           :: eulspace, opose
-        integer, allocatable :: states(:)
-        real,    allocatable :: eulers(:,:), shifts(:,:), corrs(:), margins(:)
-        real    :: euls_true(3,NTARG), euls(3)
-        integer :: i
-        character(len=96) :: msg
+        type(oris)               :: eulspace, opose
+        integer,     allocatable :: states(:)
+        real,        allocatable :: eulers(:,:), shifts(:,:), corrs(:), margins(:)
+        real                     :: euls_true(3,NTARG), euls(3)
+        integer                  :: i
+        character(len=96)        :: msg
         write(*,'(A)') 'test_two_volumes'
         allocate(vols(2), targs(NTARG))
         call blob_volume(vols(1), BOX, SMPD, reshape([ 6., 0., 0.,  -4., 5., 1.,   0.,-3., 6.,  -2.,-4.,-5.], [3,4]),&
@@ -134,8 +134,8 @@ contains
         integer,      intent(in)    :: box
         real,         intent(in)    :: smpd, centres(:,:), amps(:), vars(:)
         real, allocatable :: rmat(:,:,:)
-        real    :: r(3)
-        integer :: x, y, z, j
+        real              :: r(3)
+        integer           :: x, y, z, j
         allocate(rmat(box,box,box), source=0.)
         do z = 1,box
             do y = 1,box

@@ -38,7 +38,7 @@ contains
         integer, allocatable :: ptcls_in_which(:)
         integer, allocatable :: states(:)
         type(ran_tabu)       :: rt
-        integer              ::  n, nstates, iptcl
+        integer              :: n, nstates, iptcl
         nstates = self%get_n('state')
         if( which < 1 .or. which > nstates )then
             THROW_HARD('which (state) is out of range; split_state')
@@ -65,7 +65,7 @@ contains
         integer, allocatable :: ptcls_in_which(:)
         integer, allocatable :: members(:)
         type(ran_tabu)       :: rt
-        integer              ::  n, nmembers, iptcl
+        integer              :: n, nmembers, iptcl
         nmembers = self%get_n('class')
         if( which < 1 .or. which > nmembers )then
             THROW_HARD('which member is out of range; split_class')
@@ -90,7 +90,7 @@ contains
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: ncls_target
         integer, allocatable       :: pops(:)
-        integer :: ncls, loc(1), myncls, icls
+        integer                    :: ncls, loc(1), myncls, icls
         ncls = self%get_n('class')
         if( ncls_target <= ncls ) THROW_HARD('nr of target classes cannot be <= original number')
         allocate(pops(ncls_target))
@@ -110,7 +110,7 @@ contains
 
     module subroutine remap_cls( self )
         class(oris), intent(inout) :: self
-        integer :: ncls, clsind_remap, pop, icls, iptcl, old_cls
+        integer               :: ncls, clsind_remap, pop, icls, iptcl, old_cls
         integer , allocatable :: clspops(:)
         ncls = self%get_n('class')
         allocate(clspops(ncls))
@@ -150,15 +150,15 @@ contains
     !! a parent's particles dealt round-robin in corr rank. All other particles, state=0 included, get class=0; e3/shift
     !! are untouched. parent_of_seed(k)/seed_pops(k): parent/population of seed k; ndropped: parents left without a seed.
     module subroutine reseed_classes( self, clsinds, ncls_target, parent_of_seed, seed_pops, ndropped )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: clsinds(:)
-        integer,              intent(in)    :: ncls_target
-        integer, allocatable, intent(inout) :: parent_of_seed(:), seed_pops(:)
-        integer,              intent(out)   :: ndropped
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: clsinds(:)
+        integer,              intent(in)                 :: ncls_target
+        integer,              allocatable, intent(inout) :: parent_of_seed(:), seed_pops(:)
+        integer,              intent(out)                :: ndropped
         type(class_sample), allocatable :: clssmp(:)
-        integer, allocatable :: nseeds(:)
-        real,    allocatable :: quota(:), remainder(:)
-        integer :: nparents, nptcls_tot, i, j, k, iseed, offset, nalloc, loc(1)
+        integer,            allocatable :: nseeds(:)
+        real,               allocatable :: quota(:), remainder(:)
+        integer                         :: nparents, nptcls_tot, i, j, k, iseed, offset, nalloc, loc(1)
         nparents = size(clsinds)
         if( nparents   < 1 ) THROW_HARD('reseed_classes requires at least one accepted parent class')
         if( ncls_target < 1 ) THROW_HARD('reseed_classes requires ncls_target >= 1')

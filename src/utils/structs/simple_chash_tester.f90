@@ -127,7 +127,7 @@ contains
     !---------------- get(key) / get(index) / get_key(index) ----------------
 
     subroutine test_get_by_key_and_index()
-        type(chash) :: h
+        type(chash)  :: h
         type(string) :: v, k
         write(*,'(A)') 'test_get_by_key_and_index'
         h = chash()
@@ -146,9 +146,9 @@ contains
     !---------------- chash2str / chash_strlen ----------------
 
     subroutine test_chash2str_and_strlen()
-        type(chash) :: h
+        type(chash)  :: h
         type(string) :: s
-        integer :: n
+        integer      :: n
         write(*,'(A)') 'test_chash2str_and_strlen'
         h = chash()
         n = h%chash_strlen()
@@ -194,7 +194,7 @@ contains
     !---------------- sort ----------------
 
     subroutine test_sort()
-        type(chash) :: h
+        type(chash)  :: h
         type(string) :: s
         write(*,'(A)') 'test_sort'
         h = chash()

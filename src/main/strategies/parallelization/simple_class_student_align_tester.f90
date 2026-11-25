@@ -23,12 +23,12 @@ private
 public :: run_all_class_student_align_tests
 
 character(len=*), parameter :: PHANTOM = 'tmp_class_student_align_tester_phantom.mrc'
-integer,          parameter :: NREFS  = 4      !< the class averages
-integer,          parameter :: NPTCLS = 12     !< the particles: three per class
-integer,          parameter :: NTEAM  = 4      !< the team of the thread check
-real,             parameter :: TRS    = 2.     !< the window (pixels): the planted shifts lie beyond it
-real,             parameter :: SHSIG  = 3.     !< the prior width (A): a disk of 9 A, 6 px at 1.5 A per pixel
-real,             parameter :: SH_TOL = 0.25   !< the recovered shift's tolerance (pixels)
+integer,          parameter :: NREFS   = 4     !< the class averages
+integer,          parameter :: NPTCLS  = 12    !< the particles: three per class
+integer,          parameter :: NTEAM   = 4     !< the team of the thread check
+real,             parameter :: TRS     = 2.    !< the window (pixels): the planted shifts lie beyond it
+real,             parameter :: SHSIG   = 3.    !< the prior width (A): a disk of 9 A, 6 px at 1.5 A per pixel
+real,             parameter :: SH_TOL  = 0.25  !< the recovered shift's tolerance (pixels)
 
 real, allocatable, target :: sigma2_fix(:,:)   !< the fixture's unit noise spectra: the calculator points at them
 
@@ -44,14 +44,14 @@ contains
 
     !> a list of the planted class alone: its rotation, and the planted shift (5 px, beyond the 2 px window) as the increment
     subroutine test_one_class_recovers_planted_pose()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(class_student_align) :: aln
-        integer, allocatable :: cls_true(:), inpl_true(:)
-        real,    allocatable :: sh_true(:,:)
-        real    :: corr, sh(2), sdev
-        integer :: iptcl, cls, irot
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(class_student_align)     :: aln
+        integer,          allocatable :: cls_true(:), inpl_true(:)
+        real,             allocatable :: sh_true(:,:)
+        real                          :: corr, sh(2), sdev
+        integer                       :: iptcl, cls, irot
         write(*,'(A)') 'test_one_class_recovers_planted_pose'
         call make_fixture(b, p, cline, cls_true, inpl_true, sh_true)
         call aln%new(p, b, NREFS)
@@ -68,14 +68,14 @@ contains
     !> lists of every class with the planted class first, in the middle and last: the planted class, rotation and shift;
     !! another class alone keeps that class at a lower score
     subroutine test_list_keeps_planted_class()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(class_student_align) :: aln
-        integer, allocatable :: cls_true(:), inpl_true(:)
-        real,    allocatable :: sh_true(:,:)
-        real    :: corr, corr1, sh(2), sh1(2), sdev
-        integer :: iptcl, cls, irot, cls1, irot1, iorder, refs(NREFS), other
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(class_student_align)     :: aln
+        integer,          allocatable :: cls_true(:), inpl_true(:)
+        real,             allocatable :: sh_true(:,:)
+        real                          :: corr, corr1, sh(2), sh1(2), sdev
+        integer                       :: iptcl, cls, irot, cls1, irot1, iorder, refs(NREFS), other
         write(*,'(A)') 'test_list_keeps_planted_class'
         call make_fixture(b, p, cline, cls_true, inpl_true, sh_true)
         call aln%new(p, b, NREFS)
@@ -121,14 +121,14 @@ contains
 
     !> every particle aligned over the whole list by a team of NTEAM, one object per thread, against one thread
     subroutine test_team_as_one_thread()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(class_student_align) :: aln(NTEAM)
-        integer, allocatable :: cls_true(:), inpl_true(:)
-        real,    allocatable :: sh_true(:,:)
-        real    :: corr1(NPTCLS), corrt(NPTCLS), sh1(2,NPTCLS), sht(2,NPTCLS), sdev1(NPTCLS), sdevt(NPTCLS)
-        integer :: cls1(NPTCLS), clst(NPTCLS), irot1(NPTCLS), irott(NPTCLS), iptcl, i, ithr, refs(NREFS)
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(class_student_align)     :: aln(NTEAM)
+        integer,          allocatable :: cls_true(:), inpl_true(:)
+        real,             allocatable :: sh_true(:,:)
+        real                          :: corr1(NPTCLS), corrt(NPTCLS), sh1(2,NPTCLS), sht(2,NPTCLS), sdev1(NPTCLS), sdevt(NPTCLS)
+        integer                       :: cls1(NPTCLS), clst(NPTCLS), irot1(NPTCLS), irott(NPTCLS), iptcl, i, ithr, refs(NREFS)
         write(*,'(A)') 'test_team_as_one_thread'
         call make_fixture(b, p, cline, cls_true, inpl_true, sh_true)
         do i = 1, NTEAM
@@ -161,14 +161,14 @@ contains
     !! a grid rotation and shifted by a planted 5 px in a direction of its own, every particle not yet centred; the
     !! search reports the planted shift as the increment (the optimizer's shift rotated into the particle's axes)
     subroutine make_fixture( b, p, cline, cls_true, inpl_true, sh_true )
-        type(builder),    target, intent(inout) :: b
-        type(parameters), target, intent(inout) :: p
-        type(cmdline),            intent(inout) :: cline
-        integer, allocatable,     intent(out)   :: cls_true(:), inpl_true(:)
-        real,    allocatable,     intent(out)   :: sh_true(:,:)
+        type(builder),            target, intent(inout)        :: b
+        type(parameters),         target, intent(inout)        :: p
+        type(cmdline),            intent(inout)                :: cline
+        integer,                  allocatable,     intent(out) :: cls_true(:), inpl_true(:)
+        real,                     allocatable,     intent(out) :: sh_true(:,:)
         complex(sp), allocatable :: refs(:,:,:), ptcl(:,:)
-        real    :: ang, s(2)
-        integer :: icls, iptcl, k, pp, pdim(3), kfromto(2), pftsz, nrots
+        real                     :: ang, s(2)
+        integer                  :: icls, iptcl, k, pp, pdim(3), kfromto(2), pftsz, nrots
         call set_fixed_seed(20261116)
         call write_phantom
         call cline%set('vol1',        PHANTOM)
@@ -249,10 +249,10 @@ contains
 
     !> a 32^3 two-blob phantom: the builder's volume (the alignment reads only the calculator)
     subroutine write_phantom
-        integer, parameter :: BOX = 32
-        type(image)        :: vol
-        real, allocatable  :: rmat(:,:,:)
-        integer :: i, j, k
+        integer, parameter   :: BOX = 32
+        type(image)          :: vol
+        real,    allocatable :: rmat(:,:,:)
+        integer              :: i, j, k
         allocate(rmat(BOX,BOX,BOX))
         do k = 1, BOX
             do j = 1, BOX

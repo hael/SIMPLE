@@ -13,12 +13,12 @@ private
 type :: oris
     private
     type(ori), allocatable :: o(:)
-    integer :: n = 0
+    integer                :: n = 0
   contains
     !======================================================================
     ! LIFE CYCLE / ALLOCATION (simple_oris_life.f90)
     !======================================================================
-    generic            :: new => new_by_n, new_from_arr
+    generic            :: new            => new_by_n, new_from_arr
     procedure, private :: new_by_n, new_from_arr
     procedure          :: reallocate
     procedure, private :: extract_subset_range, extract_subset_inds
@@ -41,7 +41,7 @@ type :: oris
     procedure          :: get_str
     procedure          :: get_static
     procedure, private :: getter_str, getter_real, getter_int
-    generic            :: getter => getter_str, getter_real, getter_int
+    generic            :: getter  => getter_str, getter_real, getter_int
     procedure          :: get_all, get_all_asint
     procedure          :: gen_ptcl_mask
     procedure          :: get_all_sampled
@@ -104,21 +104,21 @@ type :: oris
     ! SETTERS / MUTATORS (simple_oris_setters.f90)
     !======================================================================
     procedure, private :: append_at, append_oris
-    generic            :: append => append_at, append_oris
+    generic            :: append              => append_at, append_oris
     procedure, private :: copy_as_kind, copy_same_kind
-    generic            :: copy => copy_as_kind, copy_same_kind
+    generic            :: copy                => copy_as_kind, copy_same_kind
     procedure          :: reject
     procedure, private :: delete_entry_all, delete_entry_by_ind
-    generic            :: delete_entry => delete_entry_all, delete_entry_by_ind
+    generic            :: delete_entry        => delete_entry_all, delete_entry_by_ind
     procedure, private :: delete_2Dclustering_all, delete_2Dclustering_by_ind
     generic            :: delete_2Dclustering => delete_2Dclustering_all, delete_2Dclustering_by_ind
     procedure          :: delete_3Dalignment
     procedure          :: delete
     procedure          :: transfer_2Dshifts
     procedure, private :: transfer_2Dparams_ori, transfer_2Dparams_oris
-    generic            :: transfer_2Dparams => transfer_2Dparams_ori, transfer_2Dparams_oris
+    generic            :: transfer_2Dparams   => transfer_2Dparams_ori, transfer_2Dparams_oris
     procedure, private :: transfer_3Dparams_ori, transfer_3Dparams_oris
-    generic            :: transfer_3Dparams => transfer_3Dparams_ori, transfer_3Dparams_oris
+    generic            :: transfer_3Dparams   => transfer_3Dparams_ori, transfer_3Dparams_oris
     procedure          :: transfer_class_assignment
     procedure          :: set_euler
     procedure          :: set_shift
@@ -130,16 +130,16 @@ type :: oris
     procedure          :: e2set
     procedure          :: e3set
     procedure, private :: set_real, set_char, set_int, set_dp, set_str
-    generic            :: set => set_real, set_char, set_int, set_dp, set_str
+    generic            :: set                 => set_real, set_char, set_int, set_dp, set_str
     procedure          :: set_dfx, set_dfy
     procedure          :: set_ori
     procedure          :: transfer_ori
     procedure, private :: set_all_real, set_all_char, set_all_int
-    generic            :: set_all => set_all_real, set_all_char, set_all_int
+    generic            :: set_all             => set_all_real, set_all_char, set_all_int
     procedure, private :: set_all2single_real, set_all2single_char, set_all2single_int
-    generic            :: set_all2single => set_all2single_real, set_all2single_char, set_all2single_int
+    generic            :: set_all2single      => set_all2single_real, set_all2single_char, set_all2single_int
     procedure, private :: set_field2single_real, set_field2single_char, set_field2single_int
-    generic            :: set_field2single => set_field2single_real, set_field2single_char, set_field2single_int
+    generic            :: set_field2single    => set_field2single_real, set_field2single_char, set_field2single_int
     procedure          :: set_projs
     procedure          :: remap_projs
     procedure          :: proj2class
@@ -228,9 +228,9 @@ type :: oris
     procedure          :: introd_alig_err
     procedure          :: introd_ctf_err
     procedure, private :: rot_all, rot_by_ind
-    generic            :: rot => rot_all, rot_by_ind
+    generic            :: rot           => rot_all, rot_by_ind
     procedure, private :: rot_transp_all, rot_transp_by_ind
-    generic            :: rot_transp => rot_transp_all, rot_transp_by_ind
+    generic            :: rot_transp    => rot_transp_all, rot_transp_by_ind
     procedure, private :: map3dshift22d_all, map3dshift22d_by_ind
     generic            :: map3dshift22d => map3dshift22d_all, map3dshift22d_by_ind
     procedure          :: calc_avg_offset2D, calc_avg_offset3D
@@ -243,7 +243,7 @@ type :: oris
     procedure, private :: median_key
     generic            :: median => median_key
     procedure, private :: stats_all, stats_masked, stats_range
-    generic            :: stats => stats_all, stats_masked, stats_range
+    generic            :: stats  => stats_all, stats_masked, stats_range
     procedure          :: minmax
     procedure, private :: spiral_full, spiral_lims
     generic            :: spiral => spiral_full, spiral_lims
@@ -260,7 +260,7 @@ type :: oris
     generic            :: nearest_proj_neighbors => nearest_proj_neighbors_mat, nearest_proj_neighbors_thres, nearest_proj_neighbors_k
     procedure          :: replace_with_closest
     procedure, private :: diststat_within, diststat_between
-    generic            :: diststat => diststat_within, diststat_between
+    generic            :: diststat               => diststat_within, diststat_between
     procedure          :: overlap
 end type oris
 
@@ -351,15 +351,15 @@ interface
     end function get_euler
 
     module pure function get_noris( self, consider_state ) result( n )
-        class(oris),       intent(in) :: self
-        logical, optional, intent(in) :: consider_state
+        class(oris),       intent(in)           :: self
+        logical,           optional, intent(in) :: consider_state
         integer :: n
     end function get_noris
 
     module subroutine get_mirror_pairs(self, partners, frame_angles)
-        class(oris),          intent(in)  :: self
-        integer, allocatable, intent(out) :: partners(:)
-        real, allocatable,    intent(out) :: frame_angles(:)
+        class(oris),          intent(in)                  :: self
+        integer,              allocatable, intent(out)    :: partners(:)
+        real,                 allocatable,    intent(out) :: frame_angles(:)
     end subroutine get_mirror_pairs
 
     module subroutine get_ori( self, i, o )
@@ -418,33 +418,33 @@ interface
     end subroutine getter_int
 
     module function get_all( self, key, fromto, nonzero ) result( arr )
-        class(oris),       intent(in) :: self
-        character(len=*),  intent(in) :: key
-        integer, optional, intent(in) :: fromto(2)
-        logical, optional, intent(in) :: nonzero
+        class(oris),       intent(in)           :: self
+        character(len=*),  intent(in)           :: key
+        integer,           optional, intent(in) :: fromto(2)
+        logical,           optional, intent(in) :: nonzero
         real, allocatable :: arr(:)
     end function get_all
 
     module function get_all_asint( self, key, fromto ) result( iarr )
-        class(oris),       intent(in) :: self
-        character(len=*),  intent(in) :: key
-        integer, optional, intent(in) :: fromto(2)
+        class(oris),       intent(in)           :: self
+        character(len=*),  intent(in)           :: key
+        integer,           optional, intent(in) :: fromto(2)
         integer, allocatable :: iarr(:)
     end function get_all_asint
 
     module function gen_ptcl_mask( self, key, ival, frac_best ) result( mask )
-        class(oris),       intent(in) :: self
-        character(len=*),  intent(in) :: key
-        integer,           intent(in) :: ival
-        real,    optional, intent(in) :: frac_best
+        class(oris),       intent(in)           :: self
+        character(len=*),  intent(in)           :: key
+        integer,           intent(in)           :: ival
+        real,              optional, intent(in) :: frac_best
         logical, allocatable :: mask(:)
     end function gen_ptcl_mask
 
     module function get_all_sampled( self, key, state, lowerbound ) result( arr )
-        class(oris),       intent(in) :: self
-        character(len=*),  intent(in) :: key
-        integer, optional, intent(in) :: state
-        real,    optional, intent(in) :: lowerbound
+        class(oris),       intent(in)           :: self
+        character(len=*),  intent(in)           :: key
+        integer,           optional, intent(in) :: state
+        real,              optional, intent(in) :: lowerbound
         real, allocatable :: arr(:)
     end function get_all_sampled
 
@@ -543,9 +543,9 @@ interface
     end function get_updatecnt
 
     module subroutine get_tseries_neighs( self, nsz, ptcls2neigh )
-        class(oris),          intent(in)    :: self
-        integer,              intent(in)    :: nsz
-        integer, allocatable, intent(inout) :: ptcls2neigh(:,:)
+        class(oris),          intent(in)                 :: self
+        integer,              intent(in)                 :: nsz
+        integer,              allocatable, intent(inout) :: ptcls2neigh(:,:)
     end subroutine get_tseries_neighs
 
     module pure function isthere_any( self, key ) result( is )
@@ -585,50 +585,50 @@ interface
     end function get_n
 
     module function get_pop_scalar( self, ind, label, eo ) result( pop )
-        class(oris),       intent(in) :: self
-        integer,           intent(in) :: ind
-        character(len=*),  intent(in) :: label
-        integer, optional, intent(in) :: eo
+        class(oris),       intent(in)           :: self
+        integer,           intent(in)           :: ind
+        character(len=*),  intent(in)           :: label
+        integer,           optional, intent(in) :: eo
         integer :: pop
     end function get_pop_scalar
 
     module function get_pop_array( self, inds, labels, eo ) result( pop )
-        class(oris),       intent(in) :: self
-        integer,           intent(in) :: inds(:)
-        character(len=*),  intent(in) :: labels(:)
-        integer, optional, intent(in) :: eo
+        class(oris),       intent(in)           :: self
+        integer,           intent(in)           :: inds(:)
+        character(len=*),  intent(in)           :: labels(:)
+        integer,           optional, intent(in) :: eo
         integer :: pop
     end function get_pop_array
 
     module subroutine get_pops( self, pops, label, maxn, eo )
-        class(oris),          intent(in)    :: self
-        integer, allocatable, intent(out)   :: pops(:)
-        character(len=*),     intent(in)    :: label
-        integer, optional,    intent(in)    :: maxn, eo
+        class(oris),          intent(in)               :: self
+        integer,              allocatable, intent(out) :: pops(:)
+        character(len=*),     intent(in)               :: label
+        integer,              optional,    intent(in)  :: maxn, eo
     end subroutine get_pops
 
     module subroutine get_pinds( self, ind, label, indices, l_shuffle, l_require_updated )
-        class(oris),          intent(in)  :: self
-        character(len=*),     intent(in)  :: label
-        integer,              intent(in)  :: ind
-        integer, allocatable, intent(out) :: indices(:)
-        logical, optional,    intent(in)  :: l_shuffle, l_require_updated
+        class(oris),          intent(in)               :: self
+        character(len=*),     intent(in)               :: label
+        integer,              intent(in)               :: ind
+        integer,              allocatable, intent(out) :: indices(:)
+        logical,              optional,    intent(in)  :: l_shuffle, l_require_updated
     end subroutine get_pinds
 
     module subroutine gen_mask( self, state, ind, label, l_mask, fromto )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: state, ind
-        character(len=*),     intent(in)    :: label
-        logical, allocatable, intent(out)   :: l_mask(:)
-        integer, optional,    intent(in)    :: fromto(2)
+        class(oris),          intent(inout)            :: self
+        integer,              intent(in)               :: state, ind
+        character(len=*),     intent(in)               :: label
+        logical,              allocatable, intent(out) :: l_mask(:)
+        integer,              optional,    intent(in)  :: fromto(2)
     end subroutine gen_mask
 
     module subroutine mask_from_state( self, state, l_mask, pinds, fromto )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: state
-        logical, allocatable, intent(inout) :: l_mask(:)
-        integer, allocatable, intent(inout) :: pinds(:)
-        integer, optional,    intent(in)    :: fromto(2)
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: state
+        logical,              allocatable, intent(inout) :: l_mask(:)
+        integer,              allocatable, intent(inout) :: pinds(:)
+        integer,              optional,    intent(in)    :: fromto(2)
     end subroutine mask_from_state
 
     module function get_all_normals( self ) result( normals )
@@ -637,56 +637,56 @@ interface
     end function get_all_normals
 
     module function states_exist( self, nstates, thres ) result( state_exists )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: nstates
-        integer, optional, intent(in)    :: thres
+        class(oris),       intent(inout)        :: self
+        integer,           intent(in)           :: nstates
+        integer,           optional, intent(in) :: thres
         logical :: state_exists(nstates)
     end function states_exist
 
     module function projs_exist( self, nstates, nprojs, thres ) result( proj_exists )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: nstates
-        integer,           intent(in)    :: nprojs
-        integer, optional, intent(in)    :: thres
+        class(oris),       intent(inout)        :: self
+        integer,           intent(in)           :: nstates
+        integer,           intent(in)           :: nprojs
+        integer,           optional, intent(in) :: thres
         logical :: proj_exists(nprojs,nstates)
     end function projs_exist
 
     module function get_arr( self, which, class, state ) result( vals )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
+        class(oris),       intent(inout)        :: self
+        character(len=*),  intent(in)           :: which
+        integer,           optional, intent(in) :: class
+        integer,           optional, intent(in) :: state
         real, allocatable :: vals(:)
     end function get_arr
 
     module subroutine calc_sum( self, which, sum, cnt, class, state, fromto, mask )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        real,              intent(out)   :: sum
-        integer,           intent(out)   :: cnt
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
-        integer, optional, intent(in)    :: fromto(2)
-        logical, optional, intent(in)    :: mask(self%n)
+        class(oris),       intent(inout)        :: self
+        character(len=*),  intent(in)           :: which
+        real,              intent(out)          :: sum
+        integer,           intent(out)          :: cnt
+        integer,           optional, intent(in) :: class
+        integer,           optional, intent(in) :: state
+        integer,           optional, intent(in) :: fromto(2)
+        logical,           optional, intent(in) :: mask(self%n)
     end subroutine calc_sum
 
     module function get_sum( self, which, class, state, fromto, mask) result( sum )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
-        integer, optional, intent(in)    :: fromto(2)
-        logical, optional, intent(in)    :: mask(self%n)
+        class(oris),       intent(inout)        :: self
+        character(len=*),  intent(in)           :: which
+        integer,           optional, intent(in) :: class
+        integer,           optional, intent(in) :: state
+        integer,           optional, intent(in) :: fromto(2)
+        logical,           optional, intent(in) :: mask(self%n)
         real :: sum
     end function get_sum
 
     module function get_avg( self, which, class, state, fromto, mask ) result( avg )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
-        integer, optional, intent(in)    :: fromto(2)
-        logical, optional, intent(in)    :: mask(self%n)
+        class(oris),       intent(inout)        :: self
+        character(len=*),  intent(in)           :: which
+        integer,           optional, intent(in) :: class
+        integer,           optional, intent(in) :: state
+        integer,           optional, intent(in) :: fromto(2)
+        logical,           optional, intent(in) :: mask(self%n)
         real :: avg
     end function get_avg
 
@@ -732,10 +732,10 @@ interface
     end function ori2str
 
     module subroutine ori2json( self, i, json_ori, boxes)
-        class(oris),               intent(in)    :: self
-        integer,                   intent(in)    :: i
-        logical,       optional,   intent(in)    :: boxes
-        type(json_value), pointer, intent(inout) :: json_ori
+        class(oris),               intent(in)             :: self
+        integer,                   intent(in)             :: i
+        logical,                   optional,   intent(in) :: boxes
+        type(json_value),          pointer, intent(inout) :: json_ori
     end subroutine ori2json
 
     module subroutine ori2prec( self, i, prec )
@@ -778,28 +778,28 @@ interface
     end function get_update_frac
 
     module subroutine get_update_rows( self, rep_rows, smp_rows, rec_rows )
-        class(oris),          intent(inout) :: self
-        integer, allocatable, intent(inout) :: rep_rows(:), smp_rows(:), rec_rows(:)
+        class(oris),          intent(inout)              :: self
+        integer,              allocatable, intent(inout) :: rep_rows(:), smp_rows(:), rec_rows(:)
     end subroutine get_update_rows
 
     module subroutine get_group_update_counts( self, label, ngroups, nrep, nsmp )
-        class(oris),          intent(inout) :: self
-        character(len=*),     intent(in)    :: label
-        integer,              intent(in)    :: ngroups
-        integer, allocatable, intent(inout) :: nrep(:), nsmp(:)
+        class(oris),          intent(inout)              :: self
+        character(len=*),     intent(in)                 :: label
+        integer,              intent(in)                 :: ngroups
+        integer,              allocatable, intent(inout) :: nrep(:), nsmp(:)
     end subroutine get_group_update_counts
 
     module subroutine get_state_update_fracs( self, nstates, rho )
-        class(oris),                     intent(inout) :: self
-        integer,                         intent(in)    :: nstates
-        real, allocatable,               intent(inout) :: rho(:)
+        class(oris),                     intent(inout)                            :: self
+        integer,                         intent(in)                               :: nstates
+        real,                            allocatable,               intent(inout) :: rho(:)
     end subroutine get_state_update_fracs
 
     module subroutine get_class_sample_stats( self, clsinds, clssmp, label, score_key )
-        class(oris),                     intent(inout) :: self
-        integer,                         intent(in)    :: clsinds(:)
-        type(class_sample), allocatable, intent(inout) :: clssmp(:)
-        character(len=*),      optional, intent(in)    :: label, score_key
+        class(oris),                     intent(inout)              :: self
+        integer,                         intent(in)                 :: clsinds(:)
+        type(class_sample),              allocatable, intent(inout) :: clssmp(:)
+        character(len=*),                optional, intent(in)       :: label, score_key
     end subroutine get_class_sample_stats
 
     module subroutine rank_class_samples( self, clssmp, score_key )
@@ -851,19 +851,19 @@ interface
     end subroutine delete_entry_by_ind
 
     module subroutine delete_2Dclustering_all( self, keepshifts, keepcls )
-        class(oris),       intent(inout) :: self
-        logical, optional, intent(in)    :: keepshifts, keepcls
+        class(oris),       intent(inout)        :: self
+        logical,           optional, intent(in) :: keepshifts, keepcls
     end subroutine delete_2Dclustering_all
 
     module subroutine delete_2Dclustering_by_ind( self, i, keepshifts, keepcls )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: i
-        logical, optional, intent(in)    :: keepshifts, keepcls
+        class(oris),       intent(inout)        :: self
+        integer,           intent(in)           :: i
+        logical,           optional, intent(in) :: keepshifts, keepcls
     end subroutine delete_2Dclustering_by_ind
 
     module subroutine delete_3Dalignment( self, keepshifts )
-        class(oris),       intent(inout) :: self
-        logical, optional, intent(in)    :: keepshifts
+        class(oris),       intent(inout)        :: self
+        logical,           optional, intent(in) :: keepshifts
     end subroutine delete_3Dalignment
 
     module subroutine delete( self, ind )
@@ -1116,9 +1116,9 @@ interface
     end subroutine mul_shifts
 
     module subroutine rnd_oris( self, trs, eullims )
-        class(oris),    intent(inout) :: self
-        real, optional, intent(in)    :: trs
-        real, optional, intent(inout) :: eullims(3,2)
+        class(oris),    intent(inout)           :: self
+        real,           optional, intent(in)    :: trs
+        real,           optional, intent(inout) :: eullims(3,2)
     end subroutine rnd_oris
 
     module subroutine gau_rnd_shifts( self, std )
@@ -1127,21 +1127,21 @@ interface
     end subroutine gau_rnd_shifts
 
     module subroutine rnd_ori( self, i, trs, eullims )
-        class(oris),    intent(inout) :: self
-        integer,        intent(in)    :: i
-        real, optional, intent(in)    :: trs
-        real, optional, intent(inout) :: eullims(3,2)
+        class(oris),    intent(inout)           :: self
+        integer,        intent(in)              :: i
+        real,           optional, intent(in)    :: trs
+        real,           optional, intent(inout) :: eullims(3,2)
     end subroutine rnd_ori
 
     module subroutine rnd_inpls( self, trs )
-        class(oris),    intent(inout) :: self
-        real, optional, intent(in)    :: trs
+        class(oris),    intent(inout)        :: self
+        real,           optional, intent(in) :: trs
     end subroutine rnd_inpls
 
     module subroutine rnd_ctf( self, kv, cs, fraca, defocus, deferr, astigerr )
-        class(oris),    intent(inout) :: self
-        real,           intent(in)    :: kv, cs, fraca, defocus, deferr
-        real, optional, intent(in)    :: astigerr
+        class(oris),    intent(inout)        :: self
+        real,           intent(in)           :: kv, cs, fraca, defocus, deferr
+        real,           optional, intent(in) :: astigerr
     end subroutine rnd_ctf
 
     module subroutine rnd_states( self, nstates )
@@ -1158,11 +1158,11 @@ interface
     end subroutine rnd_corrs
 
     module subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: nsample
-        class(ori), optional, intent(inout) :: o_prev
-        real,       optional, intent(inout) :: eullims(3,2)
-        real,       optional, intent(in)    :: thres
+        class(oris),          intent(inout)           :: self
+        integer,              intent(in)              :: nsample
+        class(ori),           optional, intent(inout) :: o_prev
+        real,                 optional, intent(inout) :: eullims(3,2)
+        real,                 optional, intent(in)    :: thres
     end subroutine rnd_proj_space
 
     module subroutine rnd_cls( self, ncls )
@@ -1216,10 +1216,10 @@ interface
     end subroutine set_ctfvars
 
     module subroutine gen_balanced_partitions( self, nparts, parts, err )
-        class(oris),          intent(in)    :: self
-        integer,              intent(in)    :: nparts
-        integer, allocatable, intent(inout) :: parts(:,:)
-        logical,              intent(out)   :: err
+        class(oris),          intent(in)                 :: self
+        integer,              intent(in)                 :: nparts
+        integer,              allocatable, intent(inout) :: parts(:,:)
+        logical,              intent(out)                :: err
     end subroutine gen_balanced_partitions
 
     !======================================================================
@@ -1227,102 +1227,102 @@ interface
     !======================================================================
 
     module subroutine sample4rec( self, fromto, nsamples, inds )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
     end subroutine sample4rec
 
     module subroutine get_state_rec_pops( self, nstates, pops )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: nstates
-        integer, allocatable, intent(inout) :: pops(:)
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: nstates
+        integer,              allocatable, intent(inout) :: pops(:)
     end subroutine get_state_rec_pops
 
     module subroutine sample4update_all( self, fromto, nsamples, inds, incr_sampled )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
+        logical,              intent(in)                 :: incr_sampled
     end subroutine sample4update_all
 
     module subroutine sample4update_rnd( self, fromto, update_frac, nsamples, inds, incr_sampled, key )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        real,                 intent(in)    :: update_frac
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
-        type(rnd_key), optional, intent(in) :: key
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        real,                 intent(in)                 :: update_frac
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
+        logical,              intent(in)                 :: incr_sampled
+        type(rnd_key),        optional, intent(in)       :: key
     end subroutine sample4update_rnd
 
     module subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty, key, &
                                         scores )
-        class(oris),             intent(inout) :: self
-        integer,                 intent(in)    :: fromto(2)
-        real,                    intent(in)    :: update_frac
-        integer,                 intent(inout) :: nsamples
-        integer, allocatable,    intent(inout) :: inds(:)
-        logical,                 intent(in)    :: incr_sampled
-        logical,       optional, intent(in)    :: allow_empty
-        type(rnd_key), optional, intent(in)    :: key
-        real,          optional, intent(in)    :: scores(:)
+        class(oris),             intent(inout)                 :: self
+        integer,                 intent(in)                    :: fromto(2)
+        real,                    intent(in)                    :: update_frac
+        integer,                 intent(inout)                 :: nsamples
+        integer,                 allocatable,    intent(inout) :: inds(:)
+        logical,                 intent(in)                    :: incr_sampled
+        logical,                 optional, intent(in)          :: allow_empty
+        type(rnd_key),           optional, intent(in)          :: key
+        real,                    optional, intent(in)          :: scores(:)
     end subroutine sample4update_cnt
 
     module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, &
                                         incr_sampled, allow_empty, key, scores )
-        class(oris),             intent(inout) :: self
-        type(class_sample),      intent(inout) :: clssmp(:)
-        integer,                 intent(in)    :: fromto(2)
-        real,                    intent(in)    :: update_frac
-        integer,                 intent(inout) :: nsamples
-        integer, allocatable,    intent(inout) :: inds(:)
-        logical,                 intent(in)    :: incr_sampled
-        logical,       optional, intent(in)    :: allow_empty
-        type(rnd_key), optional, intent(in)    :: key
-        real,          optional, intent(in)    :: scores(:)
+        class(oris),             intent(inout)                 :: self
+        type(class_sample),      intent(inout)                 :: clssmp(:)
+        integer,                 intent(in)                    :: fromto(2)
+        real,                    intent(in)                    :: update_frac
+        integer,                 intent(inout)                 :: nsamples
+        integer,                 allocatable,    intent(inout) :: inds(:)
+        logical,                 intent(in)                    :: incr_sampled
+        logical,                 optional, intent(in)          :: allow_empty
+        type(rnd_key),           optional, intent(in)          :: key
+        real,                    optional, intent(in)          :: scores(:)
     end subroutine sample4update_class
 
     module subroutine sample4update_reprod( self, fromto, nsamples, inds, allow_empty )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical, optional,    intent(in)    :: allow_empty
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
+        logical,              optional,    intent(in)    :: allow_empty
     end subroutine sample4update_reprod
 
     module subroutine sample4update_rescore( self, fromto, nsamples, inds, allow_empty )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical, optional,    intent(in)    :: allow_empty
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
+        logical,              optional,    intent(in)    :: allow_empty
     end subroutine sample4update_rescore
 
     module subroutine sample4update_updated( self, fromto, nsamples, inds, incr_sampled )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
+        logical,              intent(in)                 :: incr_sampled
     end subroutine sample4update_updated
 
     module subroutine sample4update_missing( self, fromto, nsamples, inds, incr_sampled )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: fromto(2)
+        integer,              intent(inout)              :: nsamples
+        integer,              allocatable, intent(inout) :: inds(:)
+        logical,              intent(in)                 :: incr_sampled
     end subroutine sample4update_missing
 
     module subroutine sample_balanced_mode( self, clssmp, nptcls, l_greedy, states, exact )
-        class(oris),        intent(in)    :: self
-        type(class_sample), intent(inout) :: clssmp(:)
-        integer,            intent(in)    :: nptcls
-        logical,            intent(in)    :: l_greedy
-        integer,            intent(inout) :: states(self%n)
-        logical, optional,  intent(in)    :: exact
+        class(oris),        intent(in)            :: self
+        type(class_sample), intent(inout)         :: clssmp(:)
+        integer,            intent(in)            :: nptcls
+        logical,            intent(in)            :: l_greedy
+        integer,            intent(inout)         :: states(self%n)
+        logical,            optional,  intent(in) :: exact
     end subroutine sample_balanced_mode
 
     module subroutine sample_balanced_frac_best( self, clssmp, nptcls, frac_best, states )
@@ -1342,19 +1342,19 @@ interface
     end subroutine sample_balanced_inv
 
     module subroutine sample_balanced_parts( self, clssmp, nparts, states, nptcls_per_part )
-        class(oris),        intent(inout) :: self
-        type(class_sample), intent(inout) :: clssmp(:)
-        integer,            intent(in)    :: nparts
-        integer,            intent(inout) :: states(self%n)
-        integer, optional,  intent(in)    :: nptcls_per_part
+        class(oris),        intent(inout)         :: self
+        type(class_sample), intent(inout)         :: clssmp(:)
+        integer,            intent(in)            :: nparts
+        integer,            intent(inout)         :: states(self%n)
+        integer,            optional,  intent(in) :: nptcls_per_part
     end subroutine sample_balanced_parts
 
     module subroutine sample_ranked_parts( self, clssmp, nparts, states, nptcls_per_part )
-        class(oris),        intent(inout) :: self
-        type(class_sample), intent(inout) :: clssmp(:)
-        integer,            intent(in)    :: nparts
-        integer,            intent(inout) :: states(self%n)
-        integer, optional,  intent(in)    :: nptcls_per_part
+        class(oris),        intent(inout)         :: self
+        type(class_sample), intent(inout)         :: clssmp(:)
+        integer,            intent(in)            :: nparts
+        integer,            intent(inout)         :: states(self%n)
+        integer,            optional,  intent(in) :: nptcls_per_part
     end subroutine sample_ranked_parts
 
     module function get_sample_ind( self, incr_sampled ) result( sample_ind )
@@ -1381,26 +1381,26 @@ interface
     end subroutine set_updatecnt
 
     module subroutine clean_entry( self, varflag1, varflag2 )
-        class(oris),                 intent(inout) :: self
-        character(len=*),            intent(in)    :: varflag1
-        character(len=*),  optional, intent(in)    :: varflag2
+        class(oris),                 intent(inout)        :: self
+        character(len=*),            intent(in)           :: varflag1
+        character(len=*),            optional, intent(in) :: varflag2
     end subroutine clean_entry
 
     ! Population rule of the fractional blends (2D class sums, 3D trailing chains). Not
     ! type-bound: it acts on the counts of get_group_update_counts (or on applied weight masses),
     ! not on rows.
     elemental module subroutine population_blend_weights_counts( nrep, nsmp, mrep, s, w, mnew, ufrac )
-        integer,        intent(in)  :: nrep, nsmp
-        real,           intent(in)  :: mrep
-        real,           intent(out) :: s, w, mnew
-        real, optional, intent(in)  :: ufrac
+        integer,        intent(in)           :: nrep, nsmp
+        real,           intent(in)           :: mrep
+        real,           intent(out)          :: s, w, mnew
+        real,           optional, intent(in) :: ufrac
     end subroutine population_blend_weights_counts
 
     elemental module subroutine population_blend_weights_mass( nrep, nsmp, mrep, s, w, mnew, ufrac )
-        real,           intent(in)  :: nrep, nsmp
-        real,           intent(in)  :: mrep
-        real,           intent(out) :: s, w, mnew
-        real, optional, intent(in)  :: ufrac
+        real,           intent(in)           :: nrep, nsmp
+        real,           intent(in)           :: mrep
+        real,           intent(out)          :: s, w, mnew
+        real,           optional, intent(in) :: ufrac
     end subroutine population_blend_weights_mass
 
     ! Expected particles per iteration of every sampling unit under the nested equal quota of
@@ -1455,10 +1455,10 @@ interface
     end subroutine print_matrices
 
     module subroutine read( self, orifile, fromto, nst )
-        class(oris),       intent(inout) :: self
-        class(string),     intent(in)    :: orifile
-        integer, optional, intent(in)    :: fromto(2)
-        integer, optional, intent(out)   :: nst
+        class(oris),       intent(inout)         :: self
+        class(string),     intent(in)            :: orifile
+        integer,           optional, intent(in)  :: fromto(2)
+        integer,           optional, intent(out) :: nst
     end subroutine read
 
     module subroutine read_ctfparams_state_eo( self, ctfparamfile )
@@ -1467,9 +1467,9 @@ interface
     end subroutine read_ctfparams_state_eo
 
     module subroutine write_range( self, orifile, fromto )
-        class(oris),       intent(in) :: self
-        class(string),     intent(in) :: orifile
-        integer, optional, intent(in) :: fromto(2)
+        class(oris),       intent(in)           :: self
+        class(string),     intent(in)           :: orifile
+        integer,           optional, intent(in) :: fromto(2)
     end subroutine write_range
 
     module subroutine write_by_ind( self, i, orifile )
@@ -1484,10 +1484,10 @@ interface
     end subroutine write2bild
 
     module subroutine write_projdir_heatmap( self, state, nspace, fname, legend )
-        class(oris),            intent(in) :: self
-        integer,                intent(in) :: state, nspace
-        class(string),          intent(in) :: fname
-        type(string), optional, intent(in) :: legend
+        class(oris),            intent(in)           :: self
+        integer,                intent(in)           :: state, nspace
+        class(string),          intent(in)           :: fname
+        type(string),           optional, intent(in) :: legend
     end subroutine write_projdir_heatmap
 
     !======================================================================
@@ -1519,11 +1519,11 @@ interface
     end subroutine remap_cls
 
     module subroutine reseed_classes( self, clsinds, ncls_target, parent_of_seed, seed_pops, ndropped )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: clsinds(:)
-        integer,              intent(in)    :: ncls_target
-        integer, allocatable, intent(inout) :: parent_of_seed(:), seed_pops(:)
-        integer,              intent(out)   :: ndropped
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: clsinds(:)
+        integer,              intent(in)                 :: ncls_target
+        integer,              allocatable, intent(inout) :: parent_of_seed(:), seed_pops(:)
+        integer,              intent(out)                :: ndropped
     end subroutine reseed_classes
 
     module subroutine merge_classes( self, class_merged, class )
@@ -1583,16 +1583,16 @@ interface
     end subroutine rot_transp_by_ind
 
     module subroutine map3dshift22d_all( self, sh3d, state )
-        class(oris),       intent(inout) :: self
-        real,              intent(in)    :: sh3d(3)
-        integer, optional, intent(in)    :: state
+        class(oris),       intent(inout)        :: self
+        real,              intent(in)           :: sh3d(3)
+        integer,           optional, intent(in) :: state
     end subroutine map3dshift22d_all
 
     module subroutine map3dshift22d_by_ind( self, i, sh3d, state )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: i
-        real,              intent(in)    :: sh3d(3)
-        integer, optional, intent(in)    :: state
+        class(oris),       intent(inout)        :: self
+        integer,           intent(in)           :: i
+        real,              intent(in)           :: sh3d(3)
+        integer,           optional, intent(in) :: state
     end subroutine map3dshift22d_by_ind
 
     module subroutine calc_avg_offset2D( self, class, offset_avg )
@@ -1602,9 +1602,9 @@ interface
     end subroutine calc_avg_offset2D
 
     module subroutine calc_avg_offset3D( self, offset_avg, state )
-        class(oris),       intent(inout) :: self
-        real,              intent(inout) :: offset_avg(3)
-        integer, optional, intent(in)    :: state
+        class(oris),       intent(inout)        :: self
+        real,              intent(inout)        :: offset_avg(3)
+        integer,           optional, intent(in) :: state
     end subroutine calc_avg_offset3D
 
     module subroutine mirror2d( self )
@@ -1639,11 +1639,11 @@ interface
     end subroutine stats_all
 
     module subroutine stats_masked( self, which, statvars, mask, nozero )
-        class(oris),        intent(inout) :: self
-        character(len=*),   intent(in)    :: which
-        type(stats_struct), intent(inout) :: statvars
-        logical,            intent(in)    :: mask(self%n)
-        logical, optional,  intent(in)    :: nozero
+        class(oris),        intent(inout)         :: self
+        character(len=*),   intent(in)            :: which
+        type(stats_struct), intent(inout)         :: statvars
+        logical,            intent(in)            :: mask(self%n)
+        logical,            optional,  intent(in) :: nozero
     end subroutine stats_masked
 
     module subroutine stats_range( self, which, ave, sdev, var, err, fromto )
@@ -1695,13 +1695,13 @@ interface
     end function extremal_bound
 
     module subroutine set_extremal_vars( self, extr_init, extr_iter, iter, frac_srch_space, do_extr, iextr_lim, update_frac )
-        class(oris),       intent(in)  :: self
-        real,              intent(in)  :: extr_init
-        integer,           intent(in)  :: extr_iter, iter
-        real,              intent(in)  :: frac_srch_space
-        logical,           intent(out) :: do_extr
-        integer,           intent(out) :: iextr_lim
-        real,    optional, intent(in)  :: update_frac
+        class(oris),       intent(in)           :: self
+        real,              intent(in)           :: extr_init
+        integer,           intent(in)           :: extr_iter, iter
+        real,              intent(in)           :: frac_srch_space
+        logical,           intent(out)          :: do_extr
+        integer,           intent(out)          :: iextr_lim
+        real,              optional, intent(in) :: update_frac
     end subroutine set_extremal_vars
 
     !======================================================================

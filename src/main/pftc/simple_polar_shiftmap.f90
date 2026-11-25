@@ -18,44 +18,44 @@ real(dp), parameter :: SHIFTMAP_JTOL = 1.d-8 !< a Bessel order whose value at th
 
 type :: polar_shiftmap
     private
-    integer                  :: pftsz      = 0 !< angular samples over a half turn (the stored half ring)
-    integer                  :: nrots      = 0 !< 2 * pftsz
-    integer                  :: kfromto(2) = 0 !< shell range of the map
-    integer                  :: box        = 0 !< logical box: shifts are in its pixels
-    integer                  :: nrho       = 0 !< shift magnitudes of the grid
-    integer                  :: nalpha     = 0 !< shift directions of the grid
-    integer                  :: nharm_max  = 0 !< highest harmonic order kept at any magnitude
-    real(dp),    allocatable :: rho(:)         !< the magnitudes (pixels)
-    real(dp),    allocatable :: alpha(:)       !< the directions (radians)
-    real(dp),    allocatable :: area(:)        !< the translation area of one cell at each magnitude (pixels^2)
+    integer                  :: pftsz       = 0 !< angular samples over a half turn (the stored half ring)
+    integer                  :: nrots       = 0 !< 2 * pftsz
+    integer                  :: kfromto(2)  = 0 !< shell range of the map
+    integer                  :: box         = 0 !< logical box: shifts are in its pixels
+    integer                  :: nrho        = 0 !< shift magnitudes of the grid
+    integer                  :: nalpha      = 0 !< shift directions of the grid
+    integer                  :: nharm_max   = 0 !< highest harmonic order kept at any magnitude
+    real(dp),    allocatable :: rho(:)          !< the magnitudes (pixels)
+    real(dp),    allocatable :: alpha(:)        !< the directions (radians)
+    real(dp),    allocatable :: area(:)         !< the translation area of one cell at each magnitude (pixels^2)
     real(dp),    allocatable :: logarea(:), ca(:), sa(:)
-    integer,     allocatable :: nharm(:)       !< highest harmonic order kept at each magnitude
-    real(dp),    allocatable :: jn(:,:,:)      !< J_n(2 pi k rho / box): (0:nharm_max, kfromto(1):kfromto(2), nrho)
-    complex(dp), allocatable :: tw(:,:)        !< exp(i n theta_p): (pftsz, 0:nharm_max)
-    complex(dp), allocatable :: ea(:,:)        !< exp(-i n alpha_j): (nalpha, 0:nharm_max)
+    integer,     allocatable :: nharm(:)        !< highest harmonic order kept at each magnitude
+    real(dp),    allocatable :: jn(:,:,:)       !< J_n(2 pi k rho / box): (0:nharm_max, kfromto(1):kfromto(2), nrho)
+    complex(dp), allocatable :: tw(:,:)         !< exp(i n theta_p): (pftsz, 0:nharm_max)
+    complex(dp), allocatable :: ea(:,:)         !< exp(-i n alpha_j): (nalpha, 0:nharm_max)
     logical                  :: exists_flag = .false.
   contains
-    procedure :: new
-    procedure :: kill
-    procedure :: get_nrho
-    procedure :: get_nalpha
-    procedure :: get_nharm_max
-    procedure :: get_nharm
-    procedure :: get_kfromto
-    procedure :: exists
-    procedure :: matches
-    procedure :: get_rho
-    procedure :: get_alpha
-    procedure :: get_shift
-    procedure :: get_cell_area
-    procedure :: get_log_area
-    procedure :: cross_spectrum
-    procedure :: coeffs
-    procedure :: eval
-    procedure :: map
-    procedure :: peak
-    procedure :: shell_weights
-    procedure :: eval_rotcoeffs
+    procedure          :: new
+    procedure          :: kill
+    procedure          :: get_nrho
+    procedure          :: get_nalpha
+    procedure          :: get_nharm_max
+    procedure          :: get_nharm
+    procedure          :: get_kfromto
+    procedure          :: exists
+    procedure          :: matches
+    procedure          :: get_rho
+    procedure          :: get_alpha
+    procedure          :: get_shift
+    procedure          :: get_cell_area
+    procedure          :: get_log_area
+    procedure          :: cross_spectrum
+    procedure          :: coeffs
+    procedure          :: eval
+    procedure          :: map
+    procedure          :: peak
+    procedure          :: shell_weights
+    procedure          :: eval_rotcoeffs
     procedure, private :: cell_areas
 end type polar_shiftmap
 
@@ -220,8 +220,8 @@ contains
 
     pure logical function matches( self, pftsz, kfromto, box, rho, nalpha )
         class(polar_shiftmap), intent(in) :: self
-        integer, intent(in) :: pftsz, kfromto(2), box, nalpha
-        real(dp), intent(in) :: rho(:)
+        integer,               intent(in) :: pftsz, kfromto(2), box, nalpha
+        real(dp),              intent(in) :: rho(:)
         matches = .false.
         if( .not. self%exists_flag ) return
         if( self%pftsz /= pftsz .or. self%box /= box .or. self%nalpha /= nalpha ) return
@@ -281,7 +281,7 @@ contains
 
     pure real(dp) function get_log_area( self, irho )
         class(polar_shiftmap), intent(in) :: self
-        integer, intent(in) :: irho
+        integer,               intent(in) :: irho
         get_log_area = self%logarea(irho)
     end function get_log_area
 
@@ -331,8 +331,8 @@ contains
         real(dp),              intent(in)  :: w(self%kfromto(1):self%kfromto(2))
         complex(dp),           intent(out) :: A(-self%nharm_max:self%nharm_max, self%nrho)
         complex(dp), allocatable :: hp(:,:), hm(:,:)
-        complex(dp) :: ap, am
-        integer     :: k, n, ir
+        complex(dp)              :: ap, am
+        integer                  :: k, n, ir
         allocate(hp(self%kfromto(1):self%kfromto(2), 0:self%nharm_max),&
                 &hm(self%kfromto(1):self%kfromto(2), 0:self%nharm_max))
         ! the half-ring harmonics of every shell, positive and negative orders

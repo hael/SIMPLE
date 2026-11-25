@@ -157,7 +157,7 @@ contains
         real(sp),            intent(in)    :: shift(2)
         complex(sp),         intent(out)   :: bank(:,:)
         complex(sp), pointer :: shmat(:,:)
-        integer :: ithr, i, k, kk, k0
+        integer              :: ithr, i, k, kk, k0
         if( size(bank,1) /= self%pftsz+1 .or. size(bank,2) /= self%nk )then
             THROW_HARD('shifted particle bank has the wrong shape; memoize_shifted_ptcl')
         endif
@@ -183,13 +183,13 @@ contains
 
     module subroutine memoize_refs(self, eulspace)
         use simple_ori_utils, only: canonical_mirror_frame_angle
-        class(polarft_calc),           intent(inout) :: self
-        class(oris),         optional, intent(in)    :: eulspace
-        integer :: ithr, iref, mref, bank, iproj, offset, nhalf, nspace
+        class(polarft_calc),           intent(inout)        :: self
+        class(oris),                   optional, intent(in) :: eulspace
+        integer              :: ithr, iref, mref, bank, iproj, offset, nhalf, nspace
         integer, allocatable :: partners(:)
-        real, allocatable :: frame_angles(:)
-        real(dp) :: psi
-        logical :: l_mirr_proj, half_turn
+        real,    allocatable :: frame_angles(:)
+        real(dp)             :: psi
+        logical              :: l_mirr_proj, half_turn
         if( OMP_IN_PARALLEL() ) THROW_HARD('No memoization inside OpenMP regions')
         if( .not. self%existence ) THROW_HARD('reference memoisation requires an initialized polar calculator')
         if( .not. associated(self%p_ptr) ) THROW_HARD('reference memoisation requires polar parameters')
@@ -239,7 +239,7 @@ contains
     module subroutine memoize_ref_bins( self )
         class(polarft_calc), intent(inout) :: self
         character(len=STDLEN) :: alloc_msg
-        integer :: iref, ieo, j, k, kk, alloc_stat
+        integer               :: iref, ieo, j, k, kk, alloc_stat
         if( OMP_IN_PARALLEL() ) THROW_HARD('No memoization inside OpenMP regions')
         if( self%ref_gen < 1_int64 .or. .not. allocated(self%ft_ref) ) THROW_HARD('memoize_ref_bins after memoize_refs')
         if( .not. allocated(self%ft_ref_bins) )then
@@ -266,7 +266,7 @@ contains
     !> Transform one reference's two halves using the calling thread's existing FFT workspace.
     subroutine memoize_one_ref(self, iref, ithr)
         class(polarft_calc), intent(inout) :: self
-        integer,            intent(in)    :: iref, ithr
+        integer,             intent(in)    :: iref, ithr
         integer :: ieo
         do ieo = REF_EVEN,REF_ODD
             self%cmat2_many(ithr)%c(1:self%pftsz,:) = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
@@ -284,9 +284,9 @@ contains
 
     module subroutine alloc_memo_ptcls(self)
         class(polarft_calc), intent(inout) :: self
-        real(dp) :: array_gb, total_gb
-        integer  :: alloc_stat
-        integer(kind=longer) :: nelems
+        real(dp)              :: array_gb, total_gb
+        integer               :: alloc_stat
+        integer(kind=longer)  :: nelems
         character(len=STDLEN) :: alloc_msg
         call self%kill_memo_ptcls
         nelems   = int(self%pftsz+1,kind=longer) * int(self%nk,kind=longer) * int(self%nptcls,kind=longer)
@@ -330,14 +330,14 @@ contains
 
     module subroutine allocate_memo_workspace(self, nmany_refs)
         use simple_rnd, only: has_global_seed
-        class(polarft_calc),           intent(inout) :: self
-        integer,             optional, intent(in)    :: nmany_refs
+        class(polarft_calc),           intent(inout)        :: self
+        integer,                       optional, intent(in) :: nmany_refs
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
-        integer(kind=c_int) :: wsdm_ret, rank, howmany, n(1),  inembed(1), onembed(1), istride, ostride, idist, odist
-        integer             :: ithr, nthr_team
-        integer(c_int)      :: plan_flags
-        logical             :: l_fixed_seed
-        integer(int64)      :: plan_start, plan_end, clock_rate
+        integer(kind=c_int)                        :: wsdm_ret, rank, howmany, n(1),  inembed(1), onembed(1), istride, ostride, idist, odist
+        integer                                    :: ithr, nthr_team
+        integer(c_int)                             :: plan_flags
+        logical                                    :: l_fixed_seed
+        integer(int64)                             :: plan_start, plan_end, clock_rate
         call self%kill_memo_workspace
         ! one workspace per thread of the team in use
         nthr_team = 1

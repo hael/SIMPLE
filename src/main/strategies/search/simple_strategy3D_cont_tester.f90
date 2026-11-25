@@ -30,7 +30,7 @@ implicit none
 private
 public :: run_all_strategy3D_cont_tests
 
-integer, parameter :: BOX = 16, NPTCLS = 6
+integer, parameter :: BOX        = 16, NPTCLS = 6
 integer, parameter :: KFROMTO(2) = [2, BOX/2 - 1]
 ! single-precision Euler angles of the stored poses limit the recovered rotation
 real(dp), parameter :: ROTATION_TOL = 2.e-3_dp
@@ -104,12 +104,12 @@ contains
 
     !> Three Angstroms spans 2, 1.5 and 1 native pixels at these samplings, independently of cropping.
     subroutine test_shift_prior_angstrom_units()
-        real,     parameter :: SAMPLINGS(3) = [1.5, 2., 3.]
-        real(dp), parameter :: VARIANCES(3) = [4._dp, 2.25_dp, 1._dp]
-        integer,  parameter :: CROPS(2) = [BOX, BOX/2]
+        real,              parameter           :: SAMPLINGS(3) = [1.5, 2., 3.]
+        real(dp),          parameter           :: VARIANCES(3) = [4._dp, 2.25_dp, 1._dp]
+        integer,           parameter           :: CROPS(2)     = [BOX, BOX/2]
         class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        integer :: i, j
+        integer                                :: i, j
         allocate(b, p)
         p%l_cart_refine = .true.
         p%cont_prior = 'shift'
@@ -152,8 +152,8 @@ contains
 
     subroutine test_invalid_prior_width()
         type(invalid_prior_width_child) :: child
-        class(cmdline), allocatable :: cline
-        integer :: i
+        class(cmdline), allocatable     :: cline
+        integer                         :: i
         allocate(cline)
         do i = 1, 3
             call cline%set('which_iter', i)
@@ -168,10 +168,10 @@ contains
 
     subroutine reject_invalid_prior_width( self, cline )
         class(invalid_prior_width_child), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                   intent(inout) :: cline
         type(oris) :: os
-        real(dp) :: variance
-        real :: increment
+        real(dp)   :: variance
+        real       :: increment
         increment = -1.
         select case(cline%get_iarg('which_iter'))
             case(2)
@@ -190,12 +190,12 @@ contains
     !> Relay a real invalid-width worker exit through the production queue status boundary.
     !! The master must stop before merge; a watchdog makes a missed failure a bounded test.
     subroutine test_prior_master_failure()
-        type(invalid_prior_width_child) :: worker
+        type(invalid_prior_width_child)  :: worker
         type(prior_failure_master_child) :: master
-        type(string) :: saved, root
-        class(cmdline), allocatable :: cline
-        integer :: nfail0, unit, i, state
-        logical :: merged, timed_out
+        type(string)                     :: saved, root
+        class(cmdline), allocatable      :: cline
+        integer                          :: nfail0, unit, i, state
+        logical                          :: merged, timed_out
         nfail0 = tests_failed
         call enter_fixture('prior_master_failure', saved, root)
         allocate(cline)
@@ -232,12 +232,12 @@ contains
         use simple_qsys_ctrl, only: qsys_ctrl
         use simple_qsys_local, only: qsys_local
         class(prior_failure_master_child), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
-        class(qsys_ctrl), allocatable :: ctrl
+        class(cmdline),                    intent(inout) :: cline
+        class(qsys_ctrl),  allocatable         :: ctrl
         class(qsys_local), allocatable, target :: queue
-        integer, allocatable, target :: parts(:,:)
-        logical, allocatable :: done(:), submitted(:)
-        integer :: unit
+        integer,           allocatable, target :: parts(:,:)
+        logical,           allocatable         :: done(:), submitted(:)
+        integer                                :: unit
         allocate(ctrl, queue, parts(1,2))
         parts(1,:) = [1,1]
         call queue%new()
@@ -255,11 +255,11 @@ contains
 
     !> Exercise the production strategy with prior on and independently recompute its data score.
     subroutine test_prior_strategy_commit()
-        class(builder), allocatable, target :: b
+        class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        type(ori) :: result
-        real(dp) :: objective, gradient(5)
-        integer :: slot
+        type(ori)                              :: result
+        real(dp)                               :: objective, gradient(5)
+        integer                                :: slot
         allocate(b, p)
         call build_fixture(b, p, OBJFUN_EUCLID)
         p%cont_prior = 'pose'
@@ -301,14 +301,14 @@ contains
     !! Cartesian calculator with every particle's slot: particle i in slot NPTCLS+1-i, holding
     !! the truth prediction centred on the stored shift. Particle 2 has state zero.
     subroutine build_fixture( b, p, objfun )
-        class(builder),    target, intent(inout) :: b
-        class(parameters), target, intent(inout) :: p
-        integer,                  intent(in)    :: objfun
+        class(builder),           target, intent(inout) :: b
+        class(parameters),        target, intent(inout) :: p
+        integer,                  intent(in)            :: objfun
         type(ctfparams)      :: no_ctf
-        real, allocatable    :: volume(:,:,:)
+        real,    allocatable :: volume(:,:,:)
         complex, allocatable :: observed(:,:)
-        real    :: seed_shift(2), truth_shift(2)
-        integer :: i, pinds(NPTCLS)
+        real                 :: seed_shift(2), truth_shift(2)
+        integer              :: i, pinds(NPTCLS)
         p%oritype          = 'ptcl3D'
         p%cc_objfun        = objfun
         p%inpl_cont        = 'no'
@@ -372,11 +372,11 @@ contains
 
     !> One particle through a class(strategy3D) pointer, as the matcher runs it.
     subroutine run_particle( b, p, iptcl )
-        class(builder),    target, intent(inout) :: b
-        class(parameters), target, intent(inout) :: p
-        integer,                  intent(in)    :: iptcl
+        class(builder),           target, intent(inout) :: b
+        class(parameters),        target, intent(inout) :: p
+        integer,                  intent(in)            :: iptcl
         class(strategy3D), pointer :: strat
-        type(strategy3D_spec) :: spec
+        type(strategy3D_spec)      :: spec
         spec%iptcl     = iptcl
         spec%iptcl_map = iptcl
         allocate(strategy3D_cont :: strat)
@@ -396,7 +396,7 @@ contains
     subroutine test_reference_geometry()
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
         integer :: dims(3,3)
-        real :: sampling(3)
+        real    :: sampling(3)
         dims = 32
         sampling = 1.5
         call assert_true(cont_reference_geometry_is_valid(dims, sampling, 32, 1.5), 'valid reference geometry rejected')
@@ -424,7 +424,7 @@ contains
     ! An invalid row outside the selected state must not reject that state's continuation.
     subroutine test_selected_seeds()
         class(oris), allocatable :: particles
-        type(ori) :: seed
+        type(ori)                :: seed
         allocate(particles)
         call seed%new(is_ptcl=.true.)
         call particles%new(2, is_ptcl=.true.)
@@ -495,7 +495,7 @@ contains
     subroutine test_lifecycle_and_rejection()
         class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        integer :: icycle
+        integer                                :: icycle
         allocate(b, p)
         do icycle = 1, 2
             call build_fixture(b, p, OBJFUN_CC)
@@ -521,14 +521,14 @@ contains
     subroutine test_commit_contract()
         class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        type(ori) :: before, after
-        real(dp)  :: objective, gradient(5), truth(3,3), expected_score
-        real      :: native_before(2), sigma_shells_sum
-        real, allocatable :: stored(:)
-        complex, allocatable :: observed(:,:)
-        type(ctfparams) :: no_ctf
-        integer   :: islot, iobj
-        integer, parameter :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID]
+        type(ori)                              :: before, after
+        real(dp)                               :: objective, gradient(5), truth(3,3), expected_score
+        real                                   :: native_before(2), sigma_shells_sum
+        real,              allocatable         :: stored(:)
+        complex,           allocatable         :: observed(:,:)
+        type(ctfparams)                        :: no_ctf
+        integer                                :: islot, iobj
+        integer,           parameter           :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID]
         allocate(b, p)
         do iobj = 1, 2
             call build_fixture(b, p, objfuns(iobj))
@@ -591,11 +591,11 @@ contains
     ! N27: the batch run through srch at every processor, 20 times, gives the poses, scores and
     ! flags of the run at one thread bit for bit. Expected value: the one-thread run.
     subroutine test_threaded_batch()
-        integer, parameter :: NREPS = 20
+        integer,           parameter           :: NREPS = 20
         class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        real    :: single(9,NPTCLS), team(9,NPTCLS)
-        integer :: irep, ndiff, nthr_prev, nthr_full
+        real                                   :: single(9,NPTCLS), team(9,NPTCLS)
+        integer                                :: irep, ndiff, nthr_prev, nthr_full
         allocate(b, p)
         nthr_prev = 1
         nthr_full = 1
@@ -649,8 +649,8 @@ contains
     subroutine test_outside_sample_untouched()
         class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        type(ori) :: o
-        real      :: before(N_PTCL_ORIPARAMS), after(N_PTCL_ORIPARAMS)
+        type(ori)                              :: o
+        real                                   :: before(N_PTCL_ORIPARAMS), after(N_PTCL_ORIPARAMS)
         allocate(b, p)
         call build_fixture(b, p, OBJFUN_CC)
         call b%spproj_field%set(4, 'corr_cart', 0.123)
@@ -675,11 +675,11 @@ contains
     subroutine test_followup_keeps_convergence_fields()
         character(len=9), parameter :: KEYS(6) = [character(len=9) :: 'dist', 'dist_inpl', 'shincarg', &
             &'mi_proj', 'mi_state', 'frac']
-        real,             parameter :: DISCRETE(6) = [7.5, 3.25, 1.5, 0., 0., 55.]
+        real,              parameter           :: DISCRETE(6) = [7.5, 3.25, 1.5, 0., 0., 55.]
         class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        type(ori) :: before, after
-        integer   :: i, k
+        type(ori)                              :: before, after
+        integer                                :: i, k
         allocate(b, p)
         call build_fixture(b, p, OBJFUN_CC)
         do i = 3, 5, 2
@@ -721,11 +721,11 @@ contains
     ! that to 0.5 degrees): with athres_cont = 0.5 the committed rotation stays within 0.5 degrees
     ! of the seed and the truth 1.8 degrees away is not reached.
     subroutine test_rotation_bound()
-        real(dp), parameter :: BOUND = 0.5_dp*acos(-1._dp)/180._dp
+        real(dp),          parameter           :: BOUND = 0.5_dp*acos(-1._dp)/180._dp
         class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        type(ori) :: before, after
-        real(dp)  :: truth(3,3)
+        type(ori)                              :: before, after
+        real(dp)                               :: truth(3,3)
         allocate(b, p)
         call build_fixture(b, p, OBJFUN_CC)
         p%athres_cont = 0.5

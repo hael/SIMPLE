@@ -10,12 +10,12 @@ contains
     ! open
     !===========================
     module subroutine open( self, fname, ioimg, formatchar, readhead, rwaction )
-        class(image),               intent(inout) :: self
-        class(string),              intent(in)    :: fname
-        class(imgfile),             intent(inout) :: ioimg
-        character(len=1), optional, intent(in)    :: formatchar
-        logical,          optional, intent(in)    :: readhead
-        character(len=*), optional, intent(in)    :: rwaction
+        class(image),               intent(inout)        :: self
+        class(string),              intent(in)           :: fname
+        class(imgfile),             intent(inout)        :: ioimg
+        character(len=1),           optional, intent(in) :: formatchar
+        logical,                    optional, intent(in) :: readhead
+        character(len=*),           optional, intent(in) :: rwaction
         character(len=1) :: form
         integer          :: mode
         if( self%existence )then
@@ -52,10 +52,10 @@ contains
     ! read
     !===========================
     module subroutine read( self, fname, i, readhead )
-        class(image),               intent(inout) :: self
-        class(string),              intent(in)    :: fname
-        integer,          optional, intent(in)    :: i
-        logical,          optional, intent(in)    :: readhead
+        class(image),               intent(inout)        :: self
+        class(string),              intent(in)           :: fname
+        integer,                    optional, intent(in) :: i
+        logical,                    optional, intent(in) :: readhead
         type(imgfile)    :: ioimg
         character(len=1) :: form
         integer          :: ldim(3), first_slice
@@ -113,11 +113,11 @@ contains
     ! write
     !===========================
     module subroutine write( self, fname, i, del_if_exists, wfloat16 )
-        class(image),      intent(inout) :: self
-        class(string),     intent(in)    :: fname
-        integer, optional, intent(in)    :: i
-        logical, optional, intent(in)    :: del_if_exists
-        logical, optional, intent(in)    :: wfloat16
+        class(image),      intent(inout)        :: self
+        class(string),     intent(in)           :: fname
+        integer,           optional, intent(in) :: i
+        logical,           optional, intent(in) :: del_if_exists
+        logical,           optional, intent(in) :: wfloat16
         real             :: dev, mean
         type(imgfile)    :: ioimg
         character(len=1) :: form
@@ -271,10 +271,10 @@ contains
     !===========================
     module subroutine write_jpg( self, fname, quality, colorspec, norm )
         use simple_jpg, only: jpg_img
-        class(image),               intent(inout) :: self
-        class(string),              intent(in)    :: fname
-        integer,          optional, intent(in)    :: quality, colorspec
-        logical,          optional, intent(in)    :: norm
+        class(image),               intent(inout)        :: self
+        class(string),              intent(in)           :: fname
+        integer,                    optional, intent(in) :: quality, colorspec
+        logical,                    optional, intent(in) :: norm
         type(jpg_img)     :: jpg
         integer           :: status
         logical           :: norm_here

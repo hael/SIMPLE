@@ -5,7 +5,7 @@ private
 public :: molecule_data
 
 type :: molecule_data
-    integer :: n = 0
+    integer                       :: n = 0
     character(len=4), allocatable :: name(:)
     character(len=3), allocatable :: resname(:)
     character(len=1), allocatable :: chain(:)

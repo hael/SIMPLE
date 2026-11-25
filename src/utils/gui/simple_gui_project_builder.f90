@@ -60,22 +60,22 @@ type :: gui_project_builder
   integer      :: nstates3D       = UNSET
   integer      :: pspec_size      = UNSET
   ! the sections the update sets, with what their setters take
-  logical      :: l_movies      = .false.
-  logical      :: l_micrographs = .false.
-  logical      :: l_particles   = .false.
-  logical      :: l_cavgs2D     = .false.
-  logical      :: l_vols3D      = .false.
+  logical                                    :: l_movies      = .false.
+  logical                                    :: l_micrographs = .false.
+  logical                                    :: l_particles   = .false.
+  logical                                    :: l_cavgs2D     = .false.
+  logical                                    :: l_vols3D      = .false.
   type(gui_metadata_micrograph), allocatable :: movies(:)
   type(gui_metadata_micrograph), allocatable :: micrographs(:)
-  integer      :: xdim_mic  = 0
-  integer      :: ydim_mic  = 0
-  real         :: smpd_mic  = 0.
-  type(string) :: ptcls_jpg
+  integer                                    :: xdim_mic      = 0
+  integer                                    :: ydim_mic      = 0
+  real                                       :: smpd_mic      = 0.
+  type(string)                               :: ptcls_jpg
   type(gui_metadata_ptcl),       allocatable :: ptcls(:)
   type(gui_metadata_cavg2D),     allocatable :: cavgs(:)
-  integer      :: dim_cavgs = 0
-  real         :: mskdiam   = 0.
-  real         :: mskscale  = 0.
+  integer                                    :: dim_cavgs     = 0
+  real                                       :: mskdiam       = 0.
+  real                                       :: mskscale      = 0.
   type(gui_metadata_vol3D),      allocatable :: vols(:)
 contains
   procedure          :: build
@@ -93,12 +93,12 @@ contains
     !> The update of the sections of @p spproj that @p oritype selects, for @p stage (0 the final
     !! one); @p selection adds the selected counts. Writes the previews; touches no shared state.
     subroutine build( self, spproj, oritype, stage, selection, vol_kind )
-        class(gui_project_builder), intent(inout) :: self
-        type(sp_project),           intent(inout) :: spproj
-        character(len=*),           intent(in)    :: oritype
-        integer,                    intent(in)    :: stage
-        logical,                    intent(in)    :: selection
-        character(len=*), optional, intent(in)    :: vol_kind
+        class(gui_project_builder), intent(inout)        :: self
+        type(sp_project),           intent(inout)        :: spproj
+        character(len=*),           intent(in)           :: oritype
+        integer,                    intent(in)           :: stage
+        logical,                    intent(in)           :: selection
+        character(len=*),           optional, intent(in) :: vol_kind
         logical :: l_all
         if( stage < 0 ) THROW_HARD('stage must be >= 1, or 0 for the final output')
         call self%kill()
@@ -158,12 +158,12 @@ contains
     subroutine add_movies( self, spproj )
         class(gui_project_builder), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
-        integer, parameter :: N_MOV_THUMBS = 1
+        integer, parameter            :: N_MOV_THUMBS = 1
         type(gui_metadata_micrograph) :: movies(N_MOV_THUMBS)
-        type(image)  :: movsum, movthumb
-        type(string) :: movfname, thumbfname
-        integer      :: i, nmics, nthumbs, n_movies_sum, n_frames_sum, ldim_mov(3), ldim_thumb(3)
-        real         :: smpd, scale_thumb
+        type(image)                   :: movsum, movthumb
+        type(string)                  :: movfname, thumbfname
+        integer                       :: i, nmics, nthumbs, n_movies_sum, n_frames_sum, ldim_mov(3), ldim_thumb(3)
+        real                          :: smpd, scale_thumb
         nmics      = spproj%os_mic%get_noris()
         self%nmics = nmics
         if( nmics == 0 ) return
@@ -203,13 +203,13 @@ contains
         class(gui_project_builder), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
         logical,                    intent(in)    :: l_ptcl, l_selection
-        integer, parameter :: N_MICS_SHOWN = 50
+        integer,                       parameter   :: N_MICS_SHOWN = 50
         type(gui_metadata_micrograph), allocatable :: mics(:)
         real,                          allocatable :: boxdata(:)
-        type(nrtxtfile) :: boxfile
-        type(string)    :: boxpath
-        integer :: i, j, x, y, nmics, nshown, nvalid, nrecs, nlines, xdim, ydim
-        logical :: l_ctf
+        type(nrtxtfile)                            :: boxfile
+        type(string)                               :: boxpath
+        integer                                    :: i, j, x, y, nmics, nshown, nvalid, nrecs, nlines, xdim, ydim
+        logical                                    :: l_ctf
         nmics           = spproj%os_mic%get_noris()
         self%nmics      = nmics
         self%pspec_size = GUI_PSPECSZ
@@ -268,11 +268,11 @@ contains
     subroutine add_particles( self, spproj )
         class(gui_project_builder), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
-        integer, parameter :: N_PTCLS_SAMPLE = 100
+        integer, parameter   :: N_PTCLS_SAMPLE = 100
         integer, allocatable :: ptcl_inds(:)
-        type(string) :: stem, stk, jpg, lpstk, lpjpg
-        integer :: i, nptcls_all, nptcls_valid, nsample, nshown, box, xtiles, ytiles, xtile, ytile
-        real    :: smpd, df
+        type(string)         :: stem, stk, jpg, lpstk, lpjpg
+        integer              :: i, nptcls_all, nptcls_valid, nsample, nshown, box, xtiles, ytiles, xtile, ytile
+        real                 :: smpd, df
         nptcls_all = spproj%os_ptcl2D%get_noris()
         if( nptcls_all == 0 ) return
         if( spproj%os_ptcl2D%isthere('state') )then
@@ -319,9 +319,9 @@ contains
         type(sp_project),           intent(inout) :: spproj
         logical,                    intent(in)    :: l_selection
         type(gui_metadata_cavg2D), allocatable :: cavgs(:)
-        type(string) :: cavgsstk, cavgsjpg
-        integer :: i, ncls, ncls_stk, nvalid, out_ind, xtiles, ytiles, xtile, ytile
-        real    :: smpd, box, mskdiam
+        type(string)                           :: cavgsstk, cavgsjpg
+        integer                                :: i, ncls, ncls_stk, nvalid, out_ind, xtiles, ytiles, xtile, ytile
+        real                                   :: smpd, box, mskdiam
         ncls        = spproj%os_cls2D%get_noris()
         self%nstks  = spproj%os_stk%get_noris()
         self%nptcls = spproj%os_ptcl2D%get_noris()
@@ -372,15 +372,15 @@ contains
         class(gui_project_builder), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
         character(len=*),           intent(in)    :: vol_kind
-        integer, parameter :: NTILES3D = 3
+        integer,                  parameter   :: NTILES3D = 3
         type(gui_metadata_vol3D), allocatable :: vols(:)
         real,                     allocatable :: fsc_arr(:), res_arr(:)
-        type(gui_metadata_cavg2D) :: tiles(NTILES3D)
-        type(string) :: volpath, volpath_out, fsc_fname, pprocpath, lppath, pprocmirrpath, reprojpath, oridistpath
-        real         :: smpd, res0143, res05, cfar, vmin, vmax
-        integer      :: hist(ORIDIST_NBINS_X, ORIDIST_NBINS_Y)
-        integer      :: nstates, istate, nvalid, box, pop, fsc_box, nfsc, itile, iptcl
-        logical      :: l_final, l_have_fsc
+        type(gui_metadata_cavg2D)             :: tiles(NTILES3D)
+        type(string)                          :: volpath, volpath_out, fsc_fname, pprocpath, lppath, pprocmirrpath, reprojpath, oridistpath
+        real                                  :: smpd, res0143, res05, cfar, vmin, vmax
+        integer                               :: hist(ORIDIST_NBINS_X, ORIDIST_NBINS_Y)
+        integer                               :: nstates, istate, nvalid, box, pop, fsc_box, nfsc, itile, iptcl
+        logical                               :: l_final, l_have_fsc
         l_final        = self%stage == 0
         nstates        = spproj%os_ptcl3D%get_n('state')
         self%nstates3D = nstates

@@ -48,44 +48,44 @@ private
 
 public :: run_all_strategy3D_cont_1jyx_tests
 
-integer, parameter :: TEST_BOX = 144
-integer, parameter :: TEST_PARTICLES = 1000
-integer, parameter :: SIMULATION_SEED = 20260914
+integer, parameter :: TEST_BOX          = 144
+integer, parameter :: TEST_PARTICLES    = 1000
+integer, parameter :: SIMULATION_SEED   = 20260914
 integer, parameter :: PERTURBATION_SEED = 20260915
-integer, parameter :: NOISE_SEED = 20260916
-real, parameter :: TEST_SMPD = 1.3
-real, parameter :: TEST_MSKDIAM = 120.
-real, parameter :: TEST_MSKRAD = 46.
-real, parameter :: TEST_SNR = 1.
-real, parameter :: TEST_LPS(2) = [8., 4.]             !< the E25 band and its high-resolution case
-real, parameter :: TEST_KV = 300.
-real, parameter :: TEST_CS = 2.7
-real, parameter :: TEST_FRACA = 0.1
-real, parameter :: TEST_DEFOCUS = 1.5
-real, parameter :: TEST_DFERR = 0.5
-real, parameter :: TEST_ASTIGERR = 0.1
+integer, parameter :: NOISE_SEED        = 20260916
+real,    parameter :: TEST_SMPD         = 1.3
+real,    parameter :: TEST_MSKDIAM      = 120.
+real,    parameter :: TEST_MSKRAD       = 46.
+real,    parameter :: TEST_SNR          = 1.
+real,    parameter :: TEST_LPS(2)       = [8., 4.]    !< the E25 band and its high-resolution case
+real,    parameter :: TEST_KV           = 300.
+real,    parameter :: TEST_CS           = 2.7
+real,    parameter :: TEST_FRACA        = 0.1
+real,    parameter :: TEST_DEFOCUS      = 1.5
+real,    parameter :: TEST_DFERR        = 0.5
+real,    parameter :: TEST_ASTIGERR     = 0.1
 ! inside the 15 deg rotation bound (athres_cont): at 15 deg the truth sat on the search boundary and the
 ! particles that did not reach it never moved, so the basin fractions changed with the rounding of
 ! the platform (2026-11-02; at 10 deg over 20 seed offsets every check passes, the weakest basin
 ! fraction median 0.999, worst 0.996)
-real(dp), parameter :: ROTATION_ERROR = 10._dp*real(PI, dp)/180._dp
-real(dp), parameter :: SHIFT_ERROR = 2._dp
-character(len=*), parameter :: ATOM_VOLUME_FILE = '1JYX_atoms.mrc'
-character(len=*), parameter :: TRUTH_VOLUME_FILE = '1JYX.mrc'
-character(len=*), parameter :: PARTICLE_FILE = '1JYX_particles.mrcs'
+real(dp),         parameter :: ROTATION_ERROR              = 10._dp*real(PI, dp)/180._dp
+real(dp),         parameter :: SHIFT_ERROR                 = 2._dp
+character(len=*), parameter :: ATOM_VOLUME_FILE            = '1JYX_atoms.mrc'
+character(len=*), parameter :: TRUTH_VOLUME_FILE           = '1JYX.mrc'
+character(len=*), parameter :: PARTICLE_FILE               = '1JYX_particles.mrcs'
 character(len=*), parameter :: SIMULATION_ORIENTATION_FILE = '1JYX_simulation_orientations.txt'
-character(len=*), parameter :: TRUTH_ORIENTATION_FILE = '1JYX_truth_orientations.txt'
+character(len=*), parameter :: TRUTH_ORIENTATION_FILE      = '1JYX_truth_orientations.txt'
 ! bounds of the Phase 0 baseline: trs (pixels, box_crop == box) and athres_cont (degrees)
-real, parameter :: TEST_TRS = 5., TEST_ATHRES_CONT = 15.
-integer, parameter :: NROUTES = 1
-character(len=16), parameter :: ROUTE_NAMES(NROUTES) = [character(len=16) :: 'joint']
-integer, parameter :: NOBJFUNS = 2
-integer, parameter :: TEST_OBJFUNS(NOBJFUNS) = [OBJFUN_CC, OBJFUN_EUCLID]
-character(len=6), parameter :: OBJFUN_NAMES(NOBJFUNS) = ['cc    ', 'euclid']
+real,              parameter :: TEST_TRS               = 5., TEST_ATHRES_CONT = 15.
+integer,           parameter :: NROUTES                = 1
+character(len=16), parameter :: ROUTE_NAMES(NROUTES)   = [character(len=16) :: 'joint']
+integer,           parameter :: NOBJFUNS               = 2
+integer,           parameter :: TEST_OBJFUNS(NOBJFUNS) = [OBJFUN_CC, OBJFUN_EUCLID]
+character(len=6),  parameter :: OBJFUN_NAMES(NOBJFUNS) = ['cc    ', 'euclid']
 ! floors (section 10.1), declared before the first run of the Phase 3 code
-real(dp), parameter :: TRUTH_FACTOR = 0.1_dp                       !< median error / injected error
+real(dp), parameter :: TRUTH_FACTOR            = 0.1_dp             !< median error / injected error
 real(dp), parameter :: BASIN_FRACTION_FLOOR(2) = [0.95_dp, 0.90_dp] !< per band
-real(dp), parameter :: MAP_CORR_MARGIN = 0.01_dp                    !< below the exact-pose map
+real(dp), parameter :: MAP_CORR_MARGIN         = 0.01_dp            !< below the exact-pose map
 
 contains
 
@@ -96,29 +96,29 @@ contains
     end subroutine run_all_strategy3D_cont_1jyx_tests
 
     subroutine run_pose_cont_1jyx_reconstruction()
-        type(atoms) :: molecule
-        type(commander_simulate_particles) :: simulator
-        type(image) :: mask_image, particle_reader, truth_image
-        type(molecule_data) :: molecule_record
-        type(ori) :: truth_orientation
-        type(oris) :: truth_orientations
+        type(atoms)                            :: molecule
+        type(commander_simulate_particles)     :: simulator
+        type(image)                            :: mask_image, particle_reader, truth_image
+        type(molecule_data)                    :: molecule_record
+        type(ori)                              :: truth_orientation
+        type(oris)                             :: truth_orientations
         class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        type(cartft_calc), pointer :: calc
-        class(cmdline), allocatable :: simulation_command
-        type(ctfparams), allocatable :: ctf_parameters(:)
-        real, allocatable :: particles(:, :, :), sigma2(:), truth_volume(:, :, :), taper(:)
-        real(dp), allocatable :: truth_rotations(:, :, :), initial_rotations(:, :, :), terminal_rotations(:, :, :, :)
-        real(dp), allocatable :: truth_shifts(:, :), initial_shifts(:, :), terminal_shifts(:, :, :)
-        real(dp), allocatable :: start_rotations(:, :, :), start_shifts(:, :)
-        real(dp), allocatable :: initial_rotation_errors(:), terminal_rotation_errors(:)
-        real(dp), allocatable :: initial_shift_errors(:), terminal_shift_errors(:)
-        real(dp), allocatable :: objectives_before(:), objectives_after(:), objectives_truth(:)
-        real(dp) :: median_rotation(NOBJFUNS, size(TEST_LPS)), gain, basin_width
-        integer, allocatable :: statuses(:)
-        logical, allocatable :: noise_mask(:, :, :)
-        integer :: i, iband, iobj, iroute, ldim(3), nsections, nworkers, upper_shell
-        integer :: route_checks_before, route_failures_before
+        type(cartft_calc), pointer             :: calc
+        class(cmdline),    allocatable         :: simulation_command
+        type(ctfparams),   allocatable         :: ctf_parameters(:)
+        real,              allocatable         :: particles(:, :, :), sigma2(:), truth_volume(:, :, :), taper(:)
+        real(dp),          allocatable         :: truth_rotations(:, :, :), initial_rotations(:, :, :), terminal_rotations(:, :, :, :)
+        real(dp),          allocatable         :: truth_shifts(:, :), initial_shifts(:, :), terminal_shifts(:, :, :)
+        real(dp),          allocatable         :: start_rotations(:, :, :), start_shifts(:, :)
+        real(dp),          allocatable         :: initial_rotation_errors(:), terminal_rotation_errors(:)
+        real(dp),          allocatable         :: initial_shift_errors(:), terminal_shift_errors(:)
+        real(dp),          allocatable         :: objectives_before(:), objectives_after(:), objectives_truth(:)
+        real(dp)                               :: median_rotation(NOBJFUNS, size(TEST_LPS)), gain, basin_width
+        integer,           allocatable         :: statuses(:)
+        logical,           allocatable         :: noise_mask(:, :, :)
+        integer                                :: i, iband, iobj, iroute, ldim(3), nsections, nworkers, upper_shell
+        integer                                :: route_checks_before, route_failures_before
         allocate(b, p, simulation_command)
 
         call make_ui
@@ -321,7 +321,7 @@ contains
     end subroutine run_pose_cont_1jyx_reconstruction
 
     subroutine make_perturbed_pose(truth_rotation, truth_shift, rotation, shift)
-        real(dp), intent(in) :: truth_rotation(3, 3), truth_shift(2)
+        real(dp), intent(in)  :: truth_rotation(3, 3), truth_shift(2)
         real(dp), intent(out) :: rotation(3, 3), shift(2)
         real(dp) :: axis(3), azimuth, radial, uniform(3), z
 
@@ -354,13 +354,13 @@ contains
     subroutine prepare_particle(calc, particle, ctf_parameters, noise_mask, taper, stored_shift, objfun, &
         &upper_shell, raw_work, fourier_work, islot)
         class(cartft_calc), intent(inout) :: calc
-        real, intent(in) :: particle(:, :, :), taper(:)
-        type(ctfparams), intent(in) :: ctf_parameters
-        logical, intent(in) :: noise_mask(:, :, :)
-        real(dp), intent(in) :: stored_shift(2)
-        integer, intent(in) :: objfun, upper_shell, islot
-        type(image), intent(inout) :: raw_work, fourier_work
-        type(ctfparams) :: cropped_ctf
+        real,               intent(in)    :: particle(:, :, :), taper(:)
+        type(ctfparams),    intent(in)    :: ctf_parameters
+        logical,            intent(in)    :: noise_mask(:, :, :)
+        real(dp),           intent(in)    :: stored_shift(2)
+        integer,            intent(in)    :: objfun, upper_shell, islot
+        type(image),        intent(inout) :: raw_work, fourier_work
+        type(ctfparams)      :: cropped_ctf
         complex, allocatable :: observed(:, :)
 
         call raw_work%set_rmat(particle, .false.)
@@ -388,19 +388,19 @@ contains
     !! per-shell accounting (sigma_contribution) of a unit-sigma2 Euclidean slot.
     subroutine estimate_noise_model(calc, particles, ctf_parameters, noise_mask, taper, truth_rotations, &
         &truth_shifts, initial_shifts, upper_shell, nworkers, gain, sigma2)
-        class(cartft_calc), intent(inout) :: calc
-        real, intent(in) :: particles(:, :, :), taper(:)
-        type(ctfparams), intent(in) :: ctf_parameters(:)
-        logical, intent(in) :: noise_mask(:, :, :)
-        real(dp), intent(in) :: truth_rotations(:, :, :), truth_shifts(:, :), initial_shifts(:, :)
-        integer, intent(in) :: upper_shell, nworkers
-        real(dp), intent(out) :: gain
-        real, allocatable, intent(out) :: sigma2(:)
+        class(cartft_calc), intent(inout)            :: calc
+        real,               intent(in)               :: particles(:, :, :), taper(:)
+        type(ctfparams),    intent(in)               :: ctf_parameters(:)
+        logical,            intent(in)               :: noise_mask(:, :, :)
+        real(dp),           intent(in)               :: truth_rotations(:, :, :), truth_shifts(:, :), initial_shifts(:, :)
+        integer,            intent(in)               :: upper_shell, nworkers
+        real(dp),           intent(out)              :: gain
+        real,               allocatable, intent(out) :: sigma2(:)
         type(image), allocatable :: raw_work(:), fourier_work(:)
-        real, allocatable :: unit_sigma2(:)
-        real(dp), allocatable :: residual_sum(:, :), ref_sum(:, :), ptcl_sum(:, :)
-        real(dp) :: cross(2:upper_shell), ref_mean(2:upper_shell), ptcl_mean(2:upper_shell), npix(2:upper_shell)
-        integer :: h, k, shell
+        real,        allocatable :: unit_sigma2(:)
+        real(dp),    allocatable :: residual_sum(:, :), ref_sum(:, :), ptcl_sum(:, :)
+        real(dp)                 :: cross(2:upper_shell), ref_mean(2:upper_shell), ptcl_mean(2:upper_shell), npix(2:upper_shell)
+        integer                  :: h, k, shell
 
         allocate (unit_sigma2(0:TEST_BOX/2), source=1.)
         allocate (residual_sum(2:upper_shell, nworkers), ref_sum(2:upper_shell, nworkers), &
@@ -414,8 +414,8 @@ contains
 !$omp parallel default(shared)
         block
             real, allocatable :: sigma_contrib(:), ref_pow(:), ptcl_pow(:)
-            real :: v
-            integer :: iparticle, thread_index
+            real              :: v
+            integer           :: iparticle, thread_index
 
             thread_index = 1
 !$          thread_index = omp_get_thread_num() + 1
@@ -464,19 +464,19 @@ contains
     subroutine refine_all_particles(b, p, particles, ctf_parameters, noise_mask, taper, objfun, sigma2, &
         &upper_shell, nworkers, truth_rotations, truth_shifts, initial_rotations, initial_shifts, terminal_rotations, &
         &terminal_shifts, objectives_before, objectives_after, objectives_truth, statuses)
-        class(builder), target, intent(inout) :: b
+        class(builder),    target, intent(inout) :: b
         class(parameters), target, intent(inout) :: p
-        real, intent(in) :: particles(:, :, :), taper(:), sigma2(0:)
-        type(ctfparams), intent(in) :: ctf_parameters(:)
-        logical, intent(in) :: noise_mask(:, :, :)
-        integer, intent(in) :: objfun, upper_shell, nworkers
-        real(dp), intent(in) :: truth_rotations(:, :, :), truth_shifts(:, :)
-        real(dp), intent(in) :: initial_rotations(:, :, :), initial_shifts(:, :)
-        real(dp), intent(out) :: terminal_rotations(:, :, :), terminal_shifts(:, :)
-        real(dp), intent(out) :: objectives_before(:), objectives_after(:), objectives_truth(:)
-        integer, intent(out) :: statuses(:)
+        real,              intent(in)            :: particles(:, :, :), taper(:), sigma2(0:)
+        type(ctfparams),   intent(in)            :: ctf_parameters(:)
+        logical,           intent(in)            :: noise_mask(:, :, :)
+        integer,           intent(in)            :: objfun, upper_shell, nworkers
+        real(dp),          intent(in)            :: truth_rotations(:, :, :), truth_shifts(:, :)
+        real(dp),          intent(in)            :: initial_rotations(:, :, :), initial_shifts(:, :)
+        real(dp),          intent(out)           :: terminal_rotations(:, :, :), terminal_shifts(:, :)
+        real(dp),          intent(out)           :: objectives_before(:), objectives_after(:), objectives_truth(:)
+        integer,           intent(out)           :: statuses(:)
         type(image), allocatable :: raw_work(:), fourier_work(:)
-        integer :: i
+        integer                  :: i
 
         ! The policy of the pass the matcher runs.
         p%oritype = 'ptcl3D'
@@ -515,10 +515,10 @@ contains
 !$omp parallel default(shared)
         block
             class(strategy3D), pointer :: strat
-            type(strategy3D_spec) :: spec
-            type(ori) :: seed
-            real(dp) :: gradient(5)
-            integer :: iparticle, thread_index
+            type(strategy3D_spec)      :: spec
+            type(ori)                  :: seed
+            real(dp)                   :: gradient(5)
+            integer                    :: iparticle, thread_index
 
             thread_index = 1
 !$          thread_index = omp_get_thread_num() + 1
@@ -563,7 +563,7 @@ contains
     !> One raw and one Fourier work image per OpenMP worker, created serially (image%new
     !! makes FFTW plans, which is not thread-safe).
     subroutine new_work_images(nworkers, raw_work, fourier_work)
-        integer, intent(in) :: nworkers
+        integer,     intent(in)               :: nworkers
         type(image), allocatable, intent(out) :: raw_work(:), fourier_work(:)
         integer :: i
         allocate (raw_work(nworkers), fourier_work(nworkers))
@@ -600,29 +600,29 @@ contains
     !! (F4).
     subroutine reconstruct_and_score(iroute, iband, particles, ctf_parameters, truth_image, noise_mask, &
         &truth_rotations, truth_shifts, initial_rotations, initial_shifts, terminal_rotations, terminal_shifts)
-        integer, intent(in) :: iroute, iband
-        real, intent(in) :: particles(:, :, :)
+        integer,         intent(in) :: iroute, iband
+        real,            intent(in) :: particles(:, :, :)
         type(ctfparams), intent(in) :: ctf_parameters(:)
-        class(image), intent(in) :: truth_image
-        logical, intent(in) :: noise_mask(:, :, :)
-        real(dp), intent(in) :: truth_rotations(:, :, :), truth_shifts(:, :)
-        real(dp), intent(in) :: initial_rotations(:, :, :), initial_shifts(:, :)
-        real(dp), intent(in) :: terminal_rotations(:, :, :, :), terminal_shifts(:, :, :)
-        integer, parameter :: NMAPS = 2 + NOBJFUNS !< exact, perturbed, refined per objective
-        type(fplane_type) :: plane
-        type(fplane_grid) :: grid
-        type(image) :: particle, padded_particle, maps(NMAPS), truth_metric, metric
-        type(ori) :: orientation
+        class(image),    intent(in) :: truth_image
+        logical,         intent(in) :: noise_mask(:, :, :)
+        real(dp),        intent(in) :: truth_rotations(:, :, :), truth_shifts(:, :)
+        real(dp),        intent(in) :: initial_rotations(:, :, :), initial_shifts(:, :)
+        real(dp),        intent(in) :: terminal_rotations(:, :, :, :), terminal_shifts(:, :, :)
+        integer,           parameter           :: NMAPS = 2 + NOBJFUNS !< exact, perturbed, refined per objective
+        type(fplane_type)                      :: plane
+        type(fplane_grid)                      :: grid
+        type(image)                            :: particle, padded_particle, maps(NMAPS), truth_metric, metric
+        type(ori)                              :: orientation
         class(parameters), allocatable, target :: reconstruction_parameters
-        type(reconstructor) :: reconstructors(NMAPS)
-        class(sp_project), allocatable :: empty_project
-        type(sym) :: c1
-        real, allocatable :: map_array(:, :, :), truth_array(:, :, :), fsc(:), resolutions(:)
-        real(dp) :: correlations(NMAPS)
-        real :: fsc05(NMAPS), fsc0143(NMAPS)
-        integer :: i, imap
-        logical :: finite_fsc(NMAPS)
-        character(len=16) :: map_names(NMAPS)
+        type(reconstructor)                    :: reconstructors(NMAPS)
+        class(sp_project), allocatable         :: empty_project
+        type(sym)                              :: c1
+        real,              allocatable         :: map_array(:, :, :), truth_array(:, :, :), fsc(:), resolutions(:)
+        real(dp)                               :: correlations(NMAPS)
+        real                                   :: fsc05(NMAPS), fsc0143(NMAPS)
+        integer                                :: i, imap
+        logical                                :: finite_fsc(NMAPS)
+        character(len=16)                      :: map_names(NMAPS)
         allocate(reconstruction_parameters, empty_project)
 
         map_names(1) = 'exact'
@@ -723,7 +723,7 @@ contains
     contains
 
         subroutine insert(imap_insert, rotation, shift)
-            integer, intent(in) :: imap_insert
+            integer,  intent(in) :: imap_insert
             real(dp), intent(in) :: rotation(3, 3), shift(2)
             call orientation%set_euler(real(dm2euler(rotation)))
             call padded_particle%gen_fplane4rec(TEST_SMPD, ctf_parameters(i), real(shift), plane, grid)
@@ -746,18 +746,18 @@ contains
     !! median terminal rotation error for F5.
     subroutine assert_pose_improvement(label, iband, objfun, statuses, objectives_before, objectives_after, &
         &rotation_before, rotation_after, shift_before, shift_after, rotation_median)
-        character(len=*), intent(in) :: label
-        integer, intent(in) :: iband, objfun
-        integer, intent(in) :: statuses(:)
-        real(dp), intent(in) :: objectives_before(:), objectives_after(:)
-        real(dp), intent(in) :: rotation_before(:), rotation_after(:), shift_before(:), shift_after(:)
-        real(dp), intent(out) :: rotation_median
+        character(len=*), intent(in)  :: label
+        integer,          intent(in)  :: iband, objfun
+        integer,          intent(in)  :: statuses(:)
+        real(dp),         intent(in)  :: objectives_before(:), objectives_after(:)
+        real(dp),         intent(in)  :: rotation_before(:), rotation_after(:), shift_before(:), shift_after(:)
+        real(dp),         intent(out) :: rotation_median
         logical, allocatable :: finite_objective(:)
-        real(dp) :: objective_before_mean, objective_after_mean
-        real(dp) :: rotation_before_rms, rotation_after_rms, shift_before_rms, shift_after_rms
-        real(dp) :: basin_width, shift_median, basin_fraction
-        integer :: accepted, status_code
-        character(len=80) :: tag
+        real(dp)             :: objective_before_mean, objective_after_mean
+        real(dp)             :: rotation_before_rms, rotation_after_rms, shift_before_rms, shift_after_rms
+        real(dp)             :: basin_width, shift_median, basin_fraction
+        integer              :: accepted, status_code
+        character(len=80)    :: tag
 
         tag = 'POSE_CONT_1JYX ['//trim(label)//']'
         finite_objective = ieee_is_finite(objectives_before) .and. ieee_is_finite(objectives_after) .and. &

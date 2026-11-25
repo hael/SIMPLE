@@ -10,13 +10,13 @@ implicit none
 contains
 
     module subroutine calc_nu_evidence_margin( margin, lp_smooth, l_relative )
-        real, allocatable, intent(inout) :: margin(:)
-        real,    optional, intent(in)    :: lp_smooth
-        logical, optional, intent(in)    :: l_relative
+        real,    allocatable, intent(inout) :: margin(:)
+        real,    optional, intent(in)       :: lp_smooth
+        logical, optional, intent(in)       :: l_relative
         real, allocatable :: full(:,:,:), base_full(:,:,:), tmp(:,:,:)
-        real    :: lp, floor_val, base_val, best_val
-        logical :: l_rel
-        integer :: imask, i, j, k
+        real              :: lp, floor_val, base_val, best_val
+        logical           :: l_rel
+        integer           :: imask, i, j, k
         if( .not.allocated(nu_ev_base) .or. .not.allocated(nu_ev_best) ) &
             &THROW_HARD('raw evidence not allocated; run setup_nu_dmats before calc_nu_evidence_margin')
         if( n_nu_mask < 1 ) THROW_HARD('empty NU support mask; calc_nu_evidence_margin')
@@ -112,8 +112,8 @@ contains
     !! the robust statistics resolve the solvent-majority mixture (spherical
     !! base pair). l_shell reports which regime applies.
     subroutine nu_evidence_null_mask( nullm, l_shell )
-        logical, allocatable, intent(inout) :: nullm(:)
-        logical,              intent(out)   :: l_shell
+        logical,              allocatable, intent(inout) :: nullm(:)
+        logical,              intent(out)                :: l_shell
         if( allocated(nullm) ) deallocate(nullm)
         l_shell = allocated(nu_null_lmask)
         if( l_shell )then
@@ -131,8 +131,8 @@ contains
         real, intent(in) :: base_full(:,:,:)
         real,    allocatable :: work(:)
         logical, allocatable :: calib(:)
-        integer :: imask, i, j, k, n
-        real    :: val
+        integer              :: imask, i, j, k, n
+        real                 :: val
         call nu_evidence_calibration_mask(calib)
         allocate(work(n_nu_mask), source=0.)
         n = 0
@@ -152,15 +152,15 @@ contains
     end function nu_evidence_baseline_floor
 
     module subroutine calc_nu_evidence_score( margin, nsigma, score, stats )
-        real,                    intent(in)    :: margin(:)
-        real,                    intent(in)    :: nsigma
-        real, allocatable,       intent(inout) :: score(:)
-        type(nu_envmask_stats),  intent(inout) :: stats
+        real,                    intent(in)                       :: margin(:)
+        real,                    intent(in)                       :: nsigma
+        real,                    allocatable,       intent(inout) :: score(:)
+        type(nu_envmask_stats),  intent(inout)                    :: stats
         real,    allocatable :: work(:), margin_null(:)
         logical, allocatable :: calib(:), nullm(:)
-        real    :: med, mad_val, denom
-        integer :: n
-        logical :: l_shell
+        real                 :: med, mad_val, denom
+        integer              :: n
+        logical              :: l_shell
         n = size(margin)
         if( n < 1 ) THROW_HARD('empty margin vector; calc_nu_evidence_score')
         if( n /= n_nu_mask ) THROW_HARD('margin size mismatch; calc_nu_evidence_score')
@@ -217,16 +217,16 @@ contains
     end subroutine calc_nu_evidence_score
 
     module subroutine add_nu_evidence_density( vol_dens, weight, score, stats )
-        class(image), target,    intent(in)    :: vol_dens
-        real,                    intent(in)    :: weight
-        real, allocatable,       intent(inout) :: score(:)
-        type(nu_envmask_stats),  intent(inout) :: stats
-        real(kind=c_float), pointer :: rmat(:,:,:) => null()
-        real,    allocatable :: dens(:), work(:), dens_null(:)
-        logical, allocatable :: calib(:), nullm(:)
-        real    :: med, mad_val, denom
-        integer :: imask, i, j, k
-        logical :: l_shell
+        class(image),            target,    intent(in)            :: vol_dens
+        real,                    intent(in)                       :: weight
+        real,                    allocatable,       intent(inout) :: score(:)
+        type(nu_envmask_stats),  intent(inout)                    :: stats
+        real(kind=c_float), pointer     :: rmat(:,:,:) => null()
+        real,               allocatable :: dens(:), work(:), dens_null(:)
+        logical,            allocatable :: calib(:), nullm(:)
+        real                            :: med, mad_val, denom
+        integer                         :: imask, i, j, k
+        logical                         :: l_shell
         if( abs(weight) <= TINY ) return
         if( .not.allocated(score) ) THROW_HARD('score not allocated; add_nu_evidence_density')
         if( any(vol_dens%get_ldim() /= ldim) ) &
@@ -266,15 +266,15 @@ contains
     end subroutine add_nu_evidence_density
 
     module subroutine segment_nu_evidence( score, p, lmask, stats )
-        real,                    intent(in)    :: score(:)
-        type(nu_envmask_params), intent(in)    :: p
-        logical, allocatable,    intent(inout) :: lmask(:,:,:)
-        type(nu_envmask_stats),  intent(inout) :: stats
+        real,                    intent(in)                    :: score(:)
+        type(nu_envmask_params), intent(in)                    :: p
+        logical,                 allocatable,    intent(inout) :: lmask(:,:,:)
+        type(nu_envmask_stats),  intent(inout)                 :: stats
         logical, allocatable :: lab(:,:,:)
-        integer :: iter, color, imask, i, j, k, ineigh, ni, nj, nk
-        integer :: n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz, deg, nsig, nchanged
-        real    :: e_sig, e_sol, beta
-        logical :: newlab
+        integer              :: iter, color, imask, i, j, k, ineigh, ni, nj, nk
+        integer              :: n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz, deg, nsig, nchanged
+        real                 :: e_sig, e_sol, beta
+        logical              :: newlab
         if( size(score) /= n_nu_mask ) THROW_HARD('score size mismatch; segment_nu_evidence')
         beta = max(0., p%beta)
         if( allocated(lmask) ) deallocate(lmask)
@@ -360,12 +360,12 @@ contains
     end subroutine segment_nu_evidence
 
     module subroutine nu_evidence_envelope( p, lmask, stats, vol_dens )
-        type(nu_envmask_params), intent(in)    :: p
-        logical, allocatable,    intent(inout) :: lmask(:,:,:)
-        type(nu_envmask_stats),  intent(inout) :: stats
-        class(image), optional, target, intent(in) :: vol_dens
+        type(nu_envmask_params), intent(in)                    :: p
+        logical,                 allocatable,    intent(inout) :: lmask(:,:,:)
+        type(nu_envmask_stats),  intent(inout)                 :: stats
+        class(image),            optional, target, intent(in)  :: vol_dens
         type(nu_envmask_stats) :: fresh
-        real, allocatable :: margin(:), score(:)
+        real, allocatable      :: margin(:), score(:)
         stats           = fresh
         stats%n_support = n_nu_mask
         stats%beta_used = max(0., p%beta)
@@ -412,16 +412,16 @@ contains
     !! diagnostic (automsk=density) or the active envelope (automsk=nu).
     module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname, mask_out, l_valid )
         use simple_image_msk, only: image_msk
-        real,              intent(in)  :: nsigma, lp_smooth, smpd
-        integer,           intent(in)  :: state
-        class(string),     intent(in)  :: fname
-        class(image), optional, intent(inout) :: mask_out
-        logical,      optional, intent(out)   :: l_valid
+        real,              intent(in)              :: nsigma, lp_smooth, smpd
+        integer,           intent(in)              :: state
+        class(string),     intent(in)              :: fname
+        class(image),      optional, intent(inout) :: mask_out
+        logical,           optional, intent(out)   :: l_valid
         type(nu_envmask_params) :: envp
         type(nu_envmask_stats)  :: envstats
         type(image_msk)         :: envmask
         logical, allocatable    :: l_env(:,:,:)
-        integer :: grow_px, edge_px, n_ccs, n_ccs_kept
+        integer                 :: grow_px, edge_px, n_ccs, n_ccs_kept
         envp%nsigma      = nsigma
         envp%beta        = NU_ENVMASK_BETA
         envp%dens_weight = NU_ENVMASK_DENS_WEIGHT
@@ -479,9 +479,9 @@ contains
         class(image), intent(inout) :: evmap
         real,         intent(in)    :: lp_smooth
         logical,      intent(in)    :: l_relative
-        real(kind=c_float), pointer :: rmat(:,:,:) => null()
-        real, allocatable :: margin(:)
-        integer :: imask, i, j, k
+        real(kind=c_float), pointer     :: rmat(:,:,:) => null()
+        real,               allocatable :: margin(:)
+        integer                         :: imask, i, j, k
         call calc_nu_evidence_margin(margin, lp_smooth, l_relative)
         call evmap%new(ldim, smpd, wthreads=.false.)
         call evmap%get_rmat_ptr(rmat)

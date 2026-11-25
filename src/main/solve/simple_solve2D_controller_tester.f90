@@ -21,11 +21,11 @@ contains
     subroutine test_sigma2_annealing()
         use simple_cmdline,       only: cmdline
         use simple_sigma2_anchor, only: sigma2_stage_weight
-        class(parameters), allocatable :: params
-        class(cmdline), allocatable :: cline, child
+        class(parameters),  allocatable :: params
+        class(cmdline),     allocatable :: cline, child
         type(stage_params), allocatable :: stages(:)
-        real :: first, last, hist(2)
-        integer :: nstages, stage, it
+        real                            :: first, last, hist(2)
+        integer                         :: nstages, stage, it
         write(*,'(A)') 'test_sigma2_annealing'
         allocate(params,cline,child)
         params%sigma2_anneal='yes'
@@ -149,7 +149,7 @@ contains
     !> omitted when the resolution at the ends of the last two executed stages is finer than the planned limit
     subroutine test_omission_rule()
         type(stage_params), allocatable :: stage_parms(:)
-        real :: hist(6)
+        real                            :: hist(6)
         write(*,'(A)') 'test_omission_rule'
         call make_ladder(stage_parms)
         hist = 0.
@@ -175,7 +175,7 @@ contains
     !! or on fewer than two recorded ends or a missing estimate
     subroutine test_omission_never()
         type(stage_params), allocatable :: stage_parms(:)
-        real :: hist(6)
+        real                            :: hist(6)
         write(*,'(A)') 'test_omission_never'
         call make_ladder(stage_parms)
         hist = 0.

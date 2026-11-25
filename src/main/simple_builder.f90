@@ -21,26 +21,26 @@ private
 
 type :: builder
     ! GENERAL TOOLBOX
-    type(sp_project)                    :: spproj                 !< centralised single-particle project meta-data handler
-    class(oris), pointer                :: spproj_field => null() !< pointer to field in spproj
-    type(oris)                          :: eulspace               !< discrete projection direction search space
-    type(sym)                           :: pgrpsyms               !< symmetry elements object
-    type(euclid_sigma2)                 :: esig                   !< sigma2 noise variance
-    type(polarft_calc)                  :: pftc                   !< object for polar Fourier transform calculations
-    type(cartft_calc)                   :: cftc                   !< Cartesian Fourier calculator of continuous pose refinement
-    type(polarft_cont_calc), allocatable :: pcont                 !< continuous view refinement on polar sections of pftc and cftc (cont_view)
-    type(image)                         :: img                    !< individual image/projector objects
-    type(image)                         :: img_crop               !< for cropped image
-    type(image)                         :: img_pad                !< -"-
-    type(projector)                     :: vol, vol_odd
-    type(projector)                     :: vol_pad, vol_odd_pad
-    type(image)                         :: vol2                   !< -"-
-    type(image)                         :: mskvol                 !< envelope mask volume
-    type(image),            allocatable :: imgbatch(:)            !< batch of images
-    type(image),            allocatable :: img_pad_heap(:)        !< heap of padded images for use in norm_noise_taper_edge_pad_fft_gen_fplane4rec
+    type(sp_project)                     :: spproj                 !< centralised single-particle project meta-data handler
+    class(oris),             pointer     :: spproj_field => null() !< pointer to field in spproj
+    type(oris)                           :: eulspace               !< discrete projection direction search space
+    type(sym)                            :: pgrpsyms               !< symmetry elements object
+    type(euclid_sigma2)                  :: esig                   !< sigma2 noise variance
+    type(polarft_calc)                   :: pftc                   !< object for polar Fourier transform calculations
+    type(cartft_calc)                    :: cftc                   !< Cartesian Fourier calculator of continuous pose refinement
+    type(polarft_cont_calc), allocatable :: pcont                  !< continuous view refinement on polar sections of pftc and cftc (cont_view)
+    type(image)                          :: img                    !< individual image/projector objects
+    type(image)                          :: img_crop               !< for cropped image
+    type(image)                          :: img_pad                !< -"-
+    type(projector)                      :: vol, vol_odd
+    type(projector)                      :: vol_pad, vol_odd_pad
+    type(image)                          :: vol2                   !< -"-
+    type(image)                          :: mskvol                 !< envelope mask volume
+    type(image),             allocatable :: imgbatch(:)            !< batch of images
+    type(image),             allocatable :: img_pad_heap(:)        !< heap of padded images for use in norm_noise_taper_edge_pad_fft_gen_fplane4rec
     ! neighborhood structures
-    integer,                allocatable :: subspace_inds(:)       !< indices of eulspace_sub in eulspace
-    integer,                allocatable :: subspace_full2sub_map(:)!< labels of eulspace in eulspace_sub
+    integer,                allocatable :: subspace_inds(:)         !< indices of eulspace_sub in eulspace
+    integer,                allocatable :: subspace_full2sub_map(:) !< labels of eulspace in eulspace_sub
 
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used refine2D
@@ -85,7 +85,7 @@ contains
         class(builder),    target, intent(inout)  :: self
         class(cmdline),    intent(inout)          :: cline
         class(parameters), intent(inout)          :: params
-        logical, optional, intent(in)             :: ptclrange
+        logical,           optional, intent(in)   :: ptclrange
         type(string) :: projdir
         logical      :: read_spproj, ptclrange_here
         call params%new(cline)
@@ -136,20 +136,20 @@ contains
     end subroutine init_params_and_build_spproj
 
     subroutine init_params_and_build_general_tbox( self, cline, params, do3d )
-        class(builder),    target,   intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        class(parameters),           intent(inout) :: params
-        logical,           optional, intent(in)    :: do3d
+        class(builder),              target,   intent(inout) :: self
+        class(cmdline),              intent(inout)           :: cline
+        class(parameters),           intent(inout)           :: params
+        logical,                     optional, intent(in)    :: do3d
         call params%new(cline)
         call self%build_spproj(params, cline)
         call self%build_general_tbox(params, cline, do3d=do3d)
     end subroutine init_params_and_build_general_tbox
 
     subroutine init_params_and_build_strategy2D_tbox( self, cline, params, wthreads )
-        class(builder),    target, intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
-        class(parameters),         intent(inout) :: params
-        logical,         optional, intent(in)    :: wthreads
+        class(builder),            target, intent(inout) :: self
+        class(cmdline),            intent(inout)         :: cline
+        class(parameters),         intent(inout)         :: params
+        logical,                   optional, intent(in)  :: wthreads
         call params%new(cline)
         call self%build_spproj(params, cline, wthreads=wthreads)
         call self%build_general_tbox(params, cline, do3d=.false.)
@@ -157,9 +157,9 @@ contains
     end subroutine init_params_and_build_strategy2D_tbox
 
     subroutine init_params_and_build_strategy3D_tbox( self, cline, params )
-        class(builder),    target,  intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
-        class(parameters),          intent(inout) :: params
+        class(builder),             target,  intent(inout) :: self
+        class(cmdline),             intent(inout)          :: cline
+        class(parameters),          intent(inout)          :: params
         call params%new(cline)
         call self%build_spproj(params, cline)
         call self%build_general_tbox(params, cline, do3d=.true.)
@@ -170,10 +170,10 @@ contains
 
     subroutine build_spproj( self, params, cline, wthreads )
         use simple_ui, only: get_prg_ptr
-        class(builder),    target,   intent(inout) :: self
-        class(parameters),           intent(inout) :: params
-        class(cmdline),              intent(inout) :: cline
-        logical,           optional, intent(in)    :: wthreads
+        class(builder),              target,   intent(inout) :: self
+        class(parameters),           intent(inout)           :: params
+        class(cmdline),              intent(inout)           :: cline
+        logical,                     optional, intent(in)    :: wthreads
         type(string) :: projdir
         logical      :: read_spproj
         ! create object for orientations
@@ -240,16 +240,16 @@ contains
     end subroutine build_spproj
 
     subroutine build_general_tbox( self, params, cline, do3d)
-        class(builder), target, intent(inout) :: self
-        class(parameters),      intent(inout) :: params
-        class(cmdline),         intent(inout) :: cline
-        logical, optional,      intent(in)    :: do3d
+        class(builder),         target, intent(inout)     :: self
+        class(parameters),      intent(inout)             :: params
+        class(cmdline),         intent(inout)             :: cline
+        logical,                optional,      intent(in) :: do3d
         type(srchspace_map) :: sub_mapper
-        type(oris)  :: eulspace_sub !< discrete projection direction search space, reduced
-        type(image) :: mskimg
-        integer     :: lfny
-        logical     :: ddo3d, l_direct_prob_neigh
-        real, allocatable :: sub_distmat(:,:)
+        type(oris)          :: eulspace_sub !< discrete projection direction search space, reduced
+        type(image)         :: mskimg
+        integer             :: lfny
+        logical             :: ddo3d, l_direct_prob_neigh
+        real, allocatable   :: sub_distmat(:,:)
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -385,8 +385,8 @@ contains
     end subroutine kill_general_tbox
 
     subroutine build_strategy2D_tbox( self, params )
-        class(builder), target, intent(inout) :: self
-        class(parameters),      intent(inout) :: params
+        class(builder),         target, intent(inout) :: self
+        class(parameters),      intent(inout)         :: params
         call self%kill_strategy2D_tbox
         call self%clsfrcs%new(params%ncls, params%box_crop, params%smpd_crop, params%nstates)
         self%strategy2D_tbox_exists = .true.
@@ -402,8 +402,8 @@ contains
     end subroutine kill_strategy2D_tbox
 
     subroutine build_strategy3D_tbox( self, params )
-        class(builder), target, intent(inout) :: self
-        class(parameters),      intent(inout) :: params
+        class(builder),         target, intent(inout) :: self
+        class(parameters),      intent(inout)         :: params
         real    :: rot
         call self%kill_strategy3D_tbox
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)

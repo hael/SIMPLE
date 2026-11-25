@@ -9,19 +9,19 @@ private
 type :: winfuns
     private
     character(len=STDLEN) :: wfun_str=''                  !< wfun string descriptor
-    procedure(wfun), pointer, nopass :: apod_fun=>null()  !< apodization function
-    procedure(ifun), pointer, nopass :: instr_fun=>null() !< instrument function
-    real :: Whalf=0.                                      !< window halfwidth
-    real :: alpha=0.                                      !< oversampling (padding) factor
-    real :: W=0.                                          !< window fullwidth
-    real :: beta=0.                                       !< KB shape factor
+    procedure(wfun), pointer, nopass :: apod_fun  => null() !< apodization function
+    procedure(ifun), pointer, nopass :: instr_fun => null() !< instrument function
+    real :: Whalf = 0.                                    !< window halfwidth
+    real :: alpha = 0.                                    !< oversampling (padding) factor
+    real :: W     = 0.                                    !< window fullwidth
+    real :: beta  = 0.                                    !< KB shape factor
     real :: betasq, twooW, twoW, oneoW, piW, pioW
     real :: bmanc1, bmanc2, bmanc3, bmanc4, bmanc5, bmanc6, bmanc7
   contains
-    procedure :: which
-    procedure :: get_Whalf
-    procedure :: eval_apod
-    procedure :: eval_instr
+    procedure          :: which
+    procedure          :: get_Whalf
+    procedure          :: eval_apod
+    procedure          :: eval_instr
     procedure, private :: bman_apod
     procedure, private :: bman_instr
     procedure, private :: hann_apod
@@ -41,7 +41,7 @@ abstract interface
     function wfun( self, x ) result( w )
         import winfuns
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real :: w
     end function
 end interface
@@ -51,7 +51,7 @@ abstract interface
     function ifun( self, x ) result( w )
         import winfuns
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real :: w
     end function
 end interface
@@ -71,7 +71,7 @@ contains
     !> \brief  is a constructor
     function constructor( wfun_str, Whalf, alpha ) result( self )
         character(len=*), intent(in) :: wfun_str
-        real, intent(in)             :: Whalf, alpha
+        real,             intent(in) :: Whalf, alpha
         type(winfuns)                :: self
         ! set window function constants
         self%wfun_str = wfun_str
@@ -142,7 +142,7 @@ contains
     !> \brief  2 evaluate the apodization function
     function eval_apod( self, x ) result( r )
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real :: r
         r = self%apod_fun(self,x)
     end function
@@ -150,7 +150,7 @@ contains
     !> \brief  2 evaluate the instrument function
     function eval_instr( self, x ) result( r )
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real :: r
         r = self%instr_fun(self,x)
     end function
@@ -162,7 +162,7 @@ contains
     !>  \brief  is the Blackmann apodization function
     function bman_apod( self, x ) result( r ) ! OK
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real             :: r
         if( abs(x) > self%Whalf )then
             r = 0.
@@ -174,7 +174,7 @@ contains
     !>  \brief  is the Blackmann instrument function
     function bman_instr( self, x ) result( r )
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real             :: r, sincarg, arg, div
         sincarg = self%bmanc7*x
         if( abs(sincarg) < 0.00000001 ) then
@@ -197,7 +197,7 @@ contains
     !>  \brief  is the Hanning apodization function
     function hann_apod( self, x ) result( r )
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real             :: r
         if( abs(x) > self%Whalf )then
             r = 0.
@@ -210,7 +210,7 @@ contains
     !>  \brief  is the Hanning instrument function
     function hann_instr( self, x ) result( r )
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real             :: r, arg1, arg2, div
         arg1 = self%piW*x
         if( abs(arg1) < 0.00000001 ) then
@@ -233,7 +233,7 @@ contains
     !>  \brief  is the Kaiser-Bessel apodization function, abs(x) <= Whalf
     function kb_apod( self, x ) result( r ) ! OK
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real             :: r, arg
         if( abs(x) > self%Whalf )then
             r = 0.
@@ -247,7 +247,7 @@ contains
     !>  \brief  is the Kaiser-Bessel instrument function
     function kb_instr( self, x ) result( r )
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real             :: r, arg1, arg2
         arg1 = self%piW*x
         arg1 = self%betasq-arg1*arg1
@@ -270,7 +270,7 @@ contains
     !!          also called Bartlett window
     function lin_apod( self, x ) result( r )
         class(winfuns), intent(in) :: self
-        real, intent(in) ::  x
+        real,           intent(in) :: x
         real :: ax, r
         ax = abs(x)
         if( ax .gt. self%Whalf )then
@@ -283,7 +283,7 @@ contains
     !>  \brief  the instrument function to linear interpolation kernel
     function lin_instr( self, x ) result( r )
         class(winfuns), intent(in) :: self
-        real, intent(in) ::  x
+        real,           intent(in) :: x
         real :: r, arg
         arg = self%sinc_apod(x*self%Whalf)
         r = self%Whalf*arg*arg
@@ -295,7 +295,7 @@ contains
     !!          warning: make sure that x is positive!
     function nn_apod( self, x ) result( r )
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real :: r
         if( abs(x) .gt. self%Whalf )then
             r = 0
@@ -307,7 +307,7 @@ contains
     !>  \brief  instrument fun of nearest neighbor kernel
     function nn_instr( self, x ) result( r )
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real :: r
         r = self%sinc_apod(x*self%Whalf)
     end function
@@ -317,7 +317,7 @@ contains
     !>  \brief  is a normalized sinc apodization function
     function sinc_apod( self, x ) result( r )
         class(winfuns), intent(in) :: self
-        real, intent(in) :: x
+        real,           intent(in) :: x
         real             :: r, arg
         if( abs(x) > self%Whalf )then
             r = 0.

@@ -37,25 +37,25 @@ module simple_forked_process
 
   type :: forked_process
     private
-    type(cmdline), allocatable :: cline ! what the child runs execute with (set_cline, or start's)
-    type(string)          :: name
-    type(string)          :: logfile
-    integer(kind=c_pid_t) :: pid        = -1
-    integer               :: queuetime  = 0  ! Unix timestamp: when process was queued
-    integer               :: starttime  = 0  ! Unix timestamp: when process last started
-    integer               :: stoptime   = 0  ! Unix timestamp: when process stopped cleanly
-    integer               :: failtime   = 0  ! Unix timestamp: when process last failed
-    logical               :: running    = .false.
-    logical               :: failed     = .false.
-    logical               :: stopped    = .false.
-    logical               :: skipped    = .false.
-    logical               :: new_session = .false. ! the child leads its own session
-    integer(kind=c_int)   :: wstatus    = 0  ! wait status of the reaped child
+    type(cmdline), allocatable :: cline                 ! what the child runs execute with (set_cline, or start's)
+    type(string)               :: name
+    type(string)               :: logfile
+    integer(kind=c_pid_t)      :: pid         = -1
+    integer                    :: queuetime   = 0       ! Unix timestamp: when process was queued
+    integer                    :: starttime   = 0       ! Unix timestamp: when process last started
+    integer                    :: stoptime    = 0       ! Unix timestamp: when process stopped cleanly
+    integer                    :: failtime    = 0       ! Unix timestamp: when process last failed
+    logical                    :: running     = .false.
+    logical                    :: failed      = .false.
+    logical                    :: stopped     = .false.
+    logical                    :: skipped     = .false.
+    logical                    :: new_session = .false. ! the child leads its own session
+    integer(kind=c_int)        :: wstatus     = 0       ! wait status of the reaped child
   contains
     procedure :: execute => execute_test
     procedure :: start
     procedure :: terminate
-    procedure :: kill => kill_forked_process
+    procedure :: kill    => kill_forked_process
     procedure :: signal_group
     procedure :: get_exit_code
     procedure :: destroy
@@ -78,10 +78,10 @@ contains
   ! logfhandle if a logfile is given, call self%execute(), then exit. In the
   ! parent, record timestamps.
   subroutine start( self, name, logfile, cline, new_session )
-    class(forked_process),           intent(inout) :: self
-    type(string),          optional, intent(in)    :: name, logfile
-    type(cmdline),         optional, intent(in)    :: cline
-    logical,               optional, intent(in)    :: new_session
+    class(forked_process),           intent(inout)        :: self
+    type(string),                    optional, intent(in) :: name, logfile
+    type(cmdline),                   optional, intent(in) :: cline
+    logical,                         optional, intent(in) :: new_session
     integer(kind=c_int)                            :: ios
     type(c_funptr)                                 :: prev_handler
     if( present(logfile) ) self%logfile = logfile
@@ -303,7 +303,7 @@ contains
       end function c_waitid
     end interface
     integer(c_int), parameter :: P_PID = 1, WEXITED = 4, WNOWAIT = int(z'01000000', c_int)
-    integer(c_int) :: info(32)
+    integer(c_int)            :: info(32)
 #endif
     has_exited = .false.
     if( .not. self%running .or. self%pid <= 0 ) return

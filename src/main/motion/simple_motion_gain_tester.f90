@@ -99,11 +99,11 @@ contains
     !! except one pixel at 4 and one at 0, so the global mean is (62*2 + 4)/64 = 2 exactly, the gain 1
     !! on the plain pixels, 0.5 on the bright one and 0 on the dead one
     subroutine test_normalized_inverse_average_intensity()
-        integer, parameter :: NFRAMES = 4
-        type(image) :: sum_img, gain_img
-        real, allocatable :: gain(:,:,:)
-        real    :: rmat(8,8,1), avg_value
-        logical :: plain(8,8)
+        integer, parameter   :: NFRAMES = 4
+        type(image)          :: sum_img, gain_img
+        real,    allocatable :: gain(:,:,:)
+        real                 :: rmat(8,8,1), avg_value
+        logical              :: plain(8,8)
         write(*,'(A)') 'test_normalized_inverse_average_intensity'
         rmat = 2. * real(NFRAMES)
         rmat(1,1,1) = 4. * real(NFRAMES)
@@ -154,9 +154,9 @@ contains
     !> a uniform sum gives a gain of 1 everywhere, read back from the written file
     subroutine test_write_gain_from_sum()
         integer, parameter :: NFRAMES = 4
-        type(image)  :: sum_img, gain_img
-        type(string) :: fname
-        integer      :: ldim(3), n
+        type(image)        :: sum_img, gain_img
+        type(string)       :: fname
+        integer            :: ldim(3), n
         write(*,'(A)') 'test_write_gain_from_sum'
         fname = 'motion_gain_test_written_gain.mrc'
         call create_constant_image(sum_img, [8,8,1], 1.0, 3. * real(NFRAMES))
@@ -191,14 +191,14 @@ contains
 
     subroutine test_correct_gain_flipping()
         use simple_motion_correct_utils, only: correct_gain
-        integer, parameter :: NX = 6, NY = 4, NFRAMES_TEST = 3
-        character(len=2), parameter :: MODES(5) = ['no', 'x ', 'y ', 'xy', 'yx']
-        type(image), allocatable :: frames(:)
-        class(image), allocatable :: gain
-        type(string) :: fname
-        real :: source_gain(NX,NY,1), source_frame(NX,NY,1), expected_gain(NX,NY,1)
-        real, allocatable :: actual(:,:,:)
-        integer :: i, j, iframe, imode, ix, iy, saved_log, scratch_log
+        integer,          parameter   :: NX       = 6, NY = 4, NFRAMES_TEST = 3
+        character(len=2), parameter   :: MODES(5) = ['no', 'x ', 'y ', 'xy', 'yx']
+        type(image),      allocatable :: frames(:)
+        class(image),     allocatable :: gain
+        type(string)                  :: fname
+        real                          :: source_gain(NX,NY,1), source_frame(NX,NY,1), expected_gain(NX,NY,1)
+        real,             allocatable :: actual(:,:,:)
+        integer                       :: i, j, iframe, imode, ix, iy, saved_log, scratch_log
         write(*,'(A)') 'test_correct_gain_flipping'
         allocate(frames(NFRAMES_TEST), gain)
         fname = 'tmp_motion_gain_flip_input.mrc'

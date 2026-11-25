@@ -19,8 +19,8 @@ implicit none
 private
 public :: run_all_pcg_lattice_tests
 
-integer, parameter :: BOX = 24
-real,    parameter :: SMPD = 1.0
+integer, parameter :: BOX     = 24
+real,    parameter :: SMPD    = 1.0
 real,    parameter :: WL_TEST = 0.7     !< a wavelength in pixels large enough to curve the paraboloid by 2.1 voxels
 
 contains
@@ -37,10 +37,10 @@ contains
     !> <G x, q> = <x, G^T q> for flat and curved planes, two replicated rotations
     subroutine test_adjoint()
         class(pcg_lattice), allocatable :: lat
-        complex, allocatable :: cmat(:,:,:), accum(:,:,:), plane(:,:), q(:,:)
-        real     :: rots(3,3,2), curv
-        real(dp) :: lhs, rhs
-        integer  :: ic, g
+        complex,            allocatable :: cmat(:,:,:), accum(:,:,:), plane(:,:), q(:,:)
+        real                            :: rots(3,3,2), curv
+        real(dp)                        :: lhs, rhs
+        integer                         :: ic, g
         allocate(lat)
         call lat%new_lattice(BOX, SMPD)
         cmat = random_lattice(lat)
@@ -78,12 +78,12 @@ contains
     !! between lattice points, while a wrong sign errs by twice the phase (up to 5.5 rad here) and a 2%
     !! error in the size by 0.055 rad at the rim
     subroutine test_curvature_phase()
-        integer, parameter :: Z0 = 5, X0 = 5
+        integer,            parameter   :: Z0 = 5, X0 = 5
         class(pcg_lattice), allocatable :: lat
-        complex, allocatable :: cz(:,:,:), cx(:,:,:), c0(:,:,:), pflat(:,:), pcurv(:,:), px(:,:), p0(:,:)
-        real    :: ident(3,3), rot(3,3), curv, kz, s, loc(3), w(15,15,15), dphase, err_loc, err_phase
-        complex :: expected
-        integer :: h, k, kappa, i0(3)
+        complex,            allocatable :: cz(:,:,:), cx(:,:,:), c0(:,:,:), pflat(:,:), pcurv(:,:), px(:,:), p0(:,:)
+        real                            :: ident(3,3), rot(3,3), curv, kz, s, loc(3), w(15,15,15), dphase, err_loc, err_phase
+        complex                         :: expected
+        integer                         :: h, k, kappa, i0(3)
         allocate(lat)
         call lat%new_lattice(BOX, SMPD)
         if( lat%wdim > size(w,1) ) error stop 'test_curvature_phase: KB window larger than the work stencil'
@@ -152,12 +152,12 @@ contains
 
     !> gather and scatter on the paraboloid at 1, 11, 16 and 24 threads, twice each: bitwise equal
     subroutine test_thread_identity()
-        integer, parameter :: NTHR(4) = [1, 11, 16, 24]
+        integer,            parameter   :: NTHR(4) = [1, 11, 16, 24]
         class(pcg_lattice), allocatable :: lat
-        complex, allocatable :: cmat(:,:,:), q(:,:), plane(:,:), plane_ref(:,:), accum(:,:,:), accum_ref(:,:,:)
-        real    :: rots(3,3,3), curv
-        integer :: it, irep, nthr0
-        logical :: l_same
+        complex,            allocatable :: cmat(:,:,:), q(:,:), plane(:,:), plane_ref(:,:), accum(:,:,:), accum_ref(:,:,:)
+        real                            :: rots(3,3,3), curv
+        integer                         :: it, irep, nthr0
+        logical                         :: l_same
         allocate(lat)
         call lat%new_lattice(BOX, SMPD)
         cmat = random_lattice(lat)
@@ -196,7 +196,7 @@ contains
 
     !> the cube of multislice: adjoint, central plane, thread identity
     subroutine test_cube()
-        integer, parameter :: NTHR(4) = [1, 11, 16, 24]
+        integer,            parameter   :: NTHR(4) = [1, 11, 16, 24]
         class(pcg_lattice), allocatable :: lat
         complex, allocatable :: cmat(:,:,:), cube(:,:,:), q(:,:,:), cube_ref(:,:,:), plane(:,:), accum(:,:,:), &
             &accum_ref(:,:,:)
@@ -270,8 +270,8 @@ contains
     function random_lattice( lat ) result( cmat )
         class(pcg_lattice), intent(in) :: lat
         complex, allocatable :: cmat(:,:,:)
-        type(image) :: vol
-        real, allocatable :: r(:,:,:)
+        type(image)          :: vol
+        real,    allocatable :: r(:,:,:)
         allocate(r(lat%boxpd,lat%boxpd,lat%boxpd))
         call random_number(r)
         call vol%new([lat%boxpd,lat%boxpd,lat%boxpd], SMPD)
@@ -286,9 +286,9 @@ contains
         class(pcg_lattice), intent(in) :: lat
         integer,            intent(in) :: off(3)
         complex, allocatable :: cmat(:,:,:)
-        type(image) :: vol
-        real, allocatable :: r(:,:,:)
-        integer :: c
+        type(image)          :: vol
+        real,    allocatable :: r(:,:,:)
+        integer              :: c
         allocate(r(lat%boxpd,lat%boxpd,lat%boxpd), source=0.)
         c = lat%boxpd/2 + 1
         r(c+off(1), c+off(2), c+off(3)) = 1.
@@ -302,8 +302,8 @@ contains
     function random_plane( lat ) result( q )
         class(pcg_lattice), intent(in) :: lat
         complex, allocatable :: q(:,:)
-        real, allocatable :: re(:,:), im(:,:)
-        integer :: h, k
+        real,    allocatable :: re(:,:), im(:,:)
+        integer              :: h, k
         allocate(re(lat%lims2(1,1):lat%lims2(1,2), lat%lims2(2,1):lat%lims2(2,2)))
         allocate(im, mold=re)
         call random_number(re)

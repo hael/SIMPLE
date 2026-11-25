@@ -22,14 +22,14 @@ type, extends( gui_metadata_base ) :: gui_metadata_ptcl
   character(len=LONGSTRLEN) :: pathlp     = ''                  ! absolute path to the low-pass particle-sample JPEG
   integer                   :: idx        = 0                   ! particle index within the ptcl2D segment
   type(sprite_sheet_pos)    :: sprite     = sprite_sheet_pos()  ! tile position and sheet dimensions
-  real                      :: df         = 0.0   ! defocus estimate (microns); valid only when l_df
-  integer                   :: box        = 0     ! particle box size in pixels; valid only when l_box
+  real                      :: df         = 0.0                 ! defocus estimate (microns); valid only when l_df
+  integer                   :: box        = 0                   ! particle box size in pixels; valid only when l_box
   logical                   :: l_df       = .false.
   logical                   :: l_box      = .false.
-  integer                   :: i          = 1     ! index of this entry within the current batch (IPC routing)
-  integer                   :: i_max      = 1     ! total entries in the current batch (IPC routing)
+  integer                   :: i          = 1                   ! index of this entry within the current batch (IPC routing)
+  integer                   :: i_max      = 1                   ! total entries in the current batch (IPC routing)
 contains
-  procedure :: kill => kill_override
+  procedure :: kill    => kill_override
   procedure :: set
   procedure :: get
   procedure :: get_idx
@@ -46,13 +46,13 @@ contains
   ! df and box are optional; omitting them clears the corresponding flag.
   ! i and i_max are required IPC routing fields (batch index / batch size).
   subroutine set( self, path, pathlp, idx, sprite, i, i_max, df, box )
-    class(gui_metadata_ptcl),   intent(inout) :: self
-    type(string),               intent(in)    :: path, pathlp
-    integer,                    intent(in)    :: idx
-    type(sprite_sheet_pos),     intent(in)    :: sprite
-    integer,                    intent(in)    :: i, i_max
-    real,    optional,          intent(in)    :: df
-    integer, optional,          intent(in)    :: box
+    class(gui_metadata_ptcl),   intent(inout)                 :: self
+    type(string),               intent(in)                    :: path, pathlp
+    integer,                    intent(in)                    :: idx
+    type(sprite_sheet_pos),     intent(in)                    :: sprite
+    integer,                    intent(in)                    :: i, i_max
+    real,                       optional,          intent(in) :: df
+    integer,                    optional,          intent(in) :: box
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned = .true.
     self%path       = path%to_char()
@@ -72,12 +72,12 @@ contains
   ! Return all fields; result is .true. if the object has been assigned.
   ! df and box are set only when the corresponding optional was supplied to set().
   function get( self, path, pathlp, idx, sprite, df, box ) result( l_assigned )
-    class(gui_metadata_ptcl),   intent(in)  :: self
-    type(string),               intent(out) :: path, pathlp
-    integer,                    intent(out) :: idx
-    type(sprite_sheet_pos),     intent(out) :: sprite
-    real,    optional,          intent(out) :: df
-    integer, optional,          intent(out) :: box
+    class(gui_metadata_ptcl),   intent(in)                     :: self
+    type(string),               intent(out)                    :: path, pathlp
+    integer,                    intent(out)                    :: idx
+    type(sprite_sheet_pos),     intent(out)                    :: sprite
+    real,                       optional,          intent(out) :: df
+    integer,                    optional,          intent(out) :: box
     logical                                 :: l_assigned
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned = self%l_assigned

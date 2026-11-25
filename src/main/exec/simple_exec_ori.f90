@@ -8,10 +8,10 @@ implicit none
 public :: exec_ori_commander
 private
 
-type(commander_make_oris) :: xmake_oris
-type(commander_oriops)    :: xoriops
-type(commander_oristats)  :: xoristats
-type(commander_vizoris)   :: xvizoris
+type(commander_make_oris)                :: xmake_oris
+type(commander_oriops)                   :: xoriops
+type(commander_oristats)                 :: xoristats
+type(commander_vizoris)                  :: xvizoris
 type(commander_measure_projspace_angres) :: xmeasure_projspace_angres
 
 contains

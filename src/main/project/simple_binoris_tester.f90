@@ -29,16 +29,16 @@ contains
 end type nonslot_writer
 
 ! the file header: MAX_N_SEGMENTS (20) segment records of five 8-byte integers (simple_binoris)
-integer, parameter :: HEADER_NBYTES     = 20 * 5 * 8
-integer, parameter :: PTCL_REC_NBYTES   = N_PTCL_RECORD_REALS * 4
-integer, parameter :: NRELEASE3_VALUES = 53 ! the particle record width of release 3
-integer, parameter :: NOLDER_VALUES    = 40 ! a narrower record from before the last slot additions
-integer, parameter :: NMICS = 3, NSTKS = 2, NPTCLS = 6
-real,    parameter :: TOL = 1.0e-5
-character(len=*), parameter :: BIN_FILE = 'tmp_binoris_test.simple'
-character(len=*), parameter :: TXT_FILE = 'tmp_binoris_test.txt'
-character(len=*), parameter :: PROJ_FILE  = 'tmp_binoris_project.simple'
-character(len=*), parameter :: PROJ_FILE2 = 'tmp_binoris_project_missing.simple'
+integer,          parameter :: HEADER_NBYTES     = 20 * 5 * 8
+integer,          parameter :: PTCL_REC_NBYTES   = N_PTCL_RECORD_REALS * 4
+integer,          parameter :: NRELEASE3_VALUES  = 53 ! the particle record width of release 3
+integer,          parameter :: NOLDER_VALUES     = 40 ! a narrower record from before the last slot additions
+integer,          parameter :: NMICS             = 3, NSTKS = 2, NPTCLS = 6
+real,             parameter :: TOL               = 1.0e-5
+character(len=*), parameter :: BIN_FILE          = 'tmp_binoris_test.simple'
+character(len=*), parameter :: TXT_FILE          = 'tmp_binoris_test.txt'
+character(len=*), parameter :: PROJ_FILE         = 'tmp_binoris_project.simple'
+character(len=*), parameter :: PROJ_FILE2        = 'tmp_binoris_project_missing.simple'
 
 contains
 
@@ -62,7 +62,7 @@ contains
     !---------------- header bookkeeping ----------------
 
     subroutine test_open_close_and_empty_header()
-        type(binoris) :: bos
+        type(binoris)   :: bos
         integer(kind=8) :: nbytes
         write(*,'(A)') 'test_open_close_and_empty_header'
         call del_file(string(BIN_FILE))
@@ -86,15 +86,15 @@ contains
     !---------------- string-backed segment (mic) ----------------
 
     subroutine test_string_segment_roundtrip()
-        type(binoris) :: bos
-        type(oris)    :: os, os2
-        type(ori)     :: o, o2
-        type(string)  :: s, s2
+        type(binoris)                      :: bos
+        type(oris)                         :: os, os2
+        type(ori)                          :: o, o2
+        type(string)                       :: s, s2
         type(string),          allocatable :: sarr(:)
         type(binoris_seginfo), allocatable :: infos(:)
         integer,               allocatable :: seginds(:)
-        integer(kind=8) :: nbytes
-        integer :: i, nbpr
+        integer(kind=8)                    :: nbytes
+        integer                            :: i, nbpr
         write(*,'(A)') 'test_string_segment_roundtrip'
         call make_mic_oris(os, NMICS)
         nbpr = os%max_ori_strlen_trim()
@@ -147,10 +147,10 @@ contains
     !---------------- fixed-width particle segment (ptcl2D) ----------------
 
     subroutine test_particle_segment_roundtrip()
-        type(binoris) :: bos
-        type(oris)    :: os, os2, os3
+        type(binoris)      :: bos
+        type(oris)         :: os, os2, os3
         integer, parameter :: FROMTO(2) = [2,5]
-        integer :: i
+        integer            :: i
         write(*,'(A)') 'test_particle_segment_roundtrip'
         call make_ptcl_oris(os, NPTCLS)
         call bos%open(string(BIN_FILE), del_if_exists=.true.)
@@ -234,7 +234,7 @@ contains
     subroutine test_cartesian_record_slots()
         type(binoris) :: bos
         type(oris)    :: os, os2
-        integer :: i
+        integer       :: i
         write(*,'(A)') 'test_cartesian_record_slots'
         call assert_int(59, N_PTCL_ORIPARAMS, 'a resident particle holds the 59 named slots')
         call assert_int(64, N_PTCL_RECORD_REALS, 'the particle record on disk is 64 reals')
@@ -282,11 +282,11 @@ contains
     !> Projects outlive releases: a particle record narrower than the current width reads back
     !! with its own slots intact and zeros in the slots it lacks.
     subroutine test_earlier_release_particle_records()
-        type(binoris) :: bos
-        type(oris)    :: os, os2
-        type(ori)     :: o
-        real    :: prec(N_PTCL_ORIPARAMS)
-        integer :: i, funit, io_stat, width, widths(2)
+        type(binoris)   :: bos
+        type(oris)      :: os, os2
+        type(ori)       :: o
+        real            :: prec(N_PTCL_ORIPARAMS)
+        integer         :: i, funit, io_stat, width, widths(2)
         integer(kind=8) :: pos
         write(*,'(A)') 'test_earlier_release_particle_records'
         call make_ptcl_oris(os, NPTCLS)
@@ -343,10 +343,10 @@ contains
     ! three segments; the middle one is rewritten longer, then shorter: the segments after it
     ! move but keep their bytes, the header total tracks the file size
     subroutine test_write_segment_inside()
-        type(binoris) :: bos
-        type(oris)    :: os_mic, os_stk, os_ptcl, os_stk_long, os_stk_short, rd_mic, rd_stk, rd_ptcl
+        type(binoris)   :: bos
+        type(oris)      :: os_mic, os_stk, os_ptcl, os_stk_long, os_stk_short, rd_mic, rd_stk, rd_ptcl
         integer(kind=8) :: nbytes
-        integer :: nbpr_mic, nbpr_stk, i
+        integer         :: nbpr_mic, nbpr_stk, i
         write(*,'(A)') 'test_write_segment_inside'
         call make_mic_oris(os_mic, NMICS)
         call make_stk_oris(os_stk, NSTKS, 'stack')
@@ -409,10 +409,10 @@ contains
 
     ! the string-array variant (merge_algndocs): records arrive as strings with a caller-supplied width
     subroutine test_write_segment_inside_strings()
-        type(binoris) :: bos
-        type(oris)    :: os_mic, os_stk, os_ptcl, rd_mic, rd_stk, rd_ptcl
+        type(binoris)             :: bos
+        type(oris)                :: os_mic, os_stk, os_ptcl, rd_mic, rd_stk, rd_ptcl
         type(string), allocatable :: recs(:)
-        integer :: i, strlen_max
+        integer                   :: i, strlen_max
         write(*,'(A)') 'test_write_segment_inside_strings'
         call make_mic_oris(os_mic, NMICS)
         call make_stk_oris(os_stk, NSTKS, 'stack')
@@ -458,7 +458,7 @@ contains
     subroutine test_project_write_segment_inside()
         type(sp_project) :: proj, before, after, fallback
         type(oris)       :: stk_new
-        integer :: i
+        integer          :: i
         write(*,'(A)') 'test_project_write_segment_inside'
         call del_file(string(PROJ_FILE))
         call del_file(string(PROJ_FILE2))
@@ -501,7 +501,7 @@ contains
     !! segment reads back unchanged; emptying a segment that is already empty changes nothing
     subroutine test_project_clear_segment_inside()
         type(sp_project) :: proj, before, after
-        integer :: i
+        integer          :: i
         write(*,'(A)') 'test_project_clear_segment_inside'
         call del_file(string(PROJ_FILE))
         call make_project(proj, string(PROJ_FILE))
@@ -533,7 +533,7 @@ contains
         type(sp_project) :: spproj
         type(oris)       :: os, os2, os3
         type(string)     :: s
-        integer :: i
+        integer          :: i
         write(*,'(A)') 'test_binoris_io_text_dispatch'
         call del_file(string(TXT_FILE))
         call make_mic_oris(os, NMICS)
@@ -573,7 +573,7 @@ contains
     subroutine test_binoris_io_project_dispatch()
         type(sp_project) :: proj, rd, rd_ctf
         type(oris)       :: dummy
-        integer :: i
+        integer          :: i
         write(*,'(A)') 'test_binoris_io_project_dispatch'
         call del_file(string(PROJ_FILE))
         call make_project(proj, string(PROJ_FILE))
@@ -618,11 +618,11 @@ contains
 
     ! hash-backed micrograph records with record lengths that differ
     subroutine make_mic_oris(os, n, prefix)
-        type(oris),                 intent(inout) :: os
-        integer,                    intent(in)    :: n
-        character(len=*), optional, intent(in)    :: prefix
+        type(oris),                 intent(inout)        :: os
+        integer,                    intent(in)           :: n
+        character(len=*),           optional, intent(in) :: prefix
         character(len=:), allocatable :: pfx
-        integer :: i
+        integer                       :: i
         pfx = 'movie'
         if( present(prefix) ) pfx = prefix
         call os%new(n, is_ptcl=.false.)
@@ -710,10 +710,10 @@ contains
     ! dummy names must not coincide with the module constants (NMICS, NSTKS): Fortran is case-insensitive
     ! and a dummy hides the host constant, so an absent optional would be read instead of it
     subroutine read_three(bos, rd_mic, rd_stk, rd_ptcl, nstk_recs, nmic_recs)
-        type(binoris),     intent(inout) :: bos
-        type(oris),        intent(inout) :: rd_mic, rd_stk, rd_ptcl
-        integer,           intent(in)    :: nstk_recs
-        integer, optional, intent(in)    :: nmic_recs
+        type(binoris),     intent(inout)        :: bos
+        type(oris),        intent(inout)        :: rd_mic, rd_stk, rd_ptcl
+        integer,           intent(in)           :: nstk_recs
+        integer,           optional, intent(in) :: nmic_recs
         integer :: nm
         nm = NMICS
         if( present(nmic_recs) ) nm = nmic_recs
@@ -731,7 +731,7 @@ contains
         integer,          intent(in) :: ifrom, ito
         character(len=*), intent(in) :: label
         type(string) :: s
-        integer :: i
+        integer      :: i
         do i = ifrom,ito
             s = expected%ori2str(i)
             call assert_string_eq(s%to_char(), actual%ori2str(i), label//': record '//int2str(i))
@@ -743,7 +743,7 @@ contains
         type(oris),       intent(in) :: expected, actual
         integer,          intent(in) :: i
         character(len=*), intent(in) :: label
-        real :: e1(3), e2(3), sh1(2), sh2(2)
+        real    :: e1(3), e2(3), sh1(2), sh2(2)
         integer :: j
         e1  = expected%get_euler(i)
         e2  = actual%get_euler(i)

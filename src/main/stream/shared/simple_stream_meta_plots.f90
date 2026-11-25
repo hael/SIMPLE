@@ -36,7 +36,7 @@ contains
         type(histogram)      :: hist
         real,    allocatable :: labels(:)
         integer, allocatable :: counts(:)
-        integer :: i
+        integer              :: i
         labels = bin_centres
         call hist%new(labels)
         call hist%zero()
@@ -59,9 +59,9 @@ contains
         character(len=*),             intent(in)    :: key
         integer,                      intent(in)    :: window
         real, allocatable :: labels(:), avgs(:), sdevs(:)
-        real    :: ave, sdev, var
-        integer :: n, win, nwin, iwin, fromto(2)
-        logical :: err
+        real              :: ave, sdev, var
+        integer           :: n, win, nwin, iwin, fromto(2)
+        logical           :: err
         n = os%get_noris()
         if( n == 0 .or. window <= 0 ) return
         win  = max(window, ceiling(real(n) / real(MAX_TIMEPLOT_POINTS)))
@@ -84,7 +84,7 @@ contains
         class(gui_metadata_timeplot), intent(inout) :: meta
         integer,                      intent(in)    :: rates(:)
         real, allocatable :: labels(:), data(:)
-        integer :: i, first, n
+        integer           :: i, first, n
         if( size(rates) == 0 ) return
         first = max(1, size(rates) - MAX_TIMEPLOT_POINTS + 1)
         n     = size(rates) - first + 1
@@ -100,12 +100,12 @@ contains
     !! @p max_points per group, in one pass from the newest micrograph back: column i of
     !! @p xshifts / @p yshifts holds group i, with @p npoints(i) entries filled.
     subroutine recent_shifts_by_optics_group( os_mic, os_optics, max_points, xshifts, yshifts, npoints )
-        class(oris),          intent(in)  :: os_mic, os_optics
-        integer,              intent(in)  :: max_points
-        real,    allocatable, intent(out) :: xshifts(:,:), yshifts(:,:)
-        integer, allocatable, intent(out) :: npoints(:)
+        class(oris),          intent(in)               :: os_mic, os_optics
+        integer,              intent(in)               :: max_points
+        real,                 allocatable, intent(out) :: xshifts(:,:), yshifts(:,:)
+        integer,              allocatable, intent(out) :: npoints(:)
         integer, allocatable :: ogids(:)
-        integer :: ngroups, igroup, imic
+        integer              :: ngroups, igroup, imic
         ngroups = os_optics%get_noris()
         allocate(xshifts(max_points,ngroups), yshifts(max_points,ngroups), source=0.)
         allocate(npoints(ngroups), source=0)

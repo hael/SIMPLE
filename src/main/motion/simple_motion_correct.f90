@@ -24,8 +24,8 @@ private
 #include "simple_local_flags.inc"
 
 ! data structures for isotropic correction
-type(image), target, allocatable :: movie_frames_scaled(:) !< scaled movie frames
-real,                allocatable :: opt_shifts(:,:)        !< optimal shifts identified
+type(image),         target, allocatable :: movie_frames_scaled(:) !< scaled movie frames
+real,                allocatable         :: opt_shifts(:,:)        !< optimal shifts identified
 
 ! data structures for patch-based motion correction
 type(motion_patched)     :: motion_patch
@@ -40,24 +40,24 @@ real,        allocatable :: shifts_toplot(:,:)            !< shifts for plotting
 real,        allocatable :: frameweights(:)               !< array of frameweights
 
 ! module global variables
-type(string)         :: patched_shift_fname               !< file name for shift plot for patched-based alignment
-integer, allocatable :: pos_outliers(:,:)                 !< positions of defects & hot pixels
-integer :: nframes        = 0                             !< number of frames used for alignement
-integer :: total_nframes  = 0                             !< total number of frames in movie
-integer :: fixed_frame    = 0                             !< fixed frame of reference for isotropic alignment (0,0)
-integer :: ldim(3)        = [0,0,0]                       !< logical dimension of frame
-integer :: ldim_scaled(3) = [0,0,0]                       !< shrunken logical dimension of frame
-integer :: eer_fraction   = 0                             !< number of EER frames within a movie fraction
-real    :: total_dose     = 0.                            !< total dose in e/A2
-real    :: dose_per_frame = 0.                            !< dose per frame in e/A2
-real    :: hp             = 0.                            !< high-pass limit
-real    :: lp             = 0.                            !< low-pass limit
-real    :: smpd           = 0.                            !< sampling distance
-real    :: smpd_scaled    = 0.                            !< sampling distance
-real    :: kV             = 300.                          !< acceleration voltage
-logical :: do_scale                    = .false.          !< scale or not
-logical :: l_eer                       = .false.          !< whether eer format is in use
-logical :: motion_correct_with_patched = .false.          !< run patch-based aniso or not
+type(string)         :: patched_shift_fname                   !< file name for shift plot for patched-based alignment
+integer, allocatable :: pos_outliers(:,:)                     !< positions of defects & hot pixels
+integer              :: nframes                     = 0       !< number of frames used for alignement
+integer              :: total_nframes               = 0       !< total number of frames in movie
+integer              :: fixed_frame                 = 0       !< fixed frame of reference for isotropic alignment (0,0)
+integer              :: ldim(3)                     = [0,0,0] !< logical dimension of frame
+integer              :: ldim_scaled(3)              = [0,0,0] !< shrunken logical dimension of frame
+integer              :: eer_fraction                = 0       !< number of EER frames within a movie fraction
+real                 :: total_dose                  = 0.      !< total dose in e/A2
+real                 :: dose_per_frame              = 0.      !< dose per frame in e/A2
+real                 :: hp                          = 0.      !< high-pass limit
+real                 :: lp                          = 0.      !< low-pass limit
+real                 :: smpd                        = 0.      !< sampling distance
+real                 :: smpd_scaled                 = 0.      !< sampling distance
+real                 :: kV                          = 300.    !< acceleration voltage
+logical              :: do_scale                    = .false. !< scale or not
+logical              :: l_eer                       = .false. !< whether eer format is in use
+logical              :: motion_correct_with_patched = .false. !< run patch-based aniso or not
 
 ! module global constants
 real,    parameter :: NSIGMAS          = 6.       !< Number of standard deviations for outliers detection
@@ -82,14 +82,14 @@ contains
 
     subroutine motion_correct_init( params, movie_stack_fname, ctfvars, movie_sum, gainref )
         use simple_motion_correct_utils, only: eer_scale_movie_convention
-        class(parameters), target, intent(in)    :: params
-        class(string),             intent(in)    :: movie_stack_fname !< input filename of stack
-        type(ctfparams),           intent(in)    :: ctfvars           !< CTF parameters
-        type(image),               intent(inout) :: movie_sum
-        class(string), optional,   intent(in)    :: gainref           !< gain reference filename
+        class(parameters),         target, intent(in)     :: params
+        class(string),             intent(in)             :: movie_stack_fname !< input filename of stack
+        type(ctfparams),           intent(in)             :: ctfvars           !< CTF parameters
+        type(image),               intent(inout)          :: movie_sum
+        class(string),             optional,   intent(in) :: gainref           !< gain reference filename
         type(image), allocatable :: movie_frames(:)
-        real     :: dimo4
-        integer  :: shp(3), iframe, n_eer_frames, ldim_input(2)
+        real                     :: dimo4
+        integer                  :: shp(3), iframe, n_eer_frames, ldim_input(2)
         p_ptr => params
         total_dose = p_ptr%total_dose
         ! get number of frames & dim from stack
@@ -252,12 +252,12 @@ contains
 
     !> isotropic motion_correction of DDD movie
     subroutine motion_correct_iso( params, movie_stack_fname, ctfvars, bfactor, movie_sum, gainref_fname )
-        class(parameters),       intent(in) :: params
-        class(string),           intent(in)    :: movie_stack_fname !< input filename of stack
-        type(ctfparams),         intent(inout) :: ctfvars           !< CTF params
-        real,                    intent(in)    :: bfactor           !< B-factor
-        type(image),             intent(inout) :: movie_sum
-        class(string), optional, intent(in)    :: gainref_fname     !< gain reference filename
+        class(parameters),       intent(in)           :: params
+        class(string),           intent(in)           :: movie_stack_fname !< input filename of stack
+        type(ctfparams),         intent(inout)        :: ctfvars           !< CTF params
+        real,                    intent(in)           :: bfactor           !< B-factor
+        type(image),             intent(inout)        :: movie_sum
+        class(string),           optional, intent(in) :: gainref_fname     !< gain reference filename
         real                      :: ave, sdev, var, minw, maxw, corr
         logical                   :: err_stat
         type(motion_align_hybrid) :: hybrid_srch
@@ -494,9 +494,9 @@ contains
         type(image),       intent(inout) :: img_out
         type(image)       :: tiles(nthr_glob), tmp(nthr_glob)
         real, allocatable :: rmat_sum(:,:,:)
-        real    :: smpd
-        integer :: ldim(3), i,j, n, hbox, ithr
-        logical :: outside
+        real              :: smpd
+        integer           :: ldim(3), i,j, n, hbox, ithr
+        logical           :: outside
         if( L_BENCH ) t_mic2spec = tic()
         hbox = box/2
         call img_in%ifft
@@ -571,9 +571,9 @@ contains
         integer, parameter   :: hwinsz = 5
         real,    allocatable :: rsum(:,:), new_vals(:,:), vals(:)
         integer, allocatable :: pos_outliers_here(:,:)
-        real    :: ave, sdev, var, lthresh,uthresh, l,u,localave
-        integer :: iframe, noutliers, i,j,k,ii,jj, nvals, winsz, n
-        logical :: outliers(ldim(1),ldim(2)), err
+        real                 :: ave, sdev, var, lthresh,uthresh, l,u,localave
+        integer              :: iframe, noutliers, i,j,k,ii,jj, nvals, winsz, n
+        logical              :: outliers(ldim(1),ldim(2)), err
         allocate(rsum(ldim(1),ldim(2)),source=0.)
         if( l_BENCH ) t_cure = tic()
         ! sum

@@ -3,8 +3,8 @@ submodule (simple_refine3D_strategy) simple_refine3D_strategy_tester
 use simple_image,      only: image
 use simple_test_utils, only: assert_true, assert_false, assert_int, assert_char, enter_fixture, leave_fixture, tests_failed
 implicit none
-integer, parameter :: BOX = 16
-real, parameter    :: SMPD = 1.5
+integer, parameter :: BOX  = 16
+real,    parameter :: SMPD = 1.5
 
 contains
 
@@ -24,7 +24,7 @@ contains
     subroutine test_prior_child_scope()
         use simple_chash, only: chash
         class(cmdline), allocatable :: cline
-        class(chash), allocatable :: job
+        class(chash),   allocatable :: job
         allocate(cline, job)
         call cline%set('cont_prior', 'shift')
         call cline%set('cont_prior_rot_sigma', 5.)
@@ -53,10 +53,10 @@ contains
         type(refine3D_provenance)      :: reference_record
         class(parameters), allocatable :: params
         class(sp_project), allocatable :: project
-        class(image), allocatable      :: volume
+        class(image),      allocatable :: volume
         type(string)                   :: source(3), target, target_path, fsc_file, missing_fsc, registered
         integer(int64)                 :: digests(3)
-        real, allocatable              :: fsc(:)
+        real,              allocatable :: fsc(:)
         real                           :: registered_smpd
         integer                        :: i, registered_box
         character(len=256)             :: message
@@ -298,13 +298,13 @@ contains
 
     ! Known impulses distinguish startup maps, assembled raw halves and assembled NU halves.
     subroutine test_reference_transition()
-        class(parameters), allocatable      :: params
-        class(cmdline), allocatable         :: cline
-        class(builder), allocatable, target :: build
-        class(image), allocatable           :: volume
-        type(string) :: merged, even, odd, nu_even, nu_odd, active
-        integer      :: generation, center
-        real         :: expected(BOX,BOX,BOX), even_value, odd_value
+        class(parameters), allocatable         :: params
+        class(cmdline),    allocatable         :: cline
+        class(builder),    allocatable, target :: build
+        class(image),      allocatable         :: volume
+        type(string)                           :: merged, even, odd, nu_even, nu_odd, active
+        integer                                :: generation, center
+        real                                   :: expected(BOX,BOX,BOX), even_value, odd_value
         write(*,'(A)') 'test_reference_transition'
         allocate(params, cline, build, volume)
         params%box               = BOX

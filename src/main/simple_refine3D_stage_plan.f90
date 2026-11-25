@@ -11,10 +11,10 @@ public :: refine3D_stage_plan_entry, plan_refine3D_frequency_stages
 private
 
 type :: refine3D_stage_plan_entry
-    integer :: stage      = 0
-    integer :: first_iter = 0
-    integer :: last_iter  = 0
-    integer :: nits       = 0
+    integer           :: stage      = 0
+    integer           :: first_iter = 0
+    integer           :: last_iter  = 0
+    integer           :: nits       = 0
     type(lp_crop_inf) :: lpinfo
 end type refine3D_stage_plan_entry
 
@@ -22,12 +22,12 @@ contains
 
     subroutine plan_refine3D_frequency_stages( box, smpd, lpstart, lpstop, total_nits, block_nits, &
         &first_iter, master_lpinfo, stages )
-        integer,                           intent(in)  :: box, total_nits, block_nits, first_iter
-        real,                              intent(in)  :: smpd, lpstart, lpstop
-        type(lp_crop_inf),                 intent(in)  :: master_lpinfo
-        type(refine3D_stage_plan_entry), allocatable, intent(out) :: stages(:)
-        integer :: find_start, find_stop, istage, nstages, nits_remaining
-        real    :: rfind, rfind_incr
+        integer,                           intent(in)               :: box, total_nits, block_nits, first_iter
+        real,                              intent(in)               :: smpd, lpstart, lpstop
+        type(lp_crop_inf),                 intent(in)               :: master_lpinfo
+        type(refine3D_stage_plan_entry),   allocatable, intent(out) :: stages(:)
+        integer           :: find_start, find_stop, istage, nstages, nits_remaining
+        real              :: rfind, rfind_incr
         type(lp_crop_inf) :: stage_lpinfo(1)
         if( box < 8 ) THROW_HARD('frequency-stage planning requires box >= 8')
         if( smpd <= 0. ) THROW_HARD('frequency-stage planning requires positive sampling')

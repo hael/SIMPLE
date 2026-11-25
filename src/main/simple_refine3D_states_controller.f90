@@ -50,20 +50,20 @@ type :: refine3D_states_controller
     type(lp_crop_inf)               :: lpinfo_multi(2)
     type(string),       allocatable :: init_vols(:)
     type(class_sample), allocatable :: clssmp_units(:)
-    integer :: nstates_project    = 0
-    integer :: nptcls_eff         = 0
-    integer :: nptcls_per_iter    = 0
-    integer :: local_nspace_sub   = STAGE2_NSPACE_SUB
-    integer :: maxits_user        = 0
-    integer :: stage_cap          = 0
-    integer :: total_iter         = 0
-    integer :: gui_stage          = 0
-    real    :: local_ang_bound    = -1.
-    real    :: local_shift_bound  = -1.
-    logical :: l_maxits_defined   = .false.
-    logical :: l_nstates_on_cline = .false.
-    logical :: l_flex_init        = .false.
-    logical :: l_nsample_auto     = .false.
+    integer                         :: nstates_project    = 0
+    integer                         :: nptcls_eff         = 0
+    integer                         :: nptcls_per_iter    = 0
+    integer                         :: local_nspace_sub   = STAGE2_NSPACE_SUB
+    integer                         :: maxits_user        = 0
+    integer                         :: stage_cap          = 0
+    integer                         :: total_iter         = 0
+    integer                         :: gui_stage          = 0
+    real                            :: local_ang_bound    = -1.
+    real                            :: local_shift_bound  = -1.
+    logical                         :: l_maxits_defined   = .false.
+    logical                         :: l_nstates_on_cline = .false.
+    logical                         :: l_flex_init        = .false.
+    logical                         :: l_nsample_auto     = .false.
   contains
     procedure          :: new
     procedure          :: normalize_inputs
@@ -231,10 +231,10 @@ contains
     !> state=0/1 input: flex_pca labels the particles and delivers the state maps; flex_mean replaces the
     !! project consensus map flex would otherwise pick up
     subroutine initialize_states( self, params, cline, flex_mean )
-        class(refine3D_states_controller), intent(inout) :: self
-        class(parameters),                 intent(inout) :: params
-        class(cmdline),                    intent(inout) :: cline
-        class(string),           optional, intent(in)    :: flex_mean
+        class(refine3D_states_controller), intent(inout)        :: self
+        class(parameters),                 intent(inout)        :: params
+        class(cmdline),                    intent(inout)        :: cline
+        class(string),                     optional, intent(in) :: flex_mean
         if( .not. self%l_flex_init ) return
         call self%run_flex_pca(params, cline, flex_mean)
         call self%set_nstates(cline)
@@ -266,12 +266,12 @@ contains
     !> iters_done: refinement iterations the caller already ran, so the march numbers its own after them
     subroutine run_march( self, params, cline, xrefine3D, gui_comm, iters_done )
         use simple_strategy_sigma2, only: prepare_start_sigma_anchor
-        class(refine3D_states_controller), intent(inout) :: self
-        class(parameters),                 intent(in)    :: params
-        class(cmdline),                    intent(inout) :: cline
-        class(commander_base),             intent(inout) :: xrefine3D
-        class(gui_communicator),           intent(inout) :: gui_comm
-        integer,                 optional, intent(in)    :: iters_done
+        class(refine3D_states_controller), intent(inout)        :: self
+        class(parameters),                 intent(in)           :: params
+        class(cmdline),                    intent(inout)        :: cline
+        class(commander_base),             intent(inout)        :: xrefine3D
+        class(gui_communicator),           intent(inout)        :: gui_comm
+        integer,                           optional, intent(in) :: iters_done
         integer :: nspace_sub, stage_cap, stage2_niters
         call cline%set('prg', 'refine3D')
         self%total_iter = 0
@@ -366,7 +366,7 @@ contains
         class(cmdline),                    intent(inout) :: cline
         type(sp_project) :: proj
         type(string)     :: projfile
-        integer :: nactive
+        integer          :: nactive
         l_multi = .false.
         if( .not. cline%defined('projfile') ) THROW_HARD('projfile is required for '//self%label())
         projfile = cline%get_carg('projfile')
@@ -382,11 +382,11 @@ contains
     subroutine set_nstates( self, cline )
         class(refine3D_states_controller), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        type(sp_project) :: state_proj
-        type(string)     :: projfile
+        type(sp_project)     :: state_proj
+        type(string)         :: projfile
         integer, allocatable :: pops(:)
-        integer :: state, nactive_labels, nstates_cline, nstates_labels
-        logical :: l_has_state_labels, l_has_project_multistates
+        integer              :: state, nactive_labels, nstates_cline, nstates_labels
+        logical              :: l_has_state_labels, l_has_project_multistates
         if( .not. cline%defined('projfile') )then
             THROW_HARD('projfile is required for '//self%label())
         endif
@@ -431,8 +431,8 @@ contains
         class(parameters),                 intent(inout) :: params
         class(cmdline),                    intent(inout) :: cline
         type(sp_project) :: sampling_proj
-        integer :: maxits_auto, nsample_target, sweep_iters
-        real    :: update_frac_auto
+        integer          :: maxits_auto, nsample_target, sweep_iters
+        real             :: update_frac_auto
         nsample_target = params%nsample
         if( .not. self%policy%l_full_batch .and. nsample_target < 1 ) THROW_HARD('nsample must be >= 1 for '//self%label())
         call sampling_proj%read(params%projfile)
@@ -568,7 +568,7 @@ contains
         class(cmdline),                    intent(inout) :: cline
         type(commander_rec3D) :: xrec3D
         type(cmdline)         :: cline_rec3D
-        integer :: state
+        integer               :: state
         allocate(self%init_vols(self%nstates_project))
         if( self%project_state_volumes_compatible(params) )then
             do state = 1,self%nstates_project
@@ -600,8 +600,8 @@ contains
         class(refine3D_states_controller), intent(inout) :: self
         class(parameters),                 intent(in)    :: params
         type(sp_project) :: spproj
-        real    :: init_smpd
-        integer :: state, init_box
+        real             :: init_smpd
+        integer          :: state, init_box
         l_compatible = .false.
         call spproj%read_segment('out', params%projfile)
         do state = 1,self%nstates_project
@@ -635,16 +635,16 @@ contains
         use simple_commanders_flex_pca, only: commander_flex_pca
         use simple_state_weight_set,    only: discard_state_weight_set
         use simple_syslib,              only: simple_abspath
-        class(refine3D_states_controller), intent(inout) :: self
-        class(parameters),                 intent(in)    :: params
-        class(cmdline),                    intent(inout) :: cline
-        class(string),           optional, intent(in)    :: flex_mean
+        class(refine3D_states_controller), intent(inout)        :: self
+        class(parameters),                 intent(in)           :: params
+        class(cmdline),                    intent(inout)        :: cline
+        class(string),                     optional, intent(in) :: flex_mean
         type(commander_flex_pca) :: xflex
         type(cmdline)            :: cline_flex
         type(sp_project)         :: flex_proj
-        integer :: state, flex_box, nstates_requested, nstates_flex
-        integer :: nactive_labels, nstates_labels
-        real    :: flex_smpd
+        integer                  :: state, flex_box, nstates_requested, nstates_flex
+        integer                  :: nactive_labels, nstates_labels
+        real                     :: flex_smpd
         ! validate inputs
         nstates_requested = params%nstates
         if( nstates_requested < 3 ) THROW_HARD(self%label()//' flex_pca initialization requires nstates >= 3')
@@ -727,8 +727,8 @@ contains
         integer,                           intent(out)   :: niters
         real,                              intent(in)    :: overlap_target
         type(refine3D_stage_plan_entry), allocatable :: stages(:)
-        integer :: block, block_niters, block_minits, ramp_first, ramp_last
-        real    :: w_first, w_last
+        integer                                      :: block, block_niters, block_minits, ramp_first, ramp_last
+        real                                         :: w_first, w_last
         niters = 0
         if( max_total_iters < min_total_iters )then
             THROW_HARD(self%label()//' frequency-stage cap is below its required minimum')
@@ -808,9 +808,9 @@ contains
         real,                              intent(in)    :: stage_overlap_target
         type(sp_project) :: gui_proj
         type(string)     :: gui_stage_suffix, gui_vol, gui_stage_vol, gui_stage_lp
-        integer :: stage_start, stage_limit, gui_box, state
-        real    :: gui_smpd, gui_lp, state_overlap
-        logical :: l_gui_comm_active
+        integer          :: stage_start, stage_limit, gui_box, state
+        real             :: gui_smpd, gui_lp, state_overlap
+        logical          :: l_gui_comm_active
         l_gui_comm_active = self%policy%l_gui_stages .and. params%niceserver .ne. "" .and. params%niceprocid > 0
         niters            = 0
         state_overlap     = 0.
@@ -947,10 +947,10 @@ contains
     real function read_state_overlap( self, params ) result( overlap )
         class(refine3D_states_controller), intent(in) :: self
         class(parameters),                 intent(in) :: params
-        type(sp_project) :: state_proj
+        type(sp_project)     :: state_proj
         real,    allocatable :: states(:), mi_state(:), sampled(:)
         logical, allocatable :: mask(:)
-        real :: sampled_lb
+        real                 :: sampled_lb
         overlap = 0.
         call state_proj%read_segment('ptcl3D', params%projfile)
         if( .not. state_proj%os_ptcl3D%isthere('mi_state') )then

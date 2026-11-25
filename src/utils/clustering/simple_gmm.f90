@@ -25,7 +25,7 @@ real(dp), parameter :: GMM_MERGE_D2    = 1.0_dp !< squared Mahalanobis separatio
 
 type gmm
     private
-    integer               :: n = 0, d = 0, k = 0
+    integer               :: n          = 0, d = 0, k = 0
     integer               :: maxits     = 0
     integer               :: niters     = 0       !< EM iterations of the last fit
     integer               :: nrespawn   = 0       !< respawns of the last fit
@@ -42,22 +42,22 @@ type gmm
     real(dp), allocatable :: pival(:)             !< (k) mixing proportions
     real(dp), allocatable :: resp(:,:)            !< (n,k) responsibilities
     real(dp), allocatable :: nresp(:)             !< (k) responsibility mass
-    logical               :: exists = .false.
+    logical               :: exists     = .false.
   contains
-    procedure :: new
-    procedure :: fit
-    procedure :: get_resp
-    procedure :: get_labels
-    procedure :: get_means
-    procedure :: get_cov
-    procedure :: get_pi
-    procedure :: get_mass
-    procedure :: get_loglik
-    procedure :: get_niters
-    procedure :: get_bic
-    procedure :: get_icl
-    procedure :: get_pairsep
-    procedure :: kill
+    procedure          :: new
+    procedure          :: fit
+    procedure          :: get_resp
+    procedure          :: get_labels
+    procedure          :: get_means
+    procedure          :: get_cov
+    procedure          :: get_pi
+    procedure          :: get_mass
+    procedure          :: get_loglik
+    procedure          :: get_niters
+    procedure          :: get_bic
+    procedure          :: get_icl
+    procedure          :: get_pairsep
+    procedure          :: kill
     procedure, private :: order_by_population
 end type gmm
 
@@ -65,16 +65,16 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, X, k, means0, reg, tol, maxits, pi_floor, resp_floor, respawn )
-        class(gmm),         intent(inout) :: self
-        real(dp),           intent(in)    :: X(:,:)       !< (n,d) points
-        integer,            intent(in)    :: k            !< nr of components
-        real(dp),           intent(in)    :: means0(:,:)  !< (d,k) initial means
-        real(dp),           intent(in)    :: reg          !< ridge of the tied covariance
-        real(dp),           intent(in)    :: tol          !< relative log-likelihood change of convergence
-        integer,            intent(in)    :: maxits       !< EM iteration cap
-        real(dp), optional, intent(in)    :: pi_floor     !< mixing-proportion floor (default none)
-        real(dp), optional, intent(in)    :: resp_floor   !< responsibility floor of get_resp (default none)
-        logical,  optional, intent(in)    :: respawn      !< respawn redundant components (default yes)
+        class(gmm),         intent(inout)        :: self
+        real(dp),           intent(in)           :: X(:,:)      !< (n,d) points
+        integer,            intent(in)           :: k           !< nr of components
+        real(dp),           intent(in)           :: means0(:,:) !< (d,k) initial means
+        real(dp),           intent(in)           :: reg         !< ridge of the tied covariance
+        real(dp),           intent(in)           :: tol         !< relative log-likelihood change of convergence
+        integer,            intent(in)           :: maxits      !< EM iteration cap
+        real(dp),           optional, intent(in) :: pi_floor    !< mixing-proportion floor (default none)
+        real(dp),           optional, intent(in) :: resp_floor  !< responsibility floor of get_resp (default none)
+        logical,            optional, intent(in) :: respawn     !< respawn redundant components (default yes)
         call self%kill
         self%n = size(X,1)
         self%d = size(X,2)
@@ -103,8 +103,8 @@ contains
         class(gmm), intent(inout) :: self
         logical,    intent(out)   :: ok
         real(dp), allocatable :: Sinv(:,:), Sxx(:,:), Smu(:,:), mSm(:), xbar(:), evwork(:,:), ev(:), evec(:,:)
-        real(dp) :: lp(self%k), xSx, xSm, lse, ll, prev_ll, logdet, dmin, d2pair
-        integer  :: i, q, r, c, it, nrot, errflg, kmin, kdrop, iworst
+        real(dp)              :: lp(self%k), xSx, xSm, lse, ll, prev_ll, logdet, dmin, d2pair
+        integer               :: i, q, r, c, it, nrot, errflg, kmin, kdrop, iworst
         if( .not. self%exists ) THROW_HARD('object does not exist; fit')
         ok = .false.
         self%l_fitted = .false.
@@ -240,7 +240,7 @@ contains
         class(gmm), intent(inout) :: self
         integer,  allocatable :: cnt(:), first_member(:), order(:)
         real(dp), allocatable :: tmp2(:,:), tmp1(:)
-        integer :: i, j, c, tmp
+        integer               :: i, j, c, tmp
         allocate(cnt(self%k), source=0)
         allocate(first_member(self%k), source=huge(1))
         do i = self%n, 1, -1
@@ -383,8 +383,8 @@ contains
         real(dp),   intent(out) :: sep(:,:) !< (k,k)
         logical,    intent(out) :: ok
         real(dp), allocatable :: Sinv(:,:), dev(:)
-        real(dp) :: d2pair
-        integer  :: c, r, q, errflg
+        real(dp)              :: d2pair
+        integer               :: c, r, q, errflg
         sep = -1._dp
         ok  = .false.
         if( .not. self%l_fitted ) return

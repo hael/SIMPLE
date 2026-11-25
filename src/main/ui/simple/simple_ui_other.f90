@@ -4,7 +4,7 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('other', 'Other Utilities', 190)
-type(ui_program), target :: cif2pdb
+type(ui_program),          target    :: cif2pdb
 
 contains
 

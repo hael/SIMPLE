@@ -23,13 +23,13 @@ real(dp),         parameter :: COV_XFSC_H_FLOOR      = 1.0d-10
 !> One per-iteration record (layout COV_XFSC_VERSION). Unmatched components appear in the per-fit
 !! sampling blocks (h_a/h_b) but not in the matched blocks (match_*/fsc_cross).
 type crossfsc_record
-    integer :: it_eff  = 0                   !< global iteration stamp (never a worker-local counter)
-    integer :: ncomp_a = 0, ncomp_b = 0      !< per-fit delivered ranks
-    integer :: kmatch  = 0                   !< number of matched pairs
-    integer, allocatable :: match_a(:), match_b(:)  !< pairing (component indices)
-    real,    allocatable :: fsc_cross(:,:)          !< (filtsz,kmatch) cross-fit FSC curves (sign resolved)
-    real,    allocatable :: h_a(:,:)                !< (filtsz,ncomp_a) fit A sampling profiles
-    real,    allocatable :: h_b(:,:)                !< (filtsz,ncomp_b)
+    integer              :: it_eff  = 0              !< global iteration stamp (never a worker-local counter)
+    integer              :: ncomp_a = 0, ncomp_b = 0 !< per-fit delivered ranks
+    integer              :: kmatch  = 0              !< number of matched pairs
+    integer, allocatable :: match_a(:), match_b(:)   !< pairing (component indices)
+    real,    allocatable :: fsc_cross(:,:)           !< (filtsz,kmatch) cross-fit FSC curves (sign resolved)
+    real,    allocatable :: h_a(:,:)                 !< (filtsz,ncomp_a) fit A sampling profiles
+    real,    allocatable :: h_b(:,:)                 !< (filtsz,ncomp_b)
   contains
     procedure :: kill => crossfsc_kill_record
 end type crossfsc_record
@@ -38,9 +38,9 @@ end type crossfsc_record
 !! stream unformatted -- the write_embedding_cache idiom), so the artifact is restart-complete:
 !! on master restart the series reloads exactly.
 type crossfsc_file
-    integer :: box_crop = 0
-    integer :: filtsz   = 0   !< fdim(box_crop)-1
-    integer :: nrec     = 0
+    integer                            :: box_crop = 0
+    integer                            :: filtsz   = 0 !< fdim(box_crop)-1
+    integer                            :: nrec     = 0
     type(crossfsc_record), allocatable :: recs(:)
   contains
     procedure :: load        => crossfsc_load
@@ -58,9 +58,9 @@ contains
     !! Hard-fails on magic and version mismatch: any layout change bumps COV_XFSC_VERSION.
     subroutine crossfsc_load( self, found )
         class(crossfsc_file), intent(inout) :: self
-        logical,             intent(out)   :: found
+        logical,              intent(out)   :: found
         character(len=len(COV_XFSC_MAGIC)) :: magic
-        integer :: funit, io_stat, ver, irec
+        integer                            :: funit, io_stat, ver, irec
         call self%kill
         found = .false.
         if( .not. file_exists(string(COV_XFSC_FNAME)) ) return
@@ -117,7 +117,7 @@ contains
     subroutine crossfsc_write( self )
         class(crossfsc_file), intent(in) :: self
         type(string) :: fname, tmp_fname
-        integer :: funit, io_stat, irec
+        integer      :: funit, io_stat, irec
         fname     = string(COV_XFSC_FNAME)
         tmp_fname = fname//'.tmp'
         call fopen(funit, file=tmp_fname, access='STREAM', action='WRITE', status='REPLACE', &
@@ -162,7 +162,7 @@ contains
         class(crossfsc_file),  intent(inout) :: self
         type(crossfsc_record), intent(in)    :: rec
         type(crossfsc_record), allocatable   :: tmp(:)
-        integer :: nkeep, irec
+        integer                              :: nkeep, irec
         nkeep = 0
         do irec = 1, self%nrec
             if( self%recs(irec)%it_eff < rec%it_eff )then
@@ -190,7 +190,7 @@ contains
     !! consume only records stamped <= t-1, so callers pass it = t-1). 0 when none qualifies.
     integer function crossfsc_latest_upto( self, it ) result( irec )
         class(crossfsc_file), intent(in) :: self
-        integer,             intent(in) :: it
+        integer,              intent(in) :: it
         integer :: i
         irec = 0
         do i = 1, self%nrec

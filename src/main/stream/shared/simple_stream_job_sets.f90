@@ -88,11 +88,11 @@ contains
     !! projname, projfile, and items 1 to @p nitems. @p source, when given, is recorded in the
     !! set as its origin and returned by restore().
     subroutine write_set( self, set_proj, cline_worker, nitems, source )
-        class(stream_job_sets),  intent(inout) :: self
-        class(sp_project),       intent(inout) :: set_proj
-        class(cmdline),          intent(inout) :: cline_worker
-        integer,                 intent(in)    :: nitems
-        class(string), optional, intent(in)    :: source
+        class(stream_job_sets),  intent(inout)        :: self
+        class(sp_project),       intent(inout)        :: set_proj
+        class(cmdline),          intent(inout)        :: cline_worker
+        integer,                 intent(in)           :: nitems
+        class(string),           optional, intent(in) :: source
         type(string) :: projname, projfile
         self%counter = self%counter + 1
         projname     = int2str_pad(self%counter, self%numlen)
@@ -135,12 +135,12 @@ contains
     !! and the items of the jobs that failed (the items each set's job was given, fromp to top:
     !! the movies of a preprocessing set, partial or not).
     subroutine collect( self, qenv, done, nfailed_items )
-        class(stream_job_sets),    intent(inout) :: self
-        class(qsys_env),           intent(inout) :: qenv
-        type(string), allocatable, intent(inout) :: done(:)
-        integer,                   intent(out)   :: nfailed_items
+        class(stream_job_sets),    intent(inout)              :: self
+        class(qsys_env),           intent(inout)              :: qenv
+        type(string),              allocatable, intent(inout) :: done(:)
+        integer,                   intent(out)                :: nfailed_items
         class(cmdline), allocatable :: done_clines(:), failed_clines(:)
-        integer :: i, n
+        integer                     :: i, n
         if( allocated(done) ) deallocate(done)
         allocate(done(0))
         nfailed_items = 0
@@ -181,13 +181,13 @@ contains
     !! completed or left unfinished; a job folder holding unfinished sets is set aside, since a
     !! job left running reads its set by path, and the job folder is made afresh.
     subroutine restore( self, completed, sources )
-        class(stream_job_sets),              intent(inout) :: self
-        type(string), allocatable,           intent(inout) :: completed(:)
-        type(string), allocatable, optional, intent(inout) :: sources(:)
+        class(stream_job_sets),              intent(inout)                        :: self
+        type(string),                        allocatable,           intent(inout) :: completed(:)
+        type(string),                        allocatable, optional, intent(inout) :: sources(:)
         type(string),     allocatable :: unfinished(:)
-        type(sp_project) :: proj
-        integer          :: i
-        logical          :: l_unfinished
+        type(sp_project)              :: proj
+        integer                       :: i
+        logical                       :: l_unfinished
         call simple_list_files_regexp(self%completed_dir, '\.simple$', completed)
         if( .not. allocated(completed) ) allocate(completed(0))
         call simple_list_files_regexp(self%job_dir, '\.simple$', unfinished)

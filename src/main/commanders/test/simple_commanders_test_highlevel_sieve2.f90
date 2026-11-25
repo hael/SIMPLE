@@ -19,40 +19,40 @@ contains
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
         class(commander_test_particle_sieving_2), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
-        integer,  parameter :: NPTCLS         = 2000
-        integer,  parameter :: NSTKS          = 20     !< one stack per micrograph, 100 particles each
-        integer,  parameter :: NSEED_MICS     = 5      !< the seed's stacks, ended by its particle cap
-        integer,  parameter :: NMICS          = 10     !< nmics, which the cap comes before
-        integer,  parameter :: NCLS           = 10
-        integer,  parameter :: BATCH_NPTCLS   = 300    !< three stacks, so that every batch closes at it
-        integer,  parameter :: ROUND_NBATCHES = 2
-        integer,  parameter :: TRAIN_NPTCLS   = 400
-        integer,  parameter :: NSEED_PTCLS    = NSEED_MICS * (NPTCLS / NSTKS)
-        integer,  parameter :: SEED_NPTCLS    = NSEED_PTCLS - (NPTCLS / NSTKS) / 2 !< the cap, reached by the fifth stack
-        integer,  parameter :: NBATCHES       = (NPTCLS - NSEED_PTCLS) / BATCH_NPTCLS
-        integer,  parameter :: NROUNDS        = (NBATCHES + ROUND_NBATCHES - 1) / ROUND_NBATCHES
-        real,     parameter :: SNR            = 0.5
-        real,     parameter :: SHERR_PX       = 6.  !< the planted shifts' range (pixels at 2.2 A), the class_student test's
-        real,     parameter :: HALVES_IMBALANCE = 0.05 !< the even/odd partition's own warning bound (IMBALANCE_WARN)
+        integer,  parameter :: NPTCLS           = 2000
+        integer,  parameter :: NSTKS            = 20                                 !< one stack per micrograph, 100 particles each
+        integer,  parameter :: NSEED_MICS       = 5                                  !< the seed's stacks, ended by its particle cap
+        integer,  parameter :: NMICS            = 10                                 !< nmics, which the cap comes before
+        integer,  parameter :: NCLS             = 10
+        integer,  parameter :: BATCH_NPTCLS     = 300                                !< three stacks, so that every batch closes at it
+        integer,  parameter :: ROUND_NBATCHES   = 2
+        integer,  parameter :: TRAIN_NPTCLS     = 400
+        integer,  parameter :: NSEED_PTCLS      = NSEED_MICS * (NPTCLS / NSTKS)
+        integer,  parameter :: SEED_NPTCLS      = NSEED_PTCLS - (NPTCLS / NSTKS) / 2 !< the cap, reached by the fifth stack
+        integer,  parameter :: NBATCHES         = (NPTCLS - NSEED_PTCLS) / BATCH_NPTCLS
+        integer,  parameter :: NROUNDS          = (NBATCHES + ROUND_NBATCHES - 1) / ROUND_NBATCHES
+        real,     parameter :: SNR              = 0.5
+        real,     parameter :: SHERR_PX         = 6.                                 !< the planted shifts' range (pixels at 2.2 A), the class_student test's
+        real,     parameter :: HALVES_IMBALANCE = 0.05                               !< the even/odd partition's own warning bound (IMBALANCE_WARN)
         !> frozen between the p_junk values the fixture network gives the miniature's classes, so both labels occur
-        real(dp), parameter :: JUNK_THRES     = 0.503d0
-        character(len=*), parameter :: WEIGHTS = SIMPLE_SOURCE_PATH//'/testdata/cavg_cnn/weights.raw'
+        real(dp),           parameter   :: JUNK_THRES     = 0.503d0
+        character(len=*),   parameter   :: WEIGHTS        = SIMPLE_SOURCE_PATH//'/testdata/cavg_cnn/weights.raw'
         class(parameters),  allocatable :: params, params_run
         class(ptcl_sieve2), allocatable :: sieve
-        type(sieve2_settings)   :: settings
-        type(state_fixture)     :: fix
-        type(test_gate)         :: gate
-        type(sp_project)        :: proj
-        type(cmdline)           :: cl
-        type(string)            :: cwd_saved, root, projfile, projname, edir, fname
-        integer(timer_int_kind) :: t0
-        integer, allocatable    :: lab_pop(:)
-        real(real32), allocatable :: spectra(:,:)
-        character(len=STDLEN)   :: msg
-        logical, allocatable    :: lab_bad(:)
-        real    :: wall
-        integer :: status, ib, ir, n, nsum, nshort, iptcl, icls, nacc, nwrong, ir_bad(NROUNDS), neo(2)
-        logical :: l_ok, l_active, l_halves, l_found
+        type(sieve2_settings)           :: settings
+        type(state_fixture)             :: fix
+        type(test_gate)                 :: gate
+        type(sp_project)                :: proj
+        type(cmdline)                   :: cl
+        type(string)                    :: cwd_saved, root, projfile, projname, edir, fname
+        integer(timer_int_kind)         :: t0
+        integer,            allocatable :: lab_pop(:)
+        real(real32),       allocatable :: spectra(:,:)
+        character(len=STDLEN)           :: msg
+        logical,            allocatable :: lab_bad(:)
+        real                            :: wall
+        integer                         :: status, ib, ir, n, nsum, nshort, iptcl, icls, nacc, nwrong, ir_bad(NROUNDS), neo(2)
+        logical                         :: l_ok, l_active, l_halves, l_found
         allocate(params)
         call simple_getcwd(cwd_saved)
         root = filepath(cwd_saved, 'test_particle_sieving_2_mini_'//int2str(get_process_id()))
@@ -221,7 +221,7 @@ contains
             class(string), intent(in)  :: pname
             integer,       intent(out) :: nsel, nhalves(2)
             type(sp_project) :: p
-            integer :: i, eo
+            integer          :: i, eo
             call p%read_segment('ptcl2D', pname)
             nsel    = 0
             nhalves = 0
@@ -236,13 +236,13 @@ contains
 
         !> a labels table's populations and junk flags, by class
         subroutine read_labels( tname, pops, bad, found )
-            character(len=*),     intent(in)  :: tname
-            integer, allocatable, intent(out) :: pops(:)
-            logical, allocatable, intent(out) :: bad(:)
-            logical,              intent(out) :: found
+            character(len=*),     intent(in)               :: tname
+            integer,              allocatable, intent(out) :: pops(:)
+            logical,              allocatable, intent(out) :: bad(:)
+            logical,              intent(out)              :: found
             character(len=256) :: line
-            real(dp) :: pj, ps, pl
-            integer  :: u, ios, c, pop, ie, ibad
+            real(dp)           :: pj, ps, pl
+            integer            :: u, ios, c, pop, ie, ibad
             allocate(pops(NCLS), source=0)
             allocate(bad(NCLS), source=.false.)
             found = file_exists(tname)

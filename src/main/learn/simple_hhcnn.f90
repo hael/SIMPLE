@@ -39,26 +39,26 @@ public :: CNN_NBLK, CNN_NREAD, CNN_KREAD, CNN_MREAD, CNN_NCHUNK, CNN_WEIGHTS_VER
 private
 #include "simple_local_flags.inc"
 
-integer,        parameter :: CNN_NBLK            = 3       !< convolution blocks
-integer,        parameter :: CNN_NREAD           = 8       !< the readout map's channels
-integer,        parameter :: CNN_KREAD           = 8       !< its ring bands (fewer when the last block has fewer rings)
-integer,        parameter :: CNN_MREAD           = 16      !< the templates' band limit: full-ring angular orders 0..CNN_MREAD
+integer,        parameter :: CNN_NBLK            = 3                          !< convolution blocks
+integer,        parameter :: CNN_NREAD           = 8                          !< the readout map's channels
+integer,        parameter :: CNN_KREAD           = 8                          !< its ring bands (fewer when the last block has fewer rings)
+integer,        parameter :: CNN_MREAD           = 16                         !< the templates' band limit: full-ring angular orders 0..CNN_MREAD
 integer,        parameter :: CNN_LT              = 2 * CNN_NREAD * CNN_KREAD  !< a template's rows per order (part, channel, band)
 integer,        parameter :: CNN_NQ              = 1 + 2 * CNN_MREAD          !< a class's score coefficients: Re P(0), Re P(1..), Im P(1..)
-integer,        parameter :: CNN_NCHUNK          = 96      !< a mini-batch's target chunk count: the samples per chunk follow the batch alone, never the team; a batch of 256 gives 86 chunks, enough for a 24-thread team of fast and slow cores to balance over dynamically scheduled rounds
-integer,        parameter :: CNN_SLICE           = 4096    !< the templates' Adam step's unit: a slice of the templates per task
-integer,        parameter :: CNN_LOOP_ROWS       = 64      !< without a team-safe BLAS: the rows of a transposed product per block (by 256 inner terms at most: 64 kB on the stack)
-integer,        parameter :: CNN_MATMUL_ROWS     = 16      !< without a team-safe BLAS: a transposed product of fewer rows takes matmul in any build (the loops' vectors are too short)
-integer,        parameter :: CNN_TILE            = 128     !< blocks 2 and 3 build their im2col matrix in tiles of this many columns, which stay in a core's cache (0.6 MB at most)
-integer,        parameter :: CNN_TCOLS           = 64      !< the templates' gradient's unit: one order's product over the batch for this many classes per task (eight tasks per order at 500 classes)
+integer,        parameter :: CNN_NCHUNK          = 96                         !< a mini-batch's target chunk count: the samples per chunk follow the batch alone, never the team; a batch of 256 gives 86 chunks, enough for a 24-thread team of fast and slow cores to balance over dynamically scheduled rounds
+integer,        parameter :: CNN_SLICE           = 4096                       !< the templates' Adam step's unit: a slice of the templates per task
+integer,        parameter :: CNN_LOOP_ROWS       = 64                         !< without a team-safe BLAS: the rows of a transposed product per block (by 256 inner terms at most: 64 kB on the stack)
+integer,        parameter :: CNN_MATMUL_ROWS     = 16                         !< without a team-safe BLAS: a transposed product of fewer rows takes matmul in any build (the loops' vectors are too short)
+integer,        parameter :: CNN_TILE            = 128                        !< blocks 2 and 3 build their im2col matrix in tiles of this many columns, which stay in a core's cache (0.6 MB at most)
+integer,        parameter :: CNN_TCOLS           = 64                         !< the templates' gradient's unit: one order's product over the batch for this many classes per task (eight tasks per order at 500 classes)
 integer(int64), parameter :: CNN_WEIGHTS_MAGIC   = 5417389302_int64
 integer(int64), parameter :: CNN_WEIGHTS_VERSION = 2_int64
-real(sp),       parameter :: SCALE_INIT_LOGIT    = 8.      !< the learned scale starts so that a class's own reprojection scores this logit on average
-real(sp),       parameter :: GATE_DELTA2  = 1.e-12  !< the modulus is sqrt(re^2 + im^2 + delta^2): the gate is smooth at zero
-real(sp),       parameter :: NORM_EPS     = 1.e-3   !< the first block's normaliser: the filter's energy under the CTF squared plus this share of its band mean
-real(sp),       parameter :: ADAM_BETA1   = 0.9
-real(sp),       parameter :: ADAM_BETA2   = 0.999
-real(sp),       parameter :: ADAM_EPS     = 1.e-8
+real(sp),       parameter :: SCALE_INIT_LOGIT    = 8.                         !< the learned scale starts so that a class's own reprojection scores this logit on average
+real(sp),       parameter :: GATE_DELTA2         = 1.e-12                     !< the modulus is sqrt(re^2 + im^2 + delta^2): the gate is smooth at zero
+real(sp),       parameter :: NORM_EPS            = 1.e-3                      !< the first block's normaliser: the filter's energy under the CTF squared plus this share of its band mean
+real(sp),       parameter :: ADAM_BETA1          = 0.9
+real(sp),       parameter :: ADAM_BETA2          = 0.999
+real(sp),       parameter :: ADAM_EPS            = 1.e-8
 ! the products' arithmetic is a property of the build and the shape, never of the team, so that a step is the same at
 ! any thread count: sgemm where the build's BLAS stays on the calling thread inside teams; otherwise the faster of the
 ! explicit loops and the matmul intrinsic (the runtime's single-threaded product, optimised even in a Debug build,
@@ -77,7 +77,7 @@ logical, parameter :: L_MATMUL_PRODUCTS = .false.
 !> one convolution block: real kernels w(cout, 9 cin) over the 3 by 3 taps (ci fastest, then the angle offset,
 !! then the ring offset), the modulus gate's bias b(cout), and their Adam moments
 type :: conv_layer
-    integer :: cin = 0, cout = 0, nkin = 0, nkout = 0, npos = 0
+    integer               :: cin = 0, cout = 0, nkin = 0, nkout = 0, npos = 0
     real(sp), allocatable :: w(:,:), b(:)
     real(sp), allocatable :: mw(:,:), vw(:,:), mb(:), vb(:)
 end type conv_layer
@@ -86,50 +86,50 @@ end type conv_layer
 !! angular harmonic domain as one array indexed by tix (part, channel, band, order 0..CNN_MREAD, class; the order-0
 !! imaginary part is never used), the scale, and their Adam moments
 type :: readout_layer
-    integer :: cout = 0, kread = 0
+    integer               :: cout  = 0, kread = 0
     integer,  allocatable :: kb0(:), kb1(:)        !< (kread) the ring bands' first and last ring of the last block
     real(sp), allocatable :: wread(:,:), mwread(:,:), vwread(:,:)
     real(sp), allocatable :: tmpl(:), mtmpl(:), vtmpl(:)
-    real(sp), allocatable :: rotb(:,:)          !< (nrots, CNN_NQ) the rotation basis: S(r) = rotb(r,:) . the class's coefficients
-    real(sp), allocatable :: rotbt(:,:)         !< (CNN_NQ, nrots) its transpose (the log-sum-exp readout's backward)
+    real(sp), allocatable :: rotb(:,:)             !< (nrots, CNN_NQ) the rotation basis: S(r) = rotb(r,:) . the class's coefficients
+    real(sp), allocatable :: rotbt(:,:)            !< (CNN_NQ, nrots) its transpose (the log-sum-exp readout's backward)
     real(sp)              :: scale = 1., mscale = 0., vscale = 0.
 end type readout_layer
 
 !> one block's activations of one sample, forward and backward
 type :: blk_buf
-    real(sp), allocatable :: col(:,:)       !< (9 cin, 2 npos) the im2col matrix
-    real(sp), allocatable :: raw(:,:,:,:)   !< (cout, pftsz, nkin, 2) the first block's convolution before its normalisation
-    real(sp), allocatable :: dnorm(:,:)     !< (cout, nkin) the first block's normaliser per channel and ring
-    real(sp), allocatable :: pre(:,:,:,:)   !< (cout, pftsz, nkin, 2) the convolution's output (normalised in block 1)
-    real(sp), allocatable :: gated(:,:,:,:) !< after the modulus gate
-    real(sp), allocatable :: pooled(:,:,:,:) !< (cout, pftsz, nkout, 2) after the ring pooling, the next block's input
+    real(sp), allocatable :: col(:,:)                                         !< (9 cin, 2 npos) the im2col matrix
+    real(sp), allocatable :: raw(:,:,:,:)                                     !< (cout, pftsz, nkin, 2) the first block's convolution before its normalisation
+    real(sp), allocatable :: dnorm(:,:)                                       !< (cout, nkin) the first block's normaliser per channel and ring
+    real(sp), allocatable :: pre(:,:,:,:)                                     !< (cout, pftsz, nkin, 2) the convolution's output (normalised in block 1)
+    real(sp), allocatable :: gated(:,:,:,:)                                   !< after the modulus gate
+    real(sp), allocatable :: pooled(:,:,:,:)                                  !< (cout, pftsz, nkout, 2) after the ring pooling, the next block's input
     real(sp), allocatable :: dpre(:,:,:,:), dgated(:,:,:,:), dpooled(:,:,:,:) !< their gradients
-    real(sp), allocatable :: dcol(:,:)      !< (9 cin, 2 npos)
+    real(sp), allocatable :: dcol(:,:)                                        !< (9 cin, 2 npos)
 end type blk_buf
 
 !> one thread's workspace
 type :: cnn_work
-    type(blk_buf) :: blk(CNN_NBLK)
-    real(sp), allocatable :: fmap(:,:,:,:)  !< (CNN_NREAD, pftsz, kread, 2) the readout map on the half ring
-    real(sp), allocatable :: fhat(:,:,:,:)  !< (2, CNN_NREAD, kread, 0:CNN_MREAD) its full-ring angular spectrum (Re, Im)
-    real(sp), allocatable :: dfmap(:,:,:,:), dfhat(:,:,:,:) !< their gradients
+    type(blk_buf)         :: blk(CNN_NBLK)
+    real(sp), allocatable :: fmap(:,:,:,:)                           !< (CNN_NREAD, pftsz, kread, 2) the readout map on the half ring
+    real(sp), allocatable :: fhat(:,:,:,:)                           !< (2, CNN_NREAD, kread, 0:CNN_MREAD) its full-ring angular spectrum (Re, Im)
+    real(sp), allocatable :: dfmap(:,:,:,:), dfhat(:,:,:,:)          !< their gradients
     real(sp), allocatable :: smax(:), logits(:), prob(:), dlogits(:) !< (nclasses) the maximised scores, the logits, the posterior
-    integer,  allocatable :: rbest(:)       !< (nclasses) the maximising rotation of each class, 1..nrots
-    logical,  allocatable :: refl(:)        !< (nclasses) whether the reflected map scored it
-    real(sp), allocatable :: g(:)           !< (nk) the ring-averaged CTF squared of the sample (the shell weights are in the tensor)
-    real(sp), allocatable :: wnorm(:)       !< (cout1) the first block's filter norms
-    real(sp), allocatable :: nscale(:,:)    !< (cout1, nk) the first block's normalisation per channel and ring, wnorm / dnorm
-    real(sp), allocatable :: cosm(:,:), sinm(:,:) !< (pftsz, 0:CNN_MREAD) the half-ring angles' full-ring harmonics
-    real(sp), allocatable :: cosr(:,:), sinr(:,:) !< (nrots, 0:CNN_MREAD) the rotation grid's
-    real(sp), allocatable :: xs(:,:,:)      !< (CNN_LT, 4, 0:CNN_MREAD) per order the spectrum as four columns: F, its i-rotated F, their reflections
-    real(sp), allocatable :: pq(:,:,:)      !< (4, nclasses, 0:CNN_MREAD) per order the classes' products with the four columns
-    real(sp), allocatable :: q(:,:)         !< (CNN_NQ, 2 nclasses) the score coefficients of the map's classes, then the reflection's
-    real(sp), allocatable :: scores(:,:)    !< (nrots, 2 nclasses) every class's score at every rotation, the map's then the reflection's
-    real(sp), allocatable :: pis(:,:)       !< (nrots, 2 nclasses) the log-sum-exp readout's posterior over each class's rotations
-    real(sp), allocatable :: dsr(:,:)       !< (nrots, 2 nclasses) the scores' gradient (the log-sum-exp readout)
-    real(sp), allocatable :: gqc(:,:)       !< (CNN_NQ, 2 nclasses) the score coefficients' gradient (the log-sum-exp readout)
-    real(sp), allocatable :: gq(:,:,:)      !< (4, nclasses, 0:CNN_MREAD) the products' gradients through the maximising rotations
-    real(sp), allocatable :: yq(:,:)        !< (CNN_LT, 4) one order's templates times those gradients
+    integer,  allocatable :: rbest(:)                                !< (nclasses) the maximising rotation of each class, 1..nrots
+    logical,  allocatable :: refl(:)                                 !< (nclasses) whether the reflected map scored it
+    real(sp), allocatable :: g(:)                                    !< (nk) the ring-averaged CTF squared of the sample (the shell weights are in the tensor)
+    real(sp), allocatable :: wnorm(:)                                !< (cout1) the first block's filter norms
+    real(sp), allocatable :: nscale(:,:)                             !< (cout1, nk) the first block's normalisation per channel and ring, wnorm / dnorm
+    real(sp), allocatable :: cosm(:,:), sinm(:,:)                    !< (pftsz, 0:CNN_MREAD) the half-ring angles' full-ring harmonics
+    real(sp), allocatable :: cosr(:,:), sinr(:,:)                    !< (nrots, 0:CNN_MREAD) the rotation grid's
+    real(sp), allocatable :: xs(:,:,:)                               !< (CNN_LT, 4, 0:CNN_MREAD) per order the spectrum as four columns: F, its i-rotated F, their reflections
+    real(sp), allocatable :: pq(:,:,:)                               !< (4, nclasses, 0:CNN_MREAD) per order the classes' products with the four columns
+    real(sp), allocatable :: q(:,:)                                  !< (CNN_NQ, 2 nclasses) the score coefficients of the map's classes, then the reflection's
+    real(sp), allocatable :: scores(:,:)                             !< (nrots, 2 nclasses) every class's score at every rotation, the map's then the reflection's
+    real(sp), allocatable :: pis(:,:)                                !< (nrots, 2 nclasses) the log-sum-exp readout's posterior over each class's rotations
+    real(sp), allocatable :: dsr(:,:)                                !< (nrots, 2 nclasses) the scores' gradient (the log-sum-exp readout)
+    real(sp), allocatable :: gqc(:,:)                                !< (CNN_NQ, 2 nclasses) the score coefficients' gradient (the log-sum-exp readout)
+    real(sp), allocatable :: gq(:,:,:)                               !< (4, nclasses, 0:CNN_MREAD) the products' gradients through the maximising rotations
+    real(sp), allocatable :: yq(:,:)                                 !< (CNN_LT, 4) one order's templates times those gradients
 end type cnn_work
 
 !> one block's gradient sums
@@ -147,74 +147,74 @@ end type dw_set
 !! the chunk slots of the team that ran them (per step the team times its rounds of chunks), so that
 !! nchunks / nslots is the share of the team's threads the chunks kept busy
 type :: hhcnn_profile
-    integer(int64) :: nsteps = 0, nsamples_train = 0, nsamples_eval = 0
+    integer(int64) :: nsteps  = 0, nsamples_train = 0, nsamples_eval = 0
     integer(int64) :: nchunks = 0, nslots = 0
-    integer        :: nthr = 0              !< the team of the last step
+    integer        :: nthr    = 0           !< the team of the last step
     real(dp)       :: rt_grad = 0.d0, rt_step = 0.d0, rt_eval = 0.d0
 end type hhcnn_profile
 
 !> one chunk's gradient sums and loss
 type :: cnn_grad
-    type(blk_grad) :: blk(CNN_NBLK)
+    type(blk_grad)        :: blk(CNN_NBLK)
     real(sp), allocatable :: dwread(:,:)
     real(sp)              :: dscale = 0.
-    real(dp)              :: loss  = 0.d0
-    integer               :: nmode = 0      !< samples whose predicted mode is the target's
+    real(dp)              :: loss   = 0.d0
+    integer               :: nmode  = 0     !< samples whose predicted mode is the target's
 end type cnn_grad
 
 type :: hhcnn
     private
-    integer :: pftsz = 0, nrots = 0, nk = 0, nclasses = 0, width = 0, nfeat = 0, ntmpl = 0
-    integer :: adam_step = 0
-    logical :: l_refl = .true.   !< a class also scores the reflected map (the pose student's mirror pairs); off for classes without mirrors
-    logical :: l_lse  = .false.  !< a class's logit is the log-sum-exp over its rotations (and reflections) at the scale, the in-plane marginal; off, the scale times the maximum
-    integer(int64) :: seed = 0_int64
-    type(conv_layer)    :: conv(CNN_NBLK)
-    type(readout_layer) :: rd
+    integer                     :: pftsz     = 0, nrots = 0, nk = 0, nclasses = 0, width = 0, nfeat = 0, ntmpl = 0
+    integer                     :: adam_step = 0
+    logical                     :: l_refl    = .true.  !< a class also scores the reflected map (the pose student's mirror pairs); off for classes without mirrors
+    logical                     :: l_lse     = .false. !< a class's logit is the log-sum-exp over its rotations (and reflections) at the scale, the in-plane marginal; off, the scale times the maximum
+    integer(int64)              :: seed      = 0_int64
+    type(conv_layer)            :: conv(CNN_NBLK)
+    type(readout_layer)         :: rd
     type(cnn_work), allocatable :: work(:)
     type(cnn_grad), allocatable :: gchunk(:)
-    real(sp),       allocatable :: xsb(:,:,:,:)  !< (CNN_LT, 4, batch, 0:CNN_MREAD) the batch's spectrum columns, by sample
-    real(sp),       allocatable :: gqb(:,:,:,:)  !< (4, batch, nclasses, 0:CNN_MREAD) the batch's products' gradients, by sample
-    real(sp),       allocatable :: gtmpl(:)      !< (ntmpl) the templates' gradient summed over the batch
+    real(sp),       allocatable :: xsb(:,:,:,:)        !< (CNN_LT, 4, batch, 0:CNN_MREAD) the batch's spectrum columns, by sample
+    real(sp),       allocatable :: gqb(:,:,:,:)        !< (4, batch, nclasses, 0:CNN_MREAD) the batch's products' gradients, by sample
+    real(sp),       allocatable :: gtmpl(:)            !< (ntmpl) the templates' gradient summed over the batch
     type(hhcnn_profile)         :: prof
-    logical :: exists = .false.
+    logical                     :: exists    = .false.
   contains
-    procedure :: new
-    procedure :: get_nweights
-    procedure :: get_shape
-    procedure :: get_seed
-    procedure :: get_nrot_targets
-    procedure :: prepare_work
-    procedure :: predict
-    procedure :: get_features
-    procedure :: get_scores
-    procedure :: get_class_rotation
-    procedure :: init_templates
-    procedure :: train_batch
-    procedure :: eval_batch
-    procedure :: write_weights
-    procedure :: read_weights
-    procedure :: copy_weights_from
-    procedure :: weights_identical
-    procedure :: get_profile
-    procedure :: reset_profile
-    procedure :: kill
-    procedure, private :: forward_sample
-    procedure, private :: backward_sample
-    procedure, private :: grad_chunk
-    procedure, private :: zero_grad
-    procedure, private :: reduce_and_step
-    procedure, private :: template_grads
-    procedure, private :: alloc_work
-    procedure, private :: alloc_grad
-    procedure, private :: ensure_chunks
-    procedure, private :: readout_forward
-    procedure, private :: readout_spectrum
-    procedure, private :: readout_products
-    procedure, private :: readout_rotations
-    procedure, private :: readout_backward
-    procedure, private :: impose_symmetry
-    procedure, private :: tie_kernel_grads
+    procedure                  :: new
+    procedure                  :: get_nweights
+    procedure                  :: get_shape
+    procedure                  :: get_seed
+    procedure                  :: get_nrot_targets
+    procedure                  :: prepare_work
+    procedure                  :: predict
+    procedure                  :: get_features
+    procedure                  :: get_scores
+    procedure                  :: get_class_rotation
+    procedure                  :: init_templates
+    procedure                  :: train_batch
+    procedure                  :: eval_batch
+    procedure                  :: write_weights
+    procedure                  :: read_weights
+    procedure                  :: copy_weights_from
+    procedure                  :: weights_identical
+    procedure                  :: get_profile
+    procedure                  :: reset_profile
+    procedure                  :: kill
+    procedure, private         :: forward_sample
+    procedure, private         :: backward_sample
+    procedure, private         :: grad_chunk
+    procedure, private         :: zero_grad
+    procedure, private         :: reduce_and_step
+    procedure, private         :: template_grads
+    procedure, private         :: alloc_work
+    procedure, private         :: alloc_grad
+    procedure, private         :: ensure_chunks
+    procedure, private         :: readout_forward
+    procedure, private         :: readout_spectrum
+    procedure, private         :: readout_products
+    procedure, private         :: readout_rotations
+    procedure, private         :: readout_backward
+    procedure, private         :: impose_symmetry
+    procedure, private         :: tie_kernel_grads
     procedure, private, nopass :: tix
     ! the layer kernels the tester and the benchmark drive on their own (bound so that the submodules link them)
     procedure, private, nopass :: im2col
@@ -255,8 +255,8 @@ contains
         integer(int64), intent(in)    :: seed
         logical,        intent(in)    :: reflect, lse
         integer(int64) :: state
-        integer :: b, nkin, cin, kb, nper, r, m
-        real(sp) :: scale
+        integer        :: b, nkin, cin, kb, nper, r, m
+        real(sp)       :: scale
         call self%kill
         if( pftsz < 2 .or. nk < 1 .or. nclasses < 2 .or. width < 1 ) THROW_HARD('invalid network shape; hhcnn%new')
         self%pftsz    = pftsz
@@ -573,7 +573,7 @@ contains
         real(sp), intent(in)    :: a(lda,*), b(ldb,*)
         real(sp), intent(inout) :: c(ldc,*)
         real(sp), allocatable   :: bt(:,:)
-        integer :: j, l
+        integer                 :: j, l
         if( L_BLAS_TEAM_SAFE )then
             call sgemm('N', 'T', m, n, k, 1.0, a, lda, b, ldb, 1.0, c, ldc)
         else if( L_MATMUL_PRODUCTS )then
@@ -595,9 +595,9 @@ contains
         integer,  intent(in)    :: m, n, k, lda, ldb, ldc
         real(sp), intent(in)    :: a(lda,*), b(ldb,*)
         real(sp), intent(inout) :: c(ldc,*)
-        real(sp) :: at(CNN_LOOP_ROWS, k)
+        real(sp)              :: at(CNN_LOOP_ROWS, k)
         real(sp), allocatable :: atw(:,:)
-        integer  :: i0, nr, i, j, l
+        integer               :: i0, nr, i, j, l
         if( L_BLAS_TEAM_SAFE )then
             call sgemm('T', 'N', m, n, k, 1.0, a, lda, b, ldb, 0.0, c, ldc)
         else if( L_MATMUL_PRODUCTS .or. m < CNN_MATMUL_ROWS )then
@@ -1052,13 +1052,13 @@ contains
     !! for the templates' gradient (template_grads); it flows through each class's maximising rotation, or with the
     !! log-sum-exp readout through every rotation, with the rotation targets tq of classes tqc (loss_rot their loss)
     subroutine readout_backward( self, wk, gr, isample, loss_rot, tq, tqc )
-        class(hhcnn),   intent(inout) :: self
-        type(cnn_work), intent(inout) :: wk
-        type(cnn_grad), intent(inout) :: gr
-        integer,        intent(in)    :: isample
-        real(dp),       intent(out)   :: loss_rot
-        real(sp), optional, intent(in) :: tq(:,:)
-        integer,  optional, intent(in) :: tqc(:)
+        class(hhcnn),   intent(inout)        :: self
+        type(cnn_work), intent(inout)        :: wk
+        type(cnn_grad), intent(inout)        :: gr
+        integer,        intent(in)           :: isample
+        real(dp),       intent(out)          :: loss_rot
+        real(sp),       optional, intent(in) :: tq(:,:)
+        integer,        optional, intent(in) :: tqc(:)
         integer  :: cout, kb, part, p, n, kk, c, m, ic, r, nb, j, k, nl, ldt, jc, side
         real(sp) :: ds, inv_n, fr, fi
         real(dp) :: acc, dsc
@@ -1217,8 +1217,8 @@ contains
         real(sp),     intent(in)    :: xrefs(self%pftsz, self%nk, 2, self%nclasses), g(self%nk)
         real(sp), allocatable :: tmpl(:)
         real(dp), allocatable :: sselfs(:)
-        integer  :: ic, m, kb, n, ithr, nthr
-        real(dp) :: sself, ssum
+        integer               :: ic, m, kb, n, ithr, nthr
+        real(dp)              :: sself, ssum
         nthr = 1
         !$ nthr = omp_get_max_threads()
         call self%prepare_work(nthr)
@@ -1302,14 +1302,14 @@ contains
     !! the rotation targets tq of classes tqc): the gradients accumulated into gr; the loss (the cross-entropy against t,
     !! plus the rotation targets' against the rotations' posteriors) returned
     subroutine backward_sample( self, wk, t, gr, loss, isample, tq, tqc )
-        class(hhcnn),   intent(inout) :: self
-        type(cnn_work), intent(inout) :: wk
-        real(sp),       intent(in)    :: t(self%nclasses)
-        type(cnn_grad), intent(inout) :: gr
-        real(dp),       intent(out)   :: loss
-        integer,        intent(in)    :: isample
-        real(sp), optional, intent(in) :: tq(:,:)
-        integer,  optional, intent(in) :: tqc(:)
+        class(hhcnn),   intent(inout)        :: self
+        type(cnn_work), intent(inout)        :: wk
+        real(sp),       intent(in)           :: t(self%nclasses)
+        type(cnn_grad), intent(inout)        :: gr
+        real(dp),       intent(out)          :: loss
+        integer,        intent(in)           :: isample
+        real(sp),       optional, intent(in) :: tq(:,:)
+        integer,        optional, intent(in) :: tqc(:)
         real(sp) :: s_norm(self%conv(1)%cout, self%nk), ysum(self%conv(1)%cout), wsum, gterm, gbar(-1:1)
         real(dp) :: loss_rot
         integer  :: b, cin, cout, nkin, nkout, npos, c, k, p, kk, ik, ia, r, q0, q1, pp0, kk0, pa0
@@ -1409,11 +1409,11 @@ contains
     !> the gradients of samples i0..i1 of the batch into chunk buffer ic, on thread ithr's workspace (with the rotation
     !! targets when given)
     subroutine grad_chunk( self, ic, ithr, i0, i1, x, g, side, t, tq, tqc )
-        class(hhcnn), intent(inout) :: self
-        integer,      intent(in)    :: ic, ithr, i0, i1
-        real(sp),     intent(in)    :: x(self%pftsz, self%nk, 2, *), g(self%nk, *), side(*), t(self%nclasses, *)
-        real(sp), optional, intent(in) :: tq(:,:,:)
-        integer,  optional, intent(in) :: tqc(:,:)
+        class(hhcnn), intent(inout)        :: self
+        integer,      intent(in)           :: ic, ithr, i0, i1
+        real(sp),     intent(in)           :: x(self%pftsz, self%nk, 2, *), g(self%nk, *), side(*), t(self%nclasses, *)
+        real(sp),     optional, intent(in) :: tq(:,:,:)
+        integer,      optional, intent(in) :: tqc(:,:)
         real(dp) :: loss
         integer  :: i
         call self%zero_grad(self%gchunk(ic))
@@ -1433,14 +1433,14 @@ contains
     !! classes tqc(kq, n), 0 for none): chunks of chunk_size(n) computed in parallel into their own buffers, reduced in
     !! chunk order and one Adam step at rate lr with decoupled weight decay wd; the mean loss and the mode agreement
     subroutine train_batch( self, n, x, g, side, t, lr, wd, loss_mean, frac_mode, tq, tqc )
-        class(hhcnn), intent(inout) :: self
-        integer,      intent(in)    :: n
-        real(sp),     intent(in)    :: x(self%pftsz, self%nk, 2, n), g(self%nk, n), side(n), t(self%nclasses, n)
-        real(sp),     intent(in)    :: lr, wd
-        real(sp),     intent(out)   :: loss_mean, frac_mode
-        real(sp), optional, intent(in) :: tq(:,:,:)
-        integer,  optional, intent(in) :: tqc(:,:)
-        integer :: nchunks, ic, ithr, i0, i1, nthr, csz
+        class(hhcnn), intent(inout)        :: self
+        integer,      intent(in)           :: n
+        real(sp),     intent(in)           :: x(self%pftsz, self%nk, 2, n), g(self%nk, n), side(n), t(self%nclasses, n)
+        real(sp),     intent(in)           :: lr, wd
+        real(sp),     intent(out)          :: loss_mean, frac_mode
+        real(sp),     optional, intent(in) :: tq(:,:,:)
+        integer,      optional, intent(in) :: tqc(:,:)
+        integer                 :: nchunks, ic, ithr, i0, i1, nthr, csz
         integer(timer_int_kind) :: t0
         if( present(tq) )then
             if( .not. self%l_lse ) THROW_HARD('rotation targets need the log-sum-exp readout; hhcnn%train_batch')
@@ -1485,11 +1485,11 @@ contains
         integer,      intent(in)    :: nchunks, n
         real(sp),     intent(in)    :: lr, wd
         real(sp),     intent(out)   :: loss_mean, frac_mode
-        type(dw_set) :: acc(CNN_NBLK)
+        type(dw_set)          :: acc(CNN_NBLK)
         real(dp), allocatable :: dwread(:,:)
-        real(dp) :: loss, scl, bc1, bc2, dscale
-        real(sp) :: scale1, mscale1, vscale1
-        integer  :: ic, b, nmode, j, is, i0, i1, nslice
+        real(dp)              :: loss, scl, bc1, bc2, dscale
+        real(sp)              :: scale1, mscale1, vscale1
+        integer               :: ic, b, nmode, j, is, i0, i1, nslice
         scl = 1.d0 / real(n,dp)
         self%adam_step = self%adam_step + 1
         bc1 = 1.d0 - real(ADAM_BETA1,dp)**self%adam_step
@@ -1604,8 +1604,8 @@ contains
         integer,      intent(in)    :: n
         real(sp),     intent(in)    :: x(self%pftsz, self%nk, 2, n), g(self%nk, n), side(n), t(self%nclasses, n)
         real(sp),     intent(out)   :: loss_mean, frac_mode
-        real(dp) :: loss
-        integer  :: nchunks, ic, ithr, i0, i1, i, nmode, csz
+        real(dp)                :: loss
+        integer                 :: nchunks, ic, ithr, i0, i1, i, nmode, csz
         integer(timer_int_kind) :: t0
         call self%ensure_chunks(n, nchunks)
         csz = chunk_size(n)
@@ -1723,8 +1723,8 @@ contains
         class(hhcnn),  intent(inout) :: self
         class(string), intent(in)    :: fname
         integer(int64) :: magic, version, seed
-        integer :: funit, io_stat, b, pftsz, nk, nclasses, width, nblk, nread, kread, mread
-        logical :: l_refl_here, l_lse_here
+        integer        :: funit, io_stat, b, pftsz, nk, nclasses, width, nblk, nread, kread, mread
+        logical        :: l_refl_here, l_lse_here
         if( .not. file_exists(fname) ) THROW_HARD('no weights file '//fname%to_char()//'; hhcnn%read_weights')
         call fopen(funit, fname, 'old', 'read', iostat=io_stat, access='stream', form='unformatted')
         call fileiochk('hhcnn%read_weights; open '//fname%to_char(), io_stat)

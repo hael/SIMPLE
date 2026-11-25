@@ -47,21 +47,21 @@ module simple_ipc_tcp_socket_server
 
   ! POD struct passed by pointer to the listener pthread.
   type, bind(c) :: listener_args
-    integer(kind=c_int)     :: fd    = -1
-    integer(kind=c_int)     :: ready = 0         ! set to 1 once listen() succeeds
+    integer(kind=c_int)     :: fd       = -1
+    integer(kind=c_int)     :: ready    = 0           ! set to 1 once listen() succeeds
     type(c_pthread_mutex_t) :: mutex
     type(c_ptr)             :: data_ptr = c_null_ptr  ! optional opaque payload for listener
   end type listener_args
 
   type :: ipc_tcp_socket_server
     private
-    integer               :: port        = -1
-    integer(kind=c_int)   :: fd          = -1
-    type(string)          :: server_ips
-    type(c_pthread_t)     :: thread
-    type(listener_args), pointer :: listener_args => null()
-    logical               :: thread_started = .false.
-    logical               :: listening   = .false.
+    integer                      :: port           = -1
+    integer(kind=c_int)          :: fd             = -1
+    type(string)                 :: server_ips
+    type(c_pthread_t)            :: thread
+    type(listener_args), pointer :: listener_args  => null()
+    logical                      :: thread_started = .false.
+    logical                      :: listening      = .false.
   contains
     procedure :: new
     procedure :: kill
@@ -78,9 +78,9 @@ module simple_ipc_tcp_socket_server
 
   !> Reinitialise server object and start a fresh listener thread.
   subroutine new( self, thread_funloc, thread_args_ptr )
-    class(ipc_tcp_socket_server), intent(inout) :: self
-    type(c_funptr), value, intent(in) :: thread_funloc
-    type(c_ptr),     value, intent(in) :: thread_args_ptr
+    class(ipc_tcp_socket_server), intent(inout)     :: self
+    type(c_funptr),               value, intent(in) :: thread_funloc
+    type(c_ptr),                  value, intent(in) :: thread_args_ptr
     call self%kill()
     call self%find_server_ips()
     call self%start_listener(thread_funloc, thread_args_ptr)
@@ -130,15 +130,15 @@ module simple_ipc_tcp_socket_server
 
   !> Bind an available port, call listen(), and launch the listener pthread.
   subroutine start_listener( self, thread_funloc, thread_args_ptr )
-    class(ipc_tcp_socket_server), intent(inout) :: self
-    type(c_funptr), value,      intent(in) :: thread_funloc
-    type(c_ptr),     value,     intent(in) :: thread_args_ptr
-    type(listener_args),  pointer :: args
-    type(tcp_sockaddr_in), target :: addr
-    integer(kind=c_socklen_t)     :: addrlen
-    integer(kind=c_int)           :: rc
-    integer(kind=c_int), target   :: optval
-    integer                       :: i, iport
+    class(ipc_tcp_socket_server), intent(inout)          :: self
+    type(c_funptr),               value,      intent(in) :: thread_funloc
+    type(c_ptr),                  value,     intent(in)  :: thread_args_ptr
+    type(listener_args),   pointer :: args
+    type(tcp_sockaddr_in), target  :: addr
+    integer(kind=c_socklen_t)      :: addrlen
+    integer(kind=c_int)            :: rc
+    integer(kind=c_int),   target  :: optval
+    integer                        :: i, iport
     if( .not. c_associated(thread_args_ptr) ) return
     if( .not. c_associated(thread_funloc)   ) return
 #if defined(_WIN32)
@@ -296,14 +296,14 @@ module simple_ipc_tcp_socket_server
   !> Accept a single connection and read up to len(buf) bytes.
   !> Optionally closes the accepted fd before return (default: close).
   subroutine recv_msg( fd, conn_fd, buf, nread, ok, close_after_read )
-    integer(kind=c_int),           intent(in)         :: fd
-    character(kind=c_char, len=*), intent(inout), target :: buf
-    integer(kind=c_int),           intent(inout)         :: conn_fd
-    integer,                       intent(out)        :: nread
-    logical,                       intent(out)        :: ok
-    logical, optional,             intent(in)         :: close_after_read
-    integer(kind=c_int)    :: rc
-    integer(kind=c_size_t) :: nr
+    integer(kind=c_int),           intent(in)                       :: fd
+    character(kind=c_char, len=*), intent(inout), target            :: buf
+    integer(kind=c_int),           intent(inout)                    :: conn_fd
+    integer,                       intent(out)                      :: nread
+    logical,                       intent(out)                      :: ok
+    logical,                       optional,             intent(in) :: close_after_read
+    integer(kind=c_int)     :: rc
+    integer(kind=c_size_t)  :: nr
     logical                 :: l_close_conn
     l_close_conn = .true.
     if( present(close_after_read) ) l_close_conn = close_after_read
@@ -321,11 +321,11 @@ module simple_ipc_tcp_socket_server
   !> Send len(buf) bytes to an accepted connection fd.
   !> Optionally closes the fd after write (default: close).
   subroutine repl_msg( conn_fd, buf, nread, ok, close_after_write )
-    integer(kind=c_int),           intent(in)         :: conn_fd
-    character(kind=c_char, len=*), intent(inout), target :: buf
-    integer,                       intent(out)        :: nread
-    logical,                       intent(out)        :: ok
-    logical, optional,             intent(in)         :: close_after_write
+    integer(kind=c_int),           intent(in)                       :: conn_fd
+    character(kind=c_char, len=*), intent(inout), target            :: buf
+    integer,                       intent(out)                      :: nread
+    logical,                       intent(out)                      :: ok
+    logical,                       optional,             intent(in) :: close_after_write
     integer(kind=c_int)                               :: rc
     logical                                           :: l_close_conn
     l_close_conn = .true.

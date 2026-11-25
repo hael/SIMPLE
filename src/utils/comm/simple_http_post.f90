@@ -82,9 +82,9 @@ contains
   ! response holds the HTTP status code, content-type, and accumulated body.
   ! Returns .true. on success, .false. if any curl operation failed.
   function request( self, response, request_str ) result( l_success )
-    class(http_post),             intent(inout) :: self
-    type(http_response), target,  intent(inout) :: response
-    type(string),        optional, intent(in)   :: request_str
+    class(http_post),             intent(inout)          :: self
+    type(http_response),          target,  intent(inout) :: response
+    type(string),                 optional, intent(in)   :: request_str
     character(len=:),              allocatable  :: content_type
     character(len=:),              allocatable  :: request_body
     integer                                     :: rc

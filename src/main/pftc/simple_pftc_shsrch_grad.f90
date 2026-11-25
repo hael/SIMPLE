@@ -16,10 +16,10 @@ public :: shsrch_lm_terms, shsrch_callback_profile
 private
 #include "simple_local_flags.inc"
 
-integer,  parameter :: coarse_num_steps = 5       ! no. of coarse search steps in x AND y (hence real no. is its square)
-integer,  parameter :: SHSRCH_SHIFT = 1, SHSRCH_JOINT = 2, SHSRCH_JOINT_VIEW = 3 !< _VIEW: joint + two view tilts
+integer,  parameter :: coarse_num_steps = 5                                          ! no. of coarse search steps in x AND y (hence real no. is its square)
+integer,  parameter :: SHSRCH_SHIFT     = 1, SHSRCH_JOINT = 2, SHSRCH_JOINT_VIEW = 3 !< _VIEW: joint + two view tilts
 ! reasons the quadratic grid step falls back to the L-BFGS-B alternations
-integer,  parameter :: FIT_EDGE = 1, FIT_CURVATURE = 2, FIT_STEP = 3, FIT_LIMITS = 4, FIT_VALUE = 5, FIT_NREASONS = 5
+integer,  parameter :: FIT_EDGE           = 1, FIT_CURVATURE = 2, FIT_STEP = 3, FIT_LIMITS = 4, FIT_VALUE = 5, FIT_NREASONS = 5
 real(dp), parameter :: FIT_MIN_CURV_RATIO = 0.01d0 ! smallest accepted ratio of the Hessian's eigenvalues
 ! the joint route's 'lm' stops (euclid): a step gaining less than this in the draw's log-probability (loss x prob_beta x T)
 real(dp), parameter :: SHSRCH_JOINT_LOGP_TOL = 0.01d0
@@ -29,31 +29,31 @@ character(len=*), parameter :: SHSRCH_JOINT_SOLVER = 'lbfgsb' !< the joint shift
 
 type :: pftc_shsrch_grad
     private
-    type(opt_spec)            :: ospec                  !< optimizer specification object
-    class(optimizer), pointer :: opt_obj => null()      !< optimizer object
-    class(builder),   pointer :: b_ptr   => null()      !< pointer to polarft_calc object for cost function evaluations
-    integer                   :: reference    = 0       !< reference pft
-    integer                   :: particle     = 0       !< particle pft
-    integer                   :: nrots        = 0       !< # rotations
-    integer                   :: maxits       = 100     !< max # iterations
-    integer                   :: cur_inpl_idx = 0       !< index of inplane angle for shift search
-    real                      :: cur_inpl_rotind = 0.   !< continuous in-plane rotation index
-    integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
-    logical                   :: opt_angle    = .true.  !< alternate discrete in-plane and shift optimization
-    integer                   :: search_mode = SHSRCH_SHIFT !< configured numerical algorithm
-    real(dp)                  :: joint_initial_cost = 0.d0 !< first optimizer evaluation for monotonic acceptance
+    type(opt_spec)            :: ospec                                    !< optimizer specification object
+    class(optimizer), pointer :: opt_obj                  => null()       !< optimizer object
+    class(builder),   pointer :: b_ptr                    => null()       !< pointer to polarft_calc object for cost function evaluations
+    integer                   :: reference                = 0             !< reference pft
+    integer                   :: particle                 = 0             !< particle pft
+    integer                   :: nrots                    = 0             !< # rotations
+    integer                   :: maxits                   = 100           !< max # iterations
+    integer                   :: cur_inpl_idx             = 0             !< index of inplane angle for shift search
+    real                      :: cur_inpl_rotind          = 0.            !< continuous in-plane rotation index
+    integer                   :: max_evals                = 5             !< max # inplrot/shsrch cycles
+    logical                   :: opt_angle                = .true.        !< alternate discrete in-plane and shift optimization
+    integer                   :: search_mode              = SHSRCH_SHIFT  !< configured numerical algorithm
+    real(dp)                  :: joint_initial_cost       = 0.d0          !< first optimizer evaluation for monotonic acceptance
     logical                   :: joint_initial_cost_valid = .false.
-    logical                   :: joint_cc = .false.      !< joint objective is cc (loss = -cc)
-    character(len=8)          :: solver = SHSRCH_SOLVER   !< 'lm' minimises the euclid shift loss L/W + w|d|^2, not -exp(-loss)
-    real(dp)                  :: factr0 = 0.d0            !< the joint mode's factr as specified (the 'lm' stop resets to it)
-    real(dp)                  :: shift_curv(2,2) = 0.d0   !< 'lm' shift mode: the curvature at grid rotation shift_curv_irot,
-    integer                   :: shift_curv_irot = 0      !< shift-independent, so formed once per rotation of a solve (0: none)
-    logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
-    integer(int64)            :: profile_objective_evals = 0_int64
-    integer(int64)            :: profile_gradient_evals  = 0_int64
-    integer(int64)            :: profile_alternations    = 0_int64 !< L-BFGS-B / discrete in-plane alternations
-    integer(int64)            :: profile_grid_points     = 0_int64 !< coarse-grid points scored
-    integer(int64)            :: profile_minimize_calls  = 0_int64 !< calls of minimize
+    logical                   :: joint_cc                 = .false.       !< joint objective is cc (loss = -cc)
+    character(len=8)          :: solver                   = SHSRCH_SOLVER !< 'lm' minimises the euclid shift loss L/W + w|d|^2, not -exp(-loss)
+    real(dp)                  :: factr0                   = 0.d0          !< the joint mode's factr as specified (the 'lm' stop resets to it)
+    real(dp)                  :: shift_curv(2,2)          = 0.d0          !< 'lm' shift mode: the curvature at grid rotation shift_curv_irot,
+    integer                   :: shift_curv_irot          = 0             !< shift-independent, so formed once per rotation of a solve (0: none)
+    logical                   :: coarse_init              = .false.       !< whether to perform an intial coarse search over the range
+    integer(int64)            :: profile_objective_evals  = 0_int64
+    integer(int64)            :: profile_gradient_evals   = 0_int64
+    integer(int64)            :: profile_alternations     = 0_int64       !< L-BFGS-B / discrete in-plane alternations
+    integer(int64)            :: profile_grid_points      = 0_int64       !< coarse-grid points scored
+    integer(int64)            :: profile_minimize_calls   = 0_int64       !< calls of minimize
     ! the discrete-angle callback: its calls, the rotation changes, and the 'lm' re-evaluations at a changed rotation
     integer(int64)            :: profile_callbacks       = 0_int64
     integer(int64)            :: profile_angle_changes   = 0_int64
@@ -61,16 +61,16 @@ type :: pftc_shsrch_grad
     logical                   :: reeval_pending          = .false. !< a rotation change awaits its evaluation at reeval_x
     real(dp)                  :: reeval_x(2)             = 0.d0
     ! quadratic step from the coarse grid (the multi-state probabilistic table)
-    logical                   :: grid_fit     = .false. !< quadratic step from the coarse grid before the alternations
-    real,         allocatable :: grid_corrs(:,:)        !< objective of every grid point over all rotations (nrots, points)
-    integer                   :: grid_ix_star = 0       !< grid point of the lowest cost, x index
-    integer                   :: grid_iy_star = 0       !< grid point of the lowest cost, y index
+    logical                   :: grid_fit                    = .false. !< quadratic step from the coarse grid before the alternations
+    real,         allocatable :: grid_corrs(:,:)                       !< objective of every grid point over all rotations (nrots, points)
+    integer                   :: grid_ix_star                = 0       !< grid point of the lowest cost, x index
+    integer                   :: grid_iy_star                = 0       !< grid point of the lowest cost, y index
     integer(int64)            :: profile_fit(0:FIT_NREASONS) = 0_int64 !< (0) fits kept, (1:5) fallbacks per FIT_* reason
     ! particle-frame coarse grid (the multi-state probabilistic table)
-    logical                   :: grid_ptcl    = .false. !< the grid is the lattice of particle-frame shifts, scored from a bank
-    complex(sp),  allocatable :: grid_bank(:,:,:)       !< shifted particle memos (pftsz+1, nk, lattice points + 1 scratch)
-    integer                   :: grid_bank_ptcl = 0     !< particle the bank was built for (0: none)
-    real(dp)                  :: grid_u_star(2) = 0.d0  !< lattice shift of the grid minimum
+    logical                   :: grid_ptcl           = .false. !< the grid is the lattice of particle-frame shifts, scored from a bank
+    complex(sp),  allocatable :: grid_bank(:,:,:)              !< shifted particle memos (pftsz+1, nk, lattice points + 1 scratch)
+    integer                   :: grid_bank_ptcl      = 0       !< particle the bank was built for (0: none)
+    real(dp)                  :: grid_u_star(2)      = 0.d0    !< lattice shift of the grid minimum
     integer(int64)            :: profile_bank_builds = 0_int64 !< shifted particle memos built
     ! the last all-rotation objective of minimize and its shift: L-BFGS-B's callback scores every accepted point and
     ! minimize scores the point it ends on, the same vector when the shifts are bitwise equal
@@ -96,14 +96,14 @@ type :: pftc_shsrch_grad
     real(dp),     allocatable :: rot_cs(:,:)             !< cos and sin of every grid rotation (2, nrots): R(irot) u0
 contains
     procedure          :: new_alternating      => grad_shsrch_new_alternating
-    procedure          :: new_fixed       => grad_shsrch_new_fixed
-    procedure          :: new_joint       => grad_shsrch_new_joint
-    procedure          :: new_joint_view  => grad_shsrch_new_joint_view
-    procedure          :: set_indices     => grad_shsrch_set_indices
-    procedure          :: minimize        => grad_shsrch_minimize
-    procedure          :: minimize_joint  => grad_shsrch_minimize_joint
+    procedure          :: new_fixed            => grad_shsrch_new_fixed
+    procedure          :: new_joint            => grad_shsrch_new_joint
+    procedure          :: new_joint_view       => grad_shsrch_new_joint_view
+    procedure          :: set_indices          => grad_shsrch_set_indices
+    procedure          :: minimize             => grad_shsrch_minimize
+    procedure          :: minimize_joint       => grad_shsrch_minimize_joint
     procedure          :: select_best_discrete_angle
-    procedure          :: kill            => grad_shsrch_kill
+    procedure          :: kill                 => grad_shsrch_kill
     procedure          :: does_opt_angle
     procedure          :: set_limits
     procedure          :: minimize_in_cell
@@ -117,10 +117,10 @@ contains
     procedure, private :: build_rot_table
     procedure, private :: coarse_search
     procedure, private :: coarse_search_opt_angle
-    procedure          :: reset_profile     => grad_shsrch_reset_profile
-    procedure          :: get_profile       => grad_shsrch_get_profile
-    procedure          :: get_fit_profile   => grad_shsrch_get_fit_profile
-    procedure          :: get_bank_builds   => grad_shsrch_get_bank_builds
+    procedure          :: reset_profile        => grad_shsrch_reset_profile
+    procedure          :: get_profile          => grad_shsrch_get_profile
+    procedure          :: get_fit_profile      => grad_shsrch_get_fit_profile
+    procedure          :: get_bank_builds      => grad_shsrch_get_bank_builds
     procedure, private :: try_grid_fit
     procedure, private :: build_grid_bank
     procedure, private :: objfun_vals
@@ -130,10 +130,10 @@ interface
     !> the 'lm' callback's objective, gradient and curvature at vec (shift mode at grid rotation irot), for the
     !! testers' curvature oracles (submodule simple_pftc_shsrch_grad_tester, built only with BUILD_TESTS=ON)
     module subroutine shsrch_lm_terms( srch, vec, f, grad, curv, irot )
-        class(pftc_shsrch_grad), intent(inout) :: srch
-        real(dp),                intent(inout) :: vec(:)
-        real(dp),                intent(out)   :: f, grad(:), curv(:,:)
-        integer, optional,       intent(in)    :: irot
+        class(pftc_shsrch_grad), intent(inout)              :: srch
+        real(dp),                intent(inout)              :: vec(:)
+        real(dp),                intent(out)                :: f, grad(:), curv(:,:)
+        integer,                 optional,       intent(in) :: irot
     end subroutine shsrch_lm_terms
 
     !> the discrete-angle callback's profile: calls, rotation changes and evaluations at a changed rotation's point
@@ -146,43 +146,43 @@ end interface
 contains
 
     subroutine grad_shsrch_new_alternating( self, build, lims, lims_init, maxits, coarse_init, grid_fit, grid_ptcl, solver )
-        class(pftc_shsrch_grad),     intent(inout) :: self
-        class(builder),      target, intent(in)    :: build
-        real,                        intent(in)    :: lims(:,:)
-        real,              optional, intent(in)    :: lims_init(:,:)
-        integer,           optional, intent(in)    :: maxits
-        logical,           optional, intent(in)    :: coarse_init
-        logical,           optional, intent(in)    :: grid_fit   !< quadratic step from the coarse grid, needs coarse_init
-        logical,           optional, intent(in)    :: grid_ptcl  !< particle-frame coarse grid, needs coarse_init
-        character(len=*),  optional, intent(in)    :: solver     !< testers only: 'lbfgsb' or 'lm'
+        class(pftc_shsrch_grad),     intent(inout)        :: self
+        class(builder),              target, intent(in)   :: build
+        real,                        intent(in)           :: lims(:,:)
+        real,                        optional, intent(in) :: lims_init(:,:)
+        integer,                     optional, intent(in) :: maxits
+        logical,                     optional, intent(in) :: coarse_init
+        logical,                     optional, intent(in) :: grid_fit  !< quadratic step from the coarse grid, needs coarse_init
+        logical,                     optional, intent(in) :: grid_ptcl !< particle-frame coarse grid, needs coarse_init
+        character(len=*),            optional, intent(in) :: solver    !< testers only: 'lbfgsb' or 'lm'
         call grad_shsrch_new_mode(self, build, lims, lims_init, maxits, .true., coarse_init, grid_fit, grid_ptcl, solver)
     end subroutine grad_shsrch_new_alternating
 
     subroutine grad_shsrch_new_fixed( self, build, lims, lims_init, maxits, coarse_init, solver )
-        class(pftc_shsrch_grad),     intent(inout) :: self
-        class(builder),      target, intent(in)    :: build
-        real,                        intent(in)    :: lims(:,:)
-        real,              optional, intent(in)    :: lims_init(:,:)
-        integer,           optional, intent(in)    :: maxits
-        logical,           optional, intent(in)    :: coarse_init
-        character(len=*),  optional, intent(in)    :: solver     !< testers only: 'lbfgsb' or 'lm'
+        class(pftc_shsrch_grad),     intent(inout)        :: self
+        class(builder),              target, intent(in)   :: build
+        real,                        intent(in)           :: lims(:,:)
+        real,                        optional, intent(in) :: lims_init(:,:)
+        integer,                     optional, intent(in) :: maxits
+        logical,                     optional, intent(in) :: coarse_init
+        character(len=*),            optional, intent(in) :: solver !< testers only: 'lbfgsb' or 'lm'
         call grad_shsrch_new_mode(self, build, lims, lims_init, maxits, .false., coarse_init, solver=solver)
     end subroutine grad_shsrch_new_fixed
 
     subroutine grad_shsrch_new_mode( self, build, lims, lims_init, maxits, opt_angle, coarse_init, grid_fit, grid_ptcl, solver )
         use simple_opt_factory, only: opt_factory
-        class(pftc_shsrch_grad),     intent(inout) :: self           !< instance
-        class(builder),      target, intent(in)    :: build          !< builder object for pftc access
-        real,                        intent(in)    :: lims(:,:)      !< limits for barrier constraint
-        real,              optional, intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
-        integer,           optional, intent(in)    :: maxits         !< maximum iterations
-        logical,                     intent(in)    :: opt_angle      !< alternate discrete in-plane and shift optimization
-        logical,           optional, intent(in)    :: coarse_init    !< coarse inital search
-        logical,           optional, intent(in)    :: grid_fit       !< quadratic step from the coarse grid
-        logical,           optional, intent(in)    :: grid_ptcl      !< particle-frame coarse grid
-        character(len=*),  optional, intent(in)    :: solver         !< 'lbfgsb' (default, SHSRCH_SOLVER) or 'lm'
+        class(pftc_shsrch_grad),     intent(inout)        :: self           !< instance
+        class(builder),              target, intent(in)   :: build          !< builder object for pftc access
+        real,                        intent(in)           :: lims(:,:)      !< limits for barrier constraint
+        real,                        optional, intent(in) :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
+        integer,                     optional, intent(in) :: maxits         !< maximum iterations
+        logical,                     intent(in)           :: opt_angle      !< alternate discrete in-plane and shift optimization
+        logical,                     optional, intent(in) :: coarse_init    !< coarse inital search
+        logical,                     optional, intent(in) :: grid_fit       !< quadratic step from the coarse grid
+        logical,                     optional, intent(in) :: grid_ptcl      !< particle-frame coarse grid
+        character(len=*),            optional, intent(in) :: solver         !< 'lbfgsb' (default, SHSRCH_SOLVER) or 'lm'
         type(opt_factory) :: opt_fact
-        integer :: kfromto(2)
+        integer           :: kfromto(2)
         call self%kill
         self%solver = SHSRCH_SOLVER
         if( present(solver) ) self%solver = solver
@@ -227,11 +227,11 @@ contains
 
     subroutine grad_shsrch_new_joint( self, build, lims, maxits, solver )
         use simple_opt_factory, only: opt_factory
-        class(pftc_shsrch_grad),     intent(inout) :: self
-        class(builder),      target, intent(in)    :: build
-        real,                        intent(in)    :: lims(3,2)
-        integer,                     intent(in)    :: maxits
-        character(len=*),  optional, intent(in)    :: solver     !< testers only: 'lbfgsb' or 'lm'
+        class(pftc_shsrch_grad),     intent(inout)        :: self
+        class(builder),              target, intent(in)   :: build
+        real,                        intent(in)           :: lims(3,2)
+        integer,                     intent(in)           :: maxits
+        character(len=*),            optional, intent(in) :: solver !< testers only: 'lbfgsb' or 'lm'
         type(opt_factory) :: opt_fact
         call self%kill
         self%solver = SHSRCH_JOINT_SOLVER
@@ -262,11 +262,11 @@ contains
     !! 'lbfgsb' or 'lm' (cont_view). The caller sets the drawn reference (pcont%set_view_ref) before minimize_joint.
     subroutine grad_shsrch_new_joint_view( self, build, lims, maxits, solver )
         use simple_opt_factory, only: opt_factory
-        class(pftc_shsrch_grad),     intent(inout) :: self
-        class(builder),      target, intent(in)    :: build
-        real,                        intent(in)    :: lims(5,2)
-        integer,                     intent(in)    :: maxits
-        character(len=*),            intent(in)    :: solver
+        class(pftc_shsrch_grad),     intent(inout)      :: self
+        class(builder),              target, intent(in) :: build
+        real,                        intent(in)         :: lims(5,2)
+        integer,                     intent(in)         :: maxits
+        character(len=*),            intent(in)         :: solver
         type(opt_factory) :: opt_fact
         call self%kill
         self%solver = solver
@@ -296,7 +296,7 @@ contains
     end function does_opt_angle
 
     subroutine set_limits( self, lims )
-        class(pftc_shsrch_grad), intent(inout) :: self              !< instance
+        class(pftc_shsrch_grad), intent(inout) :: self                    !< instance
         real,                    intent(in)    :: lims(self%ospec%ndim,2) !< new limits
         call self%ospec%set_limits(lims)
     end subroutine set_limits
@@ -463,10 +463,10 @@ contains
     !> The view mode's cost at vec = (shift x, shift y, rotation index, tilt x, tilt y): build%pcont's raw Euclidean
     !! loss with the joint mode's shift prior (prior_centre_angle), its gradient and optionally its Gauss-Newton matrix
     subroutine joint_view_terms( self, vec, cost, grad, curv )
-        class(pftc_shsrch_grad), intent(inout) :: self
-        real(dp),                intent(in)    :: vec(5)
-        real(dp),                intent(out)   :: cost, grad(5)
-        real(dp), optional,      intent(out)   :: curv(5,5)
+        class(pftc_shsrch_grad), intent(inout)              :: self
+        real(dp),                intent(in)                 :: vec(5)
+        real(dp),                intent(out)                :: cost, grad(5)
+        real(dp),                optional,      intent(out) :: curv(5,5)
         real(dp) :: c0(2), dc0(2), d(2), dang, jprior(2,5)
         call self%b_ptr%pcont%eval(self%particle, vec, cost, grad, curv)
         if( self%prior_w > 0.d0 )then
@@ -761,11 +761,11 @@ contains
 
     !> minimisation routine
     function grad_shsrch_minimize( self, irot, sh_rot, xy_in, prior_origin ) result( cxy )
-        class(pftc_shsrch_grad), intent(inout) :: self
-        integer,                 intent(inout) :: irot
-        logical, optional,       intent(in)    :: sh_rot
-        real,    optional,       intent(in)    :: xy_in(2)
-        logical, optional,       intent(in)    :: prior_origin !< the prior centred at the stored shift, not the start
+        class(pftc_shsrch_grad), intent(inout)              :: self
+        integer,                 intent(inout)              :: irot
+        logical,                 optional,       intent(in) :: sh_rot
+        real,                    optional,       intent(in) :: xy_in(2)
+        logical,                 optional,       intent(in) :: prior_origin !< the prior centred at the stored shift, not the start
         real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost
         integer  :: loc, i, lowest_rot, init_rot
@@ -893,26 +893,26 @@ contains
     !! seed cell re-scored at xy_in (irot never 0, always committable); evaluation_valid/improved say which.
     function grad_shsrch_minimize_joint( self, irot, xy_in, sh_rot, rotind_frac, &
             &evaluation_valid, improved, initial_cost_out, irot_in, xsol, rotind_seed ) result(cxy)
-        class(pftc_shsrch_grad), intent(inout) :: self
-        integer,                 intent(out)   :: irot
-        real,                    intent(in)    :: xy_in(2)
-        logical,                 intent(in)    :: sh_rot
-        real(dp),                intent(out)   :: rotind_frac
-        logical,       optional, intent(out)   :: evaluation_valid, improved
-        real(dp),      optional, intent(out)   :: initial_cost_out
-        integer,                 intent(in)    :: irot_in
-        real(dp),      optional, intent(out)   :: xsol(:)  !< the result's point: the solution when improved, else the seed (shift in the reference frame, rotation index[, tilts])
-        real,          optional, intent(in)    :: rotind_seed !< geometric proposal's exact stored in-plane coordinate
+        class(pftc_shsrch_grad), intent(inout)         :: self
+        integer,                 intent(out)           :: irot
+        real,                    intent(in)            :: xy_in(2)
+        logical,                 intent(in)            :: sh_rot
+        real(dp),                intent(out)           :: rotind_frac
+        logical,                 optional, intent(out) :: evaluation_valid, improved
+        real(dp),                optional, intent(out) :: initial_cost_out
+        integer,                 intent(in)            :: irot_in
+        real(dp),                optional, intent(out) :: xsol(:)     !< the result's point: the solution when improved, else the seed (shift in the reference frame, rotation index[, tilts])
+        real,                    optional, intent(in)  :: rotind_seed !< geometric proposal's exact stored in-plane coordinate
         ! a final cost this far outside its physical range is a series artifact: invalid solve
         real(dp), parameter :: JOINT_NEG_COST_TOL = 1.d-2
         ! a gain must be material, not solver noise
         real(dp), parameter :: JOINT_IMPROVE_REL_TOL = 1.d-4
         ! bound-pinned solutions never displace the seed
         real(dp), parameter :: JOINT_BOUND_TOL = 1.d-3
-        real :: cxy(3), rotmat(2,2), lowest_cost, seed_corr, joint_lims(5,2), seed_coord, seed_angle
-        real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(5), brange, beta_temp, rel_tol
-        integer  :: idim, ndim
-        logical :: valid_result, improved_result, valid_coordinates
+        real                :: cxy(3), rotmat(2,2), lowest_cost, seed_corr, joint_lims(5,2), seed_coord, seed_angle
+        real(dp)            :: initial_cost, final_cost, improve_tol, coordinate_tol(5), brange, beta_temp, rel_tol
+        integer             :: idim, ndim
+        logical             :: valid_result, improved_result, valid_coordinates
 
         if( self%search_mode /= SHSRCH_JOINT .and. self%search_mode /= SHSRCH_JOINT_VIEW )then
             THROW_HARD('joint minimization requested from a non-joint search object')

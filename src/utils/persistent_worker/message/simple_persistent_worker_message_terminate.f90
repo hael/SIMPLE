@@ -48,8 +48,8 @@ contains
     !> the complete qsys_persistent_worker_message_terminate layout — and filled with the
     !> raw storage representation of self via TRANSFER.
     subroutine serialise_qsys_persistent_worker_message_terminate( self, buffer )
-        class(qsys_persistent_worker_message_terminate), intent(in)    :: self
-        character(len=:), allocatable,        intent(inout) :: buffer
+        class(qsys_persistent_worker_message_terminate), intent(in)                        :: self
+        character(len=:),                                allocatable,        intent(inout) :: buffer
         if( allocated(buffer) ) deallocate(buffer)
         allocate(character(len=sizeof(self)) :: buffer)
         buffer = transfer(self, buffer)

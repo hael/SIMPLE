@@ -40,15 +40,15 @@ contains
 
     function artifact_part_fname( self, prefix, part, numlen ) result( fname )
         class(flex_pca_artifact_catalog), intent(in) :: self
-        character(len=*), intent(in) :: prefix
-        integer,          intent(in) :: part, numlen
+        character(len=*),                 intent(in) :: prefix
+        integer,                          intent(in) :: part, numlen
         type(string) :: fname
         fname = self%part_path('flex_pca_'//prefix//'_part'//int2str_pad(part, numlen)//'.bin')
     end function artifact_part_fname
 
     function artifact_part_path( self, name ) result( path )
         class(flex_pca_artifact_catalog), intent(in) :: self
-        character(len=*), intent(in) :: name
+        character(len=*),                 intent(in) :: name
         type(string) :: path
         if( allocated(self%part_dir_prefix) )then
             path = string(self%part_dir_prefix)//name
@@ -59,7 +59,7 @@ contains
 
     subroutine artifact_catalog_new( self, dir )
         class(flex_pca_artifact_catalog), intent(inout) :: self
-        character(len=*), intent(in) :: dir
+        character(len=*),                 intent(in)    :: dir
         call self%kill
         if( len_trim(dir) == 0 )then
             return
@@ -83,10 +83,10 @@ contains
         class(parameters), intent(in) :: params
         integer,           intent(in) :: nparts
         character(len=:), allocatable :: dir
-        type(string) :: cwd
+        type(string)                  :: cwd
         character(len=:), allocatable :: cwdc
-        integer(kind=8) :: h
-        integer :: i
+        integer(kind=8)               :: h
+        integer                       :: i
         dir = ''
         if( nparts < 2 ) return
         if( trim(params%qsys_name) /= 'local' ) return

@@ -43,10 +43,10 @@ contains
     procedure(lm_limit_step_i), deferred :: limit_step
     procedure(lm_propose_i),    deferred :: propose
     procedure(lm_accept_i),     deferred :: accept
-    procedure :: penalty         => lm_no_penalty
-    procedure :: observable      => lm_always_observable
-    procedure :: free            => lm_all_free
-    procedure :: negligible_step => lm_no_negligible_step
+    procedure                            :: penalty         => lm_no_penalty
+    procedure                            :: observable      => lm_always_observable
+    procedure                            :: free            => lm_all_free
+    procedure                            :: negligible_step => lm_no_negligible_step
 end type lm_problem
 
 !> maxits, the stops, and per coordinate the scale of the damped system and whether the solve may move it
@@ -150,18 +150,18 @@ contains
     !! the coordinates options%active and free. The seed terms (all or none) are f, g and curv at the start,
     !! which then is not evaluated. THROW_HARD for inconsistent sizes, maxits < 1 or a partial seed.
     subroutine lm_solve( problem, options, outcome, seed_f, seed_g, seed_curv )
-        class(lm_problem),  intent(inout) :: problem
-        type(lm_options),   intent(in)    :: options
-        type(lm_outcome),   intent(out)   :: outcome
-        real(dp), optional, intent(in)    :: seed_f, seed_g(:), seed_curv(:,:)
+        class(lm_problem),  intent(inout)        :: problem
+        type(lm_options),   intent(in)           :: options
+        type(lm_outcome),   intent(out)          :: outcome
+        real(dp),           optional, intent(in) :: seed_f, seed_g(:), seed_curv(:,:)
         real(dp), allocatable :: g(:), curv(:,:), trial_g(:), trial_curv(:,:), total_g(:), total_curv(:,:)
         real(dp), allocatable :: penalty_g(:), penalty_curv(:,:), scaled_g(:), scaled_curv(:,:)
         real(dp), allocatable :: solve_matrix(:,:), scaled_step(:), step(:)
         logical,  allocatable :: lfree(:), mask(:)
-        real(dp) :: f, trial_f, total_f, trial_total, penalty, mu, rejection_multiplier
-        real(dp) :: predicted, actual, ratio, relative_reduction, curv_scale
-        integer  :: n, iteration, axis, consecutive_rejections
-        logical  :: bounded_trial, bounded_step, reliable
+        real(dp)              :: f, trial_f, total_f, trial_total, penalty, mu, rejection_multiplier
+        real(dp)              :: predicted, actual, ratio, relative_reduction, curv_scale
+        integer               :: n, iteration, axis, consecutive_rejections
+        logical               :: bounded_trial, bounded_step, reliable
         n = size(options%scale)
         if( n < 1 ) THROW_HARD('lm_solve needs at least one coordinate')
         if( size(options%active) /= n ) THROW_HARD('lm_solve scale and active differ in size')

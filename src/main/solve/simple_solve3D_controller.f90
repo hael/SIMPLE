@@ -20,21 +20,21 @@ integer,          parameter :: NSPACE_SUB_BASE         = 2500
 integer,          parameter :: NSPACE_MULTI_MAX        = 2500 ! multi-state cap on nspace
 
 ! Stage transition policy
-integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaussian filtering after early stages
-integer,          parameter :: ML_REG_START_STAGE      = 3           ! first stage with ml_reg=yes; must match set_refine3D_stage_controls case split
-integer,          parameter :: SYMSRCH_STAGE           = 4           ! search symmetry axis after this stage (3 until 2026-10-17)
-integer,          parameter :: NOSYMSRCH_STAGE         = 3           ! its counterpart in a run that searches no axis
-integer,          parameter :: VOL_SUPPLIED_STAGE      = NOSYMSRCH_STAGE + 1 ! first stage for supplied volumes
-integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
-integer,          parameter :: STICKY_LAST_STAGE       = 4           ! single state holds its sticky subset through this stage, free from the next
+integer,          parameter :: GAUREF_LAST_STAGE       = 2                     ! stop gaussian filtering after early stages
+integer,          parameter :: ML_REG_START_STAGE      = 3                     ! first stage with ml_reg=yes; must match set_refine3D_stage_controls case split
+integer,          parameter :: SYMSRCH_STAGE           = 4                     ! search symmetry axis after this stage (3 until 2026-10-17)
+integer,          parameter :: NOSYMSRCH_STAGE         = 3                     ! its counterpart in a run that searches no axis
+integer,          parameter :: VOL_SUPPLIED_STAGE      = NOSYMSRCH_STAGE + 1   ! first stage for supplied volumes
+integer,          parameter :: PROB_REFINE_STAGE       = 3                     ! prob refinement stages 3-5
+integer,          parameter :: STICKY_LAST_STAGE       = 4                     ! single state holds its sticky subset through this stage, free from the next
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = STICKY_LAST_STAGE + 1 ! single state trails from the first freely sampled stage
-integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
-integer,          parameter :: GOLD_STD_STAGE          = 6           ! first eligible single-state gold-standard stage
-integer,          parameter :: PCG_START_STAGE         = 7           ! requested PCG backend, the last two stages (6 until 2026-11-18); independent of gold_std_stage
-integer,          parameter :: AUTOMSK_START_STAGE     = PCG_START_STAGE ! a requested automsk acts in the last two stages, spherical before
-integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8, single and multi-state
-integer,          parameter :: NSTAGES_INDEPENDENT     = 5           ! default last stage of independent multi-state solve3D
-real,             parameter :: FRACSRCH_SCAN_EXIT      = 95.         ! multi-state shc stage 2 also ends above this mean % scanned
+integer,          parameter :: NU_FILTER_STAGE         = 5                     ! switch on staged NU filtering (6 until 2026-10-18)
+integer,          parameter :: GOLD_STD_STAGE          = 6                     ! first eligible single-state gold-standard stage
+integer,          parameter :: PCG_START_STAGE         = 7                     ! requested PCG backend, the last two stages (6 until 2026-11-18); independent of gold_std_stage
+integer,          parameter :: AUTOMSK_START_STAGE     = PCG_START_STAGE       ! a requested automsk acts in the last two stages, spherical before
+integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6                     ! prob_neigh refinement stages 6-8, single and multi-state
+integer,          parameter :: NSTAGES_INDEPENDENT     = 5                     ! default last stage of independent multi-state solve3D
+real,             parameter :: FRACSRCH_SCAN_EXIT      = 95.                   ! multi-state shc stage 2 also ends above this mean % scanned
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
 character(len=*), parameter :: PROB_NEIGH_MODE_EARLY   = 'shc'
 character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'state'
@@ -42,30 +42,30 @@ character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
 
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
-integer,          parameter :: FSC05_PROMOTE_MIN_STAGE = 2    ! FSC=0.5 stage-boundary promotion applies past this stage
-integer,          parameter :: STAGE_MINITS            = 3    ! every stage runs this many iterations before its exits apply
+integer,          parameter :: FSC05_PROMOTE_MIN_STAGE = 2           ! FSC=0.5 stage-boundary promotion applies past this stage
+integer,          parameter :: STAGE_MINITS            = 3           ! every stage runs this many iterations before its exits apply
 real,             parameter :: LPSTART_MSKDIAM_DIV     = 8.          ! size ladder: first limit mskdiam/8 within LPSTART_SIZE_BOUNDS
 real,             parameter :: LPSTART_SIZE_BOUNDS(2)  = [10.,30.]   ! start bounds of the size ladder
 real,             parameter :: LPSTOP_MSKDIAM_DIV      = 160./6.     ! last limit mskdiam/26.7 within LPSTOP_BOUNDS (6 A at PfCRT's 160 A)
 real,             parameter :: CENLP_DEFAULT           = 30.
 real,             parameter :: LPSYMSRCH_LB            = 12.
-real,             parameter :: LPSTART_INI3D           = 20.  ! default lpstart for solve3D_cavgs/cavgs_ini
-real,             parameter :: LPSTOP_INI3D            = 8.   ! default lpstop for solve3D_cavgs/cavgs_ini
-real,             parameter :: LPSTOP_INDEPENDENT      = 6.   ! conservative default for independent multi-state solve3D
+real,             parameter :: LPSTART_INI3D           = 20.         ! default lpstart for solve3D_cavgs/cavgs_ini
+real,             parameter :: LPSTOP_INI3D            = 8.          ! default lpstop for solve3D_cavgs/cavgs_ini
+real,             parameter :: LPSTOP_INDEPENDENT      = 6.          ! conservative default for independent multi-state solve3D
 
 ! Sampling and update defaults
 real,             parameter :: UPDATE_FRAC_MAX            = 0.9  ! ensures fractional update remains on
 real,             parameter :: FULL_SAMPLE_SWITCH_FRAC    = 0.9  ! force all-active sampling once nsample/active reaches this fraction
-integer,          parameter :: NSAMPLE_SOLVE3D_DEFAULT = 10000
+integer,          parameter :: NSAMPLE_SOLVE3D_DEFAULT    = 10000
 
 type :: refine3D_stage_cfg
     type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, envfsc
     type(string) :: balance, filt_mode, automsk, prob_neigh_mode
-    integer :: iter, inspace, inspace_sub, imaxits, iminits = 0
-    real    :: trs, overlap, fracsrch
-    real    :: snr_noise_reg, gaufreq, update_frac_dyn
-    logical :: l_gold_standard = .false.
-    logical :: l_scan_exit = .false. !< the multi-state rule also converges on the scan alone (scan_exit=yes)
+    integer      :: iter, inspace, inspace_sub, imaxits, iminits = 0
+    real         :: trs, overlap, fracsrch
+    real         :: snr_noise_reg, gaufreq, update_frac_dyn
+    logical      :: l_gold_standard = .false.
+    logical      :: l_scan_exit     = .false. !< the multi-state rule also converges on the scan alone (scan_exit=yes)
 end type refine3D_stage_cfg
 
 contains
@@ -228,7 +228,7 @@ contains
 
     module procedure set_cline_refine3D
         type(refine3D_stage_cfg) :: cfg
-        logical :: l_addon, l_register
+        logical                  :: l_addon, l_register
         l_addon = .false.
         if( present(addon) ) l_addon = addon%active
         l_register = l_addon
@@ -504,9 +504,9 @@ contains
 
     subroutine set_refine3D_gold_standard_policy( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
-        class(parameters),       intent(in)    :: params
-        integer,                 intent(in)    :: istage
-        logical,                 intent(in)    :: l_cavgs
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
         cfg%l_gold_standard = params%nstates == 1 .and. .not. l_cavgs .and. istage >= gold_std_start_stage(params)
     end subroutine set_refine3D_gold_standard_policy
 

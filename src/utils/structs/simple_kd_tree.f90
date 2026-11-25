@@ -9,8 +9,8 @@ private
 public :: kd_tree, knn_table
 
 type :: knn_table
-    integer :: n = 0
-    integer :: k = 0
+    integer              :: n = 0
+    integer              :: k = 0
     integer, allocatable :: neighbor(:,:)
     real,    allocatable :: distance2(:,:)
 contains
@@ -19,11 +19,11 @@ end type knn_table
 
 type :: kd_tree
     private
-    integer :: ndim      = 0
-    integer :: npoints   = 0
-    integer :: nnodes    = 0
-    integer :: root      = 0
-    integer :: leaf_size = 32
+    integer              :: ndim      = 0
+    integer              :: npoints   = 0
+    integer              :: nnodes    = 0
+    integer              :: root      = 0
+    integer              :: leaf_size = 32
     integer, allocatable :: permutation(:)
     integer, allocatable :: left(:), right(:)
     integer, allocatable :: first(:), count(:)
@@ -49,9 +49,9 @@ contains
     end subroutine kill_knn_table
 
     subroutine build_kd_tree( self, features, leaf_size )
-        class(kd_tree), intent(inout) :: self
-        real,           intent(in)    :: features(:,:)
-        integer, optional, intent(in) :: leaf_size
+        class(kd_tree), intent(inout)        :: self
+        real,           intent(in)           :: features(:,:)
+        integer,        optional, intent(in) :: leaf_size
         integer :: i, initial_capacity
         call self%kill()
         self%ndim    = size(features,1)
@@ -93,7 +93,7 @@ contains
         real,           intent(in) :: features(:,:)
         integer,        intent(in) :: lo,hi
         real(dp) :: xmin,xmax,span,best_span
-        integer :: q,p
+        integer  :: q,p
         axis = 1
         best_span = -1.0_dp
         do q=1,self%ndim
@@ -180,15 +180,15 @@ contains
     end function point_less
 
     subroutine query_kd_tree( self, features, query, k, neighbors, distances2, exclude )
-        class(kd_tree), intent(in) :: self
-        real,           intent(in) :: features(:,:),query(:)
-        integer,        intent(in) :: k
-        integer, allocatable, intent(out) :: neighbors(:)
-        real,    allocatable, intent(out) :: distances2(:)
-        integer, optional, intent(in) :: exclude
-        integer, allocatable :: heap_ids(:)
+        class(kd_tree), intent(in)               :: self
+        real,           intent(in)               :: features(:,:),query(:)
+        integer,        intent(in)               :: k
+        integer,        allocatable, intent(out) :: neighbors(:)
+        real,           allocatable, intent(out) :: distances2(:)
+        integer,        optional, intent(in)     :: exclude
+        integer,  allocatable :: heap_ids(:)
         real(dp), allocatable :: heap_d2(:)
-        integer :: exclude_here,heap_size,visited
+        integer               :: exclude_here,heap_size,visited
         call validate_query(self,features,query,k)
         exclude_here = 0
         if( present(exclude) ) exclude_here = exclude
@@ -206,15 +206,15 @@ contains
     end subroutine query_kd_tree
 
     subroutine query_all_kd_tree( self, features, k, table, mean_nodes_visited )
-        class(kd_tree), intent(in) :: self
-        real,           intent(in) :: features(:,:)
-        integer,        intent(in) :: k
-        type(knn_table), intent(inout) :: table
-        real, optional, intent(out) :: mean_nodes_visited
-        integer, allocatable :: heap_ids(:)
+        class(kd_tree),  intent(in)            :: self
+        real,            intent(in)            :: features(:,:)
+        integer,         intent(in)            :: k
+        type(knn_table), intent(inout)         :: table
+        real,            optional, intent(out) :: mean_nodes_visited
+        integer,  allocatable :: heap_ids(:)
         real(dp), allocatable :: heap_d2(:)
-        integer :: i,heap_size,visited
-        integer(kind=8) :: total_visited
+        integer               :: i,heap_size,visited
+        integer(kind=8)       :: total_visited
         if( any(shape(features)/=[self%ndim,self%npoints]) ) THROW_HARD('kd_tree query feature shape mismatch')
         if( k < 1 .or. k >= self%npoints ) THROW_HARD('kd_tree all-point query requires 1 <= k < npoints')
         call table%kill()
@@ -245,12 +245,12 @@ contains
     end subroutine query_all_kd_tree
 
     recursive subroutine query_node( self, features, query, exclude, inode, k, heap_ids, heap_d2, heap_size, visited )
-        class(kd_tree), intent(in) :: self
-        real,           intent(in) :: features(:,:),query(:)
-        integer,        intent(in) :: exclude,inode,k
+        class(kd_tree), intent(in)    :: self
+        real,           intent(in)    :: features(:,:),query(:)
+        integer,        intent(in)    :: exclude,inode,k
         integer,        intent(inout) :: heap_ids(:),heap_size,visited
         real(dp),       intent(inout) :: heap_d2(:)
-        integer :: pos,point_id,near_node,far_node,q
+        integer  :: pos,point_id,near_node,far_node,q
         real(dp) :: d2,delta,lower_bound
         if( inode == 0 ) return
         visited = visited+1
@@ -329,7 +329,7 @@ contains
         integer,  intent(inout) :: ids(:)
         real(dp), intent(inout) :: d2s(:)
         integer,  intent(in)    :: n
-        integer :: i,j,id
+        integer  :: i,j,id
         real(dp) :: d2
         do i=2,n
             id = ids(i)
@@ -362,7 +362,7 @@ contains
         integer,  intent(inout) :: ids(:)
         real(dp), intent(inout) :: d2s(:)
         integer,  intent(in)    :: i,j
-        integer :: id
+        integer  :: id
         real(dp) :: d2
         id = ids(i); ids(i) = ids(j); ids(j) = id
         d2 = d2s(i); d2s(i) = d2s(j); d2s(j) = d2
@@ -403,7 +403,7 @@ contains
         class(kd_tree), intent(inout) :: self
         integer, allocatable :: left(:),right(:),first(:),count(:),split_dim(:)
         real,    allocatable :: split_value(:)
-        integer :: old_capacity,new_capacity
+        integer              :: old_capacity,new_capacity
         old_capacity = size(self%left)
         new_capacity = max(old_capacity+1,2*old_capacity)
         allocate(left(new_capacity),right(new_capacity),first(new_capacity),count(new_capacity), &

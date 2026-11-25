@@ -27,10 +27,10 @@ module subroutine exec_test_state_fixture( self, cline )
     class(commander_test_state_fixture), intent(inout) :: self
     class(cmdline),                      intent(inout) :: cline
     class(parameters), allocatable :: params
-    type(test_gate) :: gate
-    type(string)    :: cwd_saved, root
-    integer :: nthr, status
-    logical :: all_ok
+    type(test_gate)                :: gate
+    type(string)                   :: cwd_saved, root
+    integer                        :: nthr, status
+    logical                        :: all_ok
     call make_ui
     call simple_getcwd(cwd_saved)
     allocate(params)
@@ -69,14 +69,14 @@ subroutine check_blob_modes( nthr, gate )
     use simple_oris,       only: oris
     integer,         intent(in)    :: nthr
     type(test_gate), intent(inout) :: gate
-    character(len=8), parameter :: MODES(3) = ['search', 'known ', 'views ']
-    type(state_fixture) :: fix
+    character(len=8),  parameter   :: MODES(3) = ['search', 'known ', 'views ']
+    type(state_fixture)            :: fix
     class(sp_project), allocatable :: proj
-    type(oris) :: truth
-    integer, allocatable :: states(:)
-    integer :: imode, k, nrep, i
-    real    :: ccg, ccl
-    logical :: ok
+    type(oris)                     :: truth
+    integer,           allocatable :: states(:)
+    integer                        :: imode, k, nrep, i
+    real                           :: ccg, ccl
+    logical                        :: ok
     allocate(proj)
     do imode = FIX_SEARCH, FIX_VIEWS
         call fix%new('blob', imode, 3, 300, 1., nthr, pops=[0.5, 0.3, 0.2], nviews=10)
@@ -133,8 +133,8 @@ subroutine check_betagal( kind, nstates, nptcls, nthr, gate )
     integer,          intent(in)    :: nstates, nptcls, nthr
     type(test_gate),  intent(inout) :: gate
     type(state_fixture) :: fix
-    real    :: ccg, ccl, extra(3,3)
-    integer :: k
+    real                :: ccg, ccl, extra(3,3)
+    integer             :: k
     call fix%new('betagal', FIX_SEARCH, nstates, nptcls, 1., nthr, kind=kind)
     call fix%build
     do k = 1, fix%nstates

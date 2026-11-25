@@ -16,24 +16,24 @@ implicit none
 
 ! singleton variables
 type(lp_crop_inf), allocatable :: lpinfo(:)
-logical          :: l_srch4symaxis    = .false., l_symran = .false.
-logical          :: l_ini3D           = .false.
-logical          :: l_cavg_ini        = .false. !< particle stages of a cavg_ini run: the entry stage runs its full budget
-logical          :: l_nonuniform      = .false.
-logical          :: l_state_continue_mode = .false.
-logical          :: l_refine3D_mode_override   = .false.
-logical          :: l_refine3D_lp_override     = .false.
-logical          :: l_refine3D_lpstop_override = .false.
-logical          :: l_refine3D_trs_override    = .false. !< the user set a positive solve3D shift limit
-logical          :: l_prob_beta_end_override   = .false. !< the user set prob_beta_end: the stages keep it
-logical          :: l_cavgs_mode = .false.
-type(sym)        :: se1, se2
-type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_reproject
-type(string)     :: refine3D_mode_override
-real             :: update_frac  = 1.0
-integer          :: nstates_glob = 1, nptcls_eff = 0
-integer          :: nstages_refine3D = 0
-integer, parameter :: FINAL_PCG_MAXITS_FLOOR = 5
+logical                        :: l_srch4symaxis             = .false., l_symran = .false.
+logical                        :: l_ini3D                    = .false.
+logical                        :: l_cavg_ini                 = .false. !< particle stages of a cavg_ini run: the entry stage runs its full budget
+logical                        :: l_nonuniform               = .false.
+logical                        :: l_state_continue_mode      = .false.
+logical                        :: l_refine3D_mode_override   = .false.
+logical                        :: l_refine3D_lp_override     = .false.
+logical                        :: l_refine3D_lpstop_override = .false.
+logical                        :: l_refine3D_trs_override    = .false. !< the user set a positive solve3D shift limit
+logical                        :: l_prob_beta_end_override   = .false. !< the user set prob_beta_end: the stages keep it
+logical                        :: l_cavgs_mode               = .false.
+type(sym)                      :: se1, se2
+type(cmdline)                  :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_reproject
+type(string)                   :: refine3D_mode_override
+real                           :: update_frac                = 1.0
+integer                        :: nstates_glob               = 1, nptcls_eff = 0
+integer                        :: nstages_refine3D           = 0
+integer,           parameter   :: FINAL_PCG_MAXITS_FLOOR     = 5
 ! state reseeding of multi-state solve3D_cavgs (reseed_states=yes); provisional until validated
 integer, parameter :: RESEED_MIN_POP  = 5     ! a state of no more entries leaves the probabilistic search (eul_prob_tab MIN_POP)
 real,    parameter :: RESEED_MIN_FRAC = 0.02  ! a state with less of the selected entries is reseeded too
@@ -169,10 +169,10 @@ interface
     end function solve3D_first_free_stage
 
     module subroutine set_cline_refine3D( params, istage, first_stage, l_cavgs, addon )
-        class(parameters),                 intent(in) :: params
-        integer,                           intent(in) :: istage, first_stage
-        logical,                           intent(in) :: l_cavgs
-        type(solve3D_addon_ctx), optional, intent(in) :: addon
+        class(parameters),                 intent(in)           :: params
+        integer,                           intent(in)           :: istage, first_stage
+        logical,                           intent(in)           :: l_cavgs
+        type(solve3D_addon_ctx),           optional, intent(in) :: addon
     end subroutine set_cline_refine3D
 
 end interface
@@ -258,8 +258,8 @@ contains
     end subroutine prep_class_command_lines
 
     subroutine strip_refine3D_planning_keys( child_cline, delete_which_iter )
-        class(cmdline), intent(inout) :: child_cline
-        logical, optional, intent(in) :: delete_which_iter
+        class(cmdline), intent(inout)        :: child_cline
+        logical,        optional, intent(in) :: delete_which_iter
         logical :: l_delete_which_iter
         l_delete_which_iter = .false.
         if( present(delete_which_iter) ) l_delete_which_iter = delete_which_iter
@@ -346,14 +346,14 @@ contains
     end subroutine inject_refine3D_volume
 
     subroutine register_stage_volume( params, state, vol_name, projfile )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: state
-        class(string),     intent(in) :: vol_name
+        class(parameters), intent(in)           :: params
+        integer,           intent(in)           :: state
+        class(string),     intent(in)           :: vol_name
         class(string),     intent(in), optional :: projfile
         type(sp_project)            :: spproj
-        type(string) :: fsc_name
-        integer :: ldim(3), nptcls
-        real    :: smpd
+        type(string)                :: fsc_name
+        integer                     :: ldim(3), nptcls
+        real                        :: smpd
         if( .not. file_exists(vol_name) ) return
         call find_ldim_nptcls(vol_name, ldim, nptcls)
         smpd = find_img_smpd(vol_name)
@@ -379,12 +379,12 @@ contains
     !! the stage runs cropped), in which case the pixel size is rescaled with
     !! the box*smpd invariant so the header stays physically correct.
     subroutine write_solve3D_lowpass_snapshot( vol_in, lp, vol_out, smpd, box )
-        class(string),     intent(in) :: vol_in, vol_out
-        real,              intent(in) :: lp, smpd
-        integer, optional, intent(in) :: box
+        class(string),     intent(in)           :: vol_in, vol_out
+        real,              intent(in)           :: lp, smpd
+        integer,           optional, intent(in) :: box
         type(image) :: vol_lp
-        integer :: ldim(3), nptcls
-        real    :: lp_eff, smpd_eff
+        integer     :: ldim(3), nptcls
+        real        :: lp_eff, smpd_eff
         if( .not. file_exists(vol_in) ) return
         call find_ldim_nptcls(vol_in, ldim, nptcls)
         smpd_eff = smpd
@@ -402,12 +402,12 @@ contains
     end subroutine write_solve3D_lowpass_snapshot
 
     real function solve3D_state_fsc_lowpass( state, box, smpd, fallback_lp, istage ) result( lp )
-        integer,           intent(in) :: state, box
-        real,              intent(in) :: smpd, fallback_lp
-        integer, optional, intent(in) :: istage
-        type(string) :: fsc_name
+        integer,           intent(in)           :: state, box
+        real,              intent(in)           :: smpd, fallback_lp
+        integer,           optional, intent(in) :: istage
+        type(string)      :: fsc_name
         real, allocatable :: fsc(:), res(:)
-        real :: fsc05, fsc0143
+        real              :: fsc05, fsc0143
         lp = fallback_lp
         ! In cavgs mode the even/odd class-average FSC is only unreliable for the
         ! first stages (ml_reg off). Once ml_reg is active the FSC resolution is
@@ -456,10 +456,10 @@ contains
     !! mskdiam/8 (10-30 A) to mskdiam/26.7 (4.5-6 A); lpstart replaces the first limit, never finer than the last,
     !! and lpstop coarsens the last
     subroutine set_lplims_from_size( params, spproj, l_cavgs, lpstart, lpstop )
-        class(parameters), intent(inout) :: params
-        class(sp_project), intent(in)    :: spproj
-        logical,           intent(in)    :: l_cavgs
-        real, optional,    intent(in)    :: lpstart, lpstop
+        class(parameters), intent(inout)           :: params
+        class(sp_project), intent(in)              :: spproj
+        logical,           intent(in)              :: l_cavgs
+        real,              optional,    intent(in) :: lpstart, lpstop
         type(string) :: frcs_fname
         real         :: lims(2), trslim_override
         integer      :: nstages
@@ -489,10 +489,10 @@ contains
     end subroutine set_lplims_from_size
 
     subroutine set_lplims_from_input( params, spproj, lpstart, lpstop, first_stage )
-        class(parameters), intent(inout) :: params
-        class(sp_project), intent(in)    :: spproj
-        real,              intent(in)    :: lpstart, lpstop
-        integer, optional, intent(in)    :: first_stage
+        class(parameters), intent(inout)        :: params
+        class(sp_project), intent(in)           :: spproj
+        real,              intent(in)           :: lpstart, lpstop
+        integer,           optional, intent(in) :: first_stage
         integer :: nstages
         real    :: trslim_override
         l_cavgs_mode = .false.
@@ -520,7 +520,7 @@ contains
     subroutine set_lplims_from_manifest( man )
         class(solve3D_manifest), intent(in) :: man
         type(solve3D_stage_record) :: stage
-        integer :: i
+        integer                    :: i
         l_cavgs_mode = .false.
         if( man%get_nstages() < 1 ) THROW_HARD('solve3D manifest carries no stage ladder')
         if( allocated(lpinfo) ) deallocate(lpinfo)
@@ -599,17 +599,17 @@ contains
     end subroutine release_sticky_subset
 
     subroutine symmetrize( params, istage, spproj, projfile, xrec3D )
-        class(parameters),               intent(inout) :: params
-        integer,                         intent(in)    :: istage
-        class(sp_project),               intent(inout) :: spproj
-        class(string),                   intent(in)    :: projfile
-        class(commander_base), optional, intent(inout) :: xrec3D
+        class(parameters),               intent(inout)           :: params
+        integer,                         intent(in)              :: istage
+        class(sp_project),               intent(inout)           :: spproj
+        class(string),                   intent(in)              :: projfile
+        class(commander_base),           optional, intent(inout) :: xrec3D
         type(commander_symmetrize_map) :: xsymmap
         type(cmdline)                  :: cline_symrec
-        type(string) :: vol_iter, vol_sym, stage, vol_stage, vol_lp_stage
-        integer :: state
-        real :: lp_snapshot
-        real :: lpsym, hpsym
+        type(string)                   :: vol_iter, vol_sym, stage, vol_stage, vol_lp_stage
+        integer                        :: state
+        real                           :: lp_snapshot
+        real                           :: lpsym, hpsym
         if( l_symran ) call symmetry_randomize_poses(se1, spproj, projfile)
         if( l_srch4symaxis )then
             lpsym = max(solve3D_lpsymsrch_lb(),lpinfo(solve3D_symsrch_stage(l_srch4symaxis))%lp)
@@ -706,7 +706,7 @@ contains
         use simple_refine3D_provenance, only: provenance_file, provenance_pending_file
         integer, intent(in) :: nstates
         type(string) :: fnames(12)
-        integer :: state, i
+        integer      :: state, i
         do state = 1, nstates
             fnames(1)  = refine3D_trail_manifest_fname(state)
             fnames(2)  = provenance_file(fnames(1))
@@ -750,7 +750,7 @@ contains
         real,    allocatable :: keys(:)
         logical, allocatable :: l_done(:)
         integer, allocatable :: pops(:)
-        integer :: nsel, s, weak, donor, nwant, nmove, icls, j, ihalf
+        integer              :: nsel, s, weak, donor, nwant, nmove, icls, j, ihalf
         nmoved = 0
         if( size(states) /= 2*ncavgs .or. size(scores) /= 2*ncavgs ) THROW_HARD('states and scores must cover both halves of every class average; reseed_state_labels')
         if( nstates < 2 ) return
@@ -824,7 +824,7 @@ contains
         use simple_commanders_euclid, only: commander_commit_sigma2
         class(parameters), intent(in) :: params
         type(commander_commit_sigma2) :: xcommit_sigma2
-        type(cmdline) :: cline_commit_sigma2
+        type(cmdline)                 :: cline_commit_sigma2
         if( params%cc_objfun /= OBJFUN_EUCLID .and. trim(params%cc_emit_sigma) /= 'yes' ) return
         if( .not. cline_refine3D%defined('sigma_commit_deferred') ) return
         if( cline_refine3D%get_carg('sigma_commit_deferred') /= 'yes' ) return
@@ -1072,8 +1072,8 @@ contains
         real,              intent(in) :: lp
         type(string) :: str_state, vol_name, vol_final, vol_final_lp
         type(string) :: vol_pproc, vol_final_pproc, vol_mirr, vol_final_mirr
-        integer :: state
-        real    :: lp_snapshot
+        integer      :: state
+        real         :: lp_snapshot
         do state = 1, params%nstates
             if( .not.spproj%isthere_in_osout('vol', state) )cycle ! empty-state case
             str_state      = int2str_pad(state,2)

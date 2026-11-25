@@ -47,19 +47,19 @@ contains
     !! project. Without it they take the parameters default pixel size; that is harmless only
     !! with @p mskdiam = 0, where the radius falls back to the box default (the sieve).
     subroutine score_project_cavgs( spproj, model, mskdiam, cavg_imgs, quality, hard_gate_context, smpd )
-        class(sp_project),          intent(inout) :: spproj
-        type(cavg_quality_model),   intent(in)    :: model
-        real,                       intent(in)    :: mskdiam
-        type(image), allocatable,   intent(inout) :: cavg_imgs(:)
-        type(cavg_quality_result),  intent(inout) :: quality
-        character(len=*), optional, intent(in)    :: hard_gate_context
-        real,             optional, intent(in)    :: smpd
-        type(parameters) :: relation_params
-        type(cmdline)    :: relation_cline
-        integer, allocatable :: seed_saved(:)
+        class(sp_project),          intent(inout)                :: spproj
+        type(cavg_quality_model),   intent(in)                   :: model
+        real,                       intent(in)                   :: mskdiam
+        type(image),                allocatable,   intent(inout) :: cavg_imgs(:)
+        type(cavg_quality_result),  intent(inout)                :: quality
+        character(len=*),           optional, intent(in)         :: hard_gate_context
+        real,                       optional, intent(in)         :: smpd
+        type(parameters)              :: relation_params
+        type(cmdline)                 :: relation_cline
+        integer,          allocatable :: seed_saved(:)
         character(len=:), allocatable :: cwd_saved, worker_projfile_saved
-        integer :: nthr_saved, nteam_saved, ncalls_saved, part_saved
-        logical :: l_worker_saved
+        integer                       :: nthr_saved, nteam_saved, ncalls_saved, part_saved
+        logical                       :: l_worker_saved
         if( allocated(cavg_imgs) ) call dealloc_imgarr(cavg_imgs)
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) < 1 ) THROW_HARD('no class averages in the project; score_project_cavgs')

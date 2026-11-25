@@ -34,16 +34,16 @@ contains
         use simple_parameters,  only: parameters
         use simple_projector,   only: projector
         use simple_opt_factory, only: opt_factory
-        class(parameters), intent(in) :: params
-        class(projector),  intent(in) :: vol
-        character(len=*),  intent(in) :: pgrp
-        real,              intent(in) :: hp, lp
-        integer, optional, intent(in) :: nrestarts_in
+        class(parameters), intent(in)           :: params
+        class(projector),  intent(in)           :: vol
+        character(len=*),  intent(in)           :: pgrp
+        real,              intent(in)           :: hp, lp
+        integer,           optional, intent(in) :: nrestarts_in
         type(opt_factory) :: ofac
         type(ori)         :: o
         type(sym)         :: symobj
-        integer :: isym, ithr
-        real    :: lims(3,2)
+        integer           :: isym, ithr
+        real              :: lims(3,2)
         call volpft_symsrch_kill
         ! create the correlator
         call vpftc%new(vol, hp, lp, KBALPHA)
@@ -86,15 +86,15 @@ contains
 
     subroutine volpft_srch4symaxis( symaxis_best )
         class(ori), intent(inout) :: symaxis_best
-        real,    allocatable :: rmats(:,:,:), corrs(:)
-        integer, allocatable :: order(:)
-        class(*),    pointer :: fun_self => null()
-        type(ori),    target :: dummyobject ! a dummy object for minimizer, could be any type
-        type(ori)  :: symaxis
-        type(oris) :: espace, cand_axes
-        integer    :: fromto(2), ntot, iproj, iproj_best
-        integer    :: istop, ithr, iloc
-        real       :: eul(3), corr_best, cost, rmat(3,3)
+        real,         allocatable :: rmats(:,:,:), corrs(:)
+        integer,      allocatable :: order(:)
+        class(*),     pointer     :: fun_self => null()
+        type(ori),    target      :: dummyobject ! a dummy object for minimizer, could be any type
+        type(ori)                 :: symaxis
+        type(oris)                :: espace, cand_axes
+        integer                   :: fromto(2), ntot, iproj, iproj_best
+        integer                   :: istop, ithr, iloc
+        real                      :: eul(3), corr_best, cost, rmat(3,3)
         ! dummy association
         fun_self => dummyobject
         ! set range

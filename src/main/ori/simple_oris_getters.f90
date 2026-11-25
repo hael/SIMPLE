@@ -42,8 +42,8 @@ contains
     end function get_euler
 
     module pure function get_noris( self, consider_state ) result( n )
-        class(oris),       intent(in) :: self
-        logical, optional, intent(in) :: consider_state
+        class(oris),       intent(in)           :: self
+        logical,           optional, intent(in) :: consider_state
         integer :: i, n
         logical :: consider_state_here
         consider_state_here = .false.
@@ -65,9 +65,9 @@ contains
     !> Return reciprocal half-set partners and the in-plane angles removed from their stored frames.
     module subroutine get_mirror_pairs(self, partners, frame_angles)
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-        class(oris),          intent(in)  :: self
-        integer, allocatable, intent(out) :: partners(:)
-        real, allocatable,    intent(out) :: frame_angles(:)
+        class(oris),          intent(in)                  :: self
+        integer,              allocatable, intent(out)    :: partners(:)
+        real,                 allocatable,    intent(out) :: frame_angles(:)
         integer :: nhalf, i, m
         if( self%n < 2 ) THROW_HARD('mirror orientations require a positive even count')
         if( mod(self%n,2) /= 0 ) THROW_HARD('mirror orientations require an even count')
@@ -152,13 +152,13 @@ contains
     end subroutine getter_int
 
     module function get_all( self, key, fromto, nonzero ) result( arr )
-        class(oris),       intent(in) :: self
-        character(len=*),  intent(in) :: key
-        integer, optional, intent(in) :: fromto(2)
-        logical, optional, intent(in) :: nonzero
+        class(oris),       intent(in)           :: self
+        character(len=*),  intent(in)           :: key
+        integer,           optional, intent(in) :: fromto(2)
+        logical,           optional, intent(in) :: nonzero
         real,    allocatable :: arr(:)
-        integer :: ffromto(2)
-        logical :: nnonzero
+        integer              :: ffromto(2)
+        logical              :: nnonzero
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
@@ -171,11 +171,11 @@ contains
     end function get_all
 
     module function get_all_asint( self, key, fromto ) result( iarr )
-        class(oris),       intent(in) :: self
-        character(len=*),  intent(in) :: key
-        integer, optional, intent(in) :: fromto(2)
+        class(oris),       intent(in)           :: self
+        character(len=*),  intent(in)           :: key
+        integer,           optional, intent(in) :: fromto(2)
         integer, allocatable :: iarr(:)
-        integer :: ffromto(2)
+        integer              :: ffromto(2)
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
@@ -183,15 +183,15 @@ contains
     end function get_all_asint
 
     module function gen_ptcl_mask( self, key, ival, frac_best ) result( mask )
-        class(oris),       intent(in) :: self
-        character(len=*),  intent(in) :: key
-        integer,           intent(in) :: ival
-        real,    optional, intent(in) :: frac_best
+        class(oris),       intent(in)           :: self
+        character(len=*),  intent(in)           :: key
+        integer,           intent(in)           :: ival
+        real,              optional, intent(in) :: frac_best
         logical, allocatable :: mask(:)
         integer, allocatable :: ivals(:)
         real,    allocatable :: corrs(:), tmp(:)
-        real    :: corr_t
-        integer :: ncorrs, nsample
+        real                 :: corr_t
+        integer              :: ncorrs, nsample
         allocate(mask(self%n))
         allocate(ivals(self%n), source=self%o(1:self%n)%get_int(key))
         if( present(frac_best) )then
@@ -217,14 +217,14 @@ contains
     end function gen_ptcl_mask
 
     module function get_all_sampled( self, key, state, lowerbound ) result( arr )
-        class(oris),       intent(in) :: self
-        character(len=*),  intent(in) :: key
-        integer, optional, intent(in) :: state
-        real,    optional, intent(in) :: lowerbound
+        class(oris),       intent(in)           :: self
+        character(len=*),  intent(in)           :: key
+        integer,           optional, intent(in) :: state
+        real,              optional, intent(in) :: lowerbound
         real,    allocatable :: arr(:), sampled(:)
         integer, allocatable :: states(:)
-        integer :: i
-        real    :: lb
+        integer              :: i
+        real                 :: lb
         allocate(arr(self%n), sampled(self%n), source=0.)
         if( present(state) ) states = nint(self%get_all('state'))
         do i=1,self%n
@@ -304,7 +304,7 @@ contains
     module function get_half( self, i ) result( eo )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
-        integer :: eo
+        integer               :: eo
         character(len=STDLEN) :: msg
         eo = self%o(i)%get_eo()
         if( eo == 0 .or. eo == 1 ) return
@@ -346,9 +346,9 @@ contains
     end function get_updatecnt
 
     module subroutine get_tseries_neighs( self, nsz, ptcls2neigh )
-       class(oris),          intent(in)    :: self
-       integer,              intent(in)    :: nsz
-       integer, allocatable, intent(inout) :: ptcls2neigh(:,:)
+       class(oris),          intent(in)                 :: self
+       integer,              intent(in)                 :: nsz
+       integer,              allocatable, intent(inout) :: ptcls2neigh(:,:)
        integer :: i, j, cls1, cls2
        if( allocated(ptcls2neigh) ) deallocate(ptcls2neigh)
        allocate(ptcls2neigh(self%n,2), source=0)
@@ -424,10 +424,10 @@ contains
     end function get_n
 
     module function get_pop_scalar( self, ind, label, eo ) result( pop )
-        class(oris),       intent(in) :: self
-        integer,           intent(in) :: ind
-        character(len=*),  intent(in) :: label
-        integer, optional, intent(in) :: eo
+        class(oris),       intent(in)           :: self
+        integer,           intent(in)           :: ind
+        character(len=*),  intent(in)           :: label
+        integer,           optional, intent(in) :: eo
         integer :: pop, i
         logical :: consider_eo
         consider_eo = .false.
@@ -452,10 +452,10 @@ contains
     end function get_pop_scalar
 
     module function get_pop_array( self, inds, labels, eo ) result( pop )
-        class(oris),       intent(in) :: self
-        integer,           intent(in) :: inds(:)
-        character(len=*),  intent(in) :: labels(:)
-        integer, optional, intent(in) :: eo
+        class(oris),       intent(in)           :: self
+        integer,           intent(in)           :: inds(:)
+        character(len=*),  intent(in)           :: labels(:)
+        integer,           optional, intent(in) :: eo
         integer :: pop, i, j, n
         logical :: consider_eo, l_okay
         consider_eo = .false.
@@ -496,10 +496,10 @@ contains
 
     !> pops(v): the active records with label value v (1..max(get_n(label), maxn)); with eo, those of that half only
     module subroutine get_pops( self, pops, label, maxn, eo )
-        class(oris),          intent(in)    :: self
-        integer, allocatable, intent(out)   :: pops(:)
-        character(len=*),     intent(in)    :: label
-        integer, optional,    intent(in)    :: maxn, eo
+        class(oris),          intent(in)               :: self
+        integer,              allocatable, intent(out) :: pops(:)
+        character(len=*),     intent(in)               :: label
+        integer,              optional,    intent(in)  :: maxn, eo
         integer :: i, val, n, eo_sel
         logical :: l_eo
         n = self%get_n(label)
@@ -522,15 +522,15 @@ contains
     end subroutine get_pops
 
     module subroutine get_pinds( self, ind, label, indices, l_shuffle, l_require_updated )
-        class(oris),          intent(in)  :: self
-        character(len=*),     intent(in)  :: label
-        integer,              intent(in)  :: ind
-        integer, allocatable, intent(out) :: indices(:)
-        logical, optional,    intent(in)  :: l_shuffle, l_require_updated
+        class(oris),          intent(in)               :: self
+        character(len=*),     intent(in)               :: label
+        integer,              intent(in)               :: ind
+        integer,              allocatable, intent(out) :: indices(:)
+        logical,              optional,    intent(in)  :: l_shuffle, l_require_updated
         type(ran_tabu)       :: rt
         logical, allocatable :: mask(:)
-        integer :: pop, i
-        logical :: ll_shuffle, ll_require_updated
+        integer              :: pop, i
+        logical              :: ll_shuffle, ll_require_updated
         ll_shuffle = .false.
         if( present(l_shuffle) ) ll_shuffle = l_shuffle
         ll_require_updated = .false.
@@ -572,11 +572,11 @@ contains
     end subroutine get_pinds
 
     module subroutine gen_mask( self, state, ind, label, l_mask, fromto )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: state, ind
-        character(len=*),     intent(in)    :: label
-        logical, allocatable, intent(out)   :: l_mask(:)
-        integer, optional,    intent(in)    :: fromto(2)
+        class(oris),          intent(inout)            :: self
+        integer,              intent(in)               :: state, ind
+        character(len=*),     intent(in)               :: label
+        logical,              allocatable, intent(out) :: l_mask(:)
+        integer,              optional,    intent(in)  :: fromto(2)
         integer :: i, mystate, myval, ffromto(2)
         ffromto(1) = 1
         ffromto(2) = self%n
@@ -592,11 +592,11 @@ contains
     end subroutine gen_mask
 
     module subroutine mask_from_state( self, state, l_mask, pinds, fromto )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: state
-        logical, allocatable, intent(inout) :: l_mask(:)
-        integer, allocatable, intent(inout) :: pinds(:)
-        integer, optional,    intent(in)    :: fromto(2)
+        class(oris),          intent(inout)              :: self
+        integer,              intent(in)                 :: state
+        logical,              allocatable, intent(inout) :: l_mask(:)
+        integer,              allocatable, intent(inout) :: pinds(:)
+        integer,              optional,    intent(in)    :: fromto(2)
         integer :: i, cnt, ffromto(2)
         ffromto(1) = 1
         ffromto(2) = self%n
@@ -620,7 +620,7 @@ contains
     module function get_all_normals( self ) result( normals )
         class(oris), intent(inout) :: self
         real, allocatable :: normals(:,:)
-        integer :: i
+        integer           :: i
         allocate(normals(self%n,3))
         do i=1,self%n
             normals(i,:) = self%o(i)%get_normal()
@@ -628,9 +628,9 @@ contains
     end function get_all_normals
 
     module function states_exist( self, nstates, thres ) result( state_exists )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: nstates
-        integer, optional, intent(in)    :: thres
+        class(oris),       intent(inout)        :: self
+        integer,           intent(in)           :: nstates
+        integer,           optional, intent(in) :: thres
         integer :: i, min_pop
         logical :: state_exists(nstates)
         min_pop = 0
@@ -641,10 +641,10 @@ contains
     end function states_exist
 
     module function projs_exist( self, nstates, nprojs, thres ) result( proj_exists )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: nstates
-        integer,           intent(in)    :: nprojs
-        integer, optional, intent(in)    :: thres
+        class(oris),       intent(inout)        :: self
+        integer,           intent(in)           :: nstates
+        integer,           intent(in)           :: nprojs
+        integer,           optional, intent(in) :: thres
         integer :: i, j, min_pop
         logical :: proj_exists(nprojs,nstates)
         min_pop = 0
@@ -657,14 +657,14 @@ contains
     end function projs_exist
 
     module function get_arr( self, which, class, state ) result( vals )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
+        class(oris),       intent(inout)        :: self
+        character(len=*),  intent(in)           :: which
+        integer,           optional, intent(in) :: class
+        integer,           optional, intent(in) :: state
         real, allocatable :: vals(:)
-        integer :: pop, cnt, clsnr, i, mystate
-        real    :: val
-        logical :: class_present, state_present
+        integer           :: pop, cnt, clsnr, i, mystate
+        real              :: val
+        logical           :: class_present, state_present
         class_present = present(class)
         state_present = present(state)
         if( class_present )then
@@ -702,14 +702,14 @@ contains
     end function get_arr
 
     module subroutine calc_sum( self, which, sum, cnt, class, state, fromto, mask )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        real,              intent(out)   :: sum
-        integer,           intent(out)   :: cnt
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
-        integer, optional, intent(in)    :: fromto(2)
-        logical, optional, intent(in)    :: mask(self%n)
+        class(oris),       intent(inout)        :: self
+        character(len=*),  intent(in)           :: which
+        real,              intent(out)          :: sum
+        integer,           intent(out)          :: cnt
+        integer,           optional, intent(in) :: class
+        integer,           optional, intent(in) :: state
+        integer,           optional, intent(in) :: fromto(2)
+        logical,           optional, intent(in) :: mask(self%n)
         integer :: clsnr, i, mystate, istart, istop
         real    :: val
         logical :: proceed, class_present, state_present, mask_present
@@ -762,24 +762,24 @@ contains
     end subroutine calc_sum
 
     module function get_sum( self, which, class, state, fromto, mask) result( sum )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
-        integer, optional, intent(in)    :: fromto(2)
-        logical, optional, intent(in)    :: mask(self%n)
+        class(oris),       intent(inout)        :: self
+        character(len=*),  intent(in)           :: which
+        integer,           optional, intent(in) :: class
+        integer,           optional, intent(in) :: state
+        integer,           optional, intent(in) :: fromto(2)
+        logical,           optional, intent(in) :: mask(self%n)
         integer :: cnt
         real    :: sum
         call self%calc_sum(which, sum, cnt, class, state, fromto, mask)
     end function get_sum
 
     module function get_avg( self, which, class, state, fromto, mask ) result( avg )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
-        integer, optional, intent(in)    :: fromto(2)
-        logical, optional, intent(in)    :: mask(self%n)
+        class(oris),       intent(inout)        :: self
+        character(len=*),  intent(in)           :: which
+        integer,           optional, intent(in) :: class
+        integer,           optional, intent(in) :: state
+        integer,           optional, intent(in) :: fromto(2)
+        logical,           optional, intent(in) :: mask(self%n)
         integer :: cnt
         real    :: avg, sum
         call self%calc_sum(which, sum, cnt, class, state, fromto, mask)
@@ -789,7 +789,7 @@ contains
     module function included( self ) result( incl )
         class(oris),       intent(inout) :: self
         logical, allocatable :: incl(:)
-        integer :: i
+        integer              :: i
         if(.not.allocated(incl))allocate(incl(self%n))
         incl = .false.
         do i=1,self%n
@@ -828,7 +828,7 @@ contains
     module function get_all_rmats( self ) result( mat )
         class(oris), intent(in) :: self
         real, allocatable       :: mat(:,:,:)
-        integer :: i,n
+        integer                 :: i,n
         n = self%n
         if(allocated(mat))deallocate(mat)
         allocate(mat(n,3,3),source=0.)
@@ -867,12 +867,12 @@ contains
     end function ori2str
 
     module subroutine ori2json( self, i, json_ori, boxes)
-        class(oris),                  intent(in)    :: self
-        integer,                      intent(in)    :: i
-        logical,          optional,   intent(in)    :: boxes
-        type(json_value), pointer,    intent(inout) :: json_ori
+        class(oris),                  intent(in)                :: self
+        integer,                      intent(in)                :: i
+        logical,                      optional,   intent(in)    :: boxes
+        type(json_value),             pointer,    intent(inout) :: json_ori
         type(json_core)                             :: json
-        logical :: l_boxes = .false.
+        logical                                     :: l_boxes = .false.
         if(present(boxes)) l_boxes = boxes
         call self%o(i)%ori2json(json_ori, boxes=l_boxes)
         call json%add(json_ori, 'n', i) 
@@ -955,12 +955,12 @@ contains
     !   nsmp(g) = n(g): those carrying the current sampling marker, the maximum
     !             'sampled' value over the whole project
     module subroutine get_group_update_counts( self, label, ngroups, nrep, nsmp )
-        class(oris),          intent(inout) :: self
-        character(len=*),     intent(in)    :: label
-        integer,              intent(in)    :: ngroups
-        integer, allocatable, intent(inout) :: nrep(:), nsmp(:)
+        class(oris),          intent(inout)              :: self
+        character(len=*),     intent(in)                 :: label
+        integer,              intent(in)                 :: ngroups
+        integer,              allocatable, intent(inout) :: nrep(:), nsmp(:)
         integer, allocatable :: updatecnts(:), sampled(:), states(:), groups(:)
-        integer :: sampled_max, updatecnt_max, i, g
+        integer              :: sampled_max, updatecnt_max, i, g
         select case(trim(label))
             case('class','state')
             case DEFAULT
@@ -996,12 +996,12 @@ contains
     !   smp_rows: those carrying the current sampling marker
     !   rec_rows: the rows sample4rec reconstructs over the whole project (a seed's population)
     module subroutine get_update_rows( self, rep_rows, smp_rows, rec_rows )
-        class(oris),          intent(inout) :: self
-        integer, allocatable, intent(inout) :: rep_rows(:), smp_rows(:), rec_rows(:)
+        class(oris),          intent(inout)              :: self
+        integer,              allocatable, intent(inout) :: rep_rows(:), smp_rows(:), rec_rows(:)
         integer, allocatable :: updatecnts(:), sampled(:), states(:), rows(:)
         logical, allocatable :: l_rep(:), l_smp(:), l_rec(:)
-        integer :: sampled_max, i
-        logical :: l_any_updated
+        integer              :: sampled_max, i
+        logical              :: l_any_updated
         updatecnts = self%get_all_asint('updatecnt')
         sampled    = self%get_all_asint('sampled')
         states     = nint(self%get_all('state'))
@@ -1020,9 +1020,9 @@ contains
     end subroutine get_update_rows
 
     module subroutine get_state_update_fracs( self, nstates, rho )
-        class(oris),                     intent(inout) :: self
-        integer,                         intent(in)    :: nstates
-        real, allocatable,               intent(inout) :: rho(:)
+        class(oris),                     intent(inout)                            :: self
+        integer,                         intent(in)                               :: nstates
+        real,                            allocatable,               intent(inout) :: rho(:)
         integer, allocatable :: nrep(:), nsmp(:)
         call self%get_group_update_counts('state', nstates, nrep, nsmp)
         call counts2fracs(nrep, nsmp, rho)
@@ -1031,12 +1031,12 @@ contains
     !> The active particles of every class, in index order. The 3D sampling units use this order; a selection
     !! tool that picks by score passes score_key, which ranks each class best first (rank_class_samples).
     module subroutine get_class_sample_stats( self, clsinds, clssmp, label, score_key )
-        class(oris),                     intent(inout) :: self
-        integer,                         intent(in)    :: clsinds(:)
-        type(class_sample), allocatable, intent(inout) :: clssmp(:)
-        character(len=*),      optional, intent(in)    :: label, score_key
+        class(oris),                     intent(inout)              :: self
+        integer,                         intent(in)                 :: clsinds(:)
+        type(class_sample),              allocatable, intent(inout) :: clssmp(:)
+        character(len=*),                optional, intent(in)       :: label, score_key
         character(len=:), allocatable :: flag
-        integer :: n, i, nc
+        integer                       :: n, i, nc
         if( present(label) )then
             flag = trim(label)
         else
@@ -1084,8 +1084,8 @@ contains
 
     ! f = n/N per group, 0 for an empty group
     subroutine counts2fracs( nrep, nsmp, rho )
-        integer,           intent(in)    :: nrep(:), nsmp(:)
-        real, allocatable, intent(inout) :: rho(:)
+        integer,           intent(in)                 :: nrep(:), nsmp(:)
+        real,              allocatable, intent(inout) :: rho(:)
         if( allocated(rho) ) deallocate(rho)
         allocate(rho(size(nrep)), source=0.0)
         where( nrep > 0 ) rho = real(nsmp) / real(nrep)

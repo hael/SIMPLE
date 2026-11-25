@@ -19,12 +19,12 @@ end interface ptcl_layout_digest
 contains
 
     function ptcl_layout_digest_arrays(lineage, stack_refs, stack_ids, stack_indices, nrows) result(digest)
-        character(len=*),  intent(in) :: lineage
-        type(string),      intent(in) :: stack_refs(:)
-        integer,           intent(in) :: stack_ids(:), stack_indices(:)
-        integer, optional, intent(in) :: nrows
+        character(len=*),  intent(in)           :: lineage
+        type(string),      intent(in)           :: stack_refs(:)
+        integer,           intent(in)           :: stack_ids(:), stack_indices(:)
+        integer,           optional, intent(in) :: nrows
         integer(int64) :: digest
-        integer :: i, n
+        integer        :: i, n
         n = size(stack_ids)
         if( present(nrows) ) n = nrows
         if( n < 0 .or. n > size(stack_ids) .or. n > size(stack_indices) )then
@@ -46,14 +46,14 @@ contains
 
     !> Layout of the first nrows (default all) rows of particles; the lineage is the project name
     function ptcl_layout_digest_project(project, particles, nrows) result(digest)
-        type(sp_project),  intent(in) :: project
-        class(oris),       intent(in) :: particles
-        integer, optional, intent(in) :: nrows
-        integer(int64) :: digest
+        type(sp_project),  intent(in)           :: project
+        class(oris),       intent(in)           :: particles
+        integer,           optional, intent(in) :: nrows
+        integer(int64)            :: digest
         type(string), allocatable :: stack_refs(:)
         integer,      allocatable :: stack_ids(:), stack_indices(:)
-        type(string) :: lineage, stack_ref
-        integer :: i, nptcls, nstks
+        type(string)              :: lineage, stack_ref
+        integer                   :: i, nptcls, nstks
         digest = 0_int64
         nptcls = particles%get_noris(consider_state=.false.)
         nstks  = project%os_stk%get_noris(consider_state=.false.)

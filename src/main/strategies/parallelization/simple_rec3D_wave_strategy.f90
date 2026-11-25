@@ -51,21 +51,21 @@ end type raw_density
 !! losses on the step subset (wave_model_policy.md, sections 5 and 6)
 type, extends(nlcg_objective) :: rec3D_wave_objective
     private
-    class(parameters),        pointer :: params => null()
-    class(builder),           pointer :: build  => null()
-    class(reconstructor_pcg), pointer :: pcgop  => null()
-    type(wave_projector),    allocatable :: wp
-    type(ptcl_read_session), allocatable :: rsess
-    type(image), allocatable :: obs(:)          !< per-thread observation work images
-    integer, allocatable :: pinds(:)            !< the half's particles, the step subset first
-    complex, allocatable :: ybatch(:,:,:)       !< one batch of observation planes
-    complex, allocatable :: ysub(:,:,:)         !< the step subset's observation planes
-    real,    allocatable :: supp(:,:,:)         !< the solve support, 0 or 1
-    integer  :: n = 0, nsub = 0, box = 0, lims2(2,2) = 0, sqlp = 0
-    real(dp) :: kappa2 = 0.0_dp, subscale = 1.0_dp
-    real     :: gain = 1.0                      !< g of the scale link
-    integer  :: npasses = 0, nsubpasses = 0
-    real(timer_int_kind) :: rt_prep = 0.
+    class(parameters),        pointer     :: params  => null()
+    class(builder),           pointer     :: build   => null()
+    class(reconstructor_pcg), pointer     :: pcgop   => null()
+    type(wave_projector),     allocatable :: wp
+    type(ptcl_read_session),  allocatable :: rsess
+    type(image),              allocatable :: obs(:)        !< per-thread observation work images
+    integer,                  allocatable :: pinds(:)      !< the half's particles, the step subset first
+    complex,                  allocatable :: ybatch(:,:,:) !< one batch of observation planes
+    complex,                  allocatable :: ysub(:,:,:)   !< the step subset's observation planes
+    real,                     allocatable :: supp(:,:,:)   !< the solve support, 0 or 1
+    integer                               :: n       = 0, nsub = 0, box = 0, lims2(2,2) = 0, sqlp = 0
+    real(dp)                              :: kappa2  = 0.0_dp, subscale = 1.0_dp
+    real                                  :: gain    = 1.0 !< g of the scale link
+    integer                               :: npasses = 0, nsubpasses = 0
+    real(timer_int_kind)                  :: rt_prep = 0.
   contains
     procedure :: new         => objective_new
     procedure :: size        => objective_size
@@ -88,23 +88,23 @@ contains
         type(parameters), target, intent(inout) :: params
         type(builder),    target, intent(inout) :: build
         type(reconstructor_pcg),    allocatable, target :: pcgops(:)
-        type(raw_density)                       :: d_raws(2)
-        type(rec3D_wave_objective), allocatable :: obj
-        type(ptcl_read_session),    allocatable :: rsess
-        type(halfmap_diagnostics_result) :: diag
-        type(nlcg_solver_options) :: opts
-        type(nlcg_solver_outcome) :: outcome
-        type(image)               :: vols(2), unfil(2), avg
-        type(string)              :: fname, support_kind
-        integer, allocatable :: all_pinds(:), halves(:,:), even_pinds(:), odd_pinds(:), state_pinds(:)
-        real,    allocatable :: x(:,:,:), xreg(:,:,:), supp(:,:,:)
-        real,    allocatable, target :: v(:,:,:)
-        real,    pointer :: vp(:)
-        integer  :: model, kappa, state, ihalf, nhalf(2), i, buffer_status, nstates_done
-        real     :: gain, kv, kv2, scale_volts
-        real(dp) :: gain_fit, gain_num, gain_den
-        logical  :: l_sigma_loaded
-        character(len=4), parameter :: HALF_NAMES(2) = ['even', 'odd ']
+        type(raw_density)                               :: d_raws(2)
+        type(rec3D_wave_objective), allocatable         :: obj
+        type(ptcl_read_session),    allocatable         :: rsess
+        type(halfmap_diagnostics_result)                :: diag
+        type(nlcg_solver_options)                       :: opts
+        type(nlcg_solver_outcome)                       :: outcome
+        type(image)                                     :: vols(2), unfil(2), avg
+        type(string)                                    :: fname, support_kind
+        integer,                    allocatable         :: all_pinds(:), halves(:,:), even_pinds(:), odd_pinds(:), state_pinds(:)
+        real,                       allocatable         :: x(:,:,:), xreg(:,:,:), supp(:,:,:)
+        real,                       allocatable, target :: v(:,:,:)
+        real,                       pointer             :: vp(:)
+        integer                                         :: model, kappa, state, ihalf, nhalf(2), i, buffer_status, nstates_done
+        real                                            :: gain, kv, kv2, scale_volts
+        real(dp)                                        :: gain_fit, gain_num, gain_den
+        logical                                         :: l_sigma_loaded
+        character(len=4),           parameter           :: HALF_NAMES(2) = ['even', 'odd ']
         select case(trim(params%wave_model))
             case('projection')
                 model = WAVE_PROJECTION
@@ -258,7 +258,7 @@ contains
             integer, intent(in)  :: pinds_here(:)
             real,    intent(out) :: kv_here
             type(ctfparams) :: ctfparms
-            integer :: ii
+            integer         :: ii
             kv_here = 0.
             do ii = 1, size(pinds_here)
                 ctfparms = build%spproj%get_ctfparams(params%oritype, pinds_here(ii))
@@ -273,10 +273,10 @@ contains
             integer,     intent(in)    :: ihalf_here, pinds_here(:)
             type(image), intent(inout) :: vol
             type(pcg_solver_outcome) :: pcg_outcome
-            real, allocatable :: rel_res_hist(:), xbase(:,:,:)
-            real(timer_int_kind) :: rt_prep
-            integer(timer_int_kind) :: t0, t1, rate
-            integer :: niters
+            real, allocatable        :: rel_res_hist(:), xbase(:,:,:)
+            real(timer_int_kind)     :: rt_prep
+            integer(timer_int_kind)  :: t0, t1, rate
+            integer                  :: niters
             call system_clock(t0, rate)
             associate( op => pcgops(ihalf_here) )
             call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA, fft_nthreads=params%nthr)
@@ -301,13 +301,13 @@ contains
         !> the regularized flat map of a half: its operator under the ML prior (set_ml_prior first), the
         !! closed-form shrink of the base map and maxits_ml coupled iterations, as the PCG master's
         subroutine regularize_start( ihalf_here, vol, xout )
-            integer,           intent(in)    :: ihalf_here
-            type(image),       intent(in)    :: vol
-            real, allocatable, intent(inout) :: xout(:,:,:)
+            integer,           intent(in)                 :: ihalf_here
+            type(image),       intent(in)                 :: vol
+            real,              allocatable, intent(inout) :: xout(:,:,:)
             type(pcg_solver_outcome) :: pcg_outcome
-            real, allocatable :: rel_res_hist(:), x_cf(:,:,:)
-            integer(timer_int_kind) :: t0, t1, rate
-            integer :: niters
+            real, allocatable        :: rel_res_hist(:), x_cf(:,:,:)
+            integer(timer_int_kind)  :: t0, t1, rate
+            integer                  :: niters
             call system_clock(t0, rate)
             call pcgops(ihalf_here)%regularize_finalized(d_raws(ihalf_here)%d)
             call pcgops(ihalf_here)%set_op_mode(PCG_OP_KERNEL)
@@ -329,7 +329,7 @@ contains
             real(dp),                   intent(in) :: g_fit, g_num, g_den
             type(rec3D_wave_objective), intent(in) :: objective
             type(string) :: dname
-            integer :: funit, it
+            integer      :: funit, it
             dname = 'reconstruct3D_wave_state'//int2str_pad(state_here,2)//'_'//trim(half)//'_diagnostics.txt'
             call fopen(funit, file=dname, status='replace', action='write')
             write(funit,'(A,A)')      'wave_model=',        trim(params%wave_model)
@@ -366,15 +366,15 @@ contains
     !! holds the half's ML prior and preconditioner; model, kappa_here, gain_here as wave_projector%new;
     !! scale_volts the PCG map's scale per volt
     subroutine objective_new( self, params, build, pcgop_here, pinds_here, model, kappa_here, gain_here, scale_volts )
-        class(rec3D_wave_objective),      intent(inout) :: self
-        class(parameters),        target, intent(inout) :: params
-        class(builder),           target, intent(inout) :: build
-        class(reconstructor_pcg), target, intent(inout) :: pcgop_here
-        integer,                          intent(in)    :: pinds_here(:), model, kappa_here
-        real,                             intent(in)    :: gain_here, scale_volts
-        type(oris) :: selection
-        real, allocatable :: inv_sig2(:)
-        integer :: i, j, stride, batchlims(2), eo, nthr
+        class(rec3D_wave_objective),      intent(inout)         :: self
+        class(parameters),                target, intent(inout) :: params
+        class(builder),                   target, intent(inout) :: build
+        class(reconstructor_pcg),         target, intent(inout) :: pcgop_here
+        integer,                          intent(in)            :: pinds_here(:), model, kappa_here
+        real,                             intent(in)            :: gain_here, scale_volts
+        type(oris)           :: selection
+        real,    allocatable :: inv_sig2(:)
+        integer              :: i, j, stride, batchlims(2), eo, nthr
         logical, allocatable :: l_sub(:)
         call self%kill
         self%params => params
@@ -445,13 +445,13 @@ contains
 
     !> L(x) and its gradient: one pass over the half's particles
     subroutine objective_eval( self, x, loss, g )
-        class(rec3D_wave_objective), intent(inout) :: self
-        real, contiguous, target,    intent(in)    :: x(:)
-        real(dp),                    intent(out)   :: loss
-        real, contiguous, target,    intent(out)   :: g(:)
+        class(rec3D_wave_objective), intent(inout)                      :: self
+        real,                        contiguous, target,    intent(in)  :: x(:)
+        real(dp),                    intent(out)                        :: loss
+        real,                        contiguous, target,    intent(out) :: g(:)
         real, pointer     :: x3(:,:,:), g3(:,:,:)
         real, allocatable :: q(:,:,:)
-        integer :: i, nb, batchlims(2)
+        integer           :: i, nb, batchlims(2)
         x3(1:self%box,1:self%box,1:self%box) => x
         g3(1:self%box,1:self%box,1:self%box) => g
         call self%wp%set_volume(x3)
@@ -473,8 +473,8 @@ contains
 
     !> the Gauss-Newton curvature along d at x on the step subset, scaled to the half, plus the prior's
     real(dp) function objective_curvature( self, x, d ) result( curv )
-        class(rec3D_wave_objective), intent(inout) :: self
-        real, contiguous, target,    intent(in)    :: x(:), d(:)
+        class(rec3D_wave_objective), intent(inout)                     :: self
+        real,                        contiguous, target,    intent(in) :: x(:), d(:)
         real, pointer     :: x3(:,:,:), d3(:,:,:)
         real, allocatable :: q(:,:,:)
         x3(1:self%box,1:self%box,1:self%box) => x
@@ -489,13 +489,13 @@ contains
 
     !> L(x + t(j) d) on the step subset, its data term scaled to the half
     subroutine objective_line_losses( self, x, d, t, losses )
-        class(rec3D_wave_objective), intent(inout) :: self
-        real, contiguous, target,    intent(in)    :: x(:), d(:)
-        real(dp),                    intent(in)    :: t(:)
-        real(dp),                    intent(out)   :: losses(:)
+        class(rec3D_wave_objective), intent(inout)                     :: self
+        real,                        contiguous, target,    intent(in) :: x(:), d(:)
+        real(dp),                    intent(in)                        :: t(:)
+        real(dp),                    intent(out)                       :: losses(:)
         real, pointer     :: x3(:,:,:), d3(:,:,:)
         real, allocatable :: qx(:,:,:), qd(:,:,:)
-        real(dp) :: pxx, pxd, pdd
+        real(dp)          :: pxx, pxd, pdd
         x3(1:self%box,1:self%box,1:self%box) => x
         d3(1:self%box,1:self%box,1:self%box) => d
         call self%wp%set_volume(x3)
@@ -511,9 +511,9 @@ contains
     end subroutine objective_line_losses
 
     subroutine objective_precond( self, r, z )
-        class(rec3D_wave_objective), intent(inout) :: self
-        real, contiguous, target,    intent(in)    :: r(:)
-        real, contiguous, target,    intent(out)   :: z(:)
+        class(rec3D_wave_objective), intent(inout)                      :: self
+        real,                        contiguous, target,    intent(in)  :: r(:)
+        real,                        contiguous, target,    intent(out) :: z(:)
         real, pointer :: r3(:,:,:), z3(:,:,:)
         r3(1:self%box,1:self%box,1:self%box) => r
         z3(1:self%box,1:self%box,1:self%box) => z
@@ -521,14 +521,14 @@ contains
     end subroutine objective_precond
 
     real(dp) function objective_dot( self, a, b ) result( value )
-        class(rec3D_wave_objective), intent(in) :: self
-        real, contiguous, target,    intent(in) :: a(:), b(:)
+        class(rec3D_wave_objective), intent(in)                        :: self
+        real,                        contiguous, target,    intent(in) :: a(:), b(:)
         value = sum(real(a,dp) * real(b,dp))
     end function objective_dot
 
     subroutine objective_project( self, v )
-        class(rec3D_wave_objective), intent(inout) :: self
-        real, contiguous, target,    intent(inout) :: v(:)
+        class(rec3D_wave_objective), intent(inout)                        :: self
+        real,                        contiguous, target,    intent(inout) :: v(:)
         real, pointer :: v3(:,:,:)
         v3(1:self%box,1:self%box,1:self%box) => v
         v3 = v3 * self%supp
@@ -542,7 +542,7 @@ contains
         real,                        intent(in)    :: v(self%box,self%box,self%box)
         real(dp),                    intent(out)   :: snum, sden
         real(dp), allocatable :: num(:), den(:)
-        integer  :: i, nb, ib, batchlims(2)
+        integer               :: i, nb, ib, batchlims(2)
         call self%wp%set_volume(v)
         allocate(num(MAXIMGBATCHSZ), den(MAXIMGBATCHSZ))
         snum = 0.0_dp

@@ -21,19 +21,19 @@ contains
 
     subroutine exec_refpick( params, micname, boxfile_out, thumb_den_out, smpd, nptcls, pickrefs, dir_out, nboxes_max )
         use simple_string_utils, only: str2real, parsestr
-        class(parameters),       intent(in)    :: params
-        class(string),           intent(in)    :: micname
-        class(string),           intent(out)   :: boxfile_out, thumb_den_out
-        real,                    intent(in)    :: smpd    !< sampling distance in A
-        integer,                 intent(out)   :: nptcls
-        class(image),            intent(inout) :: pickrefs(:)
-        class(string), optional, intent(in)    :: dir_out
-        integer,       optional, intent(in)    :: nboxes_max
+        class(parameters),       intent(in)           :: params
+        class(string),           intent(in)           :: micname
+        class(string),           intent(out)          :: boxfile_out, thumb_den_out
+        real,                    intent(in)           :: smpd !< sampling distance in A
+        integer,                 intent(out)          :: nptcls
+        class(image),            intent(inout)        :: pickrefs(:)
+        class(string),           optional, intent(in) :: dir_out
+        integer,                 optional, intent(in) :: nboxes_max
         type(pickref)                  :: refp, refp_refine
-        type(string) :: boxfile, fbody_here, ext, fname_thumb_den
-        real    :: maxdiam
-        integer :: box
-        logical :: l_roi, l_backgr_subtr
+        type(string)                   :: boxfile, fbody_here, ext, fname_thumb_den
+        real                           :: maxdiam
+        integer                        :: box
+        logical                        :: l_roi, l_backgr_subtr
         fbody_here      = basename(micname)
         ext             = fname2ext(fbody_here)
         fbody_here      = get_fbody(fbody_here, ext)
@@ -73,13 +73,13 @@ contains
     end subroutine exec_refpick
 
     subroutine exec_segdiampick( params, micname, boxfile_out, thumb_den_out, smpd, nptcls, moldiam_max, dir_out )
-        class(parameters),          intent(in)  :: params
-        class(string),              intent(in)  :: micname
-        class(string),              intent(out) :: boxfile_out, thumb_den_out
-        real,                       intent(in)  :: smpd    !< sampling distance in A
-        integer,                    intent(out) :: nptcls
-        real,                       intent(in)  :: moldiam_max
-        class(string), optional,    intent(in)  :: dir_out
+        class(parameters),          intent(in)              :: params
+        class(string),              intent(in)              :: micname
+        class(string),              intent(out)             :: boxfile_out, thumb_den_out
+        real,                       intent(in)              :: smpd !< sampling distance in A
+        integer,                    intent(out)             :: nptcls
+        real,                       intent(in)              :: moldiam_max
+        class(string),              optional,    intent(in) :: dir_out
         type(string)      :: boxfile, fbody_here, ext, fname_thumb_den
         type(picksegdiam) :: picker
         fbody_here      = basename(micname)
@@ -102,22 +102,22 @@ contains
 
     subroutine exec_gaupick( params, micname, boxfile_out, smpd, nptcls, dir_out, nboxes_max )
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
-        class(parameters),          intent(inout) :: params
-        class(string),              intent(in)    :: micname
-        class(string),              intent(out)   :: boxfile_out
-        real,                       intent(in)    :: smpd    !< sampling distance in A
-        integer,                    intent(out)   :: nptcls
-        class(string),    optional, intent(in)    :: dir_out
-        integer,          optional, intent(in)    :: nboxes_max
+        class(parameters),          intent(inout)        :: params
+        class(string),              intent(in)           :: micname
+        class(string),              intent(out)          :: boxfile_out
+        real,                       intent(in)           :: smpd !< sampling distance in A
+        integer,                    intent(out)          :: nptcls
+        class(string),              optional, intent(in) :: dir_out
+        integer,                    optional, intent(in) :: nboxes_max
         type(image),      allocatable :: pickrefs(:)
         type(pickref),    allocatable :: comprefp_refine(:)
         real,             allocatable :: moldiams(:)
         character(len=4), allocatable :: moldiams_str(:)
-        type(pickref) :: refp, refp_refine
-        type(string)  :: kind, boxfile
-        real          :: maxdiam, sig, r, ang
-        integer       :: box, i, istr, num_entries, nmoldiams, sel
-        logical       :: l_roi, l_backgr_subtr, l_competitive
+        type(pickref)                 :: refp, refp_refine
+        type(string)                  :: kind, boxfile
+        real                          :: maxdiam, sig, r, ang
+        integer                       :: box, i, istr, num_entries, nmoldiams, sel
+        logical                       :: l_roi, l_backgr_subtr, l_competitive
         boxfile = basename(fname_new_ext(micname,'box'))
         if( present(dir_out) ) boxfile = dir_out//'/'//boxfile%to_char()
         l_roi          = trim(params%pick_roi).eq.'yes'

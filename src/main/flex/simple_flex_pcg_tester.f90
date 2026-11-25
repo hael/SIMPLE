@@ -34,7 +34,7 @@ contains
     subroutine check_operator( box, nsamples, with_solve, sweep )
         integer, intent(in) :: box, nsamples
         logical, intent(in) :: with_solve, sweep
-        logical :: l_pass, passes(6)
+        logical           :: l_pass, passes(6)
         character(len=32) :: tag
         write(tag,'(A,I0,A,I0,A)') 'box ', box, ', ', nsamples, ' samples: '
         call test_flex_pcg_operator(box, nsamples, l_pass, passes=passes, sweep=sweep)

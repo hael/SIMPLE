@@ -17,13 +17,13 @@ public  :: run_all_http_post_tests
 private
 #include "simple_local_flags.inc"
 
-integer,          parameter :: REQ_BUF  = 4096
-integer,          parameter :: RESP_BUF = 1024
-character(len=*), parameter :: CRLF     = achar(13)//achar(10)
-character(len=*), parameter :: CANNED   = '{"id":1,"title":"loopback","userId":1}'
-character(len=*), parameter :: CTYPE    = 'application/json; charset=utf-8'
-character(len=*), parameter :: BODY1    = '{"title":"foo","body":"bar","userId":1}'
-character(len=*), parameter :: BODY2    = '{"title":"second"}'
+integer,          parameter :: REQ_BUF     = 4096
+integer,          parameter :: RESP_BUF    = 1024
+character(len=*), parameter :: CRLF        = achar(13)//achar(10)
+character(len=*), parameter :: CANNED      = '{"id":1,"title":"loopback","userId":1}'
+character(len=*), parameter :: CTYPE       = 'application/json; charset=utf-8'
+character(len=*), parameter :: BODY1       = '{"title":"foo","body":"bar","userId":1}'
+character(len=*), parameter :: BODY2       = '{"title":"second"}'
 integer,          parameter :: UNUSED_PORT = 65000
 
 contains
@@ -63,7 +63,7 @@ contains
 
     function loopback_url( port ) result( url )
         integer, intent(in) :: port
-        type(string) :: url
+        type(string)      :: url
         character(len=64) :: buf
         write(buf,'(A,I0,A)') 'http://127.0.0.1:', port, '/posts'
         url = string(trim(buf))
@@ -73,7 +73,7 @@ contains
     integer function content_length( hdr )
         character(len=*), intent(in) :: hdr
         character(len=len(hdr)) :: lc
-        integer :: i, j, ios
+        integer                 :: i, j, ios
         content_length = 0
         lc = lowercase(hdr)
         i  = index(lc, 'content-length:')
@@ -87,15 +87,15 @@ contains
 
     !> listener thread: serve requests until the server's kill sentinel arrives
     subroutine http_listener( arg_ptr ) bind(c)
-        type(c_ptr), value :: arg_ptr
-        type(listener_args), pointer :: args
-        character(kind=c_char, len=REQ_BUF),  target :: req, chunk
-        character(kind=c_char, len=RESP_BUF), target :: resp
-        character(len=16)      :: clen_str
-        integer(c_int)         :: conn_fd, rc
-        integer(c_size_t)      :: nr
-        integer                :: nread, ntot, hdr_end, clen, body_from, nbody, nresp, nwrite
-        logical                :: ok
+        type(c_ptr),                          value   :: arg_ptr
+        type(listener_args),                  pointer :: args
+        character(kind=c_char, len=REQ_BUF),  target  :: req, chunk
+        character(kind=c_char, len=RESP_BUF), target  :: resp
+        character(len=16)                             :: clen_str
+        integer(c_int)                                :: conn_fd, rc
+        integer(c_size_t)                             :: nr
+        integer                                       :: nread, ntot, hdr_end, clen, body_from, nbody, nresp, nwrite
+        logical                                       :: ok
         if( .not. c_associated(arg_ptr) ) return
         call c_f_pointer(arg_ptr, args)
         rc = c_pthread_mutex_lock(args%mutex)

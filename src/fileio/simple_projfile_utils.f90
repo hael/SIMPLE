@@ -17,29 +17,29 @@ contains
 
     subroutine merge_chunk_projfiles( chunk_fnames, folder, merged_proj, projname_out, write_proj, cavgs_out, &
             &cavgs_replace, update_classno )
-        class(string),           intent(in)    :: chunk_fnames(:) ! List of project files
-        class(string),           intent(in)    :: folder          ! output folder
-        class(sp_project),       intent(inout) :: merged_proj     ! output project, assumed to have compuational env info
-        class(string), optional, intent(in)    :: projname_out    ! name for output project file
-        logical,       optional, intent(in)    :: write_proj      ! write project file
-        logical,       optional, intent(in)    :: cavgs_replace   ! replace cavgs
-        logical,       optional, intent(in)    :: update_classno  ! update the ptcl class numbers
-        class(string), optional, intent(in)    :: cavgs_out       ! name for output cls2D stack
+        class(string),           intent(in)           :: chunk_fnames(:) ! List of project files
+        class(string),           intent(in)           :: folder          ! output folder
+        class(sp_project),       intent(inout)        :: merged_proj     ! output project, assumed to have compuational env info
+        class(string),           optional, intent(in) :: projname_out    ! name for output project file
+        logical,                 optional, intent(in) :: write_proj      ! write project file
+        logical,                 optional, intent(in) :: cavgs_replace   ! replace cavgs
+        logical,                 optional, intent(in) :: update_classno  ! update the ptcl class numbers
+        class(string),           optional, intent(in) :: cavgs_out       ! name for output cls2D stack
         type(sp_project), allocatable :: chunks(:)
         type(string),     allocatable :: chunks_sigma2_state(:)
         real,             allocatable :: states(:)
         integer,          allocatable :: clsmap(:)
-        type(class_frcs) :: frcs, frcs_chunk
-        type(image)      :: img
-        type(string)     :: projname, stkname, evenname, oddname, frc_fname, projfile_out, dir, cavgs
-        type(string)     :: cavgs_tmp, evenname_tmp, oddname_tmp
-        real             :: smpd
-        integer          :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
-        integer          :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
-        logical, allocatable :: chunks_have_canonical(:)
-        logical          :: l_write_proj, l_cavgs_replace, l_update_classno, l_merge_evenodd, l_merge_frcs
-        logical          :: l_merge_canonical
-        logical          :: frcs_initialised
+        type(class_frcs)              :: frcs, frcs_chunk
+        type(image)                   :: img
+        type(string)                  :: projname, stkname, evenname, oddname, frc_fname, projfile_out, dir, cavgs
+        type(string)                  :: cavgs_tmp, evenname_tmp, oddname_tmp
+        real                          :: smpd
+        integer                       :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
+        integer                       :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
+        logical,          allocatable :: chunks_have_canonical(:)
+        logical                       :: l_write_proj, l_cavgs_replace, l_update_classno, l_merge_evenodd, l_merge_frcs
+        logical                       :: l_merge_canonical
+        logical                       :: frcs_initialised
         l_write_proj     = .true.
         l_cavgs_replace  = .false.
         l_update_classno = .true.
@@ -251,12 +251,12 @@ contains
 
         subroutine concatenate_canonical_states
             type(sigma2_state_header) :: source_header, target_header
-            type(string) :: target_path, candidate_path
-            logical, allocatable :: active(:)
-            integer, allocatable :: eo_ids(:)
-            integer(int64) :: layout_digest, generation
-            integer :: irow, offset, status
-            character(len=STDLEN) :: message
+            type(string)              :: target_path, candidate_path
+            logical, allocatable      :: active(:)
+            integer, allocatable      :: eo_ids(:)
+            integer(int64)            :: layout_digest, generation
+            integer                   :: irow, offset, status
+            character(len=STDLEN)     :: message
             generation = 1_int64
             offset = 0
             do irow = 1, nchunks
@@ -305,9 +305,9 @@ contains
         subroutine validate_chunk_canonical_identity( ichunk )
             integer, intent(in) :: ichunk
             type(sigma2_state_header) :: source_header
-            integer(int64) :: source_digest
-            integer :: status
-            character(len=STDLEN) :: message
+            integer(int64)            :: source_digest
+            integer                   :: status
+            character(len=STDLEN)     :: message
             call sigma2_state_validate_file(chunks_sigma2_state(ichunk)%to_char(), status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
             call sigma2_state_read_header(chunks_sigma2_state(ichunk)%to_char(), source_header, status, message)
@@ -327,14 +327,14 @@ contains
         type(sp_project), allocatable :: chunks(:)
         real,             allocatable :: states(:)
         integer,          allocatable :: clsmap(:)
-        type(class_frcs) :: frcs, frcs_chunk
-        type(image)      :: img
-        type(string)     :: projname, stkname, evenname, oddname, frc_fname, projfile_out, dir, cavgs
-        logical, allocatable :: chunks_have2D(:)
-        real    :: smpd
-        integer :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
-        integer :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
-        logical :: l_merge_evenodd, l_merge_frcs, frcs_initialised
+        type(class_frcs)              :: frcs, frcs_chunk
+        type(image)                   :: img
+        type(string)                  :: projname, stkname, evenname, oddname, frc_fname, projfile_out, dir, cavgs
+        logical,          allocatable :: chunks_have2D(:)
+        real                          :: smpd
+        integer                       :: ldim(3), i, ic, icls, ncls, nchunks, nallmics, nallstks, nallptcls, ncls_tot, box4frc
+        integer                       :: fromp, fromp_glob, top, top_glob, j, iptcl_glob, nstks, nmics, nptcls, istk
+        logical                       :: l_merge_evenodd, l_merge_frcs, frcs_initialised
         frcs_initialised = .false.
         nchunks = size(chunk_fnames)
         if( nchunks < 1 ) THROW_HARD('merge_chunk_projfiles requires at least one chunk project')
@@ -511,30 +511,30 @@ contains
     end subroutine merge_chunk_projfiles_without_sigma2
 
     subroutine merge_selected_project_files( project_fnames, projfile_out, merged_proj, write_proj )
-        class(string),     intent(in)    :: project_fnames(:) ! SIMPLE project files to merge
-        class(string),     intent(in)    :: projfile_out      ! output project file
-        class(sp_project), intent(inout) :: merged_proj       ! output project
-        logical, optional, intent(in)    :: write_proj        ! write project file
-        real, parameter :: SMPD_TOL = 0.001
-        type(sp_project), allocatable :: projects(:)
-        type(string), allocatable :: project_sigma2_states(:)
-        type(string) :: projfile_abs, projdir, stage_dir, projfile_stage
+        class(string),     intent(in)           :: project_fnames(:) ! SIMPLE project files to merge
+        class(string),     intent(in)           :: projfile_out      ! output project file
+        class(sp_project), intent(inout)        :: merged_proj       ! output project
+        logical,           optional, intent(in) :: write_proj        ! write project file
+        real,                  parameter   :: SMPD_TOL = 0.001
+        type(sp_project),      allocatable :: projects(:)
+        type(string),          allocatable :: project_sigma2_states(:)
+        type(string)                       :: projfile_abs, projdir, stage_dir, projfile_stage
         type(binoris_seginfo), allocatable :: seginfos(:), hint_infos(:)
-        integer, allocatable :: nmics(:), nstks(:), nptcl2Ds(:), nptcl3Ds(:), noptics(:)
-        integer, allocatable :: mic_offsets(:), stk_offsets(:), ptcl2D_offsets(:), ptcl3D_offsets(:)
-        integer, allocatable :: opt_offsets(:)
-        integer, allocatable :: src_ogid_maxs(:), ogid_offsets(:)
-        integer, allocatable :: seginds(:), hint_inds(:)
-        integer :: nprojs, iproj, imic, istk, iptcl, iopt, iseg, idir_dummy
-        integer :: imic_glob, istk_glob, iptcl2D_glob, iptcl3D_glob
-        integer :: iopt_glob
-        integer :: stk_offset, ptcl2D_offset, ptcl3D_offset
-        integer :: fromp, top, range_offset
-        integer :: ogid_offset, ogid_glob_max, ogid
-        logical, allocatable :: projects_have_canonical(:)
-        logical :: l_write_proj, l_has_mics, l_has_stks, l_has_ptcl2D, l_has_ptcl3D
-        logical :: l_has_optics, l_has_any_data
-        logical :: l_merge_canonical_sigma
+        integer,               allocatable :: nmics(:), nstks(:), nptcl2Ds(:), nptcl3Ds(:), noptics(:)
+        integer,               allocatable :: mic_offsets(:), stk_offsets(:), ptcl2D_offsets(:), ptcl3D_offsets(:)
+        integer,               allocatable :: opt_offsets(:)
+        integer,               allocatable :: src_ogid_maxs(:), ogid_offsets(:)
+        integer,               allocatable :: seginds(:), hint_inds(:)
+        integer                            :: nprojs, iproj, imic, istk, iptcl, iopt, iseg, idir_dummy
+        integer                            :: imic_glob, istk_glob, iptcl2D_glob, iptcl3D_glob
+        integer                            :: iopt_glob
+        integer                            :: stk_offset, ptcl2D_offset, ptcl3D_offset
+        integer                            :: fromp, top, range_offset
+        integer                            :: ogid_offset, ogid_glob_max, ogid
+        logical,               allocatable :: projects_have_canonical(:)
+        logical                            :: l_write_proj, l_has_mics, l_has_stks, l_has_ptcl2D, l_has_ptcl3D
+        logical                            :: l_has_optics, l_has_any_data
+        logical                            :: l_merge_canonical_sigma
         nprojs = size(project_fnames)
         if( nprojs < 2 ) THROW_HARD('merge_selected_project_files requires at least two input projects')
         if( fname2format(projfile_out) /= 'O' )then
@@ -756,9 +756,9 @@ contains
             subroutine validate_selected_source_sigma( isource )
                 integer, intent(in) :: isource
                 type(sigma2_state_header) :: source_header
-                integer(int64) :: source_digest
-                integer :: status
-                character(len=STDLEN) :: message
+                integer(int64)            :: source_digest
+                integer                   :: status
+                character(len=STDLEN)     :: message
                 call sigma2_state_validate_file(project_sigma2_states(isource)%to_char(), status, message)
                 if( status /= 0 ) THROW_HARD(trim(message))
                 call sigma2_state_read_header(project_sigma2_states(isource)%to_char(), source_header, status, message)
@@ -787,12 +787,12 @@ contains
             subroutine merge_selected_canonical_field( target_particles )
                 class(oris), intent(in) :: target_particles
                 type(sigma2_state_header) :: source_header, target_header
-                type(string) :: target_dir, target_path, candidate_path
-                logical, allocatable :: active(:)
-                integer, allocatable :: eo_ids(:)
-                integer(int64) :: layout_digest, generation
-                integer :: ip, irow, offset, nrows, status
-                character(len=STDLEN) :: message
+                type(string)              :: target_dir, target_path, candidate_path
+                logical, allocatable      :: active(:)
+                integer, allocatable      :: eo_ids(:)
+                integer(int64)            :: layout_digest, generation
+                integer                   :: ip, irow, offset, nrows, status
+                character(len=STDLEN)     :: message
                 nrows = target_particles%get_noris(consider_state=.false.)
                 generation = 1_int64
                 offset = 0
@@ -934,10 +934,10 @@ contains
                 class(sp_project), intent(inout) :: proj
                 integer,           intent(in)    :: iproj
                 character(len=*),  intent(in)    :: segment
-                integer, parameter :: NO_BAD = huge(1)
-                integer :: iptcl, stkind, nptcls, nstks_here
-                integer :: bad_stkind_missing, bad_stkind_range
-                integer :: bad_dfx, bad_angast, bad_phshift
+                integer, parameter   :: NO_BAD = huge(1)
+                integer              :: iptcl, stkind, nptcls, nstks_here
+                integer              :: bad_stkind_missing, bad_stkind_range
+                integer              :: bad_dfx, bad_angast, bad_phshift
                 logical, allocatable :: stack_ctf(:)
                 nptcls = os%get_noris()
                 bad_phshift = NO_BAD
@@ -1108,7 +1108,7 @@ contains
             end subroutine validate_stack_dimensions
 
             subroutine validate_mic_sampling
-                real :: smpd_ref, smpd_here
+                real    :: smpd_ref, smpd_here
                 integer :: ip, im
                 if( .not.projects(1)%os_mic%isthere(1, 'smpd') ) return
                 smpd_ref = projects(1)%os_mic%get(1, 'smpd')
@@ -1240,7 +1240,7 @@ contains
         class(sp_project), intent(inout) :: proj
         class(string),     intent(in)    :: projfile
         type(string) :: projdir, fname, absfname
-        integer :: istk, nstks
+        integer      :: istk, nstks
         projdir = get_fpath(projfile)
         nstks = proj%os_stk%get_noris()
         do istk = 1,nstks
@@ -1273,15 +1273,15 @@ contains
     !! the particle records to the current width. With nerrors_out present, an
     !! unfixable project returns its error count instead of stopping.
     subroutine fix_project_file( projfile_in, projfile_out, nerrors_out )
-        class(string),     intent(in)  :: projfile_in
-        type(string),      intent(out) :: projfile_out
-        integer, optional, intent(out) :: nerrors_out
-        type(sp_project) :: proj
+        class(string),     intent(in)            :: projfile_in
+        type(string),      intent(out)           :: projfile_out
+        integer,           optional, intent(out) :: nerrors_out
+        type(sp_project)              :: proj
         character(len=:), allocatable :: errmsg
-        integer, allocatable :: stack_counts(:)
-        logical, allocatable :: derive_indstk(:)
-        integer :: nstks, nptcls_ref, nptcls2D, nptcls3D
-        integer :: nwarns, nerrors, nrepairs
+        integer,          allocatable :: stack_counts(:)
+        logical,          allocatable :: derive_indstk(:)
+        integer                       :: nstks, nptcls_ref, nptcls2D, nptcls3D
+        integer                       :: nwarns, nerrors, nrepairs
         if( fname2format(projfile_in) /= 'O' )then
             THROW_HARD('fix_projfile requires a SIMPLE project file (*.simple)')
         endif
@@ -1385,8 +1385,8 @@ contains
                 character(len=*), intent(in)    :: segment
                 integer,          intent(in)    :: nptcls
                 integer, allocatable :: stkind_counts(:)
-                integer :: istk, iptcl, stkind, fromp, top, nptcls_stk, total_counts, expected_fromp
-                integer :: count_from_range, count_from_nptcls, excess, trim_now
+                integer              :: istk, iptcl, stkind, fromp, top, nptcls_stk, total_counts, expected_fromp
+                integer              :: count_from_range, count_from_nptcls, excess, trim_now
                 allocate(stkind_counts(nstks))
                 stkind_counts = 0
                 do iptcl = 1,nptcls
@@ -1494,7 +1494,7 @@ contains
             !! the project rows only when the stack holds one image per row.
             subroutine fix_stack_nptcls_stk
                 type(string) :: stkname
-                integer :: istk, nptcls_stk, ldim(3)
+                integer      :: istk, nptcls_stk, ldim(3)
                 do istk = 1,nstks
                     if( stack_counts(istk) == 0 ) cycle
                     if( proj%os_stk%isthere(istk, 'nptcls_stk') )then
@@ -1625,15 +1625,15 @@ contains
     !> The routine validates every target in the selected scope before changing
     !> any project field. Paths must match old_root on a path-component boundary.
     subroutine remap_project_paths( proj, old_root, new_root, nremapped, scope, require_match )
-        class(sp_project), intent(inout) :: proj
-        class(string),     intent(in)    :: old_root, new_root
-        integer,           intent(out)   :: nremapped
-        character(len=*), optional, intent(in) :: scope
-        logical,          optional, intent(in) :: require_match
+        class(sp_project), intent(inout)        :: proj
+        class(string),     intent(in)           :: old_root, new_root
+        integer,           intent(out)          :: nremapped
+        character(len=*),  optional, intent(in) :: scope
+        logical,           optional, intent(in) :: require_match
         character(len=:), allocatable :: old_root_norm, new_root_norm
-        character(len=5) :: scope_here
-        integer :: nmatched, nmissing
-        logical :: require_match_here
+        character(len=5)              :: scope_here
+        integer                       :: nmatched, nmissing
+        logical                       :: require_match_here
         scope_here = 'all'
         if( present(scope) ) scope_here = trim(adjustl(scope))
         select case(trim(scope_here))
@@ -1736,11 +1736,11 @@ contains
         end subroutine process_vol_fields
 
         subroutine process_field( os, segment, key, apply_changes, nfound, nbad, path_is_dir, required_imgkind )
-            class(oris),      intent(inout) :: os
-            character(len=*), intent(in)    :: segment, key
-            logical,          intent(in)    :: apply_changes
-            integer,          intent(inout) :: nfound, nbad
-            logical, optional, intent(in)    :: path_is_dir
+            class(oris),      intent(inout)        :: os
+            character(len=*), intent(in)           :: segment, key
+            logical,          intent(in)           :: apply_changes
+            integer,          intent(inout)        :: nfound, nbad
+            logical,          optional, intent(in) :: path_is_dir
             character(len=*), optional, intent(in) :: required_imgkind
             type(string) :: path_old, path_new
             logical      :: matched, is_directory
@@ -1785,7 +1785,7 @@ contains
             type(string),      intent(out) :: path_out
             logical,           intent(out) :: matched
             character(len=:), allocatable :: path_norm, suffix
-            integer :: old_len
+            integer                       :: old_len
             path_norm = normalize_separators(path_in%to_char())
             path_out  = path_in
             matched   = .false.
@@ -1813,7 +1813,7 @@ contains
         function normalize_root( path ) result( normalized )
             character(len=*), intent(in) :: path
             character(len=:), allocatable :: normalized
-            integer :: n
+            integer                       :: n
             normalized = normalize_separators(trim(adjustl(path)))
             n = len(normalized)
             do while( n > 1 .and. normalized(n:n) == '/' )
@@ -1826,7 +1826,7 @@ contains
         function normalize_separators( path ) result( normalized )
             character(len=*), intent(in) :: path
             character(len=:), allocatable :: normalized
-            integer :: i
+            integer                       :: i
             normalized = trim(adjustl(path))
             do i = 1,len(normalized)
                 if( normalized(i:i) == '\' ) normalized(i:i) = '/'

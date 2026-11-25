@@ -10,24 +10,24 @@ public :: ftexp_shsrch
 private
 #include "simple_local_flags.inc"
 
-real,     parameter :: TOL    = 1e-4    !< tolerance parameter
-integer,  parameter :: MAXITS = 30      !< maximum number of iterations
+real,             parameter :: TOL          = 1e-4     !< tolerance parameter
+integer,          parameter :: MAXITS       = 30       !< maximum number of iterations
 character(len=*), parameter :: FTEXP_SOLVER = 'lbfgsb' !< the search's optimiser; testers pass 'lm' to new
 
 type :: ftexp_shsrch
     private
-    type(opt_spec), public      :: ospec                     !< optimizer specification object
-    class(optimizer),   pointer :: opt_obj      => null()    !< pointer to nonlinear optimizer
-    class(ft_expanded), pointer :: reference    => null()    !< reference ft_exp
-    class(ft_expanded), pointer :: particle     => null()    !< particle ft_exp
+    type(opt_spec),     public  :: ospec                        !< optimizer specification object
+    class(optimizer),   pointer :: opt_obj            => null() !< pointer to nonlinear optimizer
+    class(ft_expanded), pointer :: reference          => null() !< reference ft_exp
+    class(ft_expanded), pointer :: particle           => null() !< particle ft_exp
     real(dp)                    :: denominator        = 0.d0
-    real(dp)                    :: curv(2,2)          = 0.d0 !< the cost's Gauss-Newton matrix of the solve ('lm')
+    real(dp)                    :: curv(2,2)          = 0.d0    !< the cost's Gauss-Newton matrix of the solve ('lm')
     character(len=8)            :: solver             = FTEXP_SOLVER
-    real                        :: maxHWshift         = 0.   !< maximum half-width of shift
-    real                        :: motion_correctftol = 1e-4 !< function error tolerance
-    real                        :: motion_correctgtol = 1e-4 !< gradient error tolerance
+    real                        :: maxHWshift         = 0.      !< maximum half-width of shift
+    real                        :: motion_correctftol = 1e-4    !< function error tolerance
+    real                        :: motion_correctgtol = 1e-4    !< gradient error tolerance
     real                        :: shsrch_tol         = TOL
-    logical                     :: existence = .false.
+    logical                     :: existence          = .false.
   contains
     procedure          :: new            => ftexp_shsrch_new
     procedure          :: minimize       => ftexp_shsrch_minimize
@@ -42,11 +42,11 @@ contains
     !> Initialise  ftexp_shsrch
     subroutine ftexp_shsrch_new( self, ref, ptcl, trs, motion_correct_ftol, motion_correct_gtol, solver )
         use simple_opt_factory, only: opt_factory
-        class(ftexp_shsrch),        intent(inout) :: self
-        class(ft_expanded), target, intent(in)    :: ref, ptcl
-        real,                       intent(in)    :: trs
-        real,             optional, intent(in)    :: motion_correct_ftol, motion_correct_gtol
-        character(len=*), optional, intent(in)    :: solver !< testers only: 'lbfgsb' or 'lm'
+        class(ftexp_shsrch),        intent(inout)        :: self
+        class(ft_expanded),         target, intent(in)   :: ref, ptcl
+        real,                       intent(in)           :: trs
+        real,                       optional, intent(in) :: motion_correct_ftol, motion_correct_gtol
+        character(len=*),           optional, intent(in) :: solver !< testers only: 'lbfgsb' or 'lm'
         type(opt_factory) :: ofac
         real              :: opt_lims(2,2)
         call self%kill()
@@ -86,8 +86,8 @@ contains
 
     !> Main search routine
     function ftexp_shsrch_minimize( self, prev_corr, prev_shift ) result( cxy )
-        class(ftexp_shsrch), intent(inout) :: self
-        real, optional,      intent(in)    :: prev_corr, prev_shift(2)
+        class(ftexp_shsrch), intent(inout)             :: self
+        real,                optional,      intent(in) :: prev_corr, prev_shift(2)
         real :: cxy(3)
         self%ospec%limits(1,1) = - self%maxHWshift
         self%ospec%limits(1,2) =   self%maxHWshift

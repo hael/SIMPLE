@@ -66,7 +66,7 @@ integer, parameter :: NBIN_MIN         = 20     ! atoms per coordination bin of 
 integer, parameter :: NPHANTOM         = 1000   ! phantom sites of the intensity noise
 real,    parameter :: RENDER_NSD       = 5.     ! render cutoff of a Gaussian, in standard deviations (5: the atoms
                                                  ! rendered without the transfer match the analytic kernel to 1e-5)
-real(dp), parameter :: GOLD = (sqrt(5._dp) - 1._dp) / 2._dp
+real(dp), parameter :: GOLD             = (sqrt(5._dp) - 1._dp) / 2._dp
 logical,  parameter :: L_CHECK_RESIDUAL = .false. ! diagnostic: every fitted atom's residual against brute force (1 thread)
 
 ! the halo h(r; B) = IFT[exp(-B s**2/4) (1 - T(s))] of an atom through the transfer T, and its derivative in ln B,
@@ -74,79 +74,79 @@ logical,  parameter :: L_CHECK_RESIDUAL = .false. ! diagnostic: every fitted ato
 ! interpolated linearly between the shell centres, held beyond them. T = 1 everywhere is the plain Gaussian (no halo)
 type :: transfer_kernels
     private
-    logical :: l_plain = .true.
-    integer :: ntr = 0, nb = 0
-    real    :: dr = 0., ds = 0., lnb0 = 0., dlnb = 0.
+    logical           :: l_plain = .true.
+    integer           :: ntr     = 0, nb = 0
+    real              :: dr      = 0., ds = 0., lnb0 = 0., dlnb = 0.
     real, allocatable :: tsh(:)                    ! T at the shells
     real, allocatable :: htab(:,:), dhtab(:,:)     ! (0:ntr, nb): h and dh/d ln B
     real, allocatable :: reach(:)                  ! (nb): radius (A) beyond which |K_T| < REACH_FRAC of its peak
 contains
-    procedure :: new => new_kernels
+    procedure          :: new  => new_kernels
     procedure, private :: is_plain
     procedure, private :: ntab
-    procedure :: halo_at
+    procedure          :: halo_at
     procedure, private :: kernel_at
     procedure, private :: profile
-    procedure :: t_of
-    procedure :: kill => kill_kernels
+    procedure          :: t_of
+    procedure          :: kill => kill_kernels
 end type transfer_kernels
 
 type :: nano_density
     private
-    integer :: ldim(3) = 0, n = 0
-    real    :: smpd = 0., d_nn = 0., bstart = 0.
+    integer                :: ldim(3)         = 0, n = 0
+    real                   :: smpd            = 0., d_nn = 0., bstart = 0.
     type(transfer_kernels) :: tk
-    real    :: t_ds = TRANSFER_DS                                   ! shell width of t_smooth (1/A)
-    real    :: t_change = -1.                                       ! largest difference of the report's curve from the one used
-    real    :: gauge_scale = 1., gauge_bfac = 0.                    ! the last measurement's gauge: c and 4 g (A**2)
-    integer :: n_gauge = 0                                          ! shells of the gauge band in the last measurement
-    integer :: n_held = 0                                           ! shells held by the measurement
-    integer :: n_rounds = 0, round_kept = 0                         ! rounds of the transfer taken, the one kept
-    logical :: l_rounds_capped = .false.                            ! the rounds reached NROUNDS_MAX still improving
-    real,    allocatable :: round_fields(:,:)                       ! (NROUND_FIELDS, n_rounds)
-    real,    allocatable :: round_t(:,:)                            ! (shells, n_rounds): the curve each round held
-    real,    allocatable :: t_meas(:), t_smooth(:), pow_s(:)        ! the transfer per shell: measured, smoothed; |F_S|**2
-    real,    allocatable :: t_report(:)                             ! the report's measurement on the final model, smoothed
-    real,    allocatable :: tfilt(:,:,:)                            ! 1 - T at every coefficient of the halo's transform
-    real    :: sig2n = 0., s_int = 0., f_corr = 1.
-    real    :: ln_s = 0., beta = 0., ln_bp = 0., gamma = 0., tau_b = 0.
-    logical :: l_background = .true., l_profiles = .false., l_noise_resid = .false.
-    logical :: l_exists = .false.
-    real,    allocatable :: map(:,:,:), model(:,:,:), backg(:,:,:)
-    real,    allocatable :: smod(:,:,:), halo(:,:,:)              ! the atoms without the transfer, their halo
-    real,    allocatable :: xyz(:,:), xyz0(:,:), ints(:), bfacs(:), var_lni(:), var_lnb(:)
-    real,    allocatable :: xyz_h(:,:), ints_h(:), bfacs_h(:)     ! the atoms as the halo was last refreshed
-    real,    allocatable :: xyz_o(:,:), ints_o(:), bfacs_o(:)     ! the atoms as the atom field was last rendered
-    real,    allocatable :: tau_i(:)
-    integer, allocatable :: cn(:), bin_lo(:)
+    real                   :: t_ds            = TRANSFER_DS         ! shell width of t_smooth (1/A)
+    real                   :: t_change        = -1.                 ! largest difference of the report's curve from the one used
+    real                   :: gauge_scale     = 1., gauge_bfac = 0. ! the last measurement's gauge: c and 4 g (A**2)
+    integer                :: n_gauge         = 0                   ! shells of the gauge band in the last measurement
+    integer                :: n_held          = 0                   ! shells held by the measurement
+    integer                :: n_rounds        = 0, round_kept = 0   ! rounds of the transfer taken, the one kept
+    logical                :: l_rounds_capped = .false.             ! the rounds reached NROUNDS_MAX still improving
+    real,    allocatable   :: round_fields(:,:)                     ! (NROUND_FIELDS, n_rounds)
+    real,    allocatable   :: round_t(:,:)                          ! (shells, n_rounds): the curve each round held
+    real,    allocatable   :: t_meas(:), t_smooth(:), pow_s(:)      ! the transfer per shell: measured, smoothed; |F_S|**2
+    real,    allocatable   :: t_report(:)                           ! the report's measurement on the final model, smoothed
+    real,    allocatable   :: tfilt(:,:,:)                          ! 1 - T at every coefficient of the halo's transform
+    real                   :: sig2n           = 0., s_int = 0., f_corr = 1.
+    real                   :: ln_s            = 0., beta = 0., ln_bp = 0., gamma = 0., tau_b = 0.
+    logical                :: l_background    = .true., l_profiles = .false., l_noise_resid = .false.
+    logical                :: l_exists        = .false.
+    real,    allocatable   :: map(:,:,:), model(:,:,:), backg(:,:,:)
+    real,    allocatable   :: smod(:,:,:), halo(:,:,:)              ! the atoms without the transfer, their halo
+    real,    allocatable   :: xyz(:,:), xyz0(:,:), ints(:), bfacs(:), var_lni(:), var_lnb(:)
+    real,    allocatable   :: xyz_h(:,:), ints_h(:), bfacs_h(:)     ! the atoms as the halo was last refreshed
+    real,    allocatable   :: xyz_o(:,:), ints_o(:), bfacs_o(:)     ! the atoms as the atom field was last rendered
+    real,    allocatable   :: tau_i(:)
+    integer, allocatable   :: cn(:), bin_lo(:)
 contains
-    procedure :: new
-    procedure :: kill
-    procedure :: set_transfer
-    procedure :: noise_from_region
-    procedure :: noise_from_residual
-    procedure :: sweep
-    procedure :: measure_transfer
-    procedure :: fit_profiles
-    procedure :: fit_model
-    procedure :: fit_transfer_rounds
-    procedure :: get_rounds
-    procedure :: resid_over_noise
-    procedure :: add_atoms
-    procedure :: keep_atoms
-    procedure :: get_residual
-    procedure :: aperture_intensities
-    procedure :: render_sim
-    procedure :: render_fit
-    procedure :: get_natoms
-    procedure :: get_atoms
-    procedure :: get_coordination
-    procedure :: get_transfer
-    procedure :: get_gauge
-    procedure :: has_profiles
-    procedure :: get_intensity_profile
-    procedure :: get_width_profile
-    procedure :: get_noise
+    procedure          :: new
+    procedure          :: kill
+    procedure          :: set_transfer
+    procedure          :: noise_from_region
+    procedure          :: noise_from_residual
+    procedure          :: sweep
+    procedure          :: measure_transfer
+    procedure          :: fit_profiles
+    procedure          :: fit_model
+    procedure          :: fit_transfer_rounds
+    procedure          :: get_rounds
+    procedure          :: resid_over_noise
+    procedure          :: add_atoms
+    procedure          :: keep_atoms
+    procedure          :: get_residual
+    procedure          :: aperture_intensities
+    procedure          :: render_sim
+    procedure          :: render_fit
+    procedure          :: get_natoms
+    procedure          :: get_atoms
+    procedure          :: get_coordination
+    procedure          :: get_transfer
+    procedure          :: get_gauge
+    procedure          :: has_profiles
+    procedure          :: get_intensity_profile
+    procedure          :: get_width_profile
+    procedure          :: get_noise
     procedure, private :: add_model
     procedure, private :: rerender
     procedure, private :: render_narrow
@@ -194,9 +194,9 @@ contains
         real, intent(inout) :: arr(:,:,:)
         real, intent(in)    :: smpd, xyz(3), intens, bfac, halo_amp, halo_bfac, sgn
         real, allocatable :: d2(:,:), g1(:,:), g2(:,:)
-        real    :: c1, e1, c2, e2, rc, rc2, s2
-        integer :: n(3), lo(3), hi(3), i, j, k, l, w
-        logical :: l_halo
+        real              :: c1, e1, c2, e2, rc, rc2, s2
+        integer           :: n(3), lo(3), hi(3), i, j, k, l, w
+        logical           :: l_halo
         n      = shape(arr)
         l_halo = halo_amp > 0.
         c1 = sgn * intens * (4. * PI / bfac)**1.5
@@ -256,9 +256,9 @@ contains
         real,                    intent(in)    :: smpd, ds, tsh(:)
         real(dp), allocatable :: sv(:), w(:,:), dw(:,:), sincv(:)
         integer,  allocatable :: lcut(:)
-        real(dp) :: smax, b, peak, kt, hsum, dhsum
-        real     :: r
-        integer  :: ns, l, j, i
+        real(dp)              :: smax, b, peak, kt, hsum, dhsum
+        real                  :: r
+        integer               :: ns, l, j, i
         call self%kill
         if( smpd <= 0. .or. ds <= 0. .or. size(tsh) < 1 ) THROW_HARD('sampling, shell width and shells must be positive; new_kernels')
         self%ds  = ds
@@ -447,8 +447,8 @@ contains
         class(transfer_kernels), intent(in) :: tk
         real,                    intent(in) :: r2(:), bfac
         real, allocatable :: g(:), prof(:), dprof(:)
-        real    :: rch
-        integer :: m
+        real              :: rch
+        integer           :: m
         g = gauss_kernel(r2, bfac)
         if( tk%l_plain ) return
         allocate(prof(0:tk%ntr), dprof(0:tk%ntr))
@@ -474,12 +474,12 @@ contains
 
     ! add sgn I h(B) of an atom at xyz (voxels) to arr, within the halo's reach
     subroutine add_halo( arr, smpd, tk, xyz, intens, bfac, sgn )
-        real,                   intent(inout) :: arr(:,:,:)
-        real,                   intent(in)    :: smpd, xyz(3), intens, bfac, sgn
-        class(transfer_kernels), intent(in)   :: tk
+        real,                    intent(inout) :: arr(:,:,:)
+        real,                    intent(in)    :: smpd, xyz(3), intens, bfac, sgn
+        class(transfer_kernels), intent(in)    :: tk
         real, allocatable :: prof(:), dprof(:)
-        real    :: rch, rv, d2, s2
-        integer :: n(3), lo(3), hi(3), i, j, k
+        real              :: rch, rv, d2, s2
+        integer           :: n(3), lo(3), hi(3), i, j, k
         if( tk%l_plain ) return
         allocate(prof(0:tk%ntr), dprof(0:tk%ntr))
         call tk%profile(bfac, prof, dprof, rch)
@@ -510,10 +510,10 @@ contains
         real,                    intent(in)  :: y(:), r2(:), sig2n, lnb_mean, lnb_sd
         class(transfer_kernels), intent(in)  :: tk
         real,                    intent(out) :: intens, bfac, var_int, var_lnb
-        real(dp) :: t(NGRID_B), c(NGRID_B), lo, hi, x1, x2, f1, f2, syy, tb, bb
-        real(dp) :: g(size(y)), gt(size(y)), k1(size(y)), hh(size(y)), dh(size(y)), rr(size(y)), j11, j12, j22, det
+        real(dp)          :: t(NGRID_B), c(NGRID_B), lo, hi, x1, x2, f1, f2, syy, tb, bb
+        real(dp)          :: g(size(y)), gt(size(y)), k1(size(y)), hh(size(y)), dh(size(y)), rr(size(y)), j11, j12, j22, det
         real, allocatable :: prof(:), dprof(:)
-        integer  :: i, ibest
+        integer           :: i, ibest
         if( size(y) < 1 .or. size(y) /= size(r2) ) THROW_HARD('samples and distances differ in size; fit_atom')
         if( sig2n <= 0. .or. lnb_sd <= 0. )         THROW_HARD('noise and prior spread must be positive; fit_atom')
         rr  = real(r2, dp)
@@ -614,16 +614,16 @@ contains
     ! tau in bins of cn (at least NBIN_MIN atoms each, from the interior down; the interior bin is the floor),
     ! tau_all over all atoms. bin_lo(k) is the lowest cn of bin k; bin 1 holds the highest.
     subroutine regress_profile( cn, y, v, slope, icept, bin_lo, tau_bin, tau_all )
-        integer,              intent(in)  :: cn(:)
-        real,                 intent(in)  :: y(:), v(:)
-        real,                 intent(out) :: slope, icept, tau_all
-        integer, allocatable, intent(out) :: bin_lo(:)
-        real,    allocatable, intent(out) :: tau_bin(:)
+        integer,              intent(in)               :: cn(:)
+        real,                 intent(in)               :: y(:), v(:)
+        real,                 intent(out)              :: slope, icept, tau_all
+        integer,              allocatable, intent(out) :: bin_lo(:)
+        real,                 allocatable, intent(out) :: tau_bin(:)
         real(dp), allocatable :: w(:), x(:), res(:), tau2(:)
         integer,  allocatable :: ibin(:)
         logical,  allocatable :: finite(:)
-        real(dp) :: sw, sx, sy, sxx, sxy, den
-        integer  :: m, c, cnt, nb, i, k, ipass
+        real(dp)              :: sw, sx, sy, sxx, sxy, den
+        integer               :: m, c, cnt, nb, i, k, ipass
         m = size(y)
         if( m < 2 .or. size(cn) /= m .or. size(v) /= m ) THROW_HARD('profile needs two or more atoms of matching sizes; regress_profile')
         ! bins from the highest coordination down
@@ -703,11 +703,11 @@ contains
     ! widths start at a Gaussian of BSTART_NN_FRAC d_nn, the transfer at T = 1 (the plain Gaussian), the intensities
     ! at the linear fit of that kernel on the map; l_background (default on) fits the background
     subroutine new( self, map, smpd, d_nn, xyz, l_background )
-        class(nano_density), intent(inout) :: self
-        real,                intent(in)    :: map(:,:,:), smpd, d_nn, xyz(:,:)
-        logical, optional,   intent(in)    :: l_background
+        class(nano_density), intent(inout)          :: self
+        real,                intent(in)             :: map(:,:,:), smpd, d_nn, xyz(:,:)
+        logical,             optional,   intent(in) :: l_background
         real, allocatable :: y(:), r2(:), g(:)
-        integer :: i
+        integer           :: i
         call self%kill
         if( size(xyz,1) /= 3 .or. size(xyz,2) < 1 ) THROW_HARD('positions must be 3 x n, n > 0; new')
         if( smpd <= 0. .or. d_nn <= 0. )             THROW_HARD('sampling and d_NN must be positive; new')
@@ -803,7 +803,7 @@ contains
         class(nano_density), intent(inout) :: self
         logical,             intent(in)    :: region(:,:,:)
         real, allocatable :: vals(:)
-        real :: m
+        real              :: m
         if( any(shape(region) /= self%ldim) ) THROW_HARD('region and map differ in size; noise_from_region')
         if( count(region) < 2 )               THROW_HARD('empty noise region; noise_from_region')
         vals = pack(self%map - self%backg - self%model, region)
@@ -820,8 +820,8 @@ contains
         class(nano_density), intent(inout) :: self
         logical,             intent(in)    :: envelope(:,:,:)
         logical, allocatable :: sel(:,:,:)
-        real    :: rv, c(3)
-        integer :: i, lo(3), hi(3), ii, jj, kk
+        real                 :: rv, c(3)
+        integer              :: i, lo(3), hi(3), ii, jj, kk
         if( any(shape(envelope) /= self%ldim) ) THROW_HARD('envelope and map differ in size; noise_from_residual')
         sel = envelope
         rv  = FIT_NN_FRAC * self%d_nn / self%smpd
@@ -850,8 +850,8 @@ contains
         class(nano_density), intent(inout) :: self
         logical,             intent(in)    :: sel(:,:,:)
         real, allocatable :: y(:), r2(:), g(:), vals(:)
-        real    :: bref, sgg, m
-        integer :: nsel, stride, cnt, nsite, ii, jj, kk
+        real              :: bref, sgg, m
+        integer           :: nsel, stride, cnt, nsite, ii, jj, kk
         bref = self%bstart
         if( self%l_profiles ) bref = exp(self%ln_bp)
         nsel   = count(sel)
@@ -894,8 +894,8 @@ contains
     subroutine sweep( self )
         class(nano_density), intent(inout) :: self
         integer, allocatable :: cell_of(:), first(:), next(:), cells(:), upd(:)
-        real    :: dmax, rv
-        integer :: side, ncell(3), nc, i, ic(3), colour, icell, ncol, j, l, nupd
+        real                 :: dmax, rv
+        integer              :: side, ncell(3), nc, i, ic(3), colour, icell, ncol, j, l, nupd
         if( self%sig2n <= 0. ) THROW_HARD('the noise is not set; sweep')
         dmax  = MOVE_NN_FRAC * self%d_nn / self%smpd
         rv    = FIT_NN_FRAC * self%d_nn / self%smpd
@@ -969,7 +969,7 @@ contains
         real,                intent(in)    :: dmax
         integer,             intent(in)    :: upd(:)
         real, allocatable :: y(:), r2(:)
-        real :: pos(3), d0, lnb_mean, lnb_sd, vi, vb
+        real              :: pos(3), d0, lnb_mean, lnb_sd, vi, vb
         pos = self%centroid(self%xyz(:,i), iown=i, upd=upd)
         d0  = sqrt(sum((pos - self%xyz0(:,i))**2))
         if( d0 > dmax ) pos = self%xyz0(:,i) + (pos - self%xyz0(:,i)) * dmax / d0
@@ -995,13 +995,13 @@ contains
         use simple_image, only: image
         class(nano_density), intent(inout) :: self
         logical,             intent(in)    :: l_apply
-        type(image) :: img_m, img_s
+        type(image)           :: img_m, img_s
         complex,  allocatable :: cm(:,:,:), cs(:,:,:)
         real(dp), allocatable :: num(:), den(:)
         real,     allocatable :: tm(:), tv(:), tsm(:)
         logical,  allocatable :: ok(:)
-        integer  :: cshape(3), i, j, k, h, kk, ll, ish, nsh, first, nheld, ngauge
-        real     :: sfreq, w, tlast, gscale, gbfac
+        integer               :: cshape(3), i, j, k, h, kk, ll, ish, nsh, first, nheld, ngauge
+        real                  :: sfreq, w, tlast, gscale, gbfac
         call img_m%new(self%ldim, self%smpd, wthreads=.false.)
         call img_s%new(self%ldim, self%smpd, wthreads=.false.)
         call img_m%set_rmat(self%map,  .false.)
@@ -1176,7 +1176,7 @@ contains
         logical, allocatable :: strong(:)
         integer, allocatable :: bins_b(:), cns(:)
         real,    allocatable :: taus_b(:)
-        real :: slope_b, tau_all_i
+        real                 :: slope_b, tau_all_i
         strong = self%ints > STRONG_SNR * self%s_int
         if( count(strong) < 3 )then
             THROW_WARN('too few strong atoms for the profiles; they are kept')
@@ -1211,11 +1211,11 @@ contains
         class(nano_density), intent(inout) :: self
         logical,             intent(in)    :: envelope(:,:,:)
         type(nano_density), allocatable :: best
-        real,    allocatable :: fields(:,:), tr(:,:)
-        logical, allocatable :: rel(:)
-        real    :: rr, rr_best, dt
-        integer :: iround, ibest, kept, nr
-        logical :: capped
+        real,               allocatable :: fields(:,:), tr(:,:)
+        logical,            allocatable :: rel(:)
+        real                            :: rr, rr_best, dt
+        integer                         :: iround, ibest, kept, nr
+        logical                         :: capped
         if( any(shape(envelope) /= self%ldim) ) THROW_HARD('envelope and map differ in size; fit_transfer_rounds')
         allocate(fields(NROUND_FIELDS,NROUNDS_MAX), source=0.)
         rr_best = huge(1.)
@@ -1270,10 +1270,10 @@ contains
     ! previous round (-1 for the first) (fields), and the curve it held (curves, per shell of the transfer); the round
     ! kept and whether the rounds reached their limit with the curve still changing
     subroutine get_rounds( self, fields, curves, kept, capped )
-        class(nano_density),  intent(in)  :: self
-        real,    allocatable, intent(out) :: fields(:,:), curves(:,:)
-        integer,              intent(out) :: kept
-        logical,              intent(out) :: capped
+        class(nano_density),  intent(in)               :: self
+        real,                 allocatable, intent(out) :: fields(:,:), curves(:,:)
+        integer,              intent(out)              :: kept
+        logical,              intent(out)              :: capped
         if( self%n_rounds > 0 )then
             fields = self%round_fields
             curves = self%round_t
@@ -1302,8 +1302,8 @@ contains
         class(nano_density), intent(inout) :: self
         real,                intent(in)    :: xyz(:,:)
         real, allocatable :: y(:), r2(:)
-        real    :: lnb_mean, lnb_sd, vi, vb
-        integer :: m, n0, i
+        real              :: lnb_mean, lnb_sd, vi, vb
+        integer           :: m, n0, i
         m = size(xyz,2)
         if( m < 1 ) return
         if( size(xyz,1) /= 3 ) THROW_HARD('positions must be 3 x m; add_atoms')
@@ -1442,8 +1442,8 @@ contains
 
     ! positions (voxels), intensities, widths and the measurement variances of ln I and ln B
     subroutine get_atoms( self, xyz, ints, bfacs, var_lni, var_lnb )
-        class(nano_density), intent(in)  :: self
-        real, allocatable,   intent(out) :: xyz(:,:), ints(:), bfacs(:), var_lni(:), var_lnb(:)
+        class(nano_density), intent(in)                 :: self
+        real,                allocatable,   intent(out) :: xyz(:,:), ints(:), bfacs(:), var_lni(:), var_lnb(:)
         xyz     = self%xyz
         ints    = self%ints
         bfacs   = self%bfacs
@@ -1462,12 +1462,12 @@ contains
     ! the report measured it on the final model (t_report, empty without); the shells the measurement held, and the
     ! largest difference of the report's curve from the one used over the reliable shells (-1 without)
     subroutine get_transfer( self, ds, t_meas, t_smooth, pow_s, reliable, t_report, n_held, t_change )
-        class(nano_density),  intent(in)  :: self
-        real,                 intent(out) :: ds
-        real,    allocatable, intent(out) :: t_meas(:), t_smooth(:), pow_s(:), t_report(:)
-        logical, allocatable, intent(out) :: reliable(:)
-        integer,              intent(out) :: n_held
-        real,                 intent(out) :: t_change
+        class(nano_density),  intent(in)               :: self
+        real,                 intent(out)              :: ds
+        real,                 allocatable, intent(out) :: t_meas(:), t_smooth(:), pow_s(:), t_report(:)
+        logical,              allocatable, intent(out) :: reliable(:)
+        integer,              intent(out)              :: n_held
+        real,                 intent(out)              :: t_change
         ds = self%t_ds
         if( allocated(self%t_meas) )then
             t_meas   = self%t_meas
@@ -1509,10 +1509,10 @@ contains
 
     ! ln S, beta, and tau_I by coordination bin (bin_lo the lowest coordination of each bin)
     subroutine get_intensity_profile( self, ln_s, beta, bin_lo, tau_i )
-        class(nano_density),  intent(in)  :: self
-        real,                 intent(out) :: ln_s, beta
-        integer, allocatable, intent(out) :: bin_lo(:)
-        real,    allocatable, intent(out) :: tau_i(:)
+        class(nano_density),  intent(in)               :: self
+        real,                 intent(out)              :: ln_s, beta
+        integer,              allocatable, intent(out) :: bin_lo(:)
+        real,                 allocatable, intent(out) :: tau_i(:)
         if( .not. self%l_profiles ) THROW_HARD('no profile fitted yet; get_intensity_profile')
         ln_s   = self%ln_s
         beta   = self%beta
@@ -1739,10 +1739,10 @@ contains
     ! the residual map - background - model within FIT_NN_FRAC d_NN of c (voxels), with the squared distances (A**2);
     ! for atom iown corrected by residual_correction (its own atom and halo added back, the changes of upd applied)
     subroutine gather( self, c, y, r2, iown, upd )
-        class(nano_density), intent(in)  :: self
-        real,                intent(in)  :: c(3)
-        real, allocatable,   intent(out) :: y(:), r2(:)
-        integer, optional,   intent(in)  :: iown, upd(:)
+        class(nano_density), intent(in)                 :: self
+        real,                intent(in)                 :: c(3)
+        real,                allocatable,   intent(out) :: y(:), r2(:)
+        integer,             optional,   intent(in)     :: iown, upd(:)
         real    :: rad, rv, dd
         real    :: ybuf((2 * (ceiling(FIT_NN_FRAC * self%d_nn / self%smpd) + 1) + 1)**3), rbuf(size(ybuf))
         integer :: lo(3), hi(3), ii, jj, kk, m
@@ -1771,9 +1771,9 @@ contains
     ! centroid of the positive residual within FIT_NN_FRAC d_NN of c (voxels); for atom iown the residual is
     ! corrected as in gather
     function centroid( self, c, iown, upd ) result( pos )
-        class(nano_density), intent(in) :: self
-        real,                intent(in) :: c(3)
-        integer, optional,   intent(in) :: iown, upd(:)
+        class(nano_density), intent(in)             :: self
+        real,                intent(in)             :: c(3)
+        integer,             optional,   intent(in) :: iown, upd(:)
         real    :: pos(3), rv, w, wsum
         integer :: lo(3), hi(3), ii, jj, kk
         if( present(iown) .neqv. present(upd) ) THROW_HARD('iown and upd come together; centroid')
@@ -1834,7 +1834,7 @@ contains
         real, intent(in)  :: sigma_vox
         real, intent(out) :: b(:,:,:)
         real, allocatable :: tmp(:,:,:), w(:)
-        integer :: n(3), hw, i, j, k, l
+        integer           :: n(3), hw, i, j, k, l
         n  = shape(a)
         hw = max(1, ceiling(4. * sigma_vox))
         allocate(w(-hw:hw))

@@ -31,10 +31,10 @@ contains
 
     !> clusters the points x on a line into nclust groups
     subroutine run_line( x, linkage, nclust, i_medoids, labels )
-        real,                 intent(in)    :: x(:)
-        character(len=*),     intent(in)    :: linkage
-        integer,              intent(in)    :: nclust
-        integer, allocatable, intent(inout) :: i_medoids(:), labels(:)
+        real,                 intent(in)                 :: x(:)
+        character(len=*),     intent(in)                 :: linkage
+        integer,              intent(in)                 :: nclust
+        integer,              allocatable, intent(inout) :: i_medoids(:), labels(:)
         type(hac) :: hc
         call hc%new(size(x), line_dmat(x), linkage, nclust=nclust)
         call hc%cluster(i_medoids, labels)
@@ -45,7 +45,7 @@ contains
     function line_dmat( x ) result( dmat )
         real, intent(in)      :: x(:)
         real(dp), allocatable :: dmat(:,:)
-        integer :: i, j
+        integer               :: i, j
         allocate(dmat(size(x),size(x)))
         do j = 1, size(x)
             do i = 1, size(x)
@@ -58,7 +58,7 @@ contains
     !! any merge across groups (>= 48); labels by decreasing population, the medoid is the member with
     !! the smallest summed distance, the first one on a tie (101 before 102 in the largest group)
     subroutine test_hac_separated_groups()
-        real, parameter      :: X(9) = [0., 1., 2., 50., 51., 100., 101., 102., 103.]
+        real,    parameter   :: X(9) = [0., 1., 2., 50., 51., 100., 101., 102., 103.]
         integer, allocatable :: i_medoids(:), labels(:)
         write(*,'(A)') 'test_hac_separated_groups'
         call run_line(X, 'average', 3, i_medoids, labels)
@@ -71,9 +71,9 @@ contains
     !! clusters all fall inside the dense group (mean distances <= 11 against >= 989), so it is one
     !! cluster; its medoid is the first median item (x = 5)
     subroutine test_hac_dense_group_stays_whole()
-        real    :: x(16)
+        real                 :: x(16)
         integer, allocatable :: i_medoids(:), labels(:)
-        integer :: i
+        integer              :: i
         write(*,'(A)') 'test_hac_dense_group_stays_whole'
         x(1:12)  = [(real(i), i=0,11)]
         x(13:16) = [1000., 2000., 3000., 4000.]
@@ -87,7 +87,7 @@ contains
     !! weighting gives d(T,3) = (2*10 + 5.4)/3 = 8.47 > d(3,5) = 8, so 3 joins 5; the unweighted mean
     !! (10 + 5.4)/2 = 7.7 would have joined 3 to T instead
     subroutine test_hac_population_weighted_update()
-        real, parameter      :: X(5) = [0., 0., 10., 4.6, 18.]
+        real,    parameter   :: X(5) = [0., 0., 10., 4.6, 18.]
         integer, allocatable :: i_medoids(:), labels(:)
         write(*,'(A)') 'test_hac_population_weighted_update'
         call run_line(X, 'average', 2, i_medoids, labels)
@@ -98,10 +98,10 @@ contains
     !! = 2.8, so 3 joins {1,2}; complete gives d({1,2},3) = max(3,2) = 3 > 2.8, so 3 joins 4. The complete
     !! history is (1,2) at 1 and (3,4) at 2.8; the tie of populations 2 and 2 labels by representative
     subroutine test_hac_complete_linkage()
-        real, parameter       :: X(4) = [0., 1., 3., 5.8]
+        real,     parameter   :: X(4) = [0., 1., 3., 5.8]
         integer,  allocatable :: i_medoids(:), labels(:), pairs(:,:)
         real(dp), allocatable :: heights(:)
-        type(hac) :: hc
+        type(hac)             :: hc
         write(*,'(A)') 'test_hac_complete_linkage'
         call run_line(X, 'average', 2, i_medoids, labels)
         call assert_true(all(labels == [1,1,1,2]), 'hac average linkage joins the middle point to the pair')
@@ -122,9 +122,9 @@ contains
     !> x = 0, 1, 3, 7, 8 with threshold 2.7. Both linkages join (1,2) and (4,5) at 1; average then joins 3 to
     !! {1,2} at 2.5 and stops at 6.17 (two clusters), complete would join it at 3 > 2.7 and stops (three)
     subroutine test_hac_threshold_stop()
-        real, parameter      :: X(5) = [0., 1., 3., 7., 8.]
+        real,    parameter   :: X(5) = [0., 1., 3., 7., 8.]
         integer, allocatable :: i_medoids(:), labels(:)
-        type(hac) :: hc
+        type(hac)            :: hc
         write(*,'(A)') 'test_hac_threshold_stop'
         call hc%new(size(X), line_dmat(X), 'average', thres=2.7_dp)
         call hc%cluster(i_medoids, labels)
@@ -141,9 +141,9 @@ contains
     !> x = 0, 0.5, 1, 10 at threshold 2. Unmasked: (1,2) at 0.5 and 3 at 0.75 join; masking out entry 2
     !! leaves it a singleton and (1,3) join at 1
     subroutine test_hac_mask()
-        real, parameter      :: X(4) = [0., 0.5, 1., 10.]
+        real,    parameter   :: X(4) = [0., 0.5, 1., 10.]
         integer, allocatable :: i_medoids(:), labels(:)
-        type(hac) :: hc
+        type(hac)            :: hc
         write(*,'(A)') 'test_hac_mask'
         call hc%new(size(X), line_dmat(X), 'average', thres=2._dp)
         call hc%cluster(i_medoids, labels)
@@ -159,7 +159,7 @@ contains
     !! is the global medoid (x = 1 of 0, 1, 5). One object serves both: new on a live object replaces
     !! it, and cluster may be called twice on the same construction
     subroutine test_hac_edges()
-        real, parameter      :: X(3) = [0., 1., 5.]
+        real,    parameter   :: X(3) = [0., 1., 5.]
         integer, allocatable :: i_medoids(:), labels(:)
         type(hac)            :: hc
         write(*,'(A)') 'test_hac_edges'
@@ -180,10 +180,10 @@ contains
     !! it joins {5-8}; then every cluster weighs at least 5 and merging stops at two, below nclust. A
     !! minimum of 1 changes nothing
     subroutine test_hac_min_weight()
-        real,     parameter  :: X(9) = [0., 1., 2., 3., 10., 11., 12., 13., 100.]
-        real(dp), parameter  :: W(9) = [10._dp, 10._dp, 10._dp, 10._dp, 10._dp, 10._dp, 10._dp, 10._dp, 1._dp]
-        integer, allocatable :: i_medoids(:), labels(:)
-        type(hac)            :: hc
+        real,     parameter   :: X(9) = [0., 1., 2., 3., 10., 11., 12., 13., 100.]
+        real(dp), parameter   :: W(9) = [10._dp, 10._dp, 10._dp, 10._dp, 10._dp, 10._dp, 10._dp, 10._dp, 1._dp]
+        integer,  allocatable :: i_medoids(:), labels(:)
+        type(hac)             :: hc
         write(*,'(A)') 'test_hac_min_weight'
         call hc%new(size(X), line_dmat(X), 'average', nclust=3, weights=W, min_weight=5._dp)
         call hc%cluster(i_medoids, labels)

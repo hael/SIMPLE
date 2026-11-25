@@ -14,12 +14,12 @@ module simple_persistent_worker_message_heartbeat
     !> Carries the worker identity, a liveness timestamp, and thread-load
     !> information used by the server to assign tasks appropriately.
     type, extends(qsys_persistent_worker_message_base) :: qsys_persistent_worker_message_heartbeat
-        integer :: worker_id      = 0  !< 1-based worker slot index on the server
-        integer :: heartbeat_time = 0  !< UNIX timestamp at time of transmission
-        integer :: nthr_used      = 0  !< threads currently executing tasks
-        integer :: nthr_total     = 0  !< total thread capacity of this worker
-        integer :: fd             = 0  !< server-side connection fd, overwritten on receipt; used to clear the registry entry on disconnect
-        character(len=256) :: worker_uid = ''  !< unique worker identifier: <hostname>_<PID>
+        integer            :: worker_id      = 0  !< 1-based worker slot index on the server
+        integer            :: heartbeat_time = 0  !< UNIX timestamp at time of transmission
+        integer            :: nthr_used      = 0  !< threads currently executing tasks
+        integer            :: nthr_total     = 0  !< total thread capacity of this worker
+        integer            :: fd             = 0  !< server-side connection fd, overwritten on receipt; used to clear the registry entry on disconnect
+        character(len=256) :: worker_uid     = '' !< unique worker identifier: <hostname>_<PID>
     contains
         procedure :: new       => new_qsys_persistent_worker_message_heartbeat       !< constructor
         procedure :: kill      => kill_qsys_persistent_worker_message_heartbeat      !< destructor
@@ -55,8 +55,8 @@ contains
     !> the complete qsys_persistent_worker_message_heartbeat layout — and filled with the
     !> raw storage representation of self via TRANSFER.
     subroutine serialise_qsys_persistent_worker_message_heartbeat( self, buffer )
-        class(qsys_persistent_worker_message_heartbeat), intent(in)    :: self
-        character(len=:), allocatable,        intent(inout) :: buffer
+        class(qsys_persistent_worker_message_heartbeat), intent(in)                        :: self
+        character(len=:),                                allocatable,        intent(inout) :: buffer
         if( allocated(buffer) ) deallocate(buffer)
         allocate(character(len=sizeof(self)) :: buffer)
         buffer = transfer(self, buffer)

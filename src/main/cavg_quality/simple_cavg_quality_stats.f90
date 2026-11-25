@@ -51,8 +51,8 @@ contains
         real,    intent(in) :: vals(:)
         integer, intent(in) :: reference_states(:)
         real,    allocatable :: bad(:)
-        real(dp) :: wins
-        integer  :: i, ngood, nbad, nbelow, nnear
+        real(dp)             :: wins
+        integer              :: i, ngood, nbad, nbelow, nnear
         if( size(vals) /= size(reference_states) ) THROW_HARD('auc_for_values: size mismatch')
         ngood = count(reference_states > 0)
         nbad  = size(reference_states) - ngood

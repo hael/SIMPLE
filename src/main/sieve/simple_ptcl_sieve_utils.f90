@@ -28,15 +28,15 @@ contains
         type(sp_project),     intent(in)    :: spproj_glob
         integer,              intent(out)   :: ntot_chunks
         character(len=*),     parameter     :: DIR_PROJS = trim(PATH_HERE)//'spprojs/'
-        type(sp_project)     :: spproj
-        type(project_rec)    :: prec
-        type(ctfparams)      :: ctfparms
-        integer, allocatable :: stk_nptcls(:), stk_all_nptcls(:), chunks_map(:,:)
-        type(string)         :: fname, absfname, path, projname, projfile
-        integer              :: cnt, cnt_stk, ichunk, istk, iptcl, jptcl, kptcl
-        integer              :: fromp, top, cfromp, ctop, n, nstks_chunk, nptcls_chunk, nptcls
-        integer              :: tail_start, tail_end, nptcls_tot, nstks, n_chunks_available, nptcls_chunks_total
-        logical              :: has_mic, l_truncate
+        type(sp_project)                    :: spproj
+        type(project_rec)                   :: prec
+        type(ctfparams)                     :: ctfparms
+        integer,              allocatable   :: stk_nptcls(:), stk_all_nptcls(:), chunks_map(:,:)
+        type(string)                        :: fname, absfname, path, projname, projfile
+        integer                             :: cnt, cnt_stk, ichunk, istk, iptcl, jptcl, kptcl
+        integer                             :: fromp, top, cfromp, ctop, n, nstks_chunk, nptcls_chunk, nptcls
+        integer                             :: tail_start, tail_end, nptcls_tot, nstks, n_chunks_available, nptcls_chunks_total
+        logical                             :: has_mic, l_truncate
         call simple_mkdir(DIR_PROJS)
         nstks  = spproj_glob%os_stk%get_noris()
         nptcls = spproj_glob%os_ptcl2D%get_noris()

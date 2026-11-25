@@ -18,10 +18,10 @@ contains
     subroutine exec_cls_expansion( self, cline )
         use simple_cls_expansion_strategy
         class(commander_cls_expansion), intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
+        class(cmdline),                 intent(inout) :: cline
         class(cls_expansion_strategy), allocatable :: strategy
-        type(parameters) :: params
-        type(builder)    :: build
+        type(parameters)                           :: params
+        type(builder)                              :: build
         strategy = create_cls_expansion_strategy(cline)
         call strategy%initialize(params, build, cline)
         call strategy%execute(params, build, cline)

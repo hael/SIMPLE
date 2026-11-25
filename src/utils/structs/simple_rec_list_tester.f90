@@ -40,8 +40,8 @@ contains
     ! Push_back + at() + polymorphic safety
     !----------------------------------------------------------
     subroutine test_push_back_and_at()
-        type(rec_list) :: lst
-        type(project_rec) :: pr
+        type(rec_list)          :: lst
+        type(project_rec)       :: pr
         class(rec), allocatable :: r
         write(*,'(A)') 'test_push_back_and_at'
         pr%id = 11
@@ -63,10 +63,10 @@ contains
     ! Iterator traversal
     !----------------------------------------------------------
     subroutine test_iterator_traversal()
-        type(rec_list) :: lst
-        type(project_rec) :: a,b
+        type(rec_list)     :: lst
+        type(project_rec)  :: a,b
         type(rec_iterator) :: it
-        integer :: count
+        integer            :: count
         write(*,'(A)') 'test_iterator_traversal'
         a%id = 1; a%projname = string("A")
         b%id = 2; b%projname = string("B")
@@ -85,8 +85,8 @@ contains
     ! replace_at()
     !----------------------------------------------------------
     subroutine test_replace_at()
-        type(rec_list) :: lst
-        type(project_rec) :: pr1, pr2
+        type(rec_list)          :: lst
+        type(project_rec)       :: pr1, pr2
         class(rec), allocatable :: r
         write(*,'(A)') 'test_replace_at'
         pr1%id = 10
@@ -106,9 +106,9 @@ contains
     ! Iterator-based replacement
     !----------------------------------------------------------
     subroutine test_iterator_replace()
-        type(rec_list) :: lst
-        type(process_rec) :: p1, p2
-        type(rec_iterator) :: it
+        type(rec_list)          :: lst
+        type(process_rec)       :: p1, p2
+        type(rec_iterator)      :: it
         class(rec), allocatable :: r
         write(*,'(A)') 'test_iterator_replace'
         p1%id = 100
@@ -126,8 +126,8 @@ contains
     end subroutine test_iterator_replace
 
     subroutine test_included_mask()
-        type(rec_list) :: lst, lst2
-        type(project_rec) :: r(3)
+        type(rec_list)       :: lst, lst2
+        type(project_rec)    :: r(3)
         logical, allocatable :: m(:), m2(:)
         write(*,'(A)') 'test_included_mask'
         m = lst%get_included_flags()
@@ -149,8 +149,8 @@ contains
     end subroutine test_included_mask
 
     subroutine test_flag_included()
-        type(rec_list) :: lst
-        type(project_rec) :: r(3)
+        type(rec_list)       :: lst
+        type(project_rec)    :: r(3)
         logical, allocatable :: m(:)
         write(*,'(A)') 'test_flag_included'
         r(1)%included=.false.; r(2)%included=.false.; r(3)%included=.false.
@@ -163,9 +163,9 @@ contains
     end subroutine test_flag_included
 
     subroutine test_particle_sums()
-        type(rec_list) :: lst
+        type(rec_list)    :: lst
         type(project_rec) :: a,b
-        integer :: sum1, sum2
+        integer           :: sum1, sum2
         write(*,'(A)') 'test_particle_sums'
         a%nptcls=100; a%nptcls_sel=25; a%included=.true.
         b%nptcls=200; b%nptcls_sel=50; b%included=.false.
@@ -182,7 +182,7 @@ contains
     ! Operator // append
     !----------------------------------------------------------
     subroutine test_append_operator()
-        type(rec_list) :: a,b,c
+        type(rec_list)  :: a,b,c
         type(chunk_rec) :: r1,r2
         write(*,'(A)') 'test_append_operator'
         r1%id = 1
@@ -197,9 +197,9 @@ contains
     ! slice(), subset_to()
     !----------------------------------------------------------
     subroutine test_slice_subset()
-        type(rec_list) :: lst, sub1, sub2
+        type(rec_list)    :: lst, sub1, sub2
         type(project_rec) :: r(4)
-        integer :: i
+        integer           :: i
         write(*,'(A)') 'test_slice_subset_copy'
         do i=1,4
             r(i)%id = i
@@ -215,7 +215,7 @@ contains
     ! Assignment semantics
     !----------------------------------------------------------
     subroutine test_assign_semantics()
-        type(rec_list) :: a,b
+        type(rec_list)  :: a,b
         type(chunk_rec) :: r
         write(*,'(A)') 'test_assign_semantics'
         r%id = 99
@@ -228,7 +228,7 @@ contains
     ! kill()
     !----------------------------------------------------------
     subroutine test_kill_behavior()
-        type(rec_list) :: lst
+        type(rec_list)    :: lst
         type(project_rec) :: r
         write(*,'(A)') 'test_kill_behavior'
         r%id = 4

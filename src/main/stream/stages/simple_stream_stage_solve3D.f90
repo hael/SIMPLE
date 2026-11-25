@@ -150,45 +150,45 @@ character(len=*), parameter :: REJECTED_PUBLICATIONS = 'rejected_publications.tx
 type :: stream_stage_solve3D
     type(parameters), allocatable                   :: params
     ! allocatable (compile-time policy), allocated in init_params and released in kill
-    type(sp_project), allocatable                   :: spproj        ! the rows: imported particles, their states and poses
+    type(sp_project), allocatable                   :: spproj                       ! the rows: imported particles, their states and poses
     type(qsys_env),   allocatable                   :: qenv
-    type(qsys_async_job)                            :: job           ! the running job
-    type(stream_watcher)                            :: project_buff  ! the publications of pool 2D
-    type(rec_list)                                  :: setslist      ! one record per publication; included once taken or passed over
-    type(stream_pipe)                               :: pipe          ! to the master
+    type(qsys_async_job)                            :: job                          ! the running job
+    type(stream_watcher)                            :: project_buff                 ! the publications of pool 2D
+    type(rec_list)                                  :: setslist                     ! one record per publication; included once taken or passed over
+    type(stream_pipe)                               :: pipe                         ! to the master
     type(gui_metadata_stream_solve3D_multistate)    :: meta_status
     type(gui_metadata_cavg2D)                       :: meta_reproj
     type(gui_metadata_stream_snapshot)              :: meta_snapshot
-    type(string),   allocatable :: stk_names(:)    ! the stacks in the pool
-    real,           allocatable :: state_res(:)    ! FSC=0.143 resolution per state of the latest refinement (0: none)
-    integer,        allocatable :: state_pop(:)    ! population per state of the latest refinement (0: none)
-    type(string),   allocatable :: ref_vols(:)     ! the reference volumes, one per state (state_refs/); none before
-    real,           allocatable :: try_angdist(:)  ! each attempt's even/odd angular distance (-1: no volumes)
-    logical,        allocatable :: first_set(:)    ! the rows the first publication left selected: their selection stays
-    logical,        allocatable :: model_rej(:)    ! the selected rows the pool model rejects in the newest publication (logged)
-    logical,        allocatable :: fit_desel(:)    ! the rows the latest assignment deselected: a first-set row among them is selected again by the next merge
-    type(string)                :: result_projfile ! the latest local refinement's project: 3D snapshots' source
-    type(string)                :: assign_dir      ! the running assignment's folder (assign/it_<n>)
-    type(string)                :: last_stem       ! the latest publication taken (its quality folder's name)
-    integer :: phase              = PHASE_IMPORTING
-    integer :: nassign            = 0  ! assignments started
-    integer :: nroute_tries       = 0  ! the route's attempts started
-    integer :: nptcls_at_last_run = 0  ! particles the latest assignment gave a state
-    integer :: nptcls_selected    = 0  ! selected particles in the rows
-    integer :: ref_box            = 0  ! the reference volumes' box and pixel size (A)
-    real    :: ref_smpd           = 0.
-    integer :: last_snapshot_id   = 0  ! the latest 3D snapshot request answered; each is written once
-    integer :: optics_id_offset   = 0  ! optics group ids of the snapshots' STAR files, per GUI display
-    logical :: l_route_due        = .false. ! the route is to run on the first set
-    logical :: l_fallback_pending = .false. ! the route failed: the fallback waits for a later publication
-    logical :: l_fallback_due     = .false. ! that publication is in: the fallback is to run
-    logical :: l_fallback_done    = .false. ! the fallback has run (once a session)
-    logical :: l_assign_due       = .false. ! a publication waits for its assignment
-    logical :: l_expanded         = .false. ! the running assignment matches cls_expansion's sub-classes
-    logical :: l_final_seen       = .false. ! the newest publication taken is the pool's final one
-    logical :: l_dock_refs        = .true.  ! the references are compared after docking (a test without the docking's
+    type(string),     allocatable                   :: stk_names(:)                 ! the stacks in the pool
+    real,             allocatable                   :: state_res(:)                 ! FSC=0.143 resolution per state of the latest refinement (0: none)
+    integer,          allocatable                   :: state_pop(:)                 ! population per state of the latest refinement (0: none)
+    type(string),     allocatable                   :: ref_vols(:)                  ! the reference volumes, one per state (state_refs/); none before
+    real,             allocatable                   :: try_angdist(:)               ! each attempt's even/odd angular distance (-1: no volumes)
+    logical,          allocatable                   :: first_set(:)                 ! the rows the first publication left selected: their selection stays
+    logical,          allocatable                   :: model_rej(:)                 ! the selected rows the pool model rejects in the newest publication (logged)
+    logical,          allocatable                   :: fit_desel(:)                 ! the rows the latest assignment deselected: a first-set row among them is selected again by the next merge
+    type(string)                                    :: result_projfile              ! the latest local refinement's project: 3D snapshots' source
+    type(string)                                    :: assign_dir                   ! the running assignment's folder (assign/it_<n>)
+    type(string)                                    :: last_stem                    ! the latest publication taken (its quality folder's name)
+    integer                                         :: phase              = PHASE_IMPORTING
+    integer                                         :: nassign            = 0       ! assignments started
+    integer                                         :: nroute_tries       = 0       ! the route's attempts started
+    integer                                         :: nptcls_at_last_run = 0       ! particles the latest assignment gave a state
+    integer                                         :: nptcls_selected    = 0       ! selected particles in the rows
+    integer                                         :: ref_box            = 0       ! the reference volumes' box and pixel size (A)
+    real                                            :: ref_smpd           = 0.
+    integer                                         :: last_snapshot_id   = 0       ! the latest 3D snapshot request answered; each is written once
+    integer                                         :: optics_id_offset   = 0       ! optics group ids of the snapshots' STAR files, per GUI display
+    logical                                         :: l_route_due        = .false. ! the route is to run on the first set
+    logical                                         :: l_fallback_pending = .false. ! the route failed: the fallback waits for a later publication
+    logical                                         :: l_fallback_due     = .false. ! that publication is in: the fallback is to run
+    logical                                         :: l_fallback_done    = .false. ! the fallback has run (once a session)
+    logical                                         :: l_assign_due       = .false. ! a publication waits for its assignment
+    logical                                         :: l_expanded         = .false. ! the running assignment matches cls_expansion's sub-classes
+    logical                                         :: l_final_seen       = .false. ! the newest publication taken is the pool's final one
+    logical                                         :: l_dock_refs        = .true.  ! the references are compared after docking (a test without the docking's
                                             ! time sets it .false.: no comparison)
-    real    :: mskdiam            = 0. ! pool 2D's mask diameter (A), from the latest publication taken
+    real    :: mskdiam            = 0.      ! pool 2D's mask diameter (A), from the latest publication taken
     logical :: l_restart          = .false.
     logical :: l_attached         = .false. ! pool 2D's completed folder exists and is watched
     logical :: l_waiting_logged   = .false.
@@ -205,66 +205,66 @@ contains
     procedure :: kill
     ! the steps of new(), in order
     procedure, private :: init_params
-    procedure :: init_queue
+    procedure          :: init_queue
     procedure, private :: init_gui
     ! the steps of iterate() and their helpers
     procedure, private :: attach_upstream
     procedure, private :: watch_sets
     procedure, private :: take_mskdiam
-    procedure :: import_sets
+    procedure          :: import_sets
     procedure, private :: publication_problem
     procedure, private :: rows_problem
-    procedure :: flag_model_rows
+    procedure          :: flag_model_rows
     procedure, private :: take_first_publication
-    procedure :: in_first_set
+    procedure          :: in_first_set
     procedure, private :: fit_deselected
     procedure, private :: merge_publication
     procedure, private :: take_cavgs
-    procedure :: stack_index
-    procedure :: advance_jobs
-    procedure :: job_failed
-    procedure :: job_done
-    procedure :: set_job_resources
+    procedure          :: stack_index
+    procedure          :: advance_jobs
+    procedure          :: job_failed
+    procedure          :: job_done
+    procedure          :: set_job_resources
     ! the route to the reference volumes
-    procedure :: start_solve2D_first
-    procedure :: finish_solve2D_first
-    procedure :: select_first_set_classes
-    procedure :: start_clsexp
-    procedure :: finish_clsexp
-    procedure :: adopt_job_2D
-    procedure :: start_fallback
-    procedure :: start_cavgs3D
-    procedure :: finish_cavgs3D
+    procedure          :: start_solve2D_first
+    procedure          :: finish_solve2D_first
+    procedure          :: select_first_set_classes
+    procedure          :: start_clsexp
+    procedure          :: finish_clsexp
+    procedure          :: adopt_job_2D
+    procedure          :: start_fallback
+    procedure          :: start_cavgs3D
+    procedure          :: finish_cavgs3D
     procedure, private :: register_attempt
     procedure, private :: next_attempt
-    procedure :: accept_best
+    procedure          :: accept_best
     procedure, private :: accept_refs
-    procedure :: restore_refs
+    procedure          :: restore_refs
     procedure, private :: n_refs
     ! the assignment of a publication
-    procedure :: start_expand
-    procedure :: finish_expand
-    procedure :: start_assign
-    procedure :: finish_assign
+    procedure          :: start_expand
+    procedure          :: finish_expand
+    procedure          :: start_assign
+    procedure          :: finish_assign
     procedure, private :: take_assignment
-    procedure :: write_assignment_cavgs
+    procedure          :: write_assignment_cavgs
     procedure, private :: prepare_refine_seeds
-    procedure :: start_refine
-    procedure :: finish_refine
+    procedure          :: start_refine
+    procedure          :: finish_refine
     procedure, private :: take_refine_result
     ! records
-    procedure :: record_run_publication
+    procedure          :: record_run_publication
     procedure, private :: prune_quality_dirs
     procedure, private :: prune_run_dirs
-    procedure :: write_stage_project
+    procedure          :: write_stage_project
     ! GUI
     procedure, private :: apply_gui_updates
-    procedure :: write_snapshot
+    procedure          :: write_snapshot
     procedure, private :: send_status
     procedure, private :: send_volumes
-    procedure :: send_refs
-    procedure :: send_state_volume
-    procedure :: read_state_fsc
+    procedure          :: send_refs
+    procedure          :: send_state_volume
+    procedure          :: read_state_fsc
     ! rules that use no stage state
     procedure, nopass, private :: next_job
     procedure, nopass, private :: best_attempt
@@ -480,7 +480,7 @@ contains
     subroutine watch_sets( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(string), allocatable :: projects(:)
-        integer :: nprojects, i
+        integer                   :: nprojects, i
         call self%project_buff%watch(nprojects, projects)
         if( nprojects == 0 ) return
         call lex_sort(projects)
@@ -608,7 +608,7 @@ contains
         logical function is_rejected( fname )
             class(string), intent(in) :: fname
             character(len=4096) :: line
-            integer :: funit, ios
+            integer             :: funit, ios
             is_rejected = .false.
             if( .not. file_exists(string(REJECTED_PUBLICATIONS)) ) return
             open(newunit=funit, file=REJECTED_PUBLICATIONS, status='old', action='read', iostat=ios)
@@ -641,8 +641,8 @@ contains
         class(stream_stage_solve3D), intent(inout) :: self
         class(sp_project),           intent(inout) :: set
         type(string) :: problem, stk, frcs
-        real    :: smpd
-        integer :: ncls, ldim(3), nimgs
+        real         :: smpd
+        integer      :: ncls, ldim(3), nimgs
         problem = ''
         if( set%os_cls2D%get_noris() == 0 )then
             problem = 'no cls2D entries'
@@ -677,7 +677,7 @@ contains
         class(stream_stage_solve3D), intent(inout) :: self
         class(sp_project),           intent(inout) :: set
         type(string) :: problem, name
-        integer :: nstks, jstk, k, hint, fromp, fromp_set, nptcls, i, jptcl, iimg, iptcl
+        integer      :: nstks, jstk, k, hint, fromp, fromp_set, nptcls, i, jptcl, iimg, iptcl
         problem = ''
         nstks   = set%os_stk%get_noris()
         if( set%os_mic%get_noris() /= nstks )then
@@ -785,9 +785,9 @@ contains
         integer,      allocatable :: kstk(:)   ! the stage's stack of each publication stack, 0 when new
         logical,      allocatable :: l_seen(:) ! the stage's stacks the publication holds
         type(string), allocatable :: new_names(:)
-        type(string) :: name
-        integer :: nstks, nstks_pool, jstk, k, hint, nnew, nptcls_new, nptcls, i, iptcl, jptcl
-        integer :: fromp, fromp_set, pool_nmics, pool_nptcls, imic, nupdated, ndeselected, s, iimg
+        type(string)              :: name
+        integer                   :: nstks, nstks_pool, jstk, k, hint, nnew, nptcls_new, nptcls, i, iptcl, jptcl
+        integer                   :: fromp, fromp_set, pool_nmics, pool_nptcls, imic, nupdated, ndeselected, s, iimg
         nstks = set%os_stk%get_noris()
         if( set%os_mic%get_noris() /= nstks ) THROW_HARD('# micrographs /= # stacks in publication '//int2str(id))
         nstks_pool = size(self%stk_names)
@@ -1405,8 +1405,8 @@ contains
         class(stream_stage_solve3D), intent(inout) :: self
         class(string),               intent(in)    :: dir
         type(string), allocatable :: vols(:)
-        real    :: smpd
-        integer :: box
+        real                      :: smpd
+        integer                   :: box
         l_ok = read_refs_record(dir, size(self%state_res), vols, box, smpd)
         if( .not. l_ok ) return
         call move_alloc(vols, self%ref_vols)
@@ -1673,9 +1673,9 @@ contains
     subroutine prune_quality_dirs( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(string), allocatable :: dirs(:), runs(:)
-        character(len=256) :: line
-        integer :: i, j, funit, ios, nruns
-        logical :: l_run
+        character(len=256)        :: line
+        integer                   :: i, j, funit, ios, nruns
+        logical                   :: l_run
         if( .not. dir_exists(QUALITY_DIR) ) return
         dirs = simple_list_dirs(QUALITY_DIR)
         if( size(dirs) <= NQUALITY_KEPT ) return
@@ -1719,7 +1719,7 @@ contains
     subroutine prune_run_dirs( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(string), allocatable :: dirs(:)
-        integer :: i, k
+        integer                   :: i, k
         do k = 1,self%nassign - 1
             if( dir_exists(ASSIGN_DIR//'/it_'//int2str(k)) ) call simple_rmdir(ASSIGN_DIR//'/it_'//int2str(k))
         enddo
@@ -1836,8 +1836,8 @@ contains
     ! The phase, the assignments, the particle counts and, once the references exist, each
     ! state's population and resolution (of the latest refinement; none for the references).
     subroutine send_status( self, stage )
-        class(stream_stage_solve3D), intent(inout) :: self
-        type(string), optional,      intent(in)    :: stage
+        class(stream_stage_solve3D), intent(inout)             :: self
+        type(string),                optional,      intent(in) :: stage
         type(string) :: stage_here
         integer      :: istate, progress
         select case(self%phase)
@@ -1922,12 +1922,12 @@ contains
     ! orientation distribution of its particles. The reprojection and heatmap JPEGs beside the
     ! volume are named after the state @p ifile, which may differ from the stage's.
     subroutine send_state_volume( self, istate, volpath, smpd, box, ifile, l_with_fsc, l_rows )
-        class(stream_stage_solve3D), intent(inout) :: self
-        integer,                     intent(in)    :: istate, box, ifile
-        type(string),                intent(in)    :: volpath
-        real,                        intent(in)    :: smpd
-        logical,                     intent(in)    :: l_with_fsc
-        logical, optional,           intent(in)    :: l_rows
+        class(stream_stage_solve3D), intent(inout)                  :: self
+        integer,                     intent(in)                     :: istate, box, ifile
+        type(string),                intent(in)                     :: volpath
+        real,                        intent(in)                     :: smpd
+        logical,                     intent(in)                     :: l_with_fsc
+        logical,                     optional,           intent(in) :: l_rows
         type(gui_metadata_vol3D) :: meta, fresh_meta
         type(string)             :: pprocpath, lppath, pprocmirrpath, reprojpath, oridistpath
         real, allocatable        :: fsc(:), res(:)
@@ -1999,11 +1999,11 @@ contains
     ! The FSC of state @p istate in the stage's project, its resolutions at 1/(Fourier index) for
     ! pixel size @p smpd, and the FSC=0.5 and FSC=0.143 resolutions; .false. without an FSC file.
     logical function read_state_fsc( self, istate, smpd, fsc, res, res05, res0143 ) result( l_fsc )
-        class(stream_stage_solve3D), intent(in)    :: self
-        integer,                     intent(in)    :: istate
-        real,                        intent(in)    :: smpd
-        real, allocatable,           intent(inout) :: fsc(:), res(:)
-        real,                        intent(out)   :: res05, res0143
+        class(stream_stage_solve3D), intent(in)                           :: self
+        integer,                     intent(in)                           :: istate
+        real,                        intent(in)                           :: smpd
+        real,                        allocatable,           intent(inout) :: fsc(:), res(:)
+        real,                        intent(out)                          :: res05, res0143
         type(string) :: fsc_fname
         integer      :: fsc_box, n
         l_fsc   = .false.

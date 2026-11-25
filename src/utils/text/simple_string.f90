@@ -21,41 +21,41 @@ type :: string
     character(len=:), allocatable :: buffer
   contains
     procedure, private :: assign
-    generic            :: assignment(=) => assign
+    generic            :: assignment(=)    => assign
     procedure, private :: append
-    generic            :: operator(//)  => append
+    generic            :: operator(//)     => append
     procedure          :: strlen
     procedure          :: strlen_trim
     procedure          :: raw
     procedure, private :: to_char_full, to_char_range
-    generic            :: to_char => to_char_full, to_char_range
+    generic            :: to_char          => to_char_full, to_char_range
     procedure, private :: to_static_full, to_static_range
-    generic            :: to_static => to_static_full, to_static_range
+    generic            :: to_static        => to_static_full, to_static_range
     procedure          :: to_int
     procedure          :: to_real
     procedure          :: to_dble
     procedure          :: to_fnv1a_hash64
     procedure, private :: has_substr_str, has_substr_char
-    generic            :: has_substr => has_substr_str, has_substr_char
+    generic            :: has_substr       => has_substr_str, has_substr_char
     procedure          :: substr_remove
     procedure, private :: ends_with_substr_str, ends_with_substr_char
     generic            :: ends_with_substr => ends_with_substr_str, ends_with_substr_char
     procedure, private :: substr_ind_char, substr_ind_str
-    generic            :: substr_ind => substr_ind_char, substr_ind_str
+    generic            :: substr_ind       => substr_ind_char, substr_ind_str
     procedure          :: substr_replace
     procedure          :: is_blank
     procedure          :: is_allocated
     procedure, private :: is_equal_str, is_equal_char
-    generic            :: operator(.eq.) => is_equal_str, is_equal_char
-    generic            :: operator(==) => is_equal_str, is_equal_char
+    generic            :: operator(.eq.)   => is_equal_str, is_equal_char
+    generic            :: operator(==)     => is_equal_str, is_equal_char
     procedure, private :: is_not_equal_str, is_not_equal_char
-    generic            :: operator(.ne.) => is_not_equal_str, is_not_equal_char
-    generic            :: operator(/=) => is_not_equal_str, is_not_equal_char
+    generic            :: operator(.ne.)   => is_not_equal_str, is_not_equal_char
+    generic            :: operator(/=)     => is_not_equal_str, is_not_equal_char
     procedure          :: readline
     procedure          :: writeline
     procedure          :: print
     procedure, private :: set_real, set_dble, set_int
-    generic            :: set => set_real, set_dble, set_int
+    generic            :: set              => set_real, set_dble, set_int
     procedure          :: kill
 end type string
 
@@ -104,7 +104,7 @@ contains
     function append(lhs, rhs) result(res)
         class(string), intent(in) :: lhs
         class(*),      intent(in) :: rhs
-        type(string)              :: res
+        type(string)                  :: res
         character(len=:), allocatable :: tmp
         select type (rhs)
             type is (string)
@@ -155,7 +155,7 @@ contains
         class(string), intent(in) :: self
         integer,       intent(in) :: fromto(2)
         character(:), allocatable :: c
-        integer :: i1, i2
+        integer                   :: i1, i2
         i1 = fromto(1)
         i2 = fromto(2)
         if (.not. allocated(self%buffer) .or. i1 < 1 .or. i2 < i1 .or. i2 > len(self%buffer)) then
@@ -193,8 +193,8 @@ contains
     end subroutine to_static_range
 
     integer function to_int( self, io_stat )
-        class(string),     intent(in)  :: self
-        integer, optional, intent(out) :: io_stat 
+        class(string),     intent(in)            :: self
+        integer,           optional, intent(out) :: io_stat
         integer :: ios
         to_int = 0
         if( allocated(self%buffer) )then
@@ -206,8 +206,8 @@ contains
     end function to_int
 
     real function to_real( self, io_stat )
-        class(string),     intent(in)  :: self
-        integer, optional, intent(out) :: io_stat 
+        class(string),     intent(in)            :: self
+        integer,           optional, intent(out) :: io_stat
         integer :: ios
         to_real = 0.
         if( allocated(self%buffer) )then
@@ -219,8 +219,8 @@ contains
     end function to_real
 
     real(dp) function to_dble( self, io_stat )
-        class(string),     intent(in)  :: self
-        integer, optional, intent(out) :: io_stat 
+        class(string),     intent(in)            :: self
+        integer,           optional, intent(out) :: io_stat
         integer :: ios
         to_dble = 0.d0
         if( allocated(self%buffer) )then
@@ -283,8 +283,8 @@ contains
         contains
 
             subroutine rm_substr( str, substr, str_out )
-                character(len=*),              intent(in)    :: str, substr
-                character(len=:), allocatable, intent(inout) :: str_out
+                character(len=*),              intent(in)                 :: str, substr
+                character(len=:),              allocatable, intent(inout) :: str_out
                 integer :: l, lout, pos
                 str_out = str
                 l = len(substr)
@@ -339,9 +339,9 @@ contains
     end function ends_with_substr_char
 
     elemental integer function substr_ind_char( self, substr, back )
-        class(string),     intent(in) :: self
-        character(len=*),  intent(in) :: substr
-        logical, optional, intent(in) :: back 
+        class(string),     intent(in)           :: self
+        character(len=*),  intent(in)           :: substr
+        logical,           optional, intent(in) :: back
         substr_ind_char = 0
         if( allocated(self%buffer) )then
             if( present(back) )then
@@ -353,8 +353,8 @@ contains
     end function substr_ind_char
 
     integer function substr_ind_str( self, substr, back )
-        class(string),     intent(in) :: self, substr
-        logical, optional, intent(in) :: back 
+        class(string),     intent(in)           :: self, substr
+        logical,           optional, intent(in) :: back
         substr_ind_str = 0
         if( allocated(self%buffer) .and. allocated(substr%buffer) )then
             if( present(back) )then
@@ -366,9 +366,9 @@ contains
     end function substr_ind_str
 
     pure subroutine substr_replace( self, s1, s2, one, back )
-        class(string),     intent(inout) :: self
-        character(len=*),  intent(in)    :: s1, s2
-        logical, optional, intent(in)    :: one, back
+        class(string),     intent(inout)        :: self
+        character(len=*),  intent(in)           :: s1, s2
+        logical,           optional, intent(in) :: one, back
         if( allocated(self%buffer) )then
             call rpl_substr(self%buffer, s1, s2, one, back)
         endif
@@ -379,12 +379,12 @@ contains
         !!  Optionally one occurence (one=.true.) and
         !!  optionally starting from end of string (back=.true.)
         pure subroutine rpl_substr( str, s1, s2, one, back )
-            character(len=:), allocatable, intent(inout) :: str
-            character(len=*),              intent(in)    :: s1, s2
-            logical,             optional, intent(in)    :: one, back
+            character(len=:),              allocatable, intent(inout) :: str
+            character(len=*),              intent(in)                 :: s1, s2
+            logical,                       optional, intent(in)       :: one, back
             character(len=:), allocatable :: tmp
-            integer :: i, n, ilen, ilen1
-            logical :: l_one, l_back
+            integer                       :: i, n, ilen, ilen1
+            logical                       :: l_one, l_back
             l_one  = .false.
             l_back = .false.
             if( present(one) ) l_one = one
@@ -490,7 +490,7 @@ contains
 
     elemental subroutine set_int(self, val)
         class(string), intent(inout) :: self
-        integer,      intent(in)     :: val
+        integer,       intent(in)    :: val
         character(len=STDLEN) :: tmp ! temporary buffer for WRITE
         call self%kill
         write(tmp, '(G0)') val       ! G0 = automatic-width formatting

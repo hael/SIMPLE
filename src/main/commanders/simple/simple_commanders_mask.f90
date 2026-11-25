@@ -85,7 +85,7 @@ contains
         type(parameters)         :: params
         type(image), allocatable :: imgs(:), masks(:)
         real,        allocatable :: diams(:), shifts(:,:)
-        integer :: ldim(3), n, i
+        integer                  :: ldim(3), n, i
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call set_automask2D_defaults(cline)
         call params%new(cline)

@@ -22,7 +22,7 @@ real,    parameter :: DS_MEAS  = 0.02    ! shells of the measured transfer, 1/A 
 ! with the transfer measured (ruling 5 of atomic_density_model.md, 2026-10-26): the curve within T_TOL of the rendered
 ! one where the atoms have power, ln S and ln B_p within MEAS_SCALE_TOL of the truth in the gauge (the scale is a soft
 ! direction once the curve is measured: the measurement's own noise moves it by about 4% at 147 atoms)
-real,    parameter :: T_TOL    = 0.06
+real,    parameter :: T_TOL          = 0.06
 real,    parameter :: MEAS_SCALE_TOL = 0.05
 ! the width of a fully coordinated atom is the real Pt maps' (atomic_density_model.md, Progress of phase 1), whose
 ! peak over the noise is 15 and whose correlated noise has the smoothing CORR_SD. The fixture is quieter than that
@@ -30,9 +30,9 @@ real,    parameter :: MEAS_SCALE_TOL = 0.05
 ! recovers is determined to about a third of its tolerance across noise draws: the draw depends on the compiler
 ! (gfortran 15 and 16 seed `random_number` differently), and at the real level the two machines' draws put beta 0.0048
 ! apart with the kernel known (2026-10-27), one sigma of the 0.005 tolerance. The real level is the 66 maps' business
-real,    parameter :: BP       = 28.
-real,    parameter :: PEAK_SNR = 40.
-real,    parameter :: CORR_SD  = 0.23
+real,    parameter :: BP              = 28.
+real,    parameter :: PEAK_SNR        = 40.
+real,    parameter :: CORR_SD         = 0.23
 real,    parameter :: INT_SCATTER_IN  = 0.015  ! intrinsic scatter of ln I, fully coordinated atoms (real maps 0.03)
 real,    parameter :: INT_SCATTER_OUT = 0.03   ! the same at the surface (real maps 0.06)
 
@@ -61,9 +61,9 @@ contains
     ! the kernels integrate to 1 and to 1 - a, the transfer at zero frequency (Riemann sums on fine grids)
     subroutine test_kernels()
         real, parameter :: B1 = 20., B2 = 25.
-        real(dp) :: s1, s2
-        real     :: h, r2
-        integer  :: i, j, k, m
+        real(dp)        :: s1, s2
+        real            :: h, r2
+        integer         :: i, j, k, m
         write(*,'(A)') 'test_kernels'
         h  = 0.1
         m  = 30
@@ -95,11 +95,11 @@ contains
     ! of the notch between shell centres errs by 2e-4 at most, max |T''| ds**2 / 8); T = 1 is the plain Gaussian exactly
     ! and T = 0 leaves nothing of the atom
     subroutine test_transfer_kernels()
-        real, parameter :: BS(3) = [20., 28., 40.]
+        real, parameter        :: BS(3) = [20., 28., 40.]
         type(transfer_kernels) :: tk
-        real, allocatable :: t(:), prof(:), dprof(:)
-        real    :: r2, err, errd, peak, peakd, rch, bh, dref
-        integer :: ib, i
+        real, allocatable      :: t(:), prof(:), dprof(:)
+        real                   :: r2, err, errd, peak, peakd, rch, bh, dref
+        integer                :: ib, i
         write(*,'(A)') 'test_transfer_kernels'
         t = notch_table(DS_FINE)
         call tk%new(SMPD, DS_FINE, t)
@@ -159,13 +159,13 @@ contains
     subroutine test_convolution_identity()
         use simple_atoms, only: atoms
         use simple_image, only: image
-        integer, parameter :: N = 64
-        real,    parameter :: B1 = 25., B2 = 200., Q = 1.3
-        real, allocatable :: a1(:,:,:), a2(:,:,:), a3(:,:,:)
-        real, pointer     :: p(:,:,:)
-        real    :: xyz(3,1)
-        type(atoms) :: atm
-        type(image) :: vol
+        integer, parameter   :: N  = 64
+        real,    parameter   :: B1 = 25., B2 = 200., Q = 1.3
+        real,    allocatable :: a1(:,:,:), a2(:,:,:), a3(:,:,:)
+        real,    pointer     :: p(:,:,:)
+        real                 :: xyz(3,1)
+        type(atoms)          :: atm
+        type(image)          :: vol
         write(*,'(A)') 'test_convolution_identity'
         allocate(a1(N,N,N), a2(N,N,N), a3(N,N,N))
         xyz(:,1) = [32.3, 31.6, 33.2]
@@ -196,9 +196,9 @@ contains
 
     ! rendering adds the atoms; the rendered integral is sum I (1 - a)
     subroutine test_render()
-        integer, parameter :: N = 64
-        real, allocatable :: arr(:,:,:)
-        real    :: xyz(3,2), r2
+        integer, parameter   :: N = 64
+        real,    allocatable :: arr(:,:,:)
+        real                 :: xyz(3,2), r2
         write(*,'(A)') 'test_render'
         allocate(arr(N,N,N))
         xyz(:,1) = [30.2, 32.7, 31.1]
@@ -212,12 +212,12 @@ contains
 
     ! the per-atom fit returns I and B of a noise-free atom, and in noise is unbiased with the spread it reports
     subroutine test_fit_atom()
-        integer, parameter :: NREP = 200
-        real,    parameter :: I0 = 1., B0 = 28., SIG = 0.02
+        integer, parameter     :: NREP = 200
+        real,    parameter     :: I0   = 1., B0 = 28., SIG = 0.02
         type(transfer_kernels) :: tk
-        real, allocatable  :: y(:), r2(:), g(:)
-        real    :: fint, fb, vi, vb, ints(NREP), mi, sdi, sdpred
-        integer :: i, j, k, m, irep
+        real,    allocatable   :: y(:), r2(:), g(:)
+        real                   :: fint, fb, vi, vb, ints(NREP), mi, sdi, sdpred
+        integer                :: i, j, k, m, irep
         write(*,'(A)') 'test_fit_atom'
         call tk%new(SMPD, DS_FINE, notch_table(DS_FINE))
         allocate(r2(729))
@@ -257,13 +257,13 @@ contains
     ! the regression returns slope and intercept within four standard errors, the interior spread within 25%,
     ! bins of at least 20 atoms from the interior down
     subroutine test_regress_profile()
-        integer, parameter :: M = 632
-        real,    parameter :: SLOPE0 = 0.05, ICEPT0 = 0.2, TAU_IN = 0.04, TAU_OUT = 0.1
-        integer :: cn(M), i, cvals(5) = [5, 7, 8, 9, 12], nper(5) = [100, 200, 100, 12, 220]
+        integer, parameter   :: M      = 632
+        real,    parameter   :: SLOPE0 = 0.05, ICEPT0 = 0.2, TAU_IN = 0.04, TAU_OUT = 0.1
+        integer              :: cn(M), i, cvals(5) = [5, 7, 8, 9, 12], nper(5) = [100, 200, 100, 12, 220]
         integer, allocatable :: bin_lo(:)
         real,    allocatable :: tau_bin(:)
-        real    :: y(M), v(M), w(M), x(M), slope, icept, tau_all, tau, xw, se_slope, se_icept
-        integer :: k, j
+        real                 :: y(M), v(M), w(M), x(M), slope, icept, tau_all, tau, xw, se_slope, se_icept
+        integer              :: k, j
         write(*,'(A)') 'test_regress_profile'
         call set_fixed_seed(815)
         i = 0
@@ -299,14 +299,14 @@ contains
     ! on white noise of known sigma: sigma_n within 2%, the phantom intensity spread within 10% of the closed form
     ! sigma / sqrt(sum g**2) and the correlation factor near 1; smoothed noise raises the factor
     subroutine test_noise()
-        integer, parameter :: N = 48
-        real,    parameter :: SIG = 0.05
+        integer,             parameter   :: N   = 48
+        real,                parameter   :: SIG = 0.05
         class(nano_density), allocatable :: dens
-        real,    allocatable :: map(:,:,:), sm(:,:,:)
-        logical, allocatable :: region(:,:,:)
-        real    :: xyz(3,1), sig_n, s_int, f_corr, sgg
-        logical :: l_resid
-        integer :: i, j, k
+        real,                allocatable :: map(:,:,:), sm(:,:,:)
+        logical,             allocatable :: region(:,:,:)
+        real                             :: xyz(3,1), sig_n, s_int, f_corr, sgg
+        logical                          :: l_resid
+        integer                          :: i, j, k
         write(*,'(A)') 'test_noise'
         allocate(dens)
         call set_fixed_seed(2026)
@@ -342,13 +342,13 @@ contains
     ! the atom set on two isolated atoms in faint noise: an added atom is fitted to its intensity and width, its aperture
     ! intensity is its intensity, keep_atoms takes an atom out of the model, the residual is the map less the model
     subroutine test_atom_set()
-        integer, parameter :: N = 64
-        real,    parameter :: I1 = 1.0, I2 = 0.6, B1 = 25., B2 = 32.
+        integer,             parameter   :: N  = 64
+        real,                parameter   :: I1 = 1.0, I2 = 0.6, B1 = 25., B2 = 32.
         class(nano_density), allocatable :: dens
-        real,    allocatable :: map(:,:,:), arr(:,:,:), one(:,:,:), xyz(:,:), ints(:), bfacs(:), vi(:), vb(:), aper(:)
-        logical, allocatable :: region(:,:,:)
-        real    :: two(3,2), sig
-        integer :: i, j, k
+        real,                allocatable :: map(:,:,:), arr(:,:,:), one(:,:,:), xyz(:,:), ints(:), bfacs(:), vi(:), vb(:), aper(:)
+        logical,             allocatable :: region(:,:,:)
+        real                             :: two(3,2), sig
+        integer                          :: i, j, k
         write(*,'(A)') 'test_atom_set'
         two(:,1) = [24.3, 31.6, 32.2]
         two(:,2) = [42.7, 32.4, 31.1]
@@ -392,10 +392,10 @@ contains
 
     ! a unit impulse becomes the normalised separable Gaussian
     subroutine test_gauss_filter()
-        integer, parameter :: N = 21, C = 11
-        real, parameter    :: SIG = 1.5
-        real    :: a(N,N,N), b(N,N,N), w(-6:6)
-        integer :: l
+        integer, parameter :: N   = 21, C = 11
+        real,    parameter :: SIG = 1.5
+        real               :: a(N,N,N), b(N,N,N), w(-6:6)
+        integer            :: l
         write(*,'(A)') 'test_gauss_filter'
         a = 0.
         a(C,C,C) = 1.
@@ -421,15 +421,15 @@ contains
     ! measured transfer within 0.06 of the notch the particle was rendered with; a fit with neighbours subtracted and no
     ! halo or background (the species work's) reads the halos as a width rise of 4.4 A**2 within a factor of two
     subroutine test_particle_uniform()
-        real, parameter :: BETA0 = 0.05, GAMMA0 = 0.
+        real,                parameter   :: BETA0 = 0.05, GAMMA0 = 0.
         class(nano_density), allocatable :: dens
-        real,    allocatable :: map(:,:,:), xyz(:,:), xyz0(:,:), ints(:), bfacs(:), fxyz(:,:), fints(:), fbfacs(:), vi(:), vb(:)
-        real,    allocatable :: arr(:,:,:), txyz(:,:), tints(:), tbfacs(:), tvi(:), tvb(:)
-        logical, allocatable :: region(:,:,:), envelope(:,:,:)
-        integer, allocatable :: cn(:)
-        real    :: sig, rms0, rms, sig_n, s_int, f_corr
-        integer :: nthr_saved
-        logical :: l_resid
+        real,                allocatable :: map(:,:,:), xyz(:,:), xyz0(:,:), ints(:), bfacs(:), fxyz(:,:), fints(:), fbfacs(:), vi(:), vb(:)
+        real,                allocatable :: arr(:,:,:), txyz(:,:), tints(:), tbfacs(:), tvi(:), tvb(:)
+        logical,             allocatable :: region(:,:,:), envelope(:,:,:)
+        integer,             allocatable :: cn(:)
+        real                             :: sig, rms0, rms, sig_n, s_int, f_corr
+        integer                          :: nthr_saved
+        logical                          :: l_resid
         write(*,'(A)') 'test_particle_uniform'
         allocate(dens)
         call make_particle(BETA0, GAMMA0, .false., 31, map, xyz, xyz0, cn, ints, bfacs, region, envelope, sig)
@@ -495,12 +495,12 @@ contains
     ! width rising towards the surface (gamma = 0.03), intensity falling with coordination (beta = -0.03),
     ! correlated noise: the same checks, beta within the fixture's 0.01
     subroutine test_particle_gradient()
-        real, parameter :: BETA0 = -0.03, GAMMA0 = 0.03
+        real,                parameter   :: BETA0 = -0.03, GAMMA0 = 0.03
         class(nano_density), allocatable :: dens
-        real,    allocatable :: map(:,:,:), xyz(:,:), xyz0(:,:), ints(:), bfacs(:)
-        logical, allocatable :: region(:,:,:), envelope(:,:,:)
-        integer, allocatable :: cn(:)
-        real    :: sig
+        real,                allocatable :: map(:,:,:), xyz(:,:), xyz0(:,:), ints(:), bfacs(:)
+        logical,             allocatable :: region(:,:,:), envelope(:,:,:)
+        integer,             allocatable :: cn(:)
+        real                             :: sig
         write(*,'(A)') 'test_particle_gradient'
         allocate(dens)
         call make_particle(BETA0, GAMMA0, .true., 47, map, xyz, xyz0, cn, ints, bfacs, region, envelope, sig)
@@ -527,13 +527,13 @@ contains
     ! the check of that
     ! scale_tol, with the transfer measured: ln S and ln B_p within it of the truth in the transfer's gauge (ruling 5)
     subroutine check_profiles( dens, tag, beta0, gamma0, beta_tol, scale_tol )
-        class(nano_density), intent(in) :: dens
-        character(len=*),   intent(in) :: tag
-        real,               intent(in) :: beta0, gamma0, beta_tol
-        real, optional,     intent(in) :: scale_tol
+        class(nano_density), intent(in)               :: dens
+        character(len=*),    intent(in)               :: tag
+        real,                intent(in)               :: beta0, gamma0, beta_tol
+        real,                optional,     intent(in) :: scale_tol
         integer, allocatable :: bin_lo(:)
         real,    allocatable :: tau_i(:)
-        real :: ln_s, beta, ln_bp, gamma, tau_b
+        real                 :: ln_s, beta, ln_bp, gamma, tau_b
         call dens%get_intensity_profile(ln_s, beta, bin_lo, tau_i)
         call dens%get_width_profile(ln_bp, gamma, tau_b)
         write(*,'(A,A,3F9.4,2F9.2)') tag, ': beta, gamma, ln S, B_p, rise ', beta, gamma, ln_s, exp(ln_bp),&
@@ -569,13 +569,13 @@ contains
     ! the last one unless its residual is above the best round's by more than 1e-3 of it
     subroutine report_rounds( dens, tag, xyz, ints, bfacs )
         class(nano_density), intent(in) :: dens
-        character(len=*),   intent(in) :: tag
-        real,               intent(in) :: xyz(:,:), ints(:), bfacs(:)
+        character(len=*),    intent(in) :: tag
+        real,                intent(in) :: xyz(:,:), ints(:), bfacs(:)
         real,    allocatable :: fields(:,:), curves(:,:), t_ref(:)
         logical, allocatable :: have(:)
-        real    :: err
-        integer :: kept, k, ir, nr
-        logical :: capped
+        real                 :: err
+        integer              :: kept, k, ir, nr
+        logical              :: capped
         call dens%get_rounds(fields, curves, kept, capped)
         nr = size(fields, 2)
         call assert_true(nr >= 1 .and. kept >= 1 .and. kept <= nr, tag//': the rounds ran and one was kept')
@@ -606,12 +606,12 @@ contains
     ! measurement returns; within T_TOL
     subroutine check_transfer( dens, tag, xyz, ints, bfacs )
         class(nano_density), intent(in) :: dens
-        character(len=*),   intent(in) :: tag
-        real,               intent(in) :: xyz(:,:), ints(:), bfacs(:)
+        character(len=*),    intent(in) :: tag
+        real,                intent(in) :: xyz(:,:), ints(:), bfacs(:)
         real,    allocatable :: t_meas(:), t_sm(:), pow(:), t_ref(:), t_rep(:)
         logical, allocatable :: rel(:), have(:)
-        real    :: ds, t_change, err
-        integer :: n_held, k, nchk
+        real                 :: ds, t_change, err
+        integer              :: n_held, k, nchk
         call dens%get_transfer(ds, t_meas, t_sm, pow, rel, t_rep, n_held, t_change)
         call rendered_transfer(xyz, ints, bfacs, BOX, SMPD, HAMP, HBFAC, ds, size(t_sm), t_ref, have)
         err  = 0.
@@ -633,7 +633,7 @@ contains
     function notch_table( ds ) result( t )
         real, intent(in)  :: ds
         real, allocatable :: t(:)
-        integer :: k, nsh
+        integer           :: k, nsh
         nsh = int(sqrt(3.) * 0.5 / SMPD / ds) + 1
         allocate(t(nsh))
         do k = 1,nsh
@@ -696,16 +696,16 @@ contains
     ! ln B = ln B_p + gamma (12 - c) + N(0, 0.02), plus white or correlated noise; xyz the truth, xyz0 the start
     ! (truth plus 0.1 A per axis), cn from the geometry, region the noise region, envelope the particle's sphere
     subroutine make_particle( beta0, gamma0, l_corr, seed, map, xyz, xyz0, cn, ints, bfacs, region, envelope, sig )
-        real,                 intent(in)  :: beta0, gamma0
-        logical,              intent(in)  :: l_corr
-        integer,              intent(in)  :: seed
-        real,    allocatable, intent(out) :: map(:,:,:), xyz(:,:), xyz0(:,:), ints(:), bfacs(:)
-        integer, allocatable, intent(out) :: cn(:)
-        logical, allocatable, intent(out) :: region(:,:,:), envelope(:,:,:)
-        real,                 intent(out) :: sig
+        real,                 intent(in)               :: beta0, gamma0
+        logical,              intent(in)               :: l_corr
+        integer,              intent(in)               :: seed
+        real,                 allocatable, intent(out) :: map(:,:,:), xyz(:,:), xyz0(:,:), ints(:), bfacs(:)
+        integer,              allocatable, intent(out) :: cn(:)
+        logical,              allocatable, intent(out) :: region(:,:,:), envelope(:,:,:)
+        real,                 intent(out)              :: sig
         real,    allocatable :: noise(:,:,:), sm(:,:,:)
-        real    :: tmp(3,1000), cen(3), step, r, peak, tau, m, rv
-        integer :: i, j, k, l, n, cnt(CN_FULL), lo(3), hi(3)
+        real                 :: tmp(3,1000), cen(3), step, r, peak, tau, m, rv
+        integer              :: i, j, k, l, n, cnt(CN_FULL), lo(3), hi(3)
         step = DNN / sqrt(2.)
         cen  = 0.5 * real(BOX) + [0.31, -0.27, 0.13]
         n    = 0

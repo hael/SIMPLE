@@ -34,8 +34,8 @@ contains
         type(parameters) :: params
         type(image_bin)  :: img_or_vol
         type(image)      :: img_sdevs
-        integer :: iptcl
-        logical :: is2D, fill_holes, l_sauvola
+        integer          :: iptcl
+        logical          :: is2D, fill_holes, l_sauvola
         ! error check
         if( .not. cline%defined('stk') .and. .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! stk or vol1 needs to be present; binarize')
@@ -78,7 +78,7 @@ contains
 
             subroutine doit
                 type(image_bin) :: cos_img
-                real :: ave, sdev, maxv, minv
+                real            :: ave, sdev, maxv, minv
                 if( cline%defined('thres') )then
                     call img_or_vol%binarize(params%thres)
                 else if( cline%defined('npix') )then
@@ -118,10 +118,10 @@ contains
         type(parameters)       :: params
         type(builder)          :: build
         type(bspline_smoother) :: bs
-        real, allocatable :: fsc(:), optlp(:), res(:)
-        real, parameter   :: SIGMA_DEFAULT=1.0
-        real              :: fsc05, fsc0143
-        integer           :: find
+        real, allocatable      :: fsc(:), optlp(:), res(:)
+        real, parameter        :: SIGMA_DEFAULT=1.0
+        real                   :: fsc05, fsc0143
+        integer                :: find
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'filtered'//STK_EXT)
         if( .not. cline%defined('outvol') ) call cline%set('outvol', 'filtered.mrc')
@@ -279,16 +279,16 @@ contains
         class(commander_scale), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(string), allocatable :: filenames(:)
-        type(parameters) :: params
-        type(builder)    :: build
-        type(gui_communicator) :: gui_comm
-        type(image)      :: vol2, img, img2
-        type(stack_io)   :: stkio_r, stkio_w
-        real             :: ave, sdev, var, med, smpd_new, scale, smpd_sc
-        integer          :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
-        integer          :: istk, nstks, ptcl_fromp, ptcl_top, newbox
-        integer          :: numlen
-        type(string)     :: fname, stkin, stkout, ext
+        type(parameters)          :: params
+        type(builder)             :: build
+        type(gui_communicator)    :: gui_comm
+        type(image)               :: vol2, img, img2
+        type(stack_io)            :: stkio_r, stkio_w
+        real                      :: ave, sdev, var, med, smpd_new, scale, smpd_sc
+        integer                   :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
+        integer                   :: istk, nstks, ptcl_fromp, ptcl_top, newbox
+        integer                   :: numlen
+        type(string)              :: fname, stkin, stkout, ext
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('projfile') .and. cline%defined('fromp') .and. cline%defined('top')&

@@ -22,7 +22,7 @@ contains
         real,    intent(inout) :: t
         real,    allocatable   :: arr(:)
         integer, allocatable   :: locn(:)
-        real    :: ts(2)
+        real                   :: ts(2)
         if( level < 0 .or. level > 2 )then
             call simple_exception('peak detection level out of range', 'simple_math.f90', __LINE__,l_stop=.true.)
         endif
@@ -52,7 +52,7 @@ contains
         real,    intent(in)    :: x(n)
         real,    intent(inout) :: t
         real,    allocatable   :: arr(:)
-        real    :: ts(2)
+        real                   :: ts(2)
         if( level < 1 .or. level > 2 )then
             call simple_exception('peak detection level out of range', 'simple_math.f90', __LINE__,l_stop=.true.)
         endif
@@ -68,9 +68,9 @@ contains
     subroutine detect_peak_thres_for_npeaks( n, npeaks, x, t )
         integer, intent(in)    :: n, npeaks
         real,    intent(in)    :: x(n)
-        real,    intent(inout) :: t 
+        real,    intent(inout) :: t
         real, allocatable :: tmp(:)
-        integer :: ind
+        integer           :: ind
         allocate(tmp(n), source=x)
         call hpsort(tmp)
         ind = max(1,n - npeaks + 1)
@@ -91,16 +91,16 @@ contains
     ! This is intended for score landscapes after local peak/minimum detection.
     ! Set lower_tail=.true. when lower values are better, e.g. distances.
     subroutine detect_peak_thres_fdr( n, x, q, min_peaks, max_peaks, t, npeaks, lower_tail )
-        integer,          intent(in)    :: n, min_peaks, max_peaks
-        real,             intent(in)    :: x(n), q
-        real,             intent(inout) :: t
-        integer,          intent(out)   :: npeaks
-        logical, optional, intent(in)   :: lower_tail
+        integer,          intent(in)           :: n, min_peaks, max_peaks
+        real,             intent(in)           :: x(n), q
+        real,             intent(inout)        :: t
+        integer,          intent(out)          :: npeaks
+        logical,          optional, intent(in) :: lower_tail
         real,    allocatable :: work(:), pvals(:), evidence(:)
         integer, allocatable :: order(:)
-        real    :: med, sigma, qcrit, sqrttwo, eps
-        integer :: i, k_bh, nsel, nfloor, ncap
-        logical :: l_lower
+        real                 :: med, sigma, qcrit, sqrttwo, eps
+        integer              :: i, k_bh, nsel, nfloor, ncap
+        logical              :: l_lower
         if( q <= 0. .or. q >= 1. )then
             call simple_exception('FDR q must be in (0,1)', 'simple_segmentation.f90', __LINE__, l_stop=.true.)
         endif
@@ -206,8 +206,8 @@ contains
         real,    intent(inout) :: t
         integer, parameter     :: NQUANTA = 5
         real,    allocatable   :: arr(:), means(:), peak_ts(:), frac_peaks(:)
-        integer, allocatable :: labels(:)
-        integer :: iq, n_fg, nvals, ind, loc(1), cnt
+        integer, allocatable   :: labels(:)
+        integer                :: iq, n_fg, nvals, ind, loc(1), cnt
         ! return immediately if there are not enough elements to quantize
         ! the input threshold is left untouched
         if( n < NQUANTA ) return
@@ -251,7 +251,7 @@ contains
         class(image), intent(inout) :: img_in    ! image input and output
         real,         intent(in)    :: thresh(1) ! threshold for Sobel algorithm
         real,  allocatable :: grad(:,:,:), rmat(:,:,:)
-        integer :: ldim(3)
+        integer            :: ldim(3)
         ldim = img_in%get_ldim()
         allocate(grad(ldim(1),ldim(2),ldim(3)), rmat(ldim(1),ldim(2),ldim(3)), source=0.)
         call img_in%calc_gradient(grad)
@@ -266,18 +266,18 @@ contains
     ! close to 'goal'. This particular number is selected because it is what needed
     ! for Chiara's particle picking routine.
     subroutine automatic_thresh_sobel( img, goal, thresh )
-        class(image), intent(inout)    :: img
-        real, optional,  intent(in)    :: goal
-        real, optional,  intent(inout) :: thresh(1) !to keep track of the selected threshold
-        real, allocatable  :: grad(:,:,:)
-        real               :: tthresh(1), ggoal       !selected threshold and ratio nforeground/nbackground
-        real               :: t(3)                    !to calculate 3 possible sobel thresholds for each iteration
-        real               :: ratio(3)                !n_foreground/nbackground for 3 different values of the thresh
-        real               :: diff(3)                 !difference between the ideal ratio (= goal) and the obtained 3 ratios
-        integer, parameter :: N_MAXIT = 100           !max number of iterations
-        integer            :: n_it, ldim(3)
-        logical            :: DEBUG
-        real               :: r                       !random # which guarantees me not to get stuck
+        class(image), intent(inout)            :: img
+        real,         optional,  intent(in)    :: goal
+        real,         optional,  intent(inout) :: thresh(1) !to keep track of the selected threshold
+        real,    allocatable :: grad(:,:,:)
+        real                 :: tthresh(1), ggoal     !selected threshold and ratio nforeground/nbackground
+        real                 :: t(3)                  !to calculate 3 possible sobel thresholds for each iteration
+        real                 :: ratio(3)              !n_foreground/nbackground for 3 different values of the thresh
+        real                 :: diff(3)               !difference between the ideal ratio (= goal) and the obtained 3 ratios
+        integer, parameter   :: N_MAXIT = 100         !max number of iterations
+        integer              :: n_it, ldim(3)
+        logical              :: DEBUG
+        real                 :: r                     !random # which guarantees me not to get stuck
         DEBUG  = .false.
         ggoal = 2.
         ldim = img%get_ldim()
@@ -334,10 +334,10 @@ contains
     ! thresh if present, else (1 -/+ sigma) * the median gradient with sigma = 0.33 (the zero-parameter
     ! auto Canny cited below); lp is passed on only in that automatic case.
     subroutine canny( img_in, img_out, thresh, lp )
-        class(image),           intent(inout) :: img_in
-        class(image), optional, intent(inout) :: img_out
-        real,         optional, intent(in)    :: thresh(2)
-        real,         optional, intent(in)    :: lp(1)
+        class(image),           intent(inout)           :: img_in
+        class(image),           optional, intent(inout) :: img_out
+        real,                   optional, intent(in)    :: thresh(2)
+        real,                   optional, intent(in)    :: lp(1)
         real              :: tthresh(2),  sigma, m
         real, allocatable :: grad(:,:,:), vector(:)
         integer           :: ldim(3)
@@ -473,14 +473,14 @@ contains
     ! Canny routine for edge detection, in its classical version.
     ! It requires a double threshold.
     subroutine canny_edge( img_in, thresh, lp )
-        class(image), intent(inout) :: img_in    ! input and output image
-        real,            intent(in) :: thresh(2) ! low and high thresholds
-        real, optional,  intent(in) :: lp(1)     ! lp filtering
-        type(image_bin) :: Gr !gradient image
-        integer        :: ldim(3), r(3), k, i, j, nsz                   !just for implementation
+        class(image),    intent(inout)         :: img_in    ! input and output image
+        real,            intent(in)            :: thresh(2) ! low and high thresholds
+        real,            optional,  intent(in) :: lp(1)     ! lp filtering
+        type(image_bin)      :: Gr                                                  !gradient image
+        integer              :: ldim(3), r(3), k, i, j, nsz                         !just for implementation
         real,    allocatable :: dir_mat(:,:,:), Dc(:,:,:), Dr(:,:,:), grad(:,:,:)   !derivates, gradient
-        integer :: neigh_8_inds(3,8) ! 8-neighborhoods of a pixel
-        real    :: smpd, llp(1)
+        integer              :: neigh_8_inds(3,8)                                   ! 8-neighborhoods of a pixel
+        real                 :: smpd, llp(1)
         ldim = img_in%get_ldim()
         smpd = img_in%get_smpd()
         allocate(grad(ldim(1),ldim(2),ldim(3)), Dc(ldim(1),ldim(2),ldim(3)), Dr(ldim(1),ldim(2),ldim(3)), &
@@ -535,19 +535,19 @@ contains
     ! otsu binarization for images, based on the implementation
     ! of otsu algo for 1D vectors
     subroutine otsu_img( img, thresh, mskrad, positive, tight, tighter )
-        class(image),      intent(inout) :: img
-        real,    optional, intent(inout) :: thresh
-        real,    optional, intent(in)    :: mskrad
-        logical, optional, intent(in)    :: positive ! consider just the positive range (specific for nanoparticles)
-        logical, optional, intent(in)    :: tight    ! for generating a tight mask in automasking
-        logical, optional, intent(in)    :: tighter  ! for generating a tighter mask
+        class(image),      intent(inout)           :: img
+        real,              optional, intent(inout) :: thresh
+        real,              optional, intent(in)    :: mskrad
+        logical,           optional, intent(in)    :: positive ! consider just the positive range (specific for nanoparticles)
+        logical,           optional, intent(in)    :: tight    ! for generating a tight mask in automasking
+        logical,           optional, intent(in)    :: tighter  ! for generating a tighter mask
         real,    pointer     :: rmat(:,:,:)
         real,    allocatable :: x(:)
         logical, allocatable :: lmsk(:,:,:)
-        type(image) :: tmpimg
-        integer     :: ldim(3)
-        logical     :: ppositive, ttight, ttighter
-        real        :: selected_t, t1, t2
+        type(image)          :: tmpimg
+        integer              :: ldim(3)
+        logical              :: ppositive, ttight, ttighter
+        real                 :: selected_t, t1, t2
         ldim = img%get_ldim()
         if( present(mskrad) )then
             call tmpimg%disc(ldim, img%get_smpd(), mskrad, lmsk)
@@ -626,13 +626,13 @@ contains
         type(image)       :: img_copy
         type(image)       :: img_avg, img_med
         real, allocatable :: neigh_8_pixs(:)
-        integer :: ldim(3)
-        integer :: i,j,k,nsz
-        integer :: count_back          ! counts how many times a px is selected as background
-        real    :: smpd
-        real, pointer :: rmat(:,:,:)   ! original matrix
-        real, pointer :: rmat_t(:,:,:) ! for the thresholded img
-        real, pointer :: rmat_avg(:,:,:),rmat_med(:,:,:)
+        integer           :: ldim(3)
+        integer           :: i,j,k,nsz
+        integer           :: count_back    ! counts how many times a px is selected as background
+        real              :: smpd
+        real, pointer     :: rmat(:,:,:)   ! original matrix
+        real, pointer     :: rmat_t(:,:,:) ! for the thresholded img
+        real, pointer     :: rmat_avg(:,:,:),rmat_med(:,:,:)
         ldim = img%get_ldim()
         smpd = img%get_smpd()
         if(is2D .eqv. .true.) ldim(3) = 1
@@ -714,13 +714,13 @@ contains
     end subroutine otsu_robust_fast
 
     subroutine sauvola( img, winsz, img_sdevs, bias )
-        class(image),   intent(inout) :: img
-        integer,        intent(in)    :: winsz
-        class(image),   intent(inout) :: img_sdevs ! local standard deviations
-        real, optional, intent(in)    :: bias
+        class(image),   intent(inout)        :: img
+        integer,        intent(in)           :: winsz
+        class(image),   intent(inout)        :: img_sdevs ! local standard deviations
+        real,           optional, intent(in) :: bias
         real, allocatable :: rmat(:,:,:), sdevs(:,:,:), avgs(:,:,:)
-        integer :: ldim(3), ir(2), jr(2), isz, jsz, npix, i, j
-        real    :: bbias, smpd, sdev_max, t
+        integer           :: ldim(3), ir(2), jr(2), isz, jsz, npix, i, j
+        real              :: bbias, smpd, sdev_max, t
         bbias = 0.34 ! [0.2,0.5]
         if( present(bias) ) bbias = bias
         ldim = img%get_ldim()

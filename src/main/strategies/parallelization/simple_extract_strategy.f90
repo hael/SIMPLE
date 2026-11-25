@@ -111,7 +111,7 @@ contains
     function create_extract_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
         class(extract_strategy), allocatable :: strategy
-        logical :: is_master
+        logical                              :: is_master
         ! Same heuristic as other refactors:
         ! distributed master when nparts defined but no explicit worker range/part.
         is_master = cline%defined('nparts') .and. (.not.cline%defined('part')) &
@@ -202,11 +202,11 @@ contains
         integer,                    allocatable :: ptcl_inds(:)
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
         type(string)                            :: stack, boxfile_name, box_fname, ctfdoc, ext
-        real                                   :: ptcl_pos(2), stk_mean,stk_sdev,stk_max,stk_min,dfx,dfy,prog
-        integer                                :: ldim(3), lfoo(3), fromto(2)
-        integer                                :: nframes, imic, iptcl, nptcls,nmics,nmics_here,box, i, iptcl_g
-        integer                                :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract
-        logical                                :: l_ctfpatch, l_gid_present, l_ogid_present, prog_write
+        real                                    :: ptcl_pos(2), stk_mean,stk_sdev,stk_max,stk_min,dfx,dfy,prog
+        integer                                 :: ldim(3), lfoo(3), fromto(2)
+        integer                                 :: nframes, imic, iptcl, nptcls,nmics,nmics_here,box, i, iptcl_g
+        integer                                 :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract
+        logical                                 :: l_ctfpatch, l_gid_present, l_ogid_present, prog_write
         ! init
         output_dir = PATH_HERE
         fromto(:)  = [params%fromp, params%top]

@@ -27,37 +27,37 @@ public :: cleanup_plane
 !! iterations; only kill_probe_fit or the rank-change resize in fit_iter_begin may free them.
 !> identity, selection and artifact namespaces
 type :: flex_fit_spec
-    integer :: id = 0  !< 1 = fit A, 2 = fit B, 0 = single fit
-    type(string) :: fprefix  !< eigenvolume namespace (default 'flex_pca_pc')
-    type(string) :: meta_fname  !< probe-state file (default COV_PROBE_META)
-    type(flex_selection) :: sel  !< this fit's half of the master's selection
-    integer, allocatable :: ppinds(:)  !< probe-stage subsample; owned per fit (the banked-
-    integer :: npp = 0
-    real(dp) :: conv_thresh = 0.d0
-    logical :: l_mix_req = .false.
-    integer :: kmix = 0, n_mix_warm = 3
-    integer :: kfr_ann(2) = 0
-    real :: dstep_ann = 0., lp_it = 0.
-    logical :: l_deflate_mean = .false.
-    integer :: vdfl = 0
+    integer              :: id             = 0 !< 1 = fit A, 2 = fit B, 0 = single fit
+    type(string)         :: fprefix            !< eigenvolume namespace (default 'flex_pca_pc')
+    type(string)         :: meta_fname         !< probe-state file (default COV_PROBE_META)
+    type(flex_selection) :: sel                !< this fit's half of the master's selection
+    integer, allocatable :: ppinds(:)          !< probe-stage subsample; owned per fit (the banked-
+    integer              :: npp            = 0
+    real(dp)             :: conv_thresh    = 0.d0
+    logical              :: l_mix_req      = .false.
+    integer              :: kmix           = 0, n_mix_warm = 3
+    integer              :: kfr_ann(2)     = 0
+    real                 :: dstep_ann      = 0., lp_it = 0.
+    logical              :: l_deflate_mean = .false.
+    integer              :: vdfl           = 0
   contains
     procedure :: kill => flex_fit_spec_kill
 end type flex_fit_spec
 
 !> cross-iteration state: convergence, the previous basis, and the MCFA mixture with its work arrays and distributed-reduce buffers (freed only here or by the rank-change resize)
 type :: flex_fit_history
-    real(dp) :: nll_prev = 0.d0
-    logical :: l_converged = .false.
+    real(dp)                 :: nll_prev     = 0.d0
+    logical                  :: l_converged  = .false.
     type(image), allocatable :: prev_real(:)  !< previous iteration's orthonormal basis
-    logical :: l_mix_active = .false.
-    logical :: l_mix_used = .false.
-    real(dp) :: ldOm_mix = 0.d0, ldOm_used = 0.d0
-    real(dp), allocatable :: mix_xi(:,:), mix_Om(:,:), mix_Ominv(:,:), mix_pi(:)
-    real(dp), allocatable :: mix_Omxi(:,:), mix_xiOx(:), mix_lpi(:)
-    real(dp), allocatable :: rhs0th(:,:), mkth(:,:,:), lwth(:,:), rkth(:,:)
-    real(dp), allocatable :: mxa_sr(:,:), mxa_sm(:,:,:), mxa_smm(:,:,:,:), mxa_sainv(:,:,:)
-    real(dp), allocatable :: dm_sr(:), dm_sm(:,:), dm_smm(:,:,:), dm_sai(:,:), dm_z(:,:)
-    integer :: dm_nz = 0
+    logical                  :: l_mix_active = .false.
+    logical                  :: l_mix_used   = .false.
+    real(dp)                 :: ldOm_mix     = 0.d0, ldOm_used = 0.d0
+    real(dp),    allocatable :: mix_xi(:,:), mix_Om(:,:), mix_Ominv(:,:), mix_pi(:)
+    real(dp),    allocatable :: mix_Omxi(:,:), mix_xiOx(:), mix_lpi(:)
+    real(dp),    allocatable :: rhs0th(:,:), mkth(:,:,:), lwth(:,:), rkth(:,:)
+    real(dp),    allocatable :: mxa_sr(:,:), mxa_sm(:,:,:), mxa_smm(:,:,:,:), mxa_sainv(:,:,:)
+    real(dp),    allocatable :: dm_sr(:), dm_sm(:,:), dm_smm(:,:,:), dm_sai(:,:), dm_z(:,:)
+    integer                  :: dm_nz        = 0
   contains
     procedure :: kill => flex_fit_history_kill
 end type flex_fit_history
@@ -69,26 +69,26 @@ type :: flex_fit_diag
     ! ---- cross-fit-FSC (crossfsc) per-fit hooks; the driver (xfsc_ctx_t) owns every decision ----
     ! fit_iter_finish harvests the writer payloads when l_xf_harvest is set (H before any ridge touches rho)
     ! and applies xf_invtau2 (record t-1, xfsc_prep_iter) to the rho_e/rho_o diagonals before the solves, once.
-    logical :: l_xf_harvest = .false.
+    logical               :: l_xf_harvest = .false.
     real,     allocatable :: xf_h_e(:,:), xf_h_o(:,:)  !< (filtsz,ncomp) per-shell H, pre-ridge
-    real,     allocatable :: xf_invtau2(:,:)  !< (ncomp,filtsz) ridge from record t-1
+    real,     allocatable :: xf_invtau2(:,:)           !< (ncomp,filtsz) ridge from record t-1
   contains
     procedure :: kill => flex_fit_diag_kill
 end type flex_fit_diag
 
 !> per-iteration workspace: prior, thread scratch, batch rows, Gamma and likelihood accumulators, projection planes
 type :: flex_fit_iter
-    real(dp), allocatable :: prior(:)
-    real(dp), allocatable :: Gth(:,:,:), Ath(:,:,:), bth(:,:), cth(:,:), zth(:,:)
-    real(dp), allocatable :: Ainvth(:,:,:), Acpth(:,:,:)
-    real(dp), allocatable :: hth(:,:)
-    real(dp), allocatable :: nll_thr(:)
-    real(dp), allocatable :: zbatch(:,:), dens(:,:,:)
-    logical,  allocatable :: valid(:), valid_e(:), valid_o(:)
-    real(dp), allocatable :: gam_thr(:,:), gam_acc(:), gam_sum(:)
-    integer,  allocatable :: nval_thr(:)
-    real(dp) :: nll_tot = 0.d0
-    integer :: nval = 0
+    real(dp),          allocatable :: prior(:)
+    real(dp),          allocatable :: Gth(:,:,:), Ath(:,:,:), bth(:,:), cth(:,:), zth(:,:)
+    real(dp),          allocatable :: Ainvth(:,:,:), Acpth(:,:,:)
+    real(dp),          allocatable :: hth(:,:)
+    real(dp),          allocatable :: nll_thr(:)
+    real(dp),          allocatable :: zbatch(:,:), dens(:,:,:)
+    logical,           allocatable :: valid(:), valid_e(:), valid_o(:)
+    real(dp),          allocatable :: gam_thr(:,:), gam_acc(:), gam_sum(:)
+    integer,           allocatable :: nval_thr(:)
+    real(dp)                       :: nll_tot = 0.d0
+    integer                        :: nval    = 0
     type(fplane_type), allocatable :: basis_fpls(:,:), mean_fpl(:)
     type(exp_samples), allocatable :: mean_es(:)   !< per-thread sample sets of the E-step's mean projection
   contains
@@ -101,18 +101,18 @@ end type flex_fit_iter
 !! from the fit around the codec call (probe_part_borrow / probe_part_restore, by move_alloc,
 !! never a copy) so the value describes exactly what the codec reads or writes.
 type :: flex_probe_part
-    integer  :: ncomp = 0, nval = 0
-    real(dp) :: nll_sum = 0.d0
-    complex,  allocatable :: cmat_e(:,:,:,:), cmat_o(:,:,:,:)   !< even/odd numerators (cmat_exp lattices)
-    real,     allocatable :: rho_ex(:,:,:,:), rho_ox(:,:,:,:)   !< even/odd numerator densities
-    real,     allocatable :: rho_e(:,:,:,:), rho_o(:,:,:,:)     !< coupled per-voxel densities (packed pairs)
-    real(dp), allocatable :: gam_sum(:)                          !< Gamma numerator (summed, divided by the reduced nval)
-    real,     allocatable :: kpk_e(:,:), kpk_o(:,:)              !< packed PCG pair kernels (rec_backend=pcg)
-    complex,  allocatable :: rpk_e(:,:), rpk_o(:,:)              !< packed PCG right-hand sides
+    integer               :: ncomp          = 0, nval = 0
+    real(dp)              :: nll_sum        = 0.d0
+    complex,  allocatable :: cmat_e(:,:,:,:), cmat_o(:,:,:,:)                        !< even/odd numerators (cmat_exp lattices)
+    real,     allocatable :: rho_ex(:,:,:,:), rho_ox(:,:,:,:)                        !< even/odd numerator densities
+    real,     allocatable :: rho_e(:,:,:,:), rho_o(:,:,:,:)                          !< coupled per-voxel densities (packed pairs)
+    real(dp), allocatable :: gam_sum(:)                                              !< Gamma numerator (summed, divided by the reduced nval)
+    real,     allocatable :: kpk_e(:,:), kpk_o(:,:)                                  !< packed PCG pair kernels (rec_backend=pcg)
+    complex,  allocatable :: rpk_e(:,:), rpk_o(:,:)                                  !< packed PCG right-hand sides
     real(dp), allocatable :: mix_sr(:), mix_sm(:,:), mix_smm(:,:,:), mix_sainv(:,:)  !< MCFA additive statistics
-    real(dp), allocatable :: z_sub(:,:)                          !< writer: this part's latent subsample; reader: the pool
-    integer  :: nz = 0                                           !< rows of z_sub in use (the pool's fill on the reader)
-    logical  :: l_mix_borrowed = .false.                         !< restore returns the mixture buffers to the fit
+    real(dp), allocatable :: z_sub(:,:)                                              !< writer: this part's latent subsample; reader: the pool
+    integer               :: nz             = 0                                      !< rows of z_sub in use (the pool's fill on the reader)
+    logical               :: l_mix_borrowed = .false.                                !< restore returns the mixture buffers to the fit
   contains
     procedure :: kill => probe_part_kill
 end type flex_probe_part
@@ -123,13 +123,13 @@ end type flex_probe_part
 !! survive from one iteration's M-step to the next iteration's E-step -- they are freed ONLY by
 !! kill or by the rank-change resize at iteration start, never by per-iteration cleanup.
 type :: flex_fit
-    type(flex_fit_spec)    :: spec
-    type(flex_fit_model)   :: model
-    type(flex_fit_history) :: history
+    type(flex_fit_spec)                :: spec
+    type(flex_fit_model)               :: model
+    type(flex_fit_history)             :: history
     type(flex_polar_bank), allocatable :: estep
-    type(flex_fit_mstep)   :: mstep
-    type(flex_fit_diag)    :: diag
-    type(flex_fit_iter)    :: iter
+    type(flex_fit_mstep)               :: mstep
+    type(flex_fit_diag)                :: diag
+    type(flex_fit_iter)                :: iter
   contains
     procedure, pass(fit) :: new  => flex_fit_new
     procedure, pass(fit) :: kill => flex_fit_kill
@@ -140,13 +140,13 @@ end type flex_fit
 !! writer and the SSNR ridge (arm 1, hard-wired in xfsc_setup) built from record t-1. fit_iter_finish
 !! stashes the writer payloads in probe_fit_t; the driver owns every consumer decision.
 type :: xfsc_ctx_t
-    logical  :: l_writer   = .false.   !< this driver writes records (paired master)
-    logical  :: l_any      = .false.   !< ridge or writer live -> artifact state resident
-    logical  :: l_loaded   = .false.   !< artifact reloaded from disk (restart-complete series)
-    logical  :: l_paired   = .false.   !< this driver is the paired engine
-    integer  :: v_reg      = 0         !< par.4 arms: 0 internal / 1 cross / 2 blend
-    integer  :: klo        = 6         !< low-resolution exemption index (reslim_ind analog)
-    integer  :: filtsz     = 0
+    logical                          :: l_writer   = .false. !< this driver writes records (paired master)
+    logical                          :: l_any      = .false. !< ridge or writer live -> artifact state resident
+    logical                          :: l_loaded   = .false. !< artifact reloaded from disk (restart-complete series)
+    logical                          :: l_paired   = .false. !< this driver is the paired engine
+    integer                          :: v_reg      = 0       !< par.4 arms: 0 internal / 1 cross / 2 blend
+    integer                          :: klo        = 6       !< low-resolution exemption index (reslim_ind analog)
+    integer                          :: filtsz     = 0
     type(crossfsc_file), allocatable :: xf
   contains
     procedure :: new  => xfsc_ctx_new

@@ -43,10 +43,10 @@ contains
 
     subroutine exec_simulate_noise( self, cline )
         class(commander_simulate_noise), intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
+        class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        integer :: i, cnt, ntot
+        integer          :: i, cnt, ntot
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         if( .not. cline%defined('outstk') ) params%outstk = string('simulated_noise')//params%ext
@@ -71,16 +71,16 @@ contains
         use simple_memoize_ft_maps,     only: memoize_ft_maps
         class(commander_simulate_particles), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        type(ori)        :: orientation, o_thres, o_mirr
-        type(oris)       :: packed_oris
-        type(ctf)        :: tfun
+        type(parameters)             :: params
+        type(builder)                :: build
+        type(ori)                    :: orientation, o_thres, o_mirr
+        type(oris)                   :: packed_oris
+        type(ctf)                    :: tfun
         type(projector), allocatable :: vol_pads(:)
         integer,         allocatable :: states(:)
-        real             :: bfac, bfacerr, euls(3), euls_mirr(3)
-        integer          :: i, cnt, ntot, nstates, istate, ldim_vol(3), nsec
-        logical          :: apply_ctf, l_oritab_states, l_wave
+        real                         :: bfac, bfacerr, euls(3), euls_mirr(3)
+        integer                      :: i, cnt, ntot, nstates, istate, ldim_vol(3), nsec
+        logical                      :: apply_ctf, l_oritab_states, l_wave
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',   'no')
         ! wave mode: the keys and defaults of reconstruct3D_wave
         l_wave = cline%defined('wave_model')
@@ -258,19 +258,19 @@ contains
         use simple_wave_projector,       only: wave_projector
         class(commander_simulate_scattering), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        integer, parameter :: BATCH = 64
-        type(parameters) :: params
-        type(builder)    :: build
-        type(atoms)      :: molecule
-        type(ori)        :: orientation
-        type(oris)       :: selection
-        type(ctfparams)  :: ctfparms
+        integer,                     parameter   :: BATCH = 64
+        type(parameters)                         :: params
+        type(builder)                            :: build
+        type(atoms)                              :: molecule
+        type(ori)                                :: orientation
+        type(oris)                               :: selection
+        type(ctfparams)                          :: ctfparms
         class(wave_projector),       allocatable :: wproj
-        type(string)     :: pdb_arg, pdb_source, potential_file
-        complex, allocatable :: planes(:,:,:)
-        integer          :: i, ib, nb, ldim(3), nptcls_arg, nsec, vol_dim(3), model, kappa, R
-        real             :: smpd
-        logical          :: from_pdb, has_angast, has_dfy, has_phshift
+        type(string)                             :: pdb_arg, pdb_source, potential_file
+        complex,                     allocatable :: planes(:,:,:)
+        integer                                  :: i, ib, nb, ldim(3), nptcls_arg, nsec, vol_dim(3), model, kappa, R
+        real                                     :: smpd
+        logical                                  :: from_pdb, has_angast, has_dfy, has_phshift
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir', 'no')
         if( .not. cline%defined('wave_model') ) call cline%set('wave_model', 'multislice')
         if( .not. cline%defined('ewald')      )then
@@ -612,7 +612,7 @@ contains
     subroutine exec_simulate_subtomogram( self, cline )
         use simple_simple_volinterp, only: rotvol
         class(commander_simulate_subtomogram), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
+        class(cmdline),                        intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
         type(image)      :: vol_rot
@@ -639,7 +639,7 @@ contains
     subroutine exec_simulate_nanoparticle( self, cline )
         use simple_atoms, only: atoms
         class(commander_simulate_nanoparticle), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
+        class(cmdline),                         intent(inout) :: cline
         real, parameter   :: NPIX_CUTOFF = 12.
         type(parameters)  :: params
         type(image)       :: vol
@@ -1069,7 +1069,7 @@ contains
     logical function oritab_holds_states( fname )
         class(string), intent(in) :: fname
         character(len=4096) :: line
-        integer :: funit, ios
+        integer             :: funit, ios
         oritab_holds_states = .false.
         open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
         if( ios /= 0 ) return
@@ -1093,7 +1093,7 @@ contains
         real, allocatable     :: fracs(:)
         character(len=STDLEN) :: list
         character(len=32)     :: items(MAXS)
-        integer :: n, i, ios
+        integer               :: n, i, ios
         allocate(fracs(nstates), source=1. / real(nstates))
         if( len_trim(pops) == 0 ) return
         list = pops
@@ -1115,8 +1115,8 @@ contains
         integer, intent(in) :: n
         real,    intent(in) :: fracs(:)
         integer, allocatable :: states(:)
-        integer :: counts(size(fracs)), order(size(fracs)), k, i, j, nleft
-        logical :: taken(size(fracs))
+        integer              :: counts(size(fracs)), order(size(fracs)), k, i, j, nleft
+        logical              :: taken(size(fracs))
         counts = nint(fracs * real(n))
         ! the states by decreasing fraction, ties in index order
         taken = .false.
@@ -1159,18 +1159,18 @@ contains
         class(cmdline),    intent(inout) :: cline
         class(ori),        intent(in)    :: o_thres, o_mirr
         integer,           intent(out)   :: cnt
-        integer, parameter :: BATCH = 64
+        integer,              parameter   :: BATCH = 64
         type(wave_projector), allocatable :: wprojs(:)
         type(oris),           allocatable :: sels(:)
         complex,              allocatable :: planes(:,:,:), buf(:,:,:)
         real,                 allocatable :: bfacs(:), vol_volts(:,:,:)
         integer,              allocatable :: inds(:), states(:), isel(:), nsel(:)
-        type(ori)       :: orientation
-        type(ctfparams) :: ctfparms
-        type(string)    :: fname
-        real    :: bfacerr, scale_link
-        integer :: model, kappa, nstates, n, i, j, j0, j1, nb, istate, a, b, r, ldim_vol(3), nsec
-        logical :: has_dfy, has_angast, has_phshift
+        type(ori)                         :: orientation
+        type(ctfparams)                   :: ctfparms
+        type(string)                      :: fname
+        real                              :: bfacerr, scale_link
+        integer                           :: model, kappa, nstates, n, i, j, j0, j1, nb, istate, a, b, r, ldim_vol(3), nsec
+        logical                           :: has_dfy, has_angast, has_phshift
         select case(trim(params%wave_model))
             case('projection')
                 model = WAVE_PROJECTION

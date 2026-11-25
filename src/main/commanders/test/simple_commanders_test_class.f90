@@ -706,7 +706,7 @@ contains
         class(commander_test_units), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_core(s, n)
         call suites_ori(s, n)
@@ -730,7 +730,7 @@ contains
         class(commander_test_unit_core), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_core(s, n)
         call run_unit_suites('unit_core', cline, s(1:n))
@@ -740,7 +740,7 @@ contains
         class(commander_test_unit_ori), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_ori(s, n)
         call run_unit_suites('unit_ori', cline, s(1:n))
@@ -750,7 +750,7 @@ contains
         class(commander_test_unit_image), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_image(s, n)
         call run_unit_suites('unit_image', cline, s(1:n))
@@ -760,7 +760,7 @@ contains
         class(commander_test_unit_numerics), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_numerics(s, n)
         call run_unit_suites('unit_numerics', cline, s(1:n))
@@ -770,7 +770,7 @@ contains
         class(commander_test_unit_project), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_project(s, n)
         call run_unit_suites('unit_project', cline, s(1:n))
@@ -780,7 +780,7 @@ contains
         class(commander_test_unit_motion), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_motion(s, n)
         call run_unit_suites('unit_motion', cline, s(1:n))
@@ -790,7 +790,7 @@ contains
         class(commander_test_unit_ui), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_ui(s, n)
         call run_unit_suites('unit_ui', cline, s(1:n))
@@ -800,7 +800,7 @@ contains
         class(commander_test_unit_ipc), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_ipc(s, n)
         call run_unit_suites('unit_ipc', cline, s(1:n))
@@ -810,37 +810,37 @@ contains
         class(commander_test_unit_reconstruction), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_reconstruction(s, n)
         call run_unit_suites('unit_reconstruction', cline, s(1:n))
     end subroutine exec_test_unit_reconstruction
 
     subroutine exec_test_unit_pftc_align2D3D( self, cline )
-        class(commander_test_unit_pftc_align2D3D), intent(inout)        :: self
+        class(commander_test_unit_pftc_align2D3D),        intent(inout) :: self
         class(cmdline),                                   intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_pftc_align2D3D(s, n)
         call run_unit_suites('unit_pftc_align2D3D', cline, s(1:n))
     end subroutine exec_test_unit_pftc_align2D3D
 
     subroutine exec_test_unit_cart_align3D( self, cline )
-        class(commander_test_unit_cart_align3D), intent(inout)        :: self
+        class(commander_test_unit_cart_align3D),        intent(inout) :: self
         class(cmdline),                                 intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_cart_align3D(s, n)
         call run_unit_suites('unit_cart_align3D', cline, s(1:n))
     end subroutine exec_test_unit_cart_align3D
 
     subroutine exec_test_lib_cart_align3D( self, cline )
-        class(commander_test_lib_cart_align3D), intent(inout)        :: self
+        class(commander_test_lib_cart_align3D),        intent(inout) :: self
         class(cmdline),                                intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_lib_cart_align3D(s, n)
         call run_unit_suites('lib_cart_align3D', cline, s(1:n))
@@ -850,7 +850,7 @@ contains
         class(commander_test_unit_single), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_single(s, n)
         call run_unit_suites('unit_single', cline, s(1:n))
@@ -860,7 +860,7 @@ contains
         class(commander_test_lib_single), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_lib_single(s, n)
         call run_unit_suites('lib_single', cline, s(1:n))
@@ -870,7 +870,7 @@ contains
         class(commander_test_unit_stream), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_stream(s, n)
         call run_unit_suites('unit_stream', cline, s(1:n))
@@ -880,7 +880,7 @@ contains
         class(commander_test_lib_stream), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_lib_stream(s, n)
         call run_unit_suites('lib_stream', cline, s(1:n))
@@ -890,7 +890,7 @@ contains
         class(commander_test_stream_chains), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(unit_suite) :: s(2)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_stream_chains(s, n)
         call run_unit_suites('stream_chains', cline, s(1:n))
@@ -900,7 +900,7 @@ contains
         class(commander_test_unit_parallel), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_parallel(s, n)
         call run_unit_suites('unit_parallel', cline, s(1:n))
@@ -910,7 +910,7 @@ contains
         class(commander_test_unit_heterogeneity), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_heterogeneity(s, n)
         call run_unit_suites('unit_heterogeneity', cline, s(1:n))
@@ -920,7 +920,7 @@ contains
         class(commander_test_lib_heterogeneity), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_lib_heterogeneity(s, n)
         call run_unit_suites('lib_heterogeneity', cline, s(1:n))
@@ -940,7 +940,7 @@ contains
         class(commander_test_lib_reconstruction), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
-        integer :: n
+        integer          :: n
         n = 0
         call suites_lib_reconstruction(s, n)
         call run_unit_suites('lib_reconstruction', cline, s(1:n))
@@ -950,7 +950,7 @@ contains
         class(commander_test_forked_process), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(unit_suite) :: s(3)
-        integer :: n
+        integer          :: n
         n = 0
         call add_suite(s, n, 'forked process',   run_all_forked_process_tests)
         call add_suite(s, n, 'stream heartbeat', run_stream_heartbeat_tests)
@@ -964,7 +964,7 @@ contains
         class(commander_test_gtk), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(unit_suite) :: s(2)
-        integer :: n
+        integer          :: n
         n = 0
         call add_suite(s, n, 'cairo tile', run_all_gtk_tile_tests)
         call add_suite(s, n, 'window',     run_all_gtk_window_tests)
@@ -1041,7 +1041,7 @@ contains
     function suite_id( name ) result( id )
         character(len=*), intent(in) :: name
         character(len=len(name))     :: id, lname
-        integer :: i, j
+        integer                      :: i, j
         lname = lowercase(adjustl(name))
         id    = ''
         j     = 0

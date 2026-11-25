@@ -21,17 +21,17 @@ private
 #include "simple_local_flags.inc"
 
 ! objective function weights
-real,    private, parameter :: W_HIST_SIG=0.5, W_POW_SIG=(1. - W_HIST_SIG)
-real,    private, parameter :: W_SIG=0.5, W_CC=0.2, W_RES=0.3
-real,    private, parameter :: W_SCORE_HOMO=0.2, W_SCORE_RES=0.5, W_SCORE_CLUST=0.3
+real,    private, parameter :: W_HIST_SIG   = 0.5, W_POW_SIG=(1. - W_HIST_SIG)
+real,    private, parameter :: W_SIG        = 0.5, W_CC=0.2, W_RES=0.3
+real,    private, parameter :: W_SCORE_HOMO = 0.2, W_SCORE_RES=0.5, W_SCORE_CLUST=0.3
 ! common control params
 integer, private, parameter :: NHISTBINS = 128
-real,    private, parameter :: HP_SPEC=20., LP_SPEC=6.
+real,    private, parameter :: HP_SPEC   = 20., LP_SPEC=6.
 
 type, public :: cavg_sigstats_matrices
-    integer :: histogram_bins = NHISTBINS
-    real    :: power_hp       = HP_SPEC
-    real    :: power_lp       = LP_SPEC
+    integer           :: histogram_bins = NHISTBINS
+    real              :: power_hp       = HP_SPEC
+    real              :: power_lp       = LP_SPEC
     real, allocatable :: power_distance(:,:)
     real, allocatable :: histogram_tvd(:,:)
     real, allocatable :: histogram_jsd(:,:)
@@ -45,21 +45,21 @@ end type cavg_sigstats_matrices
 contains
 
     subroutine id_junk_and_prep_cavgs4clust( spproj, cavg_imgs, mskdiam, clspops, clsinds, l_non_junk, mm )
-        class(sp_project),        intent(inout) :: spproj
-        type(image), allocatable, intent(inout) :: cavg_imgs(:)
-        real,                     intent(in)    :: mskdiam
-        integer,     allocatable, intent(inout) :: clspops(:), clsinds(:)
-        logical,     allocatable, intent(inout) :: l_non_junk(:)
-        real,        allocatable, intent(inout) :: mm(:,:)
-        real,              parameter  :: LP_BIN = 20.
-        logical,           parameter  :: DEBUG = .true.
-        real,    allocatable :: frcs(:,:), filter(:)
-        logical, allocatable :: l_msk(:,:,:)
-        type(string)         :: frcs_fname
-        type(image)          :: img_msk
-        type(class_frcs)     :: clsfrcs
-        integer              :: ncls, ldim(3), box, filtsz, ncls_sel, cnt, i, j
-        real                 :: smpd, mskrad
+        class(sp_project),        intent(inout)              :: spproj
+        type(image),              allocatable, intent(inout) :: cavg_imgs(:)
+        real,                     intent(in)                 :: mskdiam
+        integer,                  allocatable, intent(inout) :: clspops(:), clsinds(:)
+        logical,                  allocatable, intent(inout) :: l_non_junk(:)
+        real,                     allocatable, intent(inout) :: mm(:,:)
+        real,              parameter   :: LP_BIN = 20.
+        logical,           parameter   :: DEBUG  = .true.
+        real,              allocatable :: frcs(:,:), filter(:)
+        logical,           allocatable :: l_msk(:,:,:)
+        type(string)                   :: frcs_fname
+        type(image)                    :: img_msk
+        type(class_frcs)               :: clsfrcs
+        integer                        :: ncls, ldim(3), box, filtsz, ncls_sel, cnt, i, j
+        real                           :: smpd, mskrad
         call dealloc_imgarr(cavg_imgs)
         ncls      = spproj%os_cls2D%get_noris()
         cavg_imgs = read_cavgs_into_imgarr(spproj)
@@ -133,9 +133,9 @@ contains
     end subroutine id_junk_and_prep_cavgs4clust
 
     subroutine id_junk( spproj, mskdiam, l_non_junk )
-        class(sp_project),        intent(inout) :: spproj
-        real,                     intent(in)    :: mskdiam
-        logical,     allocatable, intent(inout) :: l_non_junk(:)
+        class(sp_project),        intent(inout)              :: spproj
+        real,                     intent(in)                 :: mskdiam
+        logical,                  allocatable, intent(inout) :: l_non_junk(:)
         type(image), allocatable                :: cavg_imgs(:)
         real,        parameter                  :: LP_BIN = 20.
         integer                                 :: ldim(3), box
@@ -151,20 +151,20 @@ contains
     end subroutine id_junk
 
     subroutine prep_cavgs4clust( spproj, cavg_imgs, mskdiam, clspops, clsinds, mask, mm )
-        class(sp_project),        intent(inout) :: spproj
-        type(image), allocatable, intent(inout) :: cavg_imgs(:)
-        real,                     intent(in)    :: mskdiam
-        integer,     allocatable, intent(inout) :: clspops(:), clsinds(:)
-        logical,                  intent(in)    :: mask(:)
-        real,        allocatable, intent(inout) :: mm(:,:)
-        real,              parameter  :: LP_BIN = 20.
-        real,    allocatable :: frcs(:,:), filter(:)
-        logical, allocatable :: l_msk(:,:,:)
-        type(string)         :: frcs_fname
-        type(image)          :: img_msk
-        type(class_frcs)     :: clsfrcs
-        integer              :: ncls, ldim(3), box, filtsz, ncls_sel, i, j
-        real                 :: smpd, mskrad
+        class(sp_project),        intent(inout)              :: spproj
+        type(image),              allocatable, intent(inout) :: cavg_imgs(:)
+        real,                     intent(in)                 :: mskdiam
+        integer,                  allocatable, intent(inout) :: clspops(:), clsinds(:)
+        logical,                  intent(in)                 :: mask(:)
+        real,                     allocatable, intent(inout) :: mm(:,:)
+        real,              parameter   :: LP_BIN = 20.
+        real,              allocatable :: frcs(:,:), filter(:)
+        logical,           allocatable :: l_msk(:,:,:)
+        type(string)                   :: frcs_fname
+        type(image)                    :: img_msk
+        type(class_frcs)               :: clsfrcs
+        integer                        :: ncls, ldim(3), box, filtsz, ncls_sel, i, j
+        real                           :: smpd, mskrad
         call dealloc_imgarr(cavg_imgs)
         ncls      = spproj%os_cls2D%get_noris()
         cavg_imgs = read_cavgs_into_imgarr(spproj)
@@ -227,10 +227,10 @@ contains
     end subroutine prep_cavgs4clust
 
     subroutine flag_non_junk_cavgs( cavgs, lp_bin, msk, l_non_junk, os_cls2D )
-        class(image),          intent(inout) :: cavgs(:)
-        real,                  intent(in)    :: lp_bin, msk
-        logical, allocatable,  intent(inout) :: l_non_junk(:)
-        class(oris), optional, intent(in)    :: os_cls2D
+        class(image),          intent(inout)               :: cavgs(:)
+        real,                  intent(in)                  :: lp_bin, msk
+        logical,               allocatable,  intent(inout) :: l_non_junk(:)
+        class(oris),           optional, intent(in)        :: os_cls2D
         real,        parameter   :: DYNRANGE_THRES  = 1e-6
         real,        parameter   :: HP_SPEC         = 20.
         real,        parameter   :: LP_SPEC         = 6.
@@ -240,9 +240,9 @@ contains
         type(image), allocatable :: cavg_threads(:)
         real,        allocatable :: pspec(:)
         integer,     allocatable :: states(:)
-        integer :: ncls, icls, ldim(3), kfromto(2), ithr, nin, nout, nmsk
-        real    :: cen(2),dynrange, smpd, large_msk, ave, sdev, maxv, minv
-        logical :: l_dens_inoutside, l_os2D_present
+        integer                  :: ncls, icls, ldim(3), kfromto(2), ithr, nin, nout, nmsk
+        real                     :: cen(2),dynrange, smpd, large_msk, ave, sdev, maxv, minv
+        logical                  :: l_dens_inoutside, l_os2D_present
         ncls = size(cavgs)
         l_os2D_present = present(os_cls2D)
         if( l_os2D_present )then
@@ -303,10 +303,10 @@ contains
     end subroutine flag_non_junk_cavgs
 
     subroutine calc_sigstats_dmats( params, cavg_imgs, oa_minmax, dmat_sig )
-        class(parameters),    intent(in)    :: params
-        class(image),         intent(inout) :: cavg_imgs(:)
-        real,                 intent(in)    :: oa_minmax(2)
-        real, allocatable,    intent(inout) :: dmat_sig(:,:)
+        class(parameters),    intent(in)                    :: params
+        class(image),         intent(inout)                 :: cavg_imgs(:)
+        real,                 intent(in)                    :: oa_minmax(2)
+        real,                 allocatable,    intent(inout) :: dmat_sig(:,:)
         type(cavg_sigstats_matrices) :: components
         call calc_cavg_sigstats_components(params, cavg_imgs, oa_minmax, components)
         if( allocated(dmat_sig) ) deallocate(dmat_sig)
@@ -321,8 +321,8 @@ contains
         type(cavg_sigstats_matrices),   intent(inout) :: components
         type(histogram),      allocatable   :: hists(:)
         real,                 allocatable   :: scaled_power(:,:)
-        type(pspecs) :: pows
-        integer      :: ncls_sel, i, j
+        type(pspecs)                        :: pows
+        integer                             :: ncls_sel, i, j
         call components%kill()
         ncls_sel = size(cavg_imgs)
         ! generate histograms
@@ -376,15 +376,15 @@ contains
     end subroutine kill_cavg_sigstats_matrices
 
     subroutine calc_sigstats_dmats_ref( params, cavg_imgs_ref, cavg_imgs_match, oa_minmax, dmat_sig )
-        class(parameters),    intent(in)    :: params
-        class(image),         intent(inout) :: cavg_imgs_ref(:), cavg_imgs_match(:)
-        real,                 intent(in)    :: oa_minmax(2)
-        real, allocatable,    intent(inout) :: dmat_sig(:,:)
+        class(parameters),    intent(in)                    :: params
+        class(image),         intent(inout)                 :: cavg_imgs_ref(:), cavg_imgs_match(:)
+        real,                 intent(in)                    :: oa_minmax(2)
+        real,                 allocatable,    intent(inout) :: dmat_sig(:,:)
         type(histogram),      allocatable   :: hists_ref(:), hists_match(:)
         real,                 allocatable   :: dmat_pow(:,:), dmat_tvd(:,:), dmat_jsd(:,:)
         real,                 allocatable   :: dmat_hd(:,:), dmat_hist(:,:)
-        type(pspecs) :: pows_ref, pows_match
-        integer      :: ncls_ref, ncls_match, i, j
+        type(pspecs)                        :: pows_ref, pows_match
+        integer                             :: ncls_ref, ncls_match, i, j
         ncls_ref   = size(cavg_imgs_ref)
         ncls_match = size(cavg_imgs_match)
         if( allocated(dmat_sig) ) deallocate(dmat_sig)
@@ -425,13 +425,13 @@ contains
     end subroutine calc_sigstats_dmats_ref
 
     subroutine calc_cc_and_res_dmats( params, cavg_imgs, hp, lp, trs, dmat_cc, dmat_res )
-        class(parameters), intent(in)    :: params
-        class(image),      intent(inout) :: cavg_imgs(:)
-        real,              intent(in)    :: hp, lp, trs
-        real,allocatable,  intent(inout) :: dmat_cc(:,:), dmat_res(:,:)
+        class(parameters), intent(in)                  :: params
+        class(image),      intent(inout)               :: cavg_imgs(:)
+        real,              intent(in)                  :: hp, lp, trs
+        real,              allocatable,  intent(inout) :: dmat_cc(:,:), dmat_res(:,:)
         type(inpl_struct), allocatable   :: algninfo(:,:)
         real,              allocatable   :: ccmat(:,:)
-        integer :: ncavgs, i, j
+        integer                          :: ncavgs, i, j
         ncavgs   = size(cavg_imgs)
         algninfo = calc_cavg_pairwise_algninfo(params, cavg_imgs, hp, lp, trs)
         if( allocated(dmat_res) ) deallocate(dmat_res)
@@ -466,13 +466,13 @@ contains
     end function calc_cavg_pairwise_algninfo
 
     subroutine calc_cc_and_res_dmats_ref( params, cavg_imgs_ref, cavg_imgs_match, hp, lp, trs, dmat_cc, dmat_res )
-        class(parameters), intent(in)    :: params
-        class(image),      intent(inout) :: cavg_imgs_ref(:), cavg_imgs_match(:)
-        real,              intent(in)    :: hp, lp, trs
-        real,allocatable,  intent(inout) :: dmat_cc(:,:), dmat_res(:,:)
+        class(parameters), intent(in)                  :: params
+        class(image),      intent(inout)               :: cavg_imgs_ref(:), cavg_imgs_match(:)
+        real,              intent(in)                  :: hp, lp, trs
+        real,              allocatable,  intent(inout) :: dmat_cc(:,:), dmat_res(:,:)
         type(inpl_struct), allocatable   :: algninfo(:,:)
         real,              allocatable   :: ccmat(:,:)
-        integer :: ncls_ref, ncls_match, i, j
+        integer                          :: ncls_ref, ncls_match, i, j
         ncls_ref   = size(cavg_imgs_ref)
         ncls_match = size(cavg_imgs_match)
         algninfo   = match_imgs(params, hp, lp, trs, cavg_imgs_ref, cavg_imgs_match)
@@ -547,8 +547,8 @@ contains
         real,                 parameter     :: SCORE_THRES=60.
         type(clust_info),     allocatable   :: clust_info_arr(:)
         logical,              allocatable   :: l_msk(:,:,:)
-        type(image)  :: img_msk 
-        integer      :: ncls_sel, nclust, iclust
+        type(image)                         :: img_msk
+        integer                             :: ncls_sel, nclust, iclust
         ncls_sel = size(cavg_imgs)
         ! prep mask
         call img_msk%new([params%box,params%box,1], params%smpd)
@@ -642,17 +642,17 @@ contains
 
     function align_clusters2medoids( params, i_medoids, labels, cavg_imgs, hp, lp, trs, l_msk ) result( clust_info_arr )
         class(parameters),    intent(in)    :: params
-        integer,          intent(in)    :: i_medoids(:), labels(:)
-        class(image),     intent(inout) :: cavg_imgs(:)
-        real,             intent(in)    :: hp, lp, trs
-        logical,          intent(in)    :: l_msk(:,:,:)
+        integer,              intent(in)    :: i_medoids(:), labels(:)
+        class(image),         intent(inout) :: cavg_imgs(:)
+        real,                 intent(in)    :: hp, lp, trs
+        logical,              intent(in)    :: l_msk(:,:,:)
         type(clust_info), allocatable   :: clust_info_arr(:)
         real,             allocatable   :: frc(:)
         type(image),      allocatable   :: cluster_imgs(:)
         real,             allocatable   :: resvals(:), resarr(:)
         real,             parameter     :: FRAC_BEST_CAVGS=0.3
-        integer :: cnt, i, filtsz, ldim(3), iclust, nclust
-        real    :: smpd, rfoo, best_res, worst_res
+        integer                         :: cnt, i, filtsz, ldim(3), iclust, nclust
+        real                            :: smpd, rfoo, best_res, worst_res
         write(logfhandle,'(A)') '>>> ALIGNING THE CLUSTERS OF CLASS AVERAGES TO THEIR MEDOIDS'
         filtsz = cavg_imgs(1)%get_filtsz()
         smpd   = cavg_imgs(1)%get_smpd()
@@ -713,7 +713,7 @@ contains
         type(clust_info), intent(in)    :: clust_info_arr(:)
         character(len=*), intent(in)    :: fbody, ext
         type(image), allocatable :: cluster_imgs(:)
-        integer :: iclust, nclust
+        integer                  :: iclust, nclust
         write(logfhandle,'(A)') '>>> ROTATING & SHIFTING CLASS AVERAGES'
         nclust = size(clust_info_arr)
         do iclust = 1, nclust
@@ -729,16 +729,16 @@ contains
         class(parameters), intent(in)    :: params
         real,              intent(in)    :: hp, lp, trs
         class(image),      intent(inout) :: imgs(:), img_ref
-        integer,     parameter           :: MAXITS_SH = 60
-        real,        allocatable         :: inpl_corrs(:)
-        type(image), allocatable         :: imgs_mirr(:)
-        type(pftc_shsrch_grad), allocatable ::  grad_shsrch_obj(:)
-        type(builder)                    :: build
-        type(inpl_struct), allocatable   :: algninfo(:), algninfo_mirr(:)
-        integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, irot_seed, n, pdim_srch(3)
-        real    :: smpd, lims(2,2), lims_init(2,2), joint_lims(3,2), joint_lims_loc(3,2), cxy(3), inpl_angle
-        real(dp):: rotind_frac
-        logical :: didft
+        integer,                parameter   :: MAXITS_SH = 60
+        real,                   allocatable :: inpl_corrs(:)
+        type(image),            allocatable :: imgs_mirr(:)
+        type(pftc_shsrch_grad), allocatable :: grad_shsrch_obj(:)
+        type(builder)                       :: build
+        type(inpl_struct),      allocatable :: algninfo(:), algninfo_mirr(:)
+        integer                             :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, irot_seed, n, pdim_srch(3)
+        real                                :: smpd, lims(2,2), lims_init(2,2), joint_lims(3,2), joint_lims_loc(3,2), cxy(3), inpl_angle
+        real(dp)                            :: rotind_frac
+        logical                             :: didft
         n        = size(imgs)
         ldim     = imgs(1)%get_ldim()
         ldim_ref = img_ref%get_ldim()
@@ -863,23 +863,23 @@ contains
     !! sphere, has each mirrored view already)
     function match_imgs( params, hp, lp, trs, imgs_ref, imgs_targ, l_nomirr ) result( algninfo )
         use simple_parameters, only: parameters
-        class(parameters), intent(in)    :: params
-        real,              intent(in)    :: hp, lp, trs
-        class(image),       intent(inout) :: imgs_ref(:), imgs_targ(:)
-        logical, optional,  intent(in)    :: l_nomirr
-        integer,      parameter         :: MAXITS_SH = 60
-        real,         parameter         :: FRC_CRIT = 0.5
-        real,         allocatable       :: inpl_corrs(:), frc(:)
-        type(image),  allocatable       :: imgs_targ_mirr(:)
-        type(pftc_shsrch_grad), allocatable ::  grad_shsrch_obj(:)
-        type(builder)                   :: build
-        type(inpl_struct), allocatable  :: algninfo(:,:), algninfo_mirr(:,:)
-        integer :: ldim(3), box, kfromto(2), ithr, i, j, k, m, loc, nrots, irot, irot_seed, nrefs, ntargets, pdim_srch(3)
-        real    :: smpd, lims(2,2), lims_init(2,2), joint_lims(3,2), joint_lims_loc(3,2)
-        real    :: cxy(3), rotmat(2,2), inpl_angle
-        real(dp):: rotind_frac
-        logical :: l_rot_shvec, l_mirr_srch
-        integer :: npfts
+        class(parameters),  intent(in)            :: params
+        real,               intent(in)            :: hp, lp, trs
+        class(image),       intent(inout)         :: imgs_ref(:), imgs_targ(:)
+        logical,            optional,  intent(in) :: l_nomirr
+        integer,                parameter   :: MAXITS_SH = 60
+        real,                   parameter   :: FRC_CRIT  = 0.5
+        real,                   allocatable :: inpl_corrs(:), frc(:)
+        type(image),            allocatable :: imgs_targ_mirr(:)
+        type(pftc_shsrch_grad), allocatable :: grad_shsrch_obj(:)
+        type(builder)                       :: build
+        type(inpl_struct),      allocatable :: algninfo(:,:), algninfo_mirr(:,:)
+        integer                             :: ldim(3), box, kfromto(2), ithr, i, j, k, m, loc, nrots, irot, irot_seed, nrefs, ntargets, pdim_srch(3)
+        real                                :: smpd, lims(2,2), lims_init(2,2), joint_lims(3,2), joint_lims_loc(3,2)
+        real                                :: cxy(3), rotmat(2,2), inpl_angle
+        real(dp)                            :: rotind_frac
+        logical                             :: l_rot_shvec, l_mirr_srch
+        integer                             :: npfts
         nrefs      = size(imgs_ref)
         ntargets   = size(imgs_targ)
         l_mirr_srch = .true.
@@ -1038,8 +1038,8 @@ contains
         type(inpl_struct),  intent(in)    :: algninfo(n)
         class(image),       intent(inout) :: imgs(n)
         real(kind=c_float), allocatable   :: rmat_rot(:,:,:)
-        integer :: ldim(3), i
-        real    :: smpd
+        integer                           :: ldim(3), i
+        real                              :: smpd
         ldim = imgs(1)%get_ldim()
         smpd = imgs(1)%get_smpd()
         allocate(rmat_rot(ldim(1),ldim(2),1), source=0.)
@@ -1056,14 +1056,14 @@ contains
     end subroutine rtsq_imgs
 
     subroutine calc_cavg_offset( cavg, lp, msk, offset, ind )
-        class(image),   intent(in)    :: cavg
-        real,           intent(in)    :: lp, msk
-        real,           intent(inout) :: offset(2)
-        integer, optional, intent(in) :: ind
-        type(image_bin)    :: bincavg, bincc
+        class(image),   intent(in)           :: cavg
+        real,           intent(in)           :: lp, msk
+        real,           intent(inout)        :: offset(2)
+        integer,        optional, intent(in) :: ind
+        type(image_bin)      :: bincavg, bincc
         integer, allocatable :: ccsz(:)
-        real    :: hp
-        integer :: loc
+        real                 :: hp
+        integer              :: loc
         if( cavg%is_ft() ) THROW_HARD('Real space only! calc_cavg_offset')
         if( cavg%is_3D() ) THROW_HARD('2D only! calc_cavg_offset')
         offset = 0.

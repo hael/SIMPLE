@@ -24,12 +24,12 @@ contains
         type(reconstructor),  intent(inout) :: mean_rec
         type(fplane_type),    intent(in)    :: fpl1
         integer,              intent(in)    :: nthr
-        type(oris) :: dirs_es
-        type(ori)  :: o_es
+        type(oris)           :: dirs_es
+        type(ori)            :: o_es
         real,    allocatable :: rmatp_es(:,:,:), nrmp_es(:,:)
-        real     :: ca1, sa1
-        real(dp) :: t_bank0, t_bank1
-        integer  :: i, q, r, ir, id_es, ithr, jx_es, kx_es
+        real                 :: ca1, sa1
+        real(dp)             :: t_bank0, t_bank1
+        integer              :: i, q, r, ir, id_es, ithr, jx_es, kx_es
         if( .not. fit%estep%l_pol_grid )then
             ! grid geometry from the first prepped plane: the identical derivation
             ! embed_accumulate_polar uses, so polar embed and polar E-step share
@@ -362,7 +362,7 @@ contains
             if( fit%history%l_mix_active )then
                 block
                     real(dp), allocatable :: rr_sr(:), rr_sm(:,:), rr_smm(:,:,:), rr_sai(:,:)
-                    integer  :: tt, kk3
+                    integer               :: tt, kk3
                     allocate(rr_sr(fit%spec%kmix), rr_sm(fit%model%ncomp,fit%spec%kmix), &
                         &rr_smm(fit%model%ncomp,fit%model%ncomp,fit%spec%kmix), rr_sai(fit%model%ncomp,fit%model%ncomp))
                     rr_sr = 0.d0; rr_sm = 0.d0; rr_smm = 0.d0; rr_sai = 0.d0
@@ -420,23 +420,23 @@ contains
     !! per-voxel solves and the per-iteration bank build). Owns its read/prep buffers; the caller
     !! owns the fits' accumulators (iter_begin / iter_reduce).
     module subroutine fit_estep_pass( params, build, plane_store, fits, means, nfits, it_eff, nthr )
-        class(parameters),    intent(inout) :: params
-        type(builder),        intent(inout) :: build
+        class(parameters),       intent(inout) :: params
+        type(builder),           intent(inout) :: build
         class(flex_plane_store), intent(inout) :: plane_store
-        integer,              intent(in)    :: nfits
-        type(flex_probe_fit), intent(inout) :: fits(nfits)
-        type(flex_mean_ref),  intent(in)    :: means(nfits)
-        integer,              intent(in)    :: it_eff, nthr
+        integer,                 intent(in)    :: nfits
+        type(flex_probe_fit),    intent(inout) :: fits(nfits)
+        type(flex_mean_ref),     intent(in)    :: means(nfits)
+        integer,                 intent(in)    :: it_eff, nthr
         type(fplane_type), allocatable :: fpls(:)
         type(ori),         allocatable :: orientations(:)
         integer,           allocatable :: eo(:)
         integer,           allocatable :: mrg_pinds(:), mrg_owner(:), mrg_row(:)
         character(len=:),  allocatable :: pfx, btag, ftag
-        integer  :: f, i, ithr, nmrg, ibatch, batchlims(2), batchsz, row, head(nfits), fmin
-        real(timer_int_kind) :: sec_read, sec_prep, sec_estep, sec_ins
-        logical  :: l_pcache
-        integer(timer_int_kind) :: t_sec
-        type(ptcl_read_session) :: reads
+        integer                        :: f, i, ithr, nmrg, ibatch, batchlims(2), batchsz, row, head(nfits), fmin
+        real(timer_int_kind)           :: sec_read, sec_prep, sec_estep, sec_ins
+        logical                        :: l_pcache
+        integer(timer_int_kind)        :: t_sec
+        type(ptcl_read_session)        :: reads
         pfx = 'PROBE'
         if( nfits == 2 ) pfx = 'PAIRED'
         sec_read = 0.; sec_prep = 0.; sec_estep = 0.; sec_ins = 0.
@@ -601,12 +601,12 @@ contains
         real(dp),            intent(inout) :: Gd(ncomp,ncomp), bd(ncomp), cd(ncomp)
         real(dp),            intent(inout) :: e_mm, myv
         type(exp_samples) :: samples
-        real        :: rotmat(3,3), locs(3,npos)
-        integer     :: j, q, r
-        logical     :: l_tf
-        complex     :: tf, yv, u0
-        complex     :: uq(ncomp), v0(npos), vq(npos,ncomp)
-        complex(dp) :: u0d, yd
+        real              :: rotmat(3,3), locs(3,npos)
+        integer           :: j, q, r
+        logical           :: l_tf
+        complex           :: tf, yv, u0
+        complex           :: uq(ncomp), v0(npos), vq(npos,ncomp)
+        complex(dp)       :: u0d, yd
         rotmat = o%get_mat()
         l_tf   = allocated(fpl%transfer_plane)
         do j = 1, npos

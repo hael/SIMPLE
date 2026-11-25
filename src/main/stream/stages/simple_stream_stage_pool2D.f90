@@ -92,12 +92,12 @@ public :: run_all_stream_stage_pool2D_tests
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: NPTCLS_PER_CLS_MIN    = 20  ! particles per class before the pool runs or resumes
-integer, parameter :: EARLY_RATE_FACTOR     = 50  ! micrographs' worth of particles a pause waits for, iterations 2-20
-integer, parameter :: LATE_RATE_FACTOR      = 500 ! the same after iteration 20, and before the first iteration
-integer, parameter :: LATE_ITER             = 20  ! last iteration of the early pause rule
-integer, parameter :: FINAL_ITER            = 25  ! the final sieve set runs the pool uninterrupted to here
-integer, parameter :: MSKDIAM_SWITCH_ITER   = 10  ! iteration from which the sieve's mask diameter applies
+integer, parameter :: NPTCLS_PER_CLS_MIN    = 20                  ! particles per class before the pool runs or resumes
+integer, parameter :: EARLY_RATE_FACTOR     = 50                  ! micrographs' worth of particles a pause waits for, iterations 2-20
+integer, parameter :: LATE_RATE_FACTOR      = 500                 ! the same after iteration 20, and before the first iteration
+integer, parameter :: LATE_ITER             = 20                  ! last iteration of the early pause rule
+integer, parameter :: FINAL_ITER            = 25                  ! the final sieve set runs the pool uninterrupted to here
+integer, parameter :: MSKDIAM_SWITCH_ITER   = 10                  ! iteration from which the sieve's mask diameter applies
 integer, parameter :: FIRST_EXPORT_ITER     = MSKDIAM_SWITCH_ITER ! a fresh pool's first publication for 3D, after this
                                                    ! iteration at the latest (earlier once NPTCLS_FIRST3D are selected): at
                                                    ! this iteration it carries the sieve's mask diameter, set when it was dispatched
@@ -112,45 +112,45 @@ integer, parameter :: NPUBLICATIONS_KEPT    = 2   ! the newest publications kept
 ! Components and steps are public so simple_stream_stage_pool2D_tester can assemble a stage and
 ! run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_pool2D
-    type(parameters), allocatable             :: params
-    type(cmdline), pointer                    :: cline => null() ! the stage's command line, which starts the pool
-    type(sp_project), allocatable             :: spproj          ! the stage's project (init_params..kill)
+    type(parameters),    allocatable          :: params
+    type(cmdline),       pointer              :: cline => null() ! the stage's command line, which starts the pool
+    type(sp_project),    allocatable          :: spproj          ! the stage's project (init_params..kill)
     type(stream_pool2D), allocatable          :: pool            ! the pool: empty from init_params, started at the first import
     type(stream_watcher)                      :: project_buff    ! the sets the sieve hands off
     type(rec_list)                            :: setslist        ! one record per set; included once in the pool
     type(stream_pipe)                         :: pipe            ! to and from the master
     type(gui_metadata_stream_pool2D)          :: meta_status
     type(gui_metadata_cavg2D)                 :: meta_cavgs
-    type(gui_metadata_stream_snapshot) :: meta_snapshot
+    type(gui_metadata_stream_snapshot)        :: meta_snapshot
     type(gui_metadata_cavg2D)                 :: meta_snapshot_cavgs
     ! the latest snapshot, as the pool's write_snapshot reports it
     type(string)              :: snapshot_dir, snapshot_filename, snapshot_jpeg, snapshot_mrc
     integer,      allocatable :: snapshot_idx(:), snapshot_pop(:)
     real,         allocatable :: snapshot_res(:)
-    integer :: snapshot_ntilesx          = 0
-    integer :: snapshot_ntilesy          = 0
-    integer :: snapshot_nptcls           = 0 ! selected particles of the last snapshot; 0 when it could not be written
-    integer :: last_snapshot_id          = 0
+    integer                   :: snapshot_ntilesx          = 0
+    integer                   :: snapshot_ntilesy          = 0
+    integer                   :: snapshot_nptcls           = 0 ! selected particles of the last snapshot; 0 when it could not be written
+    integer                   :: last_snapshot_id          = 0
     ! particle counts and the pause rule
-    integer :: nptcls_glob               = 0  ! selected particles imported
-    integer :: nptcls_glob_state_1       = 0  ! particles of the pool with state > 0
-    integer :: nmics                     = 0  ! micrographs of the pool
-    integer :: state_1_particle_rate     = 0  ! selected particles per micrograph
-    integer :: nptcls_threshold          = 0  ! particles before the first iteration runs
-    integer :: nptcls_dynamic_threshold  = 0  ! particles a paused pool waits for
-    integer :: iter_last_import          = -1 ! pool iteration of the last import
-    integer :: last_sent_iter            = 0  ! iteration whose class averages the GUI has
-    integer :: last_export_iteration     = 0  ! pool iteration of the last publication attempt
+    integer :: nptcls_glob               = 0       ! selected particles imported
+    integer :: nptcls_glob_state_1       = 0       ! particles of the pool with state > 0
+    integer :: nmics                     = 0       ! micrographs of the pool
+    integer :: state_1_particle_rate     = 0       ! selected particles per micrograph
+    integer :: nptcls_threshold          = 0       ! particles before the first iteration runs
+    integer :: nptcls_dynamic_threshold  = 0       ! particles a paused pool waits for
+    integer :: iter_last_import          = -1      ! pool iteration of the last import
+    integer :: last_sent_iter            = 0       ! iteration whose class averages the GUI has
+    integer :: last_export_iteration     = 0       ! pool iteration of the last publication attempt
     integer :: last_export_id            = 1
     integer :: optics_id_offset          = 0
-    real    :: final_mskdiam             = 0. ! the sieve's mask diameter (A), applied from MSKDIAM_SWITCH_ITER
-    real    :: sieve_mskdiam             = 0. ! the sieve's mask diameter (A) for the first publication
-    real    :: sieve_smpd                = 0. ! the pixel size (A) of the sieve's class averages
-    integer :: nptcls_sieved             = 0  ! accepted particles of the sets handed off, until the first publication
-    integer :: nmics_sieved              = 0  ! micrographs of the sets handed off, until the first publication
-    real    :: mskdiam                   = 0. ! the pool's mask diameter (A): given, the default, or updated
-    real    :: smpd                      = 0. ! the pool's native pixel size (A), from the first set imported
-    integer :: box                       = 0  ! the pool's native box (px), from the first set imported
+    real    :: final_mskdiam             = 0.      ! the sieve's mask diameter (A), applied from MSKDIAM_SWITCH_ITER
+    real    :: sieve_mskdiam             = 0.      ! the sieve's mask diameter (A) for the first publication
+    real    :: sieve_smpd                = 0.      ! the pixel size (A) of the sieve's class averages
+    integer :: nptcls_sieved             = 0       ! accepted particles of the sets handed off, until the first publication
+    integer :: nmics_sieved              = 0       ! micrographs of the sets handed off, until the first publication
+    real    :: mskdiam                   = 0.      ! the pool's mask diameter (A): given, the default, or updated
+    real    :: smpd                      = 0.      ! the pool's native pixel size (A), from the first set imported
+    integer :: box                       = 0       ! the pool's native box (px), from the first set imported
     logical :: l_pause                   = .false.
     logical :: l_sieve_final             = .false. ! the sieve's final set is in the pool
     logical :: l_final_published         = .false. ! a publication with the final flag has been attempted since the final set
@@ -182,27 +182,27 @@ contains
     ! the steps of iterate() and their helpers
     procedure, private :: attach_upstream
     procedure, private :: watch_sets
-    procedure :: read_final_mskdiam
-    procedure :: update_pool_progress
-    procedure :: import_sets
+    procedure          :: read_final_mskdiam
+    procedure          :: update_pool_progress
+    procedure          :: import_sets
     procedure, private :: transfer_sets
-    procedure :: start_pool
-    procedure :: apply_pause_policy
-    procedure :: unpause
-    procedure :: run_iteration
+    procedure          :: start_pool
+    procedure          :: apply_pause_policy
+    procedure          :: unpause
+    procedure          :: run_iteration
     procedure, private :: apply_final_mskdiam
-    procedure :: set_mskdiam
+    procedure          :: set_mskdiam
     procedure, private :: apply_gui_updates
-    procedure :: write_snapshot
-    procedure :: export_pool_state
+    procedure          :: write_snapshot
+    procedure          :: export_pool_state
     procedure, private :: publish_first_set
-    procedure :: publish_first_from_sieve
+    procedure          :: publish_first_from_sieve
     procedure, private :: collects_sieve_sets
-    procedure :: collect_sieve_set
-    procedure :: publish_sieve_set
+    procedure          :: collect_sieve_set
+    procedure          :: publish_sieve_set
     ! GUI
     procedure, private :: send_status
-    procedure :: send_pool_cavgs
+    procedure          :: send_pool_cavgs
     procedure, private :: send_snapshot
     ! rules that use no stage state
     procedure, nopass, private :: pause_rate_factor
@@ -301,8 +301,8 @@ contains
     subroutine restore_export_id( self )
         class(stream_stage_pool2D), intent(inout) :: self
         type(string), allocatable :: exports(:)
-        type(string) :: fbody
-        integer      :: i, id, iostat
+        type(string)              :: fbody
+        integer                   :: i, id, iostat
         self%last_export_id = 1
         call simple_list_files_regexp(string(PATH_HERE//DIR_STREAM_COMPLETED), '\.simple$', exports)
         if( .not. allocated(exports) ) return
@@ -479,7 +479,7 @@ contains
         class(stream_stage_pool2D), intent(inout) :: self
         type(string), allocatable :: projects(:)
         type(sp_project)          :: set
-        integer :: nprojects, i
+        integer                   :: nprojects, i
         call self%project_buff%watch(nprojects, projects)
         if( nprojects == 0 ) return
         call sort_sets(projects)
@@ -560,10 +560,10 @@ contains
         integer,                    intent(out)   :: nimported
         type(sp_project), allocatable :: sets(:)
         logical,          allocatable :: l_included(:)
-        type(rec_iterator) :: it
-        type(chunk_rec)    :: crec
-        integer :: nsets, iset, irec, nmics_new, nptcls_new, nsel, nsel_tot, nsel_cum, target_sel
-        integer :: nmics_pool, nsel_pool
+        type(rec_iterator)            :: it
+        type(chunk_rec)               :: crec
+        integer                       :: nsets, iset, irec, nmics_new, nptcls_new, nsel, nsel_tot, nsel_cum, target_sel
+        integer                       :: nmics_pool, nsel_pool
         nimported  = 0
         l_included = self%setslist%get_included_flags()
         if( count(.not. l_included) == 0 ) return
@@ -671,8 +671,8 @@ contains
         type(string), allocatable :: sorted(:)
         integer,      allocatable :: order(:), keys(:)
         logical,      allocatable :: l_final(:)
-        type(string) :: fbody
-        integer      :: n, i
+        type(string)              :: fbody
+        integer                   :: n, i
         n = size(projects)
         if( n < 2 ) return
         allocate(keys(n), l_final(n))
@@ -826,7 +826,7 @@ contains
         class(stream_stage_pool2D), intent(inout) :: self
         type(gui_metadata_stream_update) :: update
         character(len=:), allocatable    :: buffer
-        integer :: mskdiam
+        integer                          :: mskdiam
         do while( self%pipe%receive(buffer) )
             update  = transfer(buffer, update)
             mskdiam = nint(update%get_mskdiam2D_update())
@@ -847,8 +847,8 @@ contains
         class(stream_stage_pool2D),       intent(inout) :: self
         type(gui_metadata_stream_update), intent(in)    :: update
         integer, allocatable :: selection(:)
-        type(string) :: cwd, stem
-        integer      :: snapshot_id, iteration
+        type(string)         :: cwd, stem
+        integer              :: snapshot_id, iteration
         call update%get_snapshot2D_update(snapshot_id, iteration, selection, self%snapshot_filename)
         if( snapshot_id <= self%last_snapshot_id ) return
         if( self%l_pool_started )then
@@ -985,11 +985,11 @@ contains
         type(sp_project), allocatable :: sets(:)
         type(string),     allocatable :: stks(:), frcs(:)
         integer,          allocatable :: ncls_sets(:)
-        type(sp_project)   :: pub
-        type(rec_iterator) :: it
-        type(chunk_rec)    :: crec
-        type(string)       :: dir, cavgsfname, frcsfname
-        integer            :: nsets, iset, irec, ncls, lastmap
+        type(sp_project)              :: pub
+        type(rec_iterator)            :: it
+        type(chunk_rec)               :: crec
+        type(string)                  :: dir, cavgsfname, frcsfname
+        integer                       :: nsets, iset, irec, ncls, lastmap
         nstks = 0
         if( self%sieve_smpd <= 0. ) return
         nsets = self%setslist%size()

@@ -25,7 +25,7 @@ contains
     !! the route uses
     subroutine test_check_rules()
         integer, allocatable :: states(:), newind(:)
-        integer :: nstates_held
+        integer              :: nstates_held
         write(*,'(A)') 'test_check_rules'
         ! the check: even/odd angular distance, state agreement, distinct states, two states of 5%
         call assert_true(refs_usable(12., 85., [40, 30, 30], 0.5),   'halves that agree, three distinct states')
@@ -65,8 +65,8 @@ contains
     !! candidates, never a class that is no candidate) and the ambiguity flag
     subroutine test_fit_rules()
         logical, allocatable :: l_rej(:), l_cand(:)
-        real    :: med, mad, thres
-        integer :: nmax
+        real                 :: med, mad, thres
+        integer              :: nmax
         real,    parameter   :: CORRS_TWO(10)  = [0.50, 0.52, 0.48, 0.51, 0.49, 0.50, 0.53, 0.47, 0.10, 0.20]
         real,    parameter   :: CORRS_FOUR(10) = [0.50, 0.51, 0.49, 0.50, 0.52, 0.48, 0.10, 0.12, 0.11, 0.13]
         write(*,'(A)') 'test_fit_rules'
@@ -108,11 +108,11 @@ contains
     subroutine test_state_cavgs()
         type(image),  allocatable :: cavgs(:)
         real,         allocatable :: rmat(:,:,:)
-        type(string)       :: cwd_saved, root
-        integer, parameter :: STATES(5) = [1, 2, 1, 0, 2]
-        logical, parameter :: L_REJ(5)  = [.false., .false., .false., .true., .false.]
-        logical, parameter :: L_AMB(5)  = [.false., .true., .false., .false., .false.]
-        integer :: nfail0, i, x, y, ldim(3), n
+        type(string)              :: cwd_saved, root
+        integer,      parameter   :: STATES(5) = [1, 2, 1, 0, 2]
+        logical,      parameter   :: L_REJ(5)  = [.false., .false., .false., .true., .false.]
+        logical,      parameter   :: L_AMB(5)  = [.false., .true., .false., .false., .false.]
+        integer                   :: nfail0, i, x, y, ldim(3), n
         write(*,'(A)') 'test_state_cavgs'
         nfail0 = tests_failed
         call enter_fixture('state_assignment_cavgs', cwd_saved, root)
@@ -150,7 +150,7 @@ contains
     !! method; a mask diameter not positive is left to the job
     subroutine test_job_clines()
         class(cmdline), allocatable :: cline
-        type(string) :: vols(2)
+        type(string)                :: vols(2)
         write(*,'(A)') 'test_job_clines'
         allocate(cline)
         call cline%set('stray', 'yes')

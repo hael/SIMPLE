@@ -37,7 +37,7 @@ contains
         integer,              intent(in) :: box_crop          !< the working lattice the embedding was made on (provenance)
         real,                 intent(in) :: smpd_crop
         character(len=:), allocatable :: tmp
-        integer :: u
+        integer                       :: u
         tmp = trim(fname)//PART_SUFFIX
         call del_file(tmp)
         open(newunit=u, file=tmp, status='replace', action='write', access='stream', form='unformatted')
@@ -67,10 +67,10 @@ contains
         character(len=*),     intent(in)    :: fname
         integer,              intent(in)    :: box_crop  !< the run's working lattice; 0 skips the lattice check
         real,                 intent(in)    :: smpd_crop
-        integer, allocatable :: pinds_cached(:)
+        integer, allocatable                :: pinds_cached(:)
         character(len=len(COV_CACHE_MAGIC)) :: magic
-        integer :: u, ver, nptcls_c, i, box_c
-        real    :: smpd_c
+        integer                             :: u, ver, nptcls_c, i, box_c
+        real                                :: smpd_c
         if( allocated(latent%z) ) deallocate(latent%z)
         if( allocated(model%eigvals) ) deallocate(model%eigvals)
         if( allocated(latent%contrast) ) deallocate(latent%contrast)
@@ -132,13 +132,13 @@ contains
     !> The deconvolved coordinates, precisions, mixture labels (0 when absent) and noise scale (1 when
     !! absent) as the artifact's trailing block, replacing any earlier one
     subroutine write_deconv_block( fname, nptcls, ncomp, z, precision, labels, noise_scale )
-        character(len=*),   intent(in) :: fname
-        integer,            intent(in) :: nptcls, ncomp
-        real(dp),           intent(in) :: z(:,:), precision(:,:,:)
-        integer,  optional, intent(in) :: labels(:)
-        real(dp), optional, intent(in) :: noise_scale
+        character(len=*),   intent(in)           :: fname
+        integer,            intent(in)           :: nptcls, ncomp
+        real(dp),           intent(in)           :: z(:,:), precision(:,:,:)
+        integer,            optional, intent(in) :: labels(:)
+        real(dp),           optional, intent(in) :: noise_scale
         integer, allocatable :: lab(:)
-        real(dp) :: ns
+        real(dp)             :: ns
         allocate(lab(nptcls), source=0)
         if( present(labels) ) lab(1:nptcls) = labels(1:nptcls)
         ns = 1.d0
@@ -151,13 +151,13 @@ contains
 
     !> A copy of the artifact with the new trailing block after its raw block, renamed over the artifact
     subroutine write_trailing_block( fname, nptcls, ncomp, noise_scale, z, precision, labels )
-        character(len=*),   intent(in) :: fname
-        integer,            intent(in) :: nptcls, ncomp
-        real(dp),           intent(in) :: noise_scale
-        real(dp), optional, intent(in) :: z(:,:), precision(:,:,:)
-        integer,  optional, intent(in) :: labels(:)
+        character(len=*),   intent(in)           :: fname
+        integer,            intent(in)           :: nptcls, ncomp
+        real(dp),           intent(in)           :: noise_scale
+        real(dp),           optional, intent(in) :: z(:,:), precision(:,:,:)
+        integer,            optional, intent(in) :: labels(:)
         character(len=:), allocatable :: tmp
-        integer :: u, io, l_deconv
+        integer                       :: u, io, l_deconv
         if( .not. file_exists(fname) ) THROW_HARD('no flex_pca embedding artifact to extend: '//trim(fname))
         tmp = trim(fname)//PART_SUFFIX
         call simple_copy_file(string(fname), string(tmp))
@@ -188,7 +188,7 @@ contains
         logical,          intent(out) :: found
         character(len=len(COV_CACHE_MAGIC)) :: magic0
         character(len=len(COV_TRAIL_MAGIC)) :: magic
-        integer :: io, ver, n_c, k_c
+        integer                             :: io, ver, n_c, k_c
         found = .false.
         u     = 0
         ver   = 0
@@ -231,12 +231,12 @@ contains
     !> The deconvolution of the artifact's trailing block if present and consistent with (nptcls, ncomp);
     !! found=.false. otherwise (no trailing block, or the noise scale alone)
     subroutine read_deconv_block( fname, nptcls, ncomp, z, precision, labels, noise_scale, found )
-        character(len=*),      intent(in)  :: fname
-        integer,               intent(in)  :: nptcls, ncomp
-        real(dp), allocatable, intent(out) :: z(:,:), precision(:,:,:)
-        integer,  allocatable, intent(out) :: labels(:)
-        real(dp),              intent(out) :: noise_scale
-        logical,               intent(out) :: found
+        character(len=*),      intent(in)               :: fname
+        integer,               intent(in)               :: nptcls, ncomp
+        real(dp),              allocatable, intent(out) :: z(:,:), precision(:,:,:)
+        integer,               allocatable, intent(out) :: labels(:)
+        real(dp),              intent(out)              :: noise_scale
+        logical,               intent(out)              :: found
         integer :: u, io, l_deconv, n_b, k_b
         noise_scale = 1.d0
         l_deconv    = 0

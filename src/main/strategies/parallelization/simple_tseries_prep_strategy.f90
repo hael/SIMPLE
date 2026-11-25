@@ -23,17 +23,17 @@ contains
     !> Owns one project read and mic-segment write; original frame inputs are read-only.
     subroutine tseries_prep4tracking_exec( params )
         class(parameters), intent(in) :: params
-        real,    parameter :: SMPD_TARGET = 1.0
-        integer, parameter :: GRPFREQ = 10, NFRAMESGRP = 5, BATCHSZ = 100
-        character(len=*), parameter :: FILT_DIR = 'filtered/'
-        type(string), allocatable :: framenames(:)
-        type(image),  allocatable :: frames(:), frames_sc(:), denoised_frames_sc(:)
-        type(string)     :: fname
-        type(image)      :: avgimg, global_avgimg
-        type(sp_project) :: spproj
-        real    :: smpd, smpd_sc, scale, frame_smpd
-        integer :: ldim(3), ldim_sc(3), i, j, n, s, iframe, nframes, last, numlen, nbuf
-        integer :: common_divisor, other_divisor, remainder, scaled_divisor
+        real,             parameter   :: SMPD_TARGET = 1.0
+        integer,          parameter   :: GRPFREQ     = 10, NFRAMESGRP = 5, BATCHSZ = 100
+        character(len=*), parameter   :: FILT_DIR    = 'filtered/'
+        type(string),     allocatable :: framenames(:)
+        type(image),      allocatable :: frames(:), frames_sc(:), denoised_frames_sc(:)
+        type(string)                  :: fname
+        type(image)                   :: avgimg, global_avgimg
+        type(sp_project)              :: spproj
+        real                          :: smpd, smpd_sc, scale, frame_smpd
+        integer                       :: ldim(3), ldim_sc(3), i, j, n, s, iframe, nframes, last, numlen, nbuf
+        integer                       :: common_divisor, other_divisor, remainder, scaled_divisor
         call spproj%read(params%projfile)
         nframes = spproj%get_nframes()
         if( nframes == 0 ) THROW_HARD('no movie frames to process; tseries_prep4tracking')
@@ -124,8 +124,8 @@ contains
         !> Reports global-average pixels beyond six standard deviations.
         subroutine write_outliers
             real, parameter :: OUTLIER_SIGMA = 6.0
-            real    :: ave, sdev, maxv, minv, v, dead_t, hot_t
-            integer :: ix, iy, ndead, nhot, funit, io_stat, count_out
+            real            :: ave, sdev, maxv, minv, v, dead_t, hot_t
+            integer         :: ix, iy, ndead, nhot, funit, io_stat, count_out
             call global_avgimg%write(string('global_avgimg.mrc'))
             call global_avgimg%stats(ave, sdev, maxv, minv)
             dead_t = ave - OUTLIER_SIGMA*sdev

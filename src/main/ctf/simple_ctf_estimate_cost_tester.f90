@@ -8,10 +8,10 @@ use simple_memoize_ft_maps, only: memoize_ft_maps
 use simple_linalg,          only: cholesky
 implicit none
 
-integer,  parameter :: CBOX = 128
-real,     parameter :: CSMPD = 1.5, CKV = 300., CCS = 2.7, CFRACA = 0.1, CHP = 30., CLP = 5.
-real,     parameter :: TRUE_DFX = 2.0, TRUE_DFY = 2.3, TRUE_ANGAST = 27., CASTIGTOL = 0.05
-real(dp), parameter :: ORACLE_RTOL = 1.d-3   !< guessed: the ftexp gradient check's relative tolerance
+integer,  parameter :: CBOX           = 128
+real,     parameter :: CSMPD          = 1.5, CKV = 300., CCS = 2.7, CFRACA = 0.1, CHP = 30., CLP = 5.
+real,     parameter :: TRUE_DFX       = 2.0, TRUE_DFY = 2.3, TRUE_ANGAST = 27., CASTIGTOL = 0.05
+real(dp), parameter :: ORACLE_RTOL    = 1.d-3 !< guessed: the ftexp gradient check's relative tolerance
 real,     parameter :: ANGLE_KEEP_TOL = 1.e-4 !< degrees, guessed: single-precision radians-degrees round trip
 ! starts inside the cost's capture basin, as the grid search leaves them: at CLP the phase moves about 25 rad per um
 real,     parameter :: ISO_OFFSET     = 0.02  !< um
@@ -28,14 +28,14 @@ contains
     !> the fit's pixel set and a synthetic spectrum of the model at (dfx, dfy, angast, phshift): zero_residual gives
     !! the model scaled to the norm sqrt(n), else the fit's normalisation (zero mean, unit variance over the pixels)
     subroutine build_spectrum( pspec, inds, dfx, dfy, angast, phshift, zero_residual )
-        class(image),         intent(inout) :: pspec
-        integer, allocatable, intent(inout) :: inds(:,:)
-        real,                 intent(in)    :: dfx, dfy, angast, phshift
-        logical,              intent(in)    :: zero_residual
-        real, pointer :: prmat(:,:,:)
+        class(image),         intent(inout)              :: pspec
+        integer,              allocatable, intent(inout) :: inds(:,:)
+        real,                 intent(in)                 :: dfx, dfy, angast, phshift
+        logical,              intent(in)                 :: zero_residual
+        real,     pointer     :: prmat(:,:,:)
         real(dp), allocatable :: vals(:)
-        real(dp) :: wl, cs, amp, df_eff, phi, s2, ang, mean, sdev
-        integer  :: h, k, l, n, sh, kfrom, kto
+        real(dp)              :: wl, cs, amp, df_eff, phi, s2, ang, mean, sdev
+        integer               :: h, k, l, n, sh, kfrom, kto
         call memoize_ft_maps([CBOX,CBOX,1], CSMPD)
         kfrom = int(real(CBOX)*CSMPD/CHP)
         kto   = min(int(real(CBOX)*CSMPD/CLP), CBOX/2 - 1)
@@ -120,15 +120,15 @@ contains
     !> at a zero residual (3 and 4 parameters) the curvature equals the central-difference Hessian of the
     !! analytic gradient within ORACLE_RTOL, and it is symmetric positive semi-definite
     subroutine test_cont_curvature_oracle()
-        class(image), allocatable, target :: pspec
-        type(ctf_estimate_cost4Dcont) :: cost
-        type(ctfparams), target       :: parms
-        integer, allocatable, target :: inds(:,:)
-        real(dp), allocatable :: vec(:), g(:), gp(:), gm(:), curv(:,:), hfd(:,:), chol(:,:), ridge(:,:)
-        real(dp) :: f, err, step
-        real     :: limits(2,4), phshift
-        integer  :: ndim, d, j
-        logical  :: ok
+        class(image),    allocatable, target :: pspec
+        type(ctf_estimate_cost4Dcont)        :: cost
+        type(ctfparams), target              :: parms
+        integer,         allocatable, target :: inds(:,:)
+        real(dp),        allocatable         :: vec(:), g(:), gp(:), gm(:), curv(:,:), hfd(:,:), chol(:,:), ridge(:,:)
+        real(dp)                             :: f, err, step
+        real                                 :: limits(2,4), phshift
+        integer                              :: ndim, d, j
+        logical                              :: ok
         write(*,'(A)') 'test_cont_curvature_oracle'
         allocate(pspec)
         do ndim = 3, 4
@@ -170,11 +170,11 @@ contains
     !> isotropic truth and start (dfx = dfy): the angle has no gradient or curvature; under 'lm' the defocus improves
     !! and the angle does not move (ANGLE_KEEP_TOL)
     subroutine test_cont_isotropic_start()
-        class(image), allocatable, target :: pspec
-        type(ctf_estimate_cost4Dcont) :: cost
-        type(ctfparams), target       :: parms
-        integer, allocatable, target :: inds(:,:)
-        real :: limits(2,3), cc, err_before, err_after
+        class(image),    allocatable, target :: pspec
+        type(ctf_estimate_cost4Dcont)        :: cost
+        type(ctfparams), target              :: parms
+        integer,         allocatable, target :: inds(:,:)
+        real                                 :: limits(2,3), cc, err_before, err_after
         write(*,'(A)') 'test_cont_isotropic_start'
         allocate(pspec)
         call build_spectrum(pspec, inds, TRUE_DFX, TRUE_DFX, TRUE_ANGAST, 0., .false.)
@@ -197,19 +197,19 @@ contains
     !! reported, not gated)
     subroutine test_cont_solver_comparison()
         use simple_stat, only: median
-        integer,          parameter :: NTIME = 5
+        integer,          parameter :: NTIME      = 5
         character(len=6), parameter :: SOLVERS(2) = ['lbfgsb', 'lm    ']
         real, parameter :: DSTART(2,8) = reshape([0.02,0.01, -0.015,0.02, 0.01,-0.02, -0.02,-0.01, 0.015,0.015, &
             &-0.01,0.015, 0.015,-0.005, -0.02,0.005], [2,8])
-        real, parameter :: ASTART(8)   = [4., -5., 2., -3., 5., -4., 1., 3.]
-        class(image), allocatable, target :: pspec
-        type(ctf_estimate_cost4Dcont) :: cost
-        type(ctfparams), target       :: parms
-        integer, allocatable, target :: inds(:,:)
-        real    :: limits(2,3), cc, err_df, err_ang, sum_df, max_df, sum_ang
-        integer :: isolver, istart, nevals, niter, irep, ntimed
-        integer(kind=8) :: c0, c1, crate, csum
-        real(kind=8)    :: times(NTIME*size(ASTART))
+        real,            parameter           :: ASTART(8)   = [4., -5., 2., -3., 5., -4., 1., 3.]
+        class(image),    allocatable, target :: pspec
+        type(ctf_estimate_cost4Dcont)        :: cost
+        type(ctfparams), target              :: parms
+        integer,         allocatable, target :: inds(:,:)
+        real                                 :: limits(2,3), cc, err_df, err_ang, sum_df, max_df, sum_ang
+        integer                              :: isolver, istart, nevals, niter, irep, ntimed
+        integer(kind=8)                      :: c0, c1, crate, csum
+        real(kind=8)                         :: times(NTIME*size(ASTART))
         write(*,'(A)') 'test_cont_solver_comparison'
         allocate(pspec)
         call build_spectrum(pspec, inds, TRUE_DFX, TRUE_DFY, TRUE_ANGAST, 0., .false.)

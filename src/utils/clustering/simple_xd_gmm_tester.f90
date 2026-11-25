@@ -51,9 +51,9 @@ contains
 
     subroutine test_xd_gmm_recovery()
         real(dp), allocatable :: X(:,:), R(:,:,:), Nz(:,:,:), xhat(:,:), xcov(:,:,:), resp(:,:)
-        real(dp) :: mu(2,2), Sig(2,2,2), pik(2), vnoise, trpost
-        integer  :: i
-        type(xd_gmm) :: xd
+        real(dp)              :: mu(2,2), Sig(2,2,2), pik(2), vnoise, trpost
+        integer               :: i
+        type(xd_gmm)          :: xd
         write(*,'(A)') 'test_xd_gmm_recovery'
         allocate(X(NPTS,2), R(2,2,NPTS), Nz(2,2,NPTS))
         call fixture(X, R, Nz, vnoise)
@@ -87,8 +87,8 @@ contains
 
     subroutine test_xd_gmm_select_k()
         real(dp), allocatable :: X(:,:), R(:,:,:), Nz(:,:,:)
-        real(dp) :: scores(4), vnoise
-        integer  :: kbest
+        real(dp)              :: scores(4), vnoise
+        integer               :: kbest
         write(*,'(A)') 'test_xd_gmm_select_k'
         allocate(X(NPTS,2), R(2,2,NPTS), Nz(2,2,NPTS))
         call fixture(X, R, Nz, vnoise)

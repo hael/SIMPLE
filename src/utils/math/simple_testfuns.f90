@@ -354,11 +354,11 @@ contains
     !!          search domain: [-10,10]
     function testfun3( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         real                :: w(d)
-        integer :: i
-        real    :: r, var, var2, last
+        integer             :: i
+        real                :: r, var, var2, last
         w     = (x-1.)/4.+1
         var   = sin(pi*w(1))
         r     = var*var
@@ -377,10 +377,10 @@ contains
     !!          search domain: [-5.12,5.12]
     function testfun4( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
-        real :: r
+        real    :: r
         r = 10.*real(d)
         do i=1,d
             r = r+x(i)**2.-10.*cos(twopi*x(i))
@@ -393,8 +393,8 @@ contains
     !!          characteristics: highly complex, with many local minima
     function testfun5( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
         real    :: r
         r = 0.
@@ -410,8 +410,8 @@ contains
     !!          characteristics: highly multimodal
     function testfun6( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
         real    :: r
         r = 0.
@@ -428,10 +428,10 @@ contains
     !!          search domain: [-5.12,5.12]
     function testfun7( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
-        real :: r
+        real    :: r
         r = 0.
         do i=1,d
             r = r+x(i)**2.
@@ -443,8 +443,8 @@ contains
     !!          search domain: [-10,10]
     function testfun8( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
         real    :: r
         r = 0.
@@ -458,8 +458,8 @@ contains
     !!          search domain: [-1,1]
     function testfun9( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
         real    :: r
         r = 0.
@@ -473,8 +473,8 @@ contains
     !!          search domain: [-d,d]
     function testfun10( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i, j
         real    :: r, ii, jj, r_inner
         r = 0.
@@ -497,8 +497,8 @@ contains
     !!          characteristics: wavy bowl
     function testfun11( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i, j
         real    :: r, ii, jj, r_inner
         r = 0.
@@ -519,10 +519,10 @@ contains
     !!          characteristics: wavy bowl
     function testfun12( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
-        real :: r
+        real    :: r
         r = 0.
         do i=1,d
             r = r+x(i)**4.-16.*x(i)**2.+5.*x(i)
@@ -536,8 +536,8 @@ contains
     !!          characteristics: wavy bowl
     function testfun13( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i,j
         real    :: r, yij
         r = 0.
@@ -556,8 +556,8 @@ contains
     !!          search domain: [-5,10]
     function testfun14( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
         real    :: r, ii, s1, s2
         s1 = 0.
@@ -577,8 +577,8 @@ contains
     !!          search domain: [-10,10]
     function testfun15( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
         real    :: r
         r = (x(1)-1.)**2.
@@ -593,10 +593,10 @@ contains
     !!          can be restricted to: [-2.048,2.048]
     function testfun16( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
-        real :: r
+        real    :: r
         r = 0.
         do i=1,d-1
             r = r+100.*(x(i+1)-x(i)**2.)**2.+(x(i)-1.)**2.
@@ -610,8 +610,8 @@ contains
     !!          search domain: [-100,100]
     function testfun17( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
         real    :: r, ir, sum1, sum2, sum3, term1, term2, x_i_min_one, x_i_plus_one
         sum1 = 0.
@@ -643,8 +643,8 @@ contains
     !!          search domain: [-10,10]
     function testfun18( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
         real    :: r, abx, mabx
         r = 0. ; mabx = 0.
@@ -666,8 +666,8 @@ contains
     !!          difficulties for algorithms based on gradient information
     function testfun19( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
         integer :: i
         real    :: r, var
         r = 0.
@@ -686,8 +686,8 @@ contains
     !!          search domain: [-5.12,5.12]
     function testfun20( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real :: r, frac1, frac2
         frac1 = 1.+ cos(12.*sqrt(x(1)**2.+x(2)**2.))
         frac2 = 0.5*(x(1)**2.+x(2)**2.)+2.
@@ -699,8 +699,8 @@ contains
     !!         search domain: [-512,512]
     function testfun21( fun_self, x, d )result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real :: r
         r = -(x(2)+47.)*sin(sqrt(abs(x(2)+x(1)/2.+47.)))-x(1)*sin(sqrt(abs(x(1)-(x(2)+47.))))
     end function
@@ -713,8 +713,8 @@ contains
     !!          search domain: [-10,10]
     function testfun22( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real :: r, fact1, fact2
         fact1 = sin(x(1))*cos(x(2))
         fact2 = exp(abs(1.-sqrt(x(1)**2.+x(2)**2.)/pi))
@@ -726,8 +726,8 @@ contains
     !!          search domain: [-10,10]
     function testfun23( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real :: r, term1, term2, term3
         term1 = (sin(3.*pi*x(1)))**2.
         term2 = (x(1)-1.)**2*(1.+(sin(3.*pi*x(2)))**2.)
@@ -740,8 +740,8 @@ contains
     !!         search domain: [-100,100]
     function testfun24( fun_self, x, d )result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real :: r
         r = 0.5+(sin(x(1)**2.-x(2)**2.)**2.-0.5)/(1.+0.001*(x(1)**2.+x(2)**2.))**2.
     end function
@@ -751,8 +751,8 @@ contains
     !!         search domain: [-100,100]
     function testfun25( fun_self, x, d )result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real :: r
         r = 0.5+(cos(sin(abs(x(1)**2.-x(2)**2.)))-0.5)/(1.+0.001*(x(1)**2.+x(2)**2.))**2.
     end function
@@ -762,8 +762,8 @@ contains
     !!         search domain: [-5.12,5.12]
     function testfun26( fun_self, x, d )result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real    :: r, sum1, sum2, ii
         integer :: i
         sum1 = 0.
@@ -783,8 +783,8 @@ contains
     !!          search domain: [-10,10]
     function testfun27( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real :: r
         r = (x(1)+2.*x(2)-7.)**2.+(2.*x(1)+x(2)-5.)**2.
     end function
@@ -794,8 +794,8 @@ contains
     !!          search domain: [-10,-10]
     function testfun28( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real :: r
         r = 0.26*(x(1)**2.+x(2)**2)-0.48*x(1)*x(2)
     end function
@@ -807,8 +807,8 @@ contains
     !!          search domain: [-5,-5]
     function testfun29( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real :: r
         r = 2.*x(1)**2.-1.05*x(1)**4.+x(1)**6./6.+x(1)*x(2)+x(2)**2.
     end function
@@ -819,8 +819,8 @@ contains
     !!          search domain: [-3,-3]
     function testfun30( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real :: r, term1, term2, term3
         term1 = (4.-2.1*x(1)**2.+(x(1)**4.)/3.)*x(1)**2.
         term2 = x(1)*x(2)
@@ -836,8 +836,8 @@ contains
     !!          characteristics: plateued bowl
     function testfun31( fun_self, x, d ) result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real :: r
         r = (1.5-x(1)+x(1)*x(2))**2.+(2.25-x(1)+x(1)*x(2)**2.)**2.+(2.625-x(1)+x(1)*x(2)**3.)**2.
     end function
@@ -848,8 +848,8 @@ contains
     !!         characteristics: plateued humps
     function testfun32( fun_self, x, d )result( r )
         class(*), intent(inout) :: fun_self
-        integer, intent(in) :: d ! d=2
-        real, intent(in)    :: x(d)
+        integer,  intent(in)    :: d ! d=2
+        real,     intent(in)    :: x(d)
         real :: r, term1, term2, term3, term4
         term1 = x(1)+x(2)+1
         term2 = 19.-14.*x(1)+3.*x(1)**2.-14.*x(2)+6.*x(1)*x(2)+3.*x(2)**2.

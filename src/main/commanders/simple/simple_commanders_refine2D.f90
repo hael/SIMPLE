@@ -31,14 +31,14 @@ contains
         use simple_eul_prob_tab_utils, only: prob_beta_at
         use simple_defs,               only: PROB_BETA_TAIL
         use simple_sigma2_anchor,      only: sigma2_stage_weight
-        class(commander_refine2D), intent(inout) :: self
+        class(commander_refine2D),  intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         class(refine2D_strategy), allocatable     :: strategy
-        type(parameters)       :: params
-        type(builder)          :: build
-        logical                :: converged, l_anneal
-        integer                :: niters, it_tail
-        real                   :: beta_start
+        type(parameters)                          :: params
+        type(builder)                             :: build
+        logical                                   :: converged, l_anneal
+        integer                                   :: niters, it_tail
+        real                                      :: beta_start
         ! local defaults (kept consistent with previous distributed master)
         call cline%set('prg', 'refine2D')
         call set_refine2D_defaults(cline)
@@ -108,7 +108,7 @@ contains
     !> invoked by the scheduler for each partition.
     subroutine exec_refine2D_distr_worker( self, cline )
         use simple_strategy2D_matcher, only: refine2D_exec
-        class(commander_refine2D_distr_worker), intent(inout) :: self
+        class(commander_refine2D_distr_worker),  intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build

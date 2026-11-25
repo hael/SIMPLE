@@ -36,25 +36,25 @@ private
 integer, parameter :: MIN_STOCH_FINE_REFS = 5
 
 type, extends(eul_prob_tab) :: eul_prob_tab_neigh
-    type(prob_candidate_store) :: candidate_store
-    type(prob_candidate_buffer), allocatable :: candidate_buffers(:) !< per thread; the batch's store at the assignment
-    integer,        allocatable :: candidate_fill_counts(:)
-    logical                     :: l_direct_stoch_neigh = .false.
-    integer                     :: nkept = 0   !< particles without a valid candidate, orientation kept (the assignment's count)
-    real,           allocatable :: cell_radius(:) !< geom: degrees from each subspace's representative to its farthest member
-    type(view_solve), allocatable :: geom_views(:,:) !< topk solved proposals of the current batch
-    integer, allocatable :: geom_refs(:,:), geom_inpls(:,:), geom_keep(:,:), geom_nkeep(:), geom_nvalid(:), geom_nbasins(:)
-    real, allocatable :: geom_coords(:,:), geom_shifts(:,:,:), geom_weights(:,:)
+    type(prob_candidate_store)               :: candidate_store
+    type(prob_candidate_buffer), allocatable :: candidate_buffers(:)     !< per thread; the batch's store at the assignment
+    integer,                     allocatable :: candidate_fill_counts(:)
+    real,                        allocatable :: cell_radius(:)           !< geom: degrees from each subspace's representative to its farthest member
+    type(view_solve),            allocatable :: geom_views(:,:)          !< topk solved proposals of the current batch
+    integer,                     allocatable :: geom_refs(:,:), geom_inpls(:,:), geom_keep(:,:), geom_nkeep(:), geom_nvalid(:), geom_nbasins(:)
+    real,                        allocatable :: geom_coords(:,:), geom_shifts(:,:,:), geom_weights(:,:)
+    logical                                  :: l_direct_stoch_neigh = .false.
+    integer                                  :: nkept                = 0 !< particles without a valid candidate, orientation kept (the assignment's count)
 contains
-    procedure :: new_neigh_pipeline
-    procedure :: set_model_from_field => set_model_from_field_neigh
-    procedure :: fill_tab_range => fill_tab_neigh_range
-    procedure :: open_assignment  => open_assignment_neigh
-    procedure :: assign_batch     => assign_batch_neigh
-    procedure :: close_assignment => close_assignment_neigh
+    procedure          :: new_neigh_pipeline
+    procedure          :: set_model_from_field => set_model_from_field_neigh
+    procedure          :: fill_tab_range       => fill_tab_neigh_range
+    procedure          :: open_assignment      => open_assignment_neigh
+    procedure          :: assign_batch         => assign_batch_neigh
+    procedure          :: close_assignment     => close_assignment_neigh
     procedure, private :: assign_rows_neigh
     procedure, private :: batch_store_from_buffers
-    procedure :: kill          => kill_neigh
+    procedure          :: kill                 => kill_neigh
 end type eul_prob_tab_neigh
 
 ! Workspace for per-thread arrays for both the stochastic and subspace paths
@@ -71,9 +71,9 @@ type :: eval_ws
 contains
     procedure, private :: alloc_eval_stoch_ws
     procedure, private :: alloc_eval_subspace_ws
-    procedure :: init_eval_stoch_ws
-    procedure :: init_eval_subspace_ws
-    procedure :: dealloc_eval_ws
+    procedure          :: init_eval_stoch_ws
+    procedure          :: init_eval_subspace_ws
+    procedure          :: dealloc_eval_ws
 end type eval_ws
 
 ! Workspace for coarse subspaces used by the geom/state path
@@ -95,11 +95,11 @@ contains
     !! subspace representatives with the block kernel: with block_memo (a caller whose references are memoized) the
     !! state mode asks for the kernel's memo
     subroutine new_neigh_pipeline( self, params, build, pinds, block_memo )
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(builder),    target, intent(in)    :: build
-        integer,                   intent(in)    :: pinds(:)
-        logical, optional,         intent(in)    :: block_memo
+        class(eul_prob_tab_neigh), intent(inout)                :: self
+        class(parameters),         target, intent(in)           :: params
+        class(builder),            target, intent(in)           :: build
+        integer,                   intent(in)                   :: pinds(:)
+        logical,                   optional,         intent(in) :: block_memo
         logical :: l_memo
         l_memo = .false.
         if( present(block_memo) ) l_memo = block_memo .and. trim(params%prob_neigh_mode) == 'state'
@@ -170,16 +170,16 @@ contains
     !> Geometry proposals and bounded view solves on the prepared batch; no project writes or bank image scans.
     subroutine fill_geom_views( self, i_first, i_last )
         class(eul_prob_tab_neigh), intent(inout) :: self
-        integer, intent(in) :: i_first, i_last
+        integer,                   intent(in)    :: i_first, i_last
         class(strategy3D_srch), allocatable :: srch(:)
-        type(strategy3D_spec) :: spec
-        integer, allocatable :: refs(:,:)
-        real, allocatable :: seeds(:,:,:)
-        integer :: i, iptcl, ithr, nteam, kcap, k, nseed, inpl
-        real :: seed(3), cone, corr, sh(2), coord, refined_coord
-        logical :: valid_coord, mirror
-        real(dp) :: t0, temp, sigma2
-        integer(int64) :: nevals, ngrads, nalts, ngrid, ncalls
+        type(strategy3D_spec)               :: spec
+        integer,                allocatable :: refs(:,:)
+        real,                   allocatable :: seeds(:,:,:)
+        integer                             :: i, iptcl, ithr, nteam, kcap, k, nseed, inpl
+        real                                :: seed(3), cone, corr, sh(2), coord, refined_coord
+        logical                             :: valid_coord, mirror
+        real(dp)                            :: t0, temp, sigma2
+        integer(int64)                      :: nevals, ngrads, nalts, ngrid, ncalls
         if( .not. self%l_model_set ) THROW_HARD('geometry view fill requires the iteration model')
         kcap = min(self%p_ptr%topk, self%p_ptr%nspace)
         nteam = omp_get_max_threads()
@@ -255,22 +255,22 @@ contains
     subroutine fill_tab_stoch_range( self, i_first, i_last )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer,                   intent(in)    :: i_first, i_last
-        type(pftc_shsrch_grad), target :: grad_shsrch_obj(nthr_glob)
-        type(pftc_shsrch_grad), target :: grad_shsrch_disk(nthr_glob) !< the disk's (shift_sigma > 0)
-        type(eval_ws)               :: eval_work
-        integer,        allocatable :: direct_srch_order(:,:)
-        real,           allocatable :: corrs_inpl(:,:)
-        complex(sp),    allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
-        integer :: i, ithr, max_refs_to_refine, nfull_refs
-        real    :: sigma2_prior  !< the shift prior's variance per axis (shift_prior=yes)
-        integer :: iptcl, i_from, i_to, nrots
-        real    :: lims(2,2), lims_init(2,2), shift_seed(3)
-        logical :: l_shc_neigh, l_snhc_neigh, l_seed_sh_first, l_bank(nthr_glob), l_map
-        real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
-        real(dp)       :: prior_w
-        real           :: step_win, step_disk, lims_disk(2,2)
-        integer        :: kscreen
-        integer(int64) :: nscored(nthr_glob), nbank(nthr_glob)
+        type(pftc_shsrch_grad), target      :: grad_shsrch_obj(nthr_glob)
+        type(pftc_shsrch_grad), target      :: grad_shsrch_disk(nthr_glob) !< the disk's (shift_sigma > 0)
+        type(eval_ws)                       :: eval_work
+        integer,                allocatable :: direct_srch_order(:,:)
+        real,                   allocatable :: corrs_inpl(:,:)
+        complex(sp),            allocatable :: seed_bank(:,:,:)            !< per thread: the seed-shifted particle memo
+        integer                             :: i, ithr, max_refs_to_refine, nfull_refs
+        real                                :: sigma2_prior                !< the shift prior's variance per axis (shift_prior=yes)
+        integer                             :: iptcl, i_from, i_to, nrots
+        real                                :: lims(2,2), lims_init(2,2), shift_seed(3)
+        logical                             :: l_shc_neigh, l_snhc_neigh, l_seed_sh_first, l_bank(nthr_glob), l_map
+        real(dp)                            :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
+        real(dp)                            :: prior_w
+        real                                :: step_win, step_disk, lims_disk(2,2)
+        integer                             :: kscreen
+        integer(int64)                      :: nscored(nthr_glob), nbank(nthr_glob)
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
         l_shc_neigh     = (trim(self%p_ptr%prob_neigh_mode) == 'shc')
@@ -509,27 +509,27 @@ contains
     subroutine fill_tab_subspace_range( self, i_first, i_last )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer,                   intent(in)    :: i_first, i_last
-        type(pftc_shsrch_grad), target :: grad_shsrch_obj(nthr_glob)
-        type(pftc_shsrch_grad), target :: grad_shsrch_disk(nthr_glob) !< the disk's (shift_sigma > 0)
-        type(coarse_search_ws) :: coarse_ws
-        type(eval_ws)          :: eval_work
-        complex(sp), allocatable :: seed_bank(:,:,:,:) !< per thread: the seed-shifted particle memos of a block's slots
-        logical,     allocatable :: l_bank(:,:)        !< per thread: which slots hold one
-        real(sp),    allocatable :: dists_blk(:,:)     !< per thread: the block kernel's drawn distances (representatives x block)
-        integer,     allocatable :: irots_blk(:,:)     !< per thread: its drawn in-plane indices
-        integer,     allocatable :: rep_full(:), rep_isub(:), rep_state(:) !< the representatives the state mode scores, in order
-        integer,     allocatable :: prev_projs(:)      !< the batch's previous directions (state mode)
-        integer,     allocatable :: porder(:), blocks(:,:) !< the batch by half and previous cell, its blocks in porder
-        integer :: i, ithr, max_refs_to_refine, nsubs, npeak_target, npooled_capacity, nteam, nrep, nblocks, ib, nslots
-        real    :: sigma2_prior  !< the shift prior's variance per axis (shift_prior=yes)
-        integer :: iptcl, i_from, i_to, nrots, kfromto_loc(2)
-        real    :: lims(2,2), lims_init(2,2), shift_seed(3)
-        logical :: l_state_neigh, l_seed_sh_first, l_map
-        real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
-        real(dp)       :: prior_w
-        real           :: step_win, step_disk, lims_disk(2,2)
-        integer        :: kscreen
-        integer(int64) :: nscored(nthr_glob), nbank(nthr_glob)
+        type(pftc_shsrch_grad), target      :: grad_shsrch_obj(nthr_glob)
+        type(pftc_shsrch_grad), target      :: grad_shsrch_disk(nthr_glob)            !< the disk's (shift_sigma > 0)
+        type(coarse_search_ws)              :: coarse_ws
+        type(eval_ws)                       :: eval_work
+        complex(sp),            allocatable :: seed_bank(:,:,:,:)                     !< per thread: the seed-shifted particle memos of a block's slots
+        logical,                allocatable :: l_bank(:,:)                            !< per thread: which slots hold one
+        real(sp),               allocatable :: dists_blk(:,:)                         !< per thread: the block kernel's drawn distances (representatives x block)
+        integer,                allocatable :: irots_blk(:,:)                         !< per thread: its drawn in-plane indices
+        integer,                allocatable :: rep_full(:), rep_isub(:), rep_state(:) !< the representatives the state mode scores, in order
+        integer,                allocatable :: prev_projs(:)                          !< the batch's previous directions (state mode)
+        integer,                allocatable :: porder(:), blocks(:,:)                 !< the batch by half and previous cell, its blocks in porder
+        integer                             :: i, ithr, max_refs_to_refine, nsubs, npeak_target, npooled_capacity, nteam, nrep, nblocks, ib, nslots
+        real                                :: sigma2_prior                           !< the shift prior's variance per axis (shift_prior=yes)
+        integer                             :: iptcl, i_from, i_to, nrots, kfromto_loc(2)
+        real                                :: lims(2,2), lims_init(2,2), shift_seed(3)
+        logical                             :: l_state_neigh, l_seed_sh_first, l_map
+        real(dp)                            :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
+        real(dp)                            :: prior_w
+        real                                :: step_win, step_disk, lims_disk(2,2)
+        integer                             :: kscreen
+        integer(int64)                      :: nscored(nthr_glob), nbank(nthr_glob)
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
         l_state_neigh   = (trim(self%p_ptr%prob_neigh_mode) == 'state')
@@ -661,9 +661,9 @@ contains
         !! min(PFTC_BLOCK_NB, max(4, n_half / (2 nteam)))
         subroutine cut_blocks_state
             type(ori), allocatable :: o_thr(:)
-            integer, allocatable   :: cell(:)
-            integer :: ih_loc, n_loc, j0_loc, j_loc, bsz_loc, i_loc, c_loc, ithr_loc
-            logical :: l_even
+            integer,   allocatable :: cell(:)
+            integer                :: ih_loc, n_loc, j0_loc, j_loc, bsz_loc, i_loc, c_loc, ithr_loc
+            logical                :: l_even
             allocate(prev_projs(i_from:i_to), cell(i_from:i_to), o_thr(nteam))
             !$omp parallel do default(shared) private(i_loc,ithr_loc) proc_bind(close) schedule(static)
             do i_loc = i_from,i_to
@@ -1034,8 +1034,8 @@ contains
     !! rank before this table's first row: a part's offset), the draws' scope on the table and the calculator (the
     !! fallback's in-plane draw), the counts close_assignment reports
     subroutine open_assignment_neigh( self, nglob, rank0 )
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        integer, optional,         intent(in)    :: nglob, rank0
+        class(eul_prob_tab_neigh), intent(inout)                :: self
+        integer,                   optional,         intent(in) :: nglob, rank0
         integer :: nglob_here, rank0_here
         nglob_here = self%nptcls
         rank0_here = 0
@@ -1089,13 +1089,13 @@ contains
     !> Merge solved proposals, draw at the tempered basin mass and insert at the physical mass.
     subroutine assign_geom_views( self, i_first, i_last )
         class(eul_prob_tab_neigh), intent(inout) :: self
-        integer, intent(in) :: i_first, i_last
+        integer,                   intent(in)    :: i_first, i_last
         type(prob_candidate), allocatable :: cands(:)
-        real, allocatable :: rmats(:,:,:), shifts(:,:), scores(:), wd(:), wp(:), losses(:), masses(:), kw(:)
-        integer, allocatable :: pos(:), basin(:), reps(:), kept(:)
-        logical, allocatable :: valid(:), best(:), eligible(:)
-        integer :: i, k, j, nv, nb, nbphys, nc, which, nk, nelig, cap
-        real :: euler(3), temp, dist
+        real,                 allocatable :: rmats(:,:,:), shifts(:,:), scores(:), wd(:), wp(:), losses(:), masses(:), kw(:)
+        integer,              allocatable :: pos(:), basin(:), reps(:), kept(:)
+        logical,              allocatable :: valid(:), best(:), eligible(:)
+        integer                           :: i, k, j, nv, nb, nbphys, nc, which, nk, nelig, cap
+        real                              :: euler(3), temp, dist
         if( .not. self%l_assign_open ) THROW_HARD('geometry view assignment is not open')
         cap = size(self%geom_views,1)
         allocate(cands(cap), rmats(3,3,0:cap-1), shifts(2,0:cap-1), scores(0:cap-1), &
@@ -1173,7 +1173,7 @@ contains
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer,                   intent(in)    :: i_first, i_last
         integer, allocatable :: counts(:), filled(:)
-        integer :: ithr, j, i_loc, pos
+        integer              :: ithr, j, i_loc, pos
         allocate(counts(self%nptcls), filled(self%nptcls), source=0)
         do ithr = 1,size(self%candidate_buffers)
             do j = 1,self%candidate_buffers(ithr)%nused
@@ -1272,9 +1272,9 @@ contains
             real,    allocatable :: w(:), dists_c(:)
             integer, allocatable :: pos_c(:), which_pos(:), states_c(:)
             logical, allocatable :: l_refined(:), l_ref_c(:)
-            integer :: i_loc, n_loc, which, ibest, maxcand, r_loc
-            real    :: temp, dist
-            logical :: l_neff_row
+            integer              :: i_loc, n_loc, which, ibest, maxcand, r_loc
+            real                 :: temp, dist
+            logical              :: l_neff_row
             maxcand = 0
             do i_loc = i_first,i_last
                 maxcand = max(maxcand, int(self%candidate_store%offsets(i_loc+1) - self%candidate_store%offsets(i_loc)))
@@ -1348,9 +1348,9 @@ contains
             integer, allocatable :: kpos(:,:), kinds(:,:), nkeep(:), nelig(:), pos_c(:,:)
             real,    allocatable :: kw(:,:), dists_c(:,:)
             logical, allocatable :: eligible(:,:)
-            integer  :: i_loc, n_loc, ibest, istate_com, r_loc, proj_r, k, ithr, nthr_team, rcom
-            real(dp) :: prior_w_ins
-            logical  :: l_prior_ins
+            integer              :: i_loc, n_loc, ibest, istate_com, r_loc, proj_r, k, ithr, nthr_team, rcom
+            real(dp)             :: prior_w_ins
+            logical              :: l_prior_ins
             l_prior_ins = self%p_ptr%l_centring
             prior_w_ins = 0.d0
             if( l_prior_ins ) prior_w_ins = map_prior_weight(self%p_ptr%shift_sigma, self%p_ptr%smpd)
@@ -1518,9 +1518,9 @@ contains
         subroutine seed_fallback_if_empty(iptcl_loc)
             integer, intent(in) :: iptcl_loc
             type(ori) :: o_prev
-            integer :: istate_loc, iproj_loc, irot_loc, fallback_state, fallback_proj, fallback_ref_full
-            integer :: ri_loc, fallback_ref_loc
-            real    :: sh_seed(2), dist
+            integer   :: istate_loc, iproj_loc, irot_loc, fallback_state, fallback_proj, fallback_ref_full
+            integer   :: ri_loc, fallback_ref_loc
+            real      :: sh_seed(2), dist
             if( has_valid_candidate(iptcl_loc) ) return
             call self%b_ptr%spproj_field%get_ori(self%pinds(iptcl_loc), o_prev)
             istate_loc = o_prev%get_state()
@@ -1586,11 +1586,11 @@ contains
 
     ! Records one particle vs. ref evaluation result in its thread-owned buffer.
     subroutine record_sparse_eval( self, i, ithr, ri, dist, irot, x, y, has_sh, sdev )
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        integer,                   intent(in)    :: i, ithr, ri, irot
-        real,                      intent(in)    :: dist, x, y
-        logical,                   intent(in)    :: has_sh
-        real,            optional, intent(in)    :: sdev
+        class(eul_prob_tab_neigh), intent(inout)        :: self
+        integer,                   intent(in)           :: i, ithr, ri, irot
+        real,                      intent(in)           :: dist, x, y
+        logical,                   intent(in)           :: has_sh
+        real,                      optional, intent(in) :: sdev
         type(prob_candidate) :: candidate
         candidate%iref   = self%ref_full(ri)
         candidate%dist   = dist
@@ -1608,12 +1608,12 @@ contains
     !! objects' counters
     subroutine record_neigh_fill_profile( self, grad_obj, wall, ts_seed, ts_score, ts_refine, nscored, nbank, nfilled,&
             &grad_disk )
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        type(pftc_shsrch_grad),    intent(inout) :: grad_obj(:)
-        type(pftc_shsrch_grad), optional, intent(inout) :: grad_disk(:)
-        real(dp),                  intent(in)    :: wall, ts_seed(:), ts_score(:), ts_refine(:)
-        integer(int64),            intent(in)    :: nscored(:), nbank(:)
-        integer,                   intent(in)    :: nfilled
+        class(eul_prob_tab_neigh), intent(inout)           :: self
+        type(pftc_shsrch_grad),    intent(inout)           :: grad_obj(:)
+        type(pftc_shsrch_grad),    optional, intent(inout) :: grad_disk(:)
+        real(dp),                  intent(in)              :: wall, ts_seed(:), ts_score(:), ts_refine(:)
+        integer(int64),            intent(in)              :: nscored(:), nbank(:)
+        integer,                   intent(in)              :: nfilled
         integer(int64) :: obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr
         integer        :: ithr
         self%fill_profile%wall_region = self%fill_profile%wall_region + wall
@@ -1696,8 +1696,8 @@ contains
     end subroutine setup_shiftmap_neigh
 
     subroutine alloc_seed_bank( self, seed_bank )
-        class(eul_prob_tab_neigh), intent(in)    :: self
-        complex(sp), allocatable,  intent(inout) :: seed_bank(:,:,:)
+        class(eul_prob_tab_neigh), intent(in)                  :: self
+        complex(sp),               allocatable,  intent(inout) :: seed_bank(:,:,:)
         integer :: kfromto(2)
         kfromto = self%b_ptr%pftc%get_kfromto()
         allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1, nthr_glob))
@@ -1747,23 +1747,23 @@ contains
     !! the best of the screen refined in the disk's search object
     subroutine refine_best_neighbors( self, ew, grad_obj, l_seed_sh_first, max_refs_to_refine,&
         &i, ithr, iptcl, shift_seed, neval, l_map, kscreen, step_win, step_disk, l_disk, l_prior, grad_disk, prior_w)
-        class(eul_prob_tab_neigh),      intent(inout) :: self
-        type(eval_ws),                  intent(inout) :: ew
-        type(pftc_shsrch_grad), target, intent(inout) :: grad_obj(:), grad_disk(:)
-        logical,                        intent(in)    :: l_seed_sh_first
-        integer,                        intent(in)    :: max_refs_to_refine, i, ithr, iptcl, neval
-        real,                           intent(in)    :: shift_seed(3)
-        logical,                        intent(in)    :: l_map, l_disk, l_prior
-        integer,                        intent(in)    :: kscreen
-        real,                           intent(in)    :: step_win, step_disk
-        real(dp),                       intent(in)    :: prior_w
+        class(eul_prob_tab_neigh),      intent(inout)         :: self
+        type(eval_ws),                  intent(inout)         :: ew
+        type(pftc_shsrch_grad),         target, intent(inout) :: grad_obj(:), grad_disk(:)
+        logical,                        intent(in)            :: l_seed_sh_first
+        integer,                        intent(in)            :: max_refs_to_refine, i, ithr, iptcl, neval
+        real,                           intent(in)            :: shift_seed(3)
+        logical,                        intent(in)            :: l_map, l_disk, l_prior
+        integer,                        intent(in)            :: kscreen
+        real,                           intent(in)            :: step_win, step_disk
+        real(dp),                       intent(in)            :: prior_w
         type(pftc_shsrch_grad), pointer :: gso
-        integer  :: nrefs_to_refine, nstate_eval, j, k, eval_slot, ri, istate, iproj, irot, irho, ialpha, imap, npool
-        integer  :: si, state_eval, pool(neval), scr_irot(neval), loc(1)
-        real     :: refined_shift(3), xy_start(2), loss_cell, dist, sdev, step, dists_sorted(neval)
-        real     :: scr_xy(2,neval), scr_loss(neval), scr_sdev(neval), width_best(max(1,max_refs_to_refine))
-        real(dp) :: temp_s, temp_i, prior_w_map
-        logical  :: l_cont_refined
+        integer                         :: nrefs_to_refine, nstate_eval, j, k, eval_slot, ri, istate, iproj, irot, irho, ialpha, imap, npool
+        integer                         :: si, state_eval, pool(neval), scr_irot(neval), loc(1)
+        real                            :: refined_shift(3), xy_start(2), loss_cell, dist, sdev, step, dists_sorted(neval)
+        real                            :: scr_xy(2,neval), scr_loss(neval), scr_sdev(neval), width_best(max(1,max_refs_to_refine))
+        real(dp)                        :: temp_s, temp_i, prior_w_map
+        logical                         :: l_cont_refined
         ew%best_evals(:,ithr) = 0
         if( neval <= 0 ) return
         gso         => grad_obj(ithr)
@@ -1896,7 +1896,7 @@ contains
 
     ! Allocates all stochastic-path arrays
     subroutine alloc_eval_stoch_ws( self, nrefs, nstates, nspace, max_refine, nthr )
-        class(eval_ws), intent(inout) :: self
+        class(eval_ws),    intent(inout) :: self
         integer,           intent(in)    :: nrefs, nstates, nspace, max_refine, nthr
         call self%dealloc_eval_ws
         allocate(self%best_evals(max(1,max_refine),nthr), self%evaluated_ref_ids(nrefs,nthr), source=0)
@@ -1907,7 +1907,7 @@ contains
 
     ! Allocates all subspace-path arrays
     subroutine alloc_eval_subspace_ws( self, nrefs, nstates, nspace, nsubs, max_refine, nthr )
-        class(eval_ws), intent(inout) :: self
+        class(eval_ws),    intent(inout) :: self
         integer,           intent(in)    :: nrefs, nstates, nspace, nsubs, max_refine, nthr
         call self%dealloc_eval_ws
         allocate(self%best_evals(max(1,max_refine),nthr), self%evaluated_ref_ids(nrefs,nthr), source=0)

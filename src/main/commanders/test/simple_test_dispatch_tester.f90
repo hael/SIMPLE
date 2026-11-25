@@ -19,8 +19,8 @@ implicit none
 public :: run_all_test_dispatch_tests
 private
 
-integer, parameter :: DEADLINE = 2 !< seconds of the hanging probes
-integer, parameter :: GRACE    = 1 !< seconds between SIGTERM and SIGKILL
+integer, parameter :: DEADLINE       = 2 !< seconds of the hanging probes
+integer, parameter :: GRACE          = 1 !< seconds between SIGTERM and SIGKILL
 integer(c_pid_t)   :: dispatcher_pid = 0
 
 contains
@@ -47,10 +47,10 @@ contains
             &EXEC_PASSED, EXEC_PASSED]
         type(test_dispatcher) :: dispatcher
         type(test_execution)  :: exec
-        type(string) :: cwd
-        integer(int64) :: t0, t1, rate
-        integer      :: i
-        logical      :: interrupted
+        type(string)          :: cwd
+        integer(int64)        :: t0, t1, rate
+        integer               :: i
+        logical               :: interrupted
         write(*,'(A)') 'test_outcomes'
         call simple_getcwd(cwd)
         call simple_mkdir(ROOT)
@@ -88,13 +88,13 @@ contains
 
     !> an interrupted dispatcher stops every child group and starts nothing more
     subroutine test_interrupt()
-        character(len=*), parameter :: ROOT = 'tmp_test_dispatch_interrupt'
+        character(len=*),  parameter :: ROOT      = 'tmp_test_dispatch_interrupt'
         character(len=16), parameter :: PROBES(3) = [character(len=16) :: 'worker_hang', 'interrupt', 'pass']
-        type(test_dispatcher) :: dispatcher
-        type(test_execution)  :: exec
-        type(string) :: cwd
-        integer      :: i
-        logical      :: interrupted
+        type(test_dispatcher)        :: dispatcher
+        type(test_execution)         :: exec
+        type(string)                 :: cwd
+        integer                      :: i
+        logical                      :: interrupted
         write(*,'(A)') 'test_interrupt'
         call simple_getcwd(cwd)
         call simple_mkdir(ROOT)
@@ -165,7 +165,7 @@ contains
         class(test_dispatcher), intent(in) :: dispatcher
         integer,                intent(in) :: i
         integer(c_int) :: rc
-        integer :: itry
+        integer        :: itry
         do itry = 1, 20
             left_after_wait = dispatcher%processes_left(i)
             if( left_after_wait == 0 ) return
@@ -177,7 +177,7 @@ contains
     logical function group_gone( dir )
         character(len=*), intent(in) :: dir
         integer(c_int) :: rc
-        integer :: funit, ios, pgid, itry
+        integer        :: funit, ios, pgid, itry
         group_gone = .false.
         open(newunit=funit, file=trim(dir)//'/pgid.txt', action='read', status='old', iostat=ios)
         if( ios /= 0 ) return

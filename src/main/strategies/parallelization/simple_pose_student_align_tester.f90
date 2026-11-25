@@ -23,14 +23,14 @@ implicit none
 private
 public :: run_all_pose_student_align_tests
 
-character(len=*), parameter :: PHANTOM = 'tmp_pose_student_align_tester_phantom.mrc'
-integer,          parameter :: NREFS  = 4      !< the references: two mirror pairs
-integer,          parameter :: NPTCLS = 12     !< the particles: three per reference
-integer,          parameter :: NTEAM  = 4      !< the team of the thread check
+character(len=*), parameter :: PHANTOM     = 'tmp_pose_student_align_tester_phantom.mrc'
+integer,          parameter :: NREFS       = 4              !< the references: two mirror pairs
+integer,          parameter :: NPTCLS      = 12             !< the particles: three per reference
+integer,          parameter :: NTEAM       = 4              !< the team of the thread check
 integer,          parameter :: MIRR(NREFS) = [3, 4, 1, 2]   !< each reference's mirror partner
-real,             parameter :: TRS    = 2.     !< the window (pixels): the planted shifts lie beyond it
-real,             parameter :: SHSIG  = 3.     !< the prior width (A): a disk of 9 A, 6 px at 1.5 A per pixel
-real,             parameter :: SH_TOL = 0.25   !< the recovered shift's tolerance (pixels)
+real,             parameter :: TRS         = 2.             !< the window (pixels): the planted shifts lie beyond it
+real,             parameter :: SHSIG       = 3.             !< the prior width (A): a disk of 9 A, 6 px at 1.5 A per pixel
+real,             parameter :: SH_TOL      = 0.25           !< the recovered shift's tolerance (pixels)
 
 real, allocatable, target :: sigma2_fix(:,:)   !< the fixture's unit noise spectra: the calculator points at them
 
@@ -48,14 +48,14 @@ contains
     !> the planted reference alone: its rotation and the planted shift (5 px, beyond the 2 px window) as the increment;
     !! its partner is searched beside it and loses
     subroutine test_planted_reference_recovers_pose()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(pose_student_align) :: aln
-        type(pose_align_result)  :: res
-        integer, allocatable :: ref_true(:), inpl_true(:)
-        real,    allocatable :: sh_true(:,:)
-        integer :: iptcl
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(pose_student_align)      :: aln
+        type(pose_align_result)       :: res
+        integer,          allocatable :: ref_true(:), inpl_true(:)
+        real,             allocatable :: sh_true(:,:)
+        integer                       :: iptcl
         write(*,'(A)') 'test_planted_reference_recovers_pose'
         call make_fixture(b, p, cline, ref_true, inpl_true, sh_true)
         call aln%new(p, b, NREFS)
@@ -72,14 +72,14 @@ contains
     !> a list naming only the planted reference's mirror partner (the cone names one direction of a pair) finds the
     !! planted reference, its rotation and shift
     subroutine test_partner_of_a_direction_searched()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(pose_student_align) :: aln
-        type(pose_align_result)  :: res
-        integer, allocatable :: ref_true(:), inpl_true(:)
-        real,    allocatable :: sh_true(:,:)
-        integer :: iptcl
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(pose_student_align)      :: aln
+        type(pose_align_result)       :: res
+        integer,          allocatable :: ref_true(:), inpl_true(:)
+        real,             allocatable :: sh_true(:,:)
+        integer                       :: iptcl
         write(*,'(A)') 'test_partner_of_a_direction_searched'
         call make_fixture(b, p, cline, ref_true, inpl_true, sh_true)
         call aln%new(p, b, NREFS)
@@ -96,14 +96,14 @@ contains
     !> a list of every pair's direction (the cone) in either order keeps the planted reference; the other pair alone (a
     !! wrong mode) stays in that pair at a lower score
     subroutine test_cone_keeps_planted_direction()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(pose_student_align) :: aln
-        type(pose_align_result)  :: res, res_other
-        integer, allocatable :: ref_true(:), inpl_true(:)
-        real,    allocatable :: sh_true(:,:)
-        integer :: iptcl, iorder, other
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(pose_student_align)      :: aln
+        type(pose_align_result)       :: res, res_other
+        integer,          allocatable :: ref_true(:), inpl_true(:)
+        real,             allocatable :: sh_true(:,:)
+        integer                       :: iptcl, iorder, other
         write(*,'(A)') 'test_cone_keeps_planted_direction'
         call make_fixture(b, p, cline, ref_true, inpl_true, sh_true)
         call aln%new(p, b, NREFS)
@@ -131,14 +131,14 @@ contains
     !> a list that names a direction twice and both members of a pair searches each reference once: the result of the
     !! pair named by one direction, bit for bit; a list beyond nmax references aligns to none (the caller's status)
     subroutine test_reference_searched_once()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(pose_student_align) :: aln
-        type(pose_align_result)  :: res1, res2
-        integer, allocatable :: ref_true(:), inpl_true(:)
-        real,    allocatable :: sh_true(:,:)
-        integer :: iptcl
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(pose_student_align)      :: aln
+        type(pose_align_result)       :: res1, res2
+        integer,          allocatable :: ref_true(:), inpl_true(:)
+        real,             allocatable :: sh_true(:,:)
+        integer                       :: iptcl
         write(*,'(A)') 'test_reference_searched_once'
         call make_fixture(b, p, cline, ref_true, inpl_true, sh_true)
         ! two references: a pair, however often named, fits
@@ -158,14 +158,14 @@ contains
 
     !> every particle aligned over the whole cone by a team of NTEAM, one object per thread, against one thread
     subroutine test_team_as_one_thread()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(cmdline)            :: cline
-        type(pose_student_align) :: aln(NTEAM)
-        type(pose_align_result)  :: res1(NPTCLS), rest(NPTCLS)
-        integer, allocatable :: ref_true(:), inpl_true(:)
-        real,    allocatable :: sh_true(:,:)
-        integer :: iptcl, i, ithr
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(pose_student_align)      :: aln(NTEAM)
+        type(pose_align_result)       :: res1(NPTCLS), rest(NPTCLS)
+        integer,          allocatable :: ref_true(:), inpl_true(:)
+        real,             allocatable :: sh_true(:,:)
+        integer                       :: iptcl, i, ithr
         write(*,'(A)') 'test_team_as_one_thread'
         call make_fixture(b, p, cline, ref_true, inpl_true, sh_true)
         do i = 1, NTEAM
@@ -201,14 +201,14 @@ contains
     !! a grid rotation and shifted by a planted 5 px in a direction of its own, every particle not yet centred; the
     !! search reports the planted shift as the increment (the optimizer's shift rotated into the particle's axes)
     subroutine make_fixture( b, p, cline, ref_true, inpl_true, sh_true )
-        type(builder),    target, intent(inout) :: b
-        type(parameters), target, intent(inout) :: p
-        type(cmdline),            intent(inout) :: cline
-        integer, allocatable,     intent(out)   :: ref_true(:), inpl_true(:)
-        real,    allocatable,     intent(out)   :: sh_true(:,:)
+        type(builder),            target, intent(inout)        :: b
+        type(parameters),         target, intent(inout)        :: p
+        type(cmdline),            intent(inout)                :: cline
+        integer,                  allocatable,     intent(out) :: ref_true(:), inpl_true(:)
+        real,                     allocatable,     intent(out) :: sh_true(:,:)
         complex(sp), allocatable :: refs(:,:,:), ptcl(:,:)
-        real    :: ang, s(2)
-        integer :: iref, iptcl, k, pp, pdim(3), kfromto(2), pftsz, nrots
+        real                     :: ang, s(2)
+        integer                  :: iref, iptcl, k, pp, pdim(3), kfromto(2), pftsz, nrots
         call set_fixed_seed(20261117)
         call write_phantom
         call cline%set('vol1',        PHANTOM)
@@ -289,10 +289,10 @@ contains
 
     !> a 32^3 two-blob phantom: the builder's volume (the alignment reads only the calculator)
     subroutine write_phantom
-        integer, parameter :: BOX = 32
-        type(image)        :: vol
-        real, allocatable  :: rmat(:,:,:)
-        integer :: i, j, k
+        integer, parameter   :: BOX = 32
+        type(image)          :: vol
+        real,    allocatable :: rmat(:,:,:)
+        integer              :: i, j, k
         allocate(rmat(BOX,BOX,BOX))
         do k = 1, BOX
             do j = 1, BOX

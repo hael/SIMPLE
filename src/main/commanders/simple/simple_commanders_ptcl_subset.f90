@@ -24,13 +24,13 @@ contains
         use simple_sym,         only: is_valid_pointgroup
         use simple_jiffys,      only: simple_end
         class(commander_select_particles), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                    intent(inout) :: cline
         class(parameters), allocatable :: params
         class(sp_project), allocatable :: project
-        type(string) :: stkout, oritab, argument
-        logical, allocatable :: selected(:)
-        character(len=512) :: message
-        integer :: status, original_count, nspace
+        type(string)                   :: stkout, oritab, argument
+        logical,           allocatable :: selected(:)
+        character(len=512)             :: message
+        integer                        :: status, original_count, nspace
         if( cline%defined('mkdir') )then
             if( cline%get_carg('mkdir') /= 'yes' )then
                 call simple_exception('select_particles requires mkdir=yes to preserve the input project', __FILENAME__, __LINE__)

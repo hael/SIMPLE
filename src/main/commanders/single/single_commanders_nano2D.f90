@@ -38,7 +38,7 @@ contains
         type(cmdline)                    :: cline_make_cavgs, cline_refine2D_nano
         type(string)                     :: orig_projfile
         type(string)                     :: finalcavgs
-        integer :: last_iter_stage2, nptcls
+        integer                          :: last_iter_stage2, nptcls
         call cline%set('dir_exec', 'center2D_nano')
         if( .not. cline%defined('center') ) call cline%set('center', 'no')
         ! master parameters
@@ -96,12 +96,12 @@ contains
     end subroutine exec_center2D_nano
 
     subroutine exec_refine2D_nano( self, cline )
-        class(commander_refine2D_nano), intent(inout) :: self
+        class(commander_refine2D_nano),  intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commander
-        type(commander_refine2D) :: xrefine2D ! shared-memory
+        type(commander_refine2D)  :: xrefine2D ! shared-memory
         type(parameters)          :: params
-        type(string) :: str_refine, mkdir_flag
+        type(string)              :: str_refine, mkdir_flag
         ! static parameters
         call cline%delete('nparts') ! always shared-memory
         call cline%set('dir_exec', 'refine2D_nano')
@@ -150,9 +150,9 @@ contains
         class(commander_analysis2D_nano), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
-        type(commander_center2D_nano)  :: xcenter2D
-        type(commander_refine2D_nano) :: xrefine2D
-        type(commander_estimate_diam)  :: xest_diam
+        type(commander_center2D_nano)         :: xcenter2D
+        type(commander_refine2D_nano)         :: xrefine2D
+        type(commander_estimate_diam)         :: xest_diam
         type(commander_simulate_nanoparticle) :: xsim_np
         ! other variables
         type(parameters)            :: params
@@ -161,8 +161,8 @@ contains
         type(string)                :: stkname
         character(len=*), parameter :: STARTVOL    = 'startvol.mrc'
         real,             parameter :: LP_EST_DIAM = 3.
-        integer :: ncls, nptcls, ldim(3)
-        real    :: smpd, diam_min, diam_max, mskdiam
+        integer                     :: ncls, nptcls, ldim(3)
+        real                        :: smpd, diam_min, diam_max, mskdiam
         call cline%set('dir_exec', 'analysis2D_nano')
         call cline%set('objfun', 'cc') ! best objfun
         call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms

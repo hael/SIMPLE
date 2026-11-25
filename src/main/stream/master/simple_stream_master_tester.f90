@@ -69,9 +69,9 @@ contains
     !> a stop of one stage, a restart of another, and updates
     subroutine test_gui_commands()
         type(stream_master_gui_commands) :: commands
-        integer, allocatable      :: selection(:)
-        type(string)              :: fname
-        integer                   :: snapshot_id, iteration
+        integer, allocatable             :: selection(:)
+        type(string)                     :: fname
+        integer                          :: snapshot_id, iteration
         write(*,'(A)') 'test_gui_commands'
         call assert_true(commands%parse('{"terminate":false,"terminate_pool2D":true,"restart_preprocess":true,'//&
             &'"ctfresthreshold":5.5,"mskdiam2D":180.0,"snapshot2D":{"id":3,"iteration":12,"selection":[1,4],'//&
@@ -203,12 +203,12 @@ contains
     !> a stage's status replaces the previous one
     subroutine test_store_status()
         type(stream_master_meta_store)          :: store
-        type(gui_metadata_stream_pool2D) :: status
-        character(len=:), allocatable    :: buffer
-        type(string)                     :: stage
-        integer :: iter, nimported, naccepted, nrejected, tlast, mskdiam
-        real    :: mskscale, res
-        logical :: l_user_input, l_assigned
+        type(gui_metadata_stream_pool2D)        :: status
+        character(len=:), allocatable           :: buffer
+        type(string)                            :: stage
+        integer                                 :: iter, nimported, naccepted, nrejected, tlast, mskdiam
+        real                                    :: mskscale, res
+        logical                                 :: l_user_input, l_assigned
         write(*,'(A)') 'test_store_status'
         call store%new()
         call status%new(GUI_METADATA_STREAM_POOL2D_TYPE)
@@ -261,10 +261,10 @@ contains
     !> a volume sent with reprojection tiles arrives without them (they are not serialised)
     subroutine test_store_volume()
         type(stream_master_meta_store)       :: store
-        type(gui_metadata_vol3D)      :: vol
-        type(gui_metadata_cavg2D)     :: tiles(3)
-        character(len=:), allocatable :: buffer
-        integer :: i
+        type(gui_metadata_vol3D)             :: vol
+        type(gui_metadata_cavg2D)            :: tiles(3)
+        character(len=:), allocatable        :: buffer
+        integer                              :: i
         write(*,'(A)') 'test_store_volume'
         call store%new()
         call vol%new(GUI_METADATA_VOL3D_TYPE)
@@ -289,7 +289,7 @@ contains
         type(stream_master_meta_store)     :: store
         type(gui_metadata_stream_snapshot) :: snapshot
         character(len=:), allocatable      :: buffer
-        integer, allocatable               :: states(:)
+        integer,          allocatable      :: states(:)
         write(*,'(A)') 'test_store_snapshot3D'
         call store%new()
         call snapshot%new(GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE)
@@ -332,11 +332,11 @@ contains
     !! updates reach the stage, and a restart's discard empties both pipes
     subroutine test_stage_pipes()
         class(stream_master_stage), allocatable :: proc
-        type(stream_pipe)             :: stage_side
-        class(cmdline), allocatable :: cline
-        type(noop_commander)          :: commander
-        character(len=:), allocatable :: buffer
-        integer :: fd_write, fd_read, fd_master_read, fd_master_write
+        type(stream_pipe)                       :: stage_side
+        class(cmdline),             allocatable :: cline
+        type(noop_commander)                    :: commander
+        character(len=:),           allocatable :: buffer
+        integer                                 :: fd_write, fd_read, fd_master_read, fd_master_write
         write(*,'(A)') 'test_stage_pipes'
         allocate(proc)
         allocate(cline)
@@ -369,7 +369,7 @@ contains
     !! request is remembered (no more updates until the next start), and kill forgets both
     subroutine test_update_dedupe()
         class(stream_master_stage), allocatable :: proc
-        class(cmdline), allocatable :: cline
+        class(cmdline),             allocatable :: cline
         type(noop_commander)                    :: commander
         write(*,'(A)') 'test_update_dedupe'
         allocate(proc)
@@ -393,7 +393,7 @@ contains
     !> a skipped stage is never started: start() leaves it skipped and forks nothing
     subroutine test_skipped_stays_skipped()
         class(stream_master_stage), allocatable :: proc
-        class(cmdline), allocatable :: cline
+        class(cmdline),             allocatable :: cline
         type(noop_commander)                    :: commander
         write(*,'(A)') 'test_skipped_stays_skipped'
         allocate(proc)
@@ -456,7 +456,7 @@ contains
     function cavg_message( i, i_max, idx ) result( buffer )
         integer, intent(in) :: i, i_max, idx
         character(len=:), allocatable :: buffer
-        type(gui_metadata_cavg2D) :: cavg
+        type(gui_metadata_cavg2D)     :: cavg
         call cavg%new(GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE)
         call cavg%set(path=string('cavgs.jpg'), mrcpath=string('cavgs.mrc'), idx=idx,&
             &sprite=sprite_sheet_pos(x=0., y=0., h=100, w=100), i=i, i_max=i_max)
@@ -476,7 +476,7 @@ contains
     function int_list( n ) result( list )
         integer, intent(in) :: n
         character(len=:), allocatable :: list
-        integer :: i
+        integer                       :: i
         list = '['
         do i = 1,n
             list = list//int2str(i)

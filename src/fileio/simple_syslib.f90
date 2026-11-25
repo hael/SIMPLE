@@ -79,15 +79,15 @@ interface
     function fsync (fd) bind(c,name="fsync")
       use iso_c_binding, only: c_int
         integer(c_int), value :: fd
-        integer(c_int) :: fsync
+        integer(c_int)        :: fsync
     end function fsync
 
     ! For float parsing only!
     function sscanf(str, fmt, val) bind(C, name="sscanf")
         use iso_c_binding, only : c_int, c_char, c_float
         integer(kind=c_int) :: sscanf
-        character(kind=c_char,len=1), dimension(*),intent(in)  :: str, fmt
-        real(kind=c_float),                        intent(out) :: val
+        character(kind=c_char,len=1),              dimension(*),intent(in) :: str, fmt
+        real(kind=c_float),                        intent(out)             :: val
     end function sscanf
 
 end interface
@@ -98,8 +98,8 @@ interface
     function isdir(dirname, str_len) bind(C, name="isdir")
         import
         integer(c_int) :: isdir
-        character(c_char),dimension(*),intent(in)  ::  dirname
-        integer(c_int), intent(in) :: str_len
+        character(c_char),dimension(*),intent(in)  :: dirname
+        integer(c_int),   intent(in)               :: str_len
     end function isdir
 
     function makedir(dirname, str_len) bind(C, name="makedir")
@@ -113,20 +113,20 @@ interface
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: removedir
-        character(c_char),dimension(*),intent(in)  ::  dirname
-        integer(c_int), intent(in) :: str_len
-        integer(c_int), intent(inout) :: count
+        character(c_char),dimension(*),intent(in)  :: dirname
+        integer(c_int),   intent(in)               :: str_len
+        integer(c_int),   intent(inout)            :: count
     end function removedir
 
     function list_dirs(path, str_len, list_fout, str_len_fout, count) bind(c,name="list_dirs")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: list_dirs                                 !> return success
-        character(kind=c_char,len=1),dimension(*),intent(in):: path !> input pathname
-        integer(c_int), intent(in)    :: str_len                    !> input pathname string length
-        character(kind=c_char,len=1),dimension(*),intent(in):: list_fout !> output list string file name
-        integer(c_int), intent(in)    :: str_len_fout               !> output list file name string length
-        integer(c_int), intent(inout) :: count                      !> return number of elements in results
+        character(kind=c_char,len=1),dimension(*),intent(in) :: path         !> input pathname
+        integer(c_int),              intent(in)              :: str_len      !> input pathname string length
+        character(kind=c_char,len=1),dimension(*),intent(in) :: list_fout    !> output list string file name
+        integer(c_int),              intent(in)              :: str_len_fout !> output list file name string length
+        integer(c_int),              intent(inout)           :: count        !> return number of elements in results
     end function list_dirs
 
     function wait_pid(pid) bind(c,name="wait_pid")
@@ -141,7 +141,7 @@ interface
         implicit none
         integer(c_int) :: touch                                       !> return success of touch
         character(kind=c_char,len=1),dimension(*),intent(in) :: filename
-        integer(c_int), intent(in) :: len
+        integer(c_int),              intent(in)              :: len
     end function touch
 
     function get_absolute_pathname(infile, inlen, outfile, outlen) bind(c,name="get_absolute_pathname")
@@ -149,9 +149,9 @@ interface
         implicit none
         integer(c_int) :: get_absolute_pathname                             !> return status
         character(kind=c_char,len=1),dimension(*),intent(in)    :: infile   !> input pathname
-        integer(c_int), intent(in)  :: inlen                                !> input pathname string length
+        integer(c_int),              intent(in)                 :: inlen    !> input pathname string length
         character(kind=c_char,len=1),dimension(*),intent(inout) :: outfile  !> output pathname
-        integer(c_int), intent(out) :: outlen                               !> output pathname string length
+        integer(c_int),              intent(out)                :: outlen   !> output pathname string length
     end function get_absolute_pathname
 
     function get_sysinfo(HWM, totRAM, shRAM, bufRAM, peakBuf) bind(c,name="get_sysinfo")
@@ -170,7 +170,7 @@ interface
         implicit none
         integer(c_int) :: fs_is_rotational_c                                 !> 1 rotational, 0 solid state, -1 unknown
         character(kind=c_char,len=1),dimension(*),intent(in) :: path         !> path on the filesystem of interest
-        integer(c_int), intent(in) :: len                                    !> path string length
+        integer(c_int),              intent(in)              :: len          !> path string length
     end function fs_is_rotational_c
 
     function fs_avail_bytes_c(path, len) bind(c,name="simple_fs_avail_bytes")
@@ -178,7 +178,7 @@ interface
         implicit none
         integer(c_long_long) :: fs_avail_bytes_c                             !> available bytes, -1 unknown
         character(kind=c_char,len=1),dimension(*),intent(in) :: path         !> path on the filesystem of interest
-        integer(c_int), intent(in) :: len                                    !> path string length
+        integer(c_int),              intent(in)              :: len          !> path string length
     end function fs_avail_bytes_c
 
     function get_peak_rss_bytes() bind(c,name="simple_peak_rss_bytes")
@@ -210,13 +210,13 @@ interface
         import :: c_char, c_int
         character(kind=c_char), dimension(*), intent(in) :: path
         integer(c_int), value :: len
-        integer(c_int) :: ro_open_c
+        integer(c_int)        :: ro_open_c
     end function ro_open_c
 
     function ro_close(fd) bind(c,name="simple_ro_close")
         import :: c_int
         integer(c_int), value :: fd
-        integer(c_int) :: ro_close
+        integer(c_int)        :: ro_close
     end function ro_close
 
     !> all n bytes at offset off into buf: bytes read (fewer only at end of file) or -errno
@@ -225,7 +225,7 @@ interface
         integer(c_int),     value :: fd
         type(c_ptr),        value :: buf
         integer(c_int64_t), value :: n, off
-        integer(c_int64_t) :: pread_full
+        integer(c_int64_t)        :: pread_full
     end function pread_full
 
     !> readahead hint: 0 given, 1 not available on the platform, -errno
@@ -233,7 +233,7 @@ interface
         import :: c_int, c_int64_t
         integer(c_int),     value :: fd
         integer(c_int64_t), value :: off, len
-        integer(c_int) :: fadvise_willneed
+        integer(c_int)            :: fadvise_willneed
     end function fadvise_willneed
 
     function open_fd_count() bind(c,name="simple_open_fd_count")
@@ -244,7 +244,7 @@ interface
     function set_open_files_limit(nmax) bind(c,name="simple_set_open_files_limit")
         import :: c_int
         integer(c_int), value :: nmax
-        integer(c_int) :: set_open_files_limit
+        integer(c_int)        :: set_open_files_limit
     end function set_open_files_limit
 
     !> unit-test hooks: at most max_chunk bytes per read call, an EINTR every eintr_every calls, no advice
@@ -265,7 +265,7 @@ interface
         import :: c_ptr, c_int64_t
         type(c_ptr),        value :: h
         integer(c_int64_t), value :: nbytes
-        type(c_ptr) :: prefetch_window
+        type(c_ptr)               :: prefetch_window
     end function prefetch_window
 
     function prefetch_submit(h, fd, off, n, dst) bind(c,name="simple_prefetch_submit")
@@ -273,14 +273,14 @@ interface
         type(c_ptr),        value :: h, dst
         integer(c_int),     value :: fd
         integer(c_int64_t), value :: off, n
-        integer(c_int) :: prefetch_submit
+        integer(c_int)            :: prefetch_submit
     end function prefetch_submit
 
     function prefetch_wait(h, id) bind(c,name="simple_prefetch_wait")
         import :: c_ptr, c_int, c_int64_t
         type(c_ptr),    value :: h
         integer(c_int), value :: id
-        integer(c_int64_t) :: prefetch_wait
+        integer(c_int64_t)    :: prefetch_wait
     end function prefetch_wait
 
     subroutine prefetch_drain(h) bind(c,name="simple_prefetch_drain")
@@ -309,7 +309,7 @@ interface
         integer(c_int) :: memory_monitor_report_c
         character(kind=c_char,len=1), dimension(*), intent(in) :: phase
         integer(c_int), value :: phase_length
-        real(c_double), intent(out) :: elapsed
+        real(c_double),     intent(out) :: elapsed
         integer(c_int64_t), intent(out) :: current_rss, peak_rss
     end function memory_monitor_report_c
 
@@ -318,7 +318,7 @@ interface
         use, intrinsic :: iso_c_binding, only: c_double, c_int, c_int64_t
         implicit none
         integer(c_int) :: memory_monitor_stop_c
-        real(c_double), intent(out) :: elapsed
+        real(c_double),     intent(out) :: elapsed
         integer(c_int64_t), intent(out) :: current_rss, peak_rss
     end function memory_monitor_stop_c
 
@@ -327,7 +327,7 @@ interface
         implicit none
         integer(c_int) :: simple_redirect_output_c
         character(kind=c_char,len=1),dimension(*),intent(in) :: filename
-        integer(c_int), intent(in) :: len
+        integer(c_int),              intent(in)              :: len
     end function simple_redirect_output_c
 
     function simple_restore_output_c() bind(c,name="simple_restore_output")
@@ -341,9 +341,9 @@ interface
         implicit none
         integer(c_int) :: regexp_match
         character(kind=c_char,len=1),dimension(*),intent(in)    :: source  !> input string
-        integer(c_int), intent(in) :: src_len
+        integer(c_int),              intent(in)                 :: src_len
         character(kind=c_char,len=1),dimension(*),intent(in)    :: regex   !> input RE string
-        integer(c_int), intent(in) :: rgx_len
+        integer(c_int),              intent(in)                 :: rgx_len
     end function
 
 end interface
@@ -351,24 +351,24 @@ end interface
 ! Particle I/O concurrency, memoized per device by io_read_nstreams. A run can span
 ! devices -- slow disk for the particle stacks, fast one for the cache -- so the
 ! verdict is keyed on st_dev rather than being a single process-wide value.
-integer, parameter :: MAX_IO_DEVS = 8
-integer :: io_dev_ids(MAX_IO_DEVS)  = -1
-integer :: io_dev_caps(MAX_IO_DEVS) = 0
-integer :: n_io_devs                = 0
-logical :: l_io_env_probed          = .false.
-integer :: io_nstreams_env          = 0
-logical :: l_io_rot_notice_emitted  = .false.
+integer, parameter :: MAX_IO_DEVS              = 8
+integer            :: io_dev_ids(MAX_IO_DEVS)  = -1
+integer            :: io_dev_caps(MAX_IO_DEVS) = 0
+integer            :: n_io_devs                = 0
+logical            :: l_io_env_probed          = .false.
+integer            :: io_nstreams_env          = 0
+logical            :: l_io_rot_notice_emitted  = .false.
 
 contains
 
     subroutine exec_cmdline( cmdline, waitflag, suppress_errors, exitstat)
-        class(*),          intent(in)  :: cmdline
-        logical, optional, intent(in)  :: waitflag, suppress_errors
-        integer, optional, intent(out) :: exitstat
+        class(*),          intent(in)            :: cmdline
+        logical,           optional, intent(in)  :: waitflag, suppress_errors
+        integer,           optional, intent(out) :: exitstat
         character(len=:), allocatable  :: cmdstr
-        character(len=100) ::errmsg
-        integer ::  cstat, exec_stat
-        logical :: l_doprint, wwait, l_suppress_errors
+        character(len=100)             :: errmsg
+        integer                        :: cstat, exec_stat
+        logical                        :: l_doprint, wwait, l_suppress_errors
         l_doprint = .false.
         wwait     = .true.
         l_suppress_errors = .false.
@@ -424,7 +424,7 @@ contains
     subroutine redirect_stdout_stderr( output_file )
         class(*), intent(in) :: output_file
         character(kind=c_char,len=XLONGSTRLEN) :: filename_c
-        integer :: filename_len, status
+        integer                                :: filename_len, status
         select type(output_file)
             type is(string)
                 filename_len = output_file%strlen_trim()
@@ -463,9 +463,9 @@ contains
     !! variable that may be absent (a partition, an e-mail address with a default) is read with
     !! silent=.true., so that its absence is not reported as if it were missing
     function simple_getenv( name , status, silent )  result( envval )
-        character(len=*),  intent(in)  :: name
-        integer,           intent(out) :: status
-        logical, optional, intent(in)  :: silent
+        character(len=*),  intent(in)           :: name
+        integer,           intent(out)          :: status
+        logical,           optional, intent(in) :: silent
         type(string)               :: envval
         character(len=XLONGSTRLEN) :: retval
         integer                    :: length
@@ -528,9 +528,9 @@ contains
     !!  A property of the storage, not the CPU, so never nthr_glob: concurrent readers thrash a
     !!  spinning disk. The cap is memoized per device; SIMPLE_IO_NSTREAMS overrides every device.
     function io_read_nstreams( fname, nreq, report ) result( nstreams )
-        class(*), intent(in) :: fname
-        integer,  intent(in) :: nreq
-        logical, optional, intent(in) :: report
+        class(*), intent(in)           :: fname
+        integer,  intent(in)           :: nreq
+        logical,  optional, intent(in) :: report
         integer :: nstreams
         logical :: l_report
         l_report = .true.
@@ -544,7 +544,7 @@ contains
         logical,  intent(in) :: report
         integer, allocatable :: statbuf(:)
         character(len=32)    :: envval
-        integer :: cap, idev, ival, envlen, envstat, devid, stat_status
+        integer              :: cap, idev, ival, envlen, envstat, devid, stat_status
         ! environment override, resolved once and applied to every device
         if( .not. l_io_env_probed )then
             l_io_env_probed = .true.
@@ -658,12 +658,12 @@ contains
 
     !> \brief  Rename or move file; an existing fileout is replaced atomically (rename(2)), never absent
     subroutine simple_rename( filein, fileout, overwrite )
-        class(*),          intent(in) :: filein, fileout !< input filename
-        logical, optional, intent(in) :: overwrite       !< ignored: the replacement is always atomic (one caller
+        class(*),          intent(in)           :: filein, fileout !< input filename
+        logical,           optional, intent(in) :: overwrite       !< ignored: the replacement is always atomic (one caller
                                                          !! in simple_commanders_solve3D.f90 still passes it)
         character(kind=c_char, len=:), allocatable :: f1, f2
         character(len=:),              allocatable :: msg
-        integer :: file_status
+        integer                                    :: file_status
         if( .not. file_exists(filein) ) THROW_ERROR("designated input file does not exist")
         select type(filein)
             type is(string)
@@ -692,10 +692,10 @@ contains
 
     !> Flush a named file through the operating system. The file must already exist.
     subroutine simple_sync_file( file, status )
-        class(*),         intent(in)  :: file
-        integer, optional, intent(out) :: status
+        class(*),         intent(in)            :: file
+        integer,          optional, intent(out) :: status
         character(kind=c_char, len=:), allocatable :: path
-        integer(c_int) :: cstat
+        integer(c_int)                             :: cstat
         call syslib_c_path(file, path)
         cstat = c_sync_file_path(path)
         if( present(status) )then
@@ -707,10 +707,10 @@ contains
 
     !> Flush directory metadata after an atomic publication.
     subroutine simple_sync_dir( directory, status )
-        class(*),         intent(in)  :: directory
-        integer, optional, intent(out) :: status
+        class(*),         intent(in)            :: directory
+        integer,          optional, intent(out) :: status
         character(kind=c_char, len=:), allocatable :: path
-        integer(c_int) :: cstat
+        integer(c_int)                             :: cstat
         call syslib_c_path(directory, path)
         cstat = c_sync_directory_path(path)
         if( present(status) )then
@@ -722,10 +722,10 @@ contains
 
     !> Atomically replace destination with source without deleting destination first.
     subroutine simple_atomic_replace( source, destination, status )
-        class(*),         intent(in)  :: source, destination
-        integer, optional, intent(out) :: status
+        class(*),         intent(in)            :: source, destination
+        integer,          optional, intent(out) :: status
         character(kind=c_char, len=:), allocatable :: src, dst
-        integer(c_int) :: cstat
+        integer(c_int)                             :: cstat
         if( .not. file_exists(source) )then
             if( present(status) )then
                 status = 1
@@ -744,7 +744,7 @@ contains
     end subroutine simple_atomic_replace
 
     subroutine syslib_c_path( input_path, output_path )
-        class(*), intent(in) :: input_path
+        class(*),                      intent(in)               :: input_path
         character(kind=c_char, len=:), allocatable, intent(out) :: output_path
         select type(input_path)
             type is(string)
@@ -774,9 +774,9 @@ contains
 
     !>  Wrapper for POSIX system call stat
     subroutine simple_file_stat( filename, status, buffer)
-        class(*),             intent(in)    :: filename
-        integer,              intent(inout) :: status
-        integer, allocatable, intent(inout) :: buffer(:)  !< POSIX stat struct
+        class(*),             intent(in)                 :: filename
+        integer,              intent(inout)              :: status
+        integer,              allocatable, intent(inout) :: buffer(:) !< POSIX stat struct
         if( allocated(buffer) ) deallocate(buffer)
         allocate(buffer(13), source=0)
         select type(filename)
@@ -855,7 +855,7 @@ contains
     subroutine simple_getcwd( cwd )
         class(string), intent(inout) :: cwd
         character(len=XLONGSTRLEN)   :: cwd_tmp
-        integer :: io_status
+        integer                      :: io_status
         io_status = getcwd(cwd_tmp)
         if(io_status /= 0)then
             call simple_error_check(io_status, "syslib:: simple_getcwd failed to get path "//trim(cwd_tmp))
@@ -867,8 +867,8 @@ contains
     !> \brief  Change working directory
     !! return optional status 0=success
     subroutine simple_chdir( newd, status )
-        class(*),          intent(in)  :: newd   !< target pathname
-        integer, optional, intent(out) :: status
+        class(*),          intent(in)            :: newd !< target pathname
+        integer,           optional, intent(out) :: status
         type(string) :: targetdir
         integer      :: io_status
         logical      :: dir_e
@@ -898,14 +898,14 @@ contains
 
     !> \brief  Make directory
     subroutine simple_mkdir( dir, verbose )
-        class(*),          intent(in) :: dir
-        logical, optional, intent(in) :: verbose
-        logical, parameter :: ignore_here = .false.
+        class(*),          intent(in)           :: dir
+        logical,           optional, intent(in) :: verbose
+        logical,                       parameter   :: ignore_here = .false.
         character(kind=c_char, len=:), allocatable :: path
-        character(len=:), allocatable :: tmpdir
-        type(string) :: tmpdir_str, path_str
-        integer      :: io_status, lenstr
-        logical      :: l_verbose
+        character(len=:),              allocatable :: tmpdir
+        type(string)                               :: tmpdir_str, path_str
+        integer                                    :: io_status, lenstr
+        logical                                    :: l_verbose
         l_verbose = .true.
         if( present(verbose) ) l_verbose = verbose
         select type(dir)
@@ -944,10 +944,10 @@ contains
 
     !> Remove a directory tree or root symlink without following links; a missing root is a successful no-op.
     subroutine simple_rmdir( d, status )
-        class(*),          intent(in)  :: d
-        integer, optional, intent(out) :: status
+        class(*),          intent(in)            :: d
+        integer,           optional, intent(out) :: status
         character(kind=c_char,len=:), allocatable :: path
-        integer :: io_status, length, count
+        integer                                   :: io_status, length, count
         select type(d)
             type is(string)
                 allocate(path, source=d%to_char()//c_null_char)
@@ -969,15 +969,15 @@ contains
     !! return optional status 0=success for removed file or file not present;
     !! return non-zero status for unlink errors.
     subroutine simple_rmfile( f, status )
-        class(*),          intent(in)  :: f
-        integer, optional, intent(out) :: status
+        class(*),          intent(in)            :: f
+        integer,           optional, intent(out) :: status
 
 #if defined(_WIN32) 
         call del_file(f)
         if (present(status)) status = 0
 #else
         character(kind=c_char,len=:), allocatable :: path
-        integer :: io_status, err
+        integer                                   :: io_status, err
         io_status = 0
         select type(f)
             type is(string)
@@ -1005,8 +1005,8 @@ contains
 
     !> ensure C-strings get converted to fortran-style strings
     subroutine syslib_c2fortran_string( str, len )
-        character(len=*), intent(inout) :: str
-        integer, intent(out), optional :: len
+        character(len=*), intent(inout)         :: str
+        integer,          intent(out), optional :: len
         integer :: l
         l = index(str, char(0))
         if(present(len)) len = l-1
@@ -1015,10 +1015,10 @@ contains
 
     ! Read-only discovery: an existing numbered run takes precedence over the current directory.
     subroutine resolve_project_files( directory, previous_dir, next_dir, projects )
-        class(string), intent(in)              :: directory
-        type(string), intent(out)              :: previous_dir
-        integer, intent(out)                   :: next_dir
-        type(string), allocatable, intent(out) :: projects(:)
+        class(string), intent(in)               :: directory
+        type(string),  intent(out)              :: previous_dir
+        integer,       intent(out)              :: next_dir
+        type(string),  allocatable, intent(out) :: projects(:)
         next_dir = find_next_int_dir_prefix(directory, previous_dir)
         if( previous_dir%is_allocated() )then
             call simple_list_files(previous_dir%to_char()//'/*.simple', projects)
@@ -1028,14 +1028,14 @@ contains
     end subroutine resolve_project_files
 
     function find_next_int_dir_prefix( dir2list, last_prev_dir ) result( next_int_dir_prefix )
-        class(string),           intent(in)  :: dir2list
-        class(string), optional, intent(out) :: last_prev_dir
+        class(string),           intent(in)            :: dir2list
+        class(string),           optional, intent(out) :: last_prev_dir
         character(len=:), allocatable :: str
         type(string),     allocatable :: dirs(:)
         logical,          allocatable :: nrmap(:)
         integer,          allocatable :: dirinds(:)
-        integer :: i, j, last_nr_ind
-        integer :: next_int_dir_prefix, ndirs, loc(1)
+        integer                       :: i, j, last_nr_ind
+        integer                       :: next_int_dir_prefix, ndirs, loc(1)
         dirs = simple_list_dirs(dir2list)
         last_nr_ind = 1
         if( allocated(dirs) )then
@@ -1069,13 +1069,13 @@ contains
     end function find_next_int_dir_prefix
 
     function simple_list_dirs( path, status ) result( list )
-        class(*),          intent(in)  :: path
-        integer, optional, intent(out) :: status
+        class(*),          intent(in)            :: path
+        integer,           optional, intent(out) :: status
         type(string),                 allocatable :: list(:)
         character(kind=c_char,len=:), allocatable :: pathhere
-        character(len=XLONGSTRLEN) :: buffer
-        type(string) :: list_fname
-        integer      :: stat, i,num_dirs, luntmp, pid
+        character(len=XLONGSTRLEN)                :: buffer
+        type(string)                              :: list_fname
+        integer                                   :: stat, i,num_dirs, luntmp, pid
         select type(path)
             type is(string)
                 allocate(pathhere, source=path%to_char()//c_null_char)
@@ -1101,8 +1101,8 @@ contains
     end function simple_list_dirs
 
     subroutine simple_list_files( pattern, list )
-        character(len=*),          intent(in)    :: pattern
-        type(string), allocatable, intent(inout) :: list(:)
+        character(len=*),          intent(in)                 :: pattern
+        type(string),              allocatable, intent(inout) :: list(:)
         character(len=XLONGSTRLEN) :: buffer
         type(string)               :: cmd, tmpfile
         integer                    :: sz, funit, ios, i, nlines, pid
@@ -1152,15 +1152,15 @@ contains
     end subroutine simple_list_files
 
     subroutine simple_list_files_regexp( dir, regexp, list, chronological )
-        class(string),             intent(in)    :: dir
-        character(len=*),          intent(in)    :: regexp
-        type(string), allocatable, intent(inout) :: list(:)
-        logical, optional,         intent(in)    :: chronological
+        class(string),             intent(in)                   :: dir
+        character(len=*),          intent(in)                   :: regexp
+        type(string),              allocatable, intent(inout)   :: list(:)
+        logical,                   optional,         intent(in) :: chronological
         type(string)                  :: cmd, tmpfile
         character(len=1)              :: junk
         character(len=XLONGSTRLEN)    :: buffer
-        integer :: sz, funit, ios, i, nlines
-        logical :: l_chrono
+        integer                       :: sz, funit, ios, i, nlines
+        logical                       :: l_chrono
         if( len_trim(adjustl(regexp)) == 0) return
         l_chrono = .false.
         if( present(chronological) ) l_chrono = chronological
@@ -1241,14 +1241,14 @@ contains
     end function get_process_id
 
     function simple_abspath( infile, status, check_exists ) result( absolute_name )
-        class(*),          intent(in)  :: infile
-        integer, optional, intent(out) :: status
-        logical, optional, intent(in)  :: check_exists
+        class(*),          intent(in)            :: infile
+        integer,           optional, intent(out) :: status
+        logical,           optional, intent(in)  :: check_exists
         character(kind=c_char,len=XLONGSTRLEN) :: infilename_c
         character(kind=c_char,len=XLONGSTRLEN) :: outfilename_c
-        type(string) :: absolute_name
-        integer      :: lengthin,  lengthout, status_here
-        logical      :: check_exists_here
+        type(string)                           :: absolute_name
+        integer                                :: lengthin,  lengthout, status_here
+        logical                                :: check_exists_here
         check_exists_here = .true.
         if( present(check_exists) )check_exists_here = check_exists
         select type(infile)
@@ -1298,9 +1298,9 @@ contains
     end function simple_abspath
 
     subroutine print_slurm_env()
-        character(len=255) :: env_value
+        character(len=255)             :: env_value
         character(len=63), allocatable :: env_vars(:);
-        integer :: i, stat, len
+        integer                        :: i, stat, len
         len = 63
         allocate (env_vars(7))
         env_vars = [character(len=63) :: "slurm_jobid", "slurm_job_user", "slurm_job_cpus_per_node", "slurm_mem_per_cpu", "slurmd_nodename", "slurm_job_account", "slurm_submit_dir"]

@@ -9,9 +9,9 @@ contains
         class(string),     intent(in)    :: stk
         type(ctfparams),   intent(in)    :: ctfvars ! All CTF parameters associated with stk
         type(ori)                     :: o
-        type(string)    :: stk_relpath, cwd
-        integer :: ldim(3), nptcls, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
-        integer :: i, fromp, top, pind
+        type(string)                  :: stk_relpath, cwd
+        integer                       :: ldim(3), nptcls, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
+        integer                       :: i, fromp, top, pind
         ! full path and existence check
         call simple_getcwd(cwd)
         stk_relpath = simple_abspath(stk)
@@ -205,8 +205,8 @@ contains
         class(oris),       intent(inout) :: os ! parameters associated with stktab
         integer,  allocatable :: nptcls_arr(:)
         type(ori)             :: o_ptcl, o_stk
-        integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
-        integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind, pind
+        integer               :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
+        integer               :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind, pind
         nstks = size(stkfnames)
         ! check that inputs are of conforming sizes
         n_os = os%get_noris()
@@ -331,10 +331,10 @@ contains
         class(oris),       intent(inout) :: os ! parameters associated with stktab
         integer,  allocatable :: nptcls_arr(:)
         type(ori)             :: o_ptcl, o_stk
-        integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
-        integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind, pind, os_ind
-        real      :: stack_phase, particle_phase, default_phase
-        logical   :: heterogeneous_phase, l_phase_from_os
+        integer               :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
+        integer               :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind, pind, os_ind
+        real                  :: stack_phase, particle_phase, default_phase
+        logical               :: heterogeneous_phase, l_phase_from_os
         nstks = size(stkfnames)
         n_os  = os%get_noris()
         ! Resolve the phase source once, on the caller's input. For a particle-typed
@@ -486,18 +486,18 @@ contains
     
     !>  Only commits to disk when a change to the project is made
     module subroutine split_stk( self, nparts, dir )
-        class(sp_project),       intent(inout) :: self
-        integer,                 intent(in)    :: nparts
-        class(string), optional, intent(in)    :: dir
+        class(sp_project),       intent(inout)        :: self
+        integer,                 intent(in)           :: nparts
+        class(string),           optional, intent(in) :: dir
         character(len=*), parameter   :: EXT = '.mrc'
         type(image)                   :: img
         type(ori)                     :: orig_stk
         type(stack_io)                :: stkio_w
         type(dstack_io)               :: dstkio_r
-        type(string) :: tmp_dir, stkpart, stkkind, dest_stkpart, stk_relpath, cwd, stk
-        real         :: smpd
-        integer      :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
-        integer      :: nptcls, nptcls_part, numlen
+        type(string)                  :: tmp_dir, stkpart, stkkind, dest_stkpart, stk_relpath, cwd, stk
+        real                          :: smpd
+        integer                       :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
+        integer                       :: nptcls, nptcls_part, numlen
         if( nparts < 2 )return
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
@@ -671,8 +671,8 @@ contains
     end subroutine write_substk_2
 
     module subroutine add_scale_tag( self, dir )
-        class(sp_project),       intent(inout) :: self
-        class(string), optional, intent(in)    :: dir
+        class(sp_project),       intent(inout)        :: self
+        class(string),           optional, intent(in) :: dir
         type(string) :: newname, stkname, abs_dir, nametmp, ext
         integer      :: imic, nmics, numlen
         nmics = self%os_stk%get_noris()
@@ -760,7 +760,7 @@ contains
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: imic
         type(string) :: stkname
-        integer :: nmics
+        integer      :: nmics
         nmics = self%os_stk%get_noris()
         if( imic < 1 .or. imic > nmics )then
             write(logfhandle,*) 'imic : ', imic
@@ -771,11 +771,11 @@ contains
     end function get_stkname
 
     module subroutine get_stkname_and_ind( self, oritype, iptcl, stkname, ind_in_stk )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        integer,                   intent(in)    :: iptcl
-        class(string),             intent(out)   :: stkname
-        integer,                   intent(out)   :: ind_in_stk
+        class(sp_project),         target, intent(inout) :: self
+        character(len=*),          intent(in)            :: oritype
+        integer,                   intent(in)            :: iptcl
+        class(string),             intent(out)           :: stkname
+        integer,                   intent(out)           :: ind_in_stk
         real    :: smpd
         integer :: stkind, ncls
         ! do the index mapping

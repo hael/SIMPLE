@@ -36,11 +36,11 @@ contains
 
     !> the fixture's inputs (64, 64 and 96 pixels, 3 channels) and PyTorch's logits: plain, averaged over the symmetries
     subroutine read_fixture( x1, x2, x3, lplain, lsym )
-        real(sp), allocatable, intent(out) :: x1(:,:,:), x2(:,:,:), x3(:,:,:)
-        real(sp),              intent(out) :: lplain(2,NFIX), lsym(2,NFIX)
+        real(sp),              allocatable, intent(out) :: x1(:,:,:), x2(:,:,:), x3(:,:,:)
+        real(sp),              intent(out)              :: lplain(2,NFIX), lsym(2,NFIX)
         character(len=512) :: line
-        integer  :: funit, ios, nin, nx, ny, nc, i, idx
-        real(sp) :: v(4)
+        integer            :: funit, ios, nin, nx, ny, nc, i, idx
+        real(sp)           :: v(4)
         open(newunit=funit, file=FIXTURE_DIR//'inputs.raw', access='stream', form='unformatted', status='old', iostat=ios)
         if( ios /= 0 ) THROW_HARD('missing fixture testdata/cavg_cnn/inputs.raw')
         read(funit) nin
@@ -81,11 +81,11 @@ contains
     !> the 3x3 convolution at strides 1 and 2 and the 1x1 at stride 2 against PyTorch's formula evaluated directly
     subroutine test_conv_brute_force( l_blas )
         logical, intent(in) :: l_blas
-        integer, parameter :: N = 9, CIN = 2, COUT = 3
-        real(sp) :: x(N*N, CIN), w(9*CIN, COUT), w1(CIN, COUT)
+        integer,  parameter   :: N = 9, CIN = 2, COUT = 3
+        real(sp)              :: x(N*N, CIN), w(9*CIN, COUT), w1(CIN, COUT)
         real(sp), allocatable :: y(:,:)
-        real(sp) :: ref, err
-        integer  :: stride, ny, co, oh0, ow0, ci, kh, kw, ih0, iw0, i
+        real(sp)              :: ref, err
+        integer               :: stride, ny, co, oh0, ow0, ci, kh, kw, ih0, iw0, i
         write(*,'(A,L1)') 'test_conv_brute_force, sgemm ', l_blas
         call set_fixed_seed(20261120)
         do ci = 1,CIN
@@ -144,10 +144,10 @@ contains
 
     !> a delta at the centre returns the flipped kernel around it, exactly
     subroutine test_conv_delta()
-        integer, parameter :: N = 7, D = 4
-        real(sp) :: x(N*N,1), w(9,1), expected(N*N)
+        integer,  parameter   :: N = 7, D = 4
+        real(sp)              :: x(N*N,1), w(9,1), expected(N*N)
         real(sp), allocatable :: y(:,:)
-        integer  :: ny, oh, ow
+        integer               :: ny, oh, ow
         write(*,'(A)') 'test_conv_delta'
         x = 0.
         x((D-1)*N + D, 1) = 1.
@@ -165,9 +165,9 @@ contains
     !> constant channels normalise to the bias; with unit weight and zero bias each group has mean 0 and variance 1
     subroutine test_group_norm()
         integer, parameter :: NP = 50, NC = 16
-        real(sp) :: a(NP,NC), g(NC), b(NC)
-        real(dp) :: mean, var
-        integer  :: c, i, grp, cg
+        real(sp)           :: a(NP,NC), g(NC), b(NC)
+        real(dp)           :: mean, var
+        integer            :: c, i, grp, cg
         write(*,'(A)') 'test_group_norm'
         call set_fixed_seed(20261121)
         cg = NC / CAVG_CNN_GROUPS
@@ -198,9 +198,9 @@ contains
     !! turn applied four times is the identity
     subroutine test_symmetries()
         integer, parameter :: N = 5
-        real(sp) :: x(N,N,1), y(N,N,1,0:7), t(N,N,1), r(N,N,1)
-        integer  :: i, j, s, s2, nfound
-        logical  :: distinct
+        real(sp)           :: x(N,N,1), y(N,N,1,0:7), t(N,N,1), r(N,N,1)
+        integer            :: i, j, s, s2, nfound
+        logical            :: distinct
         write(*,'(A)') 'test_symmetries'
         do j = 1,N
             do i = 1,N
@@ -242,10 +242,10 @@ contains
     !> PyTorch's logits of the committed fixture, plain and averaged over the symmetries, with either product
     subroutine test_fixture_parity( l_blas )
         logical, intent(in) :: l_blas
-        type(cavg_cnn) :: net
+        type(cavg_cnn)        :: net
         real(sp), allocatable :: x1(:,:,:), x2(:,:,:), x3(:,:,:)
-        real(sp) :: lplain(2,NFIX), lsym(2,NFIX), l(2), dplain, dsym
-        integer  :: i
+        real(sp)              :: lplain(2,NFIX), lsym(2,NFIX), l(2), dplain, dsym
+        integer               :: i
         write(*,'(A,L1)') 'test_fixture_parity, sgemm ', l_blas
         call read_fixture(x1, x2, x3, lplain, lsym)
         call net%new(string(FIXTURE_DIR//'weights.raw'))
@@ -281,10 +281,10 @@ contains
     !> the averaged logits do not depend on the input's orientation; the plain logits do (a transposed input misses
     !! PyTorch's by far more than T1, so the parity above checks the orientation)
     subroutine test_symmetry_average_invariance()
-        type(cavg_cnn) :: net
+        type(cavg_cnn)        :: net
         real(sp), allocatable :: x1(:,:,:), x2(:,:,:), x3(:,:,:), xt(:,:,:)
-        real(sp) :: lplain(2,NFIX), lsym(2,NFIX), l(2)
-        integer  :: c
+        real(sp)              :: lplain(2,NFIX), lsym(2,NFIX), l(2)
+        integer               :: c
         write(*,'(A)') 'test_symmetry_average_invariance'
         call read_fixture(x1, x2, x3, lplain, lsym)
         call net%new(string(FIXTURE_DIR//'weights.raw'))
@@ -302,12 +302,12 @@ contains
     !> predict's probabilities follow from the averaged logits (P(protein) = sigmoid(l1), P(ss | protein) =
     !! sigmoid(l2)), and are the same bit for bit at one thread and in a team of three
     subroutine test_predict()
-        integer, parameter :: NTEAM = 3
-        type(cavg_cnn) :: net
+        integer,  parameter   :: NTEAM = 3
+        type(cavg_cnn)        :: net
         real(sp), allocatable :: x1(:,:,:), x2(:,:,:), x3(:,:,:), xb(:,:,:,:)
-        real(sp) :: lplain(2,NFIX), lsym(2,NFIX)
-        real(dp) :: p1(3,2), pn(3,2), pp, ps, expected(3)
-        integer  :: i, nthr_prev, limit, nteam_run
+        real(sp)              :: lplain(2,NFIX), lsym(2,NFIX)
+        real(dp)              :: p1(3,2), pn(3,2), pp, ps, expected(3)
+        integer               :: i, nthr_prev, limit, nteam_run
         write(*,'(A)') 'test_predict'
         call read_fixture(x1, x2, x3, lplain, lsym)
         call net%new(string(FIXTURE_DIR//'weights.raw'))
@@ -352,13 +352,13 @@ contains
 
     !> the reader refuses a file cut short, a wrong version, a wrong magic and data after the last tensor
     subroutine test_reader_refusals()
-        character(len=*), parameter :: TMP = 'tmp_cavg_cnn_tester_weights.bin'
-        type(cavg_cnn) :: net
+        character(len=*), parameter   :: TMP = 'tmp_cavg_cnn_tester_weights.bin'
+        type(cavg_cnn)                :: net
         character(len=:), allocatable :: msg
-        integer(int32), allocatable :: bytes(:)
-        integer(int64) :: word
-        integer :: funit, ios, nbytes, nwords
-        logical :: ok
+        integer(int32),   allocatable :: bytes(:)
+        integer(int64)                :: word
+        integer                       :: funit, ios, nbytes, nwords
+        logical                       :: ok
         write(*,'(A)') 'test_reader_refusals'
         inquire(file=FIXTURE_DIR//'weights.raw', size=nbytes)
         nwords = nbytes / 4

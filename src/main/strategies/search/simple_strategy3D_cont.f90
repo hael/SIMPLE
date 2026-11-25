@@ -27,22 +27,22 @@ private
 
 type, extends(strategy3D) :: strategy3D_cont
     private
-    class(parameters), pointer :: p_ptr => null()
-    class(builder),    pointer :: b_ptr => null()
-    type(cartft_pose_opt) :: opt                    !< the optimizer of this particle's search
-    type(ori)             :: seed_ori               !< the stored pose, the transaction seed
-    type(ori)             :: result_ori             !< the seed, or the accepted pose
-    integer               :: status = CARTFT_NOT_ATTEMPTED
-    real                  :: score  = 0.            !< corr_cart: at the result, at the seed when rejected
-    integer               :: npix   = 0             !< pixels per evaluation of the particle's slot
-    logical               :: searched = .false.
-    logical               :: exists   = .false.
+    class(parameters), pointer :: p_ptr    => null()
+    class(builder),    pointer :: b_ptr    => null()
+    type(cartft_pose_opt)      :: opt               !< the optimizer of this particle's search
+    type(ori)                  :: seed_ori          !< the stored pose, the transaction seed
+    type(ori)                  :: result_ori        !< the seed, or the accepted pose
+    integer                    :: status   = CARTFT_NOT_ATTEMPTED
+    real                       :: score    = 0.     !< corr_cart: at the result, at the seed when rejected
+    integer                    :: npix     = 0      !< pixels per evaluation of the particle's slot
+    logical                    :: searched = .false.
+    logical                    :: exists   = .false.
 contains
-    procedure :: new         => new_cont
-    procedure :: srch        => srch_cont
-    procedure :: oris_assign => oris_assign_cont
-    procedure :: add_work    => add_work_cont
-    procedure :: kill        => kill_cont
+    procedure          :: new         => new_cont
+    procedure          :: srch        => srch_cont
+    procedure          :: oris_assign => oris_assign_cont
+    procedure          :: add_work    => add_work_cont
+    procedure          :: kill        => kill_cont
     procedure, private :: bind
 end type strategy3D_cont
 
@@ -96,8 +96,8 @@ contains
     !! workflow left in the project. THROW_HARD naming the requirement otherwise, or when no
     !! particle is active.
     subroutine check_cont_seeds( os, selected )
-        class(oris), intent(in) :: os
-        logical, optional, intent(in) :: selected(:)
+        class(oris), intent(in)           :: os
+        logical,     optional, intent(in) :: selected(:)
         type(ori) :: seed
         integer   :: iptcl, nactive, ninvalid
         if( present(selected) )then
@@ -145,9 +145,9 @@ contains
     end subroutine new_cont
 
     subroutine bind( self, params, build )
-        class(strategy3D_cont),    intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(builder),    target, intent(in)    :: build
+        class(strategy3D_cont),    intent(inout)      :: self
+        class(parameters),         target, intent(in) :: params
+        class(builder),            target, intent(in) :: build
         self%p_ptr => params
         self%b_ptr => build
     end subroutine bind
@@ -159,10 +159,10 @@ contains
         class(strategy3D_cont), intent(inout) :: self
         class(oris),            intent(inout) :: os
         integer,                intent(in)    :: ithr
-        real(dp) :: objective_before, objective_after
+        real(dp)              :: objective_before, objective_after
         real(dp), allocatable :: shell_residual(:)
-        integer  :: islot, state
-        logical  :: iseven
+        integer               :: islot, state
+        logical               :: iseven
         if( .not. self%exists ) THROW_HARD('strategy3D_cont used before new')
         if( ithr < 1 ) THROW_HARD('strategy3D_cont received an invalid thread index')
         if( os%get_state(self%spec%iptcl) <= 0 )then

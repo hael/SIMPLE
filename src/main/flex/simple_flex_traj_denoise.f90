@@ -22,22 +22,22 @@ private
 #include "simple_local_flags.inc"
 
 real(dp), parameter :: TAUS(10)  = [0.d0, 0.25d0, 0.5d0, 1.d0, 2.d0, 4.d0, 8.d0, 16.d0, 32.d0, -1.d0] !< noise units; < 0: none
-integer,  parameter :: RANKS(8)  = [1, 2, 4, 8, 16, 32, 64, 128]   !< latent ranks tried, up to the models'
-real(dp), parameter :: HS(8)     = [2.d0, 4.d0, 8.d0, 16.d0, 32.d0, 64.d0, 128.d0, -1.d0] !< frames; < 0: none
-integer,  parameter :: BLOCKSZ   = 10       !< frames per block when the sets are windows
-integer,  parameter :: NVMAX     = 1000     !< validation frames per set, at most
-integer,  parameter :: NQMAX     = 1000     !< held-out coefficients per coefficient set, at most
-integer,  parameter :: NMIN      = 12       !< fewest frames a set needs for the models
-real(dp), parameter :: RIDGE     = 1.d-6    !< ridge of the ML latent system, relative to its largest diagonal
-real(dp), parameter :: WIENER    = 0.1d0    !< CV prediction denominator + this
-real(dp), parameter :: LWMIN     = -46.d0   !< log weights this far below the largest are zero
-real(dp), parameter :: SNR_BAND  = 0.1d0    !< derived fit band: up to the last shell whose spectral SNR reaches this
-integer,  parameter :: KBAND_MIN = 6        !< derived fit band: at least this many shells
-integer,  parameter :: CHUNK     = 128      !< coefficients per matrix product of the pre-images (one per thread)
-integer,  parameter :: NVB_MIN   = 16       !< validation frames per CV block, at least (one block per thread)
-integer,  parameter :: NVB_MAX   = 64       !< and at most (bounds a thread's kernel block)
-integer,  parameter :: LIBCOLS   = 1024     !< threaded BLAS: columns of a CV product (validation frames x bandwidths)
-integer,  parameter :: LIBCHUNK  = 512      !< threaded BLAS: coefficients per pre-image product
+integer,  parameter :: RANKS(8)  = [1, 2, 4, 8, 16, 32, 64, 128]                                      !< latent ranks tried, up to the models'
+real(dp), parameter :: HS(8)     = [2.d0, 4.d0, 8.d0, 16.d0, 32.d0, 64.d0, 128.d0, -1.d0]             !< frames; < 0: none
+integer,  parameter :: BLOCKSZ   = 10                                                                 !< frames per block when the sets are windows
+integer,  parameter :: NVMAX     = 1000                                                               !< validation frames per set, at most
+integer,  parameter :: NQMAX     = 1000                                                               !< held-out coefficients per coefficient set, at most
+integer,  parameter :: NMIN      = 12                                                                 !< fewest frames a set needs for the models
+real(dp), parameter :: RIDGE     = 1.d-6                                                              !< ridge of the ML latent system, relative to its largest diagonal
+real(dp), parameter :: WIENER    = 0.1d0                                                              !< CV prediction denominator + this
+real(dp), parameter :: LWMIN     = -46.d0                                                             !< log weights this far below the largest are zero
+real(dp), parameter :: SNR_BAND  = 0.1d0                                                              !< derived fit band: up to the last shell whose spectral SNR reaches this
+integer,  parameter :: KBAND_MIN = 6                                                                  !< derived fit band: at least this many shells
+integer,  parameter :: CHUNK     = 128                                                                !< coefficients per matrix product of the pre-images (one per thread)
+integer,  parameter :: NVB_MIN   = 16                                                                 !< validation frames per CV block, at least (one block per thread)
+integer,  parameter :: NVB_MAX   = 64                                                                 !< and at most (bounds a thread's kernel block)
+integer,  parameter :: LIBCOLS   = 1024                                                               !< threaded BLAS: columns of a CV product (validation frames x bandwidths)
+integer,  parameter :: LIBCHUNK  = 512                                                                !< threaded BLAS: coefficients per pre-image product
 
 ! whether the linked BLAS threads one product (probe_blas, once per run). A serial BLAS is called inside the OpenMP
 ! team, one product per thread; a threaded one (an OpenMP OpenBLAS, MKL, a pthreads OpenBLAS) from the serial region
@@ -55,8 +55,8 @@ logical, parameter :: L_BLAS_TEAM_SAFE = .false.
 
 !> a set's latents: ML latents of a model, noise-whitened (unit noise per coordinate), by decreasing scatter
 type whitened_latents
-    integer :: k = 0
-    logical :: ok = .false.
+    integer               :: k  = 0
+    logical               :: ok = .false.
     real(dp), allocatable :: zeta(:,:)   !< (m,k)
 end type whitened_latents
 
@@ -80,11 +80,11 @@ contains
         real(dp),    intent(out) :: ess(:)
         real(dp),    intent(out) :: choice(:,:)    !< (3,n) rank, tau, h per frame
         integer,     intent(out) :: kband
-        real(sp), allocatable :: s2(:), w(:)
-        logical,  allocatable :: fitmask(:), seta(:), setb(:)
-        integer,  allocatable :: times(:)
+        real(sp), allocatable   :: s2(:), w(:)
+        logical,  allocatable   :: fitmask(:), seta(:), setb(:)
+        integer,  allocatable   :: times(:)
         integer(timer_int_kind) :: t0
-        integer :: n, ncoeff, nsh, b, nb, nblock, c0, c1, ctr, lo, hi, t
+        integer                 :: n, ncoeff, nsh, b, nb, nblock, c0, c1, ctr, lo, hi, t
         n      = size(ym,2)
         ncoeff = size(ym,1)
         nsh    = maxval(shell)
@@ -137,12 +137,12 @@ contains
     !> per shell, the median over consecutive frame pairs of |y_t - y_t+1|^2 / 2 averaged over the shell's
     !! coefficients: model-free and robust to events; it includes the signal change between consecutive frames
     subroutine flex_traj_noise_spectrum( y, shell, nsh, s2 )
-        complex(sp),           intent(in)  :: y(:,:)
-        integer,               intent(in)  :: shell(:), nsh
-        real(sp), allocatable, intent(out) :: s2(:)
+        complex(sp),           intent(in)               :: y(:,:)
+        integer,               intent(in)               :: shell(:), nsh
+        real(sp),              allocatable, intent(out) :: s2(:)
         real(dp), allocatable :: pw(:,:)
         integer,  allocatable :: cnt(:)
-        integer :: n, t, j, sh
+        integer               :: n, t, j, sh
         n = size(y,2)
         allocate(s2(nsh), source=1.)
         if( n < 2 ) return
@@ -217,10 +217,10 @@ contains
         complex(sp), allocatable :: nuis(:,:)
         complex(dp), allocatable :: mu(:)
         logical,     allocatable :: even(:)
-        real(dp)    :: cv_best, cv_mean, zscore, tau, h
-        integer(timer_int_kind) :: t0
-        integer     :: m, ncoeff, kset, r, i
-        logical     :: l_lat
+        real(dp)                 :: cv_best, cv_mean, zscore, tau, h
+        integer(timer_int_kind)  :: t0
+        integer                  :: m, ncoeff, kset, r, i
+        logical                  :: l_lat
         m      = size(y,2)
         ncoeff = size(y,1)
         allocate(even(m))
@@ -300,9 +300,9 @@ contains
         real(dp),    allocatable :: A(:,:), S(:,:), bvec(:,:), z(:,:), l(:,:), linv(:,:), u(:,:), scat(:,:), v(:,:), d(:)
         real(dp),    allocatable :: e(:), ubar(:)
         complex(dp), allocatable :: col(:,:)
-        real(dp)    :: wc, ridge_abs
-        integer     :: m, nk, nn, nt, jj, j, q, r, i, nrot
-        logical     :: ok
+        real(dp)                 :: wc, ridge_abs
+        integer                  :: m, nk, nn, nt, jj, j, q, r, i, nrot
+        logical                  :: ok
         m  = size(y,2)
         nk = model%ncomp
         nn = model%nnuis
@@ -389,8 +389,8 @@ contains
         real(dp),               intent(out) :: tau, h, cv_best, cv_mean, zscore
         real(dp), allocatable :: ea(:,:,:,:), eb(:,:,:,:), e(:), eref(:), ebest(:), cvh(:), cvr(:)
         integer,  allocatable :: vinds(:)
-        real(dp) :: wnorm, cvv, gmean, gsd
-        integer  :: m, nv, nr, nt, nh, ir, it, ih, rmax, irb, itb, ihb, i
+        real(dp)              :: wnorm, cvv, gmean, gsd
+        integer               :: m, nv, nr, nt, nh, ir, it, ih, rmax, irb, itb, ihb, i
         m  = size(y,2)
         nt = size(TAUS)
         nh = size(HS)
@@ -475,8 +475,8 @@ contains
         real(dp),    intent(inout) :: err(:,:,:,:)
         real(sp), allocatable :: rmt(:,:)
         integer,  allocatable :: qidx(:)
-        real(dp) :: sc
-        integer  :: m, nv, nq, nt, nh, j, q, nthr, nvb, nblk, ib, v0
+        real(dp)              :: sc
+        integer               :: m, nv, nq, nt, nh, j, q, nthr, nvb, nblk, ib, v0
         m  = size(y,2)
         nv = size(vinds)
         nt = size(TAUS)
@@ -520,8 +520,8 @@ contains
             logical, intent(in) :: l_par
             real(sp), allocatable :: kloc(:,:), ploc(:,:)
             real(dp), allocatable :: d2(:,:), ksum(:)
-            real(dp) :: tau
-            integer  :: ir, ie, it, v, i, q, rprev, col
+            real(dp)              :: tau
+            integer               :: ir, ie, it, v, i, q, rprev, col
             allocate(d2(m,nb), source=0.d0)
             allocate(kloc(m,nb*nh), ploc(2*nq,nb*nh), ksum(nb*nh))
             rprev = 0
@@ -570,9 +570,9 @@ contains
             real(sp), intent(out) :: kcol(:)
             real(dp), intent(out) :: ks
             real(dp), allocatable :: lw(:)
-            real(dp) :: lwmax
-            integer  :: i, j
-            logical  :: l_ok
+            real(dp)              :: lwmax
+            integer               :: i, j
+            logical               :: l_ok
             allocate(lw(m))
             i     = vinds(v)
             lwmax = -huge(1.d0)
@@ -611,8 +611,8 @@ contains
         real(sp), allocatable :: ka(:,:), kb(:,:), ko(:,:)
         real(dp), allocatable :: wa(:), wb(:)
         integer,  allocatable :: ia(:), ib(:), io(:)
-        integer :: m, nt, ncoeff, ti, q
-        logical :: l_use
+        integer               :: m, nt, ncoeff, ti, q
+        logical               :: l_use
         m      = size(y,2)
         nt     = size(targets)
         ncoeff = size(y,1)
@@ -640,9 +640,9 @@ contains
 
         !> one target's normalised weights over the frames, from the latents lat
         subroutine kernel_row( lat, i, wk )
-            type(whitened_latents), intent(in)  :: lat
-            integer,                intent(in)  :: i
-            real(dp), allocatable,  intent(out) :: wk(:)
+            type(whitened_latents), intent(in)                :: lat
+            integer,                intent(in)                :: i
+            real(dp),               allocatable,  intent(out) :: wk(:)
             real(dp) :: lw(m), lwmax, wsum
             integer  :: j
             allocate(wk(m), source=0.d0)
@@ -673,10 +673,10 @@ contains
     !! coefficients: with a serial BLAS one or more chunks per thread, each its own product; with a threaded BLAS
     !! wider chunks one after the other, the products from the serial region (probe_blas)
     subroutine kernel_means( y, kmat, idx, yden )
-        complex(sp),          intent(in)    :: y(:,:)
-        real(sp), contiguous, intent(in)    :: kmat(:,:)
-        integer,              intent(in)    :: idx(:)
-        complex(sp),          intent(inout) :: yden(:,:)
+        complex(sp),          intent(in)             :: y(:,:)
+        real(sp),             contiguous, intent(in) :: kmat(:,:)
+        integer,              intent(in)             :: idx(:)
+        complex(sp),          intent(inout)          :: yden(:,:)
         integer :: m, nt, nthr, nchunk, csz, ic, c0
         if( size(idx) == 0 ) return
         m    = size(y,2)
@@ -707,7 +707,7 @@ contains
             integer, intent(in) :: c0, c1
             logical, intent(in) :: l_par
             real(sp), allocatable :: ycht(:,:), outt(:,:)
-            integer :: nc, j, t
+            integer               :: nc, j, t
             nc = c1 - c0 + 1
             allocate(ycht(2*nc,m), outt(2*nc,nt))
             !$omp parallel do default(shared) private(j) schedule(static) if(l_par)
@@ -731,12 +731,12 @@ contains
     !! products against their wall time, after a warm-up long enough for the OpenMP threads of earlier regions to stop
     !! spinning (their spinning would count as BLAS threads)
     subroutine probe_blas
-        integer,  parameter :: NP = 512, NREP = 8
-        real,     parameter :: WARMUP = 0.1     !< s
-        real(sp), allocatable :: a(:,:), b(:,:), c(:,:)
+        integer,  parameter     :: NP     = 512, NREP = 8
+        real,     parameter     :: WARMUP = 0.1 !< s
+        real(sp), allocatable   :: a(:,:), b(:,:), c(:,:)
         integer(timer_int_kind) :: t0
-        real    :: c0, c1, wall, ratio
-        integer :: irep
+        real                    :: c0, c1, wall, ratio
+        integer                 :: irep
         if( l_blas_probed ) return
         allocate(a(NP,NP), b(NP,NP), c(NP,NP))
         a  = 1.e-3
@@ -799,9 +799,9 @@ contains
     !> the held-out coefficients cv_direction uses of a set (at most NQMAX, evenly strided)
     function pick( set ) result( mask )
         logical, intent(in) :: set(:)
-        logical :: mask(size(set))
+        logical              :: mask(size(set))
         integer, allocatable :: idx(:)
-        integer :: q
+        integer              :: q
         idx = pack([(q, q=1,size(set))], set)
         if( size(idx) > NQMAX ) idx = idx(1:size(idx):(size(idx) + NQMAX - 1) / NQMAX)
         mask = .false.

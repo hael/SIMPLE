@@ -31,28 +31,28 @@ integer, parameter :: PCG_FFT_MEASURE_MIN_BOXPD = 200
 !! reads a plane through the KB window, the scatter is its literal transpose, coloured over h for threads
 !! with a serial pass over the windows that wrap, so it is reproducible at any thread count.
 type :: pcg_lattice
-    integer          :: box        = 0   !< native box: the solver unknown lives here
-    integer          :: boxpd      = 0   !< padf*box: every Fourier operation happens here
-    integer          :: padf       = 1   !< oversampling factor, OSMPL_PAD_FAC
-    integer          :: pad_off    = 0   !< centred pad/crop offset, (boxpd-box)/2
-    integer          :: Rnat       = 0   !< native Nyquist radius, box/2
-    integer          :: lims2(2,2) = 0   !< (h/k, lo/hi) plane bounds, full symmetric disk
-    integer          :: sqlp       = 0   !< squared native Nyquist radius
-    real             :: padsc      = 1.0 !< padf**3, undoes fwd_ft's 1/product(ldim)
-    real             :: smpd       = 1.0
-    type(kbinterpol) :: kbwin
-    integer          :: iwinsz     = 0
-    integer          :: wdim       = 0
-    integer          :: stride     = 0   !< OpenMP colouring stride of the scatter
-    integer          :: lims3(3,2) = 0   !< (h/k/m, lo/hi) volume array bounds of the padded lattice
-    integer          :: cdim(3)    = 0   !< complex array shape of the padded lattice
-    integer          :: wlims(2)   = 0   !< [lo,hi] canonical period-box wrap range
-    integer          :: sq_rim     = 0   !< below this h^2+k^2 a KB window cannot wrap
-    integer, allocatable :: wrap(:)      !< cyci_1d over every index a KB window can reach
-    real,    allocatable :: dep1d(:)     !< 1D deposition envelope of the padded lattice
-    real,    allocatable :: mask(:,:,:)  !< hard solve support P (window > 0)
-    real,    allocatable :: window(:,:,:)!< soft output window; the shipped map is window*u
-    logical              :: l_mask = .false.
+    integer              :: box        = 0   !< native box: the solver unknown lives here
+    integer              :: boxpd      = 0   !< padf*box: every Fourier operation happens here
+    integer              :: padf       = 1   !< oversampling factor, OSMPL_PAD_FAC
+    integer              :: pad_off    = 0   !< centred pad/crop offset, (boxpd-box)/2
+    integer              :: Rnat       = 0   !< native Nyquist radius, box/2
+    integer              :: lims2(2,2) = 0   !< (h/k, lo/hi) plane bounds, full symmetric disk
+    integer              :: sqlp       = 0   !< squared native Nyquist radius
+    real                 :: padsc      = 1.0 !< padf**3, undoes fwd_ft's 1/product(ldim)
+    real                 :: smpd       = 1.0
+    type(kbinterpol)     :: kbwin
+    integer              :: iwinsz     = 0
+    integer              :: wdim       = 0
+    integer              :: stride     = 0   !< OpenMP colouring stride of the scatter
+    integer              :: lims3(3,2) = 0   !< (h/k/m, lo/hi) volume array bounds of the padded lattice
+    integer              :: cdim(3)    = 0   !< complex array shape of the padded lattice
+    integer              :: wlims(2)   = 0   !< [lo,hi] canonical period-box wrap range
+    integer              :: sq_rim     = 0   !< below this h^2+k^2 a KB window cannot wrap
+    integer, allocatable :: wrap(:)          !< cyci_1d over every index a KB window can reach
+    real,    allocatable :: dep1d(:)         !< 1D deposition envelope of the padded lattice
+    real,    allocatable :: mask(:,:,:)      !< hard solve support P (window > 0)
+    real,    allocatable :: window(:,:,:)    !< soft output window; the shipped map is window*u
+    logical              :: l_mask     = .false.
   contains
     procedure :: new_lattice
     procedure :: set_window_sphere
@@ -75,10 +75,10 @@ contains
     !! wrap table and deposition envelope. winsz is the KB window's half-width (KBWINSZ, three taps,
     !! unless a caller needs a more accurate gather)
     subroutine new_lattice( self, box, smpd, winsz )
-        class(pcg_lattice), intent(inout) :: self
-        integer,            intent(in)    :: box
-        real,               intent(in)    :: smpd
-        real,    optional,  intent(in)    :: winsz
+        class(pcg_lattice), intent(inout)         :: self
+        integer,            intent(in)            :: box
+        real,               intent(in)            :: smpd
+        real,               optional,  intent(in) :: winsz
         type(ftiter) :: fit
         integer      :: lo, hi, i
         real         :: rlim
@@ -141,7 +141,7 @@ contains
     subroutine set_window_sphere( self, mskrad )
         class(pcg_lattice), intent(inout) :: self
         real,               intent(in)    :: mskrad
-        type(image) :: mimg
+        type(image)       :: mimg
         real, allocatable :: ones(:,:,:)
         if( allocated(self%mask)   ) deallocate(self%mask)
         if( allocated(self%window) ) deallocate(self%window)
@@ -195,7 +195,7 @@ contains
     function native_deposition_envelope( self ) result( env )
         class(pcg_lattice), intent(in) :: self
         real, allocatable :: env(:,:,:)
-        integer :: i, j, k, o
+        integer           :: i, j, k, o
         o = self%pad_off
         allocate(env(self%box,self%box,self%box))
         !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
@@ -218,8 +218,8 @@ contains
         real,               intent(inout) :: r(:,:,:)
         integer,            intent(in)    :: k
         real, parameter :: EPS_D = 1.0e-8
-        real    :: depval
-        integer :: i, j
+        real            :: depval
+        integer         :: i, j
         do j = 1, self%boxpd
             do i = 1, self%boxpd
                 depval = self%dep1d(i) * self%dep1d(j) * self%dep1d(k)
@@ -520,10 +520,10 @@ contains
                                                       &self%lims3(3,1):self%lims3(3,2))
         class(image),       intent(inout) :: wimg
         logical,            intent(in)    :: l_hermitian
-        real, allocatable :: z(:,:,:)
-        complex(c_float_complex), pointer :: cptr(:,:,:)
-        real(c_float),            pointer :: rptr(:,:,:)
-        integer :: h, hh, k, m, pk, pm, n2, n3, o, j
+        real,                     allocatable :: z(:,:,:)
+        complex(c_float_complex), pointer     :: cptr(:,:,:)
+        real(c_float),            pointer     :: rptr(:,:,:)
+        integer                               :: h, hh, k, m, pk, pm, n2, n3, o, j
         ! every packed element (h >= 0, all k and m) is written in place through the image's pointer
         ! (get_cmat_ptr states the contract): a set_cmat_at call per element and the copies of
         ! get_rmat/center_crop were most of the fold; physical addresses as comp_addr_phys

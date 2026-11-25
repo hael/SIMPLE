@@ -4,12 +4,12 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('sim', 'Simulation', 140)
-type(ui_program), target :: cif2mrc
-type(ui_program), target :: pdb2mrc
-type(ui_program), target :: simulate_movie
-type(ui_program), target :: simulate_noise
-type(ui_program), target :: simulate_particles
-type(ui_program), target :: simulate_scattering
+type(ui_program),          target    :: cif2mrc
+type(ui_program),          target    :: pdb2mrc
+type(ui_program),          target    :: simulate_movie
+type(ui_program),          target    :: simulate_noise
+type(ui_program),          target    :: simulate_particles
+type(ui_program),          target    :: simulate_scattering
 
 contains
 

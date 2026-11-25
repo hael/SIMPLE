@@ -70,12 +70,12 @@ contains
         class(commander_stack), intent(inout)  :: self
         class(cmdline),         intent(inout)  :: cline
         type(string), allocatable :: filenames(:)
-        type(parameters) :: params
-        integer          :: nfiles, ldim(3), ifile, ifoo, cnt
-        integer          :: lfoo(3), nimgs, iimg
-        type(stack_io)   :: stkio_r, stkio_w
-        type(image)      :: img, tmp
-        logical          :: l_clip
+        type(parameters)          :: params
+        integer                   :: nfiles, ldim(3), ifile, ifoo, cnt
+        integer                   :: lfoo(3), nimgs, iimg
+        type(stack_io)            :: stkio_r, stkio_w
+        type(image)               :: img, tmp
+        logical                   :: l_clip
         call cline%set('mkdir', 'no')
         call params%new(cline)
         call read_filetable(params%filetab, filenames)
@@ -156,7 +156,7 @@ contains
         type(ori)                 :: o2
         integer,      allocatable :: pinds(:)
         type(string)              :: fname
-        integer :: i, s, cnt, j
+        integer                   :: i, s, cnt, j
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! ------------------------------------------------------------------
@@ -329,8 +329,8 @@ contains
         type(image),      allocatable :: stk_imgs(:)
         integer,          allocatable :: labels(:), i_medoids(:)
         real,             allocatable :: mm(:, :), dmat(:, :)
-        real    :: smpd, mskrad, oa_min, oa_max
-        integer :: i, ldim(3), box, nimgs, nclust
+        real                          :: smpd, mskrad, oa_min, oa_max
+        integer                       :: i, ldim(3), box, nimgs, nclust
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')
@@ -388,12 +388,12 @@ contains
     subroutine exec_match_stacks( self, cline )
         class(commander_match_stacks), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(parameters) :: params
+        type(parameters)               :: params
         type(image),       allocatable :: stk_imgs_ref(:), stk_imgs_match(:)
         integer,           allocatable :: labels_match(:)
         real,              allocatable :: mm_ref(:, :), dmat(:, :)
-        integer :: nmatch, nrefs, ldim(3), i, nclust, imatch, box
-        real    :: smpd, oa_minmax(2), mskrad
+        integer                        :: nmatch, nrefs, ldim(3), i, nclust, imatch, box
+        real                           :: smpd, oa_minmax(2), mskrad
         ! defaults
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',        'no')

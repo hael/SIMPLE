@@ -4,14 +4,14 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('cavgproc', 'Class Average Processing', 40)
-type(ui_program), target :: cluster_cavgs
-type(ui_program), target :: model_cavgs_rejection
-type(ui_program), target :: cavg_cnn_predict
-type(ui_program), target :: cluster_cavgs_selection
-type(ui_program), target :: cluster_stack
-type(ui_program), target :: match_cavgs
-type(ui_program), target :: match_stacks
-type(ui_program), target :: select_clusters
+type(ui_program),          target    :: cluster_cavgs
+type(ui_program),          target    :: model_cavgs_rejection
+type(ui_program),          target    :: cavg_cnn_predict
+type(ui_program),          target    :: cluster_cavgs_selection
+type(ui_program),          target    :: cluster_stack
+type(ui_program),          target    :: match_cavgs
+type(ui_program),          target    :: match_stacks
+type(ui_program),          target    :: select_clusters
 
 contains
 

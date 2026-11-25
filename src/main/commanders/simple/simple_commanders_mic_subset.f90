@@ -24,19 +24,19 @@ contains
         use simple_fileio,     only: fname2ext, stemname, fopen, fclose
         use simple_jiffys,     only: simple_end
         class(commander_select_micrographs), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                      intent(inout) :: cline
         class(parameters), allocatable :: params
         class(sp_project), allocatable :: project
-        real(dp), allocatable :: support(:,:), before(:), after(:)
-        real, allocatable :: bin_eulers(:,:)
-        integer, allocatable :: populations(:), particle_mic(:)
-        logical, allocatable :: eligible(:), chosen(:)
-        type(string) :: output, mic_report, coverage_report, name, source_dir
-        character(len=:), allocatable :: source_name
-        character(len=512) :: message
-        integer :: status, nodes, i, unit, bin, half, particle_target
-        real(dp) :: value, upper_bound, scale
-        logical :: proven, output_supplied
+        real(dp),          allocatable :: support(:,:), before(:), after(:)
+        real,              allocatable :: bin_eulers(:,:)
+        integer,           allocatable :: populations(:), particle_mic(:)
+        logical,           allocatable :: eligible(:), chosen(:)
+        type(string)                   :: output, mic_report, coverage_report, name, source_dir
+        character(len=:),  allocatable :: source_name
+        character(len=512)             :: message
+        integer                        :: status, nodes, i, unit, bin, half, particle_target
+        real(dp)                       :: value, upper_bound, scale
+        logical                        :: proven, output_supplied
         output_supplied = cline%defined('outfile')
         if( cline%defined('mkdir') )then
             if( cline%get_carg('mkdir') /= 'no' )then
@@ -137,11 +137,11 @@ contains
         use simple_string, only: string
         use simple_syslib, only: simple_abspath
         use simple_fileio, only: filepath
-        class(oris), intent(inout) :: records
-        class(string), intent(in) :: source_dir
+        class(oris),   intent(inout) :: records
+        class(string), intent(in)    :: source_dir
         character(len=7), parameter :: keys(4) = [character(len=7) :: 'stk','movie','intg','boxfile']
-        type(string) :: path
-        integer :: i, j
+        type(string)                :: path
+        integer                     :: i, j
         do i = 1,records%get_noris()
             do j = 1,size(keys)
                 if( .not.records%isthere(i,trim(keys(j))) ) cycle
@@ -158,7 +158,7 @@ contains
     function csv_field(text) result(quoted)
         character(len=*), intent(in) :: text
         character(len=:), allocatable :: quoted
-        integer :: i
+        integer                       :: i
         quoted = '"'
         do i = 1,len_trim(text)
             quoted = quoted//text(i:i)

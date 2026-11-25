@@ -17,19 +17,19 @@ contains
     !> nclust returns the number of clusters formed; with avglink, weights and min_weight (both or neither)
     !! merge clusters lighter than min_weight into their nearest cluster, so fewer than nclust may result
     subroutine cluster_dmat( dmat, algorithm, nclust, i_medoids, labels, ap_pref, nclust_max, weights, min_weight )
-        real,                 intent(in)    :: dmat(:,:)
-        character(len=*),     intent(in)    :: algorithm
-        integer,              intent(inout) :: nclust
-        integer, allocatable, intent(inout) :: i_medoids(:), labels(:)
-        real,    optional,    intent(in)    :: ap_pref
-        integer, optional,    intent(in)    :: nclust_max
-        real,    optional,    intent(in)    :: weights(:), min_weight
+        real,                 intent(in)                 :: dmat(:,:)
+        character(len=*),     intent(in)                 :: algorithm
+        integer,              intent(inout)              :: nclust
+        integer,              allocatable, intent(inout) :: i_medoids(:), labels(:)
+        real,                 optional,    intent(in)    :: ap_pref
+        integer,              optional,    intent(in)    :: nclust_max
+        real,                 optional,    intent(in)    :: weights(:), min_weight
         real,    allocatable :: smat(:,:)
         type(kmedoids)       :: kmed
         type(aff_prop)       :: aprop
         type(hac)            :: avglink
-        integer :: n
-        real    :: pref, simsum
+        integer              :: n
+        real                 :: pref, simsum
         n = size(dmat, dim=1)
         if( allocated(i_medoids) ) deallocate(i_medoids)
         select case(trim(algorithm))
@@ -97,13 +97,13 @@ contains
     !!          point farthest from every seed chosen so far (squared distance, per-dimension weights wdim when
     !!          given), the first index on a tie
     subroutine farthest_point_seeds( X, k, first, seeds, wdim )
-        real(dp),           intent(in)  :: X(:,:)
-        integer,            intent(in)  :: k, first
-        integer,            intent(out) :: seeds(k)
-        real(dp), optional, intent(in)  :: wdim(:)
+        real(dp),           intent(in)           :: X(:,:)
+        integer,            intent(in)           :: k, first
+        integer,            intent(out)          :: seeds(k)
+        real(dp),           optional, intent(in) :: wdim(:)
         real(dp), allocatable :: mind(:), w(:)
-        real(dp) :: d2, dmax
-        integer  :: n, d, i, q, s
+        real(dp)              :: d2, dmax
+        integer               :: n, d, i, q, s
         n = size(X,1)
         d = size(X,2)
         if( k < 1 .or. k > n )       THROW_HARD('k must be in [1,n]; farthest_point_seeds')
@@ -140,7 +140,7 @@ contains
         real(dp), intent(out) :: means(:,:) !< (d,k)
         real,    allocatable :: skey(:)
         integer, allocatable :: ord(:)
-        integer :: n, i, c, i0, i1
+        integer              :: n, i, c, i0, i1
         n = size(X,1)
         if( size(key) /= n )  THROW_HARD('key must have one entry per point; equal_mass_quantile_start')
         if( k < 1 .or. k > n ) THROW_HARD('k must be in [1,n]; equal_mass_quantile_start')

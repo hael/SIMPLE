@@ -104,7 +104,7 @@ contains
         integer,  intent(in)  :: cout, nrow, ncol
         real(sp), intent(in)  :: w(cout, nrow), col(nrow, ncol)
         real(sp), intent(out) :: out(cout, ncol)
-        integer :: c, q, r
+        integer  :: c, q, r
         real(sp) :: s
         do q = 1,ncol
             do c = 1,cout
@@ -122,16 +122,16 @@ contains
     !! leaves every class's maximised score unchanged and moves its maximising rotation by one step (ruling R3's
     !! rotation test); the half ring with the conjugate wrap equals the explicit full ring bit for bit
     subroutine test_hermitian_contract()
-        type(hhcnn) :: net
-        real(sp) :: x(T_PFTSZ, T_NK, 2), xc(T_PFTSZ, T_NK, 2), xr(T_PFTSZ, T_NK, 2), g(T_NK), side
-        real(sp) :: xf(1, 2*T_PFTSZ, T_NK, 2)
+        type(hhcnn)           :: net
+        real(sp)              :: x(T_PFTSZ, T_NK, 2), xc(T_PFTSZ, T_NK, 2), xr(T_PFTSZ, T_NK, 2), g(T_NK), side
+        real(sp)              :: xf(1, 2*T_PFTSZ, T_NK, 2)
         real(sp), allocatable :: pre0(:,:,:,:,:), gated0(:,:,:,:,:), pooled0(:,:,:,:,:), rot(:,:,:,:)
         real(sp), allocatable :: col_h(:,:), col_f(:,:), out_h(:,:), out_f(:,:), raw0(:,:,:,:)
-        real(sp) :: prob0(T_NCLS), smax0(T_NCLS), smax1(T_NCLS)
-        integer  :: rbest0(T_NCLS), rbest1(T_NCLS), ic
-        integer  :: b, cout, nkin, nkout, p, k, part, qh, qf, nposf
-        logical  :: ok_re, ok_im, ok_rot, ok_col, ok_out, ok_shift
-        real(sp) :: maxdiff
+        real(sp)              :: prob0(T_NCLS), smax0(T_NCLS), smax1(T_NCLS)
+        integer               :: rbest0(T_NCLS), rbest1(T_NCLS), ic
+        integer               :: b, cout, nkin, nkout, p, k, part, qh, qf, nposf
+        logical               :: ok_re, ok_im, ok_rot, ok_col, ok_out, ok_shift
+        real(sp)              :: maxdiff
         write(*,'(A)') 'test_hermitian_contract'
         call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261106_int64, .true., .false.)
         call random_templates(net)
@@ -257,17 +257,17 @@ contains
     !! angle on the rotation grid (the search absorbs the rotation), scores against every class as the sample does; the
     !! kernels are symmetric along the angle from the start and through training
     subroutine test_mirror_invariance()
-        integer,  parameter :: NB = 16
-        real,     parameter :: ANG(3) = [0., 180., 75.]  ! 75: a general frame on the rotation grid (5 steps of 15)
-        type(hhcnn) :: net
+        integer,             parameter           :: NB     = 16
+        real,                parameter           :: ANG(3) = [0., 180., 75.] ! 75: a general frame on the rotation grid (5 steps of 15)
+        type(hhcnn)                              :: net
         class(parameters),   allocatable, target :: p
-        class(cmdline),      allocatable :: cline
-        class(polarft_calc), allocatable :: calc
-        complex(sp), allocatable :: bank(:,:,:)
-        real(sp) :: x(T_PFTSZ, T_NK, 2), xm(T_PFTSZ, T_NK, 2), g(T_NK), side, s0(T_NCLS), s1(T_NCLS), smx, loss, fm
-        real(sp), allocatable :: xb(:,:,:,:), gb(:,:), sb(:), tb(:,:)
-        integer  :: r0(T_NCLS), r1(T_NCLS), ia, b, ic, istep, nrots, nsteps_psi, nchk
-        logical  :: refl0(T_NCLS), ok_rot
+        class(cmdline),      allocatable         :: cline
+        class(polarft_calc), allocatable         :: calc
+        complex(sp),         allocatable         :: bank(:,:,:)
+        real(sp)                                 :: x(T_PFTSZ, T_NK, 2), xm(T_PFTSZ, T_NK, 2), g(T_NK), side, s0(T_NCLS), s1(T_NCLS), smx, loss, fm
+        real(sp),            allocatable         :: xb(:,:,:,:), gb(:,:), sb(:), tb(:,:)
+        integer                                  :: r0(T_NCLS), r1(T_NCLS), ia, b, ic, istep, nrots, nsteps_psi, nchk
+        logical                                  :: refl0(T_NCLS), ok_rot
         write(*,'(A)') 'test_mirror_invariance'
         call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261109_int64, .true., .false.)
         call random_templates(net)
@@ -342,15 +342,15 @@ contains
     !! run over the same terms in another order)
     subroutine test_lse_readout( reflect )
         logical, intent(in) :: reflect
-        real,    parameter  :: ANG(3) = [0., 180., 75.]
-        type(hhcnn) :: net
+        real,                parameter           :: ANG(3) = [0., 180., 75.]
+        type(hhcnn)                              :: net
         class(parameters),   allocatable, target :: p
-        class(cmdline),      allocatable :: cline
-        class(polarft_calc), allocatable :: calc
-        complex(sp), allocatable :: bank(:,:,:)
-        real(sp) :: x(T_PFTSZ, T_NK, 2), xr(T_PFTSZ, T_NK, 2), xm(T_PFTSZ, T_NK, 2), g(T_NK), side, prob0(T_NCLS)
-        real(dp) :: z, mx
-        integer  :: ic, side_k, jc, r, ia, nbad_lse, nbad_pi
+        class(cmdline),      allocatable         :: cline
+        class(polarft_calc), allocatable         :: calc
+        complex(sp),         allocatable         :: bank(:,:,:)
+        real(sp)                                 :: x(T_PFTSZ, T_NK, 2), xr(T_PFTSZ, T_NK, 2), xm(T_PFTSZ, T_NK, 2), g(T_NK), side, prob0(T_NCLS)
+        real(dp)                                 :: z, mx
+        integer                                  :: ic, side_k, jc, r, ia, nbad_lse, nbad_pi
         write(*,'(A,L1)') 'test_lse_readout reflect=', reflect
         call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261115_int64, reflect, .true.)
         call random_templates(net)
@@ -438,11 +438,11 @@ contains
     !> the loss of one sample at the current weights, with the rotation targets tq of classes tqc the cross-entropy of
     !! each class's rotation posterior against them added (-ln pi_c(j) = logit_c - scale s_c(j))
     subroutine sample_loss_now( net, x, g, side, t, loss, tq, tqc )
-        type(hhcnn), intent(inout) :: net
-        real(sp),    intent(in)    :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS)
-        real(dp),    intent(out)   :: loss
-        real(sp), optional, intent(in) :: tq(:,:)
-        integer,  optional, intent(in) :: tqc(:)
+        type(hhcnn), intent(inout)        :: net
+        real(sp),    intent(in)           :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS)
+        real(dp),    intent(out)          :: loss
+        real(sp),    optional, intent(in) :: tq(:,:)
+        integer,     optional, intent(in) :: tqc(:)
         integer :: k, side_k, j, jc
         call net%forward_sample(net%work(1), x, g, side)
         call net%sample_loss(T_NCLS, net%work(1)%prob, t, loss)
@@ -466,19 +466,19 @@ contains
     !! an h^2 error above the tolerance at every step single precision resolves; the Richardson extrapolation of two
     !! successive steps, (4 D(h/2) - D(h)) / 3, cancels it and is accepted as well
     subroutine check_entry( net, x, g, side, t, w, grad, nbad, nchk, label, tq, tqc )
-        type(hhcnn),      intent(inout) :: net
-        real(sp),         intent(in)    :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS)
-        real(sp),         intent(inout) :: w
-        real(sp),         intent(in)    :: grad
-        integer,          intent(inout) :: nbad, nchk
-        character(len=*), intent(in)    :: label
-        real(sp), optional, intent(in)  :: tq(:,:)
-        integer,  optional, intent(in)  :: tqc(:)
+        type(hhcnn),      intent(inout)        :: net
+        real(sp),         intent(in)           :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS)
+        real(sp),         intent(inout)        :: w
+        real(sp),         intent(in)           :: grad
+        integer,          intent(inout)        :: nbad, nchk
+        character(len=*), intent(in)           :: label
+        real(sp),         optional, intent(in) :: tq(:,:)
+        integer,          optional, intent(in) :: tqc(:)
         real(sp), parameter :: TOL_REL = 1.e-2, TOL_ABS = 2.e-4, STEP = 1.e-2
-        real(dp) :: num, num_prev, num_rich
-        real(sp) :: step_here
-        logical  :: ok
-        integer  :: ihalf
+        real(dp)            :: num, num_prev, num_rich
+        real(sp)            :: step_here
+        logical             :: ok
+        integer             :: ihalf
         ! the step halved up to three times: a harmonic magnitude or modulus near zero within the step has a
         ! curvature the central difference at STEP cannot follow, below STEP/8 the single-precision loss is noise
         step_here = STEP
@@ -510,11 +510,11 @@ contains
     end subroutine check_entry
 
     real(dp) function central_difference( net, x, g, side, t, w, h, tq, tqc ) result( num )
-        type(hhcnn), intent(inout) :: net
-        real(sp),    intent(in)    :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS), h
-        real(sp),    intent(inout) :: w
-        real(sp), optional, intent(in) :: tq(:,:)
-        integer,  optional, intent(in) :: tqc(:)
+        type(hhcnn), intent(inout)        :: net
+        real(sp),    intent(in)           :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS), h
+        real(sp),    intent(inout)        :: w
+        real(sp),    optional, intent(in) :: tq(:,:)
+        integer,     optional, intent(in) :: tqc(:)
         real(dp) :: lp, lm
         real(sp) :: w0
         w0 = w
@@ -531,13 +531,13 @@ contains
     !! taps' rings carry signal, and the raw response is the packed Euclidean product with the filter's footprint
     !! (the objective's cross term, by the polar features' contract)
     subroutine test_ctf_normalisation()
-        integer,  parameter :: NDEFOCUS = 4, P0 = T_PFTSZ / 2
+        integer,  parameter :: NDEFOCUS          = 4, P0 = T_PFTSZ / 2
         real(sp), parameter :: DEFOCUS(NDEFOCUS) = [0.6, 1.0, 1.5, 2.2]
-        type(hhcnn) :: net
-        real(sp) :: x(T_PFTSZ, T_NK, 2), g(T_NK), ctf(T_NK), side, wnorm, resp, gbar, raw_re, raw_im
-        real(sp) :: xr(T_PFTSZ, T_NK, 2), gr(T_NK)
-        integer  :: idef, c, k0, ia, ik, ntested, nbad_one, nbad_raw
-        logical  :: l_signal
+        type(hhcnn)         :: net
+        real(sp)            :: x(T_PFTSZ, T_NK, 2), g(T_NK), ctf(T_NK), side, wnorm, resp, gbar, raw_re, raw_im
+        real(sp)            :: xr(T_PFTSZ, T_NK, 2), gr(T_NK)
+        integer             :: idef, c, k0, ia, ik, ntested, nbad_one, nbad_raw
+        logical             :: l_signal
         write(*,'(A)') 'test_ctf_normalisation'
         call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261112_int64, .true., .false.)
         call random_templates(net)
@@ -601,14 +601,14 @@ contains
     !! modulus near zero on some inputs, for either readout alike
     subroutine test_gradient_check( reflect, lse, rot )
         logical, intent(in) :: reflect, lse, rot
-        type(hhcnn) :: net
-        type(cnn_grad) :: gr
-        real(sp) :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS)
+        type(hhcnn)           :: net
+        type(cnn_grad)        :: gr
+        real(sp)              :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS)
         real(sp), allocatable :: tq(:,:)
-        integer  :: tqc(2)
-        real(dp) :: loss, loss_chk
-        integer  :: b, i, nbad, nchk, c, r, n, kb, m, ic, part, it, nch
-        character(len=40) :: label
+        integer               :: tqc(2)
+        real(dp)              :: loss, loss_chk
+        integer               :: b, i, nbad, nchk, c, r, n, kb, m, ic, part, it, nch
+        character(len=40)     :: label
         write(*,'(A,L1,A,L1,A,L1)') 'test_gradient_check reflect=', reflect, ' lse=', lse, ' rot=', rot
         if( lse ) call seed_rnd_fixed(20261101)
         call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261107_int64, reflect, lse)
@@ -693,12 +693,12 @@ contains
     !! same where the reflection did not win it (to single-precision rounding: the score product's width changes the
     !! BLAS's blocking of its last columns), and the posterior still sums to one
     subroutine test_no_reflection()
-        integer, parameter :: NTRY = 20
+        integer, parameter :: NTRY      = 20
         real,    parameter :: SCORE_TOL = 1.e-5
-        type(hhcnn) :: net_r, net_n
-        real(sp) :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, p_r(T_NCLS), p_n(T_NCLS), s_r(T_NCLS), s_n(T_NCLS), ang
-        integer  :: rb_r(T_NCLS), rb_n(T_NCLS), it, ic, nwon
-        logical  :: refl, l_none, l_le, l_eq
+        type(hhcnn)        :: net_r, net_n
+        real(sp)           :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, p_r(T_NCLS), p_n(T_NCLS), s_r(T_NCLS), s_n(T_NCLS), ang
+        integer            :: rb_r(T_NCLS), rb_n(T_NCLS), it, ic, nwon
+        logical            :: refl, l_none, l_le, l_eq
         write(*,'(A)') 'test_no_reflection'
         call net_r%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261113_int64, .true., .false.)
         call net_n%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261113_int64, .false., .false.)
@@ -743,13 +743,13 @@ contains
         ! block 2: 384 columns, three tiles with the boundary at 192 inside the second; block 3: 192, a tile and a half
         integer,  parameter :: PFTSZ = 48
         ! single-precision sums of at most 384 terms in another order, relative to the largest entry
-        real(sp), parameter :: TOL = 1.e-5
-        type(hhcnn)    :: net
-        type(cnn_grad) :: gr
-        real(sp) :: x(PFTSZ, T_NK, 2), xr(PFTSZ, T_NK, 2, T_NCLS), g(T_NK), side, t(T_NCLS)
+        real(sp), parameter   :: TOL = 1.e-5
+        type(hhcnn)           :: net
+        type(cnn_grad)        :: gr
+        real(sp)              :: x(PFTSZ, T_NK, 2), xr(PFTSZ, T_NK, 2, T_NCLS), g(T_NK), side, t(T_NCLS)
         real(sp), allocatable :: col(:,:), out(:,:), dpre(:,:), dcol(:,:), dpooled(:,:,:,:), dw(:,:)
-        real(dp) :: loss
-        integer  :: b, cin, cout, nkin, npos, nch, i, ic, p, k, part
+        real(dp)              :: loss
+        integer               :: b, cin, cout, nkin, npos, nch, i, ic, p, k, part
         write(*,'(A)') 'test_tiled_blocks'
         call assert_true(2 * PFTSZ * (T_NK / 2) > 2 * CNN_TILE, 'the second block runs in three tiles or more')
         do ic = 0,T_NCLS
@@ -810,8 +810,8 @@ contains
     subroutine test_init_templates_team()
         !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
         type(hhcnn) :: net1, netn
-        real(sp) :: xr(T_PFTSZ, T_NK, 2, T_NCLS), g(T_NK), side
-        integer  :: ic, nthr_prev
+        real(sp)    :: xr(T_PFTSZ, T_NK, 2, T_NCLS), g(T_NK), side
+        integer     :: ic, nthr_prev
         write(*,'(A)') 'test_init_templates_team'
         do ic = 1,T_NCLS
             call random_input(xr(:,:,:,ic), g, side)
@@ -832,10 +832,10 @@ contains
 
     !> the weights written and read back are the same bit for bit, and give the same probabilities
     subroutine test_weights_roundtrip()
-        type(hhcnn) :: net, back
+        type(hhcnn)    :: net, back
         type(string)   :: cwd_saved, fixture_root, fname
-        real(sp) :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, prob0(T_NCLS), prob1(T_NCLS)
-        integer  :: nfail0
+        real(sp)       :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, prob0(T_NCLS), prob1(T_NCLS)
+        integer        :: nfail0
         write(*,'(A)') 'test_weights_roundtrip'
         nfail0 = tests_failed
         call enter_fixture('hhcnn_weights', cwd_saved, fixture_root)
@@ -875,28 +875,28 @@ contains
         integer, intent(in)  :: width, nepoch, ntrain, nbatch
         real,    intent(in)  :: lr, shift_max, snr
         real,    intent(out) :: acc
-        integer, parameter :: BOX = 32, PFTSZ = 16, NDIR = 20, NTEST = 20, KFROMTO(2) = [2, 9]
-        integer, parameter :: NK = KFROMTO(2) - KFROMTO(1) + 1, PDIM(3) = [PFTSZ, KFROMTO(1), KFROMTO(2)]
-        real,    parameter :: SMPD = 1.0, MSKDIAM = 24.
-        type(parameters)   :: p
-        type(cmdline)      :: cline
-        type(image)        :: vol, img_pad, img, noise
-        type(projector)    :: vol_pad
-        type(oris)         :: dirs
-        type(ori)          :: o
-        type(sym)          :: symop
-        type(polar_feats)  :: feats
-        type(polar_feat)   :: feat
-        type(hhcnn)     :: net
+        integer,     parameter   :: BOX  = 32, PFTSZ = 16, NDIR = 20, NTEST = 20, KFROMTO(2) = [2, 9]
+        integer,     parameter   :: NK   = KFROMTO(2) - KFROMTO(1) + 1, PDIM(3) = [PFTSZ, KFROMTO(1), KFROMTO(2)]
+        real,        parameter   :: SMPD = 1.0, MSKDIAM = 24.
+        type(parameters)         :: p
+        type(cmdline)            :: cline
+        type(image)              :: vol, img_pad, img, noise
+        type(projector)          :: vol_pad
+        type(oris)               :: dirs
+        type(ori)                :: o
+        type(sym)                :: symop
+        type(polar_feats)        :: feats
+        type(polar_feat)         :: feat
+        type(hhcnn)              :: net
         complex(sp), allocatable :: refs(:,:,:), pft(:,:), pft_rot(:,:), pft_sh(:,:)
         real(sp),    allocatable :: rmat(:,:,:), xtr(:,:,:,:), gtr(:,:), str(:), ttr(:,:), xte(:,:,:,:), gte(:,:), ste(:), tte(:,:)
         real(sp),    allocatable :: ctfmat(:,:), wk(:,:), noise_sd(:), xref(:,:,:,:)
-        real(sp) :: loss, fm, shift(2), side_mean, side_sd
-        real(dp) :: lsum, fsum
-        integer  :: i, j, k, idir, isample, ntr, nte, irot, pp, q, nrots, ib, i0, i1, nb
-        integer, allocatable :: order(:)
-        integer(timer_int_kind) :: t0
-        real(timer_int_kind)    :: t_data, t_train
+        real(sp)                 :: loss, fm, shift(2), side_mean, side_sd
+        real(dp)                 :: lsum, fsum
+        integer                  :: i, j, k, idir, isample, ntr, nte, irot, pp, q, nrots, ib, i0, i1, nb
+        integer,     allocatable :: order(:)
+        integer(timer_int_kind)  :: t0
+        real(timer_int_kind)     :: t_data, t_train
         t0 = tic()
         call cline%set('box',     real(BOX))
         call cline%set('smpd',    SMPD)

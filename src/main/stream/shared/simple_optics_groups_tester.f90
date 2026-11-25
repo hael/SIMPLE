@@ -14,7 +14,7 @@ real,    parameter :: TILT_THRES = 0.5
 real,    parameter :: SHIFT_X(NMICS)    = [0.0, 0.1, 5.0, 5.1, 4.9]
 real,    parameter :: SHIFT_Y(NMICS)    = [0.0,-0.1, 5.0, 4.9, 5.1]
 integer, parameter :: TILT_GROUP(NMICS) = [1, 1, 2, 2, 2]
-real,    parameter :: SMPD = 1.3, CS = 2.7, KV = 300.0, FRACA = 0.1
+real,    parameter :: SMPD              = 1.3, CS = 2.7, KV = 300.0, FRACA = 0.1
 
 contains
 
@@ -31,9 +31,9 @@ contains
 
     !> equal shifts (no dir_meta: all 0) form one group, quickly and without a distance matrix
     subroutine test_equal_shifts_one_group()
-        integer, parameter :: NMANY = 50000
-        type(sp_project) :: spproj
-        real, allocatable :: xs(:)
+        integer, parameter   :: NMANY = 50000
+        type(sp_project)     :: spproj
+        real,    allocatable :: xs(:)
         write(*,'(A)') 'test_equal_shifts_one_group'
         allocate(xs(NMANY), source=0.)
         call make_line(spproj, xs)
@@ -63,7 +63,7 @@ contains
     !! the next id never given; os_optics rows follow the ids
     subroutine test_ids_kept_across_regroupings()
         type(sp_project) :: spproj
-        integer :: last_ogid, id_a, id_b
+        integer          :: last_ogid, id_a, id_b
         write(*,'(A)') 'test_ids_kept_across_regroupings'
         ! group A at 0 (two), group B at 0.9 (three): apart, as 0.9 exceeds the threshold
         call make_line(spproj, [0.0, 0.0, 0.9, 0.9, 0.9])

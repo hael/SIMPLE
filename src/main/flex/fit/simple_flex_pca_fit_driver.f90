@@ -30,20 +30,20 @@ contains
     !! shared loop (fit_engine_iterate with nfits=2) from identical data-free bases, then merged by
     !! probe_paired_merge. Fit A writes flex_pca_pc*/flex_pca_probe.txt, fit B flex_pca_fitB_pc*/flex_pca_probe_fitB.txt.
     subroutine run_flex_pca_paired( params, build, plane_store, pcg_env, sel, col_sep, neigs_req, model, rounds )
-        type(flex_selection),   intent(in)    :: sel
-        type(flex_fit_model),   intent(inout) :: model   !< the merged product: basis, prior variances, rank, noise level
-        class(flex_pca_rounds),  intent(inout) :: rounds
-        class(parameters),       intent(inout) :: params
-        type(builder),           intent(inout) :: build
-        class(flex_plane_store), intent(inout) :: plane_store
-        class(flex_pcg_environment), intent(in) :: pcg_env
-        integer,                 intent(in)    :: col_sep, neigs_req
+        type(flex_selection),        intent(in)    :: sel
+        type(flex_fit_model),        intent(inout) :: model !< the merged product: basis, prior variances, rank, noise level
+        class(flex_pca_rounds),      intent(inout) :: rounds
+        class(parameters),           intent(inout) :: params
+        type(builder),               intent(inout) :: build
+        class(flex_plane_store),     intent(inout) :: plane_store
+        class(flex_pcg_environment), intent(in)    :: pcg_env
+        integer,                     intent(in)    :: col_sep, neigs_req
         !> per merged component: the cross-half match |cos| (the axis weight below)
-        real(dp), allocatable :: mergecos(:)
-        type(flex_probe_fit), target :: fits(2)
-        type(flex_mean_ref) :: means(2)
-        type(flex_selection) :: half
-        integer :: f, i, cnt, nhalf(2), u
+        real(dp),             allocatable :: mergecos(:)
+        type(flex_probe_fit), target      :: fits(2)
+        type(flex_mean_ref)               :: means(2)
+        type(flex_selection)              :: half
+        integer                           :: f, i, cnt, nhalf(2), u
         ! ---- FINAL STAGE (par.7 "merge, don't refit"): the accumulator-level merge is the delivery ----
         if( params%n_probe_iters < 2 ) THROW_HARD('the paired merge needs n_probe_iters >= 2: the final iteration''s statistics are expressed in the previous iteration''s delivered frame')
         model%ncomp = 0
@@ -179,7 +179,7 @@ contains
             block
                 type(image)  :: vcp
                 type(string) :: fsrc, fdst
-                integer :: qcp
+                integer      :: qcp
                 call vcp%new([params%box_crop,params%box_crop,params%box_crop], &
                     &params%smpd_crop)
                 do qcp = 1, model%ncomp
@@ -210,7 +210,7 @@ contains
     subroutine write_paired_eigen_table( fit )
         type(flex_probe_fit), intent(in) :: fit
         character(len=:), allocatable :: fn
-        integer :: q, u
+        integer                       :: q, u
         if( fit%spec%id == FLEX_FIT_A )then
             fn = 'flex_pca_eigenvalues.txt'
         else
@@ -231,19 +231,19 @@ contains
     !! the same shared E-step pass the shared-memory master runs, then one shared-codec part carrying both
     !! fits' accumulator blocks. No master tail runs here (the engine returns on a worker).
     subroutine run_flex_pca_paired_worker( params, build, plane_store, pcg_env, sel, it_stamp, niters_stamp, rounds )
-        type(flex_selection),   intent(in)    :: sel
-        class(flex_pca_rounds),  intent(inout) :: rounds
-        class(parameters),       intent(inout) :: params
-        type(builder),           intent(inout) :: build
-        class(flex_plane_store), intent(inout) :: plane_store
-        class(flex_pcg_environment), intent(in) :: pcg_env
-        integer,                 intent(in)    :: it_stamp, niters_stamp
-        type(flex_probe_fit), target :: fits(2)
-        type(flex_mean_ref) :: means(2)
-        type(flex_selection) :: half
-        real(dp), allocatable :: ev_load(:)
-        integer  :: nhalf(2), f, i, cnt, nc_load, it_eff
-        real(dp) :: s2_load
+        type(flex_selection),        intent(in)    :: sel
+        class(flex_pca_rounds),      intent(inout) :: rounds
+        class(parameters),           intent(inout) :: params
+        type(builder),               intent(inout) :: build
+        class(flex_plane_store),     intent(inout) :: plane_store
+        class(flex_pcg_environment), intent(in)    :: pcg_env
+        integer,                     intent(in)    :: it_stamp, niters_stamp
+        type(flex_probe_fit), target      :: fits(2)
+        type(flex_mean_ref)               :: means(2)
+        type(flex_selection)              :: half
+        real(dp),             allocatable :: ev_load(:)
+        integer                           :: nhalf(2), f, i, cnt, nc_load, it_eff
+        real(dp)                          :: s2_load
         it_eff = max(1, it_stamp)
         do f = 1, 2
             cnt = 0
@@ -305,13 +305,13 @@ contains
     end subroutine run_flex_pca_paired_worker
 
     subroutine probe_worker_pass( params, build, plane_store, pcg_env, model, sel, rounds )
-        type(flex_fit_model),   intent(inout) :: model   !< the workers mean in; the basis of this round loaded here
-        type(flex_selection),   intent(in)    :: sel
-        class(flex_pca_rounds),  intent(inout) :: rounds
-        class(parameters),       intent(inout) :: params
-        type(builder),           intent(inout) :: build
-        class(flex_plane_store), intent(inout) :: plane_store
-        class(flex_pcg_environment), intent(in) :: pcg_env
+        type(flex_fit_model),        intent(inout) :: model !< the workers mean in; the basis of this round loaded here
+        type(flex_selection),        intent(in)    :: sel
+        class(flex_pca_rounds),      intent(inout) :: rounds
+        class(parameters),           intent(inout) :: params
+        type(builder),               intent(inout) :: build
+        class(flex_plane_store),     intent(inout) :: plane_store
+        class(flex_pcg_environment), intent(in)    :: pcg_env
         integer :: s
         ! the master refreshed the basis volumes and the probe-state file before scheduling this
         ! round; which_iter keys every iteration schedule inside probe_subspace_iteration off the

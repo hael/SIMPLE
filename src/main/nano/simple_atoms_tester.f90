@@ -16,8 +16,8 @@ implicit none
 private
 public :: run_all_atoms_tests
 
-character(len=*), parameter :: TMP_PDB   = 'tmp_atoms_tester.pdb'
-character(len=*), parameter :: TMP_ANISO = 'tmp_atoms_tester_aniso.pdb'
+character(len=*), parameter :: TMP_PDB    = 'tmp_atoms_tester.pdb'
+character(len=*), parameter :: TMP_ANISO  = 'tmp_atoms_tester_aniso.pdb'
 character(len=*), parameter :: TMP_PSEUDO = 'tmp_atoms_tester_pseudo.pdb'
 
 !> a lattice lookup of an element the table lacks, which must stop
@@ -55,8 +55,8 @@ contains
         use simple_rnd,                    only: seed_rnd_fixed, ran3
         class(parameters), allocatable, target :: params
         class(cmdline),    allocatable         :: cline
-        integer :: nthr_saved, nteam_saved
-        real    :: r_ref, r_after
+        integer                                :: nthr_saved, nteam_saved
+        real                                   :: r_ref, r_after
         write(*,'(A)') 'test_graphene_keeps_process'
         nthr_saved  = nthr_glob
         nteam_saved = 1
@@ -98,7 +98,7 @@ contains
         class(lattice_lookup), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
         character(len=10) :: crystal_system
-        real :: a(3)
+        real              :: a(3)
         call get_lattice_params('ZN   ', crystal_system, a)
     end subroutine lookup_missing_lattice
 
@@ -156,8 +156,8 @@ contains
 
     subroutine test_geometry()
         real, parameter :: CEN(3) = [(1.25+0.50-3.0)/3., (-2.50+4.00+1.50)/3., (3.75-1.00+0.25)/3.]
-        real, parameter :: SMPD = 1.5
-        type(atoms) :: a
+        real, parameter :: SMPD   = 1.5
+        type(atoms)     :: a
         write(*,'(A)') 'test_geometry'
         call make_model(a)
         call assert_true(all(abs(a%get_geom_center() - CEN) < 1.e-6), 'get_geom_center is the mean position')
@@ -198,10 +198,10 @@ contains
     ! the record name of each atom (ATOM or HETATM) survives a read and a write
     subroutine test_pdb_hetatm()
         character(len=*), parameter :: FMT = '(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10X,A2,A2)'
-        type(atoms)       :: a
-        character(len=80) :: line
-        character(len=6)  :: tags(2)
-        integer :: funit, ios, n
+        type(atoms)                 :: a
+        character(len=80)           :: line
+        character(len=6)            :: tags(2)
+        integer                     :: funit, ios, n
         write(*,'(A)') 'test_pdb_hetatm'
         call del_file(TMP_PDB)
         open(newunit=funit, file=TMP_PDB, status='replace', action='write')
@@ -235,12 +235,12 @@ contains
 
     ! one ANISOU record per atom, U in units of 1e-4 A**2 in columns 29-70 (PDB format)
     subroutine test_anisou()
-        type(atoms)       :: a
-        real, allocatable :: aniso(:,:,:)
-        character(len=6)  :: tag
-        character(len=128):: line
-        integer :: i, funit, ios, natom, naniso, u(6)
-        logical :: ok
+        type(atoms)        :: a
+        real, allocatable  :: aniso(:,:,:)
+        character(len=6)   :: tag
+        character(len=128) :: line
+        integer            :: i, funit, ios, natom, naniso, u(6)
+        logical            :: ok
         write(*,'(A)') 'test_anisou'
         call make_model(a)
         allocate(aniso(3,3,3), source=0.)
@@ -282,14 +282,14 @@ contains
     ! map against itself gives 1 for every atom; atom_validate correlates each atom's simulated density
     ! with its window of the map, which holds that atom alone at the same place
     subroutine test_validation()
-        integer, parameter :: B3 = 32
+        integer, parameter :: B3   = 32
         real,    parameter :: SMPD = 1.0
-        type(atoms) :: a
-        type(image) :: vol, vol2, vol_full_oversampled
-        integer     :: i, nthr_saved
-        integer     :: ldim_before(3)
-        real        :: beta_min, beta_native(3), beta_fine(3), beta_full_oversampled(3), smpd_before
-        logical     :: ok
+        type(atoms)        :: a
+        type(image)        :: vol, vol2, vol_full_oversampled
+        integer            :: i, nthr_saved
+        integer            :: ldim_before(3)
+        real               :: beta_min, beta_native(3), beta_fine(3), beta_full_oversampled(3), smpd_before
+        logical            :: ok
         write(*,'(A)') 'test_validation'
         call make_model(a)
         call a%set_coord(1, [ 8., 16., 16.])
@@ -389,12 +389,12 @@ contains
     ! one pseudo-atom of integrated intensity Q and width B: peak Q (4 pi / B)**1.5 at the atom, voxel sum
     ! Q / smpd**3 within 1% at a cutoff of 4 sigma; two atoms add linearly; lp does not blur a pseudo-atom
     subroutine test_pseudo_density()
-        integer, parameter :: BX = 48
-        real,    parameter :: SMPD = 0.358, B1 = 13.9, Q1 = 2.0, B2 = 20.0, Q2 = 0.5
-        type(atoms)        :: a, a1, a2
-        type(image)        :: vol, vol1, vol2
-        real, allocatable  :: r(:,:,:), r1(:,:,:), r2(:,:,:)
-        real :: sigma, cutoff, peak
+        integer, parameter   :: BX   = 48
+        real,    parameter   :: SMPD = 0.358, B1 = 13.9, Q1 = 2.0, B2 = 20.0, Q2 = 0.5
+        type(atoms)          :: a, a1, a2
+        type(image)          :: vol, vol1, vol2
+        real,    allocatable :: r(:,:,:), r1(:,:,:), r2(:,:,:)
+        real                 :: sigma, cutoff, peak
         write(*,'(A)') 'test_pseudo_density'
         sigma  = sqrt(B1 / (8. * PI**2))
         cutoff = 4. * sigma
@@ -445,11 +445,11 @@ contains
     ! a pseudo-atom through the halo transfer: its peak and its integral q (1 - a) against the closed forms, and
     ! a zero halo amplitude leaves the plain pseudo-atom
     subroutine test_pseudo_halo()
-        integer, parameter :: BX = 48
+        integer, parameter :: BX   = 48
         real,    parameter :: SMPD = 0.358, B1 = 25., Q1 = 1.5, HAMP = 0.6, HBFAC = 200.
         type(atoms)        :: a1
         type(image)        :: vol, vol0
-        real :: cutoff, peak
+        real               :: cutoff, peak
         write(*,'(A)') 'test_pseudo_halo'
         cutoff = 4. * sqrt((B1 + HBFAC) / (8. * PI**2))
         call vol%new([BX,BX,BX], SMPD, wthreads=.false.)
@@ -483,10 +483,10 @@ contains
     ! symbol, occupancy (q) and beta (B) survive writepdb and new; the PDB columns hold two decimals
     subroutine test_pseudo_pdb_roundtrip()
         character(len=2), parameter :: SYMS(3) = ['X1', 'X2', 'X3']
-        real,             parameter :: QS(3) = [1.00, 0.17, 0.50], BS(3) = [13.90, 20.25, 7.50]
-        type(atoms) :: a, b
-        integer     :: i
-        logical     :: ok
+        real,             parameter :: QS(3)   = [1.00, 0.17, 0.50], BS(3) = [13.90, 20.25, 7.50]
+        type(atoms)                 :: a, b
+        integer                     :: i
+        logical                     :: ok
         write(*,'(A)') 'test_pseudo_pdb_roundtrip'
         call a%new(3, dummy=.true.)
         do i = 1,3
@@ -516,13 +516,13 @@ contains
     ! bfac_pdb: a Pt atom's occupancy scales the amplitude and beta is added to every b_j beside the blur
     ! bfac = (8 smpd)**2 of convolve; without the flag neither column is read, and a pseudo-atom ignores the flag
     subroutine test_element_bfac()
-        integer, parameter :: BX = 64
-        real,    parameter :: SMPD = 0.358, BFAC_PT = 20., CUTOFF = 10.
+        integer, parameter :: BX      = 64
+        real,    parameter :: SMPD    = 0.358, BFAC_PT = 20., CUTOFF = 10.
         real,    parameter :: A_PT(5) = [0.9148, 1.8096, 3.2134, 3.2953, 1.5754]
         real,    parameter :: B_PT(5) = [0.2263, 1.3813, 5.3243, 17.5987, 60.0171]
-        type(atoms) :: a
-        type(image) :: vol0, vol20, vol_def0, vol_def20, volp, volp_flag
-        real :: blur, ratio, sum0, sum20, peak20
+        type(atoms)        :: a
+        type(image)        :: vol0, vol20, vol_def0, vol_def20, volp, volp_flag
+        real               :: blur, ratio, sum0, sum20, peak20
         write(*,'(A)') 'test_element_bfac'
         blur  = (8. * SMPD)**2
         ratio = sum(A_PT / (B_PT + blur + BFAC_PT)**1.5) / sum(A_PT / (B_PT + blur)**1.5)
@@ -580,10 +580,10 @@ contains
     ! pseudo-atom symbols, a selector inside a list and a list of fewer than two symbols are rejected, without stopping
     subroutine test_parse_element_list()
         character(len=2), allocatable :: syms(:)
-        character(len=5) :: selector
-        type(string)     :: errmsg
-        logical          :: ok
-        integer          :: i
+        character(len=5)              :: selector
+        type(string)                  :: errmsg
+        logical                       :: ok
+        integer                       :: i
         character(len=*), parameter :: REJECTED(7) = [character(len=9) :: 'Pt,Pt', 'Pt,', ',Pt', 'Pt,Xx', 'Pt,X1',&
             &'CdSeW,Pt', 'Pt,Pt2']
         write(*,'(A)') 'test_parse_element_list'
@@ -620,12 +620,12 @@ contains
     subroutine test_compound_selector()
         use simple_nanoparticle_utils, only: find_rMax, lattice_cutoff
         character(len=2), allocatable :: syms(:)
-        character(len=5)  :: selector
-        character(len=10) :: crystal_system
-        type(string)      :: errmsg
-        real              :: a(3), r_cd, rmax_expected
-        integer           :: z
-        logical           :: ok
+        character(len=5)              :: selector
+        character(len=10)             :: crystal_system
+        type(string)                  :: errmsg
+        real                          :: a(3), r_cd, rmax_expected
+        integer                       :: z
+        logical                       :: ok
         write(*,'(A)') 'test_compound_selector'
         ok = parse_element_list('CdSeW', syms, selector, errmsg)
         call assert_true(ok, 'CdSeW is accepted')

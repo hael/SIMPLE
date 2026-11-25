@@ -6,7 +6,7 @@ use simple_cavg_quality_stats, only: auc_for_values
 use simple_linalg,             only: cholesky
 implicit none
 
-integer, parameter :: NTOY = 400
+integer,          parameter :: NTOY       = 400
 character(len=6), parameter :: SOLVERS(2) = ['lbfgsb', 'lm    ']
 
 contains
@@ -27,14 +27,14 @@ contains
     !! the median seconds of NTIME identical fits
     subroutine test_toy_plane_recovered()
         use simple_stat, only: median
-        integer, parameter :: NTIME = 20
+        integer,      parameter        :: NTIME = 20
         type(quality_logistic_problem) :: prob
-        real(kind=8), allocatable :: sol(:)
-        real    :: x(2,NTOY), obj, cosang
-        logical :: good(NTOY)
-        integer :: i, ncorrect, nclean, isolver, nevals, niter, irep
-        integer(kind=8) :: c0, c1, crate
-        real(kind=8)    :: times(NTIME)
+        real(kind=8), allocatable      :: sol(:)
+        real                           :: x(2,NTOY), obj, cosang
+        logical                        :: good(NTOY)
+        integer                        :: i, ncorrect, nclean, isolver, nevals, niter, irep
+        integer(kind=8)                :: c0, c1, crate
+        real(kind=8)                   :: times(NTIME)
         write(*,'(A)') 'test_toy_plane_recovered'
         do isolver = 1, size(SOLVERS)
             call toy_problem(prob, x, good, trim(SOLVERS(isolver)))
@@ -69,12 +69,12 @@ contains
     !! max(1, max|C|) (guessed), at the start and at a point away from it, and positive definite
     subroutine test_fisher_is_hessian()
         type(quality_logistic_problem) :: prob
-        real(kind=8), allocatable :: vec(:), gp(:), gm(:), curv(:,:), hfd(:,:), chol(:,:)
-        real(kind=8), parameter :: STEP = 1.d-5
-        real(kind=8) :: f, err
-        real    :: x(2,NTOY)
-        logical :: good(NTOY), ok
-        integer :: ipoint, j, d
+        real(kind=8), allocatable      :: vec(:), gp(:), gm(:), curv(:,:), hfd(:,:), chol(:,:)
+        real(kind=8), parameter        :: STEP = 1.d-5
+        real(kind=8)                   :: f, err
+        real                           :: x(2,NTOY)
+        logical                        :: good(NTOY), ok
+        integer                        :: ipoint, j, d
         write(*,'(A)') 'test_fisher_is_hessian'
         call toy_problem(prob, x, good)
         d = prob%ndim
@@ -104,9 +104,9 @@ contains
     !> the same problem fitted twice gives the same solution, bit for bit
     subroutine test_fit_repeatable()
         type(quality_logistic_problem) :: prob
-        real(kind=8), allocatable :: sol1(:), sol2(:)
-        real    :: x(2,NTOY), obj1, obj2
-        logical :: good(NTOY)
+        real(kind=8), allocatable      :: sol1(:), sol2(:)
+        real                           :: x(2,NTOY), obj1, obj2
+        logical                        :: good(NTOY)
         write(*,'(A)') 'test_fit_repeatable'
         call toy_problem(prob, x, good)
         call prob%fit(sol1, obj1)
@@ -135,8 +135,8 @@ contains
     !! single-precision counter) is 1, its reverse 0, a constant score 1/2
     subroutine test_auc_trajectory_scale()
         integer, parameter :: NG = 5336, NB = 7635
-        real    :: v(NG+NB)
-        integer :: st(NG+NB), i
+        real               :: v(NG+NB)
+        integer            :: st(NG+NB), i
         write(*,'(A)') 'test_auc_trajectory_scale'
         do i = 1, NG + NB
             if( i <= NG )then
@@ -156,8 +156,8 @@ contains
     !> on a small sample with ties the rank count equals the pairwise count of the class-average definition
     subroutine test_auc_matches_pairwise()
         integer, parameter :: N = 301
-        real    :: v(N), wins
-        integer :: st(N), i, j, seed, ngood
+        real               :: v(N), wins
+        integer            :: st(N), i, j, seed, ngood
         write(*,'(A)') 'test_auc_matches_pairwise'
         seed = 12345
         do i = 1, N
@@ -192,12 +192,12 @@ contains
 
     ! the toy design: two features on a deterministic lattice in [-2, 2]^2, balanced weights, lambda 1e-4
     subroutine toy_problem( prob, x, good, solver )
-        type(quality_logistic_problem), intent(inout) :: prob
-        real,                           intent(out)   :: x(2,NTOY)
-        logical,                        intent(out)   :: good(NTOY)
-        character(len=*), optional,     intent(in)    :: solver
+        type(quality_logistic_problem), intent(inout)            :: prob
+        real,                           intent(out)              :: x(2,NTOY)
+        logical,                        intent(out)              :: good(NTOY)
+        character(len=*),               optional,     intent(in) :: solver
         real(kind=8) :: gw, bw
-        integer :: i, ng
+        integer      :: i, ng
         do i = 1, NTOY
             x(1,i)  = -2. + 4. * real(mod(i * 37, 101)) / 100.
             x(2,i)  = -2. + 4. * real(mod(i * 53, 97)) / 96.

@@ -25,7 +25,7 @@ contains
     subroutine test_closed_forms()
         real, parameter  :: X(8) = [2., 4., 4., 4., 5., 5., 7., 9.]
         type(online_var) :: ov
-        integer :: i
+        integer          :: i
         write(*,'(A)') 'test_closed_forms'
         do i = 1,size(X)
             call ov%add(X(i))
@@ -48,7 +48,7 @@ contains
     ! sum of squares loses this completely (10002.5**2 needs 27 bits)
     subroutine test_large_offset()
         type(online_var) :: ov
-        integer :: i
+        integer          :: i
         write(*,'(A)') 'test_large_offset'
         do i = 1,4
             call ov%add(10000. + real(i))
@@ -60,10 +60,10 @@ contains
     ! 10000 seeded Gaussian draws: the online estimate agrees with the two-pass moment()
     subroutine test_against_moment()
         integer, parameter :: N = 10000
-        type(online_var) :: ov
-        real    :: samples(N), ave, sdev, var
-        integer :: i
-        logical :: err
+        type(online_var)   :: ov
+        real               :: samples(N), ave, sdev, var
+        integer            :: i
+        logical            :: err
         write(*,'(A)') 'test_against_moment'
         do i = 1,N
             samples(i) = gasdev(5., 2.)

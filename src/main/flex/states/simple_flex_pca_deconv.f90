@@ -78,21 +78,21 @@ contains
     !> Fit the mixture prior through the calibrated noise, choose K by particle-half cross-validation,
     !! and replace z by the posterior means and precision by the posterior precisions.
     subroutine deconvolve_latent( z, precision, prior, nptcls, ncomp, a, kmax_in, k_out, prior_fname, labels_fname, pinds, labels_out )
-        integer,                    intent(in)    :: nptcls, ncomp
-        real(dp),                   intent(inout) :: z(nptcls,ncomp)
-        real(dp),                   intent(inout) :: precision(ncomp,ncomp,nptcls)
-        real(dp),                   intent(in)    :: prior(ncomp), a
-        integer,                    intent(in)    :: kmax_in
-        integer,                    intent(out)   :: k_out
-        character(len=*), optional, intent(in)    :: prior_fname
-        character(len=*), optional, intent(in)    :: labels_fname   !< per-particle argmax component + its responsibility
-        integer,          optional, intent(in)    :: pinds(:)        !< project rows for that file
-        integer, allocatable, optional, intent(out)   :: labels_out(:)  !< argmax component per particle
-        real(dp), allocatable :: R(:,:,:), Nz(:,:,:), mu(:,:), Sig(:,:,:), pik(:), xhat(:,:), xcov(:,:,:)
-        real(dp), allocatable :: score(:), resp(:,:)
-        type(xd_gmm) :: xd
-        real(dp) :: ll, cobs(ncomp,ncomp), zmean(ncomp), vpop(ncomp), vobs(ncomp), mbar(ncomp)
-        integer  :: kmax, i, q, k, u, stride, nsub
+        integer,                    intent(in)                         :: nptcls, ncomp
+        real(dp),                   intent(inout)                      :: z(nptcls,ncomp)
+        real(dp),                   intent(inout)                      :: precision(ncomp,ncomp,nptcls)
+        real(dp),                   intent(in)                         :: prior(ncomp), a
+        integer,                    intent(in)                         :: kmax_in
+        integer,                    intent(out)                        :: k_out
+        character(len=*),           optional, intent(in)               :: prior_fname
+        character(len=*),           optional, intent(in)               :: labels_fname  !< per-particle argmax component + its responsibility
+        integer,                    optional, intent(in)               :: pinds(:)      !< project rows for that file
+        integer,                    allocatable, optional, intent(out) :: labels_out(:) !< argmax component per particle
+        real(dp), allocatable   :: R(:,:,:), Nz(:,:,:), mu(:,:), Sig(:,:,:), pik(:), xhat(:,:), xcov(:,:,:)
+        real(dp), allocatable   :: score(:), resp(:,:)
+        type(xd_gmm)            :: xd
+        real(dp)                :: ll, cobs(ncomp,ncomp), zmean(ncomp), vpop(ncomp), vobs(ncomp), mbar(ncomp)
+        integer                 :: kmax, i, q, k, u, stride, nsub
         integer(timer_int_kind) :: t0
         t0 = tic()
         allocate(R(ncomp,ncomp,nptcls), Nz(ncomp,ncomp,nptcls))
@@ -224,10 +224,10 @@ contains
 
     !> spd_inverse (simple_linalg) with the deconvolution's fallback: the inverse diagonal when A is not SPD
     subroutine spd_inverse_or_diag( A, Ainv, d, ok )
-        integer,           intent(in)  :: d
-        real(dp),          intent(in)  :: A(d,d)
-        real(dp),          intent(out) :: Ainv(d,d)
-        logical, optional, intent(out) :: ok
+        integer,           intent(in)            :: d
+        real(dp),          intent(in)            :: A(d,d)
+        real(dp),          intent(out)           :: Ainv(d,d)
+        logical,           optional, intent(out) :: ok
         logical :: lok
         integer :: i
         call spd_inverse(A, Ainv, d, lok)

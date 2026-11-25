@@ -20,7 +20,7 @@ private
 public :: check_fraction_dose_export, write_saved_model
 public :: MOVIE_NFRAMES, RECON_NPTCLS, SAVED_FRACTION_DOSE
 
-integer, parameter :: MOVIE_NFRAMES = 12, RECON_NPTCLS = 120
+integer, parameter :: MOVIE_NFRAMES       = 12, RECON_NPTCLS = 120
 real,    parameter :: SAVED_FRACTION_DOSE = 1.25
 
 contains
@@ -28,13 +28,13 @@ contains
     !> Persist realistic model metadata with an EER grouping and target distinct from the saved fraction dose.
     subroutine write_saved_model(params, fname, nframes, dose, kv)
         class(parameters), target, intent(inout) :: params
-        type(string), intent(in) :: fname
-        integer, intent(in) :: nframes
-        real, intent(in) :: dose, kv
+        type(string),      intent(in)            :: fname
+        integer,           intent(in)            :: nframes
+        real,              intent(in)            :: dose, kv
         class(motion_model), allocatable :: model
-        class(image), pointer :: frames(:)
-        type(string) :: movie
-        integer :: i, funit
+        class(image),        pointer     :: frames(:)
+        type(string)                     :: movie
+        integer                          :: i, funit
         allocate(model, frames(nframes))
         movie = fname//'.eer'
         open(newunit=funit, file=movie%to_char(), status='replace', access='stream', form='unformatted')
@@ -60,20 +60,20 @@ contains
     subroutine check_fraction_dose_export(root, name, stack, oritab, valid_dose, changed_state)
         use simple_test_flex_phantom_fixture, only: build_flex_pca_phantom_project, &
             &FLEX_PHANTOM_BOX, FLEX_PHANTOM_SMPD, FLEX_PHANTOM_MSKDIAM
-        type(string), intent(in) :: root, stack, oritab
+        type(string),     intent(in) :: root, stack, oritab
         character(len=*), intent(in) :: name
-        logical, intent(in) :: valid_dose, changed_state
-        class(parameters), allocatable :: params
-        class(cmdline), allocatable :: cline
-        class(sp_project), allocatable :: project
+        logical,          intent(in) :: valid_dose, changed_state
+        class(parameters),           allocatable :: params
+        class(cmdline),              allocatable :: cline
+        class(sp_project),           allocatable :: project
         class(dose_series_manifest), allocatable :: manifest
-        type(string), allocatable :: projects(:), stacks(:)
-        integer, allocatable :: ranges(:,:)
-        type(string) :: arm, directory, model, message, even, odd
-        real, allocatable :: fsc(:)
-        real(dp) :: dlo, dhi
-        integer :: i, j, nwin, nstates, a, b
-        logical :: ok
+        type(string),                allocatable :: projects(:), stacks(:)
+        integer,                     allocatable :: ranges(:,:)
+        type(string)                             :: arm, directory, model, message, even, odd
+        real,                        allocatable :: fsc(:)
+        real(dp)                                 :: dlo, dhi
+        integer                                  :: i, j, nwin, nstates, a, b
+        logical                                  :: ok
         allocate(params, cline, project, manifest)
         arm = root//'/'//name
         call simple_mkdir(arm)

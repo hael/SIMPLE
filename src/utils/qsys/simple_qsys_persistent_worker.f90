@@ -64,9 +64,9 @@ contains
     !> Write per-job script header lines derived from the job description hash.
     !> Writes to \p fhandle when present, otherwise to logfhandle.
     subroutine write_worker_header( self, q_descr, fhandle )
-        class(qsys_persistent_worker), intent(in) :: self
-        class(chash),       intent(in) :: q_descr
-        integer, optional,  intent(in) :: fhandle
+        class(qsys_persistent_worker), intent(in)            :: self
+        class(chash),                  intent(in)            :: q_descr
+        integer,                       optional,  intent(in) :: fhandle
         type(string) :: key, sbatch_cmd, sbatch_val
         integer      :: i, which
         logical      :: write2file
@@ -99,11 +99,11 @@ contains
     !> parameters \p parts_fromto and \p nactive are required by the base
     !> interface but are not used by this backend.
     subroutine write_worker_array_header( self, q_descr, parts_fromto, fhandle, nactive )
-        class(qsys_persistent_worker), intent(in) :: self
-        class(chash),       intent(in) :: q_descr
-        integer,            intent(in) :: parts_fromto(2) !< reserved: array partition range
-        integer, optional,  intent(in) :: fhandle
-        integer, optional,  intent(in) :: nactive         !< reserved: active array element count
+        class(qsys_persistent_worker), intent(in)            :: self
+        class(chash),                  intent(in)            :: q_descr
+        integer,                       intent(in)            :: parts_fromto(2) !< reserved: array partition range
+        integer,                       optional,  intent(in) :: fhandle
+        integer,                       optional,  intent(in) :: nactive         !< reserved: active array element count
         type(string) :: key, sbatch_cmd, sbatch_val
         integer      :: i, which
         logical      :: write2file

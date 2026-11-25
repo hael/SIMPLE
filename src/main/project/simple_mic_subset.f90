@@ -16,23 +16,23 @@ contains
 
     subroutine build_mic_support(project, mode, score_key, state, nspace, pgrp, support, populations, &
                                  eligible, particle_mic, status, message, bin_eulers)
-        class(sp_project), intent(inout) :: project
-        character(len=*), intent(in) :: mode, score_key, pgrp
-        integer, intent(in) :: state, nspace
-        real(dp), allocatable, intent(out) :: support(:,:)
-        integer, allocatable, intent(out) :: populations(:), particle_mic(:)
-        logical, allocatable, intent(out) :: eligible(:)
-        integer, intent(out) :: status
-        character(len=*), intent(out) :: message
-        real, allocatable, optional, intent(out) :: bin_eulers(:,:)
+        class(sp_project), intent(inout)                      :: project
+        character(len=*),  intent(in)                         :: mode, score_key, pgrp
+        integer,           intent(in)                         :: state, nspace
+        real(dp),          allocatable, intent(out)           :: support(:,:)
+        integer,           allocatable, intent(out)           :: populations(:), particle_mic(:)
+        logical,           allocatable, intent(out)           :: eligible(:)
+        integer,           intent(out)                        :: status
+        character(len=*),  intent(out)                        :: message
+        real,              allocatable, optional, intent(out) :: bin_eulers(:,:)
         integer, allocatable :: mic2stk(:), stk2mic(:)
-        type(oris) :: directions
-        type(sym) :: symmetry
-        type(ori) :: orientation
-        character(len=512) :: eo_message
-        integer :: nmics, nstks, np, i, m, s, b, half, ncells, physical_index, physical_count
-        real :: euler(3), weight
-        logical :: coverage
+        type(oris)           :: directions
+        type(sym)            :: symmetry
+        type(ori)            :: orientation
+        character(len=512)   :: eo_message
+        integer              :: nmics, nstks, np, i, m, s, b, half, ncells, physical_index, physical_count
+        real                 :: euler(3), weight
+        logical              :: coverage
         status = 1
         message = ''
         coverage = mode == 'quality_coverage'
@@ -154,21 +154,21 @@ contains
                                 particle_mic, support, particle_target, status, message)
         use simple_ptcl_subset, only: select_ptcl_subset
         class(sp_project), intent(inout) :: project
-        integer,          intent(in)    :: nselect, nspace, state
-        character(len=*), intent(in)    :: pgrp, score_key
-        integer,          intent(in)    :: populations(:), particle_mic(:)
-        logical,          intent(in)    :: eligible(:)
-        real(dp),         intent(inout) :: support(:,:)
-        integer,          intent(out)   :: particle_target, status
-        character(len=*), intent(out)   :: message
+        integer,           intent(in)    :: nselect, nspace, state
+        character(len=*),  intent(in)    :: pgrp, score_key
+        integer,           intent(in)    :: populations(:), particle_mic(:)
+        logical,           intent(in)    :: eligible(:)
+        real(dp),          intent(inout) :: support(:,:)
+        integer,           intent(out)   :: particle_target, status
+        character(len=*),  intent(out)   :: message
         class(sp_project), allocatable :: candidates
-        class(oris), allocatable :: directions
-        type(sym) :: symmetry
-        type(ori) :: orientation
-        logical, allocatable :: selected(:), recommended(:)
-        character(len=9) :: engine_score
-        integer :: np, ncandidates, i, half, cell, half_pop(0:1), requests(0:1)
-        real :: weight
+        class(oris),       allocatable :: directions
+        type(sym)                      :: symmetry
+        type(ori)                      :: orientation
+        logical,           allocatable :: selected(:), recommended(:)
+        character(len=9)               :: engine_score
+        integer                        :: np, ncandidates, i, half, cell, half_pop(0:1), requests(0:1)
+        real                           :: weight
         status = 1
         particle_target = 0
         message = ''
@@ -259,19 +259,19 @@ contains
 
     subroutine select_mic_support(support, nselect, count_only, max_nodes, chosen, value, upper_bound, &
                                   proven, nodes, status, candidate_mask)
-        real(dp), intent(in) :: support(:,:)
-        integer, intent(in) :: nselect, max_nodes
-        logical, intent(in) :: count_only
-        logical, allocatable, intent(out) :: chosen(:)
-        real(dp), intent(out) :: value, upper_bound
-        logical, intent(out) :: proven
-        integer, intent(out) :: nodes, status
-        logical, optional, intent(in) :: candidate_mask(:)
-        integer, allocatable :: indices(:), selected(:), best(:)
+        real(dp), intent(in)               :: support(:,:)
+        integer,  intent(in)               :: nselect, max_nodes
+        logical,  intent(in)               :: count_only
+        logical,  allocatable, intent(out) :: chosen(:)
+        real(dp), intent(out)              :: value, upper_bound
+        logical,  intent(out)              :: proven
+        integer,  intent(out)              :: nodes, status
+        logical,  optional, intent(in)     :: candidate_mask(:)
+        integer,  allocatable :: indices(:), selected(:), best(:)
         real(dp), allocatable :: h(:,:), suffix(:,:), largest(:,:), total(:), masses(:)
-        real(dp) :: scale, gain, best_gain, tolerance
-        integer :: n, nc, m, k, pick
-        logical :: limited
+        real(dp)              :: scale, gain, best_gain, tolerance
+        integer               :: n, nc, m, k, pick
+        logical               :: limited
         allocate(chosen(size(support,2)), source=.false.)
         value = 0._dp; upper_bound = 0._dp; proven = .false.; nodes = 0; status = 1
         if( nselect < 1 .or. max_nodes < 1 .or. size(support,1) < 1 ) return
@@ -336,7 +336,7 @@ contains
         recursive subroutine search(first, depth)
             integer, intent(in) :: first, depth
             real(dp) :: bound, score
-            integer :: remaining, i
+            integer  :: remaining, i
             remaining = nselect-depth
             if( n-first+1 < remaining ) return
             if( nodes >= max_nodes )then
@@ -364,11 +364,11 @@ contains
 
     subroutine apply_mic_subset(project, chosen, eligible, particle_mic)
         class(sp_project), intent(inout) :: project
-        logical, intent(in) :: chosen(:), eligible(:)
-        integer, intent(in) :: particle_mic(:)
+        logical,           intent(in)    :: chosen(:), eligible(:)
+        integer,           intent(in)    :: particle_mic(:)
         integer, allocatable :: mic2stk(:), stk2mic(:)
-        integer :: i, m
-        logical :: keep
+        integer              :: i, m
+        logical              :: keep
         call project%get_mic2stk_inds(mic2stk,stk2mic)
         do m = 1,size(chosen)
             if( .not.chosen(m) ) call project%os_mic%set_state(m,0)

@@ -14,9 +14,9 @@ real,    parameter :: TOL = 1.e-4
 contains
 
     subroutine run_all_volume_shape_tests()
-        type(image) :: vol
+        type(image)       :: vol
         real, allocatable :: density(:,:,:)
-        real :: q
+        real              :: q
         call vol%new([BOX, BOX, BOX], 1.0, wthreads=.false.)
         allocate(density(BOX, BOX, BOX), source=0.0)
         q = real(HALF_WIDTH * (HALF_WIDTH + 1)) / 3.0
@@ -51,14 +51,14 @@ contains
     !! largest component's share is 1 for one blob, a half for two of a size, near 1 with a speck;
     !! dense solvent outside the mask does not move the thresholds
     subroutine test_vol_shape_descr_components()
-        integer, parameter :: NB = 48, C = NB / 2 + 1, HW = 4, SHIFT = 14
-        real,    parameter :: SMPD_VOL = 2.0, LP = 6.0, FRAC = 0.1
-        type(image)       :: vol
-        type(image_bin)   :: bin
-        type(string)      :: cwd_saved, root
-        real, allocatable :: density(:,:,:)
-        real    :: dominant
-        integer :: nccs, nfail0
+        integer, parameter   :: NB       = 48, C = NB / 2 + 1, HW = 4, SHIFT = 14
+        real,    parameter   :: SMPD_VOL = 2.0, LP = 6.0, FRAC = 0.1
+        type(image)          :: vol
+        type(image_bin)      :: bin
+        type(string)         :: cwd_saved, root
+        real,    allocatable :: density(:,:,:)
+        real                 :: dominant
+        integer              :: nccs, nfail0
         nfail0 = tests_failed
         call enter_fixture('vol_shape_descr', cwd_saved, root)
         call vol%new([NB, NB, NB], SMPD_VOL, wthreads=.false.)
@@ -107,7 +107,7 @@ contains
     subroutine verify_shape(vol, label, expected_ecc, expected_aniso, expected_asph, expected_acyl, expected_rg_sq)
         type(image),      intent(in) :: vol
         character(len=*), intent(in) :: label
-        real, intent(in) :: expected_ecc, expected_aniso, expected_asph, expected_acyl, expected_rg_sq
+        real,             intent(in) :: expected_ecc, expected_aniso, expected_asph, expected_acyl, expected_rg_sq
         real :: eccentricity, anisotropy, asphericity, acylindricity, rg_sq
         call vol%calc_3D_shape_descriptors(real(BOX), eccentricity, anisotropy, asphericity, acylindricity, rg_sq)
         call assert_real(expected_ecc,   eccentricity,  TOL, 'volume shape: '//label//' eccentricity')

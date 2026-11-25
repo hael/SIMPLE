@@ -28,7 +28,7 @@ contains
     subroutine cleanup_root_folder( all )
         logical, optional, intent(in)  :: all
         type(string), allocatable :: files(:), folders(:)
-        integer :: i
+        integer                   :: i
  !       call simple_rmdir(DIR_SNAPSHOT) ! need snapshots keeping 
         call del_file(USER_PARAMS2D)
         call del_file(POOL_PROJFILE)
@@ -75,12 +75,12 @@ contains
     ! (thumb, thumbnx, thumbny, thumbidx in its cls2D), so the GUI gets the snapshot's class
     ! averages without recomputing their geometry; @p cavgsfname is their stack.
     subroutine snapshot_cavgs_meta( proj, cavgsfname, jpeg_path, mrc_path, ntilesx, ntilesy, cls_idx, cls_pop, cls_res )
-        class(sp_project),    intent(in)  :: proj
-        class(string),        intent(in)  :: cavgsfname
-        type(string),         intent(out) :: jpeg_path, mrc_path
-        integer,              intent(out) :: ntilesx, ntilesy
-        integer, allocatable, intent(out) :: cls_idx(:), cls_pop(:)
-        real,    allocatable, intent(out) :: cls_res(:)
+        class(sp_project),    intent(in)               :: proj
+        class(string),        intent(in)               :: cavgsfname
+        type(string),         intent(out)              :: jpeg_path, mrc_path
+        integer,              intent(out)              :: ntilesx, ntilesy
+        integer,              allocatable, intent(out) :: cls_idx(:), cls_pop(:)
+        real,                 allocatable, intent(out) :: cls_res(:)
         integer :: iori, noris, n_selected, thumbidx
         jpeg_path = ''
         mrc_path  = ''
@@ -145,8 +145,8 @@ contains
         class(sp_project), intent(inout) :: pub
         integer,           intent(out)   :: nstks, ncls
         integer, allocatable :: pops(:)
-        integer :: iset, ifirst, istk, jstk, iptcl, jptcl, nptcls, fromp, top, stkind, ind_in_stk
-        integer :: offset, ncls_set, icls
+        integer              :: iset, ifirst, istk, jstk, iptcl, jptcl, nptcls, fromp, top, stkind, ind_in_stk
+        integer              :: offset, ncls_set, icls
         call pub%kill
         nstks  = 0
         ncls   = 0
@@ -236,12 +236,12 @@ contains
         integer,       intent(in) :: ncls(:)
         real,          intent(in) :: smpd
         class(string), intent(in) :: cavgsfname, frcsfname
-        logical :: l_ok
+        logical           :: l_ok
         type(class_frcs)  :: frcs_set, frcs_all
         type(image)       :: img
         type(string)      :: src(3), dst(3), ext, dst_ext
         real, allocatable :: frc(:)
-        integer :: iset, ldim(3), n, ntot, box, frc_box, filtsz, ihalf, icls, k
+        integer           :: iset, ldim(3), n, ntot, box, frc_box, filtsz, ihalf, icls, k
         l_ok    = .false.
         ntot    = 0
         box     = 0
@@ -317,12 +317,12 @@ contains
     end function combine_sieve_classes
 
     subroutine build_pool_publication( src, pub, nstks, optics_dir )
-        class(sp_project),       intent(inout) :: src
-        class(sp_project),       intent(inout) :: pub
-        integer,                 intent(out)   :: nstks
-        class(string), optional, intent(in)    :: optics_dir
+        class(sp_project),       intent(inout)        :: src
+        class(sp_project),       intent(inout)        :: pub
+        integer,                 intent(out)          :: nstks
+        class(string),           optional, intent(in) :: optics_dir
         logical, allocatable :: l_stk(:)
-        integer :: nstks_src, istk, jstk, iptcl, jptcl, fromp, top, nptcls, stkind_src, ind_in_stk, lastmap
+        integer              :: nstks_src, istk, jstk, iptcl, jptcl, fromp, top, nptcls, stkind_src, ind_in_stk, lastmap
         call pub%kill
         nstks     = 0
         nstks_src = src%os_stk%get_noris()
@@ -470,7 +470,7 @@ contains
         class(sp_project), intent(inout) :: spproj
         integer,           intent(in)    :: nptcls, iter, ncls
         integer, allocatable :: clspops(:), populated(:), saved_seed(:), seed(:)
-        integer :: ncls_drawn, iptcl, nseed, i
+        integer              :: ncls_drawn, iptcl, nseed, i
         clspops    = spproj%os_cls2D%get_all_asint('pop')
         ncls_drawn = min(ncls, size(clspops))
         if( ncls_drawn < 1 ) return

@@ -57,24 +57,24 @@ contains
         !> one window of a dose series, as the manifest describes it
         type :: dose_window
             type(string) :: even, odd
-            integer      :: ffrom = 0, fto = 0
+            integer      :: ffrom   = 0, fto = 0
             real(dp)     :: dose_lo = 0._dp, dose_hi = 0._dp
         end type dose_window
-        type(parameters)   :: params
-        type(dose_series)  :: series
-        type(dose_curve)   :: curve
-        type(dose_series_manifest) :: input_series
+        type(parameters)               :: params
+        type(dose_series)              :: series
+        type(dose_curve)               :: curve
+        type(dose_series_manifest)     :: input_series
         type(dose_window), allocatable :: win(:)
-        complex(sp), allocatable :: em(:,:), om(:,:), ae(:), ao(:), s0(:)
-        integer,     allocatable :: shell(:)
-        real(dp),    allocatable :: kfreq(:)
-        real,        allocatable :: fsc(:), fsc_msk(:), res(:), fsc_tab(:,:)
-        type(image)  :: vol
-        type(image)  :: mskimg
-        type(string) :: outbody, manifest, message
-        real(dp)     :: mask_frac, shell_corr, hdr_smpd, hdr_kv
-        real         :: fsc05(4), fsc0143(4), mfsc05(4), mfsc0143(4)
-        integer      :: hdr_box, nwin, w, nsh, ncoeff, lp_shell, hp_shell, klo, khi
+        complex(sp),       allocatable :: em(:,:), om(:,:), ae(:), ao(:), s0(:)
+        integer,           allocatable :: shell(:)
+        real(dp),          allocatable :: kfreq(:)
+        real,              allocatable :: fsc(:), fsc_msk(:), res(:), fsc_tab(:,:)
+        type(image)                    :: vol
+        type(image)                    :: mskimg
+        type(string)                   :: outbody, manifest, message
+        real(dp)                       :: mask_frac, shell_corr, hdr_smpd, hdr_kv
+        real                           :: fsc05(4), fsc0143(4), mfsc05(4), mfsc0143(4)
+        integer                        :: hdr_box, nwin, w, nsh, ncoeff, lp_shell, hp_shell, klo, khi
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('bfac_model') ) call cline%set('bfac_model', 'line')
         if( .not. cline%defined('outvol')     ) call cline%set('outvol', 'dose_series.mrc')
@@ -203,10 +203,10 @@ contains
 
             !> shell index of every coefficient of the half-volume lattice, in a fixed traversal order
             subroutine lattice_shells( vol, nsh, shell, ncoeff )
-                class(image),         intent(in)    :: vol
-                integer,              intent(in)    :: nsh
-                integer, allocatable, intent(inout) :: shell(:)
-                integer,              intent(out)   :: ncoeff
+                class(image),         intent(in)                 :: vol
+                integer,              intent(in)                 :: nsh
+                integer,              allocatable, intent(inout) :: shell(:)
+                integer,              intent(out)                :: ncoeff
                 integer :: lims(3,2), h, k, l, s, i
                 lims   = vol%loop_lims(2)
                 ncoeff = 0
@@ -235,11 +235,11 @@ contains
 
             !> read every window's halves and gather their coefficients; l_mask selects the statistics copy
             subroutine gather_series( win, params, ncoeff, l_mask, em, om )
-                type(dose_window),        intent(in)    :: win(:)
-                class(parameters),        intent(in)    :: params
-                integer,                  intent(in)    :: ncoeff
-                logical,                  intent(in)    :: l_mask
-                complex(sp), allocatable, intent(inout) :: em(:,:), om(:,:)
+                type(dose_window),        intent(in)                 :: win(:)
+                class(parameters),        intent(in)                 :: params
+                integer,                  intent(in)                 :: ncoeff
+                logical,                  intent(in)                 :: l_mask
+                complex(sp),              allocatable, intent(inout) :: em(:,:), om(:,:)
                 type(image) :: vol
                 integer     :: w, nwin
                 nwin = size(win)
@@ -355,7 +355,7 @@ contains
                 class(string), intent(in) :: fname
                 real,          intent(in) :: res(:), tab(:,:)
                 character, parameter :: TAB_CHAR = achar(9)
-                integer :: funit, s, io_stat
+                integer              :: funit, s, io_stat
                 call fopen(funit, file=fname, status='replace', action='write', form='formatted')
                 write(funit,'(A)',iostat=io_stat) '# FSC of the even and odd accumulations; masked under the soft mask of mskdiam'
                 write(funit,'(A)',iostat=io_stat) 'shell'//TAB_CHAR//'res_A'//TAB_CHAR//'model'//TAB_CHAR//'model_masked'// &
@@ -387,8 +387,8 @@ contains
             subroutine plot_decay( body )
                 class(string), intent(in) :: body
                 character(len=:), allocatable :: b, gpfile, logfile, line, msg
-                integer :: unit, ios, i, j, s, w, ib, nsel, sel(5), cmdstat, exitstat
-                logical :: l_decay, l_weights
+                integer                       :: unit, ios, i, j, s, w, ib, nsel, sel(5), cmdstat, exitstat
+                logical                       :: l_decay, l_weights
                 b       = body%to_char()
                 gpfile  = b//'_plots.gp'
                 logfile = b//'_plots_gnuplot.log'
@@ -653,19 +653,19 @@ contains
             &NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A, NU_ENVMASK_RELATIVE, &
             &set_nu_solvent_envelope, nu_order_stats, make_nu_order_mask, report_nu_order_mask
         use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair
-        class(commander_nu_filt3D), intent(inout) :: self
+        class(commander_nu_filt3D),         intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        type(parameters)     :: params
-        type(image)          :: even, odd, even_nu, odd_nu, average, density_core, order_mask
-        type(image_msk)      :: nu_envelope, density_envelope
+        type(parameters)                 :: params
+        type(image)                      :: even, odd, even_nu, odd_nu, average, density_core, order_mask
+        type(image_msk)                  :: nu_envelope, density_envelope
         type(halfmap_diagnostics_result) :: diagnostics
-        type(nu_order_stats) :: order_stats
-        type(nu_envmask_params) :: envp
-        type(nu_envmask_stats)  :: envstats
-        type(string)         :: even_out, odd_out, avg_out, locres_out, evid_out, envmsk_out, order_out
-        logical, allocatable :: l_env(:,:,:)
-        integer              :: n_ccs, n_ccs_kept, grow_px, edge_px
-        logical              :: l_envmask, l_order
+        type(nu_order_stats)             :: order_stats
+        type(nu_envmask_params)          :: envp
+        type(nu_envmask_stats)           :: envstats
+        type(string)                     :: even_out, odd_out, avg_out, locres_out, evid_out, envmsk_out, order_out
+        logical, allocatable             :: l_env(:,:,:)
+        integer                          :: n_ccs, n_ccs_kept, grow_px, edge_px
+        logical                          :: l_envmask, l_order
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         l_order = .false.
         if( cline%defined('automsk') )then
@@ -790,8 +790,8 @@ contains
         class(cmdline),                    intent(inout) :: cline
         type(image),      allocatable :: odd(:), even(:), odd_filt(:)
         real,             allocatable :: lpsopt(:)
-        type(parameters) :: params
-        integer          :: iptcl
+        type(parameters)              :: params
+        integer                       :: iptcl
         ! init
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)

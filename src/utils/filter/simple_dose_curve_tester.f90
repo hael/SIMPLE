@@ -10,7 +10,7 @@ real(dp),         parameter :: TOL   = 1.e-12_dp
 ! four windows of two fractions; centres at 1, 3, 5 and 7 when a fraction carries a unit scaled dose
 real(dp),         parameter :: KNOT_C(4) = [1._dp, 0.9_dp, 0.8_dp, 0.6_dp]
 real(dp),         parameter :: KNOT_B(4) = [0._dp, 10._dp, 30._dp, 60._dp]
-real(dp),         parameter :: BETA = 10._dp, GAMMA = 0.04_dp
+real(dp),         parameter :: BETA      = 10._dp, GAMMA = 0.04_dp
 
 contains
 
@@ -107,7 +107,7 @@ contains
         type(dose_curve)      :: curve, readback
         type(string)          :: message
         real(dp), allocatable :: c(:), b(:), c2(:), b2(:)
-        logical :: ok
+        logical               :: ok
         write(*,'(A)') 'test_file_round_trip'
         call make_curve(curve, 300._dp, 1._dp, BETA, GAMMA, .false.)
         call curve%write(string(FNAME))
@@ -128,7 +128,7 @@ contains
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_positive_inf
         type(dose_curve) :: curve
         type(string)     :: message
-        real(dp) :: nan, inf
+        real(dp)         :: nan, inf
         nan = ieee_value(1._dp, ieee_quiet_nan)
         inf = ieee_value(1._dp, ieee_positive_inf)
         write(*,'(A)') 'test_movie_checks'
@@ -150,9 +150,9 @@ contains
     !> each defect of the file is reported, not read
     subroutine test_bad_files_are_rejected()
         integer, parameter :: NL = 12
-        character(len=48) :: valid(NL), lines(NL)
-        type(dose_curve)  :: curve
-        type(string)      :: message
+        character(len=48)  :: valid(NL), lines(NL)
+        type(dose_curve)   :: curve
+        type(string)       :: message
         write(*,'(A)') 'test_bad_files_are_rejected'
         valid = [character(len=48) :: '# SIMPLE dose curve 1', '# program dose_filter3D', '# kv 3.0E+002', &
             &'# dose_per_fraction 1.0E+000', '# band 2.0E+001 4.0E+000', '# line -2.0E+001 1.0E+001', &

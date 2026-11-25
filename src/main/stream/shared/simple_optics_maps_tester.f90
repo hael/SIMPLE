@@ -89,9 +89,9 @@ contains
     !! unchanged; both copies are renamed into place from their .tmp
     subroutine test_copy_with_optics_map()
         integer, parameter :: STKINDS(4) = [1, 1, 2, 3]
-        type(sp_project) :: spproj, src, copied
-        type(string)     :: dir, empty_dir, src_file, dst_file
-        integer          :: imic, iptcl
+        type(sp_project)   :: spproj, src, copied
+        type(string)       :: dir, empty_dir, src_file, dst_file
+        integer            :: imic, iptcl
         write(*,'(A)') 'test_copy_with_optics_map'
         dir       = new_test_dir('copy')
         empty_dir = new_test_dir('copy_empty')
@@ -142,7 +142,7 @@ contains
     subroutine make_grouped_mics( spproj )
         type(sp_project), intent(inout) :: spproj
         integer, parameter :: OGIDS(3) = [1, 2, 2]
-        integer :: imic
+        integer            :: imic
         call spproj%os_mic%new(3, is_ptcl=.false.)
         do imic = 1,3
             call spproj%os_mic%set(imic, 'importind', real(imic))

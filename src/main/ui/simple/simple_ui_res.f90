@@ -4,8 +4,8 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('res', 'Resolution Estimation', 130)
-type(ui_program), target :: fsc
-type(ui_program), target :: fsc_area_score
+type(ui_program),          target    :: fsc
+type(ui_program),          target    :: fsc_area_score
 
 contains
 

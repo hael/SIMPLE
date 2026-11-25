@@ -14,19 +14,19 @@ integer,          parameter :: HISTORY_CAPACITY0 = 1024 ! first capacity of the 
 
 type stream_watcher
     private
-    type(string),    allocatable :: history(:)             !< basenames of the files reported, in the order added (the first n_history)
-    integer,         allocatable :: history_order(:)       !< history indices in lexical order, for is_past's binary search
-    type(string),    allocatable :: watch_dirs(:)          !< directories to watch
-    type(string)                 :: watch_dir              !< movies directory to watch
-    type(string)                 :: regexp                 !< movies extensions
-    integer, public, allocatable :: ratehistory(:)
-    integer, public              :: n_history      = 0     !< history of movies detected
-    integer, public              :: rate           = 0     !< current rate of movie detection
-    integer                      :: report_time    = 600   !< a file is reported once untouched this long; negative: as soon as listed
-    integer                      :: ratetime       = 0     !< time of last rate checkpoint
-    integer                      :: raten          = 0     !< number imported at last rate checkpoint
-    integer                      :: n_watch        = 0     !< number of times the folder has been watched
-    logical                      :: exists         = .false.
+    type(string),    allocatable         :: history(:)           !< basenames of the files reported, in the order added (the first n_history)
+    integer,         allocatable         :: history_order(:)     !< history indices in lexical order, for is_past's binary search
+    type(string),    allocatable         :: watch_dirs(:)        !< directories to watch
+    type(string)                         :: watch_dir            !< movies directory to watch
+    type(string)                         :: regexp               !< movies extensions
+    integer,         public, allocatable :: ratehistory(:)
+    integer,         public              :: n_history      = 0   !< history of movies detected
+    integer,         public              :: rate           = 0   !< current rate of movie detection
+    integer                              :: report_time    = 600 !< a file is reported once untouched this long; negative: as soon as listed
+    integer                              :: ratetime       = 0   !< time of last rate checkpoint
+    integer                              :: raten          = 0   !< number imported at last rate checkpoint
+    integer                              :: n_watch        = 0   !< number of times the folder has been watched
+    logical                              :: exists         = .false.
 contains
     ! doers
     procedure          :: watch
@@ -51,14 +51,14 @@ contains
 
     !>  \brief  is a constructor
     function constructor( report_time, dir, spproj, nretries, suffix_filter )result( self )
-        integer,                 intent(in) :: report_time  ! in seconds
-        class(string),           intent(in) :: dir
-        logical,       optional, intent(in) :: spproj
-        integer,       optional, intent(in) :: nretries
-        class(string), optional, intent(in) :: suffix_filter
+        integer,                 intent(in)           :: report_time ! in seconds
+        class(string),           intent(in)           :: dir
+        logical,                 optional, intent(in) :: spproj
+        integer,                 optional, intent(in) :: nretries
+        class(string),           optional, intent(in) :: suffix_filter
         type(stream_watcher) :: self
-        integer :: i
-        logical :: l_movies
+        integer              :: i
+        logical              :: l_movies
         call self%kill
         l_movies = .true.
         if( present(spproj) ) l_movies = .not.spproj
@@ -106,16 +106,16 @@ contains
 
     !>  \brief  is the watching procedure
     subroutine watch( self, n_movies, movies, max_nmovies )
-        class(stream_watcher),       intent(inout) :: self
-        integer,                   intent(out)   :: n_movies
-        type(string), allocatable, intent(out)   :: movies(:)
-        integer, optional,         intent(in)    :: max_nmovies
+        class(stream_watcher),       intent(inout)                :: self
+        integer,                     intent(out)                  :: n_movies
+        type(string),                allocatable, intent(out)     :: movies(:)
+        integer,                     optional,         intent(in) :: max_nmovies
         type(string), allocatable :: farray(:)
         integer,      allocatable :: fileinfo(:)
         logical,      allocatable :: is_new_movie(:)
         integer                   :: tnow, last_accessed, last_modified, last_status_change ! in seconds
         integer                   :: i, io_stat, n_lsfiles, cnt
-        type(string) :: fname
+        type(string)              :: fname
         if( allocated(movies) ) deallocate(movies)
         n_movies = 0
         if( .not.self%exists )return
@@ -197,8 +197,8 @@ contains
 
     !>  \brief  append to history of previously processed movies/micrographs
     subroutine add2history_1(self, list)
-        class(stream_watcher),       intent(inout) :: self
-        type(string), allocatable, intent(in)    :: list(:)
+        class(stream_watcher),       intent(inout)           :: self
+        type(string),                allocatable, intent(in) :: list(:)
         integer :: i
         if( allocated(list) )then
             do i=1,size(list)
@@ -216,9 +216,9 @@ contains
         class(string),         intent(in)    :: fname
         type(string), allocatable :: tmp_farr(:)
         integer,      allocatable :: tmp_order(:)
-        type(string) :: name
-        integer      :: n, pos
-        logical      :: l_found
+        type(string)              :: name
+        integer                   :: n, pos
+        logical                   :: l_found
         if( .not.file_exists(fname) )return ! petty triple checking
         name = basename(fname)
         pos  = self%history_pos(name, l_found)
@@ -250,7 +250,7 @@ contains
         class(string),         intent(in)  :: name
         logical,               intent(out) :: l_found
         character(len=:), allocatable :: key, entry
-        integer :: lo, hi, mid
+        integer                       :: lo, hi, mid
         l_found = .false.
         key = name%to_char()
         lo  = 1
@@ -283,7 +283,7 @@ contains
     !>          absolute path is implied
     logical function is_past( self, fname )
         class(stream_watcher), intent(in) :: self
-        class(string),       intent(in) :: fname
+        class(string),         intent(in) :: fname
         integer :: pos
         ! need to use basename here since if movies are symbolic links ls -1f dereferences the links
         ! which would cause all movies to be declared as new because of the path mismatch
@@ -292,11 +292,11 @@ contains
 
     subroutine detect_and_add_dirs( self, rootdir, SJdirstruct )
         class(stream_watcher), intent(inout) :: self
-        type(string),        intent(in)    :: rootdir
-        logical,             intent(in)    :: SJdirstruct
+        type(string),          intent(in)    :: rootdir
+        logical,               intent(in)    :: SJdirstruct
         type(string), allocatable :: dir_movies(:)
-        integer :: i
-        logical :: l_new_dir
+        integer                   :: i
+        logical                   :: l_new_dir
         if( SJdirstruct )then
             ! Runtime detection of new grid square directories
             call sniff_folders_SJ( rootdir, l_new_dir, dir_movies )
@@ -314,11 +314,11 @@ contains
     !>  \brief  is for adding a directory to watch
     subroutine add2watchdirs( self, fname )
         class(stream_watcher), intent(inout) :: self
-        type(string),        intent(in)    :: fname
+        type(string),          intent(in)    :: fname
         type(string), allocatable :: tmp_farr(:)
         type(string)              :: abs_fname
-        integer :: i,n
-        logical :: new
+        integer                   :: i,n
+        logical                   :: new
         if( .not.file_exists(fname) )then
             write(logfhandle,'(A)')'>>> Directory does not exist: '//fname%to_char()
             return
@@ -351,11 +351,11 @@ contains
 
     !>  \brief  is for watching directories
     subroutine watchdirs( self, farray )
-        class(stream_watcher),       intent(in)    :: self
-        type(string), allocatable, intent(inout) :: farray(:)
+        class(stream_watcher),       intent(in)                 :: self
+        type(string),                allocatable, intent(inout) :: farray(:)
         type(string), allocatable :: tmp_farr(:), tmp_farr2(:)
         type(string)              :: dir
-        integer :: idir,ndirs,n_newfiles,nfiles,cnt,i
+        integer                   :: idir,ndirs,n_newfiles,nfiles,cnt,i
         if( allocated(farray) ) deallocate(farray)
         ndirs = 0
         if( allocated(self%watch_dirs) ) ndirs = size(self%watch_dirs)
@@ -421,12 +421,12 @@ contains
 
     ! List all directories following the so-called SJ format: directory/xxx/Data
     subroutine sniff_folders_SJ( directory, SJdirstruct, found_directories )
-        type(string),              intent(in)    :: directory
-        logical,                   intent(inout) :: SJdirstruct
-        type(string), allocatable, intent(inout) :: found_directories(:)
+        type(string),              intent(in)                 :: directory
+        logical,                   intent(inout)              :: SJdirstruct
+        type(string),              allocatable, intent(inout) :: found_directories(:)
         type(string)              :: dir, absdirectory, subdir
         type(string), allocatable :: dirs(:), subdirs(:)
-        integer :: i, j, nfound
+        integer                   :: i, j, nfound
         SJdirstruct  = .false.
         nfound       = 0
         absdirectory = simple_abspath(directory)
@@ -463,8 +463,8 @@ contains
         class(string), intent(in)  :: directory
         logical,       intent(out) :: found, SJdirstruct
         type(string),  allocatable :: dirs(:), subdirs(:), tmp(:)
-        type(string) :: regexp, absdirectory, dir
-        integer :: i, j, nfound
+        type(string)               :: regexp, absdirectory, dir
+        integer                    :: i, j, nfound
         found        = .false.
         SJdirstruct  = .false.
         absdirectory = simple_abspath(directory)

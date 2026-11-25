@@ -23,16 +23,16 @@ contains
     !==================================================================
 
     subroutine run_all_nano_mask_tests()
-        integer, parameter :: NIMGS = 3, BOX = 96, CENTRE = BOX / 2 + 1
-        integer, parameter :: NGROW = 2, WINSZ = 1, EDGE = 4
-        integer, parameter :: RADII(NIMGS) = [10, 14, 18]
-        integer, parameter :: OFFSETS(2,NIMGS) = reshape([0, 0, 5, -3, -6, 4], [2,NIMGS])
-        real,    parameter :: SMPD = 1.0
-        type(parameters) :: params
-        type(image)      :: imgs(NIMGS)
-        real, allocatable :: diams(:), shifts(:,:), mask(:,:,:)
-        real :: mask_centre(3), expected_diam
-        integer :: i, x, y
+        integer, parameter   :: NIMGS            = 3, BOX = 96, CENTRE = BOX / 2 + 1
+        integer, parameter   :: NGROW            = 2, WINSZ = 1, EDGE = 4
+        integer, parameter   :: RADII(NIMGS)     = [10, 14, 18]
+        integer, parameter   :: OFFSETS(2,NIMGS) = reshape([0, 0, 5, -3, -6, 4], [2,NIMGS])
+        real,    parameter   :: SMPD             = 1.0
+        type(parameters)     :: params
+        type(image)          :: imgs(NIMGS)
+        real,    allocatable :: diams(:), shifts(:,:), mask(:,:,:)
+        real                 :: mask_centre(3), expected_diam
+        integer              :: i, x, y
 
         call cleanup_nano_mask_files
         params%amsklp  = 8.0
@@ -86,13 +86,13 @@ contains
     !> the particle diameter that detect_atoms turns into its mask, on a sphere off the box centre along all three
     !! axes: low-passed at 5 A it reads about 1 A wider than drawn (13.3 A for 12 A in a numpy check)
     subroutine test_estimate_spher_mask_diam()
-        integer, parameter :: BOX = 64, OFFSET(3) = [4, -3, 5]
-        real,    parameter :: SMPD = 0.5, RAD = 6.0
+        integer,           parameter   :: BOX  = 64, OFFSET(3) = [4, -3, 5]
+        real,              parameter   :: SMPD = 0.5, RAD = 6.0
         class(parameters), allocatable :: params
-        type(image)     :: vol
-        type(image_msk) :: mskvol
-        integer :: i, j, k, c(3)
-        real    :: diam
+        type(image)                    :: vol
+        type(image_msk)                :: mskvol
+        integer                        :: i, j, k, c(3)
+        real                           :: diam
         write(*,'(A)') 'test_estimate_spher_mask_diam'
         allocate(parameters :: params)
         params%part = 1
@@ -142,19 +142,19 @@ contains
     !! Voxels beyond 4 sigma + envmsklp + 10.5 A of both centres are solvent. Negative control: built from the
     !! phantom shifted by 60 A, 49 A clear of it, the support covers less than half of the unshifted phantom.
     subroutine test_density_support_envelope()
-        integer, parameter :: BOX = 96, NB = 2
-        real,    parameter :: SMPD = 1.5
-        real,    parameter :: CTRS(3,NB) = reshape([-5., 3., 2., 6., -4., -3.], [3,NB]) !< A from the box centre
-        real,    parameter :: SIGS(NB) = [2.5, 2.0], AMPS(NB) = [1.0, 0.7]
-        real,    parameter :: SHIFT_X = 60.  !< A, the negative control's displacement
-        real,    parameter :: MASS_FLOOR = 0.999, CONTROL_CEIL = 0.5
+        integer,           parameter   :: BOX        = 96, NB = 2
+        real,              parameter   :: SMPD       = 1.5
+        real,              parameter   :: CTRS(3,NB) = reshape([-5., 3., 2., 6., -4., -3.], [3,NB]) !< A from the box centre
+        real,              parameter   :: SIGS(NB)   = [2.5, 2.0], AMPS(NB) = [1.0, 0.7]
+        real,              parameter   :: SHIFT_X    = 60.                                          !< A, the negative control's displacement
+        real,              parameter   :: MASS_FLOOR = 0.999, CONTROL_CEIL = 0.5
         class(parameters), allocatable :: params
-        type(image)       :: vol, core
-        type(image_msk)   :: msk
-        real, allocatable :: rho(:,:,:), sup(:,:,:), cor(:,:,:)
-        real    :: c0(3), rout, mass_tot, mass_in, mass_ctrl
-        integer :: i, j, k, b, ic(3)
-        logical :: centres_in, solvent_out
+        type(image)                    :: vol, core
+        type(image_msk)                :: msk
+        real,              allocatable :: rho(:,:,:), sup(:,:,:), cor(:,:,:)
+        real                           :: c0(3), rout, mass_tot, mass_in, mass_ctrl
+        integer                        :: i, j, k, b, ic(3)
+        logical                        :: centres_in, solvent_out
         write(*,'(A)') 'test_density_support_envelope'
         allocate(parameters :: params)
         params%part = 1
@@ -202,7 +202,7 @@ contains
         !> the phantom displaced by dx A along x
         function blobs( dx ) result( r )
             real, intent(in) :: dx
-            real :: r(BOX,BOX,BOX), p(3)
+            real    :: r(BOX,BOX,BOX), p(3)
             integer :: ii, jj, kk, bb
             r = 0.
             do kk = 1, BOX
@@ -229,9 +229,9 @@ contains
     !! OMP_NUM_THREADS says (was the msk_routines test program, which needed the environment)
     subroutine test_masks_parallel_equals_serial()
         integer, parameter :: NIMGS = 8, BOX2 = 128, BOX3 = 48, NTEAM = 3
-        real,    parameter :: SMPD = 1.0
-        type(image) :: stk(NIMGS), ref(NIMGS)
-        integer     :: i
+        real,    parameter :: SMPD  = 1.0
+        type(image)        :: stk(NIMGS), ref(NIMGS)
+        integer            :: i
         write(*,'(A)') 'test_masks_parallel_equals_serial'
         call check_2d('mask2D_soft',    1)
         call check_2d('mask2D_softavg', 2)
@@ -357,10 +357,10 @@ contains
     ! the search runs inwards from the faces to the centre, so a mask that does
     ! not straddle the centre is still contained, just not tightly
     subroutine test_bounds_from_mask3D()
-        integer, parameter :: BOX = 64, RAD = 10
-        type(image) :: cube
+        integer, parameter   :: BOX = 64, RAD = 10
+        type(image)          :: cube
         logical, allocatable :: mask(:,:,:)
-        integer :: lb(3), ub(3), lo(3), hi(3), i
+        integer              :: lb(3), ub(3), lo(3), hi(3), i
         write(*,'(A)') 'test_bounds_from_mask3D'
         call cube%new([BOX,BOX,BOX], 1.0)
         call draw_square(cube, RAD)
@@ -419,9 +419,9 @@ contains
     ! Nyquist is not in the spectrum and excludes nothing (it used to exclude the three highest
     ! shells). The expected mask is built here by a brute-force nearest-shell search.
     subroutine test_graphene_mask()
-        integer, parameter :: BOX = 160
-        real,    parameter :: SMPD = 0.358      ! Nyquist 0.716 A: all three bands inside
-        real,    parameter :: SMPD_COARSE = 0.7 ! Nyquist 1.4 A: only band 1 (2.14 A) inside
+        integer, parameter :: BOX         = 160
+        real,    parameter :: SMPD        = 0.358 ! Nyquist 0.716 A: all three bands inside
+        real,    parameter :: SMPD_COARSE = 0.7   ! Nyquist 1.4 A: only band 1 (2.14 A) inside
         write(*,'(A)') 'test_graphene_mask'
         call check_bands(SMPD, [GRAPHENE_BAND1, GRAPHENE_BAND2], 6, 'two bands inside Nyquist')
         call check_bands(SMPD, [GRAPHENE_BAND1, GRAPHENE_BAND2, GRAPHENE_BAND3], 9, 'three bands inside Nyquist')
@@ -435,7 +435,7 @@ contains
             character(len=*), intent(in) :: label
             real,    allocatable :: res(:), d(:)
             logical, allocatable :: gmask(:), expected(:)
-            integer :: n, i, k, loc
+            integer              :: n, i, k, loc
             res   = get_resarr(BOX, smpd_here)
             gmask = calc_graphene_mask(BOX, smpd_here, bands)
             n     = size(res)
@@ -464,14 +464,14 @@ contains
     !---------------- disc, transfer2bimg, cos_edge ----------------
 
     subroutine test_disc_and_cos_edge()
-        integer, parameter :: BOX = 48, EDGE = 4
-        real,    parameter :: RAD = 16.0
-        type(image)     :: sph
-        type(image_bin) :: bsph
+        integer, parameter   :: BOX = 48, EDGE = 4
+        real,    parameter   :: RAD = 16.0
+        type(image)          :: sph
+        type(image_bin)      :: bsph
         integer, allocatable :: imat(:,:,:)
-        integer :: npix, c, r
-        real    :: v, vprev, sphere_vol
-        logical :: monotone
+        integer              :: npix, c, r
+        real                 :: v, vprev, sphere_vol
+        logical              :: monotone
         write(*,'(A)') 'test_disc_and_cos_edge'
         call sph%disc([BOX,BOX,BOX], 1.0, RAD, npix)
         sphere_vol = 4.0/3.0 * PI * RAD**3
@@ -509,12 +509,12 @@ contains
     ! with mskrad and box such that 2*(mskrad+COSMSKHALFWIDTH) < box the soft mask is
     ! 1 for r <= mskrad-COSMSKHALFWIDTH, 0 for r >= mskrad+COSMSKHALFWIDTH, a cosine between
     subroutine test_mask2D_semantics()
-        integer, parameter :: BOX = 64
+        integer, parameter :: BOX    = 64
         real,    parameter :: MSKRAD = 20.0
-        type(image) :: img
-        integer :: c, r, rin, rout, i, j
-        real    :: v, vprev
-        logical :: ok
+        type(image)        :: img
+        integer            :: c, r, rin, rout, i, j
+        real               :: v, vprev
+        logical            :: ok
         write(*,'(A)') 'test_mask2D_semantics'
         c    = BOX/2 + 1
         rin  = nint(MSKRAD - COSMSKHALFWIDTH)
@@ -568,12 +568,12 @@ contains
     !---------------- 3D masks: hard, soft, softavg ----------------
 
     subroutine test_mask3D_semantics()
-        integer, parameter :: BOX = 48
+        integer, parameter :: BOX    = 48
         real,    parameter :: MSKRAD = 12.0
-        type(image) :: vol
-        integer :: c, r, rin, rout
-        real    :: v, vprev
-        logical :: ok
+        type(image)        :: vol
+        integer            :: c, r, rin, rout
+        real               :: v, vprev
+        logical            :: ok
         write(*,'(A)') 'test_mask3D_semantics'
         c    = BOX/2 + 1
         rin  = nint(MSKRAD - COSMSKHALFWIDTH)
@@ -659,9 +659,9 @@ contains
     !---------------- the original image_bin examples, with their answers ----------------
 
     subroutine test_image_bin_examples()
-        type(image_bin) :: bimg, ccimg
+        type(image_bin)      :: bimg, ccimg
         integer, allocatable :: labels(:,:,:)
-        integer :: imat(4,4,1), nccs
+        integer              :: imat(4,4,1), nccs
         write(*,'(A)') 'test_image_bin_examples'
         call bimg%new_bimg([4,4,1], 1.0)
         imat = 0
@@ -699,10 +699,10 @@ contains
     !---------------- 26-connectivity in 3D (the regression of the missing axial neighbours) ----------------
 
     subroutine test_ccs_connectivity_3D()
-        integer, parameter :: N = 7, C = 4
-        type(image_bin) :: bimg, ccimg
+        integer, parameter   :: N = 7, C = 4
+        type(image_bin)      :: bimg, ccimg
         integer, allocatable :: sz(:)
-        integer :: imat(N,N,N), nccs, di, dj, dk, nfail
+        integer              :: imat(N,N,N), nccs, di, dj, dk, nfail
         write(*,'(A)') 'test_ccs_connectivity_3D'
         call bimg%new_bimg([N,N,N], 1.0)
         ! every one of the 26 offsets connects
@@ -767,8 +767,8 @@ contains
 
     subroutine test_ccs_connectivity_2D()
         integer, parameter :: N = 7, C = 4
-        type(image_bin) :: bimg, ccimg
-        integer :: imat(N,N,1), nccs, di, dj, nfail
+        type(image_bin)    :: bimg, ccimg
+        integer            :: imat(N,N,1), nccs, di, dj, nfail
         write(*,'(A)') 'test_ccs_connectivity_2D'
         call bimg%new_bimg([N,N,1], 1.0)
         nfail = 0
@@ -799,10 +799,10 @@ contains
     !---------------- degenerate volumes ----------------
 
     subroutine test_ccs_degenerate()
-        integer, parameter :: N = 5
-        type(image_bin) :: bimg, ccimg
+        integer, parameter   :: N = 5
+        type(image_bin)      :: bimg, ccimg
         integer, allocatable :: sz(:)
-        integer :: imat(N,N,N), nccs
+        integer              :: imat(N,N,N), nccs
         write(*,'(A)') 'test_ccs_degenerate'
         call bimg%new_bimg([N,N,N], 1.0)
         imat = 0
@@ -827,10 +827,10 @@ contains
     ! a 10x10 square: erode strips the outer layer (8x8), dilate puts it back exactly,
     ! dilate once more gives 12x12; grow_bins uses a disc template, so corners are not added
     subroutine test_morphology()
-        integer, parameter :: BOX = 32, SIDE = 10
-        type(image_bin) :: bimg
+        integer, parameter   :: BOX = 32, SIDE = 10
+        type(image_bin)      :: bimg
         integer, allocatable :: imat(:,:,:), imat0(:,:,:)
-        integer :: i0
+        integer              :: i0
         write(*,'(A)') 'test_morphology'
         i0 = BOX/2 - SIDE/2 + 1
         call bimg%new_bimg([BOX,BOX,1], 1.0)
@@ -872,10 +872,10 @@ contains
     ! elimination/relabelling/extraction routines that the pickers and cavg tools use
     ! get_cc_voxels returns each label's voxels in array element order, the order pack and maxloc see
     subroutine test_cc_voxels()
-        integer, parameter :: NX = 5, NY = 4, NZ = 3, NLAB = 3
-        type(image_bin) :: bimg
+        integer, parameter   :: NX = 5, NY = 4, NZ = 3, NLAB = 3
+        type(image_bin)      :: bimg
         integer, allocatable :: first(:), vox(:,:)
-        integer :: imat(NX,NY,NZ), i, j, k, l, iv, nwrong
+        integer              :: imat(NX,NY,NZ), i, j, k, l, iv, nwrong
         write(*,'(A)') 'test_cc_voxels'
         call bimg%new_bimg([NX,NY,NZ], 1.0)
         imat = 0
@@ -918,12 +918,12 @@ contains
     end subroutine test_cc_voxels
 
     subroutine test_cc_bookkeeping()
-        integer, parameter :: BOX = 48
-        real,    parameter :: SMPD = 2.0
-        type(image_bin) :: bimg, ccimg
+        integer, parameter   :: BOX  = 48
+        real,    parameter   :: SMPD = 2.0
+        type(image_bin)      :: bimg, ccimg
         integer, allocatable :: imat(:,:,:), sz(:)
-        integer :: nccs, lab_a, lab_b, lab_c
-        real    :: xy(2), diam
+        integer              :: nccs, lab_a, lab_b, lab_c
+        real                 :: xy(2), diam
         write(*,'(A)') 'test_cc_bookkeeping'
         call bimg%new_bimg([BOX,BOX,1], SMPD)
         allocate(imat(BOX,BOX,1), source=0)
@@ -976,11 +976,11 @@ contains
 
     !> twice the farthest voxel from the component's own centre of mass, for a block well off the first plane
     subroutine test_diameter_cc_3D()
-        integer, parameter :: N = 40
-        real,    parameter :: SMPD = 2.0
-        type(image_bin) :: bimg
+        integer, parameter   :: N    = 40
+        real,    parameter   :: SMPD = 2.0
+        type(image_bin)      :: bimg
         integer, allocatable :: imat(:,:,:)
-        real :: diam
+        real                 :: diam
         write(*,'(A)') 'test_diameter_cc_3D'
         call bimg%new_bimg([N,N,N], SMPD)
         allocate(imat(N,N,N), source=0)
@@ -995,10 +995,10 @@ contains
     !---------------- hole filling and Feret diameters ----------------
 
     subroutine test_holes_and_feret()
-        integer, parameter :: BOX = 40
-        type(image_bin) :: bimg
+        integer, parameter   :: BOX = 40
+        type(image_bin)      :: bimg
         integer, allocatable :: imat(:,:,:)
-        real :: fmin, fmax
+        real                 :: fmin, fmax
         write(*,'(A)') 'test_holes_and_feret'
         call bimg%new_bimg([BOX,BOX,1], 1.0)
         allocate(imat(BOX,BOX,1), source=0)

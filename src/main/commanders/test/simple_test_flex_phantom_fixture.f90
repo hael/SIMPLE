@@ -57,14 +57,14 @@ contains
     !! nviews directions, each one pose, so a direction is an exact 2D class
     subroutine create_flex_pca_phantom_fixture( root, nthr, truth_a, truth_b, truth_mean, truth_diff, oritab, stack, &
         &nptcls, nstates, nviews, truth_c )
-        class(string),           intent(in)  :: root
-        integer,                 intent(in)  :: nthr
-        type(string),            intent(out) :: truth_a, truth_b, truth_mean, truth_diff, oritab, stack
-        integer,       optional, intent(in)  :: nptcls, nstates, nviews
-        type(string),  optional, intent(out) :: truth_c
-        integer, parameter :: SEEDS(3) = [SEED_A, SEED_B, SEED_C]
+        class(string),           intent(in)            :: root
+        integer,                 intent(in)            :: nthr
+        type(string),            intent(out)           :: truth_a, truth_b, truth_mean, truth_diff, oritab, stack
+        integer,                 optional, intent(in)  :: nptcls, nstates, nviews
+        type(string),            optional, intent(out) :: truth_c
+        integer,      parameter   :: SEEDS(3) = [SEED_A, SEED_B, SEED_C]
         type(string), allocatable :: truths(:), stks(:)
-        integer :: nst, nv, nposes, s
+        integer                   :: nst, nv, nposes, s
         call phantom_layout(nst, nv, nposes, nptcls, nstates, nviews)
         if( nst == 3 .and. .not. present(truth_c) ) THROW_HARD('three phantom states need truth_c')
         allocate(truths(nst), stks(nst))
@@ -90,8 +90,8 @@ contains
     !> The state count, direction count and poses per state of the phantom, from the optional arguments of
     !! the fixture routines; every state shares the nposes poses, every direction nposes/nviews of them
     subroutine phantom_layout( nst, nv, nposes, nptcls, nstates, nviews )
-        integer,           intent(out) :: nst, nv, nposes
-        integer, optional, intent(in)  :: nptcls, nstates, nviews
+        integer,           intent(out)          :: nst, nv, nposes
+        integer,           optional, intent(in) :: nptcls, nstates, nviews
         integer :: ntot
         ntot = DEFAULT_NPTCLS
         nst  = 2
@@ -118,12 +118,12 @@ contains
         real,    parameter :: POS(3,NBLOBS) = reshape([ &
             &-18., -10.,   4.,   14.,   8.,  -8.,   -6.,  18.,  12., &
             &  4., -16., -14.,   20., -12.,  16.,  -20.,  13., -11.], [3,NBLOBS])
-        real,    parameter :: SIGMA(NBLOBS) = [7.0, 6.0, 5.5, 6.5, 4.5, 5.0]
-        real,    parameter :: AMP(NBLOBS)   = [1.0, 0.85, 0.75, 0.70, 0.55, 0.50]
-        type(image)       :: vol
-        real, allocatable :: base(:,:,:), a(:,:,:), b(:,:,:), mean(:,:,:)
-        real    :: ctr(3), d2
-        integer :: blob, ix, iy, iz, s
+        real,    parameter   :: SIGMA(NBLOBS) = [7.0, 6.0, 5.5, 6.5, 4.5, 5.0]
+        real,    parameter   :: AMP(NBLOBS)   = [1.0, 0.85, 0.75, 0.70, 0.55, 0.50]
+        type(image)          :: vol
+        real,    allocatable :: base(:,:,:), a(:,:,:), b(:,:,:), mean(:,:,:)
+        real                 :: ctr(3), d2
+        integer              :: blob, ix, iy, iz, s
         do s = 1, nst
             truths(s) = root//'/truth_state_'//STATE_TAGS(s)//'.mrc'
         enddo
@@ -172,7 +172,7 @@ contains
         class(string), intent(in) :: fname
         integer,       intent(in) :: nposes, nviews
         class(oris), allocatable :: poses, views
-        integer :: i, nrep
+        integer                  :: i, nrep
         allocate(poses)
         call poses%new(nposes, is_ptcl=.true.)
         if( nviews > 0 )then
@@ -196,9 +196,9 @@ contains
     function simulate_stack( volume, oritab, outstk, seed, nposes, nthr ) result( stack )
         class(string), intent(in) :: volume, oritab, outstk
         integer,       intent(in) :: seed, nposes, nthr
-        type(string) :: stack
+        type(string)                                     :: stack
         class(commander_simulate_particles), allocatable :: simulate
-        class(cmdline), allocatable :: cline
+        class(cmdline),                      allocatable :: cline
         allocate(simulate, cline)
         call set_fixed_seed(seed, propagate=.true.)
         call cline%set('prg',      'simulate_particles')
@@ -235,7 +235,7 @@ contains
         integer,       intent(in) :: nposes
         type(string) :: stack
         type(image)  :: img
-        integer :: i, s, nst
+        integer      :: i, s, nst
         nst = size(stks)
         call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
         do i = 1, nposes
@@ -252,13 +252,13 @@ contains
     !! share it, so orientation coverage cannot become a state cue. With nviews > 0 the ptcl2D class of a
     !! particle is its direction, an exact 2D class: one pose, no in-plane rotation and no shift.
     subroutine build_flex_pca_phantom_project( projfile, stack, oritab, nptcls, nstates, nviews )
-        class(string),     intent(in) :: projfile, stack, oritab
-        integer, optional, intent(in) :: nptcls, nstates, nviews
+        class(string),     intent(in)           :: projfile, stack, oritab
+        integer,           optional, intent(in) :: nptcls, nstates, nviews
         class(sp_project), allocatable :: project
         class(oris),       allocatable :: poses
-        type(ctfparams) :: ctf
-        class(cmdline), allocatable:: cline_compenv
-        integer :: i, ipose, eo, nst, nv, nposes
+        type(ctfparams)                :: ctf
+        class(cmdline),    allocatable :: cline_compenv
+        integer                        :: i, ipose, eo, nst, nv, nposes
         allocate(cline_compenv)
         call phantom_layout(nst, nv, nposes, nptcls, nstates, nviews)
         allocate(project, poses)
@@ -296,16 +296,16 @@ contains
 
     !> The project's state weight set as a table: weights(nstates,nptcls) and the hard labels(nptcls)
     subroutine read_state_weight_table( project, field, nstates, weights, labels, status, message )
-        class(sp_project),         intent(in)  :: project
-        class(oris),               intent(in)  :: field
-        integer,                   intent(out) :: nstates
-        real(real32), allocatable, intent(out) :: weights(:,:)
-        integer,      allocatable, intent(out) :: labels(:)
-        integer,                   intent(out) :: status
-        character(len=*),          intent(out) :: message
+        class(sp_project),         intent(in)               :: project
+        class(oris),               intent(in)               :: field
+        integer,                   intent(out)              :: nstates
+        real(real32),              allocatable, intent(out) :: weights(:,:)
+        integer,                   allocatable, intent(out) :: labels(:)
+        integer,                   intent(out)              :: status
+        character(len=*),          intent(out)              :: message
         type(state_weight_set)    :: weight_set
         real(real32), allocatable :: column(:)
-        integer :: s
+        integer                   :: s
         nstates = 0
         call weight_set%new(project, field, status, message)
         if( status /= 0 ) return
@@ -322,11 +322,11 @@ contains
     !> The common production command line. nparts=1 selects shared memory; nparts>1 selects
     !! the distributed master and its real worker processes through the local queue system.
     subroutine configure_flex_pca_phantom( cline, truth_mean, basis_backend, state_backend, nparts, nthr, nbins, box_crop )
-        class(cmdline),    intent(inout) :: cline
-        class(string),     intent(in)    :: truth_mean
-        character(len=*),  intent(in)    :: basis_backend, state_backend
-        integer,           intent(in)    :: nparts, nthr
-        integer, optional, intent(in)    :: nbins, box_crop
+        class(cmdline),    intent(inout)        :: cline
+        class(string),     intent(in)           :: truth_mean
+        character(len=*),  intent(in)           :: basis_backend, state_backend
+        integer,           intent(in)           :: nparts, nthr
+        integer,           optional, intent(in) :: nbins, box_crop
         call cline%set('prg',               'flex_pca')
         call cline%set('projfile',          'phantom.simple')
         call cline%set('mkdir',             'no')

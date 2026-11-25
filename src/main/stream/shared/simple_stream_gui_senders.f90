@@ -35,13 +35,13 @@ contains
     !! come from. The messages carry each class's resolution and population when given, either
     !! from @p os_cls2D (indexed by class) or as @p res and @p pop (indexed like @p inds).
     subroutine send_cavgs( pipe, meta, jpg, inds, stk, xtiles, ytiles, os_cls2D, res, pop )
-        class(stream_pipe),        intent(inout) :: pipe
-        type(gui_metadata_cavg2D), intent(inout) :: meta
-        class(string),             intent(in)    :: jpg, stk
-        integer,                   intent(in)    :: inds(:), xtiles, ytiles
-        class(oris), optional,     intent(in)    :: os_cls2D
-        real,        optional,     intent(in)    :: res(:)
-        integer,     optional,     intent(in)    :: pop(:)
+        class(stream_pipe),        intent(inout)            :: pipe
+        type(gui_metadata_cavg2D), intent(inout)            :: meta
+        class(string),             intent(in)               :: jpg, stk
+        integer,                   intent(in)               :: inds(:), xtiles, ytiles
+        class(oris),               optional,     intent(in) :: os_cls2D
+        real,                      optional,     intent(in) :: res(:)
+        integer,                   optional,     intent(in) :: pop(:)
         type(string) :: jpg_here, stk_here
         integer      :: n, i, idx, xtile, ytile
         n        = size(inds)
@@ -94,8 +94,8 @@ contains
         class(string),             intent(in)    :: jpg, vol
         integer,                   intent(in)    :: istate, nstates, pop
         integer, parameter :: NTILES = 3
-        type(string) :: jpg_here, vol_here
-        integer      :: itile
+        type(string)       :: jpg_here, vol_here
+        integer            :: itile
         jpg_here = jpg
         vol_here = vol
         do itile = 1,NTILES
@@ -117,7 +117,7 @@ contains
         type(nrtxtfile)   :: boxfile
         type(string)      :: boxpath
         real, allocatable :: boxdata(:)
-        integer :: nmics, i_max, iori, imic, i, nrecs, nlines, xdim, ydim
+        integer           :: nmics, i_max, iori, imic, i, nrecs, nlines, xdim, ydim
         if( .not. (os_mic%isthere('thumb') .and. os_mic%isthere('xdim') .and. os_mic%isthere('ydim')&
             &.and. os_mic%isthere('smpd') .and. os_mic%isthere('boxfile')) ) return
         nmics = os_mic%get_noris()

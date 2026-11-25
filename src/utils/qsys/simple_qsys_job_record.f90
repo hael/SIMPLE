@@ -97,8 +97,8 @@ contains
         class(string), intent(in)  :: dir
         integer,       intent(out) :: ncancelled
         character(len=XLONGSTRLEN) :: line
-        type(string) :: listfile, exit_code_fname
-        integer      :: funit, ios, n
+        type(string)               :: listfile, exit_code_fname
+        integer                    :: funit, ios, n
         ncancelled = 0
         if( .not. dir_exists(dir) ) return
         listfile = '__simple_job_records_'//int2str(get_process_id())//'__'
@@ -172,9 +172,9 @@ contains
     !! checks in a row that found it gone. At the second, the job is lost: JOB_LOST_EXIT_CODE is
     !! written as its exit status (by temporary and rename) and .true. returned.
     logical function check_job_lost( exit_code_fname, last_check, nmisses, interval_s ) result( l_lost )
-        class(string),     intent(in)    :: exit_code_fname
-        integer,           intent(inout) :: last_check, nmisses
-        integer, optional, intent(in)    :: interval_s
+        class(string),     intent(in)           :: exit_code_fname
+        integer,           intent(inout)        :: last_check, nmisses
+        integer,           optional, intent(in) :: interval_s
         integer :: tnow, interval, funit, ios
         l_lost   = .false.
         interval = JOB_LIVENESS_S
@@ -223,8 +223,8 @@ contains
     !> Moves @p dir to <dir>_unfinished<k>, the first k free; @p aside_out is the new name (empty
     !! when @p dir does not exist).
     subroutine set_aside_dir( dir, aside_out )
-        class(string),           intent(in)  :: dir
-        type(string), optional,  intent(out) :: aside_out
+        class(string),           intent(in)             :: dir
+        type(string),            optional,  intent(out) :: aside_out
         type(string) :: aside
         integer      :: k
         if( present(aside_out) ) aside_out = ''

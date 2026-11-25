@@ -89,7 +89,7 @@ contains
     end subroutine test_estep_former
 
     subroutine test_crossfit_fsc()
-        logical :: signed_pass, noise_pass
+        logical  :: signed_pass, noise_pass
         real(dp) :: noise_mean, noise_floor
         write(*,'(A)') 'test_crossfit_fsc'
         call test_flex_crossfsc(signed_pass, noise_pass, noise_mean, noise_floor)
@@ -100,12 +100,12 @@ contains
 
     !> The PPCA posterior against Gaussian elimination independent of the Cholesky implementation.
     subroutine test_posterior_solve()
-        integer, parameter :: NC = 4
+        integer,         parameter   :: NC = 4
         class(flex_fit), allocatable :: fit
-        real(dp) :: L(NC,NC), G(NC,NC), precision(NC,NC), precision_inv(NC,NC)
-        real(dp) :: b(NC), zref(NC), contrast, ldA, quad, rel_z, rel_cov
-        logical  :: lok
-        integer  :: q
+        real(dp)                     :: L(NC,NC), G(NC,NC), precision(NC,NC), precision_inv(NC,NC)
+        real(dp)                     :: b(NC), zref(NC), contrast, ldA, quad, rel_z, rel_cov
+        logical                      :: lok
+        integer                      :: q
         write(*,'(A)') 'test_posterior_solve'
         allocate(fit)
         fit%model%ncomp = NC
@@ -178,7 +178,7 @@ contains
     pure function diagonal( A ) result( d )
         real(dp), intent(in) :: A(:,:)
         real(dp) :: d(min(size(A,1),size(A,2)))
-        integer :: i
+        integer  :: i
         do i = 1, size(d)
             d(i) = A(i,i)
         end do
@@ -187,18 +187,18 @@ contains
     !> the resume path: every payload survives a write/read round trip bit for bit, and the trailing
     !! block (noise scale, then the deconvolution) replaces itself without touching the raw block
     subroutine test_embedding_cache_io()
-        integer,          parameter :: NP = 37, NC = 4
-        character(len=*), parameter :: FN = 'test_flex_pca_cache.bin'
-        integer  :: pinds(NP), lab(NP), i, q, r, ncomp_rd
-        real(dp) :: z(NP,NC), eigvals(NC), contrast(NP), re(NP), rme(NP)
-        real(dp) :: prec(NC,NC,NP), sig2, sig2_rd, ns_rd
-        real(dp), allocatable :: z_rd(:,:), eig_rd(:), con_rd(:), re_rd(:), rme_rd(:), prec_rd(:,:,:)
-        real(dp), allocatable :: zd_rd(:,:), pd_rd(:,:,:)
-        integer,  allocatable :: lab_rd(:)
-        logical  :: l_found
-        type(flex_selection) :: sel
-        type(flex_fit_model) :: model, model_rd
-        type(flex_latent)    :: latent, latent_rd
+        integer,          parameter   :: NP = 37, NC = 4
+        character(len=*), parameter   :: FN = 'test_flex_pca_cache.bin'
+        integer                       :: pinds(NP), lab(NP), i, q, r, ncomp_rd
+        real(dp)                      :: z(NP,NC), eigvals(NC), contrast(NP), re(NP), rme(NP)
+        real(dp)                      :: prec(NC,NC,NP), sig2, sig2_rd, ns_rd
+        real(dp),         allocatable :: z_rd(:,:), eig_rd(:), con_rd(:), re_rd(:), rme_rd(:), prec_rd(:,:,:)
+        real(dp),         allocatable :: zd_rd(:,:), pd_rd(:,:,:)
+        integer,          allocatable :: lab_rd(:)
+        logical                       :: l_found
+        type(flex_selection)          :: sel
+        type(flex_fit_model)          :: model, model_rd
+        type(flex_latent)             :: latent, latent_rd
         write(*,'(A)') 'test_embedding_cache_io'
         do i = 1, NP
             pinds(i)    = 3*i + 1                   ! non-contiguous, as a real selection is
@@ -258,8 +258,8 @@ contains
 
     !> The persistent plane cache is exact for a master selection and coverage-based for workers.
     subroutine test_plane_cache_contract()
-        integer, parameter :: PBASE(4) = [2, 4, 6, 8], PCHANGED(4) = [2, 4, 7, 8]
-        integer, parameter :: PWORKER_OK(2) = [2, 8], PWORKER_BAD(2) = [2, 9]
+        integer,    parameter   :: PBASE(4)      = [2, 4, 6, 8], PCHANGED(4) = [2, 4, 7, 8]
+        integer,    parameter   :: PWORKER_OK(2) = [2, 8], PWORKER_BAD(2) = [2, 9]
         integer(8), allocatable :: base(:), changed_selection(:), changed_project(:), changed_stamp(:)
         write(*,'(A)') 'test_plane_cache_contract'
         base = plane_cache_contract_header('/data/a.simple', 101_8, 12, 24, 12, 1.5, PBASE)
@@ -283,16 +283,16 @@ contains
 
     !> two clusters plus a far outlier group: every particle gets a state, every state the floor
     subroutine test_population_floor()
-        integer, parameter :: NA = 300, NB = 250, NO = 20, NP = NA+NB+NO, NC = 2, NST = 2
-        real,    parameter :: FRAC = 0.2
-        integer  :: i, q, state, nmin, nlab(NST)
-        real(dp) :: z(NP,NC), eigvals(NC), prec(NC,NC,NP)
+        integer,  parameter   :: NA   = 300, NB = 250, NO = 20, NP = NA+NB+NO, NC = 2, NST = 2
+        real,     parameter   :: FRAC = 0.2
+        integer               :: i, q, state, nmin, nlab(NST)
+        real(dp)              :: z(NP,NC), eigvals(NC), prec(NC,NC,NP)
         real,     allocatable :: weights(:,:), targets(:,:), bandwidths(:), neff(:)
         integer,  allocatable :: labels(:)
-        logical  :: indicators, neff_match, floor_met
-        type(flex_latent)    :: latent
-        type(flex_fit_model) :: model
-        type(flex_state_set) :: st
+        logical               :: indicators, neff_match, floor_met
+        type(flex_latent)     :: latent
+        type(flex_fit_model)  :: model
+        type(flex_state_set)  :: st
         write(*,'(A)') 'test_population_floor'
         call set_fixed_seed(20260923)
         do i = 1, NA
@@ -344,11 +344,11 @@ contains
     !> pruning ruling: after the occupancy floor drops a state, a row's label is its argmax over the
     !! kept states, PARTITION rows are renormalized over them, a row without kept weight is unassigned
     subroutine test_prune_states()
-        integer, parameter :: NP = 6, NST = 3
+        integer, parameter   :: NP = 6, NST = 3
         type(flex_state_set) :: st
-        real    :: w0(NP,NST)
-        integer :: i
-        logical :: l_agree, l_unit
+        real                 :: w0(NP,NST)
+        integer              :: i
+        logical              :: l_agree, l_unit
         write(*,'(A)') 'test_prune_states'
         ! rows 1-2 belong to state 1, rows 3-4 to state 2, row 5 to the small state 3 with some weight in
         ! state 2, row 6 to state 3 only
@@ -386,9 +386,9 @@ contains
     !> compact support, unit peak, neff bounds and bounded widening towards min_neff
     subroutine test_kernel_bandwidth()
         integer, parameter :: NP = 400
-        integer  :: i, nsupp
-        real(dp) :: dist(NP), h_out, h_wide
-        real     :: w(NP), neff, neff_wide
+        integer            :: i, nsupp
+        real(dp)           :: dist(NP), h_out, h_wide
+        real               :: w(NP), neff, neff_wide
         write(*,'(A)') 'test_kernel_bandwidth'
         do i = 1, NP
             dist(i) = real(i,dp)                    ! squared distances 1..NP
@@ -413,11 +413,11 @@ contains
     !! as one thread does
     subroutine test_assign_directions()
         !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
-        integer, parameter :: NP = 300, ND = 60
+        integer, parameter :: NP      = 300, ND = 60
         real,    parameter :: TOL_DOT = 1.e-6
-        real     :: nrm_p(3,NP), nrm_b(3,ND), z, phi, worst
-        real(dp) :: d, dmax
-        integer  :: dir1(NP), dirn(NP), i, j, nthr_prev
+        real               :: nrm_p(3,NP), nrm_b(3,ND), z, phi, worst
+        real(dp)           :: d, dmax
+        integer            :: dir1(NP), dirn(NP), i, j, nthr_prev
         write(*,'(A)') 'test_assign_directions'
         ! golden-angle spirals: the bank, and particle normals off its points
         do j = 1, ND
@@ -452,14 +452,14 @@ contains
 
     !> covariance state weights on a clearly bimodal embedding
     subroutine test_state_weights()
-        integer, parameter :: NPC = 150, NP = 2*NPC, NC = 2, NST = 2
-        integer  :: i, q, state, nlab(NST)
-        real(dp) :: z(NP,NC), eigvals(NC), prec(NC,NC,NP)
+        integer,  parameter   :: NPC = 150, NP = 2*NPC, NC = 2, NST = 2
+        integer               :: i, q, state, nlab(NST)
+        real(dp)              :: z(NP,NC), eigvals(NC), prec(NC,NC,NP)
         real,     allocatable :: weights(:,:), targets(:,:), bandwidths(:), neff(:)
         integer,  allocatable :: labels(:)
-        logical  :: in_hull
-        type(flex_latent)    :: latent
-        type(flex_state_set) :: st
+        logical               :: in_hull
+        type(flex_latent)     :: latent
+        type(flex_state_set)  :: st
         write(*,'(A)') 'test_state_weights'
         do i = 1, NPC
             z(i,     1) = -5.d0 + 0.01d0*real(mod(i,7),dp)
@@ -506,11 +506,11 @@ contains
     subroutine test_deconvolution( n, smin, smax )
         integer,  intent(in) :: n            !< particles; the K ladder runs to min(4, n/2000)
         real(dp), intent(in) :: smin, smax   !< per-axis noise variance drawn uniformly in [smin,smax]
-        integer, parameter :: D = 4
+        integer,  parameter   :: D = 4
         real(dp), allocatable :: x(:,:), z(:,:), prec(:,:,:), zhalf(:,:,:), z0(:,:)
-        real(dp) :: prior(D), a, a_comp(D), s, g(D), mse_z, mse_x, mu_true(D,2), u
-        integer  :: i, q, k_out, kt
-        character(len=24) :: tag
+        real(dp)              :: prior(D), a, a_comp(D), s, g(D), mse_z, mse_x, mu_true(D,2), u
+        integer               :: i, q, k_out, kt
+        character(len=24)     :: tag
         write(tag,'(A,I0,A)') 'n=', n, ': '
         write(*,'(A,I0)') 'test_deconvolution n=', n
         allocate(x(n,D), z(n,D), prec(D,D,n), zhalf(n,D,2), z0(n,D))
@@ -572,25 +572,25 @@ contains
         logical,  intent(out) :: full_pass, ring_pass, low_pass, cart_linear_pass, ring_power_pass
         real(dp), intent(out) :: full_rel, ring_rel, low_rel, linear_rel, cart_linear_rel, quad_rel, ring_fraction
         real(dp), intent(out) :: full_tol, ring_tol, low_tol, linear_tol, ring_fraction_floor
-        integer,  parameter :: BOX = 24, NC = 2, BAND = 6, RHYB = 4, NTHR = 1
-        real(dp), parameter :: COEFF(NC)               = [0.65d0, -0.40d0]
-        real(dp), parameter :: MIN_RING_POWER_FRACTION = 0.10_dp
-        type(flex_probe_fit), allocatable :: fit
-        class(parameters), allocatable, target :: params
-        class(sp_project), allocatable :: project
-        type(fplane_type) :: fpl
-        type(ori) :: o
-        real, allocatable :: r0(:,:,:), rq(:,:,:,:)
-        complex, allocatable :: bank(:,:)
-        real(dp) :: G(NC,NC), b(NC), c(NC), e_mm, myv, a
-        real(dp) :: Gref(NC,NC), bref(NC), cref(NC), eref, myref
-        real(dp) :: Ghi(NC,NC), bhi(NC), chi(NC), ehi, myhi
-        real(dp) :: Gsame(NC,NC), bsame(NC), csame(NC), esame, mysame
-        real(dp) :: Gring(NC,NC), bring(NC), cring(NC), ering, myring
-        real(dp) :: Glow(NC,NC), blow(NC), clow(NC), elow, mylow
-        real(dp) :: Glref(NC,NC), blref(NC), clref(NC), elref, mylref
-        real :: ctr, xyz(3), rot(3,3)
-        integer :: i, j, k, q, r, ir, nlow, nops, lim, pf
+        integer,              parameter           :: BOX                     = 24, NC = 2, BAND = 6, RHYB = 4, NTHR = 1
+        real(dp),             parameter           :: COEFF(NC)               = [0.65d0, -0.40d0]
+        real(dp),             parameter           :: MIN_RING_POWER_FRACTION = 0.10_dp
+        type(flex_probe_fit), allocatable         :: fit
+        class(parameters),    allocatable, target :: params
+        class(sp_project),    allocatable         :: project
+        type(fplane_type)                         :: fpl
+        type(ori)                                 :: o
+        real,                 allocatable         :: r0(:,:,:), rq(:,:,:,:)
+        complex,              allocatable         :: bank(:,:)
+        real(dp)                                  :: G(NC,NC), b(NC), c(NC), e_mm, myv, a
+        real(dp)                                  :: Gref(NC,NC), bref(NC), cref(NC), eref, myref
+        real(dp)                                  :: Ghi(NC,NC), bhi(NC), chi(NC), ehi, myhi
+        real(dp)                                  :: Gsame(NC,NC), bsame(NC), csame(NC), esame, mysame
+        real(dp)                                  :: Gring(NC,NC), bring(NC), cring(NC), ering, myring
+        real(dp)                                  :: Glow(NC,NC), blow(NC), clow(NC), elow, mylow
+        real(dp)                                  :: Glref(NC,NC), blref(NC), clref(NC), elref, mylref
+        real                                      :: ctr, xyz(3), rot(3,3)
+        integer                                   :: i, j, k, q, r, ir, nlow, nops, lim, pf
         allocate(fit, params, project, r0(BOX,BOX,BOX), rq(BOX,BOX,BOX,NC))
         allocate(fit%estep)
         params%box_crop  = BOX
@@ -752,8 +752,8 @@ contains
         end subroutine prepare_reconstructor
 
         subroutine build_exact_positions( hs, ks, npos )
-            integer, allocatable, intent(out) :: hs(:), ks(:)
-            integer,              intent(out) :: npos
+            integer,              allocatable, intent(out) :: hs(:), ks(:)
+            integer,              intent(out)              :: npos
             integer :: h, kk, p
             npos = count_halfplane(RHYB)
             allocate(hs(npos), ks(npos))
@@ -784,7 +784,7 @@ contains
             real(dp), intent(in)  :: wr(:)
             real(dp), intent(out) :: Go(NC,NC), bo(NC), co(NC), eo, myo
             real(dp) :: u0r, u0i, uqr, uqi, urr, uri, yr, yi, wri
-            integer :: ir_, j_, iq, jq
+            integer  :: ir_, j_, iq, jq
             Go = 0.d0; bo = 0.d0; co = 0.d0; eo = 0.d0; myo = 0.d0
             do ir_ = 1, fit%estep%nk_es
                 wri = wr(ir_)
@@ -819,11 +819,11 @@ contains
             integer,             intent(in)    :: khi
             real(dp),            intent(out)   :: Go(NC,NC), bo(NC), co(NC), eo, myo
             type(kbinterpol) :: kb
-            real :: rmat(3,3), loc(3), wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
-            integer :: h, kk, iq, jq, win(2,3), lb(3), ub(3)
-            logical :: l_conjg
-            complex :: u0, uq(NC), val, tf, yv
-            complex(dp) :: u0d, yd
+            real             :: rmat(3,3), loc(3), wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
+            integer          :: h, kk, iq, jq, win(2,3), lb(3), ub(3)
+            logical          :: l_conjg
+            complex          :: u0, uq(NC), val, tf, yv
+            complex(dp)      :: u0d, yd
             Go = 0.d0; bo = 0.d0; co = 0.d0; eo = 0.d0; myo = 0.d0
             kb   = kbinterpol(KBWINSZ, KBALPHA)
             rmat = ori_here%get_mat()
@@ -871,7 +871,7 @@ contains
             real,             intent(in)  :: loc(3)
             integer,          intent(out) :: win(2,3)
             real,             intent(out) :: wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
-            real :: base(3), w3(3), s
+            real    :: base(3), w3(3), s
             integer :: d, iw
             iw = ceiling(KBWINSZ - 0.5)
             win(1,:) = nint(loc) - iw
@@ -930,14 +930,14 @@ contains
     subroutine test_flex_crossfsc( signed_pass, noise_pass, noise_mean, noise_floor )
         logical,  intent(out) :: signed_pass, noise_pass
         real(dp), intent(out) :: noise_mean, noise_floor
-        integer, parameter :: BOX = 16, NC = 2
+        integer,              parameter   :: BOX = 16, NC = 2
         type(flex_probe_fit), allocatable :: fits(:)
-        class(parameters), allocatable :: params
-        type(xfsc_ctx_t) :: ctx
-        real, allocatable :: ra(:,:,:,:), rb(:,:,:,:)
-        real(dp) :: proj
-        integer, allocatable :: shell_count(:)
-        integer :: f, q, fsz, lims(3,2), h, k, l, sh
+        class(parameters),    allocatable :: params
+        type(xfsc_ctx_t)                  :: ctx
+        real,                 allocatable :: ra(:,:,:,:), rb(:,:,:,:)
+        real(dp)                          :: proj
+        integer,              allocatable :: shell_count(:)
+        integer                           :: f, q, fsz, lims(3,2), h, k, l, sh
         allocate(params, fits(2), ra(BOX,BOX,BOX,NC), rb(BOX,BOX,BOX,NC))
         fsz = max(1, fdim(BOX) - 1)
         params%box_crop = BOX
@@ -1030,33 +1030,33 @@ contains
 
     !> Coupled two-component M-step on known noiseless planes, with a dense PCG reference.
     subroutine test_mstep_toy()
-        integer,  parameter :: BOX = 8, NC = 2, NPROJ = 40, BAND = 3
-        integer,  parameter :: NPAIRS         = (NC*(NC+1))/2
-        real(dp), parameter :: SUBSPACE_FLOOR = 0.90_dp
-        class(parameters), allocatable, target :: params
-        class(sp_project), allocatable :: project
-        class(sym), allocatable :: c1
-        class(flex_pcg_t), allocatable :: pcg
-        type(reconstructor), allocatable :: zero_rec, truth_recs(:), grid_recs(:), pcg_recs(:)
-        type(image), allocatable :: truth_imgs(:), grid_imgs(:), pcg_imgs(:), gridcorr, mask_img
-        type(fplane_type), allocatable :: fpls(:), basis_fpls(:), mean_fpl
-        type(ori), allocatable :: orientations(:)
-        type(flex_pcg_outcome_t) :: outcome
-        real, allocatable :: truth(:,:,:,:), mask(:,:,:), rho(:,:,:,:)
-        real, allocatable :: kacc(:,:), kpk(:,:), rhs_zero(:,:,:,:), precond_zero(:,:,:,:), bvol(:,:,:,:)
-        real, allocatable :: ridge_probe(:,:,:,:), h_unreg(:,:,:,:), h_reg(:,:,:,:)
-        complex, allocatable :: racc(:,:), rpk(:,:)
-        real(dp), allocatable :: z(:,:), dens(:,:,:), sv_grid(:), sv_pcg(:)
-        real(dp), allocatable :: hdense(:,:), bdense(:), xdense(:), xpcg(:)
-        integer, allocatable :: dof(:,:)
-        real(dp) :: grid_cos, pcg_cos, dense_rel, dense_resid, resid_tol, condition
-        real(dp) :: theta, proj, nrm, roundoff, ridge_lift(NC), ridge_rel, ridge_tol
-        real(dp) :: u(3)
-        real :: xyz(3), ctr, rr
-        real, pointer :: rp(:,:,:)
-        integer :: i, j, k, q, r, n, lim, ndof, mid
-        logical, allocatable :: valid(:)
-        logical :: dense_ok
+        integer,             parameter           :: BOX            = 8, NC = 2, NPROJ = 40, BAND = 3
+        integer,             parameter           :: NPAIRS         = (NC*(NC+1))/2
+        real(dp),            parameter           :: SUBSPACE_FLOOR = 0.90_dp
+        class(parameters),   allocatable, target :: params
+        class(sp_project),   allocatable         :: project
+        class(sym),          allocatable         :: c1
+        class(flex_pcg_t),   allocatable         :: pcg
+        type(reconstructor), allocatable         :: zero_rec, truth_recs(:), grid_recs(:), pcg_recs(:)
+        type(image),         allocatable         :: truth_imgs(:), grid_imgs(:), pcg_imgs(:), gridcorr, mask_img
+        type(fplane_type),   allocatable         :: fpls(:), basis_fpls(:), mean_fpl
+        type(ori),           allocatable         :: orientations(:)
+        type(flex_pcg_outcome_t)                 :: outcome
+        real,                allocatable         :: truth(:,:,:,:), mask(:,:,:), rho(:,:,:,:)
+        real,                allocatable         :: kacc(:,:), kpk(:,:), rhs_zero(:,:,:,:), precond_zero(:,:,:,:), bvol(:,:,:,:)
+        real,                allocatable         :: ridge_probe(:,:,:,:), h_unreg(:,:,:,:), h_reg(:,:,:,:)
+        complex,             allocatable         :: racc(:,:), rpk(:,:)
+        real(dp),            allocatable         :: z(:,:), dens(:,:,:), sv_grid(:), sv_pcg(:)
+        real(dp),            allocatable         :: hdense(:,:), bdense(:), xdense(:), xpcg(:)
+        integer,             allocatable         :: dof(:,:)
+        real(dp)                                 :: grid_cos, pcg_cos, dense_rel, dense_resid, resid_tol, condition
+        real(dp)                                 :: theta, proj, nrm, roundoff, ridge_lift(NC), ridge_rel, ridge_tol
+        real(dp)                                 :: u(3)
+        real                                     :: xyz(3), ctr, rr
+        real,                pointer             :: rp(:,:,:)
+        integer                                  :: i, j, k, q, r, n, lim, ndof, mid
+        logical,             allocatable         :: valid(:)
+        logical                                  :: dense_ok
         write(*,'(A)') 'test_mstep_toy'
         allocate(params, project, c1, pcg, zero_rec, mask_img)
         allocate(truth_recs(NC), grid_recs(NC), pcg_recs(NC))
@@ -1271,7 +1271,7 @@ contains
             real,                intent(in)    :: support(BOX,BOX,BOX)
             type(image),         intent(inout) :: imgs(NC)
             real, pointer :: rmat(:,:,:)
-            integer :: iq
+            integer       :: iq
             do iq = 1, NC
                 recs(iq)%rho_exp = 1.0
                 call recs(iq)%compress_exp
@@ -1286,16 +1286,16 @@ contains
         end subroutine finalize_reconstructors
 
         subroutine assemble_dense_system( op, rhs, support, amat, bvec, xref, indices, cond, ok )
-            class(flex_pcg_t),     intent(inout) :: op
-            real,                  intent(in)    :: rhs(BOX,BOX,BOX,NC), support(BOX,BOX,BOX)
-            real(dp), allocatable, intent(out)   :: amat(:,:), bvec(:), xref(:)
-            integer,  allocatable, intent(out)   :: indices(:,:)
-            real(dp),              intent(out)   :: cond
-            logical,               intent(out)   :: ok
-            real, allocatable :: unit(:,:,:,:), hunit(:,:,:,:)
+            class(flex_pcg_t),     intent(inout)            :: op
+            real,                  intent(in)               :: rhs(BOX,BOX,BOX,NC), support(BOX,BOX,BOX)
+            real(dp),              allocatable, intent(out) :: amat(:,:), bvec(:), xref(:)
+            integer,               allocatable, intent(out) :: indices(:,:)
+            real(dp),              intent(out)              :: cond
+            logical,               intent(out)              :: ok
+            real,     allocatable :: unit(:,:,:,:), hunit(:,:,:,:)
             real(dp), allocatable :: awork(:,:), eval(:), evec(:,:)
-            real(dp) :: lmax, lmin
-            integer :: col, row, iq, ii, jj, kk, id, nrot, nsys
+            real(dp)              :: lmax, lmin
+            integer               :: col, row, iq, ii, jj, kk, id, nrot, nsys
             nsys = NC*count(support > 0.0)
             allocate(indices(4,nsys))
             id = 0
@@ -1341,8 +1341,8 @@ contains
             real(dp), intent(out)   :: xvec(:)
             logical,  intent(inout) :: ok
             real(dp), allocatable :: lower(:,:), y(:)
-            real(dp) :: pivot, tol
-            integer :: ii, jj, nsys
+            real(dp)              :: pivot, tol
+            integer               :: ii, jj, nsys
             if( .not. ok ) return
             nsys = size(bvec)
             allocate(lower(nsys,nsys), y(nsys), source=0.0_dp)

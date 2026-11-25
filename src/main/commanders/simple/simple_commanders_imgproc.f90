@@ -70,16 +70,16 @@ contains
         class(commander_ctf_correct),   intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(image), allocatable :: imgs(:)
-        type(stack_io)   :: stkio_r, stkio_w
-        type(ctf)        :: tfun
-        type(ctfparams)  :: ctfparms
-        type(parameters) :: params
-        type(builder)    :: build
-        real, allocatable :: fsc(:), noise_to_signal(:), noise_to_signal_pad(:)
-        integer, allocatable :: pinds(:)
-        integer          :: nptcls, ldim(3), ldim_wpad(3), iptcl, ndone, report_freq, wiener_nobs
-        integer          :: batchsz, batch_from, batch_to, n_batch, i, ibatch, nbatches
-        logical          :: use_stk_input, heuristic_logged
+        type(stack_io)           :: stkio_r, stkio_w
+        type(ctf)                :: tfun
+        type(ctfparams)          :: ctfparms
+        type(parameters)         :: params
+        type(builder)            :: build
+        real,        allocatable :: fsc(:), noise_to_signal(:), noise_to_signal_pad(:)
+        integer,     allocatable :: pinds(:)
+        integer                  :: nptcls, ldim(3), ldim_wpad(3), iptcl, ndone, report_freq, wiener_nobs
+        integer                  :: batchsz, batch_from, batch_to, n_batch, i, ibatch, nbatches
+        logical                  :: use_stk_input, heuristic_logged
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'ctf_corrected'//STK_EXT)
         write(logfhandle,'(A)') '>>> CTF-CORRECT INITIALIZING'
@@ -165,7 +165,7 @@ contains
     contains
 
         subroutine correct_particles_batch( batch_from, n_batch, heuristic_logged )
-            integer, intent(in) :: batch_from, n_batch
+            integer, intent(in)    :: batch_from, n_batch
             logical, intent(inout) :: heuristic_logged
             integer :: k, i
             if( trim(params%ctf_correct_mode) == 'wiener' .and. cline%defined('fsc') )then
@@ -220,8 +220,8 @@ contains
             type(sp_project) :: spproj_out
             type(oris)       :: os_ptcl2D_tmp, os_ptcl3D_tmp
             type(ctfparams)  :: ctfparms_out
-            integer :: nptcls_out, nptcls_proj, nstks, iptcl
-            integer :: ldim_out(3)
+            integer          :: nptcls_out, nptcls_proj, nstks, iptcl
+            integer          :: ldim_out(3)
             call spproj_out%read(params%projfile)
             nptcls_proj = spproj_out%os_ptcl2D%get_noris()
             if( nptcls_proj < 1 ) THROW_HARD('project has no ptcl2D entries; ctf_correct')
@@ -276,11 +276,11 @@ contains
         character(len=*), parameter :: MASKED = 'masked.mrc'
         ! varables
         type(parameters)            :: params
-        type(image),    allocatable :: imgs(:) 
+        type(image),    allocatable :: imgs(:)
         type(stats_struct)          :: diamstats    ! stats struct
         real,           allocatable :: diams(:), diams_nonzero(:), shifts(:,:)
-        integer :: i, funit
-        real    :: med_diam
+        integer                     :: i, funit
+        real                        :: med_diam
         if( .not. cline%defined('lp')      ) call cline%set('lp',        7.0)
         if( .not. cline%defined('automsk') ) call cline%set('automsk', 'density')
         if( .not. cline%defined('amsklp') )then

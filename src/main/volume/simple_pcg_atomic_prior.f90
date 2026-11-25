@@ -13,91 +13,91 @@ private
 public :: pcg_atomic_prior, pcg_atomic_prior_stats
 public :: run_all_pcg_atomic_prior_tests
 
-real,     parameter :: SIGMA_MIN_VOX  = 1.0        !< width of the narrowest kernel (B_min), voxels: the lattice samples it
-real,     parameter :: FOOT_NSIGMA    = 3.0        !< footprint half-width in kernel widths
-integer,  parameter :: FOOT_RAD_MIN   = 4          !< footprint half-width bounds, voxels
-integer,  parameter :: FOOT_RAD_MAX   = 8
-real,     parameter :: MIN_SEP_A      = 0.5        !< an atom closer than this (A) to an earlier one is a duplicate
-real(dp), parameter :: GRAM_RIDGE_REL = 1.0e-7_dp  !< ridge of the Gram solve relative to each diagonal entry
-real(dp), parameter :: GRAM_TOL       = 1.0e-10_dp !< relative residual of the Gram solve
-integer,  parameter :: GRAM_MAXITS    = 2000
-real,     parameter :: WIDTH_FIT_CORR = 0.5        !< shells where model and map correlate at least this enter the width fit
+real,     parameter :: SIGMA_MIN_VOX       = 1.0        !< width of the narrowest kernel (B_min), voxels: the lattice samples it
+real,     parameter :: FOOT_NSIGMA         = 3.0        !< footprint half-width in kernel widths
+integer,  parameter :: FOOT_RAD_MIN        = 4          !< footprint half-width bounds, voxels
+integer,  parameter :: FOOT_RAD_MAX        = 8
+real,     parameter :: MIN_SEP_A           = 0.5        !< an atom closer than this (A) to an earlier one is a duplicate
+real(dp), parameter :: GRAM_RIDGE_REL      = 1.0e-7_dp  !< ridge of the Gram solve relative to each diagonal entry
+real(dp), parameter :: GRAM_TOL            = 1.0e-10_dp !< relative residual of the Gram solve
+integer,  parameter :: GRAM_MAXITS         = 2000
+real,     parameter :: WIDTH_FIT_CORR      = 0.5        !< shells where model and map correlate at least this enter the width fit
 integer,  parameter :: WIDTH_FIT_MINSHELLS = 3
-real,     parameter :: FIT_SIGMA_VOX  = 1.5        !< width of the width fit's model: no aliasing below Nyquist
-real,     parameter :: FIT_NSIGMA     = 5.0        !< its footprint half-width in widths: no truncation plateau
-real,     parameter :: C2_MAX         = 0.98       !< cap of the explained signal fraction of the strength estimate
-real,     parameter :: SIGNAL_FLOOR   = 1.0e-3     !< signal power floor of the strength estimate, in noise units
+real,     parameter :: FIT_SIGMA_VOX       = 1.5        !< width of the width fit's model: no aliasing below Nyquist
+real,     parameter :: FIT_NSIGMA          = 5.0        !< its footprint half-width in widths: no truncation plateau
+real,     parameter :: C2_MAX              = 0.98       !< cap of the explained signal fraction of the strength estimate
+real,     parameter :: SIGNAL_FLOOR        = 1.0e-3     !< signal power floor of the strength estimate, in noise units
 
 !> what the prior was built from and the moments of its strength estimate
 type :: pcg_atomic_prior_stats
-    integer :: natoms_in     = 0   !< atoms given
-    integer :: natoms        = 0   !< atoms kept
-    integer :: ndup          = 0   !< dropped as duplicates (closer than MIN_SEP_A)
-    integer :: noutside      = 0   !< dropped with their centre voxel outside the box or the support
-    integer :: nsupport      = 0   !< voxels of the solve support
-    integer :: foot_rad      = 0   !< footprint half-width, voxels
-    integer :: gram_nnz      = 0   !< non-zeros of the Gram matrix
-    integer :: nshells_fit   = 0   !< shells in the width fit
-    real    :: bfac_min      = 0.  !< B of the narrowest kernel (A^2)
-    real    :: bfac_data     = 0.  !< B added by the width fit or given (A^2)
-    real    :: sigma_vox     = 0.  !< kernel width, voxels
-    real    :: noise         = 0.  !< N, noise variance per voxel of the merged base map
-    real    :: signal        = 0.  !< S, signal power per voxel
-    real    :: explained     = 0.  !< E, power of P_G x_b per voxel
-    real    :: c2            = 0.  !< C^2, explained fraction of the signal
-    real    :: lambda_rel_merged = 0. !< (N/S)/(1-C^2), the ratio for a solve of the merged data
-    real    :: lambda_rel_est    = 0. !< the same with the half-map noise 2N, the ratio for a half solve
-    real    :: bfac_model_min    = 0. !< smallest per-atom B (A^2), zero without per-atom widths
-    real    :: bfac_model_mean   = 0. !< mean per-atom B (A^2)
-    real    :: bfac_model_max    = 0. !< largest per-atom B (A^2)
-    real    :: occupancy_mean    = 0. !< mean fitted occupancy
-    real    :: intensity_mean    = 0. !< mean posterior-weighted model intensity
+    integer :: natoms_in         = 0       !< atoms given
+    integer :: natoms            = 0       !< atoms kept
+    integer :: ndup              = 0       !< dropped as duplicates (closer than MIN_SEP_A)
+    integer :: noutside          = 0       !< dropped with their centre voxel outside the box or the support
+    integer :: nsupport          = 0       !< voxels of the solve support
+    integer :: foot_rad          = 0       !< footprint half-width, voxels
+    integer :: gram_nnz          = 0       !< non-zeros of the Gram matrix
+    integer :: nshells_fit       = 0       !< shells in the width fit
+    real    :: bfac_min          = 0.      !< B of the narrowest kernel (A^2)
+    real    :: bfac_data         = 0.      !< B added by the width fit or given (A^2)
+    real    :: sigma_vox         = 0.      !< kernel width, voxels
+    real    :: noise             = 0.      !< N, noise variance per voxel of the merged base map
+    real    :: signal            = 0.      !< S, signal power per voxel
+    real    :: explained         = 0.      !< E, power of P_G x_b per voxel
+    real    :: c2                = 0.      !< C^2, explained fraction of the signal
+    real    :: lambda_rel_merged = 0.      !< (N/S)/(1-C^2), the ratio for a solve of the merged data
+    real    :: lambda_rel_est    = 0.      !< the same with the half-map noise 2N, the ratio for a half solve
+    real    :: bfac_model_min    = 0.      !< smallest per-atom B (A^2), zero without per-atom widths
+    real    :: bfac_model_mean   = 0.      !< mean per-atom B (A^2)
+    real    :: bfac_model_max    = 0.      !< largest per-atom B (A^2)
+    real    :: occupancy_mean    = 0.      !< mean fitted occupancy
+    real    :: intensity_mean    = 0.      !< mean posterior-weighted model intensity
     logical :: atom_widths       = .false. !< every kernel has its atom's B (amplitudes free unless fitted_model)
     logical :: fitted_model      = .false. !< B, occupancy and intensity define the active one-vector subspace
 end type pcg_atomic_prior_stats
 
 type :: pcg_atomic_prior
     private
-    integer :: box    = 0
-    integer :: natoms = 0
-    integer :: rad    = 0      !< footprint half-width
-    integer :: nside  = 0      !< footprint cube side, 2*rad+1
-    real    :: smpd   = 1.
-    real    :: bfac   = 0.     !< B of the current kernels (A^2)
-    real    :: sigma  = 0.     !< width of the current kernels (voxels)
-    real,     allocatable :: pos(:,:)        !< (3,natoms) atom positions, voxels (1-based)
-    real,     allocatable :: amp(:)          !< column scale of each kernel
-    real,     allocatable :: bfac_atom(:)    !< fitted B of each retained atom (A^2)
-    real(dp), allocatable :: model_coeff(:)  !< fitted integrated intensity converted to Gaussian peak coefficient
-    integer,  allocatable :: corner(:,:)     !< (3,natoms) lowest voxel of each footprint cube
-    real,     allocatable :: fval(:,:)       !< (nside**3,natoms) kernel values, zero off the support and box
-    logical,  allocatable :: support(:,:,:)  !< the solve support
-    integer,  allocatable :: gptr(:)         !< CSR row pointers of G^T G
-    integer,  allocatable :: gcol(:)         !< CSR columns
-    real(dp), allocatable :: gval(:)         !< CSR values
-    real(dp), allocatable :: gdiag(:)        !< diagonal of G^T G
-    real(dp) :: model_norm2 = 0._dp           !< |G model_coeff|^2
+    integer                      :: box         = 0
+    integer                      :: natoms      = 0
+    integer                      :: rad         = 0     !< footprint half-width
+    integer                      :: nside       = 0     !< footprint cube side, 2*rad+1
+    real                         :: smpd        = 1.
+    real                         :: bfac        = 0.    !< B of the current kernels (A^2)
+    real                         :: sigma       = 0.    !< width of the current kernels (voxels)
+    real,     allocatable        :: pos(:,:)            !< (3,natoms) atom positions, voxels (1-based)
+    real,     allocatable        :: amp(:)              !< column scale of each kernel
+    real,     allocatable        :: bfac_atom(:)        !< fitted B of each retained atom (A^2)
+    real(dp), allocatable        :: model_coeff(:)      !< fitted integrated intensity converted to Gaussian peak coefficient
+    integer,  allocatable        :: corner(:,:)         !< (3,natoms) lowest voxel of each footprint cube
+    real,     allocatable        :: fval(:,:)           !< (nside**3,natoms) kernel values, zero off the support and box
+    logical,  allocatable        :: support(:,:,:)      !< the solve support
+    integer,  allocatable        :: gptr(:)             !< CSR row pointers of G^T G
+    integer,  allocatable        :: gcol(:)             !< CSR columns
+    real(dp), allocatable        :: gval(:)             !< CSR values
+    real(dp), allocatable        :: gdiag(:)            !< diagonal of G^T G
+    real(dp)                     :: model_norm2 = 0._dp !< |G model_coeff|^2
     type(pcg_atomic_prior_stats) :: stats
-    logical :: exists = .false.
+    logical                      :: exists      = .false.
   contains
-    procedure :: new
-    procedure :: build
-    procedure :: gather
-    procedure :: scatter
+    procedure          :: new
+    procedure          :: build
+    procedure          :: gather
+    procedure          :: scatter
     procedure, private :: solve_gram
-    procedure :: project
-    procedure :: apply
-    procedure :: amplitudes
-    procedure :: fit_width
-    procedure :: estimate_lambda
-    procedure :: get_stats
-    procedure :: get_natoms
-    procedure :: get_box
-    procedure :: get_bfac
-    procedure :: get_bfac_min
-    procedure :: uses_fitted_model
-    procedure :: is_built
-    procedure :: kill
+    procedure          :: project
+    procedure          :: apply
+    procedure          :: amplitudes
+    procedure          :: fit_width
+    procedure          :: estimate_lambda
+    procedure          :: get_stats
+    procedure          :: get_natoms
+    procedure          :: get_box
+    procedure          :: get_bfac
+    procedure          :: get_bfac_min
+    procedure          :: uses_fitted_model
+    procedure          :: is_built
+    procedure          :: kill
     procedure, private :: build_gram
     procedure, private :: gram_matvec
     procedure, private :: overlap
@@ -118,17 +118,17 @@ contains
     !! atom's B when bfacs is given: alone, the amplitudes stay free; with occupancies and intensities, the
     !! fitted model fixes them up to one global scale
     subroutine new( self, box, smpd, pos_vox, support, amps, bfacs, occupancies, intensities )
-        class(pcg_atomic_prior), intent(inout) :: self
-        integer,                 intent(in)    :: box
-        real,                    intent(in)    :: smpd
-        real,                    intent(in)    :: pos_vox(:,:)
-        real,                    intent(in)    :: support(:,:,:)
-        real,          optional, intent(in)    :: amps(:)
-        real,          optional, intent(in)    :: bfacs(:), occupancies(:), intensities(:)
+        class(pcg_atomic_prior), intent(inout)        :: self
+        integer,                 intent(in)           :: box
+        real,                    intent(in)           :: smpd
+        real,                    intent(in)           :: pos_vox(:,:)
+        real,                    intent(in)           :: support(:,:,:)
+        real,                    optional, intent(in) :: amps(:)
+        real,                    optional, intent(in) :: bfacs(:), occupancies(:), intensities(:)
         logical, allocatable :: keep(:)
-        integer :: n, a, b, iv(3)
-        real    :: minsep2
-        logical :: l_widths, l_model_fields
+        integer              :: n, a, b, iv(3)
+        real                 :: minsep2
+        logical              :: l_widths, l_model_fields
         call self%kill
         if( size(pos_vox,1) /= 3 ) THROW_HARD('atom positions are (3,natoms); new')
         if( any(shape(support) /= box) ) THROW_HARD('support dimensions differ from the box; new')
@@ -209,8 +209,8 @@ contains
         !> drops an atom closer than MIN_SEP_A to an earlier kept one, by a cell grid of the separation
         subroutine drop_duplicates
             integer, allocatable :: head(:,:,:), next(:)
-            integer :: c(3), ncell, i, j, k, m
-            real    :: cellsz
+            integer              :: c(3), ncell, i, j, k, m
+            real                 :: cellsz
             cellsz = max(1., MIN_SEP_A / smpd)
             ncell  = ceiling(real(box) / cellsz) + 2
             allocate(head(0:ncell,0:ncell,0:ncell), source=0)
@@ -315,7 +315,7 @@ contains
     subroutine build_gram( self )
         class(pcg_atomic_prior), intent(inout) :: self
         integer, allocatable :: head(:,:,:), next(:), cnt(:)
-        integer :: a, b, c(3), ncell, i, j, k, nz
+        integer              :: a, b, c(3), ncell, i, j, k, nz
         ncell = self%box / self%nside + 3
         allocate(head(-1:ncell,-1:ncell,-1:ncell), source=0)
         allocate(next(self%natoms), source=0)
@@ -414,8 +414,8 @@ contains
         class(pcg_atomic_prior), intent(in) :: self
         real,                    intent(in) :: x(:,:,:)
         real(dp), allocatable :: y(:)
-        real(dp) :: s
-        integer  :: a, di, dj, dk, i, j, k
+        real(dp)              :: s
+        integer               :: a, di, dj, dk, i, j, k
         allocate(y(self%natoms))
         !$omp parallel do default(shared) private(a,di,dj,dk,i,j,k,s) schedule(static)
         do a = 1, self%natoms
@@ -494,14 +494,14 @@ contains
 
     !> c = (G^T G + eps D)^-1 y by Jacobi-preconditioned CG in double precision, serial dots (reproducible)
     subroutine solve_gram( self, y, c, niters, rel_resid )
-        class(pcg_atomic_prior), intent(in)  :: self
-        real(dp),                intent(in)  :: y(:)
-        real(dp), allocatable,   intent(out) :: c(:)
-        integer,  optional,      intent(out) :: niters
-        real(dp), optional,      intent(out) :: rel_resid
+        class(pcg_atomic_prior), intent(in)                 :: self
+        real(dp),                intent(in)                 :: y(:)
+        real(dp),                allocatable,   intent(out) :: c(:)
+        integer,                 optional,      intent(out) :: niters
+        real(dp),                optional,      intent(out) :: rel_resid
         real(dp), allocatable :: r(:), z(:), p(:), q(:), dg(:)
-        real(dp) :: rz, rz_new, alpha, ynorm, rnorm
-        integer  :: it
+        real(dp)              :: rz, rz_new, alpha, ynorm, rnorm
+        integer               :: it
         allocate(c(self%natoms), source=0._dp)
         if( present(niters)    ) niters    = 0
         if( present(rel_resid) ) rel_resid = 0._dp
@@ -534,9 +534,9 @@ contains
     function project( self, x ) result( px )
         class(pcg_atomic_prior), intent(in) :: self
         real,                    intent(in) :: x(:,:,:)
-        real, allocatable :: px(:,:,:)
+        real,     allocatable :: px(:,:,:)
         real(dp), allocatable :: c(:), gx(:)
-        real(dp) :: scale
+        real(dp)              :: scale
         gx = self%gather(x)
         if( allocated(self%model_coeff) )then
             scale = dot_product(self%model_coeff, gx) / self%model_norm2
@@ -554,8 +554,8 @@ contains
         real,                    intent(in)    :: p(:,:,:)
         real,                    intent(inout) :: hp(:,:,:)
         real(dp), allocatable :: c(:), gp(:)
-        real(dp) :: scale
-        integer :: i, j, k
+        real(dp)              :: scale
+        integer               :: i, j, k
         gp = self%gather(p)
         if( allocated(self%model_coeff) )then
             scale = dot_product(self%model_coeff, gp) / self%model_norm2
@@ -578,19 +578,19 @@ contains
     !> Amplitudes fitted to the data, c = argmin |A G c - b|^2: CG in atom space on G^T H G c = G^T b with the
     !! reconstructor's normal operator H (op) and gathered right-hand side gb = G^T b; Jacobi on diag(G^T G)
     subroutine amplitudes( self, op, gb, c, maxits, rtol, niters, rel_resid )
-        class(pcg_atomic_prior), intent(in)    :: self
-        class(pcg_operator),     intent(inout) :: op
-        real(dp),                intent(in)    :: gb(:)
-        real(dp), allocatable,   intent(out)   :: c(:)
-        integer,                 intent(in)    :: maxits
-        real,                    intent(in)    :: rtol
-        integer,                 intent(out)   :: niters
-        real,                    intent(out)   :: rel_resid
-        real, allocatable, target :: vin(:), vout(:)
-        real, pointer         :: v3(:,:,:), w3(:,:,:)
-        real(dp), allocatable :: r(:), z(:), p(:), q(:), dg(:)
-        real(dp) :: rz, rz_new, alpha, bnorm, rnorm, pq
-        integer  :: it, n3
+        class(pcg_atomic_prior), intent(in)                 :: self
+        class(pcg_operator),     intent(inout)              :: op
+        real(dp),                intent(in)                 :: gb(:)
+        real(dp),                allocatable,   intent(out) :: c(:)
+        integer,                 intent(in)                 :: maxits
+        real,                    intent(in)                 :: rtol
+        integer,                 intent(out)                :: niters
+        real,                    intent(out)                :: rel_resid
+        real,     allocatable, target :: vin(:), vout(:)
+        real,     pointer             :: v3(:,:,:), w3(:,:,:)
+        real(dp), allocatable         :: r(:), z(:), p(:), q(:), dg(:)
+        real(dp)                      :: rz, rz_new, alpha, bnorm, rnorm, pq
+        integer                       :: it, n3
         if( size(gb) /= self%natoms ) THROW_HARD('one right-hand side entry per atom; amplitudes')
         n3 = self%box**3
         if( op%size() /= n3 ) THROW_HARD('operator size differs from the box; amplitudes')
@@ -641,13 +641,13 @@ contains
         real,                    intent(in)    :: x(:,:,:)
         real,                    intent(out)   :: bfac_data
         integer,                 intent(out)   :: nshells
-        type(image) :: mimg, ximg
+        type(image)           :: mimg, ximg
         complex,  allocatable :: mc(:,:,:), xc(:,:,:)
         real,     allocatable :: m(:,:,:)
         real(dp), allocatable :: smx(:), smm(:), sxx(:), s2arr(:), yarr(:)
-        real(dp) :: w, s2, sx, sy, sxy, sxx_fit, ys, slope, nfit
-        real     :: bfac_fit
-        integer  :: cdim(3), logi(3), i, j, k, sh, nyq
+        real(dp)              :: w, s2, sx, sy, sxy, sxx_fit, ys, slope, nfit
+        real                  :: bfac_fit
+        integer               :: cdim(3), logi(3), i, j, k, sh, nyq
         if( any(shape(x) /= self%box) ) THROW_HARD('map dimensions differ from the box; fit_width')
         nyq = self%box / 2
         call self%model_map(FIT_SIGMA_VOX, ceiling(FIT_NSIGMA * FIT_SIGMA_VOX), m)
@@ -706,10 +706,10 @@ contains
 
     !> sum of unit Gaussians of width sigma_vox at the atoms, footprint half-width rad, on the support
     subroutine model_map( self, sigma_vox, rad, m )
-        class(pcg_atomic_prior), intent(in)  :: self
-        real,                    intent(in)  :: sigma_vox
-        integer,                 intent(in)  :: rad
-        real, allocatable,       intent(out) :: m(:,:,:)
+        class(pcg_atomic_prior), intent(in)                     :: self
+        real,                    intent(in)                     :: sigma_vox
+        integer,                 intent(in)                     :: rad
+        real,                    allocatable,       intent(out) :: m(:,:,:)
         real    :: two_sig2, d2
         integer :: a, c(3), i, j, k
         allocate(m(self%box,self%box,self%box), source=0.)
@@ -735,8 +735,8 @@ contains
         class(pcg_atomic_prior), intent(inout) :: self
         real,                    intent(in)    :: xb(:,:,:), xe(:,:,:), xo(:,:,:)
         real, allocatable :: pgx(:,:,:)
-        real(dp) :: nv, dmean, d2, xb2, e2, n_noise, s_sig, e_exp, ep, c2
-        integer  :: i, j, k, model_dof
+        real(dp)          :: nv, dmean, d2, xb2, e2, n_noise, s_sig, e_exp, ep, c2
+        integer           :: i, j, k, model_dof
         if( any(shape(xb) /= self%box) .or. any(shape(xe) /= self%box) .or. any(shape(xo) /= self%box) ) &
             &THROW_HARD('map dimensions differ from the box; estimate_lambda')
         pgx   = self%project(xb)

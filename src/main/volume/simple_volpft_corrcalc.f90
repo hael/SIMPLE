@@ -10,16 +10,16 @@ private
 
 type :: volpft_corrcalc
     private
-    class(projector), pointer :: vol_ref    => null()   !< pointer to reference volume
-    class(projector), pointer :: vol_target => null()   !< pointer to target volume
-    integer                   :: nspace          = 0    !< number of vec:s in representation
-    integer                   :: nspace_nonred   = 0    !< number of non-redundant vec:s in representation
-    integer                   :: kfromto_vpft(2) = 0    !< Fourier index range
-    real                      :: sqsum_ref              !< memoized square sum 4 corrcalc (ref)
-    complex, allocatable      :: vpft_ref_nonred(:,:)   !< reference lines 4 matching, nonredundant elements only
-    real,    allocatable      :: locs_ref(:,:,:)        !< nspace x nk x 3 matrix of positions (reference)
-    real,    allocatable      :: locs_ref_nonred(:,:,:) !<nspace_nonred x nk x 3 matrix of positions (reference), nonredundant elements
-    logical                   :: existence = .false.    !< to indicate existence
+    class(projector), pointer     :: vol_ref         => null() !< pointer to reference volume
+    class(projector), pointer     :: vol_target      => null() !< pointer to target volume
+    integer                       :: nspace          = 0       !< number of vec:s in representation
+    integer                       :: nspace_nonred   = 0       !< number of non-redundant vec:s in representation
+    integer                       :: kfromto_vpft(2) = 0       !< Fourier index range
+    real                          :: sqsum_ref                 !< memoized square sum 4 corrcalc (ref)
+    complex,          allocatable :: vpft_ref_nonred(:,:)      !< reference lines 4 matching, nonredundant elements only
+    real,             allocatable :: locs_ref(:,:,:)           !< nspace x nk x 3 matrix of positions (reference)
+    real,             allocatable :: locs_ref_nonred(:,:,:)    !<nspace_nonred x nk x 3 matrix of positions (reference), nonredundant elements
+    logical                       :: existence       = .false. !< to indicate existence
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -47,12 +47,12 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, vol_ref, hp, lp, alpha, vol_target )
-        class(volpft_corrcalc),             intent(inout) :: self
-        class(projector), target,           intent(in)    :: vol_ref
-        real,                               intent(in)    :: hp, lp, alpha
-        class(projector), target, optional, intent(in)    :: vol_target
-        integer   :: ispace, k, ldim(3)
-        real      :: vec(3), rmat(3,3)
+        class(volpft_corrcalc),             intent(inout)                :: self
+        class(projector),                   target,           intent(in) :: vol_ref
+        real,                               intent(in)                   :: hp, lp, alpha
+        class(projector),                   target, optional, intent(in) :: vol_target
+        integer      :: ispace, k, ldim(3)
+        real         :: vec(3), rmat(3,3)
         type(ori)    :: e
         type(sym)    :: ico
         type(string) :: msg

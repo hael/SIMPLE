@@ -63,10 +63,10 @@ end type rec3D_request
 !> The caller's values of the parameters a request overrides
 type :: rec3D_saved_params
     type(string), allocatable :: vols(:)
-    character(len=STDLEN)     :: automsk = ''
-    integer :: nstates = 0, nparts = 0, part = 0, numlen = 0
-    logical :: l_nonuniform = .false., l_trail_rec = .false., l_state_defined = .false.
-    logical :: active = .false.
+    character(len=STDLEN)     :: automsk      = ''
+    integer                   :: nstates      = 0, nparts = 0, part = 0, numlen = 0
+    logical                   :: l_nonuniform = .false., l_trail_rec = .false., l_state_defined = .false.
+    logical                   :: active       = .false.
 end type rec3D_saved_params
 
 !> The service; the queue environment lives here when the dispatch is the queue
@@ -241,9 +241,9 @@ contains
         class(cmdline),       intent(inout) :: cline
         type(rec3D_request),  intent(in)    :: request
         type(state_weight_set) :: wset
-        type(string) :: volname
-        integer      :: state
-        logical      :: l_sigma_loaded, l_set, l_table
+        type(string)           :: volname
+        integer                :: state
+        logical                :: l_sigma_loaded, l_set, l_table
         l_set   = request%weights == REC3D_WEIGHTS_SET
         l_table = request%weights == REC3D_WEIGHTS_TABLE
         if( l_set ) call wset%new(build%spproj, build%spproj_field)
@@ -387,9 +387,9 @@ contains
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         type(state_weight_set) :: wset
-        type(string) :: fname_vol, fname_fsc, fsc_saved
-        real         :: bfac_saved
-        integer      :: state, nptcls, ldim(3)
+        type(string)           :: fname_vol, fname_fsc, fsc_saved
+        real                   :: bfac_saved
+        integer                :: state, nptcls, ldim(3)
         if( trim(params%postprocess) /= 'yes' )return
         if( cline%defined('part') )return
         if( params%l_m_estimator_flex ) call wset%new(build%spproj, build%spproj_field)
@@ -433,8 +433,8 @@ contains
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         type(state_weight_set) :: wset
-        character(len=9) :: kind_name
-        integer :: state
+        character(len=9)       :: kind_name
+        integer                :: state
         call wset%new(build%spproj, build%spproj_field)
         kind_name = 'kernel'
         if( wset%get_kind() == STATE_WEIGHTS_KIND_PARTITION ) kind_name = 'partition'
@@ -452,8 +452,8 @@ contains
     subroutine rename_outputs( params, prefix )
         type(parameters), intent(in) :: params
         class(string),    intent(in) :: prefix
-        type(string) :: src, dst, stem, fsc_src, fsc_dst
-        integer      :: state, i
+        type(string)                 :: src, dst, stem, fsc_src, fsc_dst
+        integer                      :: state, i
         character(len=11), parameter :: SUFFIXES(5) = [character(len=11) :: '', '_even', '_odd', '_even_unfil', '_odd_unfil']
         do state = 1, params%nstates
             stem = prefix//'_state'//int2str_pad(state,2)

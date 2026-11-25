@@ -11,10 +11,10 @@ type kmedoids
     private
     real,    pointer     :: ptr_dmat(:,:) => null()
     real,    allocatable :: dists2meds(:,:)
-    integer              :: n=0, ncls=0
-    integer              :: i_medoid_glob=0
+    integer              :: n             = 0, ncls=0
+    integer              :: i_medoid_glob = 0
     integer, allocatable :: i_medoids(:), cls_labels(:), cls_pops(:)
-    logical              :: exists = .false.
+    logical              :: exists        = .false.
   contains
     procedure, private   :: new_by_ncls, new_from_labels
     generic              :: new => new_by_ncls, new_from_labels
@@ -33,9 +33,9 @@ end type kmedoids
 contains
 
     subroutine new_by_ncls( self, n, dmat, ncls )
-        class(kmedoids), intent(inout) :: self
-        integer,         intent(in)    :: n, ncls
-        real, target,    intent(in)    :: dmat(n,n)
+        class(kmedoids), intent(inout)         :: self
+        integer,         intent(in)            :: n, ncls
+        real,            target,    intent(in) :: dmat(n,n)
         call self%kill
         self%n        =  n
         self%ptr_dmat => dmat
@@ -46,9 +46,9 @@ contains
     end subroutine new_by_ncls
 
     subroutine new_from_labels( self, cls_labels, dmat )
-        class(kmedoids), intent(inout) :: self
-        integer,         intent(in)    :: cls_labels(:)
-        real, target,    intent(in)    :: dmat(size(cls_labels),size(cls_labels))
+        class(kmedoids), intent(inout)         :: self
+        integer,         intent(in)            :: cls_labels(:)
+        real,            target,    intent(in) :: dmat(size(cls_labels),size(cls_labels))
         call self%new_by_ncls(size(cls_labels), dmat, maxval(cls_labels))
         self%cls_labels = cls_labels
         call self%find_medoids
@@ -70,8 +70,8 @@ contains
     subroutine init( self )
         class(kmedoids), intent(inout) :: self
         integer, allocatable :: parts(:,:)
-        real    :: medoid_dists(self%n)
-        integer :: order(self%n), i, icls
+        real                 :: medoid_dists(self%n)
+        integer              :: order(self%n), i, icls
         call medoid_from_dmat(self%ptr_dmat, self%i_medoid_glob)
         ! order according to similarity to medoid
         !omp parallel do default(shared) private(i) proc_bind(close)
@@ -98,8 +98,8 @@ contains
     subroutine cluster( self )
         class(kmedoids), intent(inout) :: self
         integer, parameter :: MAXITS = 10
-        integer :: iter, nchanges, i
-        real    :: dist
+        integer            :: iter, nchanges, i
+        real               :: dist
         if( all(self%cls_labels == 0) ) THROW_HARD('Cluster labels must be initialized somehow')
         write(logfhandle,'(A)') 'K-MEDOIDS CLUSTERING OF DISTANCE MATRIX'
         iter = 0
@@ -162,7 +162,7 @@ contains
         class(kmedoids), intent(inout) :: self
         integer,         intent(out)   :: nchanges
         integer :: i, icls, loc(self%n)
-        real :: x, rhuge
+        real    :: x, rhuge
         ! extract distances to medoids
         rhuge = huge(x)
         do i = 1, self%n
@@ -221,7 +221,7 @@ contains
         integer,         intent(in)    :: ncls_new
         real,    allocatable :: dists_btw_meds(:,:)
         logical, allocatable :: mask(:)
-        integer :: loc(1), imed, jmed
+        integer              :: loc(1), imed, jmed
         if( all(self%i_medoids == 0) ) call self%find_medoids
         if( ncls_new >= self%ncls ) THROW_HARD('new number of clusters must be smaller than current number')
         do

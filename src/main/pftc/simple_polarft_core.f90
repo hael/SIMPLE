@@ -9,12 +9,12 @@ contains
 
     module subroutine new(self, params, nrefs, pfromto, kfromto, nmany_refs, fftw_measure)
         use simple_rnd, only: has_global_seed
-        class(polarft_calc), target, intent(inout) :: self
-        class(parameters),   target, intent(in)    :: params
-        integer,                     intent(in)    :: nrefs
-        integer,                     intent(in)    :: pfromto(2), kfromto(2)
-        integer,           optional, intent(in)    :: nmany_refs
-        logical,           optional, intent(in)    :: fftw_measure
+        class(polarft_calc),         target, intent(inout) :: self
+        class(parameters),           target, intent(in)    :: params
+        integer,                     intent(in)            :: nrefs
+        integer,                     intent(in)            :: pfromto(2), kfromto(2)
+        integer,                     optional, intent(in)  :: nmany_refs
+        logical,                     optional, intent(in)  :: fftw_measure
         real(sp), allocatable :: polar_here(:)
         real(dp)              :: A(2)
         integer               :: irot, k, ithr, i, nthr_team
@@ -346,9 +346,9 @@ contains
     end subroutine set_rnd_scope
 
     module subroutine assign_sigma2_noise(self, sigma2_noise, spectra_gen)
-        class(polarft_calc),                     intent(inout) :: self
-        real, allocatable,               target, intent(inout) :: sigma2_noise(:,:)
-        integer(int64), optional, target,        intent(inout) :: spectra_gen
+        class(polarft_calc),                     intent(inout)                                    :: self
+        real,                                    allocatable,               target, intent(inout) :: sigma2_noise(:,:)
+        integer(int64),                          optional, target,        intent(inout)           :: spectra_gen
         if( size(sigma2_noise,2) /= 2 ) THROW_HARD('sigma2 must hold one spectrum per even/odd half')
         self%sigma2_noise => sigma2_noise
         ! the owner's generation of the spectra: a score on spectra newer than the weights stops

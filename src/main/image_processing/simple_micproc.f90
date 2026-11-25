@@ -12,9 +12,9 @@ contains
         class(string), intent(in) :: filetab(:)
         integer,       intent(in) :: nsample
         type(string), allocatable :: filetab_smpl(:)
-        integer, allocatable :: inds(:)
-        type(ran_tabu) :: rt
-        integer :: n
+        integer,      allocatable :: inds(:)
+        type(ran_tabu)            :: rt
+        integer                   :: n
         n   = size(filetab)
         rt = ran_tabu(n)
         allocate(inds(nsample), source=0)
@@ -25,13 +25,13 @@ contains
     end function sample_filetab
 
     subroutine read_mic_subtr_backgr_shrink( micname, smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty, mic_mask )
-        class(string),                  intent(in)    :: micname !< micrograph file name
-        real,                           intent(in)    :: smpd    !< sampling distance in A
-        real,                           intent(in)    :: scale   !< scale factor
-        character(len=*),               intent(in)    :: pcontrast
-        class(image),                   intent(inout) :: mic_raw, mic_shrink
-        logical,                        intent(out)   :: l_empty
-        logical, allocatable, optional, intent(inout) :: mic_mask(:,:)
+        class(string),                  intent(in)                           :: micname !< micrograph file name
+        real,                           intent(in)                           :: smpd    !< sampling distance in A
+        real,                           intent(in)                           :: scale   !< scale factor
+        character(len=*),               intent(in)                           :: pcontrast
+        class(image),                   intent(inout)                        :: mic_raw, mic_shrink
+        logical,                        intent(out)                          :: l_empty
+        logical,                        allocatable, optional, intent(inout) :: mic_mask(:,:)
         integer :: nframes, ldim(3), ldim_shrink(3)
         ! set micrograph info
         call find_ldim_nptcls(micname, ldim, nframes)
@@ -124,19 +124,19 @@ contains
     end subroutine read_mic
 
     subroutine cascade_filter_biomol( mic_shrink, mic4viz )
-        class(image),           intent(inout) :: mic_shrink
-        class(image), optional, intent(inout) :: mic4viz
-        real,    parameter :: LP_UB = 15., LAM_ICM = 100., DAMP = 10., LAM_TV = 7.
+        class(image),           intent(inout)           :: mic_shrink
+        class(image),           optional, intent(inout) :: mic4viz
+        real,    parameter :: LP_UB     = 15., LAM_ICM = 100., DAMP = 10., LAM_TV = 7.
         integer, parameter :: WINSZ_MED = 3
         call cascade_filter(mic_shrink, DAMP, LP_UB, LAM_TV, LAM_ICM, WINSZ_MED, mic4viz)
     end subroutine cascade_filter_biomol
 
     subroutine cascade_filter( mic_shrink, damp_below_zero, lp, lam_tv, lam_icm, winsz_med, mic4viz )
         use simple_bspline_smoother, only: bspline_smoother
-        class(image),           intent(inout) :: mic_shrink
-        real,                   intent(in)    :: damp_below_zero, lp, lam_tv, lam_icm
-        integer,                intent(in)    :: winsz_med
-        class(image), optional, intent(inout) :: mic4viz
+        class(image),           intent(inout)           :: mic_shrink
+        real,                   intent(in)              :: damp_below_zero, lp, lam_tv, lam_icm
+        integer,                intent(in)              :: winsz_med
+        class(image),           optional, intent(inout) :: mic4viz
         type(bspline_smoother) :: bs
         call mic_shrink%zero_edgeavg
         ! dampens below zero
@@ -158,7 +158,7 @@ contains
 
     subroutine bs_smoother_biomol( mic_shrink )
         class(image), intent(inout) :: mic_shrink
-        real,    parameter :: LP_UB = 15., DAMP = 10., LAM_TV = 7.
+        real,    parameter :: LP_UB     = 15., DAMP = 10., LAM_TV = 7.
         integer, parameter :: WINSZ_MED = 3
         call bs_smoother(mic_shrink, DAMP, LP_UB, LAM_TV)
     end subroutine bs_smoother_biomol
@@ -180,8 +180,8 @@ contains
     end subroutine bs_smoother
 
     subroutine binarize_mic_den( mic_den, frac_fg, mic_bin )
-        class(image),    intent(in)  :: mic_den
-        real,            intent(in)  :: frac_fg
+        class(image),     intent(in)  :: mic_den
+        real,             intent(in)  :: frac_fg
         class(image_bin), intent(out) :: mic_bin
         real :: bin_t
         call mic_bin%transfer2bimg(mic_den)
@@ -196,23 +196,23 @@ contains
 
     subroutine flag_amorphous_carbon( micrograph, picking_mask )
         use simple_histogram, only: histogram
-        class(image),         intent(in)    :: micrograph
-        logical, allocatable, intent(inout) :: picking_mask(:,:)
-        integer, parameter :: K             = 5
-        integer, parameter :: BOX           = 32 ! multiple of 4
-        integer, parameter :: NBINS         = 64
-        real,    parameter :: TVD_THRESHOLD = 0.2
-        real,    parameter :: MIN_TVD_DIFF  = 0.05
-        real,    parameter :: MIC_LP        = 15.
-        logical, parameter :: DEBUG_HERE    = .false.
+        class(image),         intent(in)                 :: micrograph
+        logical,              allocatable, intent(inout) :: picking_mask(:,:)
+        integer,         parameter   :: K             = 5
+        integer,         parameter   :: BOX           = 32 ! multiple of 4
+        integer,         parameter   :: NBINS         = 64
+        real,            parameter   :: TVD_THRESHOLD = 0.2
+        real,            parameter   :: MIN_TVD_DIFF  = 0.05
+        real,            parameter   :: MIC_LP        = 15.
+        logical,         parameter   :: DEBUG_HERE    = .false.
         type(histogram), allocatable :: hists(:,:)
         logical,         allocatable :: final_mask(:,:)
-        type(ran_tabu)  :: rt
-        type(histogram) :: khists(K)
-        type(image)     :: mic, patches(nthr_glob)
-        real    :: smpd
-        integer :: dims(3), i
-        logical :: found, empty
+        type(ran_tabu)               :: rt
+        type(histogram)              :: khists(K)
+        type(image)                  :: mic, patches(nthr_glob)
+        real                         :: smpd
+        integer                      :: dims(3), i
+        logical                      :: found, empty
         found  = .false.
         dims   = micrograph%get_ldim()
         smpd   = micrograph%get_smpd()
@@ -237,11 +237,11 @@ contains
                 integer, allocatable :: kmeans_labels(:), tmp_labels(:), inds(:)
                 type(image)          :: tmpimg, tmpimg2
                 type(histogram)      :: hist1, hist2
-                real(dp) :: tmp
-                real     :: bin_vars(K), tmpvec(K), tvd_inter(K-1), kmeans_score, mean, tvd, min_tvd
-                integer  :: b,twob,bon2,bon4,i,j,m,n,ilb,jlb,iub,jub,nx,ny,nxy
-                integer  :: bin,repeat,ii,jj,carbon,ithr
-                logical  :: mask(dims(1),dims(2)), bin_mask(K), outside, cluster_mask(K-1)
+                real(dp)             :: tmp
+                real                 :: bin_vars(K), tmpvec(K), tvd_inter(K-1), kmeans_score, mean, tvd, min_tvd
+                integer              :: b,twob,bon2,bon4,i,j,m,n,ilb,jlb,iub,jub,nx,ny,nxy
+                integer              :: bin,repeat,ii,jj,carbon,ithr
+                logical              :: mask(dims(1),dims(2)), bin_mask(K), outside, cluster_mask(K-1)
                 found = .false.
                 ! gradients magnitude image
                 call mic%fft
@@ -549,9 +549,9 @@ contains
         type(image)          :: boximgs_heap(nthr_glob), img
         real,    allocatable :: scores(:,:)
         integer, allocatable :: counts(:,:)
-        real        :: score, scale, radius, smpd_raw, smpd_shrink
-        integer     :: ldim_raw(3), ldim_shrink(3), ldim(3),i,j,ithr,ii,jj
-        logical     :: outside
+        real                 :: score, scale, radius, smpd_raw, smpd_shrink
+        integer              :: ldim_raw(3), ldim_shrink(3), ldim(3),i,j,ithr,ii,jj
+        logical              :: outside
         smpd_raw = micrograph%get_smpd()
         if( smpd_raw > SMPD_ICE ) return
         ldim_raw         = micrograph%get_ldim()

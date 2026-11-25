@@ -40,14 +40,14 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(parameters), allocatable :: params
         type(sp_project), allocatable :: spproj, work
-        type(commander_refine2D) :: xrefine2D
-        type(cmdline)            :: cline_ref
-        type(lp_crop_inf)        :: lpinfo(1)
-        type(ran_tabu)           :: rt
-        type(string)             :: refs, projabs, cwd
-        integer, allocatable     :: pinds(:), pinds_sample(:)
-        integer :: nptcls, nsample, box_crop, endit, i, iptcl
-        real    :: sh(2)
+        type(commander_refine2D)      :: xrefine2D
+        type(cmdline)                 :: cline_ref
+        type(lp_crop_inf)             :: lpinfo(1)
+        type(ran_tabu)                :: rt
+        type(string)                  :: refs, projabs, cwd
+        integer,          allocatable :: pinds(:), pinds_sample(:)
+        integer                       :: nptcls, nsample, box_crop, endit, i, iptcl
+        real                          :: sh(2)
         ! this program's defaults, before the single params%new
         if( .not. cline%defined('ncls')        ) call cline%set('ncls',        CENTER_NCLS)
         if( .not. cline%defined('nsample')     ) call cline%set('nsample',     CENTER_NSAMPLE)

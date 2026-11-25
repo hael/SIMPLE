@@ -28,11 +28,11 @@ end type gui_comm_args
 ! state continuation runs selection) has two active at once: the first new sets the state up, the
 ! nested ones report into it, and the last kill tears it down (ncomms_active), so a nested program's
 ! end never destroys the mutexes the outer one still uses.
-type(gui_comm_args),        target, save :: gui_comm_args_inst
-type(gui_metadata_project), target, save :: gui_project_metadata_inst
-type(c_pthread_t),                  save :: comm_thread_inst          ! the worker thread, when remote_active
-logical,                            save :: remote_active = .false.   ! the worker thread runs
-integer,                            save :: ncomms_active = 0         ! communicators active in the process
+type(gui_comm_args),                target, save :: gui_comm_args_inst
+type(gui_metadata_project),         target, save :: gui_project_metadata_inst
+type(c_pthread_t),                  save         :: comm_thread_inst        ! the worker thread, when remote_active
+logical,                            save         :: remote_active = .false. ! the worker thread runs
+integer,                            save         :: ncomms_active = 0       ! communicators active in the process
 
 public :: gui_communicator
 private
@@ -43,7 +43,7 @@ type gui_communicator
     logical :: is_active = .false.
 contains
     procedure :: new
-    procedure :: kill => kill_gui_communicator
+    procedure :: kill         => kill_gui_communicator
     procedure :: add_metadata_spproj
     procedure :: add_metadata_projfile
     generic   :: add_metadata => add_metadata_spproj, add_metadata_projfile
@@ -123,12 +123,12 @@ contains
     end subroutine kill_gui_communicator
 
     subroutine add_metadata_spproj( self, spproj, oritype, stage, selection, vol_kind )
-        class(gui_communicator),    intent(inout) :: self
-        type(sp_project),           intent(inout) :: spproj
-        character(len=*), optional, intent(in)    :: oritype
-        integer,          optional, intent(in)    :: stage
-        logical,          optional, intent(in)    :: selection
-        character(len=*), optional, intent(in)    :: vol_kind
+        class(gui_communicator),    intent(inout)        :: self
+        type(sp_project),           intent(inout)        :: spproj
+        character(len=*),           optional, intent(in) :: oritype
+        integer,                    optional, intent(in) :: stage
+        logical,                    optional, intent(in) :: selection
+        character(len=*),           optional, intent(in) :: vol_kind
         type(gui_project_builder)                 :: builder
         character(len=SHORTSTRLEN)                :: md_oritype
         integer                                   :: i_stage
@@ -149,11 +149,11 @@ contains
     end subroutine add_metadata_spproj
 
     subroutine add_metadata_projfile( self, projfile, oritype, stage, selection )
-        class(gui_communicator),    intent(inout) :: self
-        type(string),               intent(in)    :: projfile
-        character(len=*), optional, intent(in)    :: oritype
-        integer,          optional, intent(in)    :: stage
-        logical,          optional, intent(in)    :: selection
+        class(gui_communicator),    intent(inout)        :: self
+        type(string),               intent(in)           :: projfile
+        character(len=*),           optional, intent(in) :: oritype
+        integer,                    optional, intent(in) :: stage
+        logical,                    optional, intent(in) :: selection
         type(sp_project)                          :: spproj
         type(gui_project_builder)                 :: builder
         character(len=SHORTSTRLEN)                :: md_oritype
@@ -193,19 +193,19 @@ contains
     end subroutine add_metadata_projfile
 
     subroutine communication_worker( carg ) bind(c)
-        integer, parameter            :: SEND_INTERVAL_SEC = 10
-        type(c_ptr), value            :: carg
-        type(gui_comm_args),        pointer  :: comm_args
-        type(gui_metadata_project), pointer  :: metadata_project  => null()
-        type(json_value),           pointer  :: json_response_ptr => null()
-        type(http_post)               :: post
-        type(http_response)           :: response
-        type(gui_assembler)           :: assembler
-        type(string)                  :: my_niceserver_url, my_request
-        type(json_core)               :: json
-        character(len=STDLEN)         :: url_buffer
-        integer                       :: my_rc, last_send_time, now
-        logical                       :: my_l_continue, my_l_terminate, my_l_found, my_l_terminate_requested
+        integer,                    parameter :: SEND_INTERVAL_SEC = 10
+        type(c_ptr),                value     :: carg
+        type(gui_comm_args),        pointer   :: comm_args
+        type(gui_metadata_project), pointer   :: metadata_project  => null()
+        type(json_value),           pointer   :: json_response_ptr => null()
+        type(http_post)                       :: post
+        type(http_response)                   :: response
+        type(gui_assembler)                   :: assembler
+        type(string)                          :: my_niceserver_url, my_request
+        type(json_core)                       :: json
+        character(len=STDLEN)                 :: url_buffer
+        integer                               :: my_rc, last_send_time, now
+        logical                               :: my_l_continue, my_l_terminate, my_l_found, my_l_terminate_requested
         call c_f_pointer(carg, comm_args)
         call c_f_pointer(comm_args%metadata_project, metadata_project)
         url_buffer          = transfer(comm_args%url, url_buffer)

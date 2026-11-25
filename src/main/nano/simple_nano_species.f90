@@ -54,21 +54,21 @@ contains
     ! and counts as one more parameter, and slope returns that of K. detect_atomic_species fits x = ln I with
     ! cov = c - 12, the multiplicative form ln I = ln S_k + beta (c - 12) (atomic_density_model.md, section 2)
     subroutine fit_species_mixture( x, s2, nspecies_in, K, labels, post, mu, var, bic, admissible, cov, slope, w )
-        real,                           intent(in)  :: x(:)
-        real,                           intent(in)  :: s2(:)
-        integer,                        intent(in)  :: nspecies_in
-        integer,                        intent(out) :: K
-        integer,                        intent(out) :: labels(size(x))
-        real,              allocatable, intent(out) :: post(:,:), mu(:), var(:)
-        real,    optional, allocatable, intent(out) :: bic(:)
-        logical, optional, allocatable, intent(out) :: admissible(:)
-        real,    optional,              intent(in)  :: cov(:)
-        real,    optional,              intent(out) :: slope
-        real,    optional, allocatable, intent(out) :: w(:)
+        real,                           intent(in)                         :: x(:)
+        real,                           intent(in)                         :: s2(:)
+        integer,                        intent(in)                         :: nspecies_in
+        integer,                        intent(out)                        :: K
+        integer,                        intent(out)                        :: labels(size(x))
+        real,                           allocatable, intent(out)           :: post(:,:), mu(:), var(:)
+        real,                           optional, allocatable, intent(out) :: bic(:)
+        logical,                        optional, allocatable, intent(out) :: admissible(:)
+        real,                           optional,              intent(in)  :: cov(:)
+        real,                           optional,              intent(out) :: slope
+        real,                           optional, allocatable, intent(out) :: w(:)
         real(dp), allocatable :: mus(:,:), vars(:,:), ws(:,:), posts(:,:,:), bics(:), slopes(:)
         logical,  allocatable :: adm(:)
-        real(dp) :: X1(size(x),1), R(1,1,size(x)), Nz(1,1,size(x)), lnl
-        integer  :: n, kk, kmax, npar
+        real(dp)              :: X1(size(x),1), R(1,1,size(x)), Nz(1,1,size(x)), lnl
+        integer               :: n, kk, kmax, npar
         n = size(x)
         if( n < 1 )               THROW_HARD('no intensities; fit_species_mixture')
         if( nspecies_in < 0 )     THROW_HARD('nspecies must be 0 (automatic) or positive; fit_species_mixture')
@@ -212,14 +212,14 @@ contains
     ! noise variance sig2n. Free amplitude with the prior ((ln B - lnb_mean) / lnb_sd)**2 (stage 1), or, with
     ! i_class and tau_class, the amplitude tied to the class: ((A (B / 4 pi)**1.5 - i_class) / tau_class)**2 (stage 2).
     subroutine fit_gauss_width( y, r2, sig2n, lnb_mean, lnb_sd, amp, bfac, i_class, tau_class )
-        real,           intent(in)  :: y(:), r2(:)
-        real,           intent(in)  :: sig2n, lnb_mean, lnb_sd
-        real,           intent(out) :: amp, bfac
-        real, optional, intent(in)  :: i_class, tau_class
+        real,           intent(in)           :: y(:), r2(:)
+        real,           intent(in)           :: sig2n, lnb_mean, lnb_sd
+        real,           intent(out)          :: amp, bfac
+        real,           optional, intent(in) :: i_class, tau_class
         real(dp), parameter :: GOLD = (sqrt(5._dp) - 1._dp) / 2._dp
-        real(dp) :: t(NGRID_B), c(NGRID_B), lo, hi, x1, x2, f1, f2, syy
-        logical  :: l_tied
-        integer  :: i, ibest
+        real(dp)            :: t(NGRID_B), c(NGRID_B), lo, hi, x1, x2, f1, f2, syy
+        logical             :: l_tied
+        integer             :: i, ibest
         if( size(y) < 1 .or. size(y) /= size(r2) ) THROW_HARD('samples and distances differ in size; fit_gauss_width')
         l_tied = present(i_class) .and. present(tau_class)
         syy    = sum(real(y, dp)**2)
@@ -295,16 +295,16 @@ contains
     ! voxels of z inside mask that exceed all 26 neighbours and thres, with at least nmin_above neighbours
     ! above thres; ijk(3,n) and vals(n) by decreasing value
     subroutine local_maxima( z, mask, thres, nmin_above, ijk, vals )
-        real,                 intent(in)  :: z(:,:,:)
-        logical,              intent(in)  :: mask(:,:,:)
-        real,                 intent(in)  :: thres
-        integer,              intent(in)  :: nmin_above
-        integer, allocatable, intent(out) :: ijk(:,:)
-        real,    allocatable, intent(out) :: vals(:)
+        real,                 intent(in)               :: z(:,:,:)
+        logical,              intent(in)               :: mask(:,:,:)
+        real,                 intent(in)               :: thres
+        integer,              intent(in)               :: nmin_above
+        integer,              allocatable, intent(out) :: ijk(:,:)
+        real,                 allocatable, intent(out) :: vals(:)
         integer, allocatable :: tmp_ijk(:,:), order(:)
         real,    allocatable :: tmp_vals(:)
-        integer :: n(3), i, j, k, cnt, nabove, nmax
-        logical :: l_max
+        integer              :: n(3), i, j, k, cnt, nabove, nmax
+        logical              :: l_max
         n    = shape(z)
         nmax = count(mask .and. z > thres)
         allocate(tmp_ijk(3,max(nmax,1)), tmp_vals(max(nmax,1)))
@@ -347,10 +347,10 @@ contains
     ! Extreme-deconvolution fits of kk classes from the sorted-quantile and the largest-gap starts; the fit of
     ! higher likelihood, by decreasing mean. var is the intrinsic class variance (the noise of each value apart).
     subroutine fit_k( X1, R, Nz, kk, mu, var, w, post, lnl, tol, mstart )
-        real(dp),           intent(in)  :: X1(:,:), R(:,:,:), Nz(:,:,:)
-        integer,            intent(in)  :: kk
-        real(dp),           intent(out) :: mu(kk), var(kk), w(kk), post(size(X1,1),kk), lnl
-        real(dp), optional, intent(in)  :: tol, mstart(kk)
+        real(dp),           intent(in)           :: X1(:,:), R(:,:,:), Nz(:,:,:)
+        integer,            intent(in)           :: kk
+        real(dp),           intent(out)          :: mu(kk), var(kk), w(kk), post(size(X1,1),kk), lnl
+        real(dp),           optional, intent(in) :: tol, mstart(kk)
         real(dp) :: mu2(kk), var2(kk), w2(kk), post2(size(X1,1),kk), lnl2, means0(1,kk)
         real     :: xs(size(X1,1)), gaps(size(X1,1)-1)
         integer  :: idx(size(X1,1)), gidx(size(X1,1)-1), bnd(kk+1), n, i, g, order(kk)
@@ -396,10 +396,10 @@ contains
         contains
 
             subroutine fit_from( mu_o, var_o, w_o, post_o, lnl_o, means0_o )
-                real(dp),           intent(out) :: mu_o(kk), var_o(kk), w_o(kk), post_o(size(X1,1),kk), lnl_o
-                real(dp), optional, intent(in)  :: means0_o(1,kk)
+                real(dp),           intent(out)          :: mu_o(kk), var_o(kk), w_o(kk), post_o(size(X1,1),kk), lnl_o
+                real(dp),           optional, intent(in) :: means0_o(1,kk)
                 type(xd_gmm) :: g
-                real(dp) :: m(1,kk), S(1,1,kk), xhat(size(X1,1),1), xcov(1,1,size(X1,1))
+                real(dp)     :: m(1,kk), S(1,1,kk), xhat(size(X1,1),1), xcov(1,1,size(X1,1))
                 if( present(tol) )then
                     call g%new(1, kk, MAXITS_EM, tol, PI_MIN_EM)
                 else

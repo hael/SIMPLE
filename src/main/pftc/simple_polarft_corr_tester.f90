@@ -22,7 +22,7 @@ public :: run_all_polarft_corr_tests
 
 !> a score that breaks a call-order rule of the calculator, which must stop by its check
 integer, parameter :: ORDER_NO_WEIGHTS = 1, ORDER_STALE_SPECTRA = 2, ORDER_STALE_PTCLS = 3
-integer, parameter :: POLAR_BOX = 4, POLAR_MODE = 5, POLAR_PDIM = 6
+integer, parameter :: POLAR_BOX        = 4, POLAR_MODE = 5, POLAR_PDIM = 6
 type, extends(forked_process) :: order_violation
     integer :: what = ORDER_NO_WEIGHTS
 contains
@@ -67,17 +67,17 @@ contains
     subroutine score_out_of_order( self, cline )
         class(order_violation), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
-        integer, parameter :: BOX = 64
-        real,    parameter :: SMPD = 1.0, LP = 6.0
-        type(parameters), target :: p
-        type(cmdline)       :: cl
-        type(polarft_calc)  :: pftc
-        type(image)         :: img, img_big
-        real,           allocatable, target :: sigma2(:,:)
-        integer(int64),              target :: spectra_gen
-        real,           allocatable :: vals(:)
-        complex,        allocatable :: pft(:,:)
-        integer :: pdim(3), kfromto(2)
+        integer,                     parameter           :: BOX  = 64
+        real,                        parameter           :: SMPD = 1.0, LP = 6.0
+        type(parameters),            target              :: p
+        type(cmdline)                                    :: cl
+        type(polarft_calc)                               :: pftc
+        type(image)                                      :: img, img_big
+        real,                        allocatable, target :: sigma2(:,:)
+        integer(int64),              target              :: spectra_gen
+        real,                        allocatable         :: vals(:)
+        complex,                     allocatable         :: pft(:,:)
+        integer                                          :: pdim(3), kfromto(2)
         ! one thread: the parent's OpenMP pool does not exist in a forked child
         !$ call omp_set_num_threads(1)
         call cl%set('box',     real(BOX))
@@ -148,19 +148,19 @@ contains
     !! mode.
     subroutine test_posterior_inpl_draw()
         use simple_eul_prob_tab_utils, only: posterior_temperature
-        integer, parameter :: BOX = 64, NREFS = 2, NPTCLS = 1, NDRAWS = 200
-        real,    parameter :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
-        type(parameters), target :: p
-        type(cmdline)       :: cline
-        type(polarft_calc)  :: pftc
-        type(image)         :: img_self, img_other
-        real,    allocatable, target :: sigma2(:,:)
-        real,    allocatable :: vals(:)
-        real(dp), allocatable :: w(:)
-        complex, allocatable :: bank(:,:)
-        logical, allocatable :: seen(:)
-        real     :: s(2), u(2), dist, dist_b, dist_at, temp, max_err, p_near, f_near
-        integer  :: pdim(3), kfromto(2), irot, irot_b, nrots, idraw, nmode, ndistinct, noff
+        integer,          parameter           :: BOX  = 64, NREFS = 2, NPTCLS = 1, NDRAWS = 200
+        real,             parameter           :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
+        type(parameters), target              :: p
+        type(cmdline)                         :: cline
+        type(polarft_calc)                    :: pftc
+        type(image)                           :: img_self, img_other
+        real,             allocatable, target :: sigma2(:,:)
+        real,             allocatable         :: vals(:)
+        real(dp),         allocatable         :: w(:)
+        complex,          allocatable         :: bank(:,:)
+        logical,          allocatable         :: seen(:)
+        real                                  :: s(2), u(2), dist, dist_b, dist_at, temp, max_err, p_near, f_near
+        integer                               :: pdim(3), kfromto(2), irot, irot_b, nrots, idraw, nmode, ndistinct, noff
         write(*,'(A)') 'test_posterior_inpl_draw'
         call cline%set('box',     real(BOX))
         call cline%set('smpd',    SMPD)
@@ -316,23 +316,23 @@ contains
     !! neither its block nor the chunk of references it is scored in, and a team gives the serial entries bit for bit.
     subroutine test_block_kernel()
         use simple_sp_project, only: sp_project
-        integer, parameter :: BOX = 64, NSPACE = 200, NSTATES = 2, NREFS = NSPACE*NSTATES, NPTCLS = 32, NHALF = NPTCLS/2
-        integer, parameter :: NREPS = 3, BSZ = 6, NCHUNK = 2*PFTC_BLOCK_NR
-        real,    parameter :: SMPD = 2.0, MSKDIAM = 100.0, LP = 6.0, FALLOFF = 12.0
-        real,    parameter :: RTOL = 1.e-6, FLIP_RATE = 2.e-5
+        integer,             parameter           :: BOX   = 64, NSPACE = 200, NSTATES = 2, NREFS = NSPACE*NSTATES, NPTCLS = 32, NHALF = NPTCLS/2
+        integer,             parameter           :: NREPS = 3, BSZ = 6, NCHUNK = 2*PFTC_BLOCK_NR
+        real,                parameter           :: SMPD  = 2.0, MSKDIAM = 100.0, LP = 6.0, FALLOFF = 12.0
+        real,                parameter           :: RTOL  = 1.e-6, FLIP_RATE = 2.e-5
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
         class(sp_project),   allocatable         :: spproj
-        type(cmdline) :: cline
-        real,        allocatable, target :: sigma2(:,:)
-        complex(sp), allocatable :: pft(:,:), banks(:,:,:), banks_po(:,:,:)
-        real(sp),    allocatable :: pd(:,:,:), bd(:,:), bd_ref(:,:), td(:,:), temps(:), temps_po(:)
-        integer,     allocatable :: pr(:,:,:), br(:,:), br_ref(:,:), tr(:,:), irefs(:), perm(:), porder(:), blocks(:,:)
-        logical,     allocatable :: l_bank(:), lb_po(:)
-        real(dp) :: t0, t_pair, t_block
-        real     :: u(2), max_rel
-        integer  :: kfromto(2), pdim(3), nst, nr, ilist, ibank, i, iref, ieo, k, j, jj, nflip, nallowed, nthr_test
-        integer  :: nthr_prev, actual_team, expected_team, irep, ntasks, nchunks, itask, ib, c0, c1, ndiff
+        type(cmdline)                            :: cline
+        real,                allocatable, target :: sigma2(:,:)
+        complex(sp),         allocatable         :: pft(:,:), banks(:,:,:), banks_po(:,:,:)
+        real(sp),            allocatable         :: pd(:,:,:), bd(:,:), bd_ref(:,:), td(:,:), temps(:), temps_po(:)
+        integer,             allocatable         :: pr(:,:,:), br(:,:), br_ref(:,:), tr(:,:), irefs(:), perm(:), porder(:), blocks(:,:)
+        logical,             allocatable         :: l_bank(:), lb_po(:)
+        real(dp)                                 :: t0, t_pair, t_block
+        real                                     :: u(2), max_rel
+        integer                                  :: kfromto(2), pdim(3), nst, nr, ilist, ibank, i, iref, ieo, k, j, jj, nflip, nallowed, nthr_test
+        integer                                  :: nthr_prev, actual_team, expected_team, irep, ntasks, nchunks, itask, ib, c0, c1, ndiff
         write(*,'(A)') 'test_block_kernel'
         allocate(p, pftc, spproj)
         nthr_test = 4
@@ -643,18 +643,18 @@ contains
     !! bin; the bank's best-rotation and at-pose losses agree with each other
     !! exactly, and cross swaps the half as for the unshifted kernels.
     subroutine test_bank_and_at_pose_kernels()
-        integer, parameter :: BOX = 64, NREFS = 1, NPTCLS = 1
-        real,    parameter :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
-        real,    parameter :: NYQUIST_ATOL = 1.e-4 ! both kernels carry the Nyquist bin; a frame error is O(1)
-        type(parameters), target :: p
-        type(cmdline)       :: cline
-        type(polarft_calc)  :: pftc
-        type(image)         :: img_even, img_odd
-        real,    allocatable, target :: sigma2(:,:)
-        real,    allocatable :: vals(:)
-        complex, allocatable :: bank(:,:)
-        real    :: s(2), u(2), dist_at, dist_b, dist_bx, dist_r, dist_rx
-        integer :: pdim(3), kfromto(2), irot, irot_b, irot_bx, irot_r, nrots
+        integer,          parameter           :: BOX          = 64, NREFS = 1, NPTCLS = 1
+        real,             parameter           :: SMPD         = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
+        real,             parameter           :: NYQUIST_ATOL = 1.e-4 ! both kernels carry the Nyquist bin; a frame error is O(1)
+        type(parameters), target              :: p
+        type(cmdline)                         :: cline
+        type(polarft_calc)                    :: pftc
+        type(image)                           :: img_even, img_odd
+        real,             allocatable, target :: sigma2(:,:)
+        real,             allocatable         :: vals(:)
+        complex,          allocatable         :: bank(:,:)
+        real                                  :: s(2), u(2), dist_at, dist_b, dist_bx, dist_r, dist_rx
+        integer                               :: pdim(3), kfromto(2), irot, irot_b, irot_bx, irot_r, nrots
         write(*,'(A)') 'test_bank_and_at_pose_kernels'
         call cline%set('box',     real(BOX))
         call cline%set('smpd',    SMPD)
@@ -741,16 +741,16 @@ contains
     !! loads the real halves after the matcher's references; the plain read of a matching object is the
     !! iref_from 1 case.
     subroutine test_ref_pfts_offset_io()
-        integer, parameter :: BOX = 64, NREFS = 2, NPTCLS = 1
-        real,    parameter :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
-        type(parameters), target :: p
-        type(cmdline)       :: cline
-        type(polarft_calc)  :: pftc_src, pftc_dst, pftc_same
-        type(image)         :: imgs(2*NREFS)
-        type(string)        :: fname_even, fname_odd, fname_dst_even, fname_dst_odd
-        complex(sp), allocatable :: secs_even(:,:,:), secs_odd(:,:,:), dst_even(:,:,:), dst_odd(:,:,:)
-        integer :: pdim(3), kfromto(2), i, iref, ioff
-        logical :: iseven
+        integer,          parameter   :: BOX  = 64, NREFS = 2, NPTCLS = 1
+        real,             parameter   :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(polarft_calc)            :: pftc_src, pftc_dst, pftc_same
+        type(image)                   :: imgs(2*NREFS)
+        type(string)                  :: fname_even, fname_odd, fname_dst_even, fname_dst_odd
+        complex(sp),      allocatable :: secs_even(:,:,:), secs_odd(:,:,:), dst_even(:,:,:), dst_odd(:,:,:)
+        integer                       :: pdim(3), kfromto(2), i, iref, ioff
+        logical                       :: iseven
         write(*,'(A)') 'test_ref_pfts_offset_io'
         call cline%set('box',     real(BOX))
         call cline%set('smpd',    SMPD)
@@ -831,8 +831,8 @@ contains
     !> the sections of one half of a reprojection model file, as write_ref_pfts lays it out: a header
     !! (pftsz, kfromto, nrefs), then (pftsz, k, nrefs)
     subroutine read_model_sections( fname, secs )
-        class(string),            intent(in)  :: fname
-        complex(sp), allocatable, intent(out) :: secs(:,:,:)
+        class(string),            intent(in)               :: fname
+        complex(sp),              allocatable, intent(out) :: secs(:,:,:)
         integer :: funit, header(4)
         open(newunit=funit, file=fname%to_char(), access='stream', form='unformatted', action='read', status='old')
         read(funit) header
@@ -850,15 +850,15 @@ contains
     !! slots from a copy of one section into both.
     subroutine test_cross_half_euclid()
         use simple_eul_prob_tab_utils, only: posterior_temperature
-        integer, parameter :: BOX = 64, NREFS = 1, NPTCLS = 1
-        real,    parameter :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
-        type(parameters), target :: p
-        type(cmdline)       :: cline
-        type(polarft_calc)  :: pftc
-        type(image)         :: img_even, img_odd
-        real, allocatable, target :: sigma2(:,:)
-        real    :: dist_own, dist_cross, dist_at, temp
-        integer :: pdim(3), kfromto(2), irot_own, irot_cross
+        integer,          parameter           :: BOX  = 64, NREFS = 1, NPTCLS = 1
+        real,             parameter           :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
+        type(parameters), target              :: p
+        type(cmdline)                         :: cline
+        type(polarft_calc)                    :: pftc
+        type(image)                           :: img_even, img_odd
+        real,             allocatable, target :: sigma2(:,:)
+        real                                  :: dist_own, dist_cross, dist_at, temp
+        integer                               :: pdim(3), kfromto(2), irot_own, irot_cross
         write(*,'(A)') 'test_cross_half_euclid'
         call cline%set('box',     real(BOX))
         call cline%set('smpd',    SMPD)
@@ -944,16 +944,16 @@ contains
     end subroutine test_cross_half_euclid
 
     subroutine test_generated_images()
-        integer, parameter :: BOX = 64, NREFS = 3, NPTCLS = 5
-        real,    parameter :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
-        type(parameters), target :: p
-        type(cmdline)       :: cline
-        type(polarft_calc)  :: pftc
-        type(image)         :: imgs(NREFS), ptcls(NPTCLS)
-        real, allocatable   :: cc(:)
-        real    :: ang, dang
-        integer :: pdim(3), kfromto(2), nrots, pftsz, rotstep, i, loc, loc_fwd, loc_bwd, loc_plus, loc_minus
-        logical :: peak_ok
+        integer,          parameter   :: BOX  = 64, NREFS = 3, NPTCLS = 5
+        real,             parameter   :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
+        type(parameters), target      :: p
+        type(cmdline)                 :: cline
+        type(polarft_calc)            :: pftc
+        type(image)                   :: imgs(NREFS), ptcls(NPTCLS)
+        real,             allocatable :: cc(:)
+        real                          :: ang, dang
+        integer                       :: pdim(3), kfromto(2), nrots, pftsz, rotstep, i, loc, loc_fwd, loc_bwd, loc_plus, loc_minus
+        logical                       :: peak_ok
         write(*,'(A)') 'test_generated_images'
         ! a polarft_calc from parameters alone (no stack on disk)
         call cline%set('box',     real(BOX))

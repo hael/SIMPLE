@@ -47,13 +47,13 @@ integer,          parameter :: MIN_NSTATES = 3
 character(len=*), parameter :: TRIAL_PREFIX = 'flex_pca_trial'
 
 type :: flex_pca_application
-    type(flex_run_session), allocatable :: sess
-    type(flex_plane_store), allocatable :: plane_store
+    type(flex_run_session),     allocatable :: sess
+    type(flex_plane_store),     allocatable :: plane_store
     type(flex_pcg_environment), allocatable :: pcg_env
   contains
-    procedure :: run        => app_run
-    procedure :: run_worker => execute_worker_stage
-    procedure :: kill       => app_kill
+    procedure          :: run        => app_run
+    procedure          :: run_worker => execute_worker_stage
+    procedure          :: kill       => app_kill
     procedure, private :: prepare, obtain_embedding, infer_states, reconstruct_states, publish
     procedure, private :: resume_from_cache, embed_all
 end type flex_pca_application
@@ -371,11 +371,11 @@ contains
         type(parameters),            intent(inout) :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(in)    :: cline
-        integer :: i, r, s, nstates_merged
-        integer, allocatable :: merge_label(:)
-        real,    allocatable :: merged_weights(:,:), merged_targets(:,:), merged_bw(:)
-        real(dp), allocatable :: state_mass(:), merged_mass(:)
-        real(dp) :: sumw_s, sumw2_s
+        integer                 :: i, r, s, nstates_merged
+        integer,  allocatable   :: merge_label(:)
+        real,     allocatable   :: merged_weights(:,:), merged_targets(:,:), merged_bw(:)
+        real(dp), allocatable   :: state_mass(:), merged_mass(:)
+        real(dp)                :: sumw_s, sumw2_s
         integer(timer_int_kind) :: t_blk
         associate( sess => self%sess )
             ! the merge needs at least two states and the half maps of each

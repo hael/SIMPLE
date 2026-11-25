@@ -73,9 +73,9 @@ contains
         class(sp_project),    intent(inout) :: project
         class(oris),          intent(inout) :: os
         logical,              intent(out)   :: loaded
-        type(string) :: state_path
-        integer      :: noris
-        logical      :: state_path_found
+        type(string)          :: state_path
+        integer               :: noris
+        logical               :: state_path_found
         character(len=STDLEN) :: message
         loaded = .false.
         if( params%cc_objfun /= OBJFUN_EUCLID ) return

@@ -23,7 +23,7 @@ module simple_gui_metadata_stream_optics_assignment
     integer               :: optics_groups_assigned   = 0  ! number of distinct optics groups created
     integer               :: last_import_time         = 0  ! Unix timestamp of most recent import (stamped by set)
   contains
-    procedure :: kill => kill_override
+    procedure :: kill    => kill_override
     procedure :: set
     procedure :: get
     procedure :: jsonise => jsonise_override
@@ -36,7 +36,7 @@ contains
     class(gui_metadata_stream_optics_assignment), intent(inout) :: self
     type(string),                                 intent(in)    :: stage
     integer,                                      intent(in)    :: micrographs_assigned, optics_groups_assigned
-    integer,                                     intent(in)    :: micrographs_imported
+    integer,                                      intent(in)    :: micrographs_imported
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned               = .true.
     self%stage                    = stage%to_char()

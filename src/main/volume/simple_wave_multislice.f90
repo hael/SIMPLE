@@ -20,8 +20,8 @@ public :: wave_multislice
 !! sweeps back through segments of ceil(sqrt(nat)) sections from checkpoints (wave_model_policy.md, section 3)
 type :: wave_multislice
     private
-    integer :: nat = 0, R = 0, rl = 0, n = 0, osf = 0, kappa = 0, kseg = 0, nseg = 0
-    complex :: c = cmplx(0.,0.)
+    integer              :: nat = 0, R = 0, rl = 0, n = 0, osf = 0, kappa = 0, kseg = 0, nseg = 0
+    complex              :: c   = cmplx(0.,0.)
     type(wave_imaging)   :: wimg                   !< the lens and detector of the exit wave
     type(wave_field)     :: fpsi                   !< the wave
     type(wave_field)     :: fw                     !< work field (transmissions, tangents, cotangents)
@@ -33,19 +33,19 @@ type :: wave_multislice
     complex, allocatable :: dpsi(:,:), tt(:,:), sj(:,:)
     integer, allocatable :: order(:)               !< the sections in the beam's order
     ! the sections' spectra along l and z: zs(1:nat,-R:R,-R:R), transformed along the first dimension
-    type(c_ptr) :: zs_ptr = c_null_ptr, zd_ptr = c_null_ptr, plan_bwd = c_null_ptr, plan_fwd = c_null_ptr
+    type(c_ptr)                                   :: zs_ptr    = c_null_ptr, zd_ptr = c_null_ptr, plan_bwd = c_null_ptr, plan_fwd = c_null_ptr
     complex(c_float_complex), pointer, contiguous :: zs(:,:,:) => null()   !< of the point forward stored
     complex(c_float_complex), pointer, contiguous :: zd(:,:,:) => null()   !< of a direction or of the cotangents
-    logical :: l_optics = .false., l_point = .false.
+    logical                                       :: l_optics  = .false., l_point = .false.
   contains
-    procedure :: new
-    procedure :: set_optics
-    procedure :: forward
-    procedure :: linearize
-    procedure :: adjoint
-    procedure :: get_exit_wave
-    procedure :: get_n
-    procedure :: kill
+    procedure          :: new
+    procedure          :: set_optics
+    procedure          :: forward
+    procedure          :: linearize
+    procedure          :: adjoint
+    procedure          :: get_exit_wave
+    procedure          :: get_n
+    procedure          :: kill
     procedure, private :: cube_to_sections
     procedure, private :: sections_to_cube_t
     procedure, private :: section_field
@@ -60,8 +60,8 @@ contains
         class(wave_multislice), intent(inout) :: self
         integer,                intent(in)    :: nat, osf
         complex(c_float_complex), pointer :: zin(:), zout(:)
-        integer(c_size_t) :: nz
-        integer(c_int)    :: dims(1), emb(1)
+        integer(c_size_t)                 :: nz
+        integer(c_int)                    :: dims(1), emb(1)
         call self%kill
         if( nat < 4 .or. mod(nat,2) /= 0 ) THROW_HARD('the native box must be even; wave_multislice%new')
         if( osf < 1 ) THROW_HARD('the oversampling must be at least 1; wave_multislice%new')
@@ -152,7 +152,7 @@ contains
         complex,                intent(in)    :: cube(-self%R:self%R,-self%R:self%R,-self%rl:self%rl)
         complex,                intent(out)   :: ihat(-self%R:self%R,-self%R:self%R)
         complex, pointer :: psi(:,:), w(:,:)
-        integer :: js
+        integer          :: js
         if( .not. self%l_optics ) THROW_HARD('set_optics has not been called; wave_multislice%forward')
         psi => self%fpsi%ptr()
         w   => self%fw%ptr()
@@ -175,7 +175,7 @@ contains
         complex,                intent(in)    :: dcube(-self%R:self%R,-self%R:self%R,-self%rl:self%rl)
         complex,                intent(out)   :: dihat(-self%R:self%R,-self%R:self%R)
         complex, pointer :: psi(:,:), w(:,:)
-        integer :: js
+        integer          :: js
         if( .not. self%l_point ) THROW_HARD('forward has not been called; wave_multislice%linearize')
         psi => self%fpsi%ptr()
         w   => self%fw%ptr()
@@ -208,7 +208,7 @@ contains
         complex,                intent(in)    :: q(-self%R:self%R,-self%R:self%R)
         complex,                intent(out)   :: dcube_adj(-self%R:self%R,-self%R:self%R,-self%rl:self%rl)
         complex, pointer :: psi(:,:), w(:,:)
-        integer :: sg, ja, jb, js, ii
+        integer          :: sg, ja, jb, js, ii
         if( .not. self%l_point ) THROW_HARD('forward has not been called; wave_multislice%adjoint')
         psi => self%fpsi%ptr()
         w   => self%fw%ptr()
@@ -259,7 +259,7 @@ contains
         complex,                intent(in)    :: cube(-self%R:self%R,-self%R:self%R,-self%rl:self%rl)
         integer,                intent(in)    :: which
         complex(c_float_complex), pointer, contiguous :: z(:,:,:)
-        integer :: h, k, l
+        integer                                       :: h, k, l
         if( which == ZS_POINT )then
             z => self%zs
         else

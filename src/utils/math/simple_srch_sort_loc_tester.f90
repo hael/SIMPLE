@@ -202,8 +202,8 @@ contains
     subroutine test_find()
         real,    parameter :: TAB(6)  = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
         integer, parameter :: ITAB(6) = [1, 2, 4, 8, 16, 32]
-        integer :: j, idist
-        real    :: dist
+        integer            :: j, idist
+        real               :: dist
         write(*,'(A)') 'test_find'
         call find(TAB, 6, 4.9, j, dist)
         call assert_int(3, j,           'find: 4.9 is closest to 4')
@@ -226,9 +226,9 @@ contains
 
     subroutine test_maxnloc_minnloc()
         integer, parameter :: NSEL = 4
-        real    :: ref(NARR), shuffled(30)
-        integer :: loc(NSEL), i, loc1(1), locall(NARR), loc10(10)
-        logical :: descending_vals, ascending_vals
+        real               :: ref(NARR), shuffled(30)
+        integer            :: loc(NSEL), i, loc1(1), locall(NARR), loc10(10)
+        logical            :: descending_vals, ascending_vals
         write(*,'(A)') 'test_maxnloc_minnloc'
         ref = sorted_reals(RVALS)
         loc = maxnloc(RVALS, NSEL)
@@ -358,8 +358,8 @@ contains
 
     subroutine test_orderings()
         integer, allocatable :: order(:)
-        real    :: ref(NARR)
-        integer :: i
+        real                 :: ref(NARR)
+        integer              :: i
         write(*,'(A)') 'test_orderings'
         ref   = sorted_reals(RVALS)
         order = scores2order(RVALS)
@@ -372,8 +372,8 @@ contains
 
     subroutine test_mask2inds_and_reorder()
         integer, allocatable :: inds(:)
-        real    :: rarr(5)
-        integer :: iarr(5)
+        real                 :: rarr(5)
+        integer              :: iarr(5)
         write(*,'(A)') 'test_mask2inds_and_reorder'
         inds = mask2inds([.true., .false., .false., .true., .true.])
         call assert_true(all(inds == [1, 4, 5]), 'mask2inds: indices of the true entries')

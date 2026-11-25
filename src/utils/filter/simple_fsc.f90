@@ -11,16 +11,16 @@ private
 #include "simple_local_flags.inc"
 
 type :: fsc_area_score_result
-    integer :: nfreqs=0
-    integer :: ndirs=0
-    integer :: min_count=1
-    integer :: min_dir=0
-    integer :: max_dir=0
-    real    :: cone_half_angle_deg=20.
-    real    :: threshold=0.143
-    real    :: cfar=0.
-    real    :: wauc_min=0.
-    real    :: wauc_max=0.
+    integer              :: nfreqs              = 0
+    integer              :: ndirs               = 0
+    integer              :: min_count           = 1
+    integer              :: min_dir             = 0
+    integer              :: max_dir             = 0
+    real                 :: cone_half_angle_deg = 20.
+    real                 :: threshold           = 0.143
+    real                 :: cfar                = 0.
+    real                 :: wauc_min            = 0.
+    real                 :: wauc_max            = 0.
     real,    allocatable :: res(:)
     real,    allocatable :: dirs(:,:)
     real,    allocatable :: cfsc(:,:)
@@ -29,7 +29,7 @@ type :: fsc_area_score_result
     real,    allocatable :: crossing_res(:)
     integer, allocatable :: counts(:,:)
     integer, allocatable :: included_bins(:)
-    logical              :: exists = .false.
+    logical              :: exists              = .false.
   contains
     procedure :: new
     procedure :: calc_fsc_area_score
@@ -42,15 +42,15 @@ contains
     subroutine phase_rand_fsc(even, odd, envmask, state, n, fsc, fsc_t, fsc_n, fsc_u )
         use simple_refine3D_fnames, only: refine3D_fsc_unmasked_fname, refine3D_fsc_masked_fname, &
             &refine3D_fsc_randomized_fname
-        class(image),                intent(in)    :: even, odd
-        class(image),                intent(inout) :: envmask
-        integer,                     intent(in)    :: state, n
-        real, allocatable,           intent(out)   :: fsc(:), fsc_t(:), fsc_n(:)
-        real, allocatable, optional, intent(out)   :: fsc_u(:)
-        type(image) :: work_even, work_odd
+        class(image),                intent(in)                         :: even, odd
+        class(image),                intent(inout)                      :: envmask
+        integer,                     intent(in)                         :: state, n
+        real,                        allocatable,           intent(out) :: fsc(:), fsc_t(:), fsc_n(:)
+        real,                        allocatable, optional, intent(out) :: fsc_u(:)
+        type(image)       :: work_even, work_odd
         real, allocatable :: fsc_unmasked(:)
-        real    :: lp_rand, smpd, denom
-        integer :: ldim(3), k, k_rand
+        real              :: lp_rand, smpd, denom
+        integer           :: ldim(3), k, k_rand
         call seed_rnd()
         ldim = even%get_ldim()
         smpd = even%get_smpd()
@@ -130,7 +130,7 @@ contains
         type(CPlot2D_type)        :: plot2D
         type(CDataSet_type)       :: dataSet
         character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
-        integer  :: k,iostat
+        integer                   :: k,iostat
         if( n == 0 ) THROW_HARD('Empty FSC vector; plot_fsc')
         fname_eps  = trim(tmpl_fname)//'.eps'
         fname_pdf  = trim(tmpl_fname)//'.pdf'
@@ -169,7 +169,7 @@ contains
         type(CPlot2D_type)        :: plot2D
         type(CDataSet_type)       :: dataSet
         character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
-        integer  :: k,iostat
+        integer                   :: k,iostat
         if( n == 0 ) THROW_HARD('Empty FSC vector; plot_phrand_fsc')
         fname_eps  = trim(tmpl_fname)//'.eps'
         fname_pdf  = trim(tmpl_fname)//'.pdf'
@@ -234,15 +234,15 @@ contains
     subroutine plot_fsc_area_score( result, fbody )
         type(fsc_area_score_result), intent(in) :: result
         character(len=*),            intent(in) :: fbody
-        type(string)              :: title
-        type(CPlot2D_type)        :: plot2D
-        character(len=LONGSTRLEN) :: fname_eps, fname_png, plot_title
-        character(len=XLONGSTRLEN):: ps2png_cmd
-        real, allocatable :: freq(:), mean(:), stdev(:), minv(:), maxv(:), lower(:), upper(:), crossings(:)
-        logical, allocatable :: valid_shell(:)
-        real(dp) :: sumv, sumsq, mu, sig
-        real     :: val, max_freq, best_res, worst_res
-        integer  :: n, k, idir, cnt, ibin, ncross, iostat
+        type(string)               :: title
+        type(CPlot2D_type)         :: plot2D
+        character(len=LONGSTRLEN)  :: fname_eps, fname_png, plot_title
+        character(len=XLONGSTRLEN) :: ps2png_cmd
+        real,    allocatable       :: freq(:), mean(:), stdev(:), minv(:), maxv(:), lower(:), upper(:), crossings(:)
+        logical, allocatable       :: valid_shell(:)
+        real(dp)                   :: sumv, sumsq, mu, sig
+        real                       :: val, max_freq, best_res, worst_res
+        integer                    :: n, k, idir, cnt, ibin, ncross, iostat
         if( result%nfreqs <= 0 ) THROW_HARD('Empty FSC area score result; plot_fsc_area_score')
         if( .not.allocated(result%res) .or. .not.allocated(result%cfsc) .or. .not.allocated(result%counts) )then
             THROW_HARD('Incomplete FSC area score result; plot_fsc_area_score')
@@ -368,7 +368,7 @@ contains
             integer,        intent(in) :: first, last
             real(C_double), intent(in) :: r, g, b
             type(CDataSet_type) :: dataSet
-            integer :: kk
+            integer             :: kk
             call CDataSet__new(dataSet)
             call CDataSet__SetDrawMarker(dataSet, C_FALSE)
             call CDataSet__SetDrawLine(dataSet, C_FALSE)
@@ -385,7 +385,7 @@ contains
         end subroutine add_filled_band_segment
 
         subroutine add_crossing_bars
-            real :: left_edge, right_edge, half_width
+            real    :: left_edge, right_edge, half_width
             integer :: kk
             if( ncross == 0 ) return
             do kk = 1,n
@@ -433,9 +433,9 @@ contains
         end subroutine add_filled_rect
 
         subroutine add_curve( y, r, g, b, linewidth, dashed )
-            real,           intent(in) :: y(n)
-            real(C_double), intent(in) :: r, g, b, linewidth
-            logical(C_bool), intent(in):: dashed
+            real,            intent(in) :: y(n)
+            real(C_double),  intent(in) :: r, g, b, linewidth
+            logical(C_bool), intent(in) :: dashed
             integer :: first, last, kk
             first = 0
             last  = 0
@@ -453,12 +453,12 @@ contains
         end subroutine add_curve
 
         subroutine add_curve_segment( y, first, last, r, g, b, linewidth, dashed )
-            real,           intent(in) :: y(n)
-            integer,        intent(in) :: first, last
-            real(C_double), intent(in) :: r, g, b, linewidth
-            logical(C_bool), intent(in):: dashed
+            real,            intent(in) :: y(n)
+            integer,         intent(in) :: first, last
+            real(C_double),  intent(in) :: r, g, b, linewidth
+            logical(C_bool), intent(in) :: dashed
             type(CDataSet_type) :: dataSet
-            integer :: kk
+            integer             :: kk
             call CDataSet__new(dataSet)
             call CDataSet__SetDrawMarker(dataSet, C_FALSE)
             call CDataSet__SetDrawLine(dataSet, C_TRUE)
@@ -473,9 +473,9 @@ contains
         end subroutine add_curve_segment
 
         subroutine add_segment( x1, y1, x2, y2, r, g, b, linewidth, dashed )
-            real,           intent(in) :: x1, y1, x2, y2
-            real(C_double), intent(in) :: r, g, b, linewidth
-            logical(C_bool), intent(in):: dashed
+            real,            intent(in) :: x1, y1, x2, y2
+            real(C_double),  intent(in) :: r, g, b, linewidth
+            logical(C_bool), intent(in) :: dashed
             type(CDataSet_type) :: dataSet
             call CDataSet__new(dataSet)
             call CDataSet__SetDrawMarker(dataSet, C_FALSE)
@@ -494,8 +494,8 @@ contains
         integer, intent(in)  :: ndirs
         real,    intent(out) :: dirs(3,ndirs)
         real(dp), parameter :: GOLDEN_ANGLE = DPI * (3.d0 - sqrt(5.d0))
-        real(dp) :: z, rho, phi
-        integer  :: idir
+        real(dp)            :: z, rho, phi
+        integer             :: idir
         do idir = 1, ndirs
             z          = 1.d0 - 2.d0 * (real(idir,dp) - 0.5d0) / real(ndirs,dp)
             rho        = sqrt(max(0.d0, 1.d0 - z*z))
@@ -535,7 +535,7 @@ contains
         type(fsc_area_score_result), intent(in) :: result
         character(len=*),            intent(in) :: fbody
         character(len=LONGSTRLEN) :: summary_fname, curves_fname, dirs_fname
-        integer :: funit, iostat, idir, k
+        integer                   :: funit, iostat, idir, k
         summary_fname = trim(fbody)//'_summary.txt'
         curves_fname  = trim(fbody)//'_curves.csv'
         dirs_fname    = trim(fbody)//'_directions.csv'
@@ -618,7 +618,7 @@ contains
         class(fsc_area_score_result), intent(inout) :: self
         class(image),                 intent(inout) :: even, odd
         logical, parameter :: VERBOSE = .false.
-        integer :: idir, loc(1)
+        integer            :: idir, loc(1)
         if( .not. even%is_ft() ) call even%fft()
         if( .not. odd%is_ft()  ) call odd%fft()
         call even%conical_fsc(odd, self%dirs, self%cone_half_angle_deg, self%min_count, self%cfsc, self%counts)

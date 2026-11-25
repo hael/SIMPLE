@@ -17,8 +17,8 @@ implicit none
 private
 public :: run_all_polar_feats_tests
 
-integer, parameter :: BOX = 48, PFTSZ = 16, NPTCLS = 3, NREFS = 2
-real,    parameter :: SMPD = 1.0, MSKDIAM = 40.
+integer, parameter :: BOX        = 48, PFTSZ = 16, NPTCLS = 3, NREFS = 2
+real,    parameter :: SMPD       = 1.0, MSKDIAM = 40.
 integer, parameter :: KFROMTO(2) = [2, 10]
 
 contains
@@ -36,13 +36,13 @@ contains
     !> a calculator of NPTCLS random particles without a CTF (the CTF matrices are ones), the Euclidean weights of
     !! two unequal spectra memoised; the particles' rings and the weights are returned beside it
     subroutine make_fixture( p, pftc, sigma2, ptcls, wk )
-        type(parameters),              intent(inout) :: p
-        type(polarft_calc),            intent(inout) :: pftc
-        real(sp), allocatable, target, intent(inout) :: sigma2(:,:)
-        complex(sp), allocatable,      intent(inout) :: ptcls(:,:,:)
-        real(sp), allocatable,         intent(inout) :: wk(:,:)
-        type(cmdline) :: cline
-        integer :: iptcl, iref, k, pp, ieo
+        type(parameters),              intent(inout)                      :: p
+        type(polarft_calc),            intent(inout)                      :: pftc
+        real(sp),                      allocatable, target, intent(inout) :: sigma2(:,:)
+        complex(sp),                   allocatable,      intent(inout)    :: ptcls(:,:,:)
+        real(sp),                      allocatable,         intent(inout) :: wk(:,:)
+        type(cmdline)            :: cline
+        integer                  :: iptcl, iref, k, pp, ieo
         complex(sp), allocatable :: ref(:,:)
         call cline%set('box',     real(BOX))
         call cline%set('smpd',    SMPD)
@@ -92,15 +92,15 @@ contains
 
     !> a half ring shifted through the module's ramp equals the calculator's shift of the same particle
     subroutine test_shift_ramp()
-        type(parameters)    :: p
-        type(polarft_calc)  :: pftc
-        type(polar_feats)   :: feats
+        type(parameters)                 :: p
+        type(polarft_calc)               :: pftc
+        type(polar_feats)                :: feats
         real(sp),    allocatable, target :: sigma2(:,:)
-        complex(sp), allocatable :: ptcls(:,:,:), pft_sh(:,:), pft_calc(:,:)
-        real(sp),    allocatable :: wk(:,:)
-        real(sp), parameter :: SHIFT(2) = [1.3, -0.7]
-        real    :: maxdiff, maxval_pft
-        integer :: k
+        complex(sp), allocatable         :: ptcls(:,:,:), pft_sh(:,:), pft_calc(:,:)
+        real(sp),    allocatable         :: wk(:,:)
+        real(sp),    parameter           :: SHIFT(2) = [1.3, -0.7]
+        real                             :: maxdiff, maxval_pft
+        integer                          :: k
         write(*,'(A)') 'test_shift_ramp'
         call make_fixture(p, pftc, sigma2, ptcls, wk)
         call feats%new(PFTSZ, KFROMTO, BOX, wk)
@@ -132,10 +132,10 @@ contains
         type(polar_feats), intent(in) :: feats
         complex(sp),       intent(in) :: pft(PFTSZ,KFROMTO(1):KFROMTO(2))
         real(sp),          intent(in) :: shift(2)
-        type(polar_feat) :: f0, f1
+        type(polar_feat)         :: f0, f1
         complex(sp), allocatable :: pft_sh(:,:)
         real(sp),    allocatable :: ctfmat(:,:), x_sh(:,:,:)
-        real :: maxdiff, maxval_x
+        real                     :: maxdiff, maxval_x
         allocate(pft_sh(PFTSZ,KFROMTO(1):KFROMTO(2)), ctfmat(PFTSZ,KFROMTO(1):KFROMTO(2)), x_sh(PFTSZ,KFROMTO(1):KFROMTO(2),2))
         ctfmat = 1.
         call feats%build_from_pft(pft, ctfmat, .true., f0, normalise=.false.)
@@ -153,17 +153,17 @@ contains
     !> the conjugate wrap: the padding is the conjugate of the opposite end, a rotation by one grid step is the
     !! Friedel-extended ring's cyclic shift, a half turn is the conjugate, a full turn the identity
     subroutine test_conjugate_wrap()
-        type(parameters)    :: p
-        type(polarft_calc)  :: pftc
-        type(polar_feats)   :: feats
-        type(polar_feat)    :: feat
+        type(parameters)                 :: p
+        type(polarft_calc)               :: pftc
+        type(polar_feats)                :: feats
+        type(polar_feat)                 :: feat
         real(sp),    allocatable, target :: sigma2(:,:)
-        type(polar_feat)    :: feat_rot
-        complex(sp), allocatable :: ptcls(:,:,:), pft_rot(:,:)
-        real(sp),    allocatable :: wk(:,:), xrot(:,:,:), xpad(:,:,:), ctfmat(:,:)
-        integer, parameter :: NPAD = 3
-        integer :: nk, j, irot
-        logical :: ok
+        type(polar_feat)                 :: feat_rot
+        complex(sp), allocatable         :: ptcls(:,:,:), pft_rot(:,:)
+        real(sp),    allocatable         :: wk(:,:), xrot(:,:,:), xpad(:,:,:), ctfmat(:,:)
+        integer,     parameter           :: NPAD = 3
+        integer                          :: nk, j, irot
+        logical                          :: ok
         write(*,'(A)') 'test_conjugate_wrap'
         call make_fixture(p, pftc, sigma2, ptcls, wk)
         call feats%new(PFTSZ, KFROMTO, BOX, wk)
@@ -212,15 +212,15 @@ contains
     !> the Euclidean product of two packed tensors is the objective's weighted Hermitian product over the half ring,
     !! half the full ring's; the weighted power is the calculator's self-term; the normalised tensor has unit norm
     subroutine test_packed_product()
-        type(parameters)    :: p
-        type(polarft_calc)  :: pftc
-        type(polar_feats)   :: feats
-        type(polar_feat)    :: fa, fb, fn
+        type(parameters)                 :: p
+        type(polarft_calc)               :: pftc
+        type(polar_feats)                :: feats
+        type(polar_feat)                 :: fa, fb, fn
         real(sp),    allocatable, target :: sigma2(:,:)
-        complex(sp), allocatable :: ptcls(:,:,:)
-        real(sp),    allocatable :: wk(:,:), ctfa(:,:), ctfb(:,:)
-        real(dp) :: packed, herm, herm_full, wsq_calc, norm2
-        integer  :: k, pp
+        complex(sp), allocatable         :: ptcls(:,:,:)
+        real(sp),    allocatable         :: wk(:,:), ctfa(:,:), ctfb(:,:)
+        real(dp)                         :: packed, herm, herm_full, wsq_calc, norm2
+        integer                          :: k, pp
         write(*,'(A)') 'test_packed_product'
         call make_fixture(p, pftc, sigma2, ptcls, wk)
         call feats%new(PFTSZ, KFROMTO, BOX, wk)
@@ -274,17 +274,17 @@ contains
     !> the ring mean of the CTF squared and its azimuthal variation; a tensor built from the calculator equals one
     !! built from its arrays
     subroutine test_ctf_ring_mean()
-        type(parameters)    :: p
-        type(polarft_calc)  :: pftc
-        type(polar_feats)   :: feats
-        type(polar_feat)    :: fa, fb
-        type(polar_feat_work) :: fwk
+        type(parameters)                 :: p
+        type(polarft_calc)               :: pftc
+        type(polar_feats)                :: feats
+        type(polar_feat)                 :: fa, fb
+        type(polar_feat_work)            :: fwk
         real(sp),    allocatable, target :: sigma2(:,:)
-        complex(sp), allocatable :: ptcls(:,:,:)
-        real(sp),    allocatable :: wk(:,:), ctfa(:,:)
-        real     :: maxdiff
-        real(dp) :: tm
-        integer  :: k, pp
+        complex(sp), allocatable         :: ptcls(:,:,:)
+        real(sp),    allocatable         :: wk(:,:), ctfa(:,:)
+        real                             :: maxdiff
+        real(dp)                         :: tm
+        integer                          :: k, pp
         write(*,'(A)') 'test_ctf_ring_mean'
         call make_fixture(p, pftc, sigma2, ptcls, wk)
         call feats%new(PFTSZ, KFROMTO, BOX, wk)
@@ -329,19 +329,19 @@ contains
     !> the cache: written under a token and sealed with its contract, it serves the same project, selection, geometry
     !! and weights bit for bit and refuses a change of any of them
     subroutine test_cache_contract()
-        type(parameters)    :: p
-        type(polarft_calc)  :: pftc
-        type(polar_feats)   :: feats, feats_other
-        type(polar_feat)    :: feat, back
-        type(polar_feats_cache) :: cache
-        type(string)        :: cwd_saved, fixture_root, cname
+        type(parameters)                 :: p
+        type(polarft_calc)               :: pftc
+        type(polar_feats)                :: feats, feats_other
+        type(polar_feat)                 :: feat, back
+        type(polar_feats_cache)          :: cache
+        type(string)                     :: cwd_saved, fixture_root, cname
         real(sp),    allocatable, target :: sigma2(:,:)
-        complex(sp), allocatable :: ptcls(:,:,:)
-        real(sp),    allocatable :: wk(:,:), wk_other(:,:), ctfa(:,:)
-        integer(int64) :: key(POLAR_FEATS_NHEAD), other(POLAR_FEATS_NHEAD)
-        integer, parameter :: PINDS(3) = [2, 5, 7]
-        integer :: nfail0, status, i
-        logical :: ok
+        complex(sp), allocatable         :: ptcls(:,:,:)
+        real(sp),    allocatable         :: wk(:,:), wk_other(:,:), ctfa(:,:)
+        integer(int64)                   :: key(POLAR_FEATS_NHEAD), other(POLAR_FEATS_NHEAD)
+        integer,     parameter           :: PINDS(3) = [2, 5, 7]
+        integer                          :: nfail0, status, i
+        logical                          :: ok
         write(*,'(A)') 'test_cache_contract'
         nfail0 = tests_failed
         call make_fixture(p, pftc, sigma2, ptcls, wk)
@@ -419,14 +419,14 @@ contains
     !! band, given on the calculator's angles, is resampled exactly onto the network's angles, in both channels and
     !! on every ring; the band's power scales with the angles, so the normalised tensor keeps unit weighted norm
     subroutine test_net_half_ring()
-        integer, parameter :: N_IN = 72, KB(2) = [1, 4], JMAX = 10
-        type(polar_feats)  :: fin, fnet
-        type(polar_feat)   :: fa, fb
+        integer,     parameter   :: N_IN = 72, KB(2) = [1, 4], JMAX = 10
+        type(polar_feats)        :: fin, fnet
+        type(polar_feat)         :: fa, fb
         complex(sp), allocatable :: pft_in(:,:), pft_net(:,:)
         real(sp),    allocatable :: ctf_in(:,:), ctf_net(:,:), wk(:,:)
-        complex(dp) :: a(-JMAX:JMAX,KB(1):KB(2))
-        real(dp)    :: re, im, err, big, wsum
-        integer     :: m, k, j
+        complex(dp)              :: a(-JMAX:JMAX,KB(1):KB(2))
+        real(dp)                 :: re, im, err, big, wsum
+        integer                  :: m, k, j
         write(*,'(A)') 'test_net_half_ring'
         call assert_int(140, polar_feats_net_pftsz(220, 22), 'bgal at 15 A: 220 angles capped to 140')
         call assert_int(160, polar_feats_net_pftsz(160, 26), 'the medium assembly at 15 A: 160 kept (the cap is 164)')

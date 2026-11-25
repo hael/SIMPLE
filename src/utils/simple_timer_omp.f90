@@ -31,7 +31,7 @@ contains
 
    !> Calculate the time from two timestamps
    real(dp) function tdiff_omp(tend, tstart)
-      real(dp), intent(in) :: tend
+      real(dp), intent(in)           :: tend
       real(dp), intent(in), optional :: tstart
       if (present(tstart)) last_time_point_mp = tstart
       ! Calulate the time difference

@@ -24,7 +24,7 @@ type kmeans
     integer               :: nchanged = 0       !< reassignments on the last iteration of the last cluster call
     real(dp), allocatable :: X(:,:)             !< (n,d) points
     real(dp), allocatable :: wdim(:)            !< (d) per-dimension weights of the squared distance
-    logical               :: exists = .false.
+    logical               :: exists   = .false.
   contains
     procedure :: new
     procedure :: cluster
@@ -37,11 +37,11 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, X, k, wdim, maxits )
-        class(kmeans),      intent(inout) :: self
-        real(dp),           intent(in)    :: X(:,:)  !< (n,d) points
-        integer,            intent(in)    :: k       !< nr of clusters
-        real(dp), optional, intent(in)    :: wdim(:) !< (d) per-dimension weights (default 1)
-        integer,  optional, intent(in)    :: maxits  !< Lloyd iteration cap (default KMEANS_MAXITS)
+        class(kmeans),      intent(inout)        :: self
+        real(dp),           intent(in)           :: X(:,:)  !< (n,d) points
+        integer,            intent(in)           :: k       !< nr of clusters
+        real(dp),           optional, intent(in) :: wdim(:) !< (d) per-dimension weights (default 1)
+        integer,            optional, intent(in) :: maxits  !< Lloyd iteration cap (default KMEANS_MAXITS)
         call self%kill
         self%n = size(X,1)
         self%d = size(X,2)
@@ -66,9 +66,9 @@ contains
         real(dp),      intent(out)   :: centroids(:,:) !< (d,k)
         real(dp), allocatable :: mind(:), csum(:,:), xbar(:), cen(:,:)
         integer,  allocatable :: cnt(:), memb(:), seeds(:), first_member(:), order(:), newlab(:)
-        real(dp) :: d2, best
-        integer  :: i, q, s, it, ibest, iseed, nchanged, j, tmp
-        logical  :: l_reseed
+        real(dp)              :: d2, best
+        integer               :: i, q, s, it, ibest, iseed, nchanged, j, tmp
+        logical               :: l_reseed
         if( .not. self%exists ) THROW_HARD('object does not exist; cluster')
         if( size(labels) /= self%n ) THROW_HARD('labels must have one entry per point; cluster')
         if( size(centroids,1) /= self%d .or. size(centroids,2) /= self%k ) THROW_HARD('centroids must be (d,k); cluster')

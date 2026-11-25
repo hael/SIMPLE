@@ -96,7 +96,7 @@ contains
         class(commander_reextract), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         class(reextract_strategy), allocatable :: strategy
-        type(parameters) :: params
+        type(parameters)                       :: params
         call cline%set('prg', 'reextract')
         strategy = create_reextract_strategy(cline)
         call strategy%initialize(params, cline)
@@ -119,10 +119,10 @@ contains
         type(commander_extract)       :: xextract
         type(cmdline)                 :: cline_extract
         type(sp_project)              :: spproj
-        type(string) :: micname, output_dir_picker, fbody, output_dir_extract
-        type(string) :: boxfile, thumb_den
-        integer :: fromto(2), imic, ntot, state, nvalid, i, nptcls
-        logical :: l_extract
+        type(string)                  :: micname, output_dir_picker, fbody, output_dir_extract
+        type(string)                  :: boxfile, thumb_den
+        integer                       :: fromto(2), imic, ntot, state, nvalid, i, nptcls
+        logical                       :: l_extract
         ! set oritype
         call cline%set('oritype', 'mic')
         ! parse parameters

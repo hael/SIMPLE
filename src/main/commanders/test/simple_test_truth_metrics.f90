@@ -43,8 +43,8 @@ contains
         class(string), intent(in) :: truths(:)
         real,          intent(in) :: tdx, tdy, fdx, fdy
         type(oris) :: other
-        real    :: odx, ody, d, dmax
-        integer :: j
+        real       :: odx, ody, d, dmax
+        integer    :: j
         err  = 0.
         dmax = -1.
         do j = 1, size(truths)
@@ -68,17 +68,17 @@ contains
     !! tag
     subroutine dock_both_hands( ref_fname, map_fname, mskdiam, hp, lp, tag, docked_fname, cc_direct, cc_mirror, &
         &eul, shift, mirrored )
-        class(string),    intent(in)  :: ref_fname, map_fname, docked_fname
-        real,             intent(in)  :: mskdiam, hp, lp
-        character(len=*), intent(in)  :: tag
-        real,             intent(out) :: cc_direct, cc_mirror
-        real,    optional, intent(out) :: eul(3), shift(3) !< the transformation of the better hand
-        logical, optional, intent(out) :: mirrored         !< the better hand is the x-mirror
+        class(string),    intent(in)            :: ref_fname, map_fname, docked_fname
+        real,             intent(in)            :: mskdiam, hp, lp
+        character(len=*), intent(in)            :: tag
+        real,             intent(out)           :: cc_direct, cc_mirror
+        real,             optional, intent(out) :: eul(3), shift(3) !< the transformation of the better hand
+        logical,          optional, intent(out) :: mirrored         !< the better hand is the x-mirror
         type(dock_vols) :: docker
         type(image)     :: vol
         type(string)    :: mirror, docked_direct, docked_mirror
-        real    :: eulers(3), shifts(3), smpd
-        integer :: ldim(3), nsections
+        real            :: eulers(3), shifts(3), smpd
+        integer         :: ldim(3), nsections
         mirror        = string(tag//'_mirror.mrc')
         docked_direct = string(tag//'_docked_direct.mrc')
         docked_mirror = string(tag//'_docked_mirror.mrc')
@@ -124,15 +124,15 @@ contains
     !! mskdiam, no finer than Nyquist. A missing map or a non-finite FSC gives
     !! corr 0 and resolutions -1.
     subroutine compare_to_truth( truth_fname, map_fname, mskdiam, corr, fsc05, fsc0143, corr_lp )
-        class(string), intent(in)  :: truth_fname, map_fname
-        real,          intent(in)  :: mskdiam
-        real,          intent(out) :: corr, fsc05, fsc0143
-        real, optional, intent(in) :: corr_lp
-        type(image) :: truth, map
+        class(string), intent(in)           :: truth_fname, map_fname
+        real,          intent(in)           :: mskdiam
+        real,          intent(out)          :: corr, fsc05, fsc0143
+        real,          optional, intent(in) :: corr_lp
+        type(image)       :: truth, map
         real, allocatable :: fsc(:), res(:)
-        real    :: smpd, corr_band
-        integer :: ldim(3), nsections
-        logical :: ok
+        real              :: smpd, corr_band
+        integer           :: ldim(3), nsections
+        logical           :: ok
         corr    = 0.
         fsc05   = -1.
         fsc0143 = -1.
@@ -169,21 +169,21 @@ contains
     subroutine validate_reconstructed_volume( truth_fname, reconstruction_fname, expected_smpd, expected_box, &
         &smpd_tol, mask_diameter, dock_hp, dock_lp, min_corr, max_fsc0143, gate, tag, corr, fsc0143, &
         &dock_corr_direct, dock_corr_mirrored, dock_corr_selected, passed, corr_lp, corr_gated, fsc_gated )
-        class(string),    intent(in)    :: truth_fname, reconstruction_fname
-        real,             intent(in)    :: expected_smpd, smpd_tol, mask_diameter, dock_hp, dock_lp, min_corr, max_fsc0143
-        integer,          intent(in)    :: expected_box
-        class(test_gate), intent(inout) :: gate
-        character(len=*), intent(in)    :: tag
-        real,             intent(out)   :: corr, fsc0143
-        real,             intent(out)   :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
-        logical,          intent(out)   :: passed
-        real, optional,   intent(in)    :: corr_lp
+        class(string),    intent(in)             :: truth_fname, reconstruction_fname
+        real,             intent(in)             :: expected_smpd, smpd_tol, mask_diameter, dock_hp, dock_lp, min_corr, max_fsc0143
+        integer,          intent(in)             :: expected_box
+        class(test_gate), intent(inout)          :: gate
+        character(len=*), intent(in)             :: tag
+        real,             intent(out)            :: corr, fsc0143
+        real,             intent(out)            :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
+        logical,          intent(out)            :: passed
+        real,             optional,   intent(in) :: corr_lp
         !> the correlation and the FSC held to their bounds (the default), or reported only (a robustness
         !! profile, where the profile admits no floor) and left out of passed
         logical, optional, intent(in)   :: corr_gated, fsc_gated
         character(len=*), parameter :: DOCKED = 'workflow_reconstruction_docked.mrc'
-        real    :: fsc05
-        logical :: geom_ok, corr_ok, fsc_ok, l_corr_gated, l_fsc_gated
+        real                        :: fsc05
+        logical                     :: geom_ok, corr_ok, fsc_ok, l_corr_gated, l_fsc_gated
         l_corr_gated = .true.
         if( present(corr_gated) ) l_corr_gated = corr_gated
         l_fsc_gated = .true.
@@ -290,9 +290,9 @@ contains
         integer,     intent(in)  :: a(:), b(:), npairs, seed
         real,        intent(out) :: frac5
         real, allocatable :: errs(:)
-        type(ori) :: ea, eb, ta, tb
-        real    :: r1, r2
-        integer :: k, i1, i2, n
+        type(ori)         :: ea, eb, ta, tb
+        real              :: r1, r2
+        integer           :: k, i1, i2, n
         allocate(errs(npairs))
         call ea%new_ori(.false.)
         call eb%new_ori(.false.)
@@ -327,15 +327,15 @@ contains
     !! multiplies poses on the right (carry_pose), the mirrored hand conjugates them, so the error
     !! needs no docking; frac5 is the fraction of pairs within 5 degrees
     real function sym_pair_pose_error( estimated, truth, inds, pgrp, frac5, ptcl_err ) result( err )
-        class(oris),       intent(in)  :: estimated, truth
-        integer,           intent(in)  :: inds(:)
-        character(len=*),  intent(in)  :: pgrp
-        real,              intent(out) :: frac5
-        real, allocatable, intent(out), optional :: ptcl_err(:) ! per particle, the median over its partners
-        real, parameter :: MZ(3,3) = reshape([1.,0.,0., 0.,1.,0., 0.,0.,-1.], [3,3])
+        class(oris),       intent(in)                         :: estimated, truth
+        integer,           intent(in)                         :: inds(:)
+        character(len=*),  intent(in)                         :: pgrp
+        real,              intent(out)                        :: frac5
+        real,              allocatable, intent(out), optional :: ptcl_err(:) ! per particle, the median over its partners
+        real, parameter   :: MZ(3,3) = reshape([1.,0.,0., 0.,1.,0., 0.,0.,-1.], [3,3])
         real, allocatable :: ops(:,:,:), errs(:), re(:,:,:), rtg(:,:,:,:), pairmat(:,:)
-        real    :: rel_e(3,3), rel_t(3,3), e
-        integer :: n, i, j, g, k, npairs, nsym
+        real              :: rel_e(3,3), rel_t(3,3), e
+        integer           :: n, i, j, g, k, npairs, nsym
         n    = size(inds)
         ops  = group_operators(pgrp)
         nsym = size(ops, 3)
@@ -386,10 +386,10 @@ contains
     subroutine add_gaussian_blob( fname, pos, sigma, amp )
         class(string), intent(in) :: fname
         real,          intent(in) :: pos(3), sigma, amp
-        type(image) :: vol
+        type(image)       :: vol
         real, allocatable :: rmat(:,:,:)
-        real    :: ctr(3), d2, vmax, smpd
-        integer :: ldim(3), nsections, ix, iy, iz
+        real              :: ctr(3), d2, vmax, smpd
+        integer           :: ldim(3), nsections, ix, iy, iz
         call find_ldim_nptcls(fname, ldim, nsections)
         smpd = find_img_smpd(fname)
         call vol%new(ldim, smpd)
@@ -420,8 +420,8 @@ contains
     function match_states( truth, est, ntrue, nest ) result( map )
         integer, intent(in)  :: truth(:), est(:), ntrue, nest
         integer, allocatable :: map(:)
-        integer :: conf(ntrue, nest), perm(max(ntrue, nest)), best(max(ntrue, nest)), k, i, bestscore
-        logical :: used(max(ntrue, nest))
+        integer              :: conf(ntrue, nest), perm(max(ntrue, nest)), best(max(ntrue, nest)), k, i, bestscore
+        logical              :: used(max(ntrue, nest))
         k = max(ntrue, nest)
         if( k > 8 ) THROW_HARD('match_states compares at most eight states')
         if( size(truth) /= size(est) ) THROW_HARD('match_states: label arrays differ in length')
@@ -476,10 +476,10 @@ contains
     !! 1 count as one more class.
     real function adjusted_rand_index( a, b ) result( ari )
         integer, intent(in) :: a(:), b(:)
-        integer, allocatable :: ia(:), ib(:)
+        integer,  allocatable :: ia(:), ib(:)
         real(dp), allocatable :: n(:,:), ra(:), rb(:)
-        real(dp) :: index, expected, maxindex, pairs
-        integer :: na, nb, i
+        real(dp)              :: index, expected, maxindex, pairs
+        integer               :: na, nb, i
         ia = max(a, 0) + 1
         ib = max(b, 0) + 1
         na = maxval(ia)
@@ -523,7 +523,7 @@ contains
         real,    intent(out) :: med, p999
         integer, allocatable :: shuffled(:), map(:)
         real,    allocatable :: accs(:)
-        integer :: i
+        integer              :: i
         allocate(accs(nshuffle))
         call set_fixed_seed(seed)
         shuffled = truth
@@ -553,7 +553,7 @@ contains
     !! recall near 0 however well the labels otherwise agree
     function state_recalls( truth, est, map, ntrue ) result( rec )
         integer, intent(in) :: truth(:), est(:), map(:), ntrue
-        real :: rec(ntrue)
+        real    :: rec(ntrue)
         integer :: k, e, ntrue_k
         rec = 0.
         do k = 1, ntrue
@@ -569,7 +569,7 @@ contains
     !! estimated states mapped onto it
     function population_errors( truth, est, map, ntrue ) result( errs )
         integer, intent(in) :: truth(:), est(:), map(:), ntrue
-        real :: errs(ntrue)
+        real    :: errs(ntrue)
         integer :: k, e, nest_k
         do k = 1, ntrue
             nest_k = 0
@@ -587,9 +587,9 @@ contains
     function match_maps( cc ) result( map )
         real, intent(in)     :: cc(:,:)  !< (estimated, true)
         integer, allocatable :: map(:)
-        integer :: perm(max(size(cc,1), size(cc,2))), best(max(size(cc,1), size(cc,2))), k, ne, nt, i
-        logical :: used(max(size(cc,1), size(cc,2)))
-        real    :: bestscore
+        integer              :: perm(max(size(cc,1), size(cc,2))), best(max(size(cc,1), size(cc,2))), k, ne, nt, i
+        logical              :: used(max(size(cc,1), size(cc,2)))
+        real                 :: bestscore
         ne = size(cc,1)
         nt = size(cc,2)
         k  = max(ne, nt)
@@ -641,16 +641,16 @@ contains
     !! est(k)-est(l) with truth(k)-truth(l), and is not finite when the estimated maps are equal.
     !! corr(k,l), when present, is the correlation of est(k) with truth(l) inside the mask.
     subroutine discrimination( est, truth, frac, dilate, margins, diffcorr, nmask, corr )
-        class(image),   intent(inout) :: est(:), truth(:)
-        real,           intent(in)    :: frac
-        integer,        intent(in)    :: dilate
-        real,           intent(out)   :: margins(size(truth)), diffcorr(size(truth), size(truth))
-        integer,        intent(out)   :: nmask
-        real, optional, intent(out)   :: corr(size(truth), size(truth))
+        class(image),   intent(inout)         :: est(:), truth(:)
+        real,           intent(in)            :: frac
+        integer,        intent(in)            :: dilate
+        real,           intent(out)           :: margins(size(truth)), diffcorr(size(truth), size(truth))
+        integer,        intent(out)           :: nmask
+        real,           optional, intent(out) :: corr(size(truth), size(truth))
         real,    allocatable :: t(:,:,:,:), e(:,:,:,:)
         logical, allocatable :: diff(:,:,:), msk(:,:,:)
-        real    :: cc(size(truth), size(truth))
-        integer :: ldim(3), k, l, n, i, j, z, di, dj, dz
+        real                 :: cc(size(truth), size(truth))
+        integer              :: ldim(3), k, l, n, i, j, z, di, dj, dz
         n    = size(truth)
         if( n < 2 .or. size(est) /= n ) THROW_HARD('discrimination needs two or more truths and one map per truth')
         ldim = truth(1)%get_ldim()
@@ -717,7 +717,7 @@ contains
     function offdiag( a ) result( x )
         real, intent(in)  :: a(:,:)
         real, allocatable :: x(:)
-        integer :: k, l, n
+        integer           :: k, l, n
         allocate(x(size(a,1) * size(a,2) - min(size(a,1), size(a,2))))
         n = 0
         do l = 1, size(a,2)
@@ -783,7 +783,7 @@ contains
         real,    intent(out) :: r_out(3,3), sh_out(2)
         real, parameter :: MZ(3,3) = reshape([1.,0.,0., 0.,1.,0., 0.,0.,-1.], [3,3])
         real, parameter :: MX(3,3) = reshape([-1.,0.,0., 0.,1.,0., 0.,0.,1.], [3,3])
-        real :: r1(3,3), sh1(2), t(3)
+        real            :: r1(3,3), sh1(2), t(3)
         r1  = r
         sh1 = sh
         if( mirrored )then
@@ -804,13 +804,13 @@ contains
     !! the image of a centre-inverted object, so a nearly centrosymmetric object (a crystal lattice)
     !! is posed only up to it
     function group_errors( r_est, r_true, ops, projection_inversion ) result( errs )
-        real,              intent(in) :: r_est(:,:,:), r_true(:,:,:), ops(:,:,:)
-        logical, optional, intent(in) :: projection_inversion
-        real, parameter :: RZ180(3,3) = reshape([-1.,0.,0., 0.,-1.,0., 0.,0.,1.], [3,3])
+        real,              intent(in)           :: r_est(:,:,:), r_true(:,:,:), ops(:,:,:)
+        logical,           optional, intent(in) :: projection_inversion
+        real, parameter   :: RZ180(3,3) = reshape([-1.,0.,0., 0.,-1.,0., 0.,0.,1.], [3,3])
         real, allocatable :: errs(:)
-        real    :: rtg(3,3)
-        integer :: j, g
-        logical :: l_inv
+        real              :: rtg(3,3)
+        integer           :: j, g
+        logical           :: l_inv
         l_inv = .false.
         if( present(projection_inversion) ) l_inv = projection_inversion
         allocate(errs(size(r_est, 3)), source=huge(1.))
@@ -828,8 +828,8 @@ contains
         use simple_sym, only: sym
         character(len=*), intent(in) :: pgrp
         real, allocatable :: ops(:,:,:)
-        type(sym) :: se
-        integer   :: i
+        type(sym)         :: se
+        integer           :: i
         call se%new(pgrp)
         allocate(ops(3,3,se%get_nsym()))
         do i = 1, se%get_nsym()
@@ -841,7 +841,7 @@ contains
     !> the rotation by ang degrees about the unit axis u
     function axis_operator( u, ang ) result( r )
         real, intent(in) :: u(3), ang
-        real :: r(3,3), c, s, k(3,3)
+        real    :: r(3,3), c, s, k(3,3)
         integer :: i
         c = cos(deg2rad(ang))
         s = sin(deg2rad(ang))

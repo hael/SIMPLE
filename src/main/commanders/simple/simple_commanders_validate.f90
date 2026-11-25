@@ -30,8 +30,8 @@ contains
         class(commander_mini_stream), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         character(len=*), parameter        :: PROJFILE_MINI_STREAM = 'mini_stream.simple'
-        integer,          parameter        :: NCLS_MIN = 10, NCLS_MAX = 100
-        real,             parameter        :: LPSTOP = 8.
+        integer,          parameter        :: NCLS_MIN             = 10, NCLS_MAX = 100
+        real,             parameter        :: LPSTOP               = 8.
         type(string),     allocatable      :: micnames(:)
         type(string)                       :: output_dir
         type(parameters)                   :: params
@@ -44,8 +44,8 @@ contains
         type(commander_extract)            :: xextract
         type(commander_solve2D)            :: xsolve2D
         type(commander_shape_rank_cavgs)   :: xshape_rank
-        integer :: ncls, nmics, nptcls, box_in_pix
-        real    :: mskdiam_estimate
+        integer                            :: ncls, nmics, nptcls, box_in_pix
+        real                               :: mskdiam_estimate
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('kv')             ) call cline%set('kv',              300.)
         if( .not. cline%defined('cs')             ) call cline%set('cs',               2.7)
@@ -133,8 +133,8 @@ contains
         class(cmdline),                 intent(inout) :: cline
         character(len=*), parameter        :: DIR_THUMBS             = 'thumbnails/'
         character(len=*), parameter        :: PROJFILE_CHECK_REFPICK = 'check_refpick.simple'
-        integer,          parameter        :: NCLS_MIN = 10, NCLS_MAX = 100
-        real,             parameter        :: LPSTOP = 8.
+        integer,          parameter        :: NCLS_MIN               = 10, NCLS_MAX = 100
+        real,             parameter        :: LPSTOP                 = 8.
         type(string),     allocatable      :: micnames(:), fnames(:)
         type(string)                       :: output_dir
         type(parameters)                   :: params
@@ -144,12 +144,12 @@ contains
         type(commander_new_project)        :: xnew_project
         type(commander_make_pickrefs)      :: xmake_pickrefs
         type(commander_import_movies)      :: ximport_movies
-        type(commander_ctf_estimate) :: xctf_estimate
+        type(commander_ctf_estimate)       :: xctf_estimate
         type(commander_pick_extract)       :: xpickextract
         type(commander_solve2D)            :: xsolve2D
         type(commander_shape_rank_cavgs)   :: xshape_rank
-        integer :: ncls, nmics, nptcls 
-        real    :: mskdiam_estimate
+        integer                            :: ncls, nmics, nptcls
+        real                               :: mskdiam_estimate
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('kv')             ) call cline%set('kv',              300.)
         if( .not. cline%defined('cs')             ) call cline%set('cs',               2.7)

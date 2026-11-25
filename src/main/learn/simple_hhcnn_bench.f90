@@ -21,16 +21,16 @@ contains
     module subroutine run_hhcnn_bench( pftsz, nks, widths, nclasses, nthr_team, nrep, funit, ok_identity )
         integer, intent(in)  :: pftsz, nks(:), widths(:), nclasses, nthr_team, nrep, funit
         logical, intent(out) :: ok_identity
-        type(hhcnn) :: net, net1
-        real(sp), allocatable :: x(:,:,:,:), g(:,:), side(:), t(:,:), xr(:,:,:,:)
+        type(hhcnn)                     :: net, net1
+        real(sp),           allocatable :: x(:,:,:,:), g(:,:), side(:), t(:,:), xr(:,:,:,:)
         character(len=256), allocatable :: rate_rows(:), other_rows(:)
-        real(sp) :: loss, fm
-        real(dp) :: rt_fwd, rt_rd, rt_bwd, rt_step1, rt_stepn, rt_predn, us_fwd, us_rd, us_bwd
-        real(dp) :: us_gemm_f, us_gemm_b, us_spec, us_prod, us_rot
-        real(dp) :: f_blk_f, f_blk_b, f_spec, f_prod, f_rot, f_rd_b, f_fwd, f_bwd, f_step
-        integer(timer_int_kind) :: t0
-        integer  :: ik, iw, nk, width, ns, i, irep, ic, nch, b, nchunk_step, nbusy, nrow
-        logical  :: l_id
+        real(sp)                        :: loss, fm
+        real(dp)                        :: rt_fwd, rt_rd, rt_bwd, rt_step1, rt_stepn, rt_predn, us_fwd, us_rd, us_bwd
+        real(dp)                        :: us_gemm_f, us_gemm_b, us_spec, us_prod, us_rot
+        real(dp)                        :: f_blk_f, f_blk_b, f_spec, f_prod, f_rot, f_rd_b, f_fwd, f_bwd, f_step
+        integer(timer_int_kind)         :: t0
+        integer                         :: ik, iw, nk, width, ns, i, irep, ic, nch, b, nchunk_step, nbusy, nrow
+        logical                         :: l_id
         character(len=*), parameter :: HEAD = '# nk width weights | fwd_us blocks_us readout_us bwd_us | '//&
             &'step1_ms stepN_ms steps_per_s_N samples_per_s_N | predN_us_per_ptcl | identity'
         character(len=*), parameter :: HEAD_OTHER = '# nk width | forward: im2col gate pool rest | backward: '//&
@@ -340,7 +340,7 @@ contains
 
         subroutine rate_row
             character(len=256) :: line
-            real(dp) :: occ
+            real(dp)           :: occ
             occ = real(nchunk_step,dp) / real(max(1, nthr_team) * ((nchunk_step + max(1, nthr_team) - 1) / max(1, nthr_team)),dp)
             write(line,'(I4,1X,I5,A,4(1X,F8.2),1X,F9.1,A,8(1X,F7.2),A,1X,F7.2,A,2(1X,I5),1X,F5.2)') nk, width, ' |', &
                 &1.d-6 * f_blk_f, 1.d-6 * f_blk_b, 1.d-6 * f_prod, 1.d-6 * f_rot, 1.d-6 * f_step, ' |', &

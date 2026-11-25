@@ -15,10 +15,10 @@ contains
     !>  \brief  is for making a stack of vectors for PCA analysis
     !! \param fnameStack,fnamePCAvecs filenames for stack and pattern
     subroutine make_pcavec_stack( fnameStack, fnamePCAvecs, D, recsz, avg, l_mask )
-        class(string),     intent(in)  :: fnameStack, fnamePCAvecs
-        integer,           intent(out) :: D, recsz      !< record size
-        real, allocatable, intent(out) :: avg(:)        !< frame stack average
-        logical, optional, intent(in)  :: l_mask(:,:,:) !< true for pixels to extract
+        class(string),     intent(in)               :: fnameStack, fnamePCAvecs
+        integer,           intent(out)              :: D, recsz      !< record size
+        real,              allocatable, intent(out) :: avg(:)        !< frame stack average
+        logical,           optional, intent(in)     :: l_mask(:,:,:) !< true for pixels to extract
         type(image)          :: img
         real,    allocatable :: pcavec(:)
         logical, allocatable :: ll_mask(:,:,:)
@@ -156,9 +156,9 @@ contains
 
     !>  \brief  is for calculating image statistics
     subroutine stats_imgfile( fname, os, msk )
-        class(string),  intent(in)  :: fname
-        class(oris),    intent(out) :: os
-        real, optional, intent(in)  :: msk
+        class(string),  intent(in)           :: fname
+        class(oris),    intent(out)          :: os
+        real,           optional, intent(in) :: msk
         real              :: ave, sdev, med, minv, maxv, spec
         real, allocatable :: spectrum(:)
         type(image)       :: img

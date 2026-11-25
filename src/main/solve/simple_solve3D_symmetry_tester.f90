@@ -25,9 +25,9 @@ implicit none
 private
 public :: run_all_solve3D_symmetry_tests
 
-integer, parameter :: NPTCLS = 128, BOX = FLEX_PHANTOM_BOX
-real, parameter :: SMPD = FLEX_PHANTOM_SMPD, MSKDIAM = FLEX_PHANTOM_MSKDIAM
-real, parameter :: MAP_RELTOL = 256. * epsilon(1.) !< single-precision gridding and restoration roundoff
+integer, parameter :: NPTCLS     = 128, BOX = FLEX_PHANTOM_BOX
+real,    parameter :: SMPD       = FLEX_PHANTOM_SMPD, MSKDIAM = FLEX_PHANTOM_MSKDIAM
+real,    parameter :: MAP_RELTOL = 256. * epsilon(1.) !< single-precision gridding and restoration roundoff
 
 contains
 
@@ -42,15 +42,15 @@ contains
     subroutine test_symmetry_trailing_handoff()
         class(parameters), allocatable :: params
         class(sp_project), allocatable :: project
-        class(cmdline), allocatable :: saved_refine, saved_rec, saved_symmap
+        class(cmdline),    allocatable :: saved_refine, saved_rec, saved_symmap
         type(lp_crop_inf), allocatable :: saved_lpinfo(:)
-        type(commander_rec3D) :: xrec3D
-        type(trail_chain_manifest) :: manifest
-        type(ori) :: before, after
-        type(string) :: cwd, root, truth_a, truth_b, truth_mean, truth_diff, oritab, stack, projfile, files(5)
-        logical :: saved_flags(3), valid
-        integer :: nfail0, i, status, nthr_saved, saved_nptcls_eff
-        character(len=256) :: message
+        type(commander_rec3D)          :: xrec3D
+        type(trail_chain_manifest)     :: manifest
+        type(ori)                      :: before, after
+        type(string)                   :: cwd, root, truth_a, truth_b, truth_mean, truth_diff, oritab, stack, projfile, files(5)
+        logical                        :: saved_flags(3), valid
+        integer                        :: nfail0, i, status, nthr_saved, saved_nptcls_eff
+        character(len=256)             :: message
         write(*,'(A)') 'test_symmetry_trailing_handoff'
         nfail0 = tests_failed
         nthr_saved = 1
@@ -198,10 +198,10 @@ contains
     end subroutine test_symmetry_trailing_handoff
 
     subroutine reconstruction_cline( cline, projfile, pgrp, seed, trail )
-        class(cmdline), intent(inout) :: cline
-        class(string), intent(in) :: projfile
-        character(len=*), intent(in) :: pgrp
-        logical, intent(in) :: seed, trail
+        class(cmdline),   intent(inout) :: cline
+        class(string),    intent(in)    :: projfile
+        character(len=*), intent(in)    :: pgrp
+        logical,          intent(in)    :: seed, trail
         call cline%set('prg', 'reconstruct3D')
         call cline%set('mkdir', 'no')
         call cline%set('projfile', projfile)
@@ -222,11 +222,11 @@ contains
     end subroutine reconstruction_cline
 
     subroutine reconstruct( projfile, pgrp, seed, trail )
-        class(string), intent(in) :: projfile
+        class(string),    intent(in) :: projfile
         character(len=*), intent(in) :: pgrp
-        logical, intent(in) :: seed, trail
+        logical,          intent(in) :: seed, trail
         class(cmdline), allocatable :: cline
-        type(commander_rec3D) :: xrec3D
+        type(commander_rec3D)       :: xrec3D
         allocate(cline)
         call reconstruction_cline(cline, projfile, pgrp, seed, trail)
         call xrec3D%execute(cline)
@@ -235,12 +235,12 @@ contains
 
     !> Analytic C2 blobs about a rotated axis, offset from the box centre.
     subroutine write_turned_c2_map()
-        real, parameter :: POS(3,3) = reshape([14.,4.,3., -5.,12.,-10., 9.,-7.,14.], [3,3])
-        real, parameter :: AMPS(3) = [1.,0.7,0.9], OFFSET(3) = [4.,-3.,2.], SIGMA = 3.
-        type(image) :: vol
+        real, parameter   :: POS(3,3) = reshape([14.,4.,3., -5.,12.,-10., 9.,-7.,14.], [3,3])
+        real, parameter   :: AMPS(3)  = [1.,0.7,0.9], OFFSET(3) = [4.,-3.,2.], SIGMA = 3.
+        type(image)       :: vol
         real, allocatable :: density(:,:,:)
-        real :: rot(3,3), centers(3,6), point(3)
-        integer :: i, j, k, b, pair
+        real              :: rot(3,3), centers(3,6), point(3)
+        integer           :: i, j, k, b, pair
         rot = axis_operator([1.,2.,3.] / norm2([1.,2.,3.]), 37.)
         do pair = 0, 1
             do b = 1, 3
@@ -270,7 +270,7 @@ contains
     !> largest voxel difference of two maps relative to the largest magnitude of the second
     real function map_reldiff( actual, expected ) result( reldiff )
         class(string), intent(in) :: actual, expected
-        type(image) :: a, b
+        type(image)       :: a, b
         real, allocatable :: ra(:,:,:), rb(:,:,:)
         call a%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
         call b%new([BOX,BOX,BOX], SMPD, wthreads=.false.)

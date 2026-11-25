@@ -10,18 +10,18 @@ implicit none
 private
 public :: run_all_mrc_validate_tests
 
-integer, parameter :: LDIM(3) = [12, 10, 8]
-real,    parameter :: SMPD = 1.75
+integer,          parameter :: LDIM(3)     = [12, 10, 8]
+real,             parameter :: SMPD        = 1.75
 character(len=*), parameter :: INPUT_FILE  = 'tmp_mrc_validate_input.mrc'
 character(len=*), parameter :: OUTPUT_FILE = 'tmp_mrc_validate_output.mrc'
 
 contains
 
     subroutine run_all_mrc_validate_tests()
-        type(image) :: source, loaded, roundtrip
+        type(image)       :: source, loaded, roundtrip
         real, allocatable :: reference(:,:,:), actual(:,:,:)
-        real(dp) :: expected_sum, expected_sumsq
-        integer  :: x, y, z
+        real(dp)          :: expected_sum, expected_sumsq
+        integer           :: x, y, z
 
         call cleanup_files
         call source%new(LDIM, SMPD, wthreads=.false.)
@@ -68,7 +68,7 @@ contains
     subroutine verify_header(filename, label)
         character(len=*), intent(in) :: filename, label
         integer :: ldim_read(3), nsections
-        real :: smpd_read
+        real    :: smpd_read
         call find_ldim_nptcls(string(filename), ldim_read, nsections)
         smpd_read = find_img_smpd(string(filename))
         call assert_true(all(ldim_read == LDIM), 'mrc_validate '//label//' dimensions are 12 x 10 x 8')

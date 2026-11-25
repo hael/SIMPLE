@@ -12,9 +12,9 @@ private
 contains
 
     subroutine read_volcluster_volumes( params, volnames, vols )
-        class(parameters),        intent(in)    :: params
-        type(string),             intent(in)    :: volnames(:)
-        type(image), allocatable, intent(inout) :: vols(:)
+        class(parameters),        intent(in)                 :: params
+        type(string),             intent(in)                 :: volnames(:)
+        type(image),              allocatable, intent(inout) :: vols(:)
         integer :: i, ifoo, nvols, ldim(3), ldim_read(3)
         nvols = size(volnames)
         if( nvols < 2 ) THROW_HARD('Need at least 2 volumes for clustering')
@@ -46,7 +46,7 @@ contains
         class(parameters), intent(in)    :: params
         type(image),       intent(inout) :: vols(:)
         real, allocatable :: dmat(:,:), ccmat(:,:)
-        integer :: i, j, nvols, npairs, ipair
+        integer           :: i, j, nvols, npairs, ipair
         nvols = size(vols)
         allocate(ccmat(nvols,nvols), source=1.)
         write(logfhandle,'(A)') '>>> CALCULATING VOLUME CORRELATION DISTANCE MATRIX'
@@ -67,9 +67,9 @@ contains
     end function calc_volcluster_dmat
 
     subroutine write_volcluster_report( volnames, dmat, i_medoids, labels, outfile )
-        type(string), intent(in) :: volnames(:)
-        real,         intent(in) :: dmat(:,:)
-        integer,      intent(in) :: i_medoids(:), labels(:)
+        type(string),  intent(in) :: volnames(:)
+        real,          intent(in) :: dmat(:,:)
+        integer,       intent(in) :: i_medoids(:), labels(:)
         class(string), intent(in) :: outfile
         integer :: i, imed, funit
         logical :: l_medoid

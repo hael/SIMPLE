@@ -33,24 +33,24 @@ integer, parameter :: BUFSZ = 2
 ! 1025**2 * 2 elements exceed two float16 write buffers (FLOAT16_WRITE_BUFFER_ELEMS = 1024**2 in
 ! simple_imgfile) and 1025 does not divide the buffer length, so every row boundary case of the
 ! chunked float16 writer is exercised: two full flushes and a partial tail
-integer, parameter :: CHUNK_BOX   = 1025
-integer, parameter :: CHUNK_NIMGS = 2
-integer, parameter :: MRC_HEADER_NBYTES = 1024
-real,    parameter :: SMPD = 1.3
-real,    parameter :: TOL  = 1.0e-7
-character(len=*), parameter :: SOURCE_STACK  = 'tmp_stack_io_source.mrc'
-character(len=*), parameter :: IMAGE_COPY    = 'tmp_stack_io_image_copy.mrc'
-character(len=*), parameter :: STACK_COPY    = 'tmp_stack_io_stack_copy.mrc'
-character(len=*), parameter :: FLOAT16_STACK = 'tmp_stack_io_float16.mrc'
-character(len=*), parameter :: CHUNK_STACK   = 'tmp_stack_io_float16_chunked.mrc'
-character(len=*), parameter :: ROUND_STACK   = 'tmp_stack_io_float16_rounding.mrc'
-character(len=*), parameter :: F16_IMAGE     = 'tmp_stack_io_float16_image.mrc'
-character(len=*), parameter :: F16_BOUNDS    = 'tmp_stack_io_float16_boundaries.mrc'
+integer,          parameter :: CHUNK_BOX         = 1025
+integer,          parameter :: CHUNK_NIMGS       = 2
+integer,          parameter :: MRC_HEADER_NBYTES = 1024
+real,             parameter :: SMPD              = 1.3
+real,             parameter :: TOL               = 1.0e-7
+character(len=*), parameter :: SOURCE_STACK      = 'tmp_stack_io_source.mrc'
+character(len=*), parameter :: IMAGE_COPY        = 'tmp_stack_io_image_copy.mrc'
+character(len=*), parameter :: STACK_COPY        = 'tmp_stack_io_stack_copy.mrc'
+character(len=*), parameter :: FLOAT16_STACK     = 'tmp_stack_io_float16.mrc'
+character(len=*), parameter :: CHUNK_STACK       = 'tmp_stack_io_float16_chunked.mrc'
+character(len=*), parameter :: ROUND_STACK       = 'tmp_stack_io_float16_rounding.mrc'
+character(len=*), parameter :: F16_IMAGE         = 'tmp_stack_io_float16_image.mrc'
+character(len=*), parameter :: F16_BOUNDS        = 'tmp_stack_io_float16_boundaries.mrc'
 ! discrete reads: twelve stacks of four images, three stacks open and read concurrently
 integer, parameter :: DSTK_NSTKS = 12, DSTK_NIMGS = 4, DSTK_WINDOW = 3
 ! read session: stacks of 1, 5 and 200 images; a large-box stack for the gap budget
 integer, parameter :: SESS_NIMGS(3) = [1, 5, 200]
-integer, parameter :: NMANY_STKS = 20   ! more stacks than the read streams of any device (16 at most)
+integer, parameter :: NMANY_STKS    = 20 ! more stacks than the read streams of any device (16 at most)
 
 ! a child whose read must stop it: a stack of another box, a missing or truncated stack, or descriptors exhausted
 integer, parameter :: FAIL_BOX = 1, FAIL_MISSING = 2, FAIL_TRUNCATED = 3, FAIL_NOFILES = 4
@@ -146,7 +146,7 @@ contains
     subroutine test_image_reader_to_stack_io_writer()
         type(stack_io) :: writer
         type(image)    :: img
-        integer :: iimg
+        integer        :: iimg
         write(*,'(A)') 'test_image_reader_to_stack_io_writer'
         call img%new([BOX,BOX,1],SMPD,wthreads=.false.)
         call writer%open(string(IMAGE_COPY),SMPD,'write',box=BOX,bufsz=BUFSZ)
@@ -162,7 +162,7 @@ contains
     subroutine test_stack_io_copy()
         type(stack_io) :: reader, writer
         type(image)    :: img
-        integer :: iimg
+        integer        :: iimg
         write(*,'(A)') 'test_stack_io_copy'
         call reader%open(string(SOURCE_STACK),SMPD,'read',bufsz=BUFSZ)
         call assert_int(NIMGS, reader%get_nptcls(), 'source image count')
@@ -183,9 +183,9 @@ contains
     ! backward and out-of-order reads reload the window that holds the image
     subroutine test_buffer_sizes_and_forward_skips()
         integer, parameter :: OUT_OF_ORDER(7) = [4, 1, 5, 2, 3, 3, 1]
-        type(stack_io) :: reader
-        type(image)    :: img
-        integer :: iimg
+        type(stack_io)     :: reader
+        type(image)        :: img
+        integer            :: iimg
         write(*,'(A)') 'test_buffer_sizes_and_forward_skips'
         call verify_stack(string(SOURCE_STACK), 3,         'buffer of three')
         call verify_stack(string(SOURCE_STACK), NIMGS,     'buffer holding the whole stack')
@@ -237,7 +237,7 @@ contains
     subroutine test_float16_header_and_roundtrip()
         type(stack_io) :: writer
         type(image)    :: img
-        integer :: iimg
+        integer        :: iimg
         write(*,'(A)') 'test_float16_header_and_roundtrip'
         call writer%open(string(FLOAT16_STACK),SMPD,'write',box=BOX,bufsz=BUFSZ,wfloat16=.true.)
         call img%new([BOX,BOX,1],SMPD,wthreads=.false.)
@@ -253,11 +253,11 @@ contains
     end subroutine test_float16_header_and_roundtrip
 
     subroutine test_float16_chunked_roundtrip()
-        type(stack_io) :: writer, reader
-        type(image)    :: source, actual
+        type(stack_io)              :: writer, reader
+        type(image)                 :: source, actual
         real(kind=c_float), pointer :: pixels(:,:,:) => null()
-        real(kind=c_float) :: expected(CHUNK_BOX,CHUNK_BOX)
-        integer :: iimg, ldim(3)
+        real(kind=c_float)          :: expected(CHUNK_BOX,CHUNK_BOX)
+        integer                     :: iimg, ldim(3)
         write(*,'(A)') 'test_float16_chunked_roundtrip'
         call source%new([CHUNK_BOX,CHUNK_BOX,1],SMPD,wthreads=.false.)
         call actual%new([CHUNK_BOX,CHUNK_BOX,1],SMPD,wthreads=.false.)
@@ -288,11 +288,11 @@ contains
 
     !> values that float16 cannot hold are rounded half to even; the bits on disk are the IEEE half encodings
     subroutine test_float16_rounding_and_payload()
-        integer, parameter :: NTEST_IMGS = 5
-        type(stack_io) :: writer, reader
-        type(image)    :: source, actual, expected_img
-        real(kind=c_float), pointer :: actual_rmat(:,:,:) => null(), expected_rmat(:,:,:) => null()
-        integer :: iimg
+        integer,            parameter :: NTEST_IMGS         = 5
+        type(stack_io)                :: writer, reader
+        type(image)                   :: source, actual, expected_img
+        real(kind=c_float), pointer   :: actual_rmat(:,:,:) => null(), expected_rmat(:,:,:) => null()
+        integer                       :: iimg
         write(*,'(A)') 'test_float16_rounding_and_payload'
         call source%new([BOX,BOX,1],SMPD,wthreads=.false.)
         call actual%new([BOX,BOX,1],SMPD,wthreads=.false.)
@@ -323,10 +323,10 @@ contains
 
     !> the image layer: float16 on the first write, inherited by the next, kept by a header-statistics update
     subroutine test_float16_image_roundtrip()
-        type(image) :: source, actual, expected_img
+        type(image)                 :: source, actual, expected_img
         real(kind=c_float), pointer :: actual_rmat(:,:,:) => null(), expected_rmat(:,:,:) => null()
-        real    :: stats(4)
-        integer :: iimg
+        real                        :: stats(4)
+        integer                     :: iimg
         write(*,'(A)') 'test_float16_image_roundtrip'
         call source%new([BOX,BOX,1],SMPD,wthreads=.false.)
         call actual%new([BOX,BOX,1],SMPD,wthreads=.false.)
@@ -361,9 +361,9 @@ contains
     subroutine test_float16_encoder_boundaries()
         integer(int32), parameter :: EXPECTED_BITS(8) = [1_int32,32769_int32,256_int32,33024_int32, &
             &0_int32,32768_int32,2_int32,32770_int32]
-        type(image) :: source, actual
+        type(image)                 :: source, actual
         real(kind=c_float), pointer :: pixels(:,:,:) => null(), actual_pixels(:,:,:) => null()
-        integer(int32) :: bits(8)
+        integer(int32)              :: bits(8)
         write(*,'(A)') 'test_float16_encoder_boundaries'
         call source%new([BOX,BOX,1],SMPD,wthreads=.false.)
         call actual%new([BOX,BOX,1],SMPD,wthreads=.false.)
@@ -398,10 +398,10 @@ contains
 
     !> float32 stacks, three open and read concurrently through dstack_io
     subroutine test_dstack_parallel_read_float32()
-        type(string) :: stknames(DSTK_NSTKS)
-        type(image)  :: img
+        type(string)                :: stknames(DSTK_NSTKS)
+        type(image)                 :: img
         real(kind=c_float), pointer :: rmat(:,:,:) => null()
-        integer :: istk, iimg
+        integer                     :: istk, iimg
         write(*,'(A)') 'test_dstack_parallel_read_float32'
         call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
         do istk = 1,DSTK_NSTKS
@@ -419,7 +419,7 @@ contains
     !> 16-bit integer stacks (MRC mode 1) through the same concurrent reader
     subroutine test_dstack_parallel_read_int16()
         type(string) :: stknames(DSTK_NSTKS)
-        integer :: istk
+        integer      :: istk
         write(*,'(A)') 'test_dstack_parallel_read_int16'
         do istk = 1,DSTK_NSTKS
             stknames(istk) = 'tmp_dstack_io_i16_'//int2str(istk)//'.mrc'
@@ -433,10 +433,10 @@ contains
     subroutine read_stacks_concurrently( stknames, label )
         type(string),     intent(inout) :: stknames(DSTK_NSTKS)
         character(len=*), intent(in)    :: label
-        type(dstack_io) :: dstkios(DSTK_WINDOW)
-        type(image)     :: read_imgs(DSTK_NSTKS,DSTK_NIMGS)
+        type(dstack_io)             :: dstkios(DSTK_WINDOW)
+        type(image)                 :: read_imgs(DSTK_NSTKS,DSTK_NIMGS)
         real(kind=c_float), pointer :: rmat(:,:,:) => null()
-        integer :: istk, iimg, stk_from, stk_to, iopen, nopen, nwrong
+        integer                     :: istk, iimg, stk_from, stk_to, iopen, nopen, nwrong
         do stk_from = 1,DSTK_NSTKS,DSTK_WINDOW
             stk_to = min(stk_from + DSTK_WINDOW - 1, DSTK_NSTKS)
             nopen  = stk_to - stk_from + 1
@@ -479,8 +479,8 @@ contains
     !! of four so that stacks are split across batch boundaries
     subroutine test_session_bitexact( mode )
         integer, intent(in) :: mode
-        type(string) :: stks(3)
-        character(len=8) :: tag
+        type(string)         :: stks(3)
+        character(len=8)     :: tag
         integer, allocatable :: istk(:), inds(:)
         tag = 'mode '//int2str(mode)
         write(*,'(A)') 'test_session_bitexact '//trim(tag)
@@ -505,7 +505,7 @@ contains
     subroutine test_session_many_stacks()
         type(string) :: stks(NMANY_STKS)
         type(string) :: one(3)
-        integer :: istk(5*NMANY_STKS), inds(5*NMANY_STKS), i, k, nopens
+        integer      :: istk(5*NMANY_STKS), inds(5*NMANY_STKS), i, k, nopens
         write(*,'(A)') 'test_session_many_stacks'
         do i = 1, NMANY_STKS
             call write_session_stacks(one, 2)
@@ -531,9 +531,9 @@ contains
     subroutine test_session_one_open_per_stack()
         type(stack_read_session) :: sess
         type(stack_read_counts)  :: c
-        type(string) :: stks(3)
-        type(image)  :: imgs(8)
-        integer :: i
+        type(string)             :: stks(3)
+        type(image)              :: imgs(8)
+        integer                  :: i
         write(*,'(A)') 'test_session_one_open_per_stack'
         call write_session_stacks(stks, 2)
         do i = 1, size(imgs)
@@ -562,7 +562,7 @@ contains
     !> Spans: adjacent and near images share a request; the over-read of a span never exceeds the
     !! bytes it needs, so distant images stay separate requests
     subroutine test_session_spans()
-        type(string) :: stks(3)
+        type(string)               :: stks(3)
         integer(kind=8), parameter :: IMG_BYTES = int(BOX*BOX*4,8)
         write(*,'(A)') 'test_session_spans'
         call write_session_stacks(stks, 2)
@@ -581,7 +581,7 @@ contains
     !! the session's cap depends on its stream count, so the planner is checked with explicit caps
     subroutine test_session_gap_budget()
         integer(kind=8) :: ibytes
-        integer :: nsp, first(16), last(16), mfrom(16), mto(16)
+        integer         :: nsp, first(16), last(16), mfrom(16), mto(16)
         write(*,'(A)') 'test_session_gap_budget'
         ! 576 KiB images: a gap of three (1.7 MiB) is within the budget, a gap of four (2.3 MiB) is not
         ibytes = 384_8 * 384_8 * 4_8
@@ -613,8 +613,8 @@ contains
     !> Reading ahead changes no byte: a pass read in batches, each followed by the prefetch of the next,
     !! equals single reads; a correct guess serves every later batch from the window, a wrong one nothing
     subroutine test_session_prefetch()
-        type(string) :: stks(3)
-        integer :: istk(23), inds(23), k
+        type(string)    :: stks(3)
+        integer         :: istk(23), inds(23), k
         integer(kind=8) :: pre, used
         write(*,'(A)') 'test_session_prefetch'
         call write_session_stacks(stks, MRC_MODE_FLOAT16)
@@ -630,7 +630,7 @@ contains
     !> An extended header (nsymbt > 0) moves the first image: the descriptor path finds it as the unit path does
     subroutine test_posix_extended_header()
         type(string) :: stks(1)
-        integer :: k_all
+        integer      :: k_all
         write(*,'(A)') 'test_posix_extended_header'
         stks(1) = EXTHDR_STACK
         call write_raw_float_stack(stks(1), 2, 5, 384, [(k_all, k_all=1,5)])
@@ -641,7 +641,7 @@ contains
 
     !> A stack whose last image lies beyond 4 GiB (sparse file): 64-bit offsets on both paths
     subroutine test_posix_offsets_beyond_4GiB()
-        type(string) :: stks(1)
+        type(string)       :: stks(1)
         integer, parameter :: NBIG = 4300000   ! 1 KiB images: image NBIG starts beyond 4 GiB
         write(*,'(A)') 'test_posix_offsets_beyond_4GiB'
         stks(1) = BIG_STACK
@@ -663,7 +663,7 @@ contains
     !! give, change no byte
     subroutine test_posix_short_reads_eintr_and_advice()
         type(string) :: stks(3)
-        integer :: fd, rc
+        integer      :: fd, rc
         write(*,'(A)') 'test_posix_short_reads_eintr_and_advice'
         call write_session_stacks(stks, 2)
         fd = ro_open(stks(3))
@@ -692,10 +692,10 @@ contains
     !! outlives its session, and a session holds at most the window's stacks and the boundary stack
     subroutine test_posix_parallel_opens_no_leak()
         type(stack_read_session) :: sess
-        type(string) :: stks(NMANY_STKS), one(3)
-        type(string) :: names(5*NMANY_STKS)
-        type(image)  :: imgs(5*NMANY_STKS)
-        integer :: inds(5*NMANY_STKS), i, k, ipass, nfd0, nfd_held
+        type(string)             :: stks(NMANY_STKS), one(3)
+        type(string)             :: names(5*NMANY_STKS)
+        type(image)              :: imgs(5*NMANY_STKS)
+        integer                  :: inds(5*NMANY_STKS), i, k, ipass, nfd0, nfd_held
         write(*,'(A)') 'test_posix_parallel_opens_no_leak'
         do i = 1, NMANY_STKS
             call write_session_stacks(one, 2)
@@ -747,13 +747,13 @@ contains
     !! into junk-filled images, as often as asked (one copy per state of a weighted reconstruction), and
     !! changing a copy leaves the slab unchanged
     subroutine test_slab_roundtrip_reuse_and_immutable()
-        type(stack_read_session) :: sess
-        type(image_slab) :: slab
-        type(dstack_io)  :: single
-        type(string)     :: stks(3)
-        type(image)      :: imgs(6), ref, got
+        type(stack_read_session)    :: sess
+        type(image_slab)            :: slab
+        type(dstack_io)             :: single
+        type(string)                :: stks(3)
+        type(image)                 :: imgs(6), ref, got
         real(kind=c_float), pointer :: a(:,:,:) => null(), b(:,:,:) => null()
-        integer :: inds(6), i, status, nwrong, irep
+        integer                     :: inds(6), i, status, nwrong, irep
         write(*,'(A)') 'test_slab_roundtrip_reuse_and_immutable'
         call write_session_stacks(stks, MRC_MODE_FLOAT16)
         inds = [200, 1, 77, 2, 150, 3]
@@ -799,11 +799,11 @@ contains
     !> the parallel copy of many slots (the batches served from the particle buffer): at one thread and 20 times at
     !! every processor, every image bit for bit its slot, padding zeroed, real space, whatever the images held
     subroutine test_slab_get_many_threads()
-        integer, parameter :: NSLOTS = 97, NGET = 61, SBOX = 40
-        type(image_slab) :: slab
-        type(image)      :: put_img, ref(NGET), got(NGET)
-        real(kind=c_float), pointer :: a(:,:,:) => null(), b(:,:,:) => null()
-        integer :: slots(NGET), i, k, irep, status, nwrong, nthr_prev, nthr_full
+        integer,            parameter :: NSLOTS   = 97, NGET = 61, SBOX = 40
+        type(image_slab)              :: slab
+        type(image)                   :: put_img, ref(NGET), got(NGET)
+        real(kind=c_float), pointer   :: a(:,:,:) => null(), b(:,:,:) => null()
+        integer                       :: slots(NGET), i, k, irep, status, nwrong, nthr_prev, nthr_full
         write(*,'(A)') 'test_slab_get_many_threads'
         nthr_prev = 1
         nthr_full = 1
@@ -862,14 +862,14 @@ contains
 
     !> float32 pixels, a signalling NaN with a payload among them, pass the read and the slab bit for bit
     subroutine test_slab_float32_nan_payload()
-        integer(int32), parameter :: NAN_BITS = int(z'7FA00001', int32)
-        type(stack_read_session) :: sess
-        type(image_slab) :: slab
-        type(dstack_io)  :: single
-        type(string)     :: stks(1)
-        type(image)      :: imgs(3), ref, got
-        real(kind=c_float), pointer :: a(:,:,:) => null(), b(:,:,:) => null()
-        integer :: i, status, funit, nwrong
+        integer(int32),     parameter :: NAN_BITS = int(z'7FA00001', int32)
+        type(stack_read_session)      :: sess
+        type(image_slab)              :: slab
+        type(dstack_io)               :: single
+        type(string)                  :: stks(1)
+        type(image)                   :: imgs(3), ref, got
+        real(kind=c_float), pointer   :: a(:,:,:) => null(), b(:,:,:) => null()
+        integer                       :: i, status, funit, nwrong
         write(*,'(A)') 'test_slab_float32_nan_payload'
         stks(1) = 'tmp_slab_nan.mrc'
         call write_raw_float_stack(stks(1), 2, 3, 0, [1,2,3])
@@ -913,7 +913,7 @@ contains
     !> A slab above its budget, or one whose allocation fails, stays empty and reports why
     subroutine test_slab_budget_and_failed_allocation()
         type(image_slab) :: slab
-        integer :: status
+        integer          :: status
         write(*,'(A)') 'test_slab_budget_and_failed_allocation'
         call slab%new(BOX, 10, 10_int64*BOX*BOX*4 - 1_int64, status)
         call assert_int(SLAB_OVER_BUDGET, status, 'a slab one byte above its budget is refused')
@@ -939,8 +939,8 @@ contains
         class(failing_reader), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
         type(stack_read_session) :: sess
-        type(image) :: imgs(1)
-        integer :: rc, fd
+        type(image)              :: imgs(1)
+        integer                  :: rc, fd
         select case(self%what)
             case(FAIL_BOX)
                 call imgs(1)%new([2*BOX,2*BOX,1], SMPD, wthreads=.false.)
@@ -976,8 +976,8 @@ contains
         type(MrcImgHead)   :: header
         real(kind=c_float) :: plane(BOX,BOX)
         integer(kind=1)    :: ext(max(1,nsymbt))
-        integer :: funit, io_stat, k, i, j
-        integer(kind=8) :: first_byte, image_nbytes
+        integer            :: funit, io_stat, k, i, j
+        integer(kind=8)    :: first_byte, image_nbytes
         call header%new([BOX,BOX,nimgs])
         call header%setMode(mode)
         call header%setPixSz(SMPD)
@@ -1011,7 +1011,7 @@ contains
         integer,          intent(in) :: iimg
         character(len=*), intent(in) :: label
         type(stack_read_session) :: sess
-        type(image) :: imgs(1)
+        type(image)              :: imgs(1)
         call imgs(1)%new([BOX,BOX,1], SMPD, wthreads=.false.)
         call sess%new(BOX, SMPD, report=.false.)
         call sess%read([stkname], [iimg], imgs)
@@ -1024,20 +1024,20 @@ contains
     !! storage padding included, bit for bit with a single read of the same image
     !! ahead=1: each batch is followed by the prefetch of the next; ahead=2: by the prefetch of a wrong guess
     subroutine check_session_against_single_reads( stks, istk, inds, label, nopens, prefetched, used, ahead )
-        type(string),              intent(in)  :: stks(:)
-        integer,                   intent(in)  :: istk(:), inds(:)
-        character(len=*),          intent(in)  :: label
-        integer,         optional, intent(out) :: nopens
-        integer(kind=8), optional, intent(out) :: prefetched, used
-        integer,         optional, intent(in)  :: ahead
-        type(stack_read_session) :: sess
-        type(stack_read_counts)  :: c
-        type(dstack_io) :: single
-        type(image), allocatable :: imgs(:)
-        type(image)  :: ref
-        type(string), allocatable :: names(:)
-        real(kind=c_float), pointer :: a(:,:,:) => null(), b(:,:,:) => null()
-        integer :: n, i, ib, ie, nwrong
+        type(string),              intent(in)            :: stks(:)
+        integer,                   intent(in)            :: istk(:), inds(:)
+        character(len=*),          intent(in)            :: label
+        integer,                   optional, intent(out) :: nopens
+        integer(kind=8),           optional, intent(out) :: prefetched, used
+        integer,                   optional, intent(in)  :: ahead
+        type(stack_read_session)        :: sess
+        type(stack_read_counts)         :: c
+        type(dstack_io)                 :: single
+        type(image),        allocatable :: imgs(:)
+        type(image)                     :: ref
+        type(string),       allocatable :: names(:)
+        real(kind=c_float), pointer     :: a(:,:,:) => null(), b(:,:,:) => null()
+        integer                         :: n, i, ib, ie, nwrong
         n = size(inds)
         allocate(imgs(n), names(n))
         do i = 1, n
@@ -1101,7 +1101,7 @@ contains
         type(stack_read_session) :: sess
         type(stack_read_counts)  :: c
         type(image), allocatable :: imgs(:)
-        integer :: i
+        integer                  :: i
         allocate(imgs(size(inds)))
         do i = 1, size(inds)
             call imgs(i)%new([BOX,BOX,1], SMPD, wthreads=.false.)
@@ -1125,10 +1125,10 @@ contains
     subroutine write_session_stacks( stks, mode )
         type(string), intent(out) :: stks(3)
         integer,      intent(in)  :: mode
-        type(stack_io) :: writer
-        type(image)    :: img
+        type(stack_io)              :: writer
+        type(image)                 :: img
         real(kind=c_float), pointer :: pixels(:,:,:) => null()
-        integer :: istk, iimg, i, j
+        integer                     :: istk, iimg, i, j
         do istk = 1, 3
             stks(istk) = session_stack_name(istk, mode)
             select case(mode)
@@ -1159,8 +1159,8 @@ contains
         type(MrcImgHead) :: header
         integer(kind=1)  :: bytes(BOX,BOX)
         integer(int16)   :: words(BOX,BOX)
-        integer :: funit, io_stat, iimg, i, j, v, b
-        integer(kind=8) :: first_byte, image_nbytes
+        integer          :: funit, io_stat, iimg, i, j, v, b
+        integer(kind=8)  :: first_byte, image_nbytes
         call header%new([BOX,BOX,SESS_NIMGS(istk)])
         call header%setMode(mode)
         call header%setPixSz(SMPD)
@@ -1221,7 +1221,7 @@ contains
     subroutine create_synthetic_stack(fname)
         class(string), intent(in) :: fname
         type(image) :: img
-        integer :: iimg
+        integer     :: iimg
         call img%new([BOX,BOX,1],SMPD,wthreads=.false.)
         do iimg = 1,NIMGS
             call set_pattern(img,iimg)
@@ -1237,7 +1237,7 @@ contains
         character(len=*), intent(in) :: label
         type(stack_io) :: reader
         type(image)    :: img
-        integer :: iimg, ldim(3)
+        integer        :: iimg, ldim(3)
         call reader%open(fname,SMPD,'read',bufsz=bufsz)
         ldim = reader%get_ldim()
         call assert_int(NIMGS, reader%get_nptcls(), label//': image count')
@@ -1264,7 +1264,7 @@ contains
         integer,          intent(in)    :: iimg
         character(len=*), intent(in)    :: label
         real(kind=c_float), pointer :: pixels(:,:,:) => null()
-        real(kind=c_float) :: expected(BOX,BOX)
+        real(kind=c_float)          :: expected(BOX,BOX)
         call fill_pattern(expected,iimg)
         call img%get_rmat_ptr(pixels)
         call assert_true(maxval(abs(pixels(1:BOX,1:BOX,1)-expected)) <= TOL,&
@@ -1303,13 +1303,13 @@ contains
     end subroutine fill_chunk_pattern
 
     subroutine assert_mrc_header(fname, mode, bytes_per_pixel, label, ldim)
-        class(string),     intent(in) :: fname
-        integer,           intent(in) :: mode, bytes_per_pixel
-        character(len=*),  intent(in) :: label
-        integer, optional, intent(in) :: ldim(3)
+        class(string),     intent(in)           :: fname
+        integer,           intent(in)           :: mode, bytes_per_pixel
+        character(len=*),  intent(in)           :: label
+        integer,           optional, intent(in) :: ldim(3)
         type(MrcImgHead) :: header
-        integer :: funit, io_stat, dims(3), expected_dims(3)
-        integer(kind=8) :: file_nbytes
+        integer          :: funit, io_stat, dims(3), expected_dims(3)
+        integer(kind=8)  :: file_nbytes
         expected_dims = [BOX,BOX,NIMGS]
         if( present(ldim) ) expected_dims = ldim
         call header%new(expected_dims)
@@ -1376,7 +1376,7 @@ contains
         class(string),  intent(in)  :: fname
         integer(int32), intent(out) :: bits(:)
         integer(int16) :: plane(BOX,BOX)
-        integer :: funit, io_stat, ipixel
+        integer        :: funit, io_stat, ipixel
         bits = -1
         open(newunit=funit,file=fname%to_char(),access='stream',form='unformatted',action='read',status='old',iostat=io_stat)
         call assert_int(0, io_stat, fname%to_char()//': opens for the payload check')
@@ -1395,9 +1395,9 @@ contains
         class(string), intent(in) :: stkname
         integer,       intent(in) :: istk
         type(MrcImgHead) :: header
-        integer(int16) :: plane(BOX,BOX)
-        integer :: funit, io_stat, iimg
-        integer(kind=8) :: first_byte, image_nbytes
+        integer(int16)   :: plane(BOX,BOX)
+        integer          :: funit, io_stat, iimg
+        integer(kind=8)  :: first_byte, image_nbytes
         call header%new([BOX,BOX,DSTK_NIMGS])
         call header%setMode(1)
         call header%setPixSz(SMPD)

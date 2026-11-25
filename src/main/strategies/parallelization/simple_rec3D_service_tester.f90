@@ -83,8 +83,8 @@ contains
     subroutine make_project( dir, labels )
         character(len=*), intent(in) :: dir
         integer,          intent(in) :: labels(FLEX_PHANTOM_NPTCLS)
-        class(sp_project), allocatable:: project
-        integer :: i
+        class(sp_project), allocatable :: project
+        integer                        :: i
         allocate(project)
         call simple_chdir(root)
         call simple_mkdir(string(dir))
@@ -101,9 +101,9 @@ contains
     subroutine publish_weights( weights, labels )
         real,    intent(in) :: weights(FLEX_PHANTOM_NPTCLS,NSTATES)
         integer, intent(in) :: labels(FLEX_PHANTOM_NPTCLS)
-        class(sp_project), allocatable:: project
-        type(state_weight_set) :: wset
-        integer :: i
+        class(sp_project), allocatable :: project
+        type(state_weight_set)         :: wset
+        integer                        :: i
         allocate(project)
         call project%read(string('phantom.simple'))
         call wset%publish(project, project%os_ptcl3D, string('phantom.simple'), &
@@ -126,8 +126,8 @@ contains
         class(builder),      allocatable :: build
         class(cmdline),      allocatable :: cline, cline_rec
         type(rec3D_service), allocatable :: service
-        type(rec3D_request) :: request
-        integer :: truth_labels(FLEX_PHANTOM_NPTCLS), i
+        type(rec3D_request)              :: request
+        integer                          :: truth_labels(FLEX_PHANTOM_NPTCLS), i
         write(*,'(A)') 'test_request_settings'
         truth_labels = [(conformer(i), i = 1, FLEX_PHANTOM_NPTCLS)]
         call make_project('request', truth_labels)
@@ -184,12 +184,12 @@ contains
 
     !> reconstruct3D in this process and directory
     subroutine run_rec3D( backend, l_weighted, extra_key, extra_val )
-        character(len=*),           intent(in) :: backend
-        logical,                    intent(in) :: l_weighted
-        character(len=*), optional, intent(in) :: extra_key(:), extra_val(:)
-        type(commander_rec3D) :: xrec3D
-        class(cmdline), allocatable:: cline
-        integer :: i
+        character(len=*),           intent(in)           :: backend
+        logical,                    intent(in)           :: l_weighted
+        character(len=*),           optional, intent(in) :: extra_key(:), extra_val(:)
+        type(commander_rec3D)       :: xrec3D
+        class(cmdline), allocatable :: cline
+        integer                     :: i
         allocate(cline)
         call cline%set('prg',         'reconstruct3D')
         call cline%set('projfile',    'phantom.simple')
@@ -217,18 +217,18 @@ contains
         use simple_refine3D_fnames, only: refine3D_fsc_fname
         use simple_halfmap_diagnostics, only: read_support_provenance
         use simple_test_utils, only: assert_char, assert_real
-        character(len=5), parameter :: SUFFIXES(3) = [character(len=5) :: '', '_even', '_odd']
-        character(len=16), parameter :: KEYS(4) = [character(len=16) :: 'objfun', 'ml_reg', 'automsk', 'msk_crop']
-        character(len=16), parameter :: VALS(4) = [character(len=16) :: 'cc', 'no', 'no', '8']
-        real, parameter :: MASK_RADIUS = 8., REL_TOL = 2.e-6
+        character(len=5),  parameter   :: SUFFIXES(3) = [character(len=5) :: '', '_even', '_odd']
+        character(len=16), parameter   :: KEYS(4)     = [character(len=16) :: 'objfun', 'ml_reg', 'automsk', 'msk_crop']
+        character(len=16), parameter   :: VALS(4)     = [character(len=16) :: 'cc', 'no', 'no', '8']
+        real,              parameter   :: MASK_RADIUS = 8., REL_TOL = 2.e-6
         class(parameters), allocatable :: defaults
-        class(image), allocatable :: raw, standard
-        real, allocatable :: rraw(:,:,:), rstandard(:,:,:)
-        type(string) :: fname, rawname, baseline
-        character(len=32) :: support
-        integer :: labels(FLEX_PHANTOM_NPTCLS), i, s, h, x, y, z, c
-        real :: radius2, raw_outside, standard_outside, scale, err
-        logical :: constrained, found
+        class(image),      allocatable :: raw, standard
+        real,              allocatable :: rraw(:,:,:), rstandard(:,:,:)
+        type(string)                   :: fname, rawname, baseline
+        character(len=32)              :: support
+        integer                        :: labels(FLEX_PHANTOM_NPTCLS), i, s, h, x, y, z, c
+        real                           :: radius2, raw_outside, standard_outside, scale, err
+        logical                        :: constrained, found
         allocate(defaults, raw, standard)
         call assert_char('no', defaults%unfil_unmasked, 'raw export is disabled by default')
         labels = [(conformer(i), i=1,FLEX_PHANTOM_NPTCLS)]
@@ -312,10 +312,10 @@ contains
     subroutine test_labels_equal_hard( backend )
         character(len=*), intent(in) :: backend
         character(len=5), parameter :: SUFFIXES(3) = [character(len=5) :: '', '_even', '_odd']
-        real    :: weights(FLEX_PHANTOM_NPTCLS,NSTATES)
-        integer :: truth_labels(FLEX_PHANTOM_NPTCLS), i, s, k
-        type(string) :: fname, fname_hard
-        logical :: l_equal
+        real                        :: weights(FLEX_PHANTOM_NPTCLS,NSTATES)
+        integer                     :: truth_labels(FLEX_PHANTOM_NPTCLS), i, s, k
+        type(string)                :: fname, fname_hard
+        logical                     :: l_equal
         write(*,'(A)') 'test_labels_equal_hard '//backend
         truth_labels = [(conformer(i), i = 1, FLEX_PHANTOM_NPTCLS)]
         call make_project('eq_'//backend, truth_labels)
@@ -349,11 +349,11 @@ contains
     !> PCG with a state that lost every particle while the other has them (the gridding rule): the
     !! run completes, the empty state's previous maps stay byte for byte, the other state is rewritten
     subroutine test_empty_state_carried()
-        character(len=5), parameter :: SUFFIXES(3) = [character(len=5) :: '', '_even', '_odd']
-        class(sp_project), allocatable:: project
-        type(string)     :: fname, fname_prev
-        integer :: truth_labels(FLEX_PHANTOM_NPTCLS), i, k, status
-        logical :: l_kept
+        character(len=5),  parameter   :: SUFFIXES(3) = [character(len=5) :: '', '_even', '_odd']
+        class(sp_project), allocatable :: project
+        type(string)                   :: fname, fname_prev
+        integer                        :: truth_labels(FLEX_PHANTOM_NPTCLS), i, k, status
+        logical                        :: l_kept
         allocate(project)
         write(*,'(A)') 'test_empty_state_carried pcg'
         truth_labels = [(conformer(i), i = 1, FLEX_PHANTOM_NPTCLS)]
@@ -401,9 +401,9 @@ contains
     !> per state: the weighted map against its expected mixture, the hard map against its truth
     subroutine test_fractional_phantom( backend )
         character(len=*), intent(in) :: backend
-        real    :: weights(FLEX_PHANTOM_NPTCLS,NSTATES), corr_frac(NSTATES), corr_hard(NSTATES)
-        real    :: masses(2,NSTATES), f05, f0143
-        integer :: labels(FLEX_PHANTOM_NPTCLS), truth_labels(FLEX_PHANTOM_NPTCLS), i, s
+        real         :: weights(FLEX_PHANTOM_NPTCLS,NSTATES), corr_frac(NSTATES), corr_hard(NSTATES)
+        real         :: masses(2,NSTATES), f05, f0143
+        integer      :: labels(FLEX_PHANTOM_NPTCLS), truth_labels(FLEX_PHANTOM_NPTCLS), i, s
         type(string) :: mixture
         write(*,'(A)') 'test_fractional_phantom '//backend
         call fractional_weights(weights, labels)
@@ -441,7 +441,7 @@ contains
         class(string), intent(in) :: fname
         real,          intent(in) :: masses(2)
         type(image) :: a, b
-        integer :: ldim(3)
+        integer     :: ldim(3)
         ldim = [FLEX_PHANTOM_BOX, FLEX_PHANTOM_BOX, FLEX_PHANTOM_BOX]
         call a%new(ldim, FLEX_PHANTOM_SMPD, wthreads=.false.)
         call b%new(ldim, FLEX_PHANTOM_SMPD, wthreads=.false.)
@@ -460,9 +460,9 @@ contains
     !! generation is blended (generation 2)
     subroutine test_trailing_weight_identity()
         type(trail_chain_manifest) :: man
-        real    :: weights(FLEX_PHANTOM_NPTCLS,NSTATES), mass_grid, mass_pcg, mass_expected
-        integer :: labels(FLEX_PHANTOM_NPTCLS), status
-        integer(kind=8) :: id_first(2), id_second(2)
+        real                       :: weights(FLEX_PHANTOM_NPTCLS,NSTATES), mass_grid, mass_pcg, mass_expected
+        integer                    :: labels(FLEX_PHANTOM_NPTCLS), status
+        integer(kind=8)            :: id_first(2), id_second(2)
         write(*,'(A)') 'test_trailing_weight_identity'
         call fractional_weights(weights, labels)
         mass_expected = sum(weights(:,1))
@@ -518,8 +518,8 @@ contains
     subroutine fractional_update_then_new_generation( weights, labels )
         real,    intent(in) :: weights(FLEX_PHANTOM_NPTCLS,NSTATES)
         integer, intent(in) :: labels(FLEX_PHANTOM_NPTCLS)
-        class(sp_project), allocatable:: project
-        integer :: i
+        class(sp_project), allocatable :: project
+        integer                        :: i
         allocate(project)
         call project%read(string('phantom.simple'))
         do i = 1, FLEX_PHANTOM_NPTCLS

@@ -30,8 +30,8 @@ contains
     !! particle's observation. Extras at the committed pose with weights summing to one reproduce the plain
     !! accumulation, in one batch and in two; an extra moved off the committed pose changes it
     subroutine test_pcg_extra_entries()
-        integer, parameter :: NP = 4, BOX = 32
-        real,    parameter :: SMPD = 2.
+        integer, parameter      :: NP   = 4, BOX = 32
+        real,    parameter      :: SMPD = 2.
         type(reconstructor_pcg) :: op
         type(oris)              :: sel, entries
         type(ori)               :: o
@@ -40,7 +40,7 @@ contains
         complex, allocatable    :: planes(:,:,:), y_x(:,:,:), b(:,:,:), b0(:,:,:), b2(:,:,:)
         real,    allocatable    :: d(:,:,:), d0(:,:,:), d2(:,:,:), wts(:)
         integer, allocatable    :: xptcl(:), xfirst(:)
-        integer :: pinds(NP), lims2(2,2), i, h, k
+        integer                 :: pinds(NP), lims2(2,2), i, h, k
         write(*,'(A)') 'test_pcg_extra_entries'
         call seed_rnd_fixed(20261103)
         pinds        = [11, 12, 13, 14]
@@ -123,9 +123,9 @@ contains
 
         !> the committed and the extra entries in batches of the given size (bsz(1)) over the NP particles
         subroutine accumulate_entries( bsz, be, de )
-            integer,              intent(in)  :: bsz(2)
-            complex, allocatable, intent(out) :: be(:,:,:)
-            real,    allocatable, intent(out) :: de(:,:,:)
+            integer,              intent(in)               :: bsz(2)
+            complex,              allocatable, intent(out) :: be(:,:,:)
+            real,                 allocatable, intent(out) :: de(:,:,:)
             integer :: ib, ie
             call op%new(BOX, SMPD, PCG_LAMBDA)
             call op%prep_particles(entries, use_ctf=.true., weights=wts)
@@ -178,7 +178,7 @@ contains
     end subroutine test_backend_resolution
 
     subroutine test_factory_branches()
-        type(cmdline) :: cline
+        type(cmdline)                      :: cline
         class(rec3D_strategy), allocatable :: strategy
         write(*,'(A)') 'test_factory_branches'
         ! bare command line: shared-memory gridding

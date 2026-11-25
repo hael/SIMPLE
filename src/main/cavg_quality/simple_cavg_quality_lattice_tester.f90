@@ -19,11 +19,11 @@ use simple_forked_process,         only: forked_process, FORK_STATUS_FAILED
 use simple_cmdline,                only: cmdline
 implicit none
 
-integer,  parameter :: BOX  = 120
-real,     parameter :: SMPD = 0.358
-integer,  parameter :: FH = 18, FK = 12           !< the fringe wave vector (shell 22, 1.99 A at this box)
+integer,  parameter :: BOX        = 120
+real,     parameter :: SMPD       = 0.358
+integer,  parameter :: FH         = 18, FK = 12   !< the fringe wave vector (shell 22, 1.99 A at this box)
 integer,  parameter :: KIND_NOISE = 0, KIND_LATTICE = 1, KIND_LOWPASS = 2
-integer(kind=8)     :: rng_state = 20261028_8
+integer(kind=8)     :: rng_state  = 20261028_8
 
 
 !> a model read from fname, which must stop (a list one value short of the bank)
@@ -73,8 +73,8 @@ contains
     subroutine test_lattice_against_noise()
         type(cavg_quality_lattice) :: lat
         type(image)                :: imgs(3)
-        real    :: raw(3,LAT_NFEATS)
-        logical :: blank(3)
+        real                       :: raw(3,LAT_NFEATS)
+        logical                    :: blank(3)
         write(*,'(A)') 'test_lattice_against_noise'
         call make_cavg(imgs(1), KIND_LATTICE, 35., 0.3)
         call make_cavg(imgs(2), KIND_LOWPASS, 35., 0.3)
@@ -94,9 +94,9 @@ contains
     subroutine test_normalization()
         type(cavg_quality_result) :: q
         type(image), allocatable  :: imgs(:)
-        integer, parameter :: N = 16, NU = 8
-        integer :: kinds(N), ukinds(NU), j
-        real    :: med
+        integer,     parameter    :: N = 16, NU = 8
+        integer                   :: kinds(N), ukinds(NU), j
+        real                      :: med
         write(*,'(A)') 'test_normalization'
         kinds(1:N/2)   = KIND_LATTICE
         kinds(N/2+1:N) = KIND_NOISE
@@ -162,9 +162,9 @@ contains
         type(cavg_quality_model_spec) :: spec
         type(cavg_quality_result)     :: q
         type(image), allocatable      :: imgs(:)
-        integer, parameter :: N = 16, NU = 8
-        integer :: kinds(N), ukinds(NU)
-        real    :: x(LAT_NFEATS), thr, p_at, p_below, p_above
+        integer,     parameter        :: N = 16, NU = 8
+        integer                       :: kinds(N), ukinds(NU)
+        real                          :: x(LAT_NFEATS), thr, p_at, p_below, p_above
         write(*,'(A)') 'test_nano_preset'
         call m%init_preset('nano')
         spec = m%get_spec()
@@ -255,7 +255,7 @@ contains
         type(cavg_quality_result) :: q
         type(image), allocatable  :: imgs(:)
         type(oris)                :: os
-        integer :: i
+        integer                   :: i
         write(*,'(A)') 'test_nano_gates'
         allocate(imgs(6))
         do i = 1, 6
@@ -290,8 +290,8 @@ contains
     subroutine test_model_gate()
         real,    parameter :: CORRS(9)  = [0.1, 0.05, 0.5, 0.6, 0.7, 0.95, 0.8, 0.9, 1.0]
         integer, parameter :: STATES(9) = [1,   0,    1,   2,   1,   0,    1,   1,   1]
-        integer :: sout(9)
-        real    :: med, sd, cut
+        integer            :: sout(9)
+        real               :: med, sd, cut
         write(*,'(A)') 'test_model_gate'
         call model_gate_states(CORRS, STATES, 1.0, sout, med, sd, cut)
         call assert_real(0.7,     med, 1.e-6, 'model gate: median of the survivors')
@@ -310,8 +310,8 @@ contains
     subroutine test_diameter_calibration()
         type(cavg_quality_lattice) :: lat
         type(image)                :: imgs(2)
-        real    :: raw(2,LAT_NFEATS)
-        logical :: blank(2)
+        real                       :: raw(2,LAT_NFEATS)
+        logical                    :: blank(2)
         write(*,'(A)') 'test_diameter_calibration'
         call make_cavg(imgs(1), KIND_LATTICE, 35., 0.02, sphere=.true.)
         call make_cavg(imgs(2), KIND_LATTICE, 35., 0.02)
@@ -328,8 +328,8 @@ contains
     subroutine test_spot_arc_straight_bent()
         type(cavg_quality_lattice) :: lat
         type(image)                :: imgs(2)
-        real    :: raw(2,LAT_NFEATS)
-        logical :: blank(2)
+        real                       :: raw(2,LAT_NFEATS)
+        logical                    :: blank(2)
         write(*,'(A)') 'test_spot_arc_straight_bent'
         call make_cavg(imgs(1), KIND_LATTICE, 35., 0.02)
         call make_cavg(imgs(2), KIND_LATTICE, 35., 0.02, bent=.true.)
@@ -346,8 +346,8 @@ contains
     subroutine test_band_presence_unmasked()
         type(cavg_quality_lattice) :: lat
         type(image)                :: imgs(2)
-        real    :: raw(2,LAT_NFEATS)
-        logical :: blank(2)
+        real                       :: raw(2,LAT_NFEATS)
+        logical                    :: blank(2)
         write(*,'(A)') 'test_band_presence_unmasked'
         call make_cavg(imgs(1), KIND_LATTICE, 25., 0.05)
         call make_cavg(imgs(2), KIND_LATTICE, 25., 0.05, ring=.true.)
@@ -365,8 +365,8 @@ contains
         type(image),  allocatable  :: imgs(:)
         real,         allocatable  :: raw1(:,:), rawn(:,:)
         logical,      allocatable  :: valid(:), blank(:)
-        integer, parameter :: N = 12
-        integer :: i, nthr
+        integer,      parameter    :: N = 12
+        integer                    :: i, nthr
         write(*,'(A)') 'test_team_identity'
         allocate(imgs(N), raw1(N,LAT_NFEATS), rawn(N,LAT_NFEATS), valid(N), blank(N))
         valid = .true.
@@ -389,8 +389,8 @@ contains
     subroutine test_model_file_round_trips()
         type(cavg_quality_model)      :: m, r, p
         type(cavg_quality_model_spec) :: spec
-        type(string) :: fname, snippet
-        integer :: i, j, iterm, funit
+        type(string)                  :: fname, snippet
+        integer                       :: i, j, iterm, funit
         write(*,'(A)') 'test_model_file_round_trips'
         fname   = 'nano_model_test_'//int2str(get_process_id())//'.txt'
         snippet = 'nano_model_snippet_'//int2str(get_process_id())//'.txt'
@@ -478,8 +478,8 @@ contains
     subroutine drop_last_value( fname, key )
         character(len=*), intent(in) :: fname, key
         character(len=4096), allocatable :: lines(:)
-        character(len=4096) :: line
-        integer :: funit, ios, n, i, icut
+        character(len=4096)              :: line
+        integer                          :: funit, ios, n, i, icut
         n = 0
         allocate(lines(500))
         open(newunit=funit, file=fname, status='old', action='read')
@@ -504,10 +504,10 @@ contains
 
     !> analysis tables of both bank sizes go through learn: the model has the tables' context and bank
     subroutine test_table_round_trip_learn()
-        type(string) :: tabs(2), fmodel
+        type(string)             :: tabs(2), fmodel
         type(cavg_quality_model) :: learned, r
-        character(len=5) :: ctx(2) = ['nano ', 'chunk']
-        integer :: ic, it
+        character(len=5)         :: ctx(2) = ['nano ', 'chunk']
+        integer                  :: ic, it
         write(*,'(A)') 'test_table_round_trip_learn'
         do ic = 1, 2
             do it = 1, 2
@@ -534,12 +534,12 @@ contains
     subroutine write_synthetic_table( context, iseed, fname )
         character(len=*), intent(in) :: context, fname
         integer,          intent(in) :: iseed
-        type(cavg_quality_result) :: q
-        type(cavg_quality_model)  :: m
-        type(cavg_quality_model_spec) :: spec
+        type(cavg_quality_result)            :: q
+        type(cavg_quality_model)             :: m
+        type(cavg_quality_model_spec)        :: spec
         type(cavg_quality_relation_analysis) :: rel
-        integer, parameter :: N = 40
-        integer :: refs(N), i, nf
+        integer, parameter                   :: N = 40
+        integer                              :: refs(N), i, nf
         nf = cavg_quality_bank_size(context)
         rng_state = 7_8 + int(iseed, kind=8)
         allocate(q%raw(N,nf), q%features(N,nf), q%scores(N), q%states(N), q%labels(N), q%hard_reject(N), &
@@ -583,11 +583,11 @@ contains
 
     ! the nano-context quality of a project of synthetic class averages of the given kinds
     subroutine project_quality( kinds, q, imgs )
-        integer,                   intent(in)    :: kinds(:)
-        type(cavg_quality_result), intent(inout) :: q
-        type(image), allocatable,  intent(inout) :: imgs(:)
+        integer,                   intent(in)                  :: kinds(:)
+        type(cavg_quality_result), intent(inout)               :: q
+        type(image),               allocatable,  intent(inout) :: imgs(:)
         type(oris) :: os
-        integer :: i
+        integer    :: i
         if( allocated(imgs) ) deallocate(imgs)
         allocate(imgs(size(kinds)))
         do i = 1, size(kinds)
@@ -616,14 +616,14 @@ contains
     ! (FH,FK) (straight, bent, or low-passed away), plus white noise of sd noise_sd; ring puts the fringes on an
     ! annulus instead of a disc
     subroutine make_cavg( img, kind, rad_px, noise_sd, sphere, bent, ring )
-        type(image),       intent(inout) :: img
-        integer,           intent(in)    :: kind
-        real,              intent(in)    :: rad_px, noise_sd
-        logical, optional, intent(in)    :: sphere, bent, ring
-        real    :: rmat(BOX,BOX,1)
-        real(dp):: x, y, r, profile, phase, kx, ky, kmag
-        logical :: l_sphere, l_bent, l_ring
-        integer :: i, j
+        type(image),       intent(inout)        :: img
+        integer,           intent(in)           :: kind
+        real,              intent(in)           :: rad_px, noise_sd
+        logical,           optional, intent(in) :: sphere, bent, ring
+        real     :: rmat(BOX,BOX,1)
+        real(dp) :: x, y, r, profile, phase, kx, ky, kmag
+        logical  :: l_sphere, l_bent, l_ring
+        integer  :: i, j
         l_sphere = .false.; if( present(sphere) ) l_sphere = sphere
         l_bent   = .false.; if( present(bent)   ) l_bent   = bent
         l_ring   = .false.; if( present(ring)   ) l_ring   = ring

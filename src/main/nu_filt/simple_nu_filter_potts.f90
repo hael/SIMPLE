@@ -7,12 +7,12 @@ contains
 
     module subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates )
         integer(kind=NU_LABEL_KIND), intent(inout) :: candmap(:,:,:)
-        integer, intent(in)    :: n_candidates
-        integer :: iter, color, i, j, k, imask, icand, cur_icand, best_icand, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz
-        integer :: nchanged, n_base, ivox
-        real    :: beta, e, best_e, site_energy
+        integer,                     intent(in)    :: n_candidates
+        integer                                  :: iter, color, i, j, k, imask, icand, cur_icand, best_icand, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz
+        integer                                  :: nchanged, n_base, ivox
+        real                                     :: beta, e, best_e, site_energy
         integer(kind=NU_LABEL_KIND), allocatable :: cap(:,:,:)
-        integer, allocatable :: color_vox(:), color_offsets(:)
+        integer,                     allocatable :: color_vox(:), color_offsets(:)
         if( n_candidates < 2 ) return
         if( .not. allocated(candidate_coords) ) THROW_HARD('candidate_coords not allocated; refine_nu_candidate_map_ordered_labels')
         if( size(candidate_coords) /= n_candidates ) &
@@ -89,7 +89,7 @@ contains
         !> the support voxels of each colour, in mask order: colour c's are color_vox(color_offsets(c):color_offsets(c+1)-1)
         subroutine pack_color_voxels
             integer, allocatable :: next(:)
-            integer :: c
+            integer              :: c
             allocate(color_offsets(0:NU_LABEL_SMOOTH_NCOLORS), source=0)
             allocate(color_vox(n_nu_mask), next(0:NU_LABEL_SMOOTH_NCOLORS-1))
             do imask = 1, n_nu_mask
@@ -144,7 +144,7 @@ contains
     end function estimate_nu_label_smooth_beta
 
     module real function nu_label_smooth_neighborhood_cost( icand, candmap, neigh, nsz )
-        integer, intent(in) :: icand, neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
+        integer,                     intent(in) :: icand, neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
         integer :: ineigh, ni, nj, nk, degree
         nu_label_smooth_neighborhood_cost = 0.
@@ -192,9 +192,9 @@ contains
 
     module real function calc_nu_label_smooth_site_energy( candmap, beta )
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
-        real,    intent(in) :: beta
+        real,                        intent(in) :: beta
         integer :: i, j, k, imask, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz, nvox
-        real :: energy_sum
+        real    :: energy_sum
         calc_nu_label_smooth_site_energy = 0.
         energy_sum = 0.
         nvox = 0

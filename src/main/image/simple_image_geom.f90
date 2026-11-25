@@ -56,10 +56,10 @@ contains
 
     !>  \brief window extracts a particle image from a box as defined by EMAN 1.9
     module subroutine window( self_in, coord, box, self_out, noutside )
-        class(image),      intent(in)    :: self_in
-        integer,           intent(in)    :: coord(2), box
-        class(image),      intent(inout) :: self_out
-        integer, optional, intent(inout) :: noutside
+        class(image),      intent(in)              :: self_in
+        integer,           intent(in)              :: coord(2), box
+        class(image),      intent(inout)           :: self_out
+        integer,           optional, intent(inout) :: noutside
         integer :: i,j, fromc(2), toc(2), xoshoot, yoshoot, xushoot, yushoot, xboxrange(2), yboxrange(2)
         if( self_in%ldim(3) > 1 ) THROW_HARD('only 4 2D images; window')
         if( self_in%is_ft() )     THROW_HARD('only 4 real images; window')
@@ -170,10 +170,10 @@ contains
 
     ! for re-generation of micrograph after convolutional PPCA
     module subroutine add_window( self, imgwin, coord, offset )
-        class(image), intent(inout)   :: self
-        class(image), intent(in)      :: imgwin
-        integer,      intent(in)      :: coord(2)
-        integer, optional, intent(in) :: offset  !if offset is present it doesn't sum windows, but take just the inner part
+        class(image), intent(inout)        :: self
+        class(image), intent(in)           :: imgwin
+        integer,      intent(in)           :: coord(2)
+        integer,      optional, intent(in) :: offset !if offset is present it doesn't sum windows, but take just the inner part
         integer ::  fromc(2), toc(2), ld(3), box
         ld    = imgwin%get_ldim()
         box   = ld(1)
@@ -202,7 +202,7 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: i, j, k, winsz
         real, allocatable :: pixels(:)
-        integer :: s, ss, t, tt, u, uu, cnt, npix
+        integer           :: s, ss, t, tt, u, uu, cnt, npix
         if( self%is_ft() ) THROW_HARD('only 4 real images; win2arr')
         if( self%is_3d() )then
             npix = (2*winsz+1)**3
@@ -290,7 +290,7 @@ contains
     !! \param sqrad half width of square
     module subroutine corners( self, sqrad )
         class(image), intent(inout) :: self
-        integer, intent(in)         :: sqrad
+        integer,      intent(in)    :: sqrad
         integer :: i, j
         self%rmat = 0.
         do i=self%ldim(1)-sqrad+1,self%ldim(1)
@@ -317,9 +317,9 @@ contains
     end subroutine corners
 
     module subroutine gauimg_center( self, wsz , alpha )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: wsz
-        real, intent(in), optional  :: alpha
+        class(image), intent(inout)        :: self
+        integer,      intent(in)           :: wsz
+        real,         intent(in), optional :: alpha
         real    :: x, y, z, xw, yw, zw, a
         integer :: i, j, k
         a = 0.5
@@ -378,9 +378,9 @@ contains
     end subroutine gauimg_offset
 
     module subroutine gauimg2D( self, xsigma, ysigma, cutoff )
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: xsigma, ysigma
-        real, optional, intent(in)    :: cutoff
+        class(image),   intent(inout)        :: self
+        real,           intent(in)           :: xsigma, ysigma
+        real,           optional, intent(in) :: cutoff
         real    :: xx, x, y, cutoffsq_here, center(2)
         integer :: i, j
         cutoffsq_here = huge(cutoffsq_here)
@@ -401,9 +401,9 @@ contains
     end subroutine gauimg2D
 
     module subroutine gauimg3D( self, xsigma, ysigma, zsigma, cutoff )
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: xsigma, ysigma, zsigma
-        real, optional, intent(in)    :: cutoff
+        class(image),   intent(inout)        :: self
+        real,           intent(in)           :: xsigma, ysigma, zsigma
+        real,           optional, intent(in) :: cutoff
         real    :: xx, x, yy, y, z, cutoffsq_here, center(3)
         integer :: i, j, k
         if(self%ldim(3) == 1) then
@@ -434,9 +434,9 @@ contains
     ! pad/clip/crop
 
     module subroutine pad( self_in, self_out, backgr, antialiasing )
-        class(image),      intent(inout) :: self_in, self_out
-        real,    optional, intent(in)    :: backgr
-        logical, optional, intent(in)    :: antialiasing
+        class(image),      intent(inout)        :: self_in, self_out
+        real,              optional, intent(in) :: backgr
+        logical,           optional, intent(in) :: antialiasing
         real, allocatable :: antialw(:)
         real              :: w, ratio
         integer           :: starts(3), stops(3), lims(3,2)
@@ -504,10 +504,10 @@ contains
     end subroutine pad
 
     module subroutine pad_inplace( self, ldim, backgr, antialiasing )
-        class(image),   intent(inout) :: self
-        integer,           intent(in) :: ldim(3)
-        real,    optional, intent(in) :: backgr
-        logical, optional, intent(in) :: antialiasing
+        class(image),      intent(inout)        :: self
+        integer,           intent(in)           :: ldim(3)
+        real,              optional, intent(in) :: backgr
+        logical,           optional, intent(in) :: antialiasing
         type(image) :: tmp
         call tmp%new(ldim, self%smpd, wthreads=self%wthreads)
         call self%pad(tmp, backgr=backgr, antialiasing=antialiasing)
@@ -724,9 +724,9 @@ contains
     end subroutine flip
 
     module subroutine mirror( self, md, fourier )
-        class(image),      intent(inout) :: self
-        character(len=*),  intent(in)    :: md
-        logical, optional, intent(in)    :: fourier
+        class(image),      intent(inout)        :: self
+        character(len=*),  intent(in)           :: md
+        logical,           optional, intent(in) :: fourier
         integer :: i, j
         logical :: didft, l_fourier
         didft = .false.
@@ -773,9 +773,9 @@ contains
     end subroutine mirror
 
     module function calc_shiftcen( self, lp, msk, hp ) result( xyz )
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: lp
-        real, optional, intent(in)    :: msk, hp
+        class(image),   intent(inout)        :: self
+        real,           intent(in)           :: lp
+        real,           optional, intent(in) :: msk, hp
         type(image) :: tmp
         real        :: xyz(3), rmsk
         if( present(msk) )then
@@ -803,10 +803,10 @@ contains
     end function calc_shiftcen
 
     module function calc_shiftcen_serial( self, lp, msk, hp ) result( xyz )
-        class(image),   intent(inout) :: self
-        real,           intent(in)    :: lp
-        real,           intent(in)    :: msk
-        real, optional, intent(in)    :: hp
+        class(image),   intent(inout)        :: self
+        real,           intent(in)           :: lp
+        real,           intent(in)           :: msk
+        real,           optional, intent(in) :: hp
         real    :: xyz(3)
         integer :: ithr
         ! get thread index
@@ -832,13 +832,13 @@ contains
     end function calc_shiftcen_serial
 
     module subroutine roavg( self, angstep, avg, ang_stop )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: angstep
-        class(image),      intent(inout) :: avg
-        integer, optional, intent(in)    :: ang_stop
-        real(dp):: avgs_rmat(nthr_glob,self%ldim(1),self%ldim(2),1)
-        real    :: rotated(nthr_glob,self%ldim(1),self%ldim(2),1)
-        integer :: irot, ithr, aang_stop
+        class(image),      intent(inout)        :: self
+        integer,           intent(in)           :: angstep
+        class(image),      intent(inout)        :: avg
+        integer,           optional, intent(in) :: ang_stop
+        real(dp) :: avgs_rmat(nthr_glob,self%ldim(1),self%ldim(2),1)
+        real     :: rotated(nthr_glob,self%ldim(1),self%ldim(2),1)
+        integer  :: irot, ithr, aang_stop
         aang_stop = 359
         if( present(ang_stop) ) aang_stop = ang_stop
         avgs_rmat = 0._dp
@@ -861,9 +861,9 @@ contains
 
     !> \brief rtsq  rotation of image by quadratic interpolation (from spider)
     module subroutine rtsq( self_in, ang, shxi, shyi, self_out )
-        class(image),           intent(inout) :: self_in
-        real,                   intent(in)    :: ang,shxi,shyi
-        class(image), optional, intent(inout) :: self_out
+        class(image),           intent(inout)           :: self_in
+        real,                   intent(in)              :: ang,shxi,shyi
+        class(image),           optional, intent(inout) :: self_out
         real    :: shx,shy,ry1,rx1,ry2,rx2,cod,sid,xi,fixcenmshx,fiycenmshy
         real    :: rye2,rye1,rxe2,rxe1,yi,ycod,ysid,yold,xold
         integer :: iycen,ixcen,ix,iy
@@ -1143,8 +1143,8 @@ contains
         class(image), intent(inout) :: self
         real,         intent(in)    :: shvec(2)
         real(dp),allocatable :: hcos(:), hsin(:)
-        real(dp) :: sh(2), arg, ck, sk
-        integer  :: h,k, hphys,kphys, lims(3,2)
+        real(dp)             :: sh(2), arg, ck, sk
+        integer              :: h,k, hphys,kphys, lims(3,2)
         lims = self%fit%loop_lims(2)
         sh   = real(shvec * self%shconst(1:2),dp)
         allocate(hcos(lims(1,1):lims(1,2)),hsin(lims(1,1):lims(1,2)))
@@ -1201,8 +1201,8 @@ contains
         class(image), intent(inout) :: self, self_out
         real,         intent(in)    :: shvec(2)
         real(dp),allocatable :: hcos(:), hsin(:)
-        real(dp) :: sh(2), arg, ck, sk
-        integer  :: h,k, hphys,kphys, lims(3,2)
+        real(dp)             :: sh(2), arg, ck, sk
+        integer              :: h,k, hphys,kphys, lims(3,2)
         lims = self%fit%loop_lims(2)
         sh   = real(shvec * self%shconst(1:2),dp)
         allocate(hcos(lims(1,1):lims(1,2)),hsin(lims(1,1):lims(1,2)))
@@ -1225,10 +1225,10 @@ contains
     end subroutine shift2Dserial_into
 
     module subroutine masscen( self, xyz, mask_in )
-        class(image),      intent(inout) :: self
-        real        ,      intent(out)   :: xyz(3)
-        logical, optional, intent(in)    :: mask_in(:,:,:)
-        real                 ::  spix, ci, cj, ck
+        class(image),      intent(inout)        :: self
+        real,              intent(out)          :: xyz(3)
+        logical,           optional, intent(in) :: mask_in(:,:,:)
+        real                 :: spix, ci, cj, ck
         integer              :: i, j, k
         logical, allocatable :: mask_here(:,:,:)
         allocate(mask_here(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)

@@ -101,7 +101,7 @@ contains
         integer,          intent(in)    :: expected_first
         type(project_superset) :: superset
         character(len=STDLEN)  :: msg
-        integer :: status
+        integer                :: status
         call superset%new(cur, frozen, 2, status, msg)
         call assert_true(status /= 0, what//' is refused')
         call assert_true(names_particle(msg, expected_first), what//': the refusal names the first offending particle')
@@ -113,7 +113,7 @@ contains
         character(len=*), intent(in) :: msg
         integer,          intent(in) :: iptcl
         character(len=:), allocatable :: tail
-        integer :: n
+        integer                       :: n
         tail    = '; first offending particle: '//int2str(iptcl)
         n       = len_trim(msg)
         l_names = .false.
@@ -126,7 +126,7 @@ contains
         type(sp_project)       :: cur, frozen
         type(project_superset) :: superset
         character(len=STDLEN)  :: msg
-        integer :: status
+        integer                :: status
         write(*,'(A)') 'test_identity_accepts_superset'
         call make_current(cur)
         call make_frozen(cur, frozen, 2)
@@ -141,7 +141,7 @@ contains
         type(sp_project)       :: cur, frozen, ref
         type(project_superset) :: superset
         character(len=STDLEN)  :: msg
-        integer :: status
+        integer                :: status
         write(*,'(A)') 'test_identity_refusals'
         call make_current(ref)
         ! permuted rows: rows 3 and 4 swap their images in the current project
@@ -204,8 +204,8 @@ contains
         type(sp_project)       :: cur, frozen, work
         type(project_superset) :: superset
         character(len=STDLEN)  :: msg
-        integer :: status, i
-        logical :: l_ok
+        integer                :: status, i
+        logical                :: l_ok
         write(*,'(A)') 'test_membership'
         call make_current(cur)
         call make_frozen(cur, frozen, 2)
@@ -286,7 +286,7 @@ contains
         character(len=STDLEN)  :: msg
         logical, allocatable   :: l_frz(:), l_coh(:), l_ret(:)
         integer, allocatable   :: carried(:)
-        integer :: status
+        integer                :: status
         write(*,'(A)') 'test_carried_membership'
         call make_current(cur)
         call make_frozen(cur, frozen, 1)
@@ -317,9 +317,9 @@ contains
         type(sp_project)       :: cur, frozen, work
         type(project_superset) :: superset
         character(len=STDLEN)  :: msg
-        real    :: e_work(3), e_frz(3), sh_work(2), sh_frz(2)
-        integer :: status, i
-        logical :: l_ok
+        real                   :: e_work(3), e_frz(3), sh_work(2), sh_frz(2)
+        integer                :: status, i
+        logical                :: l_ok
         write(*,'(A)') 'test_mask_and_restore'
         call make_current(cur)
         call cur%os_ptcl2D%set_state(9, 0)    ! a previously frozen row is retired

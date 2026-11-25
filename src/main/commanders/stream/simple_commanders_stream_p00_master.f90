@@ -75,10 +75,10 @@ integer, parameter :: STOP_ONE_BY_ONE(3)    = [STAGE_SOLVE3D, STAGE_POOL2D, STAG
 ! What the listener thread shares with the main loop; it gets the address.
 type :: master_shared
     type(stream_master_meta_store) :: store
-    type(stream_master_stage) :: stages(NSTAGES)
-    type(c_pthread_mutex_t) :: meta_mutex      ! the store, and the stages' readers
-    type(c_pthread_mutex_t) :: stop_mutex      ! l_listener_stop
-    logical                 :: l_listener_stop = .false.
+    type(stream_master_stage)      :: stages(NSTAGES)
+    type(c_pthread_mutex_t)        :: meta_mutex ! the store, and the stages' readers
+    type(c_pthread_mutex_t)        :: stop_mutex ! l_listener_stop
+    logical                        :: l_listener_stop = .false.
 end type master_shared
 
 type, extends(commander_base) :: commander_stream_p00_master
@@ -90,24 +90,24 @@ contains
 
     subroutine exec_stream_p00_master( self, cline )
         class(commander_stream_p00_master), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
-        type(master_shared), target   :: shared
-        type(parameters)              :: params
-        type(cmdline)                 :: clines(NSTAGES)
-        type(http_post)               :: post
-        type(http_response)           :: response
-        type(gui_assembler)           :: assembler
-        type(qsys_env)                :: qsys
+        class(cmdline),                     intent(inout) :: cline
+        type(master_shared), target          :: shared
+        type(parameters)                     :: params
+        type(cmdline)                        :: clines(NSTAGES)
+        type(http_post)                      :: post
+        type(http_response)                  :: response
+        type(gui_assembler)                  :: assembler
+        type(qsys_env)                       :: qsys
         type(stream_master_gui_commands)     :: commands
-        type(c_pthread_t)             :: listener
-        type(c_ptr)                   :: thread_ret
-        type(string)                  :: request, cwd
-        character(len=:), allocatable :: update_buffer
-        logical :: l_existing_pickrefs, l_existing_box, l_existing_preprocess, l_updates, l_linked
-        logical :: l_stop, l_stopping, l_last_loop
-        logical :: l_restart_seen(NSTAGES) ! a restart request in the last answer, acted on once
-        integer :: id, nmics_stop, loop_counter, rc, max_frame_bytes
-        integer :: stop_times(NSTAGES) ! when each stage was asked to stop (0: not yet)
+        type(c_pthread_t)                    :: listener
+        type(c_ptr)                          :: thread_ret
+        type(string)                         :: request, cwd
+        character(len=:),    allocatable     :: update_buffer
+        logical                              :: l_existing_pickrefs, l_existing_box, l_existing_preprocess, l_updates, l_linked
+        logical                              :: l_stop, l_stopping, l_last_loop
+        logical                              :: l_restart_seen(NSTAGES) ! a restart request in the last answer, acted on once
+        integer                              :: id, nmics_stop, loop_counter, rc, max_frame_bytes
+        integer                              :: stop_times(NSTAGES)     ! when each stage was asked to stop (0: not yet)
         ! the command line
         l_existing_pickrefs = cline%defined('pickrefs')
         l_existing_box      = cline%defined('box_extract')
@@ -299,8 +299,8 @@ contains
         subroutine abort_startup( msg )
             character(len=*), intent(in) :: msg
             integer, parameter :: POLL_US = 200000
-            integer :: jd, ipoll, rc_wait
-            logical :: l_any
+            integer            :: jd, ipoll, rc_wait
+            logical            :: l_any
             write(logfhandle,'(A)') '>>> START-UP FAILED: '//msg//'; STOPPING THE STAGES'
             do jd = 1,NSTAGES
                 if( shared%stages(jd)%is_running() ) call shared%stages(jd)%request_stop()
@@ -409,9 +409,9 @@ contains
         ! the GUI does not lose the master meanwhile.
         subroutine wait_for_stop( stage, timeout_s )
             type(stream_master_stage), intent(inout) :: stage
-            integer,                 intent(in)    :: timeout_s
+            integer,                   intent(in)    :: timeout_s
             integer, parameter :: POLL_US = 200000
-            integer :: ipoll, rc_wait
+            integer            :: ipoll, rc_wait
             do ipoll = 1,(timeout_s * 1000000) / POLL_US
                 if( .not. stage%is_running() ) return
                 if( mod(ipoll, (MASTER_HEARTBEAT_S * 1000000) / POLL_US) == 0 ) call send_heartbeat()
@@ -607,10 +607,10 @@ contains
     ! metadata lock, until the main loop asks it to stop.
     subroutine metadata_listener( arg ) bind(c)
         type(c_ptr), value, intent(in) :: arg
-        type(master_shared), pointer  :: shared
-        character(len=:), allocatable :: buffer
-        logical :: l_continue
-        integer :: id, rc
+        type(master_shared), pointer     :: shared
+        character(len=:),    allocatable :: buffer
+        logical                          :: l_continue
+        integer                          :: id, rc
         call c_f_pointer(arg, shared)
         l_continue = .true.
         do while( l_continue )

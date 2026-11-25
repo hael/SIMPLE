@@ -30,14 +30,14 @@ type, extends( gui_metadata_base ) :: gui_metadata_cavg2D
   character(len=LONGSTRLEN) :: mrcpath    = ''                  ! absolute path to the cavgs MRC
   integer                   :: idx        = 0                   ! class index within the MRC
   type(sprite_sheet_pos)    :: sprite     = sprite_sheet_pos()  ! tile position and sheet dimensions
-  real                      :: res        = 0.0   ! resolution estimate (Angstroms); valid only when l_res
-  integer                   :: pop        = 0     ! particle population count; valid only when l_pop
+  real                      :: res        = 0.0                 ! resolution estimate (Angstroms); valid only when l_res
+  integer                   :: pop        = 0                   ! particle population count; valid only when l_pop
   logical                   :: l_res      = .false.
   logical                   :: l_pop      = .false.
-  integer                   :: i          = 1     ! index of this entry within the current batch (IPC routing)
-  integer                   :: i_max      = 1     ! total entries in the current batch (IPC routing)
+  integer                   :: i          = 1                   ! index of this entry within the current batch (IPC routing)
+  integer                   :: i_max      = 1                   ! total entries in the current batch (IPC routing)
 contains
-  procedure :: kill => kill_override
+  procedure :: kill    => kill_override
   procedure :: set
   procedure :: get
   procedure :: get_idx
@@ -54,13 +54,13 @@ contains
   ! res and pop are optional; omitting them clears the corresponding flag.
   ! i and i_max are required IPC routing fields (batch index / batch size).
   subroutine set( self, path, mrcpath, idx, sprite, i, i_max, res, pop )
-    class(gui_metadata_cavg2D), intent(inout) :: self
-    type(string),               intent(in)    :: path, mrcpath
-    integer,                    intent(in)    :: idx
-    type(sprite_sheet_pos),     intent(in)    :: sprite
-    integer,                    intent(in)    :: i, i_max
-    real,    optional,          intent(in)    :: res
-    integer, optional,          intent(in)    :: pop
+    class(gui_metadata_cavg2D), intent(inout)                 :: self
+    type(string),               intent(in)                    :: path, mrcpath
+    integer,                    intent(in)                    :: idx
+    type(sprite_sheet_pos),     intent(in)                    :: sprite
+    integer,                    intent(in)                    :: i, i_max
+    real,                       optional,          intent(in) :: res
+    integer,                    optional,          intent(in) :: pop
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned = .true.
     self%path       = path%to_char()
@@ -80,12 +80,12 @@ contains
   ! Return all fields; result is .true. if the object has been assigned.
   ! res and pop are set only when the corresponding optional was supplied to set().
   function get( self, path, mrcpath, idx, sprite, res, pop ) result( l_assigned )
-    class(gui_metadata_cavg2D), intent(in)  :: self
-    type(string),               intent(out) :: path, mrcpath
-    integer,                    intent(out) :: idx
-    type(sprite_sheet_pos),     intent(out) :: sprite
-    real,    optional,          intent(out) :: res
-    integer, optional,          intent(out) :: pop
+    class(gui_metadata_cavg2D), intent(in)                     :: self
+    type(string),               intent(out)                    :: path, mrcpath
+    integer,                    intent(out)                    :: idx
+    type(sprite_sheet_pos),     intent(out)                    :: sprite
+    real,                       optional,          intent(out) :: res
+    integer,                    optional,          intent(out) :: pop
     logical                                 :: l_assigned
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned = self%l_assigned

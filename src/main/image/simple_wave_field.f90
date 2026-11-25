@@ -17,10 +17,10 @@ public :: wave_field, wave_freq
 !! copied (a copy would alias the buffer). Normalisations and scales: wave_model_policy.md, section 3.1
 type :: wave_field
     private
-    integer                           :: n        = 0
-    type(c_ptr)                       :: data_ptr = c_null_ptr
-    type(c_ptr)                       :: plan_fwd = c_null_ptr
-    type(c_ptr)                       :: plan_bwd = c_null_ptr
+    integer                           :: n         = 0
+    type(c_ptr)                       :: data_ptr  = c_null_ptr
+    type(c_ptr)                       :: plan_fwd  = c_null_ptr
+    type(c_ptr)                       :: plan_bwd  = c_null_ptr
     complex(c_float_complex), pointer :: cmat(:,:) => null()
     complex(c_float_complex), pointer :: cout(:,:) => null() !< the same buffer: FFTW's output of an in-place plan
     ! an optional real field and its half spectrum, out of place (new with_real)
@@ -29,22 +29,22 @@ type :: wave_field
     real(c_float),            pointer :: rmat(:,:) => null()  !< (n,n)
     complex(c_float_complex), pointer :: hmat(:,:) => null()  !< (0:n/2,n), the half spectrum in FFT order along k
 contains
-    procedure :: new
-    procedure :: get_n
-    procedure :: ptr
-    procedure :: rptr
-    procedure :: fwd_real_crop
-    procedure :: crop_t_real
-    procedure :: zero
-    procedure :: fwd
-    procedure :: bwd
-    procedure :: embed
-    procedure :: embed_t
-    procedure :: crop
-    procedure :: crop_t
+    procedure          :: new
+    procedure          :: get_n
+    procedure          :: ptr
+    procedure          :: rptr
+    procedure          :: fwd_real_crop
+    procedure          :: crop_t_real
+    procedure          :: zero
+    procedure          :: fwd
+    procedure          :: bwd
+    procedure          :: embed
+    procedure          :: embed_t
+    procedure          :: crop
+    procedure          :: crop_t
     procedure, private :: put_disk
     procedure, private :: get_disk
-    procedure :: kill
+    procedure          :: kill
 end type wave_field
 
 contains
@@ -58,9 +58,9 @@ contains
 
     !> with_real adds the real field of rptr, fwd_real_crop and crop_t_real
     subroutine new( self, n, with_real )
-        class(wave_field), intent(inout) :: self
-        integer,           intent(in)    :: n
-        logical, optional, intent(in)    :: with_real
+        class(wave_field), intent(inout)        :: self
+        integer,           intent(in)           :: n
+        logical,           optional, intent(in) :: with_real
         if( n < 2 ) THROW_HARD('a wave field needs at least two points per side; new')
         call self%kill
         self%n        = n

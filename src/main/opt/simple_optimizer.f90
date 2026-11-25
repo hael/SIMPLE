@@ -21,7 +21,7 @@ abstract interface
         use simple_opt_spec, only: opt_spec
         import :: optimizer
         class(optimizer), intent(inout) :: self
-        class(opt_spec), intent(inout)  :: spec
+        class(opt_spec),  intent(inout) :: spec
     end subroutine generic_new
 
     !> \brief  minimization of the cost-function
@@ -33,8 +33,8 @@ abstract interface
         import :: optimizer
         class(optimizer), intent(inout) :: self
         class(opt_spec),  intent(inout) :: spec
-        class(*),         intent(inout) :: fun_self        
-        real, intent(out)               :: lowest_cost
+        class(*),         intent(inout) :: fun_self
+        real,             intent(out)   :: lowest_cost
     end subroutine generic_minimize
 
     !>  \brief  is a destructor

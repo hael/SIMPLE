@@ -16,13 +16,13 @@ use simple_fileio,                                only: simple_touch
 use simple_syslib,                                only: simple_mkdir
 implicit none
 
-character(len=*), parameter :: TEST_PROJFILE = 'test_optics_stage.simple'
-character(len=*), parameter :: UPSTREAM      = 'preproc'   ! the preprocessing stage directory (dir_target)
-real,             parameter :: SMPD = 1.3, CS = 2.7, KV = 300.0, FRACA = 0.1
-real,             parameter :: TILT_THRES = 0.5
-real,             parameter :: SHIFT_X(STREAM_NMOVS_SET)    = [0.0, 0.1, 5.0, 5.1, 4.9]
-real,             parameter :: SHIFT_Y(STREAM_NMOVS_SET)    = [0.0,-0.1, 5.0, 4.9, 5.1]
-integer,          parameter :: TILT_GROUP(STREAM_NMOVS_SET) = [1, 1, 2, 2, 2]
+character(len=*), parameter :: TEST_PROJFILE                  = 'test_optics_stage.simple'
+character(len=*), parameter :: UPSTREAM                       = 'preproc' ! the preprocessing stage directory (dir_target)
+real,             parameter :: SMPD                           = 1.3, CS = 2.7, KV = 300.0, FRACA = 0.1
+real,             parameter :: TILT_THRES                     = 0.5
+real,             parameter :: SHIFT_X(STREAM_NMOVS_SET)      = [0.0, 0.1, 5.0, 5.1, 4.9]
+real,             parameter :: SHIFT_Y(STREAM_NMOVS_SET)      = [0.0,-0.1, 5.0, 4.9, 5.1]
+integer,          parameter :: TILT_GROUP(STREAM_NMOVS_SET)   = [1, 1, 2, 2, 2]
 integer,          parameter :: ALL_ACCEPTED(STREAM_NMOVS_SET) = 1
 
 contains
@@ -47,9 +47,9 @@ contains
     !! when the stage's project holds micrographs; no map yet, and maps live in the stage directory
     subroutine test_new_starts_empty()
         class(stream_stage_optics), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root, cwd
-        integer                   :: nfail0
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root, cwd
+        integer                                 :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_new_starts_empty'
         nfail0 = tests_failed
@@ -76,9 +76,9 @@ contains
     !! the directory finished() reads, not the move into the stage directory itself.
     subroutine test_restart_removes_termination_file()
         class(stream_stage_optics), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_restart_removes_termination_file'
         nfail0 = tests_failed
@@ -98,9 +98,9 @@ contains
     !> the stage waits, logging once, until preprocessing has made its completed-projects folder
     subroutine test_attach_upstream_waits()
         class(stream_stage_optics), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_attach_upstream_waits'
         nfail0 = tests_failed
@@ -123,9 +123,9 @@ contains
     !! project is imported once, and projects completed later are picked up by a later pass
     subroutine test_import_new_projects()
         class(stream_stage_optics), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0, nimported
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0, nimported
         allocate(stage)
         write(*,'(A)') 'test_import_new_projects'
         nfail0 = tests_failed
@@ -156,10 +156,10 @@ contains
     !! groups, and the first optics map
     subroutine test_assign_and_publish()
         class(stream_stage_optics), allocatable :: stage
-        type(cmdline)             :: cline
-        type(sp_project)          :: proj
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0, nimported
+        type(cmdline)                           :: cline
+        type(sp_project)                        :: proj
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0, nimported
         allocate(stage)
         write(*,'(A)') 'test_assign_and_publish'
         nfail0 = tests_failed
@@ -192,11 +192,11 @@ contains
     !> beamtilt=yes on the command line groups by tilt group first: five micrographs with the
     !! same beam-image shift form one optics group per tilt group, and one group without it
     subroutine test_beamtilt_from_command_line()
-        real, parameter :: NO_SHIFT(STREAM_NMOVS_SET) = 0.
+        real,                       parameter   :: NO_SHIFT(STREAM_NMOVS_SET) = 0.
         class(stream_stage_optics), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0, nimported
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0, nimported
         allocate(stage)
         write(*,'(A)') 'test_beamtilt_from_command_line'
         nfail0 = tests_failed
@@ -237,9 +237,9 @@ contains
     !! never take an older map for the newest; the older maps are kept
     subroutine test_map_ids_continue_after_restart()
         class(stream_stage_optics), allocatable :: stage, restarted
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0, nimported
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0, nimported
         allocate(stage, restarted)
         write(*,'(A)') 'test_map_ids_continue_after_restart'
         nfail0 = tests_failed
@@ -273,11 +273,11 @@ contains
     !! they come back with the group ids that map gave them
     subroutine test_restart_restores_groups()
         class(stream_stage_optics), allocatable :: stage, restarted
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0, nimported, imic, importind
-        integer                   :: ogid_of(2*STREAM_NMOVS_SET)
-        logical                   :: l_same
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0, nimported, imic, importind
+        integer                                 :: ogid_of(2*STREAM_NMOVS_SET)
+        logical                                 :: l_same
         allocate(stage, restarted)
         write(*,'(A)') 'test_restart_restores_groups'
         nfail0 = tests_failed
@@ -322,10 +322,10 @@ contains
     !! the project
     subroutine test_iterate_passes()
         class(stream_stage_optics), allocatable :: stage
-        type(cmdline)             :: cline
-        type(sp_project)          :: proj
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0
+        type(cmdline)                           :: cline
+        type(sp_project)                        :: proj
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_iterate_passes'
         nfail0 = tests_failed
@@ -361,14 +361,14 @@ contains
     !> one status message per call, counting accepted micrographs and optics groups
     subroutine test_send_status()
         class(stream_stage_optics), allocatable                   :: stage
-        type(cmdline)                               :: cline
-        type(stream_pipe)                           :: reader
-        type(gui_metadata_stream_optics_assignment) :: status
-        character(len=:), allocatable               :: buffer
-        type(string)                                :: cwd_saved, root, stage_name
-        integer(c_int)                              :: fds(2)
-        integer                                     :: nfail0, imic, meta_type, nassigned, ngroups, nimported, tlast
-        logical                                     :: l_assigned
+        type(cmdline)                                             :: cline
+        type(stream_pipe)                                         :: reader
+        type(gui_metadata_stream_optics_assignment)               :: status
+        character(len=:),           allocatable                   :: buffer
+        type(string)                                              :: cwd_saved, root, stage_name
+        integer(c_int)                                            :: fds(2)
+        integer                                                   :: nfail0, imic, meta_type, nassigned, ngroups, nimported, tlast
+        logical                                                   :: l_assigned
         allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
@@ -407,15 +407,15 @@ contains
     !> one message per optics group, each with the shifts of that group's micrographs
     subroutine test_send_group_shifts()
         class(stream_stage_optics), allocatable       :: stage
-        type(cmdline)                   :: cline
-        type(stream_pipe)               :: reader
-        type(gui_metadata_optics_group) :: group
-        character(len=:), allocatable   :: buffer
-        real,             allocatable   :: xs(:), ys(:)
-        type(string)                    :: cwd_saved, root
-        integer(c_int)                  :: fds(2)
-        integer                         :: nfail0, nimported, iframe, meta_type, i, i_max, n_shifts, npoints(2)
-        logical                         :: l_assigned
+        type(cmdline)                                 :: cline
+        type(stream_pipe)                             :: reader
+        type(gui_metadata_optics_group)               :: group
+        character(len=:),           allocatable       :: buffer
+        real,                       allocatable       :: xs(:), ys(:)
+        type(string)                                  :: cwd_saved, root
+        integer(c_int)                                :: fds(2)
+        integer                                       :: nfail0, nimported, iframe, meta_type, i, i_max, n_shifts, npoints(2)
+        logical                                       :: l_assigned
         allocate(stage)
         write(*,'(A)') 'test_send_group_shifts'
         nfail0 = tests_failed
@@ -457,9 +457,9 @@ contains
     !> the stage finishes on the stream's termination file or once enough micrographs are imported
     subroutine test_finished()
         class(stream_stage_optics), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
@@ -482,8 +482,8 @@ contains
     ! the stage's command line, as its commander normalises it, under a program name outside
     ! every UI table, so params%new neither requires a project nor makes an output directory
     subroutine set_test_cline( cline, nmics )
-        type(cmdline),     intent(inout) :: cline
-        integer, optional, intent(in)    :: nmics
+        type(cmdline),     intent(inout)        :: cline
+        integer,           optional, intent(in) :: nmics
         call cline%set('prg',        'stream_optics_stage_tester')
         call cline%set('mkdir',      'no')
         call cline%set('projfile',   TEST_PROJFILE)
@@ -499,7 +499,7 @@ contains
     ! environment
     subroutine make_test_stage( stage, cline )
         class(stream_stage_optics), intent(inout) :: stage
-        type(cmdline),             intent(inout) :: cline
+        type(cmdline),              intent(inout) :: cline
         type(sp_project) :: proj
         if( .not. file_exists(string(TEST_PROJFILE)) )then
             call proj%update_projinfo(string(TEST_PROJFILE))
@@ -520,17 +520,17 @@ contains
 
     ! completed preprocessing project number @p id, as preprocessing moves it into spprojs_completed
     subroutine write_completed_project( id, states, shiftx, shifty )
-        integer,        intent(in) :: id, states(STREAM_NMOVS_SET)
-        real, optional, intent(in) :: shiftx(STREAM_NMOVS_SET), shifty(STREAM_NMOVS_SET)
+        integer,        intent(in)           :: id, states(STREAM_NMOVS_SET)
+        real,           optional, intent(in) :: shiftx(STREAM_NMOVS_SET), shifty(STREAM_NMOVS_SET)
         call write_mic_project(string(UPSTREAM//'/'//DIR_STREAM_COMPLETED//int2str_pad(id, 5)//METADATA_EXT), id, states,&
             &shiftx, shifty)
     end subroutine write_completed_project
 
     ! a project of five preprocessed micrographs, by default in the two shift clusters
     subroutine write_mic_project( fname, id, states, shiftx, shifty )
-        class(string),  intent(in) :: fname
-        integer,        intent(in) :: id, states(STREAM_NMOVS_SET)
-        real, optional, intent(in) :: shiftx(STREAM_NMOVS_SET), shifty(STREAM_NMOVS_SET)
+        class(string),  intent(in)           :: fname
+        integer,        intent(in)           :: id, states(STREAM_NMOVS_SET)
+        real,           optional, intent(in) :: shiftx(STREAM_NMOVS_SET), shifty(STREAM_NMOVS_SET)
         type(sp_project) :: proj
         type(string)     :: cwd, stem
         real             :: xs(STREAM_NMOVS_SET), ys(STREAM_NMOVS_SET)

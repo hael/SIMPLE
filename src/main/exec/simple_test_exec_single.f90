@@ -9,7 +9,7 @@ public :: exec_test_single_commander
 private
 
 type(commander_test_single_atoms_stats) :: xsingle_atoms_stats
-type(commander_test_species_discovery) :: xspecies_discovery
+type(commander_test_species_discovery)  :: xspecies_discovery
 type(commander_test_single_workflow)    :: xsingle_workflow
 
 contains

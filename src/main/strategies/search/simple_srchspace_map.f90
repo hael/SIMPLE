@@ -17,16 +17,16 @@ type :: srchspace_map
 contains
     procedure, private :: new_from_distmat
     procedure, private :: new_from_maps
-    generic   :: new => new_from_distmat, new_from_maps
-    procedure :: get_inds_in_full
-    procedure :: get_sub2full_map
-    procedure :: get_full2sub_map
-    procedure :: full2sub
-    procedure :: sub2full
-    procedure :: get_nspace
-    procedure :: get_nsub
-    procedure :: has_data
-    procedure :: kill
+    generic            :: new => new_from_distmat, new_from_maps
+    procedure          :: get_inds_in_full
+    procedure          :: get_sub2full_map
+    procedure          :: get_full2sub_map
+    procedure          :: full2sub
+    procedure          :: sub2full
+    procedure          :: get_nspace
+    procedure          :: get_nsub
+    procedure          :: has_data
+    procedure          :: kill
 end type srchspace_map
 
 contains
@@ -74,7 +74,7 @@ contains
         class(srchspace_map), intent(in) :: self
         integer,              intent(in) :: sub_idx
         integer, allocatable :: inds(:)
-        logical :: mask(self%nspace)
+        logical              :: mask(self%nspace)
         ! default empty
         allocate(inds(0))
         if (.not. allocated(self%full2sub_map)) return

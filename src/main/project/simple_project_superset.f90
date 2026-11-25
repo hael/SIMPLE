@@ -22,11 +22,11 @@ real,    parameter :: COHORT_WARN_FRAC     = 0.05 !< warn below this fraction of
 !! active frozen rows, retired rows, the cohort, and saved current ptcl2D states
 type :: project_superset
     private
-    integer :: nrows = 0, nrows_frozen = 0, nstates = 0 !< row counts of the current and the frozen project
-    integer :: nfrozen = 0, ncohort = 0, nnever_updated = 0, nretired = 0
+    integer              :: nrows   = 0, nrows_frozen = 0, nstates = 0 !< row counts of the current and the frozen project
+    integer              :: nfrozen = 0, ncohort = 0, nnever_updated = 0, nretired = 0
     logical, allocatable :: l_frozen(:), l_retired(:), l_cohort(:)
     integer, allocatable :: nfrozen_state(:)
-    integer, allocatable :: saved_state2D(:)   !< current ptcl2D states before masking
+    integer, allocatable :: saved_state2D(:)                           !< current ptcl2D states before masking
   contains
     procedure :: new
     procedure :: validate_cohort_states
@@ -55,12 +55,12 @@ contains
     !! carried: the frozen run's carried membership (state label per frozen-project row, 0 outside the
     !! sums), absent for a frozen run without carried sums; every frozen row must lie inside the sums.
     subroutine new( self, cur, frozen, nstates, status, msg, carried )
-        class(project_superset), intent(inout) :: self
-        class(sp_project),       intent(inout) :: cur, frozen
-        integer,                 intent(in)    :: nstates
-        integer,                 intent(out)   :: status
-        character(len=*),        intent(out)   :: msg
-        integer, optional,       intent(in)    :: carried(:)
+        class(project_superset), intent(inout)              :: self
+        class(sp_project),       intent(inout)              :: cur, frozen
+        integer,                 intent(in)                 :: nstates
+        integer,                 intent(out)                :: status
+        character(len=*),        intent(out)                :: msg
+        integer,                 optional,       intent(in) :: carried(:)
         logical :: l_inside
         integer :: n, i, s, nper_state
         call self%kill
@@ -250,8 +250,8 @@ contains
 
     !> the membership per row of the current project: frozen, cohort and retired rows
     subroutine get_masks( self, l_frozen, l_cohort, l_retired )
-        class(project_superset), intent(in)  :: self
-        logical, allocatable,    intent(out) :: l_frozen(:), l_cohort(:), l_retired(:)
+        class(project_superset), intent(in)                  :: self
+        logical,                 allocatable,    intent(out) :: l_frozen(:), l_cohort(:), l_retired(:)
         if( .not. allocated(self%l_frozen) ) THROW_HARD('the superset relation is not defined; get_masks')
         l_frozen  = self%l_frozen
         l_cohort  = self%l_cohort
@@ -435,8 +435,8 @@ contains
         character(len=*),  intent(in)    :: seg
         integer,           intent(in)    :: i
         character(len=:), allocatable :: id
-        type(string) :: stk
-        integer :: stkind, ind
+        type(string)                  :: stk
+        integer                       :: stkind, ind
         call p%map_ptcl_ind2stk_ind(seg, i, stkind, ind)
         stk = p%os_stk%get_str(stkind, 'stk')
         id  = trim(stk%to_char())//'|'//int2str(ind)//'|'//int2str(p%os_stk%get_int(stkind, 'box'))// &

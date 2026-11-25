@@ -12,9 +12,9 @@ contains
     !> Dominant alignment arrays, including interpolation shells, scratch and pending candidates.
     !! The remaining process memory is reserved for project state, library plans and reconstruction.
     subroutine matcher_memory_terms( params, nrefs, nptcls, nthreads, box_sums, fixed_bytes, particle_bytes )
-        class(parameters), intent(in) :: params
-        integer, intent(in) :: nrefs, nptcls, nthreads, box_sums
-        integer(int64), intent(out) :: fixed_bytes, particle_bytes
+        class(parameters), intent(in)  :: params
+        integer,           intent(in)  :: nrefs, nptcls, nthreads, box_sums
+        integer(int64),    intent(out) :: fixed_bytes, particle_bytes
         type(ptcl_ref) :: entry
         integer(int64) :: p, nk, ni, nr, box, sum_box, crop, pad, nrows
         p    = int(max(1,params%pftsz),int64)

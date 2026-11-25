@@ -26,29 +26,29 @@ public :: REFSET_OK, REFSET_LEGACY
 public :: run_all_refine3D_provenance_tests
 #include "simple_local_flags.inc"
 
-integer, parameter :: VERSION = 2, MAX_FILES = 16
+integer, parameter :: VERSION   = 2, MAX_FILES = 16
 integer, parameter :: REFSET_OK = 0, REFSET_LEGACY = 1, REFSET_INVALID = 2
 
 type :: refine3D_provenance
     private
     type(string)              :: anchor
     type(string), allocatable :: files(:)
-    integer(int64)            :: layout_digest = 0_int64, half_digest = 0_int64, population_digest = 0_int64
-    integer(int64)            :: pose_digest = 0_int64, observation_digest = 0_int64, lineage_digest = 0_int64
-    integer(int64)            :: settings_digest = 0_int64
-    integer                   :: producer_state = 0
-    real                      :: align_lp = 0.
-    character(len=9)          :: kind = ''
+    integer(int64)            :: layout_digest      = 0_int64, half_digest = 0_int64, population_digest = 0_int64
+    integer(int64)            :: pose_digest        = 0_int64, observation_digest = 0_int64, lineage_digest = 0_int64
+    integer(int64)            :: settings_digest    = 0_int64
+    integer                   :: producer_state     = 0
+    real                      :: align_lp           = 0.
+    character(len=9)          :: kind               = ''
     character(len=STDLEN)     :: validation_message = 'provenance record is not loaded'
-    logical                   :: valid = .false., legacy = .false.
+    logical                   :: valid              = .false., legacy = .false.
   contains
-    procedure :: new
-    procedure :: kill
-    procedure :: validate_reference_set
-    procedure :: reference_matches_project
-    procedure :: reference_derivatives_match
-    procedure :: contains_file
-    procedure :: get_anchor
+    procedure          :: new
+    procedure          :: kill
+    procedure          :: validate_reference_set
+    procedure          :: reference_matches_project
+    procedure          :: reference_derivatives_match
+    procedure          :: contains_file
+    procedure          :: get_anchor
     procedure, private :: read_record
     procedure, private :: reuse_matches
 end type refine3D_provenance
@@ -63,9 +63,9 @@ contains
 
     subroutine new( self, anchor, kind, message )
         class(refine3D_provenance), intent(inout) :: self
-        class(string),             intent(in)     :: anchor
-        character(len=*),          intent(in)     :: kind
-        character(len=*),          intent(out)    :: message
+        class(string),              intent(in)    :: anchor
+        character(len=*),           intent(in)    :: kind
+        character(len=*),           intent(out)   :: message
         call self%kill
         self%anchor = anchor
         self%kind = kind
@@ -102,7 +102,7 @@ contains
 
     logical function contains_file( self, file ) result(found)
         class(refine3D_provenance), intent(in) :: self
-        class(string),             intent(in)  :: file
+        class(string),              intent(in) :: file
         integer :: i
         found = .false.
         if( .not. self%valid ) return
@@ -192,10 +192,10 @@ contains
     end subroutine publish_reference_set
 
     integer function validate_reference_set( self, fsc, support_verified, message ) result(status)
-        class(refine3D_provenance), intent(in)   :: self
-        type(string),              intent(inout) :: fsc
-        logical,                   intent(out)   :: support_verified
-        character(len=*),          intent(out)   :: message
+        class(refine3D_provenance), intent(in)    :: self
+        type(string),               intent(inout) :: fsc
+        logical,                    intent(out)   :: support_verified
+        character(len=*),           intent(out)   :: message
         type(string) :: expected
         integer      :: i
         call fsc%kill
@@ -290,12 +290,12 @@ contains
     end subroutine publish_reuse_provenance
 
     logical function reuse_provenance_matches( params, project, particles, kind, anchor, expected, message ) result(valid)
-        class(parameters), intent(in) :: params
-        class(sp_project), intent(in) :: project
-        class(oris),       intent(in) :: particles
-        character(len=*),  intent(in) :: kind
-        class(string),     intent(in) :: anchor, expected(:)
-        character(len=*), intent(out) :: message
+        class(parameters), intent(in)  :: params
+        class(sp_project), intent(in)  :: project
+        class(oris),       intent(in)  :: particles
+        character(len=*),  intent(in)  :: kind
+        class(string),     intent(in)  :: anchor, expected(:)
+        character(len=*),  intent(out) :: message
         type(refine3D_provenance) :: record
         call record%new(anchor, kind, message)
         valid = record%reuse_matches(params, project, particles, expected, message)
@@ -337,9 +337,9 @@ contains
 
     ! Sigma estimates may lag the current poses; chain imports require the saved pose snapshot.
     subroutine particle_identity( project, particles, kind, identity )
-        class(sp_project), intent(in)             :: project
-        class(oris),       intent(in)             :: particles
-        character(len=*),  intent(in)             :: kind
+        class(sp_project),          intent(in)    :: project
+        class(oris),                intent(in)    :: particles
+        character(len=*),           intent(in)    :: kind
         class(refine3D_provenance), intent(inout) :: identity
         integer :: i
         identity%layout_digest = ptcl_layout_digest(project, particles)
@@ -367,7 +367,7 @@ contains
 
     subroutine hash_observations( hash, os )
         integer(int64), intent(inout) :: hash
-        class(oris), intent(in)       :: os
+        class(oris),    intent(in)    :: os
         character(len=8), parameter :: KEYS(10) = [character(len=8) :: &
             &'dfx','dfy','angast','phshift','kv','cs','fraca','smpd','w','ogid']
         type(string) :: flag
@@ -408,7 +408,7 @@ contains
 
     subroutine hash_reals( hash, values )
         integer(int64), intent(inout) :: hash
-        real, intent(in)              :: values(:)
+        real,           intent(in)    :: values(:)
         integer :: i
         do i = 1,size(values)
             call sigma2_state_digest_integer(hash, transfer(values(i), 0))
@@ -466,7 +466,7 @@ contains
 
     logical function read_record( self, message ) result(valid)
         class(refine3D_provenance), intent(inout) :: self
-        character(len=*),          intent(out)    :: message
+        character(len=*),           intent(out)   :: message
         type(string)          :: record, pending, dir
         character(len=STDLEN) :: name, producer, stored_kind, producer_settings
         integer(int64)        :: bytes, digest, actual_size

@@ -24,11 +24,11 @@ character(len=*), parameter :: FSC_MODE_UNKNOWN = &
     &'backend=unknown support=unknown posthoc_mask=none phase_randomization=no'
 
 type :: halfmap_diagnostics_result
-    real, allocatable :: fsc(:)
-    real              :: res_fsc05   = 0.
-    real              :: res_fsc0143 = 0.
-    real              :: cfar        = 0.
-    character(len=200):: fsc_mode    = FSC_MODE_UNKNOWN
+    real, allocatable  :: fsc(:)
+    real               :: res_fsc05   = 0.
+    real               :: res_fsc0143 = 0.
+    real               :: cfar        = 0.
+    character(len=200) :: fsc_mode    = FSC_MODE_UNKNOWN
   contains
     procedure :: kill => kill_halfmap_diagnostics_result
 end type halfmap_diagnostics_result
@@ -39,10 +39,10 @@ contains
     subroutine write_base_halfmap_fsc( even_file, odd_file, dims, smpd, fsc_file )
         use simple_fileio, only: arr2file
         type(string), intent(in) :: even_file, odd_file, fsc_file
-        integer, intent(in) :: dims(3)
-        real, intent(in) :: smpd
+        integer,      intent(in) :: dims(3)
+        real,         intent(in) :: smpd
         class(image), allocatable :: even, odd
-        real, allocatable :: fsc(:)
+        real,         allocatable :: fsc(:)
         allocate(even, odd)
         call even%new(dims, smpd)
         call odd%new(dims, smpd)
@@ -66,21 +66,21 @@ contains
     !! optional envmask; NU mode requires the caller to supply envmask.
     subroutine evaluate_halfmap_pair( params, state, even, odd, average, diagnostics, backend, envmask, &
         &l_pair_support_constrained, support_kind, mask_kind )
-        class(parameters),                intent(in)    :: params
-        integer,                          intent(in)    :: state
-        class(image),                     intent(in)    :: even, odd, average
-        type(halfmap_diagnostics_result), intent(out)   :: diagnostics
-        character(len=*),                 intent(in)    :: backend
-        class(image),           optional, intent(inout) :: envmask
-        logical,                optional, intent(in)    :: l_pair_support_constrained
-        character(len=*),       optional, intent(in)    :: support_kind, mask_kind
+        class(parameters),                intent(in)              :: params
+        integer,                          intent(in)              :: state
+        class(image),                     intent(in)              :: even, odd, average
+        type(halfmap_diagnostics_result), intent(out)             :: diagnostics
+        character(len=*),                 intent(in)              :: backend
+        class(image),                     optional, intent(inout) :: envmask
+        logical,                          optional, intent(in)    :: l_pair_support_constrained
+        character(len=*),                 optional, intent(in)    :: support_kind, mask_kind
         type(image)                 :: work_even, work_odd
         type(image_msk)             :: envmask_work
         type(fsc_area_score_result) :: cones
-        real, allocatable :: fsc_t(:), fsc_n(:), res(:)
-        integer :: nyq
-        character(len=16) :: support_kind_here, mask_kind_here, posthoc_kind
-        logical :: l_phase_randomization
+        real, allocatable           :: fsc_t(:), fsc_n(:), res(:)
+        integer                     :: nyq
+        character(len=16)           :: support_kind_here, mask_kind_here, posthoc_kind
+        logical                     :: l_phase_randomization
         nyq = even%get_filtsz()
         support_kind_here = 'sphere'
         mask_kind_here    = 'none'
@@ -164,7 +164,7 @@ contains
         real,                              intent(in) :: smpd
         class(string),                     intent(in) :: fname
         real, allocatable :: res(:)
-        integer :: k, fnr
+        integer           :: k, fnr
         if( .not. allocated(diagnostics%fsc) ) THROW_HARD('No half-map FSC available to write')
         res = get_resarr(box, smpd)
         call fopen(fnr, FILE=fname, STATUS='REPLACE', action='WRITE')
@@ -192,14 +192,14 @@ contains
     end function support_provenance_fname
 
     subroutine write_support_provenance( volname, l_constrained, solve_kind, support_kind, atomic_prior )
-        type(string),     intent(in) :: volname
-        logical,          intent(in) :: l_constrained
-        character(len=*), intent(in) :: solve_kind
+        type(string),     intent(in)           :: volname
+        logical,          intent(in)           :: l_constrained
+        character(len=*), intent(in)           :: solve_kind
         character(len=*), optional, intent(in) :: support_kind
         character(len=*), optional, intent(in) :: atomic_prior  !< e.g. 'lambda_rel=0.50 natoms=23000' (atm_prior=yes)
-        type(string) :: fname
+        type(string)      :: fname
         character(len=16) :: support_kind_here
-        integer :: funit
+        integer           :: funit
         select case( trim(solve_kind) )
             case( 'base', 'regularized', 'gridding', 'gridding_regularized' )
             case default
@@ -222,15 +222,15 @@ contains
     end subroutine write_support_provenance
 
     subroutine read_support_provenance( volname, l_constrained, l_found, solve_kind, l_kind_found, support_kind )
-        type(string),               intent(in)  :: volname
-        logical,                    intent(out) :: l_constrained, l_found
-        character(len=*), optional, intent(out) :: solve_kind
-        logical,          optional, intent(out) :: l_kind_found
-        character(len=*), optional, intent(out) :: support_kind
+        type(string),               intent(in)            :: volname
+        logical,                    intent(out)           :: l_constrained, l_found
+        character(len=*),           optional, intent(out) :: solve_kind
+        logical,                    optional, intent(out) :: l_kind_found
+        character(len=*),           optional, intent(out) :: support_kind
         type(string)      :: fname
         character(len=64) :: line
         character(len=16) :: support_here
-        integer :: funit, io_stat
+        integer           :: funit, io_stat
         l_constrained = .false.
         l_found       = .false.
         if( present(solve_kind) )   solve_kind   = ''

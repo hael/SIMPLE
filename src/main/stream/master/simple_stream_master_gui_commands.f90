@@ -35,7 +35,7 @@ type :: stream_master_gui_commands
     logical                          :: l_terminate_all       = .false. ! stop the stream
     logical                          :: l_terminate(NSTAGES)  = .false. ! stop a stage
     logical                          :: l_restart(NSTAGES)    = .false. ! restart a stopped stage
-    type(gui_metadata_stream_update) :: update                         ! this response's updates
+    type(gui_metadata_stream_update) :: update                          ! this response's updates
 contains
     procedure :: parse
     procedure :: kill
@@ -46,14 +46,14 @@ contains
     !> Reads one heartbeat response; .false. (and nothing asked) when it is not valid JSON.
     function parse( self, text ) result( l_ok )
         class(stream_master_gui_commands), intent(inout) :: self
-        character(len=*),           intent(in)    :: text
+        character(len=*),                  intent(in)    :: text
         type(json_core)                        :: json
-        type(json_value), pointer              :: root, snapshot
+        type(json_value),          pointer     :: root, snapshot
         character(kind=CK, len=:), allocatable :: str_val
         integer,                   allocatable :: i_arr(:)
-        real(kind=dp) :: r_val
-        integer       :: i_val, id, snapshot_id
-        logical       :: l_ok, l_found, l_id, l_iter, l_sel, l_file
+        real(kind=dp)                          :: r_val
+        integer                                :: i_val, id, snapshot_id
+        logical                                :: l_ok, l_found, l_id, l_iter, l_sel, l_file
         call self%kill()
         call self%update%new(GUI_METADATA_STREAM_UPDATE_TYPE)
         nullify(root, snapshot)

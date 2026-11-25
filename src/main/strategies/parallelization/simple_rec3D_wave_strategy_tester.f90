@@ -26,18 +26,18 @@ implicit none
 private
 public :: run_all_rec3D_wave_lib_tests
 
-integer, parameter :: BOX = 128, NPTCLS = 300, NATOMS = 150, NTHR = 4
-integer, parameter :: WAVE_SEED = 20260923 !< the test seed of simple_test_exec, so the draws stay those of the gate's profile
-real,    parameter :: SMPD = 1.0, KV = 100., CS = 2.7, FRACA = 0.07, MSKDIAM = 110., NOISE = 0.002
+integer, parameter :: BOX       = 128, NPTCLS = 300, NATOMS = 150, NTHR = 4
+integer, parameter :: WAVE_SEED = 20260923                             !< the test seed of simple_test_exec, so the draws stay those of the gate's profile
+real,    parameter :: SMPD      = 1.0, KV = 100., CS = 2.7, FRACA = 0.07, MSKDIAM = 110., NOISE = 0.002
 real,    parameter :: ATOM_PEAK = 15., ATOM_SDEV = 0.7, RADIUS = 50.   !< volts, A, A
-real,    parameter :: BAND_LO = 2.72                                   !< sqrt(2 lambda D), A
+real,    parameter :: BAND_LO   = 2.72                                 !< sqrt(2 lambda D), A
 
 contains
 
     subroutine run_all_rec3D_wave_lib_tests()
         type(string) :: cwd_saved, root
-        real :: fsc_flat, fsc_neg, fsc_pos
-        integer :: nfail0
+        real         :: fsc_flat, fsc_neg, fsc_pos
+        integer      :: nfail0
         write(*,'(A)') '**** running reconstruct3D_wave library tests ****'
         nfail0 = tests_failed
         call set_fixed_seed(WAVE_SEED, propagate=.true.)
@@ -56,16 +56,16 @@ contains
     !> the phantom, its multislice images and the project of the particles with their truth
     subroutine make_data()
         type(commander_simulate_scattering) :: xsim
-        class(cmdline), allocatable:: cline
-        type(image)       :: vol
-        class(oris),       allocatable :: os
-        class(sp_project), allocatable :: project
-        type(ori)         :: o
-        type(ctfparams)   :: ctf
-        class(cmdline), allocatable:: cline_compenv
-        real, allocatable :: v(:,:,:)
-        real    :: c(3,NATOMS), d2, r(5)
-        integer :: i, j, k, a
+        class(cmdline),    allocatable      :: cline
+        type(image)                         :: vol
+        class(oris),       allocatable      :: os
+        class(sp_project), allocatable      :: project
+        type(ori)                           :: o
+        type(ctfparams)                     :: ctf
+        class(cmdline),    allocatable      :: cline_compenv
+        real,              allocatable      :: v(:,:,:)
+        real                                :: c(3,NATOMS), d2, r(5)
+        integer                             :: i, j, k, a
         ! Gaussian atoms within the sphere
         allocate(cline, cline_compenv)
         a = 0
@@ -167,13 +167,13 @@ contains
     !> reconstruct3D_wave (Rytov, ewald) in its own directory; fsc the band mean of the truth FSC of the half-map
     !! mean, fsc_flat that of the flat start
     subroutine reconstruct( ewald, fsc, fsc_flat )
-        character(len=*), intent(in)  :: ewald
-        real,             intent(out) :: fsc
-        real, optional,   intent(out) :: fsc_flat
-        type(commander_rec3D_wave) :: xwave
-        class(cmdline), allocatable:: cline
-        type(string)  :: dir
-        integer       :: status
+        character(len=*), intent(in)              :: ewald
+        real,             intent(out)             :: fsc
+        real,             optional,   intent(out) :: fsc_flat
+        type(commander_rec3D_wave)  :: xwave
+        class(cmdline), allocatable :: cline
+        type(string)                :: dir
+        integer                     :: status
         allocate(cline)
         dir = 'rytov_'//trim(ewald)
         call simple_mkdir(dir)
@@ -201,9 +201,9 @@ contains
     !> the mean truth FSC of the half-map mean over the shells from BAND_LO to Nyquist, in a soft sphere
     real function band_fsc( even, odd )
         character(len=*), intent(in) :: even, odd
-        type(image) :: e, o, t
+        type(image)       :: e, o, t
         real, allocatable :: corrs(:)
-        integer :: k, n, klo
+        integer           :: k, n, klo
         call e%new([BOX,BOX,BOX], SMPD)
         call o%new([BOX,BOX,BOX], SMPD)
         call t%new([BOX,BOX,BOX], SMPD)

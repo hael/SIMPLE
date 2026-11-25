@@ -53,7 +53,7 @@ contains
 
     subroutine exec_stream_p03_initial_analysis( self, cline )
         class(commander_stream_p03_initial_analysis), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
+        class(cmdline),                               intent(inout) :: cline
         type(stream_stage_initial_analysis) :: stage
         call install_sigterm_handler()
         call set_initial_analysis_cline(cline)

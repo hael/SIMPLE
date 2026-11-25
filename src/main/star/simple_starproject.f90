@@ -307,17 +307,17 @@ contains
     end subroutine import_ptcls
 
     subroutine import_stardata(self, stardata, sporis, isptcl, spoptics)
-        class(starproject),    intent(inout) :: self
-        class(star_data),      intent(inout) :: stardata
-        class(oris),           intent(inout) :: sporis
-        class(oris), optional, intent(inout) :: spoptics
+        class(starproject),    intent(inout)           :: self
+        class(star_data),      intent(inout)           :: stardata
+        class(oris),           intent(inout)           :: sporis
+        class(oris),           optional, intent(inout) :: spoptics
         type(string), allocatable :: splitline(:)
         logical,      allocatable :: fieldmask(:)
-        type(string) :: cwd, line, entrystr, splitimage, fname
-        type(ori)    :: opticsori, spori
-        logical      :: isptcl
-        real         :: rval
-        integer      :: ios, flagsindex, lineindex, ival, ogid, ogmapid, projindex, fhandle
+        type(string)              :: cwd, line, entrystr, splitimage, fname
+        type(ori)                 :: opticsori, spori
+        logical                   :: isptcl
+        real                      :: rval
+        integer                   :: ios, flagsindex, lineindex, ival, ogid, ogmapid, projindex, fhandle
         call simple_getcwd(cwd)
         allocate(splitline(stardata%flagscount), fieldmask(stardata%flagscount))
         fieldmask = .false.
@@ -430,11 +430,11 @@ contains
         class(oris),        intent(inout)    :: opticsoris
         type(string), allocatable :: stknames(:), stks(:)
         integer,      allocatable :: stkcounts(:), stkoriids(:)
-        type(string) :: entrystr, stkname
-        type(oris)   :: stktmp
-        type(ori)    :: oritmpin, oritmpout
-        integer      :: ldim(3),i, j, top, fromp, stkind, nstks, nptcls_stk
-        logical      :: newstack, stkexists
+        type(string)              :: entrystr, stkname
+        type(oris)                :: stktmp
+        type(ori)                 :: oritmpin, oritmpout
+        integer                   :: ldim(3),i, j, top, fromp, stkind, nstks, nptcls_stk
+        logical                   :: newstack, stkexists
         allocate(stknames(0))
         allocate(stkcounts(0))
         allocate(stkoriids(0))
@@ -531,9 +531,9 @@ contains
     subroutine read_starheaders( self )
         class(starproject), intent(inout) :: self
         character(len=:), allocatable :: flagname, blockname
-        type(string) :: line
-        logical      :: flagsopen, dataopen
-        integer      :: ios, delimindex, flagindex, lineindex, fhandle, end
+        type(string)                  :: line
+        logical                       :: flagsopen, dataopen
+        integer                       :: ios, delimindex, flagindex, lineindex, fhandle, end
         if( .not.file_exists(self%starfile%filename) )then
             THROW_HARD("Star file does not exist: "//self%starfile%filename%to_char())
         endif
@@ -641,10 +641,10 @@ contains
     subroutine finalise_ptcl_import(self, spproj)
         class(starproject), intent(inout) :: self
         class(sp_project),  intent(inout) :: spproj
-        integer          :: i, fromp, top, ogid, stkbox, box, ldim(3), nstk_imgs, irow
-        real             :: foundval, detpix, mag
+        integer           :: i, fromp, top, ogid, stkbox, box, ldim(3), nstk_imgs, irow
+        real              :: foundval, detpix, mag
         real, allocatable :: optics_ids(:)
-        type(string)     :: datapath
+        type(string)      :: datapath
         ! once per import, after the import and the copy into the other field: a second run is not idempotent
         if( .not. self%starfile%ptcl_import_open ) THROW_HARD('no particle import to finalise; finalise_ptcl_import runs once per import')
         ! a group's row from its id: ids need not be row numbers (stream optics groups keep theirs)
@@ -720,8 +720,8 @@ contains
             subroutine field_to_pixels( os )
                 class(oris), intent(inout) :: os
                 type(string) :: msg, stkname
-                real    :: smpd, x, y
-                integer :: iptcl, stkind
+                real         :: smpd, x, y
+                integer      :: iptcl, stkind
                 do iptcl = 1, os%get_noris()
                     x = os%get(iptcl, 'x')
                     y = os%get(iptcl, 'y')
@@ -759,7 +759,7 @@ contains
             subroutine field_to_corners( os )
                 class(oris), intent(inout) :: os
                 type(string) :: msg, stkname
-                integer :: iptcl, stkind, half_boxsize
+                integer      :: iptcl, stkind, half_boxsize
                 do iptcl = 1, os%get_noris()
                     if( .not. (os%isthere(iptcl, 'xpos') .or. os%isthere(iptcl, 'ypos')) ) cycle
                     stkind = os%get_int(iptcl, 'stkind')
@@ -810,9 +810,9 @@ contains
     end subroutine export_mics
 
     subroutine export_cls2D(self, spproj, iter)
-        class(starproject), intent(inout) :: self
-        class(sp_project),  intent(inout) :: spproj
-        integer, optional,  intent(in)    :: iter
+        class(starproject), intent(inout)         :: self
+        class(sp_project),  intent(inout)         :: spproj
+        integer,            optional,  intent(in) :: iter
         type(oris)   :: cls2D
         type(string) :: stkname
         integer      :: i, ncls
@@ -858,16 +858,16 @@ contains
     end subroutine export_cls2D
 
     subroutine export_stardata(self, flags, sporis, blockname, exclude)
-        class(starproject),         intent(inout) :: self
-        type(star_flag),            intent(in)    :: flags(:)
-        class(oris),                intent(inout) :: sporis
-        character(len=*),           intent(in)    :: blockname
-        character(len=*), optional, intent(in)    :: exclude
-        type(string) :: cwd, strtmp
+        class(starproject),         intent(inout)        :: self
+        type(star_flag),            intent(in)           :: flags(:)
+        class(oris),                intent(inout)        :: sporis
+        character(len=*),           intent(in)           :: blockname
+        character(len=*),           optional, intent(in) :: exclude
+        type(string)                  :: cwd, strtmp
         character(len=:), allocatable :: fname
-        integer      :: iflag, iori, ok, fhandle, end, n
-        real         :: rval
-        logical      :: ex, excludeflag
+        integer                       :: iflag, iori, ok, fhandle, end, n
+        real                          :: rval
+        logical                       :: ex, excludeflag
         ! a writer writes name.tmp and renames it when complete: a reader never meets a partial file
         fname = self%starfile%filename%to_char()
         n     = len_trim(fname)
@@ -956,8 +956,8 @@ contains
         class(starproject), intent(inout) :: self
         logical,            intent(in)    :: beamtilt
         type(string),     allocatable :: epugroups(:)
-        type(string) :: eputilt
-        integer      :: i, epugroupid
+        type(string)                  :: eputilt
+        integer                       :: i, epugroupid
         if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
         if(.not. beamtilt) then
             if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), 'beamtilts not being used. assigning single initial beamtilt group'
@@ -987,8 +987,8 @@ contains
     end subroutine assign_initial_tiltgroups
 
     subroutine assign_xml_tiltinfo(self, xmldir)
-        class(starproject), target, intent(inout) :: self
-        class(string),              intent(in)    :: xmldir
+        class(starproject),         target, intent(inout) :: self
+        class(string),              intent(in)            :: xmldir
         type(string) :: xmlname
         real         :: tiltx, tilty
         integer      :: i
@@ -1017,7 +1017,7 @@ contains
         real,               intent(in)    :: threshold
         integer, allocatable              :: populations(:), labels(:), tiltinfopos(:)
         real,    allocatable              :: tilts(:,:), centroids(:,:)
-        integer :: i, j, tiltcount, groupcount, matchcount
+        integer                           :: i, j, tiltcount, groupcount, matchcount
         if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
         if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "clustering initial beamtilt groups using tilt info and a threshold of ", threshold, " ... "
         groupcount = 0
@@ -1056,10 +1056,10 @@ contains
     ! optics
 
     subroutine assign_optics(self, cline, spproj, propagate)
-        class(starproject), intent(inout) :: self
-        class(cmdline),     intent(inout) :: cline
-        class(sp_project),  intent(inout) :: spproj
-        logical, optional,  intent(in)    :: propagate
+        class(starproject), intent(inout)         :: self
+        class(cmdline),     intent(inout)         :: cline
+        class(sp_project),  intent(inout)         :: spproj
+        logical,            optional,  intent(in) :: propagate
         integer      :: i, element, noptics, ogid, box, stkbox
         integer      :: ptclstkid, nmics, nstks
         type(string) :: ogname, cwd, str
@@ -1230,7 +1230,7 @@ contains
         type(string)        :: title
         type(CPlot2D_type)  :: plot2D
         type(CDataSet_type) :: dataSet
-        integer :: i, j
+        integer             :: i, j
         call CPlot2D__new(plot2D, 'Optics Groups'//C_NULL_CHAR)
         call CPlot2D__SetXAxisSize(plot2D, 400.0_c_double)
         call CPlot2D__SetYAxisSize(plot2D, 400.0_c_double)
@@ -1311,7 +1311,7 @@ contains
         class(starproject), intent(inout) :: self
         integer,            intent(in)    :: maxpop
         integer, allocatable :: nextidpop(:,:)
-        integer :: i
+        integer              :: i
         allocate(nextidpop(maxval(self%tiltinfo%finaltiltgroupid) , 2))
         do i = 1, size(nextidpop,1)
             nextidpop(i,1) = i
@@ -1343,9 +1343,9 @@ contains
         class(oris),        intent(inout) :: sporis
         character(len=*),   intent(in)    :: splflag
         type(tilt_info),    allocatable   :: tiltinfotmp(:)
-        type(tilt_info) :: tiltinfo
-        type(string)    :: path, filename
-        integer         :: i, itmp, ntiltinfo
+        type(tilt_info)                   :: tiltinfo
+        type(string)                      :: path, filename
+        integer                           :: i, itmp, ntiltinfo
         allocate(tiltinfotmp(sporis%get_noris()))
         ntiltinfo = size(self%tiltinfo)
         itmp = 1

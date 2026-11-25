@@ -77,9 +77,9 @@ real, parameter :: NNET_CONST = exp(1.)-1.
 contains
 
     subroutine avg_sdev_1d( vec, avg, sdev, mask )
-        real,              intent(in)    :: vec(:)
-        real,              intent(inout) :: avg, sdev
-        logical, optional, intent(in)    :: mask(:)
+        real,              intent(in)           :: vec(:)
+        real,              intent(inout)        :: avg, sdev
+        logical,           optional, intent(in) :: mask(:)
         logical :: present_mask
         integer :: n
         real    :: rn
@@ -110,9 +110,9 @@ contains
     end subroutine avg_sdev_1d
 
     subroutine avg_sdev_2d( vec, avg, sdev, mask )
-        real,              intent(in)    :: vec(:,:)
-        real,              intent(inout) :: avg, sdev
-        logical, optional, intent(in)    :: mask(:,:)
+        real,              intent(in)           :: vec(:,:)
+        real,              intent(inout)        :: avg, sdev
+        logical,           optional, intent(in) :: mask(:,:)
         logical :: present_mask
         integer :: n
         real    :: rn
@@ -143,9 +143,9 @@ contains
     end subroutine avg_sdev_2d
 
     subroutine avg_sdev_3d( vec, avg, sdev, mask )
-        real,              intent(in)    :: vec(:,:,:)
-        real,              intent(inout) :: avg, sdev
-        logical, optional, intent(in)    :: mask(:,:,:)
+        real,              intent(in)           :: vec(:,:,:)
+        real,              intent(inout)        :: avg, sdev
+        logical,           optional, intent(in) :: mask(:,:,:)
         logical :: present_mask
         integer :: n
         real    :: rn
@@ -176,9 +176,9 @@ contains
     end subroutine avg_sdev_3d
 
     subroutine avg_sdev_1d_dp( vec, avg, sdev, mask )
-        real(dp),          intent(in)    :: vec(:)
-        real(dp),          intent(inout) :: avg, sdev
-        logical, optional, intent(in)    :: mask(:)
+        real(dp),          intent(in)           :: vec(:)
+        real(dp),          intent(inout)        :: avg, sdev
+        logical,           optional, intent(in) :: mask(:)
         real(dp) :: rn
         logical  :: present_mask
         integer  :: n
@@ -212,8 +212,8 @@ contains
         real,  intent(in) :: vec(:)
         real,  intent(in) :: frac
         real, allocatable :: tmp(:)
-        integer :: n, n_frac
-        real    :: avg
+        integer           :: n, n_frac
+        real              :: avg
         n = size(vec)
         allocate(tmp(n), source=vec)
         n_frac = ceiling(real(n) * frac)
@@ -474,8 +474,8 @@ contains
     end function skewness_1d
 
     real function skewness_2d( data, mask )
-        real,              intent(in) :: data(:,:)
-        logical, optional, intent(in) :: mask(:,:)
+        real,              intent(in)           :: data(:,:)
+        logical,           optional, intent(in) :: mask(:,:)
         real(dp) :: mu, k2, k3, c
         real(qp) :: sq
         integer  :: n
@@ -529,8 +529,8 @@ contains
     end function kurtosis_1d
 
     real function kurtosis_2d( data, mask )
-        real,              intent(in) :: data(:,:)
-        logical, optional, intent(in) :: mask(:,:)
+        real,              intent(in)           :: data(:,:)
+        logical,           optional, intent(in) :: mask(:,:)
         real(dp) :: mu, k2, k4, k4b, c1, c2
         integer  :: n
         kurtosis_2d = 0.
@@ -706,8 +706,8 @@ contains
     end function spear
 
     subroutine normalize_1d( arr, err )
-        real, intent(inout)  :: arr(:)
-        logical, intent(out) :: err
+        real,    intent(inout) :: arr(:)
+        logical, intent(out)   :: err
         real :: ave, sdev, var
         call moment_1d( arr, ave, sdev, var, err )
         if( err ) return
@@ -716,7 +716,7 @@ contains
 
     subroutine normalize_2d( arr, err )
         real,    intent(inout)  :: arr(:,:)
-        logical, intent(out) :: err
+        logical, intent(out)    :: err
         real :: ave, sdev, var
         call moment_2d( arr, ave, sdev, var, err )
         if( err ) return
@@ -724,8 +724,8 @@ contains
     end subroutine normalize_2d
 
     subroutine normalize_3d( arr, err )
-        real, intent(inout)  :: arr(:,:,:)
-        logical, intent(out) :: err
+        real,    intent(inout) :: arr(:,:,:)
+        logical, intent(out)   :: err
         real :: ave, sdev, var
         call moment_3d( arr, ave, sdev, var, err )
         if( err ) return
@@ -733,9 +733,9 @@ contains
     end subroutine normalize_3d
 
     subroutine normalize_1d_masked( arr, err, mask )
-        real, intent(inout)  :: arr(:)
-        logical, intent(out) :: err
-        logical, intent(in)  :: mask(:)
+        real,    intent(inout) :: arr(:)
+        logical, intent(out)   :: err
+        logical, intent(in)    :: mask(:)
         real :: ave, sdev, var
         call moment_1d_masked( arr, ave, sdev, var, err, mask )
         if( err ) return
@@ -885,12 +885,12 @@ contains
 
     !>  \brief  is for calculating variable statistics
     subroutine calc_stats( arr, statvars, mask )
-        real,               intent(in)  :: arr(:)
-        type(stats_struct), intent(out) :: statvars
-        logical, optional,  intent(in)  :: mask(:)
+        real,               intent(in)            :: arr(:)
+        type(stats_struct), intent(out)           :: statvars
+        logical,            optional,  intent(in) :: mask(:)
         real, allocatable :: tmparr(:)
-        real    :: var
-        logical :: err
+        real              :: var
+        logical           :: err
         if( present(mask) )then
             call moment(arr, statvars%avg, statvars%sdev, var, err, mask)
             tmparr        = pack(arr, mask=mask)
@@ -935,15 +935,15 @@ contains
     end function norm_corr_8
 
     function corrs2weights( corrs, crit, p, norm_sigm ) result( weights )
-        real,                           intent(in) :: corrs(:) !< correlation input
-        integer(kind=kind(ENUM_WCRIT)), intent(in) :: crit
-        real,                 optional, intent(in) :: p
-        logical,              optional, intent(in) :: norm_sigm
+        real,                           intent(in)           :: corrs(:) !< correlation input
+        integer(kind=kind(ENUM_WCRIT)), intent(in)           :: crit
+        real,                           optional, intent(in) :: p
+        logical,                        optional, intent(in) :: norm_sigm
         real, allocatable :: weights(:), corrs_copy(:)
         real, parameter   :: THRESHOLD=1.5
-        real    :: maxminratio, corrmax, corrmin, minw
-        integer :: ncorrs
-        logical :: nnorm_sigm
+        real              :: maxminratio, corrmax, corrmin, minw
+        integer           :: ncorrs
+        logical           :: nnorm_sigm
         nnorm_sigm = .true.
         if( present(norm_sigm) ) nnorm_sigm = norm_sigm
         ncorrs = size(corrs)
@@ -1102,9 +1102,9 @@ contains
             !< Calculate K-S significance test
             function probks( alam ) result( p )
                 real, intent(in) :: alam
-                real :: p, a2, fac, term, termbf
+                real            :: p, a2, fac, term, termbf
                 real, parameter :: EPS1=0.001, EPS2=1.e-8
-                integer :: j
+                integer         :: j
                 a2  = -2.*alam**2
                 fac = 2.
                 p = 0.
@@ -1122,9 +1122,9 @@ contains
     end subroutine kstwo
 
     subroutine analyze_smat( s, symmetrize, smin, smax )
-        real, intent(inout) :: s(:,:)          !< similarity matrix
-        logical, intent(in) :: symmetrize      !< force diag symmetry
-        real, intent(out)   :: smin, smax
+        real,    intent(inout) :: s(:,:)       !< similarity matrix
+        logical, intent(in)    :: symmetrize   !< force diag symmetry
+        real,    intent(out)   :: smin, smax
         integer             :: i, j, n, npairs
         if( size(s,1) .ne. size(s,2) )then
             THROW_HARD('not a similarity matrix')
@@ -1145,7 +1145,7 @@ contains
     function dmat2smat( dmat ) result( smat )
         real, intent(in)  :: dmat(:,:)
         real, allocatable :: smat(:,:)
-        integer :: n1, n2
+        integer           :: n1, n2
         n1 = size(dmat,1)
         n2 = size(dmat,2)
         allocate(smat(n1,n2), source=dmat)
@@ -1156,7 +1156,7 @@ contains
     function smat2dmat( smat ) result( dmat )
         real, intent(in)  :: smat(:,:)
         real, allocatable :: dmat(:,:)
-        integer :: n1, n2
+        integer           :: n1, n2
         n1 = size(smat,1)
         n2 = size(smat,2)
         allocate(dmat(n1,n2), source=smat)
@@ -1192,7 +1192,7 @@ contains
     function merge_smats( smat1, smat2 ) result( smat )
         real, intent(in)  :: smat1(:,:), smat2(:,:)
         real, allocatable :: smat(:,:), tmpmat(:,:)
-        integer :: sz1_1, sz1_2, sz2_1, sz2_2, n1, n2
+        integer           :: sz1_1, sz1_2, sz2_1, sz2_2, n1, n2
         sz1_1 = size(smat1,1)
         sz1_2 = size(smat1,2)
         sz2_1 = size(smat2,1)
@@ -1210,7 +1210,7 @@ contains
     function merge_dmats_pair( dmat1, dmat2 ) result( dmat )
         real, intent(in)  :: dmat1(:,:), dmat2(:,:)
         real, allocatable :: dmat(:,:), tmpmat(:,:)
-        integer :: sz1_1, sz1_2, sz2_1, sz2_2, n1, n2
+        integer           :: sz1_1, sz1_2, sz2_1, sz2_2, n1, n2
         sz1_1 = size(dmat1,1)
         sz1_2 = size(dmat1,2)
         sz2_1 = size(dmat2,1)
@@ -1228,7 +1228,7 @@ contains
     function merge_dmats_triple( dmat1, dmat2, dmat3 ) result( dmat )
         real, intent(in)  :: dmat1(:,:), dmat2(:,:), dmat3(:,:)
         real, allocatable :: dmat(:,:), tmpmat1(:,:), tmpmat2(:,:)
-        integer :: sz1_1, sz1_2, sz2_1, sz2_2, sz3_1, sz3_2, n1, n2
+        integer           :: sz1_1, sz1_2, sz2_1, sz2_2, sz3_1, sz3_2, n1, n2
         sz1_1 = size(dmat1,1)
         sz1_2 = size(dmat1,2)
         sz2_1 = size(dmat2,1)
@@ -1253,8 +1253,8 @@ contains
         character(len=*), intent(in)    :: mode
         logical, allocatable :: smask(:,:)
         real,    allocatable :: tmp(:)
-        real    :: pref, tmp_min, tmp_max
-        integer :: i, j, n
+        real                 :: pref, tmp_min, tmp_max
+        integer              :: i, j, n
         n = size(smat,1)
         if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed')
         allocate(smask(n,n), source=.false.)
@@ -1292,7 +1292,7 @@ contains
         integer, intent(out) :: i_medoid
         ! real,    intent(out) :: sdev
         real, allocatable :: sims(:)
-        integer :: loc(1), i, j, n
+        integer           :: loc(1), i, j, n
         n = size(smat,1)
         if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed')
         allocate(sims(n))
@@ -1310,11 +1310,11 @@ contains
     end subroutine medoid_from_smat
     
     subroutine medoid_ranking_from_smat( smat, i_medoid, rank )
-        real,                 intent(in)    :: smat(:,:)
-        integer,              intent(out)   :: i_medoid
-        integer, allocatable, intent(inout) :: rank(:)
+        real,                 intent(in)                 :: smat(:,:)
+        integer,              intent(out)                :: i_medoid
+        integer,              allocatable, intent(inout) :: rank(:)
         real,    allocatable :: sims(:)
-        integer :: i, n 
+        integer              :: i, n
         call medoid_from_smat( smat, i_medoid )
         n = size(smat,1)
         allocate(sims(n), source=smat(i_medoid,:))
@@ -1329,7 +1329,7 @@ contains
         integer, intent(out) :: i_medoid
         ! real,    intent(out) :: ddev
         real, allocatable :: dists(:)
-        integer :: loc(1), i, j, n
+        integer           :: loc(1), i, j, n
         n = size(dmat,1)
         if( n /= size(dmat,2) ) THROW_HARD('symmetric distance matrix assumed; dev_from_dmat')
         allocate(dists(n))
@@ -1352,8 +1352,8 @@ contains
     function median_sp( arr ) result( val )
         real, intent(in)  :: arr(:)
         real              :: copy(size(arr))
-        real    :: val, val1, val2
-        integer :: n, pos1, pos2
+        real              :: val, val1, val2
+        integer           :: n, pos1, pos2
         n = size(arr)
         if( is_even(n) )then
             pos1 = n/2
@@ -1445,8 +1445,8 @@ contains
     !> log(sum(exp(x))) without overflow, max(x) + log(sum(exp(x - max(x)))); w, when present, returns the
     !! normalized weights exp(x - logsumexp) (the softmax of x). x must hold at least one finite entry
     real(dp) function logsumexp( x, w ) result( lse )
-        real(dp),           intent(in)  :: x(:)
-        real(dp), optional, intent(out) :: w(:)
+        real(dp),           intent(in)            :: x(:)
+        real(dp),           optional, intent(out) :: w(:)
         real(dp) :: xmax
         xmax = maxval(x)
         lse  = xmax + log(sum(exp(x - xmax)))
@@ -1464,7 +1464,7 @@ contains
         real, intent(in)    :: x(:) ! data points
         real, intent(in)    :: nsig ! # sigmas, can be +/-
         real, allocatable   :: absdevs(:)
-        real :: med, mad, t
+        real                :: med, mad, t
         med = median(x)
         allocate(absdevs(size(x)), source=abs(x - med))
         mad = median_nocopy(absdevs)
@@ -1473,10 +1473,10 @@ contains
 
     ! the Z-score calculates the number of standard deviations a data point is away from the mean
     function z_scores( x, mask ) result( zscores )
-        real,              intent(in) :: x(:) ! data points
-        logical, optional, intent(in) :: mask(:)
+        real,              intent(in)           :: x(:) ! data points
+        logical,           optional, intent(in) :: mask(:)
         real, allocatable :: zscores(:)
-        logical :: err
+        logical           :: err
         allocate(zscores(size(x)), source=x)
         if( present(mask) )then
             call normalize(zscores, err, mask)
@@ -1494,7 +1494,7 @@ contains
     function robust_z_scores( x ) result( z_scores )
         real, intent(in)  :: x(:) ! data points
         real, allocatable :: z_scores(:)
-        real :: med
+        real              :: med
         med = median(x)
         allocate(z_scores(size(x)), source=(x - med) / mad_gau(x, med))
     end function robust_z_scores
@@ -1511,8 +1511,8 @@ contains
     subroutine robust_scaling( x )
         real, intent(inout) :: x(:)
         real, allocatable :: y(:)
-        real    :: q25, q75, med
-        integer :: n
+        real              :: q25, q75, med
+        integer           :: n
         n = size(x)
         if( n < 4 ) return
         y = x
@@ -1527,14 +1527,14 @@ contains
     ! RANK STUFF
 
     subroutine conv2rank_weights( n, weights, crit, p )
-        integer,                        intent(in)    :: n
-        real,                           intent(inout) :: weights(n)
-        integer(kind=kind(ENUM_WCRIT)), intent(in)    :: crit
-        real, optional,                 intent(in)    :: p
+        integer,                        intent(in)                           :: n
+        real,                           intent(inout)                        :: weights(n)
+        integer(kind=kind(ENUM_WCRIT)), intent(in)                           :: crit
+        real,                           optional,                 intent(in) :: p
         real,    allocatable :: weights_tmp(:)
         integer, allocatable :: ranks(:)
-        logical :: mask(n)
-        integer :: n_nonzero, i, cnt
+        logical              :: mask(n)
+        integer              :: n_nonzero, i, cnt
         mask = weights > TINY
         n_nonzero = count(mask)
         if( n_nonzero == 1 )then

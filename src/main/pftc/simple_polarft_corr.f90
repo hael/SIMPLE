@@ -14,8 +14,8 @@ contains
         real(sp),            intent(in)    :: shvec(2)
         real(sp),            intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
         complex(dp), pointer :: pft_ref(:,:), shmat(:,:), pft_rot_ref(:,:)
-        real(dp) :: sumsqref, sumsqptcl, denom, num
-        integer  :: k, ithr, i, ieo
+        real(dp)             :: sumsqref, sumsqptcl, denom, num
+        integer              :: k, ithr, i, ieo
         i    =  self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
@@ -104,13 +104,13 @@ contains
     end subroutine gen_prob_power_objfun_val
 
     module subroutine gen_corrs( self, iref, iptcl, shift, cc )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: cc(self%nrots)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(out)           :: cc(self%nrots)
         complex(sp), pointer :: shmat(:,:)
-        real(sp) :: shift_mag_sq
-        integer  :: i, ithr, k, kk, k0, ieo
+        real(sp)             :: shift_mag_sq
+        integer              :: i, ithr, k, kk, k0, ieo
         call self%check_ptcl_memo
         ithr    =  omp_get_thread_num() + 1
         i       =  self%pinds(iptcl)
@@ -146,10 +146,10 @@ contains
     end subroutine gen_corrs
 
     module subroutine gen_euclids( self, iref, iptcl, shift, euclids )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: euclids(self%nrots)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(out)           :: euclids(self%nrots)
         real(sp) :: raw_losses(self%nrots)
         real(dp) :: direct_loss, direct_grad(2)
         integer  :: irot
@@ -174,15 +174,15 @@ contains
     ! Keep the thread index local to this call.  Sharing these buffers across
     ! threads can corrupt FFT state and cause a late segmentation fault.
     subroutine gen_raw_euclid_vals_impl( self, iref, iptcl, shift, losses )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: losses(self%nrots)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(out)           :: losses(self%nrots)
         complex(sp), pointer :: shmat(:,:)
-        complex(sp) :: c
-        real(dp)    :: ptcl_sqsum
-        real(sp)    :: A_sp, shift_mag_sq, wk
-        integer     :: k, i, ithr, kk, k0, p, ieo, ih
+        complex(sp)          :: c
+        real(dp)             :: ptcl_sqsum
+        real(sp)             :: A_sp, shift_mag_sq, wk
+        integer              :: k, i, ithr, kk, k0, p, ieo, ih
         call self%check_ptcl_memo
         call self%check_euclid_weights
         ithr         =  omp_get_thread_num() + 1
@@ -254,15 +254,15 @@ contains
     !> cross=.true. scores against the other half's reference; the particle's own noise weights (ih) and
     !! self-term are unchanged (prob_post_diag: the posterior against a reference the particle did not enter)
     subroutine gen_euclid_crvec( self, iref, iptcl, shift, norm, ithr, cross )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(dp),                    intent(out)   :: norm
-        integer,                     intent(out)   :: ithr
-        logical, optional,           intent(in)    :: cross
+        class(polarft_calc),         target, intent(inout)          :: self
+        integer,                     intent(in)                     :: iref, iptcl
+        real(sp),                    intent(in)                     :: shift(2)
+        real(dp),                    intent(out)                    :: norm
+        integer,                     intent(out)                    :: ithr
+        logical,                     optional,           intent(in) :: cross
         complex(sp), pointer :: shmat(:,:)
-        real(sp)    :: shift_mag_sq
-        integer     :: k, i, kk, k0, ieo, ih
+        real(sp)             :: shift_mag_sq
+        integer              :: k, i, kk, k0, ieo, ih
         call self%check_ptcl_memo
         call self%check_euclid_weights
         ithr         = omp_get_thread_num() + 1
@@ -347,11 +347,11 @@ contains
     end subroutine euclid_dists_from_crvec
 
     module subroutine gen_best_euclid_val( self, iref, iptcl, shift, dist, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: dist
-        integer,                     intent(out)   :: irot
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(out)           :: dist
+        integer,                     intent(out)           :: irot
         real(dp) :: norm
         integer  :: ithr, p
         call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
@@ -367,11 +367,11 @@ contains
     end subroutine gen_best_euclid_val
 
     module subroutine gen_best_euclid_val_cross( self, iref, iptcl, shift, dist, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: dist
-        integer,                     intent(out)   :: irot
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(out)           :: dist
+        integer,                     intent(out)           :: irot
         real(dp) :: norm
         integer  :: ithr, p
         call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr, cross=.true.)
@@ -389,11 +389,11 @@ contains
     !> The Euclidean loss at one grid rotation irot and shift (the kernel's own frame: the reference is
     !! shifted, then rotated), own slot or, with cross, the other half's; huge outside 1..nrots
     module subroutine gen_euclid_val_at( self, iref, iptcl, shift, irot, dist, cross )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: dist
-        logical, optional,           intent(in)    :: cross
+        class(polarft_calc),         target, intent(inout)          :: self
+        integer,                     intent(in)                     :: iref, iptcl, irot
+        real(sp),                    intent(in)                     :: shift(2)
+        real(sp),                    intent(out)                    :: dist
+        logical,                     optional,           intent(in) :: cross
         real(dp) :: norm
         integer  :: ithr
         logical  :: l_cross
@@ -411,12 +411,12 @@ contains
     !! pose-posterior diagnostic at the seed the production search scored at. Every Euclidean kernel sums the
     !! angular Nyquist bin.
     module subroutine gen_best_euclid_val_bank( self, iref, iptcl, bank, dist, irot, cross )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        complex(sp),                 intent(in)    :: bank(:,:)
-        real(sp),                    intent(out)   :: dist
-        integer,                     intent(out)   :: irot
-        logical, optional,           intent(in)    :: cross
+        class(polarft_calc),         target, intent(inout)          :: self
+        integer,                     intent(in)                     :: iref, iptcl
+        complex(sp),                 intent(in)                     :: bank(:,:)
+        real(sp),                    intent(out)                    :: dist
+        integer,                     intent(out)                    :: irot
+        logical,                     optional,           intent(in) :: cross
         real(dp) :: norm
         integer  :: ithr, p
         logical  :: l_cross
@@ -436,11 +436,11 @@ contains
 
     !> The Euclidean loss of a bank entry at one grid rotation, own slot or the other half's; huge outside 1..nrots
     module subroutine gen_euclid_val_at_bank( self, iref, iptcl, bank, irot, dist, cross )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        complex(sp),                 intent(in)    :: bank(:,:)
-        real(sp),                    intent(out)   :: dist
-        logical, optional,           intent(in)    :: cross
+        class(polarft_calc),         target, intent(inout)          :: self
+        integer,                     intent(in)                     :: iref, iptcl, irot
+        complex(sp),                 intent(in)                     :: bank(:,:)
+        real(sp),                    intent(out)                    :: dist
+        logical,                     optional,           intent(in) :: cross
         real(dp) :: norm
         integer  :: ithr
         logical  :: l_cross
@@ -476,14 +476,14 @@ contains
     end function ptcl_posterior_temp
 
     module subroutine gen_prob_euclid_val( self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(in)    :: athres_ub, prob_athres
-        real(sp),                    intent(out)   :: dist
-        integer,                     intent(out)   :: irot
-        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
-        integer,                     intent(inout) :: sorted_inds(self%nrots)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(in)            :: athres_ub, prob_athres
+        real(sp),                    intent(out)           :: dist
+        integer,                     intent(out)           :: irot
+        real(sp),                    intent(inout)         :: pvec_sorted(self%nrots)
+        integer,                     intent(inout)         :: sorted_inds(self%nrots)
         real(dp)    :: norm
         integer     :: ithr
         call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
@@ -494,14 +494,14 @@ contains
 
     module subroutine gen_prob_power_euclid_val( self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
         &pvec_sorted, sorted_inds )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, nsample
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(in)    :: power
-        real(sp),                    intent(out)   :: dist, corr
-        integer,                     intent(out)   :: irot
-        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
-        integer,                     intent(inout) :: sorted_inds(self%nrots)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl, nsample
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(in)            :: power
+        real(sp),                    intent(out)           :: dist, corr
+        integer,                     intent(out)           :: irot
+        real(sp),                    intent(inout)         :: pvec_sorted(self%nrots)
+        integer,                     intent(inout)         :: sorted_inds(self%nrots)
         real(dp) :: norm
         integer  :: ithr
         call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
@@ -517,12 +517,12 @@ contains
 
     !> cross=.true. scores the bank entry against the other half's reference (prob_post_diag), as gen_euclid_crvec
     subroutine gen_euclid_crvec_bank( self, iref, iptcl, bank, norm, ithr, cross )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        complex(sp),         intent(in)    :: bank(:,:)
-        real(dp),            intent(out)   :: norm
-        integer,             intent(out)   :: ithr
-        logical, optional,   intent(in)    :: cross
+        class(polarft_calc), intent(inout)          :: self
+        integer,             intent(in)             :: iref, iptcl
+        complex(sp),         intent(in)             :: bank(:,:)
+        real(dp),            intent(out)            :: norm
+        integer,             intent(out)            :: ithr
+        logical,             optional,   intent(in) :: cross
         integer :: i, ieo, ih
         call self%check_ptcl_memo
         call self%check_euclid_weights
@@ -628,10 +628,10 @@ contains
     !! (euclid_dists_from_crvec). The posterior draws below compute this row into the thread's buffer and draw
     !! from it; the bench and the testers read it through here. objfun=euclid only.
     module subroutine gen_euclid_dists( self, iref, iptcl, shift, dists )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: dists(self%nrots)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2)
+        real(sp),                    intent(out)           :: dists(self%nrots)
         real(dp) :: norm
         integer  :: ithr
         if( self%p_ptr%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('gen_euclid_dists requires objfun=euclid')
@@ -660,11 +660,11 @@ contains
     !! (posterior_temperature). The draw's variate is keyed on the calculator's scope, the particle (the
     !! project index) and the reference: the same pair in the same pass draws the same variate on any thread.
     module subroutine gen_posterior_val( self, iref, iptcl, shift, temp, dist, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2), temp
-        real(sp),                    intent(out)   :: dist
-        integer,                     intent(out)   :: irot
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(sp),                    intent(in)            :: shift(2), temp
+        real(sp),                    intent(out)           :: dist
+        integer,                     intent(out)           :: irot
         real(dp) :: norm, u
         integer  :: ithr
         if( self%p_ptr%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('gen_posterior_val requires objfun=euclid')
@@ -723,10 +723,10 @@ contains
     end subroutine draw_posterior_rvec
 
     module real(dp) function gen_corr_for_rot_8_noshift( self, iref, iptcl, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl, irot
         complex(dp), pointer :: pft_ref_8(:,:)
-        integer :: ithr, i, ieo
+        integer              :: ithr, i, ieo
         i         = self%pinds(iptcl)
         ithr      = omp_get_thread_num() + 1
         pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
@@ -742,12 +742,12 @@ contains
     end function gen_corr_for_rot_8_noshift
 
     module real(dp) function gen_corr_for_rot_8_shifted( self, iref, iptcl, shvec, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2)
-        integer,                     intent(in)    :: irot
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(dp),                    intent(in)            :: shvec(2)
+        integer,                     intent(in)            :: irot
         complex(dp), pointer :: pft_ref_8(:,:)
-        integer :: ithr, i, ieo
+        integer              :: ithr, i, ieo
         i         = self%pinds(iptcl)
         ithr      = omp_get_thread_num() + 1
         pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
@@ -763,9 +763,9 @@ contains
     end function gen_corr_for_rot_8_shifted
 
     module real(dp) function gen_corr_cc_for_rot_8_noshift( self, pft_ref, i, irot )
-        class(polarft_calc),  intent(inout) :: self
-        complex(dp), pointer, intent(inout) :: pft_ref(:,:)
-        integer,              intent(in)    :: i, irot
+        class(polarft_calc),  intent(inout)          :: self
+        complex(dp),          pointer, intent(inout) :: pft_ref(:,:)
+        integer,              intent(in)             :: i, irot
         complex(dp) :: crefctf
         real(dp)    :: sqsum_ref, sqsumk, wk, fk
         integer     :: k, p, rp
@@ -819,14 +819,14 @@ contains
     end function gen_corr_cc_for_rot_8_noshift
 
     module real(dp) function gen_corr_cc_for_rot_8_shifted( self, pft_ref, i, shvec, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
-        integer,                     intent(in)    :: i, irot
-        real(dp),                    intent(in)    :: shvec(2)
+        class(polarft_calc),         target, intent(inout)  :: self
+        complex(dp),                 pointer, intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)             :: i, irot
+        real(dp),                    intent(in)             :: shvec(2)
         complex(dp), pointer :: shmat_8(:,:)
-        complex(dp) :: crefctf
-        real(dp)    :: sqsum_ref, sqsumk, wk, fk
-        integer     :: k, p, rp, ithr
+        complex(dp)          :: crefctf
+        real(dp)             :: sqsum_ref, sqsumk, wk, fk
+        integer              :: k, p, rp, ithr
         ithr      = omp_get_thread_num() + 1
         sqsum_ref = 0.d0
         shmat_8 => self%heap_vars(ithr)%shmat_8
@@ -882,9 +882,9 @@ contains
     end function gen_corr_cc_for_rot_8_shifted
 
     module real(dp) function gen_euclid_for_rot_8_noshift( self, pft_ref, iptcl, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
-        integer,                     intent(in)    :: iptcl, irot
+        class(polarft_calc),         target, intent(inout)  :: self
+        complex(dp),                 pointer, intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)             :: iptcl, irot
         complex(dp) :: c
         real(dp)    :: sumsq, wk
         integer     :: ithr, p, rp, k, i, ih
@@ -935,14 +935,14 @@ contains
     end function gen_euclid_for_rot_8_noshift
 
     module real(dp) function gen_euclid_for_rot_8_shifted( self, pft_ref, iptcl, shvec, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
-        integer,                     intent(in)    :: iptcl, irot
-        real(dp),                    intent(in)    :: shvec(2)
+        class(polarft_calc),         target, intent(inout)  :: self
+        complex(dp),                 pointer, intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)             :: iptcl, irot
+        real(dp),                    intent(in)             :: shvec(2)
         complex(dp), pointer :: shmat_8(:,:)
-        complex(dp) :: c
-        real(dp)    :: sumsq, wk
-        integer     :: ithr, p, rp, k, i, ih
+        complex(dp)          :: c
+        real(dp)             :: sumsq, wk
+        integer              :: ithr, p, rp, k, i, ih
         ithr    = omp_get_thread_num() + 1
         i       = self%pinds(iptcl)
         ih = merge(1, 2, self%iseven(i))
@@ -999,16 +999,16 @@ contains
     end function gen_euclid_for_rot_8_shifted
 
     module subroutine gen_corr_cc_grad_for_rot_8( self, pft_ref, i, shvec, irot, f, grad )
-        class(polarft_calc), target, intent(inout) :: self
-        complex(dp), pointer,        intent(inout) :: pft_ref(:,:)
-        integer,                     intent(in)    :: i, irot
-        real(dp),                    intent(in)    :: shvec(2)
-        real(dp),                    intent(out)   :: f, grad(2)
+        class(polarft_calc),         target, intent(inout)         :: self
+        complex(dp),                 pointer,        intent(inout) :: pft_ref(:,:)
+        integer,                     intent(in)                    :: i, irot
+        real(dp),                    intent(in)                    :: shvec(2)
+        real(dp),                    intent(out)                   :: f, grad(2)
         real(dp),    pointer :: argtransf(:,:)
         complex(dp), pointer :: shmat_8(:,:)
-        complex(dp) :: crefctf, cg, cptcl
-        real(dp)    :: fk, wk, gkx, gky, sqsumk, sqsum, denom
-        integer     :: k, ithr, p, rp
+        complex(dp)          :: crefctf, cg, cptcl
+        real(dp)             :: fk, wk, gkx, gky, sqsumk, sqsum, denom
+        integer              :: k, ithr, p, rp
         ithr      = omp_get_thread_num() + 1
         denom     = self%wsqsums_ptcls(i)
         f         = 0.d0
@@ -1102,16 +1102,16 @@ contains
     ! routine below applies its established exp(-L) score conversion, while
     ! the stream-only wrapper above applies the finite raw-loss normalization.
     subroutine gen_euclid_residual_grad(self, pft_ref, iptcl, shvec, irot, f, grad)
-        class(polarft_calc),  target, intent(inout) :: self
-        complex(dp),         pointer, intent(inout) :: pft_ref(:,:)
-        integer,                      intent(in)    :: iptcl, irot
-        real(dp),                     intent(in)    :: shvec(2)
-        real(dp),                     intent(out)   :: f, grad(2)
+        class(polarft_calc),          target, intent(inout)  :: self
+        complex(dp),                  pointer, intent(inout) :: pft_ref(:,:)
+        integer,                      intent(in)             :: iptcl, irot
+        real(dp),                     intent(in)             :: shvec(2)
+        real(dp),                     intent(out)            :: f, grad(2)
         real(dp),    pointer :: argtransf(:,:)
         complex(dp), pointer :: shmat_8(:,:)
-        complex(dp) :: crefctf, cdiff, cg
-        real(dp)    :: fk, wk, gkx, gky
-        integer     :: k, i, ithr, p, rp, ih
+        complex(dp)          :: crefctf, cdiff, cg
+        real(dp)             :: fk, wk, gkx, gky
+        integer              :: k, i, ithr, p, rp, ih
 
         ithr      = omp_get_thread_num() + 1
         i         = self%pinds(iptcl)
@@ -1188,13 +1188,13 @@ contains
     end subroutine gen_euclid_residual_grad
 
     module subroutine gen_euclid_grad_for_rot_8( self, pft_ref, iptcl, shvec, irot, f, grad )
-        class(polarft_calc),  target, intent(inout) :: self
-        complex(dp),         pointer, intent(inout) :: pft_ref(:,:)
-        integer,                      intent(in)    :: iptcl, irot
-        real(dp),                     intent(in)    :: shvec(2)
-        real(dp),                     intent(out)   :: f, grad(2)
+        class(polarft_calc),          target, intent(inout)  :: self
+        complex(dp),                  pointer, intent(inout) :: pft_ref(:,:)
+        integer,                      intent(in)             :: iptcl, irot
+        real(dp),                     intent(in)             :: shvec(2)
+        real(dp),                     intent(out)            :: f, grad(2)
         real(dp) :: denom
-        integer :: i
+        integer  :: i
         i = self%pinds(iptcl)
         denom = self%wsqsums_ptcls(i)
         call gen_euclid_residual_grad(self, pft_ref, iptcl, shvec, irot, f, grad)
@@ -1205,13 +1205,13 @@ contains
     ! Continuous-optimization API: return the finite Gaussian loss L and grad(L).
     ! The matcher score is exp(-L), which is monotonic but can underflow.
     module subroutine gen_raw_euclid_grad_for_rot_8(self, iref, iptcl, shvec, irot, f, grad)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        real(dp),                    intent(in)    :: shvec(2)
-        real(dp),                    intent(out)   :: f, grad(2)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl, irot
+        real(dp),                    intent(in)            :: shvec(2)
+        real(dp),                    intent(out)           :: f, grad(2)
         complex(dp), pointer :: pft_ref_8(:,:)
-        real(dp) :: denom
-        integer :: ithr, ieo
+        real(dp)             :: denom
+        integer              :: ithr, ieo
         ithr = omp_get_thread_num() + 1
         pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
         ieo       = merge(REF_EVEN, REF_ODD, self%iseven(self%pinds(iptcl)))
@@ -1226,18 +1226,18 @@ contains
     ! derivatives (anti-Friedel -conjg extension, as the shift phase flips sign) share one batched angular FFT,
     ! and the coefficient series evaluate at rotind_frac in O(pftsz), with no inverse FFT or temporary allocation.
     module subroutine gen_raw_euclid_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2), rotind_frac
-        real(dp),                    intent(out)   :: f, grad(3)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(dp),                    intent(in)            :: shvec(2), rotind_frac
+        real(dp),                    intent(out)           :: f, grad(3)
         complex(sp), pointer :: coeffs(:,:)
         complex(sp), pointer :: shmat(:,:)
         complex(sp), pointer :: cjoint(:,:)
-        complex(sp) :: cross_term, ref2_term
-        real(sp) :: A_sp, shift(2), shift_mag_sq, wk
-        real(dp) :: wsq_now
-        integer :: i, ithr, k, k0, kk, p, ieo, ih
-        logical :: shifted
+        complex(sp)          :: cross_term, ref2_term
+        real(sp)             :: A_sp, shift(2), shift_mag_sq, wk
+        real(dp)             :: wsq_now
+        integer              :: i, ithr, k, k0, kk, p, ieo, ih
+        logical              :: shifted
 
         call self%check_ptcl_memo
         call self%check_euclid_weights
@@ -1311,8 +1311,8 @@ contains
         real(dp),            intent(in)  :: rotind_frac
         real(dp),            intent(out) :: f, grad(3)
         complex(dp) :: phase_factor, z
-        real(dp) :: phase, dphase, frequency
-        integer :: m, component
+        real(dp)    :: phase, dphase, frequency
+        integer     :: m, component
 
         phase  = DTWOPI * (rotind_frac - 1.d0) / real(self%nrots,dp)
         dphase = DTWOPI / real(self%nrots,dp)
@@ -1351,10 +1351,10 @@ contains
     ! cc counterpart of gen_raw_euclid_grad_at_angle in loss orientation (f=-cc, grad=-dcc); on integer
     ! grid indices it reproduces gen_corrs (unweighted shells, Nyquist included).
     module subroutine gen_corr_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2), rotind_frac
-        real(dp),                    intent(out)   :: f, grad(3)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(dp),                    intent(in)            :: shvec(2), rotind_frac
+        real(dp),                    intent(out)           :: f, grad(3)
         if( .not. self%is_cc_objfun() )then
             THROW_HARD('gen_corr_grad_at_angle requires objfun=cc')
         endif
@@ -1363,19 +1363,19 @@ contains
 
     ! cc = N/sqrt(D*C); D is shift-independent, so the quotient rule enters only d/dtheta
     subroutine gen_normalized_corr_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2), rotind_frac
-        real(dp),                    intent(out)   :: f, grad(3)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(dp),                    intent(in)            :: shvec(2), rotind_frac
+        real(dp),                    intent(out)           :: f, grad(3)
         complex(sp), pointer :: coeffs(:,:)
         complex(sp), pointer :: shmat(:,:)
         complex(sp), pointer :: cjoint(:,:)
-        complex(sp) :: denom_coeffs(self%pftsz+1)
-        complex(sp) :: cross_term
-        real(sp) :: shift(2), shift_mag_sq
-        real(dp) :: numer, ngrad(3), denom_val, denom_dtheta, scale_fac, ptcl_sumsq
-        integer :: i, ithr, k, k0, kk, p, ieo
-        logical :: shifted
+        complex(sp)          :: denom_coeffs(self%pftsz+1)
+        complex(sp)          :: cross_term
+        real(sp)             :: shift(2), shift_mag_sq
+        real(dp)             :: numer, ngrad(3), denom_val, denom_dtheta, scale_fac, ptcl_sumsq
+        integer              :: i, ithr, k, k0, kk, p, ieo
+        logical              :: shifted
 
         call self%check_ptcl_memo
         ithr         = omp_get_thread_num() + 1
@@ -1461,8 +1461,8 @@ contains
         real(dp),            intent(in)  :: rotind_frac
         real(dp),            intent(out) :: val, dval
         complex(dp) :: phase_factor, z
-        real(dp) :: phase, dphase, frequency
-        integer :: m
+        real(dp)    :: phase, dphase, frequency
+        integer     :: m
 
         phase  = DTWOPI * (rotind_frac - 1.d0) / real(self%nrots,dp)
         dphase = DTWOPI / real(self%nrots,dp)
@@ -1487,14 +1487,14 @@ contains
     !! euclid, the loss L/W the score exp(-L/W) is made of, its gradient and Gauss-Newton matrix (2/W) J^T W J; cc, -cc,
     !! its gradient and the Gauss-Newton matrix of the equivalent least squares. Both matrices are shift-independent.
     module subroutine gen_shift_curv_for_rot_8_aln( self, iref, iptcl, shvec, irot, f, grad, curv )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        real(dp),                    intent(in)    :: shvec(2)
-        real(dp),                    intent(out)   :: f, grad(2)
-        real(dp), optional,          intent(out)   :: curv(2,2)
+        class(polarft_calc),         target, intent(inout)          :: self
+        integer,                     intent(in)                     :: iref, iptcl, irot
+        real(dp),                    intent(in)                     :: shvec(2)
+        real(dp),                    intent(out)                    :: f, grad(2)
+        real(dp),                    optional,          intent(out) :: curv(2,2)
         complex(dp), pointer :: pft_ref_8(:,:)
-        real(dp) :: ax, ay, amp2, gk(3), g(3), wk, sqsum, ctf8
-        integer  :: ithr, i, ih, k, p, rp
+        real(dp)             :: ax, ay, amp2, gk(3), g(3), wk, sqsum, ctf8
+        integer              :: ithr, i, ih, k, p, rp
         ithr = omp_get_thread_num() + 1
         call check_ref_aln_8(self, ithr, iref, iptcl)
         pft_ref_8 => self%heap_vars(ithr)%pft_ref_aln_8
@@ -1569,13 +1569,13 @@ contains
     !! thread's buffer, once per solve: REF' is the derivative along the Friedel-extended ring by one FFT batch (the inverse
     !! through the forward plan by conjugation)
     module subroutine load_ref_joint_curv_8( self, iref, iptcl )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
         complex(sp), pointer :: cmat(:,:)
         real(dp),    pointer :: terms(:,:,:)
-        complex(dp) :: u, du
-        real(dp)    :: w2pi, freq
-        integer     :: ithr, ieo, k, kk, k0, m, r
+        complex(dp)          :: u, du
+        real(dp)             :: w2pi, freq
+        integer              :: ithr, ieo, k, kk, k0, m, r
         ithr  = omp_get_thread_num() + 1
         ieo   = merge(REF_EVEN, REF_ODD, self%iseven(self%pinds(iptcl)))
         k0    = self%kfromto(1)
@@ -1618,16 +1618,16 @@ contains
     !! excluded, from the terms load_ref_joint_curv_8 holds: |shift phase| = 1 leaves the shift only in the ring derivative
     !! of the phase, and the CTF^2 is taken at the rotated position; euclid (1/W) J^T W J, cc the normalised J_n^T J_n.
     module subroutine gen_joint_curv_at_angle( self, iref, iptcl, shvec, rotind_frac, curv )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2), rotind_frac
-        real(dp),                    intent(out)   :: curv(3,3)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl
+        real(dp),                    intent(in)            :: shvec(2), rotind_frac
+        real(dp),                    intent(out)           :: curv(3,3)
         real(dp),    pointer :: terms(:,:,:)
-        complex(sp) :: denom_coeffs(self%pftsz+1)
-        real(dp)    :: tau, w2pi, rx, ry, x0, fr, ctf2, ax, ay, phi, t0, t1, t2, ph, wk, gk(6), g(6)
-        real(dp)    :: dm, dm_dtau, jtm(3), scale
-        integer     :: i, ithr, k, ieo, ih, r, i0, p1, p2, a, b
-        logical     :: l_cc
+        complex(sp)          :: denom_coeffs(self%pftsz+1)
+        real(dp)             :: tau, w2pi, rx, ry, x0, fr, ctf2, ax, ay, phi, t0, t1, t2, ph, wk, gk(6), g(6)
+        real(dp)             :: dm, dm_dtau, jtm(3), scale
+        integer              :: i, ithr, k, ieo, ih, r, i0, p1, p2, a, b
+        logical              :: l_cc
         call self%check_ptcl_memo
         l_cc = self%is_cc_objfun()
         if( .not. l_cc ) call self%check_euclid_weights
@@ -1720,20 +1720,20 @@ contains
     !! grad and the optional Gauss-Newton matrix in (shift x, shift y, rotation index, tilt 1, tilt 2). The bank reference
     !! supplied gives gen_raw_euclid_grad_at_angle and gen_joint_curv_at_angle; the view columns extend by +conjg.
     module subroutine gen_sect_euclid_grad_at_angle( self, iptcl, sect, dsect, shvec, rotind_frac, f, grad, curv )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iptcl
-        complex(sp),                 intent(in)    :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp),                 intent(in)    :: dsect(self%pftsz,self%kfromto(1):self%kfromto(2),2)
-        real(dp),                    intent(in)    :: shvec(2), rotind_frac
-        real(dp),                    intent(out)   :: f, grad(5)
-        real(dp), optional,          intent(out)   :: curv(5,5)
+        class(polarft_calc),         target, intent(inout)          :: self
+        integer,                     intent(in)                     :: iptcl
+        complex(sp),                 intent(in)                     :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),                 intent(in)                     :: dsect(self%pftsz,self%kfromto(1):self%kfromto(2),2)
+        real(dp),                    intent(in)                     :: shvec(2), rotind_frac
+        real(dp),                    intent(out)                    :: f, grad(5)
+        real(dp),                    optional,          intent(out) :: curv(5,5)
         complex(sp), pointer :: coeffs(:,:), vcoeffs(:,:), shmat(:,:), cjoint(:,:), cmat(:,:)
-        complex(sp) :: cross_term, ref2_term
-        complex(dp) :: u, du, jv(5)
-        real(sp)    :: A_sp, shift(2), shift_mag_sq, wk
-        real(dp)    :: wsq_now, val, dval, tau, w2pi, rx, ry, x0, fr, ctf2, ax, ay, phi, freq, gk(5,5), g(5,5)
-        integer     :: i, ithr, k, k0, kk, p, ih, a, b, m, r, i0, p1, p2
-        logical     :: shifted
+        complex(sp)          :: cross_term, ref2_term
+        complex(dp)          :: u, du, jv(5)
+        real(sp)             :: A_sp, shift(2), shift_mag_sq, wk
+        real(dp)             :: wsq_now, val, dval, tau, w2pi, rx, ry, x0, fr, ctf2, ax, ay, phi, freq, gk(5,5), g(5,5)
+        integer              :: i, ithr, k, k0, kk, p, ih, a, b, m, r, i0, p1, p2
+        logical              :: shifted
         call self%check_ptcl_memo
         call self%check_euclid_weights
         if( .not. self%is_euclid_objfun() ) THROW_HARD('the supplied-section evaluator requires objfun=euclid')
@@ -1917,11 +1917,11 @@ contains
 
     !> gen_corr_for_rot_8 with the reference load_ref_aln_8 holds
     module real(dp) function gen_corr_for_rot_8_aln( self, iref, iptcl, shvec, irot )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        real(dp),                    intent(in)    :: shvec(2)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl, irot
+        real(dp),                    intent(in)            :: shvec(2)
         complex(dp), pointer :: pft_ref_8(:,:)
-        integer :: ithr
+        integer              :: ithr
         ithr = omp_get_thread_num() + 1
         call check_ref_aln_8(self, ithr, iref, iptcl)
         pft_ref_8 => self%heap_vars(ithr)%pft_ref_aln_8
@@ -1936,12 +1936,12 @@ contains
 
     !> the objective and its shift gradient at one rotation, with the reference load_ref_aln_8 holds
     module subroutine gen_corr_grad_for_rot_8_aln( self, iref, iptcl, shvec, irot, f, grad )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        real(dp),                    intent(in)    :: shvec(2)
-        real(dp),                    intent(out)   :: f, grad(2)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iref, iptcl, irot
+        real(dp),                    intent(in)            :: shvec(2)
+        real(dp),                    intent(out)           :: f, grad(2)
         complex(dp), pointer :: pft_ref_8(:,:)
-        integer :: ithr
+        integer              :: ithr
         ithr = omp_get_thread_num() + 1
         call check_ref_aln_8(self, ithr, iref, iptcl)
         pft_ref_8 => self%heap_vars(ithr)%pft_ref_aln_8
@@ -1962,14 +1962,14 @@ contains
     !>               sum_k (k/sigma2_k) sum_p |ptcl - CTF*ref|^2 / sum_k (k/sigma2_k) sum_p |ptcl|^2,
     !>               algebraically identical to 1 + crvec/norm in euclid_dists_from_crvec
     module subroutine gen_sigma_contrib( self, iref, iptcl, shvec, irot, sigma_contrib, ref_pow, ptcl_pow, v)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shvec(2)
-        integer,                     intent(in)    :: irot
-        real(sp),                    intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
-        real(sp),  optional,         intent(out)   :: ref_pow(self%kfromto(1):self%kfromto(2))
-        real(sp),  optional,         intent(out)   :: ptcl_pow(self%kfromto(1):self%kfromto(2))
-        real(sp),  optional,         intent(out)   :: v
+        class(polarft_calc),         target, intent(inout)         :: self
+        integer,                     intent(in)                    :: iref, iptcl
+        real(sp),                    intent(in)                    :: shvec(2)
+        integer,                     intent(in)                    :: irot
+        real(sp),                    intent(out)                   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real(sp),                    optional,         intent(out) :: ref_pow(self%kfromto(1):self%kfromto(2))
+        real(sp),                    optional,         intent(out) :: ptcl_pow(self%kfromto(1):self%kfromto(2))
+        real(sp),                    optional,         intent(out) :: v
         integer :: i, ithr, ieo
         i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
@@ -1981,12 +1981,12 @@ contains
     !> gen_sigma_contrib against a supplied section instead of a bank reference (the continuous view refinement's final
     !! section, polarft_cont_calc)
     module subroutine gen_sigma_contrib_sect( self, iptcl, sect, shvec, irot, sigma_contrib )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iptcl
-        complex(sp),                 intent(in)    :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp),                    intent(in)    :: shvec(2)
-        integer,                     intent(in)    :: irot
-        real(sp),                    intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: iptcl
+        complex(sp),                 intent(in)            :: sect(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp),                    intent(in)            :: shvec(2)
+        integer,                     intent(in)            :: irot
+        real(sp),                    intent(out)           :: sigma_contrib(self%kfromto(1):self%kfromto(2))
         integer :: ithr
         ithr = omp_get_thread_num() + 1
         self%heap_vars(ithr)%pft_ref_8 = sect
@@ -1996,17 +1996,17 @@ contains
     !> the residual of the reference in the calling thread's pft_ref_8 at (shvec, irot) per shell, with the optional
     !! scale diagnostics of gen_sigma_contrib
     subroutine sigma_contrib_of_loaded_ref( self, iptcl, shvec, irot, sigma_contrib, ref_pow, ptcl_pow, v )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iptcl
-        real(sp),                    intent(in)    :: shvec(2)
-        integer,                     intent(in)    :: irot
-        real(sp),                    intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
-        real(sp),  optional,         intent(out)   :: ref_pow(self%kfromto(1):self%kfromto(2))
-        real(sp),  optional,         intent(out)   :: ptcl_pow(self%kfromto(1):self%kfromto(2))
-        real(sp),  optional,         intent(out)   :: v
+        class(polarft_calc),         target, intent(inout)         :: self
+        integer,                     intent(in)                    :: iptcl
+        real(sp),                    intent(in)                    :: shvec(2)
+        integer,                     intent(in)                    :: irot
+        real(sp),                    intent(out)                   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real(sp),                    optional,         intent(out) :: ref_pow(self%kfromto(1):self%kfromto(2))
+        real(sp),                    optional,         intent(out) :: ptcl_pow(self%kfromto(1):self%kfromto(2))
+        real(sp),                    optional,         intent(out) :: v
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
-        real(dp)    :: norm_factor, wk, vnum, vden, ppow
-        integer     :: i, ithr, k, ih
+        real(dp)             :: norm_factor, wk, vnum, vden, ppow
+        integer              :: i, ithr, k, ih
         i    = self%pinds(iptcl)
         ih = merge(1, 2, self%iseven(i))
         ithr = omp_get_thread_num() + 1
@@ -2073,16 +2073,16 @@ contains
     end subroutine gen_many_objfun_vals
 
     module subroutine gen_many_euclids( self, nr, irefs, iptcl, shift )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: nr
-        integer,                     intent(in)    :: irefs(nr)
-        integer,                     intent(in)    :: iptcl
-        real(sp),                    intent(in)    :: shift(2)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: nr
+        integer,                     intent(in)            :: irefs(nr)
+        integer,                     intent(in)            :: iptcl
+        real(sp),                    intent(in)            :: shift(2)
         complex(sp), pointer :: shmat(:,:)
-        complex(sp) :: c
-        real(dp)    :: A, v
-        real(sp)    :: wk, shift_mag_sq
-        integer     :: k, kk, k0, i, j, ithr, iref, p, ieo, ih
+        complex(sp)          :: c
+        real(dp)             :: A, v
+        real(sp)             :: wk, shift_mag_sq
+        integer              :: k, kk, k0, i, j, ithr, iref, p, ieo, ih
         call self%check_ptcl_memo
         call self%check_euclid_weights
         ithr  = omp_get_thread_num() + 1
@@ -2157,11 +2157,11 @@ contains
 #ifdef USE_OPENMP_OFFLOAD
         complex(sp), allocatable :: pft_ptcl(:,:)
         real(sp),    allocatable :: ref_vals(:,:), absctf(:,:)
-        complex(sp) :: crefctf, cdiff
-        real        :: ftvals(self%nrots), w(self%kfromto(1):self%kfromto(2))
-        real        :: sqsumptcl, acc, acc_c
-        integer(dp) :: t
-        integer     :: i, k, rot, rot_c, ir, jr, ref, ih
+        complex(sp)              :: crefctf, cdiff
+        real                     :: ftvals(self%nrots), w(self%kfromto(1):self%kfromto(2))
+        real                     :: sqsumptcl, acc, acc_c
+        integer(dp)              :: t
+        integer                  :: i, k, rot, rot_c, ir, jr, ref, ih
         ! particle index
         i = self%pinds(iptcl)
         ih = merge(1, 2, self%iseven(i))
@@ -2233,17 +2233,17 @@ contains
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: pfromto(2)
 #ifdef USE_OPENMP_OFFLOAD
-        type(c_ptr) :: p_c
-        complex(sp), allocatable, target :: buffer_c(:,:)
-        real(sp),                pointer :: buffer_r(:,:)
-        real(sp),    allocatable         :: ftvals(:,:), wks(:,:)
-        real(dp),    allocatable         :: wsq_now(:)
-        integer,     allocatable         :: halves(:)
-        real(dp)       :: df, max_abs, max_rel, rms, sumsq, f_gpu, f_cpu
-        integer(dp)    :: t
-        integer        :: i, iref, p, j, iptcl, nptcls
-        integer(c_int) :: plan_cufft, ierr
-        integer(c_int) :: n(1), inembed(1), onembed(1), howmany, idist, odist
+        type(c_ptr)                                  :: p_c
+        complex(sp),             allocatable, target :: buffer_c(:,:)
+        real(sp),                pointer             :: buffer_r(:,:)
+        real(sp),                allocatable         :: ftvals(:,:), wks(:,:)
+        real(dp),                allocatable         :: wsq_now(:)
+        integer,                 allocatable         :: halves(:)
+        real(dp)                                     :: df, max_abs, max_rel, rms, sumsq, f_gpu, f_cpu
+        integer(dp)                                  :: t
+        integer                                      :: i, iref, p, j, iptcl, nptcls
+        integer(c_int)                               :: plan_cufft, ierr
+        integer(c_int)                               :: n(1), inembed(1), onembed(1), howmany, idist, odist
         nptcls = pfromto(2) - pfromto(1) + 1
         ! Planning
         howmany = int(self%nrefs*nptcls, c_int)
@@ -2329,17 +2329,17 @@ contains
         &ft_ctf2, ft_ptcl_ctf, buffer_c, ierr )
         use  simple_gpu_utils
         use, intrinsic :: iso_c_binding, only: c_loc, c_int, c_ptr
-        integer,             intent(in)    :: kfromto(2), pftsz, nrefs, nptcls, nrots, howmany
-        integer(c_int),      intent(in)    :: plan_cufft
-        real(sp),            intent(in)    :: wks(kfromto(1):kfromto(2), 2)   !< k/sigma2 of the two halves
-        integer,             intent(in)    :: halves(nptcls)                  !< each particle's half (column of wks)
-        real(dp),            intent(in)    :: wsqsums_ptcls(nptcls)
-        complex(sp),         intent(in)    :: ft_ref( pftsz+1,kfromto(1):kfromto(2),nrefs,N_REF_PARITIES)
-        complex(sp),         intent(in)    :: ft_ref2(pftsz+1,kfromto(1):kfromto(2),nrefs,N_REF_PARITIES)
-        complex(sp),         intent(in)    :: ft_ctf2 (    pftsz+1, kfromto(1):kfromto(2), nptcls)
-        complex(sp),         intent(in)    :: ft_ptcl_ctf( pftsz+1, kfromto(1):kfromto(2), nptcls)
-        complex(sp), target, intent(inout) :: buffer_c(pftsz+1,howmany)
-        integer(c_int),      intent(out)   :: ierr
+        integer,             intent(in)            :: kfromto(2), pftsz, nrefs, nptcls, nrots, howmany
+        integer(c_int),      intent(in)            :: plan_cufft
+        real(sp),            intent(in)            :: wks(kfromto(1):kfromto(2), 2) !< k/sigma2 of the two halves
+        integer,             intent(in)            :: halves(nptcls)                !< each particle's half (column of wks)
+        real(dp),            intent(in)            :: wsqsums_ptcls(nptcls)
+        complex(sp),         intent(in)            :: ft_ref( pftsz+1,kfromto(1):kfromto(2),nrefs,N_REF_PARITIES)
+        complex(sp),         intent(in)            :: ft_ref2(pftsz+1,kfromto(1):kfromto(2),nrefs,N_REF_PARITIES)
+        complex(sp),         intent(in)            :: ft_ctf2 (    pftsz+1, kfromto(1):kfromto(2), nptcls)
+        complex(sp),         intent(in)            :: ft_ptcl_ctf( pftsz+1, kfromto(1):kfromto(2), nptcls)
+        complex(sp),         target, intent(inout) :: buffer_c(pftsz+1,howmany)
+        integer(c_int),      intent(out)           :: ierr
 #ifdef USE_OPENMP_OFFLOAD
         type(c_ptr) :: p_c
         complex(sp) :: c, d

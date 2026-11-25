@@ -4,9 +4,9 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('dock', 'Volume Docking', 170)
-type(ui_program), target :: dock_volpair
-type(ui_program), target :: volanalyze
-type(ui_program), target :: volcluster
+type(ui_program),          target    :: dock_volpair
+type(ui_program),          target    :: volanalyze
+type(ui_program),          target    :: volcluster
 
 contains
 

@@ -12,17 +12,17 @@ public :: motion_correct_iter
 private
 #include "simple_local_flags.inc"
 
-real,             parameter :: PATCH_FIT_THRESHOLD = 4.0 ! threshold for polynomial fitting in pixels
-real,             parameter :: SMPD4VIZ_NANO = 0.9
-character(len=*), parameter :: speckind = 'sqrt'
+real,             parameter :: PATCH_FIT_THRESHOLD           = 4.0 ! threshold for polynomial fitting in pixels
+real,             parameter :: SMPD4VIZ_NANO                 = 0.9
+character(len=*), parameter :: speckind                      = 'sqrt'
 real                        :: effective_patch_fit_threshold = PATCH_FIT_THRESHOLD
 
 type :: motion_correct_iter
     private
     ! these image objects are part of the instance to avoid excessive memory re-allocations
     type(image)   :: moviesum, moviesum_corrected
-    type(image)  :: moviesum_ctf, pspec_sum, pspec_ctf, img_jpg
-    type(image)  :: pspec_half_n_half, thumbnail
+    type(image)   :: moviesum_ctf, pspec_sum, pspec_ctf, img_jpg
+    type(image)   :: pspec_half_n_half, thumbnail
     ! these strings are part of the instance for reporting purposes
     type(string) :: moviename, moviename_intg
     type(string) :: moviename_forctf, moviename_thumb
@@ -34,15 +34,15 @@ end type motion_correct_iter
 contains
 
     subroutine iterate( self, params, cline, ctfvars, orientation, fbody, frame_counter, moviename, dir_out, gainref_fname, tseries )
-        class(motion_correct_iter), intent(inout) :: self
-        class(parameters),          intent(inout) :: params
-        class(cmdline),             intent(inout) :: cline
-        type(ctfparams),            intent(inout) :: ctfvars
-        class(ori),                 intent(inout) :: orientation
-        integer,                    intent(inout) :: frame_counter
-        class(string),              intent(in)    :: moviename, fbody, dir_out
-        class(string),    optional, intent(in)    :: gainref_fname
-        character(len=*), optional, intent(in)    :: tseries
+        class(motion_correct_iter), intent(inout)        :: self
+        class(parameters),          intent(inout)        :: params
+        class(cmdline),             intent(inout)        :: cline
+        type(ctfparams),            intent(inout)        :: ctfvars
+        class(ori),                 intent(inout)        :: orientation
+        integer,                    intent(inout)        :: frame_counter
+        class(string),              intent(in)           :: moviename, fbody, dir_out
+        class(string),              optional, intent(in) :: gainref_fname
+        character(len=*),           optional, intent(in) :: tseries
         type(string) :: fbody_here, ext, star_fname, model_fname
         real         :: goodnessoffit(2), scale, bfac_here, bid
         integer      :: ldim(3), ldim_thumb(3), nxpatch, nypatch

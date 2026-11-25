@@ -16,10 +16,10 @@ end interface
 contains
 
     subroutine alloc_imgarr( n, ldim, smpd, imgs, wthreads )
-        integer,                  intent(in)    :: n, ldim(3)
-        real,                     intent(in)    :: smpd
-        type(image), allocatable, intent(inout) :: imgs(:)
-        logical,        optional, intent(in)    :: wthreads
+        integer,                  intent(in)                 :: n, ldim(3)
+        real,                     intent(in)                 :: smpd
+        type(image),              allocatable, intent(inout) :: imgs(:)
+        logical,                  optional, intent(in)       :: wthreads
         integer :: i
         logical :: with_threads
         with_threads = .false.
@@ -37,7 +37,7 @@ contains
         class(image), intent(in) :: imgs(:)
         logical,      intent(in) :: mask(:)
         type(image), allocatable :: imgs_packed(:)
-        integer :: n, cnt, n_pack, i
+        integer                  :: n, cnt, n_pack, i
         n = size(imgs)
         if( n /= size(mask) ) THROW_HARD('Incongruent mask: '//int2str(n)//' vs '//int2str(size(mask)))
         n_pack = count(mask)
@@ -56,7 +56,7 @@ contains
         class(image), intent(in) :: imgs(:)
         integer,      intent(in) :: inds(:)
         type(image), allocatable :: imgs_extr(:)
-        integer :: n, n_extr, i
+        integer                  :: n, n_extr, i
         n      = size(imgs)
         n_extr = size(inds)
         allocate(imgs_extr(n_extr))
@@ -68,7 +68,7 @@ contains
     function join_imgarrs( imgs1, imgs2 ) result( imgs_joined )
         class(image), intent(in) :: imgs1(:), imgs2(:)
         type(image), allocatable :: imgs_joined(:)
-        integer :: n1, n2, n, cnt, i
+        integer                  :: n1, n2, n, cnt, i
         n1 = size(imgs1)
         n2 = size(imgs2)
         n  = n1 + n2
@@ -99,13 +99,13 @@ contains
     end subroutine dealloc_imgarr
 
     function read_cavgs_into_imgarr( spproj, mask ) result( imgs )
-        class(sp_project), intent(inout) :: spproj
-        logical, optional, intent(in)    :: mask(:)
+        class(sp_project), intent(inout)        :: spproj
+        logical,           optional, intent(in) :: mask(:)
         type(image),       allocatable   :: imgs(:)
-        type(string)   :: cavgsstk
-        type(stack_io) :: stkio_r
-        integer :: icls, ncls, ldim_read(3), cnt, ncls_sel
-        real    :: smpd
+        type(string)                     :: cavgsstk
+        type(stack_io)                   :: stkio_r
+        integer                          :: icls, ncls, ldim_read(3), cnt, ncls_sel
+        real                             :: smpd
         call spproj%get_cavgs_stk(cavgsstk, ncls, smpd, imgkind='cavg')
         if(.not. file_exists(cavgsstk)) THROW_HARD('cavgs stk does not exist')
         call stkio_r%open(cavgsstk, smpd, 'read', bufsz=min(1024,ncls))
@@ -134,12 +134,12 @@ contains
     end function read_cavgs_into_imgarr
 
     function read_stk_into_imgarr( stkname, mask ) result( imgs )
-        class(string),     intent(in)  :: stkname
-        logical, optional, intent(in)  :: mask(:)
+        class(string),     intent(in)           :: stkname
+        logical,           optional, intent(in) :: mask(:)
         type(image),       allocatable :: imgs(:)
-        type(stack_io) :: stkio_r
-        integer :: icls, ncls, ldim_read(3), cnt, ncls_sel
-        real    :: smpd
+        type(stack_io)                 :: stkio_r
+        integer                        :: icls, ncls, ldim_read(3), cnt, ncls_sel
+        real                           :: smpd
         if(.not. file_exists(stkname)) THROW_HARD('stk stk does not exist')
         call find_ldim_nptcls(stkname, ldim_read, ncls)
         smpd = find_img_smpd(stkname)
@@ -173,8 +173,8 @@ contains
         integer,          intent(in)    :: labels(n)
         character(len=*), intent(in)    :: fbody, ext
         integer, allocatable :: cnts(:)
-        type(string) :: fname 
-        integer      :: i, maxlab, pad_len
+        type(string)         :: fname
+        integer              :: i, maxlab, pad_len
         maxlab = maxval(labels)
         allocate(cnts(maxlab), source=0)
         pad_len = 2
@@ -221,7 +221,7 @@ contains
         integer,          intent(in)    :: labels(n)
         character(len=*), intent(in)    :: ext
         type(string) :: fname
-        integer :: i, cnt
+        integer      :: i, cnt
         cnt = 0
         do i = 1, n
             if( labels(i) == 0 )then
@@ -238,8 +238,8 @@ contains
         integer,           intent(in)    :: labels(n)
         character(len=*),  intent(in)    :: ext
         integer, allocatable :: cnt(:)
-        type(string) :: fname 
-        integer      :: i, maxlab
+        type(string)         :: fname
+        integer              :: i, maxlab
         maxlab = maxval(labels)
         allocate(cnt(0:maxlab), source=0)
         cnt = 0

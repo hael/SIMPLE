@@ -12,10 +12,10 @@ implicit none
 
 integer,  parameter :: BOX          = 32
 real,     parameter :: SMPD         = 0.4
-real,     parameter :: ATOM_RAD     = 9.0    !< px: atoms lie within this radius of the centre
-real,     parameter :: ATOM_DMIN    = 3.5    !< px: minimum atom spacing (kernels of ~1 px overlap weakly)
+real,     parameter :: ATOM_RAD     = 9.0        !< px: atoms lie within this radius of the centre
+real,     parameter :: ATOM_DMIN    = 3.5        !< px: minimum atom spacing (kernels of ~1 px overlap weakly)
 integer,  parameter :: NATOMS       = 60
-real,     parameter :: SUPPORT_RAD  = 15.0   !< px: the solve support
+real,     parameter :: SUPPORT_RAD  = 15.0       !< px: the solve support
 real(dp), parameter :: PROJ_TOL     = 1.0e-5_dp  !< projector identities, relative
 real(dp), parameter :: SYM_TOL      = 1.0e-6_dp  !< symmetry of the prior term, relative
 real(dp), parameter :: GRAM_CHECK   = 1.0e-6_dp  !< Gram solve against a known solution, relative
@@ -23,10 +23,10 @@ real,     parameter :: WIDTH_TOL    = 0.05       !< width fit on a noise-free ma
 ! reconstructor fixture
 integer,  parameter :: RBOX         = 32
 real,     parameter :: RSMPD        = 0.4
-real,     parameter :: R_ATOM_RAD   = 7.0    !< atoms and their footprints stay inside the support
-real,     parameter :: R_SUPPORT    = 12.0   !< four voxels from the box edge, the interior margin of test=pcg_recon
+real,     parameter :: R_ATOM_RAD   = 7.0        !< atoms and their footprints stay inside the support
+real,     parameter :: R_SUPPORT    = 12.0       !< four voxels from the box edge, the interior margin of test=pcg_recon
 integer,  parameter :: R_NATOMS     = 25
-real,     parameter :: R_SIGMA_VOX  = 1.2    !< phantom atom width = kernel width of the amplitude test
+real,     parameter :: R_SIGMA_VOX  = 1.2        !< phantom atom width = kernel width of the amplitude test
 real(dp), parameter :: MODE_TOL     = 1.0e-5_dp  !< the prior term is the same in both operator modes, relative
 real(dp), parameter :: INTERIOR_TOL = 5.0e-2_dp  !< kernel vs matrix-free with the prior on (EPS_INTERIOR of test=pcg_recon)
 real(dp), parameter :: AMP_CORR_MIN = 0.99_dp    !< fitted against true amplitudes, dense noise-free views
@@ -51,13 +51,13 @@ contains
 
     !> deterministic atom positions (3-D additive recurrence, no RNG) within rad of the box centre, dmin apart
     subroutine build_atoms( n, rad, dmin, nbox, pos )
-        integer,           intent(in)  :: n, nbox
-        real,              intent(in)  :: rad, dmin
-        real, allocatable, intent(out) :: pos(:,:)
+        integer,           intent(in)               :: n, nbox
+        real,              intent(in)               :: rad, dmin
+        real,              allocatable, intent(out) :: pos(:,:)
         real(dp), parameter :: G = 1.2207440846057595_dp   ! the root of x**4 = x + 1
-        real(dp) :: a(3), u(3)
-        real     :: p(3), acc(3,n)
-        integer  :: it, na
+        real(dp)            :: a(3), u(3)
+        real                :: p(3), acc(3,n)
+        integer             :: it, na
         a  = [1._dp/G, 1._dp/G**2, 1._dp/G**3]
         na = 0
         it = 0
@@ -80,8 +80,8 @@ contains
         integer, intent(in) :: nbox
         real,    intent(in) :: rad
         real, allocatable :: supp(:,:,:)
-        real    :: c
-        integer :: i, j, k
+        real              :: c
+        integer           :: i, j, k
         c = real(nbox/2 + 1)
         allocate(supp(nbox,nbox,nbox), source=0.)
         do k = 1, nbox
@@ -97,7 +97,7 @@ contains
     function probe_map( nbox, seed ) result( x )
         integer, intent(in) :: nbox, seed
         real, allocatable :: x(:,:,:)
-        integer :: i, j, k
+        integer           :: i, j, k
         allocate(x(nbox,nbox,nbox))
         do k = 1, nbox
             do j = 1, nbox
@@ -126,9 +126,9 @@ contains
 
     !> the prior on the BOX fixture with kernels of width sigma_vox, optional column scales
     subroutine new_fixture_prior( prior, sigma_vox, amps )
-        class(pcg_atomic_prior), intent(inout) :: prior
-        real,                    intent(in)    :: sigma_vox
-        real,          optional, intent(in)    :: amps(:)
+        class(pcg_atomic_prior), intent(inout)        :: prior
+        real,                    intent(in)           :: sigma_vox
+        real,                    optional, intent(in) :: amps(:)
         real, allocatable :: pos(:,:)
         call build_atoms(NATOMS, ATOM_RAD, ATOM_DMIN, BOX, pos)
         if( present(amps) )then
@@ -144,7 +144,7 @@ contains
         integer, intent(in) :: n
         real,    intent(in) :: lo, hi
         real(dp), allocatable :: c(:)
-        integer :: i
+        integer               :: i
         allocate(c(n))
         do i = 1, n
             c(i) = real(lo,dp) + real(hi-lo,dp) * modulo(real(i,dp) * 0.6180339887498949_dp, 1._dp)
@@ -156,8 +156,8 @@ contains
     !> P_G is a projector: P_G G = G, P_G^2 = P_G, symmetric
     subroutine test_projector()
         class(pcg_atomic_prior), allocatable :: prior
-        real, allocatable :: gc(:,:,:), pgc(:,:,:), a(:,:,:), b(:,:,:), pa(:,:,:), pb(:,:,:), ppa(:,:,:)
-        real(dp) :: err_span, err_idem, err_sym
+        real,                    allocatable :: gc(:,:,:), pgc(:,:,:), a(:,:,:), b(:,:,:), pa(:,:,:), pb(:,:,:), ppa(:,:,:)
+        real(dp)                             :: err_span, err_idem, err_sym
         write(*,'(A)') 'test_projector'
         allocate(prior)
         call new_fixture_prior(prior, 1.2)
@@ -181,10 +181,10 @@ contains
 
     !> lambda (I - P_G) is symmetric, positive semi-definite and zero on span(G)
     subroutine test_apply_symmetric()
-        real, parameter :: LAMBDA = 2.5
+        real,                    parameter   :: LAMBDA = 2.5
         class(pcg_atomic_prior), allocatable :: prior
-        real, allocatable :: a(:,:,:), b(:,:,:), aa(:,:,:), ab(:,:,:), gc(:,:,:), agc(:,:,:)
-        real(dp) :: err_sym, quad, err_null
+        real,                    allocatable :: a(:,:,:), b(:,:,:), aa(:,:,:), ab(:,:,:), gc(:,:,:), agc(:,:,:)
+        real(dp)                             :: err_sym, quad, err_null
         write(*,'(A)') 'test_apply_symmetric'
         allocate(prior)
         call new_fixture_prior(prior, 1.2)
@@ -209,9 +209,9 @@ contains
     !> P_G does not change when the columns of G are rescaled
     subroutine test_column_scaling()
         class(pcg_atomic_prior), allocatable :: p1, p2
-        real(dp), allocatable :: amps(:)
-        real, allocatable :: x(:,:,:), px1(:,:,:), px2(:,:,:)
-        real(dp) :: err
+        real(dp),                allocatable :: amps(:)
+        real,                    allocatable :: x(:,:,:), px1(:,:,:), px2(:,:,:)
+        real(dp)                             :: err
         write(*,'(A)') 'test_column_scaling'
         allocate(p1, p2)
         call new_fixture_prior(p1, 1.2)
@@ -230,13 +230,13 @@ contains
     !> fitted B shapes the kernels, while occupancy times model intensity fixes their relative weights up to one scale
     subroutine test_fitted_model_projector()
         class(pcg_atomic_prior), allocatable :: p1, p2, p3, p4
-        type(pcg_atomic_prior_stats) :: stats
-        real, allocatable :: pos(:,:), supp(:,:,:), q(:), q2(:), inten(:), inten2(:), b(:), b2(:)
+        type(pcg_atomic_prior_stats)         :: stats
+        real,                    allocatable :: pos(:,:), supp(:,:,:), q(:), q2(:), inten(:), inten2(:), b(:), b2(:)
         real, allocatable :: model(:,:,:), pmodel(:,:,:), probe(:,:,:), pp1(:,:,:), pp2(:,:,:), pp3(:,:,:), pp4(:,:,:),&
             &amodel(:,:,:)
         real(dp), allocatable :: coeff(:)
-        real(dp) :: err_model, err_q, err_i, err_b, err_null
-        integer :: i
+        real(dp)              :: err_model, err_q, err_i, err_b, err_null
+        integer               :: i
         write(*,'(A)') 'test_fitted_model_projector'
         allocate(p1, p2, p3, p4)
         call build_atoms(NATOMS, ATOM_RAD, ATOM_DMIN, BOX, pos)
@@ -290,12 +290,12 @@ contains
     !! subspace, and equal B factors give the position-only prior built at that B
     subroutine test_atom_widths_projector()
         class(pcg_atomic_prior), allocatable :: pw, pw2, pfit, pu, pref
-        type(pcg_atomic_prior_stats) :: stats
-        real, allocatable :: pos(:,:), supp(:,:,:), b(:), b2(:), bu(:), q(:), inten(:)
-        real, allocatable :: model(:,:,:), amodel(:,:,:), probe(:,:,:), pp1(:,:,:), pp2(:,:,:), ppu(:,:,:), ppr(:,:,:)
-        real(dp), allocatable :: c(:)
-        real(dp) :: err_span, err_null, err_fit, err_b, err_uniform
-        integer :: i
+        type(pcg_atomic_prior_stats)         :: stats
+        real,                    allocatable :: pos(:,:), supp(:,:,:), b(:), b2(:), bu(:), q(:), inten(:)
+        real,                    allocatable :: model(:,:,:), amodel(:,:,:), probe(:,:,:), pp1(:,:,:), pp2(:,:,:), ppu(:,:,:), ppr(:,:,:)
+        real(dp),                allocatable :: c(:)
+        real(dp)                             :: err_span, err_null, err_fit, err_b, err_uniform
+        integer                              :: i
         write(*,'(A)') 'test_atom_widths_projector'
         allocate(pw, pw2, pfit, pu, pref)
         call build_atoms(NATOMS, ATOM_RAD, ATOM_DMIN, BOX, pos)
@@ -350,9 +350,9 @@ contains
     !> the Gram solve returns a known solution of G^T G c = y
     subroutine test_gram_solve()
         class(pcg_atomic_prior), allocatable :: prior
-        real(dp), allocatable :: c_true(:), c(:), y(:)
-        real(dp) :: err, rres
-        integer  :: nit
+        real(dp),                allocatable :: c_true(:), c(:), y(:)
+        real(dp)                             :: err, rres
+        integer                              :: nit
         write(*,'(A)') 'test_gram_solve'
         allocate(prior)
         call new_fixture_prior(prior, 1.6)
@@ -367,12 +367,12 @@ contains
 
     !> a noise-free map of wider, untruncated atoms: the fit returns their B less the narrowest kernel's
     subroutine test_width_fit()
-        real, parameter :: SIGMA_TRUE = 1.6
+        real,                    parameter   :: SIGMA_TRUE = 1.6
         class(pcg_atomic_prior), allocatable :: prior
-        real, allocatable :: pos(:,:), x(:,:,:), supp(:,:,:)
-        real(dp), allocatable :: c(:)
-        real    :: bdata, bexpect
-        integer :: nsh, i, j, k, ia
+        real,                    allocatable :: pos(:,:), x(:,:,:), supp(:,:,:)
+        real(dp),                allocatable :: c(:)
+        real                                 :: bdata, bexpect
+        integer                              :: nsh, i, j, k, ia
         write(*,'(A)') 'test_width_fit'
         allocate(prior)
         call build_atoms(NATOMS, ATOM_RAD, ATOM_DMIN, BOX, pos)
@@ -407,8 +407,8 @@ contains
         real(dp), intent(in)  :: c(:)
         real,     intent(out) :: img(RBOX,RBOX)
         real, allocatable :: xy(:,:), p0(:,:)
-        real    :: ctr, amp
-        integer :: i, j, ia
+        real              :: ctr, amp
+        integer           :: i, j, ia
         ctr = real(RBOX/2 + 1)
         amp = sqrt(2. * PI) * R_SIGMA_VOX
         p0  = pos - ctr
@@ -429,15 +429,15 @@ contains
     !> an accumulated reconstructor on the RBOX fixture (kernel built, sphere support) from views of kind
     !! tilt (single-axis, -60 to +60) or dense (spiral), and the fixture's atom positions
     subroutine new_fixture_reconstructor( kind, pcgop, pos, c_true )
-        character(len=*),         intent(in)    :: kind
-        class(reconstructor_pcg), intent(inout) :: pcgop
-        real, allocatable,        intent(out)   :: pos(:,:)
-        real(dp), allocatable,    intent(out)   :: c_true(:)
-        type(oris)  :: os
-        type(image) :: proj
+        character(len=*),         intent(in)                      :: kind
+        class(reconstructor_pcg), intent(inout)                   :: pcgop
+        real,                     allocatable,        intent(out) :: pos(:,:)
+        real(dp),                 allocatable,    intent(out)     :: c_true(:)
+        type(oris)           :: os
+        type(image)          :: proj
         complex, allocatable :: planes(:,:,:)
-        real    :: img(RBOX,RBOX,1)
-        integer :: i, n, lims2(2,2)
+        real                 :: img(RBOX,RBOX,1)
+        integer              :: i, n, lims2(2,2)
         call build_atoms(R_NATOMS, R_ATOM_RAD, ATOM_DMIN, RBOX, pos)
         c_true = varied(size(pos,2), 0.5, 1.5)
         select case( kind )
@@ -484,10 +484,10 @@ contains
 
     !> strength zero leaves the solve bit for bit as without the prior
     subroutine test_reconstructor_zero_strength()
-        class(reconstructor_pcg), allocatable :: pcgop
+        class(reconstructor_pcg), allocatable         :: pcgop
         class(pcg_atomic_prior),  allocatable, target :: prior
-        real,     allocatable :: pos(:,:), x0(:,:,:), x1(:,:,:)
-        real(dp), allocatable :: c_true(:)
+        real,                     allocatable         :: pos(:,:), x0(:,:,:), x1(:,:,:)
+        real(dp),                 allocatable         :: c_true(:)
         write(*,'(A)') 'test_reconstructor_zero_strength'
         allocate(pcgop, prior)
         call new_fixture_reconstructor('tilt', pcgop, pos, c_true)
@@ -504,11 +504,11 @@ contains
 
     !> with the prior on, the kernel and matrix-free operators agree as without it, and differ by the same amount
     subroutine test_reconstructor_operator_modes()
-        class(reconstructor_pcg), allocatable :: pcgop
+        class(reconstructor_pcg), allocatable         :: pcgop
         class(pcg_atomic_prior),  allocatable, target :: prior
-        real,     allocatable :: pos(:,:), probe(:,:,:), hm(:,:,:), hk(:,:,:), hm0(:,:,:), hk0(:,:,:)
-        real(dp), allocatable :: c_true(:)
-        real(dp) :: err_mode, err_kern
+        real,                     allocatable         :: pos(:,:), probe(:,:,:), hm(:,:,:), hk(:,:,:), hm0(:,:,:), hk0(:,:,:)
+        real(dp),                 allocatable         :: c_true(:)
+        real(dp)                                      :: err_mode, err_kern
         write(*,'(A)') 'test_reconstructor_operator_modes'
         allocate(pcgop, prior)
         call new_fixture_reconstructor('tilt', pcgop, pos, c_true)
@@ -537,11 +537,11 @@ contains
     subroutine test_reconstructor_amplitudes()
         class(reconstructor_pcg), allocatable :: pcgop
         class(pcg_atomic_prior),  allocatable :: prior
-        real,     allocatable :: pos(:,:)
-        real(dp), allocatable :: c_true(:), c(:)
-        real(dp) :: corr
-        real     :: rres
-        integer  :: nit
+        real,                     allocatable :: pos(:,:)
+        real(dp),                 allocatable :: c_true(:), c(:)
+        real(dp)                              :: corr
+        real                                  :: rres
+        integer                               :: nit
         write(*,'(A)') 'test_reconstructor_amplitudes'
         allocate(pcgop, prior)
         call new_fixture_reconstructor('dense', pcgop, pos, c_true)

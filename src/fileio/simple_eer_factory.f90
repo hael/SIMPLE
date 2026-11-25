@@ -11,32 +11,32 @@ public :: eer_decoder
 private
 #include "simple_local_flags.inc"
 
-integer,         parameter :: EER_IMAGE_WIDTH  = 4096
-integer,         parameter :: EER_IMAGE_HEIGHT = 4096
-integer,         parameter :: EER_IMAGE_PIXELS = EER_IMAGE_WIDTH * EER_IMAGE_HEIGHT
+integer,         parameter :: EER_IMAGE_WIDTH          = 4096
+integer,         parameter :: EER_IMAGE_HEIGHT         = 4096
+integer,         parameter :: EER_IMAGE_PIXELS         = EER_IMAGE_WIDTH * EER_IMAGE_HEIGHT
 integer,         parameter :: TIFF_COMPRESSION_EER8bit = 65000
 integer,         parameter :: TIFF_COMPRESSION_EER7bit = 65001
-integer,         parameter :: EER_BYTE_MASK    = 255
-integer,         parameter :: EER_XMASK        = EER_IMAGE_WIDTH - 1
-integer,         parameter :: EER_YSHIFT       = 12
-integer,         parameter :: EER_7BIT_SKIP    = 127
-integer,         parameter :: EER_SYMBOL_XOR   = 10
-integer,         parameter :: EER_8K_XMASK     = 2
-integer,         parameter :: EER_8K_YMASK     = 8
-integer,         parameter :: EER_8K_SCALE     = 1
-integer,         parameter :: EER_8K_XSHIFT    = 1
-integer,         parameter :: EER_8K_YSHIFT    = 3
-integer,         parameter :: EER_16K_XMASK    = 3
-integer,         parameter :: EER_16K_YMASK    = 12
-integer,         parameter :: EER_16K_SCALE    = 2
-integer,         parameter :: EER_16K_YSHIFT   = 2
-integer(kind=2), parameter :: one2 = int(1,kind=2)
-integer(kind=8), parameter :: EER_7BIT_MASK8   = int(127,kind=8)
-integer(kind=8), parameter :: EER_SYMBOL_MASK8 = int(15,kind=8)
+integer,         parameter :: EER_BYTE_MASK            = 255
+integer,         parameter :: EER_XMASK                = EER_IMAGE_WIDTH - 1
+integer,         parameter :: EER_YSHIFT               = 12
+integer,         parameter :: EER_7BIT_SKIP            = 127
+integer,         parameter :: EER_SYMBOL_XOR           = 10
+integer,         parameter :: EER_8K_XMASK             = 2
+integer,         parameter :: EER_8K_YMASK             = 8
+integer,         parameter :: EER_8K_SCALE             = 1
+integer,         parameter :: EER_8K_XSHIFT            = 1
+integer,         parameter :: EER_8K_YSHIFT            = 3
+integer,         parameter :: EER_16K_XMASK            = 3
+integer,         parameter :: EER_16K_YMASK            = 12
+integer,         parameter :: EER_16K_SCALE            = 2
+integer,         parameter :: EER_16K_YSHIFT           = 2
+integer(kind=2), parameter :: one2                     = int(1,kind=2)
+integer(kind=8), parameter :: EER_7BIT_MASK8           = int(127,kind=8)
+integer(kind=8), parameter :: EER_SYMBOL_MASK8         = int(15,kind=8)
 
 type eer_decoder
     private
-    type(c_ptr)                   :: fhandle = c_null_ptr          !< File handle
+    type(c_ptr)                   :: fhandle       = c_null_ptr    !< File handle
     type(string)                  :: fname                         !< File name
     integer(kind=1),  allocatable :: raw_bytes(:)                  !< parsed raw bytes
     integer(kind=8),  allocatable :: frames_start(:), frames_sz(:) !< temporal dimensions
@@ -151,7 +151,7 @@ contains
     !>  reset sampling, output dimensions & pixel size
     subroutine set_dims( self, upsampling )
         class(eer_decoder), intent(inout) :: self
-        integer,            intent(in) :: upsampling
+        integer,            intent(in)    :: upsampling
         select case(upsampling)
         case(1)
             self%onx   = self%nx
@@ -172,10 +172,10 @@ contains
     end subroutine set_dims
 
     subroutine decode( self, imgs, fraction, frames_range )
-        class(eer_decoder), intent(in)    :: self
-        class(image),       intent(inout) :: imgs(:)
-        integer,            intent(in)    :: fraction
-        integer, optional,  intent(in)    :: frames_range(2)
+        class(eer_decoder), intent(in)            :: self
+        class(image),       intent(inout)         :: imgs(:)
+        integer,            intent(in)            :: fraction
+        integer,            optional,  intent(in) :: frames_range(2)
         integer :: i,nimgs, from, to
         if( .not.self%l_exists ) THROW_HARD('EER decoder object has not been instantiated! decode')
         nimgs  = size(imgs)
@@ -260,7 +260,7 @@ contains
         integer(kind=8),    intent(in)    :: frame_start
         integer(kind=2),    intent(inout) :: imat(:,:,:)
         integer(kind=8) :: pos, first_byte, chunk
-        integer :: p1, p2, bit_pos, pos_el, x, y, px, py, b0, b1, b2, b3
+        integer         :: p1, p2, bit_pos, pos_el, x, y, px, py, b0, b1, b2, b3
         pos     = frame_start
         pos_el  = 0
         bit_pos = 0
@@ -307,7 +307,7 @@ contains
         integer(kind=8),    intent(in)    :: frame_start
         integer(kind=2),    intent(inout) :: imat(:,:,:)
         integer(kind=8) :: pos, first_byte, chunk
-        integer :: p1,s1,p2,s2, bit_pos, pos_el, x, y, px, py, b0, b1, b2, b3
+        integer         :: p1,s1,p2,s2, bit_pos, pos_el, x, y, px, py, b0, b1, b2, b3
         pos     = frame_start
         pos_el  = 0
         bit_pos = 0
@@ -356,7 +356,7 @@ contains
         integer(kind=8),    intent(in)    :: frame_start
         integer(kind=2),    intent(inout) :: imat(:,:,:)
         integer(kind=8) :: pos, first_byte, chunk
-        integer :: p1,s1,p2,s2, bit_pos, pos_el, x, y, px, py, b0, b1, b2, b3
+        integer         :: p1,s1,p2,s2, bit_pos, pos_el, x, y, px, py, b0, b1, b2, b3
         pos     = frame_start
         pos_el  = 0
         bit_pos = 0
@@ -405,7 +405,7 @@ contains
         integer(kind=8),    intent(in)    :: frame_start, frame_end
         integer(kind=2),    intent(inout) :: imat(:,:,:)
         integer(kind=8) :: pos
-        integer :: p1, p2, pos_el, x, y, ub1, ub2
+        integer         :: p1, p2, pos_el, x, y, ub1, ub2
         pos     = frame_start
         pos_el  = 0
         do while( pos < frame_end )
@@ -438,7 +438,7 @@ contains
         integer(kind=8),    intent(in)    :: frame_start, frame_end
         integer(kind=2),    intent(inout) :: imat(:,:,:)
         integer(kind=8) :: pos
-        integer :: p1,s1,p2,s2, pos_el, x, y, ub0, ub1, ub2
+        integer         :: p1,s1,p2,s2, pos_el, x, y, ub0, ub1, ub2
         pos     = frame_start
         pos_el  = 0
         do while( pos < frame_end )
@@ -474,7 +474,7 @@ contains
         integer(kind=8),    intent(in)    :: frame_start, frame_end
         integer(kind=2),    intent(inout) :: imat(:,:,:)
         integer(kind=8) :: pos
-        integer :: p1,s1,p2,s2, pos_el, x, y, ub0, ub1, ub2
+        integer         :: p1,s1,p2,s2, pos_el, x, y, ub0, ub1, ub2
         pos     = frame_start
         pos_el  = 0
         do while( pos < frame_end )

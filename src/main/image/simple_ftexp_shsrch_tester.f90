@@ -17,10 +17,10 @@ implicit none
 private
 public :: run_all_ftexp_shsrch_tests
 
-real(dp), parameter :: COST_SCALE = 1.d8 ! fdfcostfun_8 works in the correlation times this
-integer,  parameter :: NTST_OPT   = 100
-real    :: opt_shifts(2,NTST_OPT)            ! test_optimiser's shifts, drawn once: both solvers see the same
-logical :: opt_shifts_drawn = .false.
+real(dp), parameter :: COST_SCALE       = 1.d8 ! fdfcostfun_8 works in the correlation times this
+integer,  parameter :: NTST_OPT         = 100
+real                :: opt_shifts(2,NTST_OPT)  ! test_optimiser's shifts, drawn once: both solvers see the same
+logical             :: opt_shifts_drawn = .false.
 
 contains
 
@@ -39,14 +39,14 @@ contains
     ! differences
     subroutine test_correlator()
         integer,  parameter :: LDIM(3) = [128,128,1], SQRAD = 32, NTST = 10, ITRS = 10
-        real,     parameter :: SMPD = 1.77, TRS = real(ITRS), HP = 100., LP = 8.
+        real,     parameter :: SMPD    = 1.77, TRS = real(ITRS), HP = 100., LP = 8.
         real(dp), parameter :: FD_STEP = 1.d-3
-        type(image)        :: img, img_shifted
-        type(ft_expanded)  :: ftexp_ref, ftexp_ptcl
-        type(ftexp_shsrch) :: srch
-        real(dp) :: vec(2), cost, cost_best, f, fp, fm, grad(2), grad_fd(2), gp(2)
-        real(dp) :: corr_min, fdf_diff_max, grad_mag_avg, fd_err_max
-        integer  :: itst, x, y, xsh, ysh, xbest, ybest, nwrong, d
+        type(image)         :: img, img_shifted
+        type(ft_expanded)   :: ftexp_ref, ftexp_ptcl
+        type(ftexp_shsrch)  :: srch
+        real(dp)            :: vec(2), cost, cost_best, f, fp, fm, grad(2), grad_fd(2), gp(2)
+        real(dp)            :: corr_min, fdf_diff_max, grad_mag_avg, fd_err_max
+        integer             :: itst, x, y, xsh, ysh, xbest, ybest, nwrong, d
         write(*,'(A)') 'test_correlator'
         call img%new(LDIM, SMPD)
         call draw_square(img, SQRAD)
@@ -115,14 +115,14 @@ contains
     ! difference of the analytic gradient within the gradient check's relative 1e-3, and positive semi-definite
     subroutine test_curvature_oracle()
         integer,  parameter :: LDIM(3) = [128,128,1], SQRAD = 32
-        real,     parameter :: SMPD = 1.77, TRS = 10., HP = 100., LP = 8.
+        real,     parameter :: SMPD    = 1.77, TRS = 10., HP = 100., LP = 8.
         real(dp), parameter :: FD_STEP = 1.d-3
-        type(image)        :: img, img_shifted
-        type(ft_expanded)  :: ftexp_ref, ftexp_ptcl
-        type(ftexp_shsrch) :: srch
-        real(dp) :: vec(2), f, grad(2), gp(2), gm(2), curv(2,2), hfd(2,2), rel_err
-        real     :: cxy(3)
-        integer  :: d
+        type(image)         :: img, img_shifted
+        type(ft_expanded)   :: ftexp_ref, ftexp_ptcl
+        type(ftexp_shsrch)  :: srch
+        real(dp)            :: vec(2), f, grad(2), gp(2), gm(2), curv(2,2), hfd(2,2), rel_err
+        real                :: cxy(3)
+        integer             :: d
         write(*,'(A)') 'test_curvature_oracle'
         call img%new(LDIM, SMPD)
         call draw_square(img, SQRAD)
@@ -164,14 +164,14 @@ contains
         use simple_stat, only: median
         character(len=*), intent(in) :: solver
         integer, parameter :: NTST = NTST_OPT
-        real,    parameter :: TRS = 5., LP = 6., HP = 100.
+        real,    parameter :: TRS  = 5., LP = 6., HP = 100.
         type(image)        :: img_ref, img_ptcl
         type(ft_expanded)  :: ftexp_ref, ftexp_ptcl
         type(ftexp_shsrch) :: srch
-        real    :: cxy(3), x, y, corr_min, sh_err_max
-        integer :: i, nevals, niter
-        integer(kind=8) :: c0, c1, crate, csum
-        real(kind=8)    :: times(NTST)
+        real               :: cxy(3), x, y, corr_min, sh_err_max
+        integer            :: i, nevals, niter
+        integer(kind=8)    :: c0, c1, crate, csum
+        real(kind=8)       :: times(NTST)
         write(*,'(A)') 'test_optimiser '//solver
         call img_ref%new([32,32,1], 2.)
         call img_ptcl%new([32,32,1], 2.)

@@ -78,55 +78,55 @@ contains
     !! and fill), audited against the physical posterior, written beside fname with their features, and the student
     !! trained on them and written as fname; with mode each row's best pose instead (doc/algorithms/pose_student.md)
     subroutine learn_pose_student_exec( params, build, cline, mode )
-        type(parameters), target, intent(inout) :: params
-        type(builder),    target, intent(inout) :: build
-        class(cmdline),           intent(inout) :: cline
-        logical, optional,        intent(in)    :: mode
+        type(parameters),         target, intent(inout)       :: params
+        type(builder),            target, intent(inout)       :: build
+        class(cmdline),           intent(inout)               :: cline
+        logical,                  optional,        intent(in) :: mode
         class(eul_prob_tab), allocatable :: tab
-        type(ptcl_read_session)  :: reads
-        type(image), allocatable :: ptcl_imgs(:), ptcl_imgs_pad(:)
-        type(polar_feats)        :: feats
-        type(polar_feat)         :: feat
-        type(polar_feat_work)    :: feat_wk
-        type(polar_feats_cache)  :: cache
-        type(prob_row_file)      :: rows
-        type(prob_row_record)    :: rec
-        type(prob_fill_profile)  :: profile
-        type(pose_student)       :: student
-        type(ori)                :: o
-        type(string)             :: base, fname_rows, fname_feats, fname_stats, fname_header, fname_grid, projpath
-        real,    allocatable     :: dists(:), wk(:,:)
-        real,    allocatable     :: x_all(:,:,:,:), ctf2_all(:,:), side_all(:), dists_all(:,:), temps_all(:), xrefs(:,:,:,:), ctf_one(:,:)
-        complex, allocatable     :: pft_ref(:,:)
-        real,    allocatable     :: prob(:,:), conf_held(:), radius_held(:)
-        logical, allocatable     :: held(:), recov(:,:)
-        integer, allocatable     :: pinds(:), batches(:,:), statbuf(:), mode_all(:), held_inds(:), group_held(:)
-        integer, allocatable     :: k99_held(:), mode_held_s(:), group_of(:), stkinds(:)
-        type(student_pred)       :: pred
-        integer(int64)           :: key(POLAR_FEATS_NHEAD), mtime, vol_hash
-        integer(timer_int_kind)  :: t0, t_all
-        real(timer_int_kind)     :: rt_prep, rt_batch, rt_fill, rt_rows, rt_all, rt_train, rt_cand(size(STUDENT_WIDTHS))
-        real(timer_int_kind)     :: rt_heldpred(size(STUDENT_WIDTHS)), rt_boot(size(STUDENT_WIDTHS)), rt_write, rt_kept
-        type(student_train_profile) :: prof_cand(size(STUDENT_WIDTHS))
-        integer(timer_int_kind)  :: tb
-        integer                  :: ntried, ntry
-        real     :: euls_ref(3), euls_mode(3), euls_sym(3), euldist, inpldist, temp, dmin, w_ref, invalid, shift_aug
-        real     :: recov_cand(size(STUDENT_WIDTHS)), loss_cand(size(STUDENT_WIDTHS)), gain_q(size(STUDENT_WIDTHS))
-        real     :: conf_threshold, heldout_seeded, heldout_recovered, cone_bound
-        real(dp) :: z
-        integer  :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, iproj_ref, iproj_mode, rank_ref
-        integer  :: stat_unit, grid_unit, head_unit, io_stat, status, stat_status, j, nvalid_ref, nk, nheld
-        integer  :: nptcls_train, nheldout, epochs_run, best_epoch, nweights, iw, iw_best, nthr_here
-        integer  :: ithr, epoch_cand(size(STUDENT_WIDTHS)), held_unit
-        real     :: loss_train, loss_held, mode_held, time_train_s
-        logical  :: l_rebuilt, l_cache, l_by_stack
-        character(len=:), allocatable :: msg
-        type(pose_student)       :: reread
-        type(prob_row_record)    :: rec_phys
-        real(dp)                 :: audit_dev(2), audit_rep(4)
-        real,    allocatable     :: pose_m(:,:), shift_m(:,:), lmin_m(:)   ! the mode pass: each row's best pose
-        integer                  :: nsel
-        logical                  :: l_mode
+        type(ptcl_read_session)          :: reads
+        type(image),         allocatable :: ptcl_imgs(:), ptcl_imgs_pad(:)
+        type(polar_feats)                :: feats
+        type(polar_feat)                 :: feat
+        type(polar_feat_work)            :: feat_wk
+        type(polar_feats_cache)          :: cache
+        type(prob_row_file)              :: rows
+        type(prob_row_record)            :: rec
+        type(prob_fill_profile)          :: profile
+        type(pose_student)               :: student
+        type(ori)                        :: o
+        type(string)                     :: base, fname_rows, fname_feats, fname_stats, fname_header, fname_grid, projpath
+        real,                allocatable :: dists(:), wk(:,:)
+        real,                allocatable :: x_all(:,:,:,:), ctf2_all(:,:), side_all(:), dists_all(:,:), temps_all(:), xrefs(:,:,:,:), ctf_one(:,:)
+        complex,             allocatable :: pft_ref(:,:)
+        real,                allocatable :: prob(:,:), conf_held(:), radius_held(:)
+        logical,             allocatable :: held(:), recov(:,:)
+        integer,             allocatable :: pinds(:), batches(:,:), statbuf(:), mode_all(:), held_inds(:), group_held(:)
+        integer,             allocatable :: k99_held(:), mode_held_s(:), group_of(:), stkinds(:)
+        type(student_pred)               :: pred
+        integer(int64)                   :: key(POLAR_FEATS_NHEAD), mtime, vol_hash
+        integer(timer_int_kind)          :: t0, t_all
+        real(timer_int_kind)             :: rt_prep, rt_batch, rt_fill, rt_rows, rt_all, rt_train, rt_cand(size(STUDENT_WIDTHS))
+        real(timer_int_kind)             :: rt_heldpred(size(STUDENT_WIDTHS)), rt_boot(size(STUDENT_WIDTHS)), rt_write, rt_kept
+        type(student_train_profile)      :: prof_cand(size(STUDENT_WIDTHS))
+        integer(timer_int_kind)          :: tb
+        integer                          :: ntried, ntry
+        real                             :: euls_ref(3), euls_mode(3), euls_sym(3), euldist, inpldist, temp, dmin, w_ref, invalid, shift_aug
+        real                             :: recov_cand(size(STUDENT_WIDTHS)), loss_cand(size(STUDENT_WIDTHS)), gain_q(size(STUDENT_WIDTHS))
+        real                             :: conf_threshold, heldout_seeded, heldout_recovered, cone_bound
+        real(dp)                         :: z
+        integer                          :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, iproj_ref, iproj_mode, rank_ref
+        integer                          :: stat_unit, grid_unit, head_unit, io_stat, status, stat_status, j, nvalid_ref, nk, nheld
+        integer                          :: nptcls_train, nheldout, epochs_run, best_epoch, nweights, iw, iw_best, nthr_here
+        integer                          :: ithr, epoch_cand(size(STUDENT_WIDTHS)), held_unit
+        real                             :: loss_train, loss_held, mode_held, time_train_s
+        logical                          :: l_rebuilt, l_cache, l_by_stack
+        character(len=:),    allocatable :: msg
+        type(pose_student)               :: reread
+        type(prob_row_record)            :: rec_phys
+        real(dp)                         :: audit_dev(2), audit_rep(4)
+        real,                allocatable :: pose_m(:,:), shift_m(:,:), lmin_m(:) ! the mode pass: each row's best pose
+        integer                          :: nsel
+        logical                          :: l_mode
         t_all = tic()
         l_mode = .false.
         if( present(mode) ) l_mode = mode
@@ -552,7 +552,7 @@ contains
         subroutine try_design( iw_here, recov_iw )
             integer, intent(in)    :: iw_here
             logical, intent(inout) :: recov_iw(:)
-            integer :: jj, ii, ithr_loc
+            integer            :: jj, ii, ithr_loc
             type(student_pred) :: pred_loc
             call student%new(feats%get_pftsz_in(), params%kfromto, params%box, params%box_crop, params%smpd, params%mskdiam, &
                 &trim(params%pgrp), params%nspace, params%lp, wk, trim(params%ctf) /= 'no', STUDENT_WIDTHS(iw_here), rnd_run_seed())
@@ -661,7 +661,7 @@ contains
         !! student's modes and whether the teacher's lies in the cone, for the kept design
         subroutine write_heldout_table
             type(string) :: fname_held
-            integer :: jj, i_here
+            integer      :: jj, i_here
             fname_held = base%to_char()//'_heldout.txt'
             call fopen(held_unit, fname_held, status='replace', action='write', iostat=io_stat)
             call fileiochk('learn_pose_student; open '//fname_held%to_char(), io_stat)
@@ -871,11 +871,11 @@ contains
     !! records merged and written once, their tables joined (doc/algorithms/pose_student.md)
     subroutine predict_poses_master( cline )
         class(cmdline), intent(inout) :: cline
-        type(parameters), target  :: params
-        type(builder)             :: build
-        type(string), allocatable :: part_bases(:)
-        type(cmdline)             :: cline_sigma2
-        logical :: l_rebuilt
+        type(parameters), target      :: params
+        type(builder)                 :: build
+        type(string),     allocatable :: part_bases(:)
+        type(cmdline)                 :: cline_sigma2
+        logical                       :: l_rebuilt
         call build%init_params_and_build_general_tbox(cline, params, do3d=cline%defined('vol1'))
         if( complete_volume_source_available(params) )then
             ! as predict_poses_exec prepares the alignment, before any part reads it; the sigma2 bootstrap in this
@@ -901,49 +901,49 @@ contains
     !! mirrors (committed); to <fname>_pred.txt and <fname>_times.txt (doc/algorithms/pose_student.md)
     subroutine predict_poses_exec( params, build, cline )
         use simple_ori_utils, only: euler_inpl_closest
-        type(parameters), target, intent(inout) :: params
-        type(builder),    target, intent(inout) :: build
-        class(cmdline),           intent(inout) :: cline
+        type(parameters),         target, intent(inout) :: params
+        type(builder),            target, intent(inout) :: build
+        class(cmdline),           intent(inout)         :: cline
         integer, parameter       :: TH_NSTEPS = 6   !< the timed per-particle steps
         ! the committed pose (the cone's alignment given the map, the readout's at the stored shift otherwise) and the
         ! readout's direction and in-plane angle
         character(len=*), parameter :: PRED_HEADER = '# iptcl eo mode pmax k99 ncone conf radius_deg iproj_ref dist_mode_deg '//&
             &'dist_cone_deg rank_ref in_cone route e1 e2 e3 x y e1_ro e2_ro e3_ro'
-        type(pose_student)       :: student
-        type(ptcl_read_session)  :: reads
-        type(image), allocatable :: ptcl_imgs(:), ptcl_imgs_pad(:)
-        type(polar_feats)        :: feats
-        type(string)             :: base, fname_pred
-        real,    allocatable     :: wk(:,:), prob(:,:)
-        integer, allocatable     :: pinds(:), batches(:,:), pinds_part(:)
-        type(student_pred), allocatable :: preds(:)
-        character(len=:), allocatable :: msg
-        real,    allocatable     :: dist_mode(:), dist_cone(:), euls_pose(:,:)
-        integer, allocatable     :: iproj_ref(:), rank_ref(:), in_cone(:)
-        integer(timer_int_kind)  :: t0, t_all
-        real(timer_int_kind)     :: rt_prep, rt_batch, rt_pred, rt_all, rt_table, rt_write, rt_chkout
-        real(dp), allocatable    :: th_s(:,:)       ! per thread: features, forward, cone, reference error, shift check, alignment
-        integer,  allocatable    :: th_n(:)
+        type(pose_student)                    :: student
+        type(ptcl_read_session)               :: reads
+        type(image),              allocatable :: ptcl_imgs(:), ptcl_imgs_pad(:)
+        type(polar_feats)                     :: feats
+        type(string)                          :: base, fname_pred
+        real,                     allocatable :: wk(:,:), prob(:,:)
+        integer,                  allocatable :: pinds(:), batches(:,:), pinds_part(:)
+        type(student_pred),       allocatable :: preds(:)
+        character(len=:),         allocatable :: msg
+        real,                     allocatable :: dist_mode(:), dist_cone(:), euls_pose(:,:)
+        integer,                  allocatable :: iproj_ref(:), rank_ref(:), in_cone(:)
+        integer(timer_int_kind)               :: t0, t_all
+        real(timer_int_kind)                  :: rt_prep, rt_batch, rt_pred, rt_all, rt_table, rt_write, rt_chkout
+        real(dp),                 allocatable :: th_s(:,:) ! per thread: features, forward, cone, reference error, shift check, alignment
+        integer,                  allocatable :: th_n(:)
         type(pose_student_align), allocatable :: aln(:)
         type(pose_align_result),  allocatable :: res_sk(:)
         type(polar_feat),         allocatable :: feat_t(:)
         type(polar_feat_work),    allocatable :: feat_wk_t(:)
         type(ori),                allocatable :: o_t(:)
-        real,    allocatable     :: sh_in(:,:), euls_sk(:,:), euls_out(:,:), sh_out(:,:)
-        integer, allocatable     :: mirr_map(:)
-        real(timer_int_kind)     :: rt_sk
-        type(string)             :: fname_times
-        logical  :: l_reg, l_rebuilt
-        integer(int64)           :: clock_rate
-        integer  :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, nthr, pred_unit, io_stat, kfromto(2)
-        integer  :: n_in_cone, n_within_two, n_capped, n_seeded, n_in_cone_seeded, route, n_wide, nchk, nfeat, chk_unit
-        real(dp) :: ncone_sum, conf_sum, radius_sum
-        real     :: conf_threshold, conf_fraction, heldout_seeded, heldout_recovered, spacing, cone, euls(3), cone_bound
-        real     :: euls_stored(3)
-        real,    allocatable :: chk_tv(:,:), chk_jacc(:,:), chk_fchg(:,:,:), chk_sorted(:)
-        integer, allocatable :: chk_mode(:,:), chk_cone(:,:)
-        type(string)         :: fname_chk
-        logical  :: l_part
+        real,                     allocatable :: sh_in(:,:), euls_sk(:,:), euls_out(:,:), sh_out(:,:)
+        integer,                  allocatable :: mirr_map(:)
+        real(timer_int_kind)                  :: rt_sk
+        type(string)                          :: fname_times
+        logical                               :: l_reg, l_rebuilt
+        integer(int64)                        :: clock_rate
+        integer                               :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, nthr, pred_unit, io_stat, kfromto(2)
+        integer                               :: n_in_cone, n_within_two, n_capped, n_seeded, n_in_cone_seeded, route, n_wide, nchk, nfeat, chk_unit
+        real(dp)                              :: ncone_sum, conf_sum, radius_sum
+        real                                  :: conf_threshold, conf_fraction, heldout_seeded, heldout_recovered, spacing, cone, euls(3), cone_bound
+        real                                  :: euls_stored(3)
+        real,                     allocatable :: chk_tv(:,:), chk_jacc(:,:), chk_fchg(:,:,:), chk_sorted(:)
+        integer,                  allocatable :: chk_mode(:,:), chk_cone(:,:)
+        type(string)                          :: fname_chk
+        logical                               :: l_part
         t_all = tic()
         call check_pass_team('predict_poses')
         if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('the poses are ptcl3D''s; predict_poses')
@@ -1302,8 +1302,8 @@ contains
         !! angle), on the calling thread; the shift check on the first particles
         subroutine predict_one( i_here, iptcl_here, islot )
             integer, intent(in) :: i_here, iptcl_here, islot
-            real    :: euls_ref(3), d
-            integer :: ithr_here, j, ip_ref, ip_pose
+            real           :: euls_ref(3), d
+            integer        :: ithr_here, j, ip_ref, ip_pose
             integer(int64) :: c0
             ithr_here = 1
             !$ ithr_here = omp_get_thread_num() + 1
@@ -1375,11 +1375,11 @@ contains
             integer,          intent(in) :: i_here, ithr_here, islot
             type(polar_feat), intent(in) :: feat_here
             type(student_pred) :: pred_sh
-            real    :: x_sh(size(feat_here%x,1), size(feat_here%x,2), 2), prob_sh(size(prob,1)), f0(nfeat), f1(nfeat)
-            real    :: shift(2), ang, tv, num, den
-            integer :: im, id, g, lo, hi, nint_set, nuni, j, k, ip0
-            integer :: set0(KMAX_STUDENT), set1(KMAX_STUDENT), n0, n1
-            logical :: l_in
+            real               :: x_sh(size(feat_here%x,1), size(feat_here%x,2), 2), prob_sh(size(prob,1)), f0(nfeat), f1(nfeat)
+            real               :: shift(2), ang, tv, num, den
+            integer            :: im, id, g, lo, hi, nint_set, nuni, j, k, ip0
+            integer            :: set0(KMAX_STUDENT), set1(KMAX_STUDENT), n0, n1
+            logical            :: l_in
             call student%get_features(ithr_here, f0)
             n0 = 0
             do j = 1,preds(i_here)%ncone

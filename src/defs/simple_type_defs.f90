@@ -11,13 +11,13 @@ end interface canonical_phshift
 ! CTF flag type
 enum, bind(c)
     enumerator :: ENUM_CTFFLAG = -1
-    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1, CTFFLAG_FLIP = 2
+    enumerator :: CTFFLAG_NO   = 0, CTFFLAG_YES = 1, CTFFLAG_FLIP = 2
 end enum
 
 ! Objective function type
 enum, bind(c)
-    enumerator :: ENUM_OBJFUN= -1
-    enumerator :: OBJFUN_CC = 0, OBJFUN_EUCLID = 1
+    enumerator :: ENUM_OBJFUN = -1
+    enumerator :: OBJFUN_CC   = 0, OBJFUN_EUCLID = 1
 end enum
 
 ! oritype enumeration
@@ -44,7 +44,7 @@ end enum
 ! specimen centering method enumeration
 enum, bind(c)
     enumerator :: ENUM_CENTYPE = -1
-    enumerator :: MASS_CEN = 0, SEG_CEN = 1, PARAMS_CEN = 2
+    enumerator :: MASS_CEN     = 0, SEG_CEN = 1, PARAMS_CEN = 2
 end enum
 
 ! export (to STAR) type enumeration
@@ -57,16 +57,16 @@ end enum
 
 ! type for CTF parameters
 type ctfparams
-    integer(kind(ENUM_CTFFLAG)) :: ctfflag = CTFFLAG_YES
-    real    :: smpd    = 0.
-    real    :: kv      = 0.
-    real    :: cs      = 0.
-    real    :: fraca   = 0.
-    real    :: dfx     = 0.
-    real    :: dfy     = 0.
-    real    :: angast  = 0.
-    real    :: phshift = 0.
-    logical :: l_fit_phshift = .false. !< fit phase shift during CTF estimation (runtime policy)
+    integer(kind(ENUM_CTFFLAG)) :: ctfflag       = CTFFLAG_YES
+    real                        :: smpd          = 0.
+    real                        :: kv            = 0.
+    real                        :: cs            = 0.
+    real                        :: fraca         = 0.
+    real                        :: dfx           = 0.
+    real                        :: dfy           = 0.
+    real                        :: angast        = 0.
+    real                        :: phshift       = 0.
+    logical                     :: l_fit_phshift = .false. !< fit phase shift during CTF estimation (runtime policy)
 end type ctfparams
 
 ! type for CTF parameters
@@ -102,8 +102,8 @@ type fplane_type
 end type fplane_type
 
 type inpl_struct
-    real    :: e3 = 0., x = 0., y = 0., corr = 0.
-    logical :: l_mirr = .false.
+    real    :: e3         = 0., x = 0., y = 0., corr = 0.
+    logical :: l_mirr     = .false.
     integer :: find_fsc05 = 0
 end type inpl_struct
 
@@ -128,23 +128,23 @@ end type clust_info
 
 ! type for particle reference relation in eul_prob_tab
 type ptcl_ref
-    integer :: pind = 0, iproj = 0, inpl = 0, istate=0, icls=0, npeaks = 0
-    real    :: dist = 0., x = 0., y = 0., frac = 100.
-    real    :: sdev = -1.  !< the shift's posterior width at the assigned pose (px; below zero: none measured)
+    integer :: pind   = 0, iproj = 0, inpl = 0, istate=0, icls=0, npeaks = 0
+    real    :: dist   = 0., x = 0., y = 0., frac = 100.
+    real    :: sdev   = -1. !< the shift's posterior width at the assigned pose (px; below zero: none measured)
     logical :: has_sh = .false.
 end type ptcl_ref
 
 type lp_crop_inf
-    real    :: lp=0., smpd_crop=0., scale=1., trslim=0., frc_crit=0.
-    integer :: box_crop=0
-    logical :: l_autoscale=.false., l_lpset=.false.
+    real    :: lp          = 0., smpd_crop=0., scale=1., trslim=0., frc_crit=0.
+    integer :: box_crop    = 0
+    logical :: l_autoscale = .false., l_lpset=.false.
 end type lp_crop_inf
 
 !> the particles of one class, in index order; ranked by a score (best first, scores in ccs) only for
 !! the selection tools; group > 0 is the class-average group of balance=cavg sampling, 0 makes the
 !! class its own group
 type class_sample
-    integer :: clsind = 0, pop = 0, nsample = 0, group = 0
+    integer              :: clsind = 0, pop = 0, nsample = 0, group = 0
     integer, allocatable :: pinds(:)
     real,    allocatable :: ccs(:)
 end type class_sample

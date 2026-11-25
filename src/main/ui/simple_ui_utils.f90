@@ -9,10 +9,10 @@ implicit none
 contains
 
     subroutine add_ui_program( prg_name, ui_prg_instance, prgtab, category )
-        character(len=*),          intent(in)    :: prg_name
-        class(ui_program), target, intent(inout) :: ui_prg_instance
-        class(ui_hash),            intent(inout) :: prgtab
-        type(category_descriptor), intent(in)    :: category
+        character(len=*),          intent(in)            :: prg_name
+        class(ui_program),         target, intent(inout) :: ui_prg_instance
+        class(ui_hash),            intent(inout)         :: prgtab
+        type(category_descriptor), intent(in)            :: category
         character(len=:), allocatable :: k
         k = trim(adjustl(prg_name))
         if( prgtab%has_key(k) )then

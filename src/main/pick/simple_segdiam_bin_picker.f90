@@ -29,12 +29,12 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: MOLDIAMS_PICK(6) = [20., 100., 200., 300., 400., 500.] ! diameter bin edges (A), also picksegdiam's diameters
-integer, parameter :: NBINS           = size(MOLDIAMS_PICK) - 1
-real,    parameter :: SMPD_SHRINK1    = 4.0   ! sampling of the segmentation; its 2x erosion is added back to the diameters
-real,    parameter :: SIGMA_CRIT      = 3.    ! accepted-bin threshold on the absolute robust z-score of the bin mean
-real,    parameter :: BOXFAC_MAX      = 1.5   ! box expansion factor at very small diameters
-real,    parameter :: BOXFAC_MIN      = 1.0   ! floor expansion factor
-real,    parameter :: BOXFAC_DECAY_PX = 400.  ! the factor reaches BOXFAC_MIN at this diameter in pixels
+integer, parameter :: NBINS            = size(MOLDIAMS_PICK) - 1
+real,    parameter :: SMPD_SHRINK1     = 4.0                                 ! sampling of the segmentation; its 2x erosion is added back to the diameters
+real,    parameter :: SIGMA_CRIT       = 3.                                  ! accepted-bin threshold on the absolute robust z-score of the bin mean
+real,    parameter :: BOXFAC_MAX       = 1.5                                 ! box expansion factor at very small diameters
+real,    parameter :: BOXFAC_MIN       = 1.0                                 ! floor expansion factor
+real,    parameter :: BOXFAC_DECAY_PX  = 400.                                ! the factor reaches BOXFAC_MIN at this diameter in pixels
 
 type :: segdiam_bin_picker
     private
@@ -57,9 +57,9 @@ contains
     !> Without arguments the first pick() decides the accepted bins and the box size; with
     !! @p accepted_bins (one per bin of MOLDIAMS_PICK) and @p box every pick() uses those.
     subroutine new( self, accepted_bins, box )
-        class(segdiam_bin_picker), intent(inout) :: self
-        logical, optional,         intent(in)    :: accepted_bins(:)
-        integer, optional,         intent(in)    :: box
+        class(segdiam_bin_picker), intent(inout)                :: self
+        logical,                   optional,         intent(in) :: accepted_bins(:)
+        integer,                   optional,         intent(in) :: box
         call self%kill()
         if( present(accepted_bins) .neqv. present(box) ) THROW_HARD('accepted_bins and box are supplied together; new')
         if( .not. present(accepted_bins) ) return
@@ -80,15 +80,15 @@ contains
         integer,           allocatable :: orimap(:), bin_pops(:), cluster_for_bin(:)
         real,              allocatable :: diams_arr(:), tmp(:), line_data(:), abs_z_scores(:)
         real,              allocatable :: bin_means(:), bin_dsum(:), bin_dmin(:), bin_dmax(:)
-        type(string)       :: fbody_here, ext, fname_thumb_den, str_intg, mic_diam_name_here, boxfile
-        type(picksegdiam)  :: picker
-        type(image)        :: mic_den
-        type(stats_struct) :: diam_stats
-        type(nrtxtfile)    :: diams_file
-        integer :: nmics, imic, nptcls, i, n_accepted, i_acc, box_loc, ibin, nrecs_line, ndatalines, iline
-        integer :: funit, iostat, x_old, y_old, old_box, x_new, y_new, line_data_cap, box_single
-        integer :: diams_len, diams_cap, ncopy
-        real    :: mad, smpd, diam_here, diam_lo, diam_hi, msk_single, diam_pix, boxfac_eff
+        type(string)                   :: fbody_here, ext, fname_thumb_den, str_intg, mic_diam_name_here, boxfile
+        type(picksegdiam)              :: picker
+        type(image)                    :: mic_den
+        type(stats_struct)             :: diam_stats
+        type(nrtxtfile)                :: diams_file
+        integer                        :: nmics, imic, nptcls, i, n_accepted, i_acc, box_loc, ibin, nrecs_line, ndatalines, iline
+        integer                        :: funit, iostat, x_old, y_old, old_box, x_new, y_new, line_data_cap, box_single
+        integer                        :: diams_len, diams_cap, ncopy
+        real                           :: mad, smpd, diam_here, diam_lo, diam_hi, msk_single, diam_pix, boxfac_eff
         ! project metadata and the micrograph range
         smpd = spproj%get_smpd()
         call spproj%get_mics_table(micnames, orimap)
@@ -362,11 +362,11 @@ contains
 
     ! geometric growth of the diameter buffer
     subroutine ensure_real_capacity( arr, cap, used, needed )
-        real,    allocatable, intent(inout) :: arr(:)
-        integer,              intent(inout) :: cap
-        integer,              intent(in)    :: used, needed
+        real,                 allocatable, intent(inout) :: arr(:)
+        integer,              intent(inout)              :: cap
+        integer,              intent(in)                 :: used, needed
         real, allocatable :: grown(:)
-        integer :: new_cap
+        integer           :: new_cap
         if( cap >= needed ) return
         new_cap = max(needed, max(1024, 2 * max(1, cap)))
         if( allocated(arr) )then
@@ -380,9 +380,9 @@ contains
     end subroutine ensure_real_capacity
 
     subroutine print_diam_stats( label, avgv, minv, maxv, med, sde )
-        character(len=*), intent(in) :: label
-        real,             intent(in) :: avgv, minv, maxv
-        real, optional,   intent(in) :: med, sde
+        character(len=*), intent(in)             :: label
+        real,             intent(in)             :: avgv, minv, maxv
+        real,             optional,   intent(in) :: med, sde
         print *, label
         print *, 'avg diam: ', avgv
         if( present(med) ) print *, 'med diam: ', med

@@ -19,9 +19,9 @@ contains
     !! tenth selected particle; ten or more selected stacks hold out every tenth of them in order of stkind, whatever
     !! their numbers; fewer than ten particles on one stack, or on a few, are refused
     subroutine test_holdout_split()
-        integer, parameter :: N = 120
-        integer :: stk(N), group_of(N), i, nstk, nheld_stk
-        logical :: held(N), l_by_stack, l_ok
+        integer,          parameter   :: N = 120
+        integer                       :: stk(N), group_of(N), i, nstk, nheld_stk
+        logical                       :: held(N), l_by_stack, l_ok
         character(len=:), allocatable :: msg
         write(*,'(A)') 'test_holdout_split'
         do nstk = 2,9
@@ -80,9 +80,9 @@ contains
     !! whole; the rows at or above the threshold are the prefix; ineligible rows are passed over
     subroutine test_conf_threshold()
         integer, parameter :: N = 21
-        real    :: conf(N), thr
-        logical :: elig(N), recov(N)
-        integer :: nsel, nrec
+        real               :: conf(N), thr
+        logical            :: elig(N), recov(N)
+        integer            :: nsel, nrec
         write(*,'(A)') 'test_conf_threshold'
         conf  = 1.
         elig  = .true.
@@ -135,11 +135,11 @@ contains
     !> A part's range of the selected particles: uneven ranges over a field cover the selection disjointly, a range of
     !! unselected rows holds none (and is no error), a range outside the field or a part outside nparts is refused
     subroutine test_part_range()
-        integer, parameter :: NP = 50, NPARTS = 4, RANGES(2,NPARTS) = reshape([1,7, 8,40, 41,41, 42,50], [2,NPARTS])
-        integer, allocatable :: sel(:), pinds(:)
-        integer :: covered(NP), i, ipart, nsel
+        integer,          parameter   :: NP = 50, NPARTS = 4, RANGES(2,NPARTS) = reshape([1,7, 8,40, 41,41, 42,50], [2,NPARTS])
+        integer,          allocatable :: sel(:), pinds(:)
+        integer                       :: covered(NP), i, ipart, nsel
         character(len=:), allocatable :: msg
-        logical :: l_ok
+        logical                       :: l_ok
         write(*,'(A)') 'test_part_range'
         ! the selection: every even particle (41 is odd: part 3 holds only an unselected row)
         nsel = NP / 2

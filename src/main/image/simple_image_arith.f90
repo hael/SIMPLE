@@ -159,9 +159,9 @@ contains
     ! add_* family
     !===============================
     module subroutine add_img( self, self_to_add, w )
-        class(image),   intent(inout) :: self
-        class(image),   intent(in)    :: self_to_add
-        real, optional, intent(in)    :: w
+        class(image),   intent(inout)        :: self
+        class(image),   intent(in)           :: self_to_add
+        real,           optional, intent(in) :: w
         real :: ww
         ww = 1.
         if( present(w) ) ww = w
@@ -173,11 +173,11 @@ contains
     end subroutine add_img
 
     module subroutine add_cmplx_at( self, logi, comp, phys_in, phys_out )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: logi(3)
-        complex,           intent(in)    :: comp
-        integer, optional, intent(in)    :: phys_in(3)
-        integer, optional, intent(out)   :: phys_out(3)
+        class(image),      intent(inout)         :: self
+        integer,           intent(in)            :: logi(3)
+        complex,           intent(in)            :: comp
+        integer,           optional, intent(in)  :: phys_in(3)
+        integer,           optional, intent(out) :: phys_out(3)
         integer :: phys(3)
         complex :: comp_here
         if( .not. self%ft ) THROW_HARD('cannot add complex number to real image; add_cmplx_at')
@@ -326,9 +326,9 @@ contains
     ! subtr_* family
     !===============================
     module subroutine subtr_img( self, self_to_subtr, w )
-        class(image),   intent(inout) :: self
-        class(image),   intent(in)    :: self_to_subtr
-        real, optional, intent(in)    :: w
+        class(image),   intent(inout)        :: self
+        class(image),   intent(in)           :: self_to_subtr
+        real,           optional, intent(in) :: w
         real :: ww
         ww = 1.0
         if( present(w) ) ww = w
@@ -340,11 +340,11 @@ contains
     end subroutine subtr_img
 
     module subroutine subtr_cmplx_at( self, logi, comp, phys_in, phys_out )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: logi(3)
-        complex,           intent(in)    :: comp
-        integer, optional, intent(out)   :: phys_in(3)
-        integer, optional, intent(out)   :: phys_out(3)
+        class(image),      intent(inout)         :: self
+        integer,           intent(in)            :: logi(3)
+        complex,           intent(in)            :: comp
+        integer,           optional, intent(out) :: phys_in(3)
+        integer,           optional, intent(out) :: phys_out(3)
         integer :: phys(3)
         complex :: comp_here
         if( .not. self%ft ) THROW_HARD('cannot subtract complex number from real image; subtr_cmplx_at')
@@ -427,10 +427,10 @@ contains
     end subroutine div_kernel_at
 
     module subroutine div_real_at( self, logi, k, phys_in )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: logi(3)
-        real,              intent(in)    :: k
-        integer, optional, intent(in)    :: phys_in(3)
+        class(image),      intent(inout)        :: self
+        integer,           intent(in)           :: logi(3)
+        real,              intent(in)           :: k
+        integer,           optional, intent(in) :: phys_in(3)
         integer :: phys(3)
         if( self%ft )then
             if( present(phys_in) )then
@@ -474,11 +474,11 @@ contains
     ! mul_* family
     !===============================
     module subroutine mul_real_at( self, logi, rc, phys_in, phys_out )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: logi(3)
-        real,              intent(in)    :: rc
-        integer, optional, intent(in)    :: phys_in(3)
-        integer, optional, intent(out)   :: phys_out(3)
+        class(image),      intent(inout)         :: self
+        integer,           intent(in)            :: logi(3)
+        real,              intent(in)            :: rc
+        integer,           optional, intent(in)  :: phys_in(3)
+        integer,           optional, intent(out) :: phys_out(3)
         integer :: phys(3)
         if( self%is_ft() )then
             if( present(phys_in) )then
@@ -595,8 +595,8 @@ contains
 
     module pure subroutine add_cmat_at( self, h, k, l, comp)
         class(image), intent(inout) :: self
-        integer,      intent(in) :: h,k,l
-        complex,      intent(in) :: comp
+        integer,      intent(in)    :: h,k,l
+        complex,      intent(in)    :: comp
         self%cmat(h,k,l) = self%cmat(h,k,l) + comp
     end subroutine add_cmat_at
 
@@ -631,8 +631,8 @@ contains
 
     module pure subroutine div_cmat_at_real( self,h,k,l, rval)
         class(image), intent(inout) :: self
-        integer,      intent(in) :: h,k,l
-        real,         intent(in) :: rval
+        integer,      intent(in)    :: h,k,l
+        real,         intent(in)    :: rval
         if( abs(rval) > 1.e-6 )then
             self%cmat(h,k,l) = self%cmat(h,k,l) / rval
         else

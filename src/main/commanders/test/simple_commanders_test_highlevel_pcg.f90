@@ -21,10 +21,10 @@ module subroutine exec_test_pcg_recon( self, cline )
     use simple_gridding,          only: kb_stencil_centered_crop_inv_envelope_1d
     class(commander_test_pcg_recon), intent(inout) :: self
     class(cmdline),                  intent(inout) :: cline
-    integer,          parameter :: BOX = 32, CROP_BOX = 16, NPROJS = 40, NBLOBS = 4, NCTF = 5
-    integer,          parameter :: BATCHSZ = 7          ! deliberately not a divisor of NPROJS
-    real,             parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
-    real,             parameter :: CROP_SMPD = SMPD * real(BOX) / real(CROP_BOX)
+    integer,          parameter :: BOX             = 32, CROP_BOX = 16, NPROJS = 40, NBLOBS = 4, NCTF = 5
+    integer,          parameter :: BATCHSZ         = 7  ! deliberately not a divisor of NPROJS
+    real,             parameter :: SMPD            = 1.5, LAMBDA = 1.0e-3
+    real,             parameter :: CROP_SMPD       = SMPD * real(BOX) / real(CROP_BOX)
     real,             parameter :: MASS_LAMBDA_REL = 1.0e-3
     ! round-off tolerance on an exact identity (not derived);
     ! the phantom recovery measured 0.9998 against RECON_CORR_THRES (not derived)
@@ -56,9 +56,9 @@ module subroutine exec_test_pcg_recon( self, cline )
     ! must not apply the soft window more than once and shrink this band.
     ! SUPPORT_ITS stays at a production-sized budget: much longer solves of the small hard-masked
     ! operator reach a near-null mode of P(H+lambda I)P (PCG_STOP_INDEFINITE).
-    real,             parameter :: SUPPORT_MSKRAD = real(BOX)/2.0 - 2.0
-    integer,          parameter :: SUPPORT_ITS = 5, SUPPORT_NREP = 6
-    real,             parameter :: SUPPORT_RTOL = 1.0e-4
+    real,             parameter :: SUPPORT_MSKRAD  = real(BOX)/2.0 - 2.0
+    integer,          parameter :: SUPPORT_ITS     = 5, SUPPORT_NREP = 6
+    real,             parameter :: SUPPORT_RTOL    = 1.0e-4
     real,             parameter :: SUPPORT_BAND_LO = 0.15, SUPPORT_BAND_HI = 0.85
     ! not derived
     real,             parameter :: SUPPORT_STABILITY_FRAC = 0.9
@@ -67,56 +67,56 @@ module subroutine exec_test_pcg_recon( self, cline )
         &4.0, 5.0,-3.0,&
         &0.0,-6.0,-5.0,&
         &3.0,-2.0, 6.0], [3,NBLOBS])
-    real,             parameter :: SIGMAS(NBLOBS)    = [2.0, 2.5, 1.8, 2.2]
-    real,             parameter :: AMPS(NBLOBS)      = [1.0, 0.8, 0.6, 0.5]
-    real,             parameter :: KV = 300., CS = 2.7, FRACA = 0.1
-    real,             parameter :: DFX_VALS(NCTF)    = [1.0, 1.5, 2.0, 2.5, 3.0]
-    real,             parameter :: ASTIG_VALS(NCTF)  = [0.10, 0.15, 0.20, 0.12, 0.18]
-    real,             parameter :: ANGAST_VALS(NCTF) = [0., 20., 40., 60., 80.]
-    type(reconstructor_pcg) :: pcgop, pcg_reduce, pcg_crop, pcg_ml, pcg_c
-    type(image)             :: ptcl_native, ptcl_work, obs_g, obs_p, pad_g, mskimg, wimg
-    logical, allocatable    :: lmsk_native(:,:,:), lmsk_crop(:,:,:)
-    real,    allocatable    :: rm_pad(:,:,:), obsg(:,:), obsp(:,:), proj2d(:,:,:), window(:,:,:)
-    real,    allocatable    :: x_c(:,:,:)
-    real    :: obs_scale, obs_err, rms_c, rms_first, rms_last, support_leak
-    integer :: npad, irep
-    type(oris)              :: projdirs, projdirs_exp, projdirs_crop
-    type(ori)               :: e, e_exp
-    type(ctfparams)         :: ctfparms
-    type(sym)               :: c1sym, c2sym
-    type(string)            :: raw_part1, raw_part2, raw_ml
-    type(pcg_solver_outcome) :: solver_outcome
-    real,    allocatable    :: phantom(:,:,:), p_probe(:,:,:), q_probe(:,:,:)
-    real,    allocatable    :: hp(:,:,:), hq(:,:,:), hm(:,:,:), hk(:,:,:)
-    real,    allocatable    :: recon(:,:,:), recon_str(:,:,:), rel_res_hist(:)
-    real,    allocatable    :: recon_mf(:,:,:), recon_kernel(:,:,:)
-    real,    allocatable    :: recon_mass(:,:,:), recon_mass_dup(:,:,:)
-    real,    allocatable    :: p_crop(:,:,:), hm_crop(:,:,:), hk_crop(:,:,:)
-    real,    allocatable    :: hm_ml(:,:,:), hk_ml(:,:,:)
-    real,    allocatable    :: xdiv(:,:,:), recon_on(:,:,:)
-    real,    allocatable    :: invenv(:,:,:), inv1d(:), g_probe(:,:,:)
-    real,    allocatable    :: khat_a(:,:,:), khat_b(:,:,:), b_mono(:,:,:), b_str(:,:,:)
-    real,    allocatable    :: sig2arr(:)
-    real,    allocatable    :: sig2_crop(:), draw_full(:,:,:), draw_crop(:,:,:), fsc_prior(:)
-    complex, allocatable    :: y_planes(:,:,:), y_exp(:,:,:), y_crop(:,:,:)
-    complex, allocatable    :: braw_full(:,:,:), braw_crop(:,:,:)
-    integer :: lims2(2,2), i, j, k, b, g, c, niters
-    integer :: R, margin, lo, hi, nb, nsym, nraw, nraw_total, ml_prior_npositive
-    integer :: lims2_crop(2,2), lims3_crop(3,2), raw_lim, hraw, kraw, mraw
-    real    :: ctr, dx, dy, dz, adjoint_err, corr, shift(2)
-    real    :: err_all, err_int, err_max, den_all, den_int, kdiff, stream_err, kscale
-    real    :: solution_err, solution_norm_ratio, energy_ratio
-    real    :: corr_on, corr_apod, corr_over
-    real    :: data_scale, data_scale_dup, lambda_eff, lambda_eff_dup
-    real    :: mass_scale_err, mass_lambda_err, mass_solution_err
-    real    :: crop_b_err, crop_d_err, crop_kernel_err, crop_factor, b_err, d_err
-    real    :: ml_kernel_err
-    real    :: ml_prior_positive_min, ml_prior_positive_max, ml_prior_to_khat_l1, ml_prior_to_khat_rms
-    real(dp):: dp_p_hq, dp_hp_q, dp_p_hp
-    real(dp):: crop_b_num, crop_b_den, crop_d_num, crop_d_den, ml_prior_energy
-    type(test_gate)         :: gate
-    type(string)            :: cwd_saved
-    logical :: all_ok, l_stage_ok
+    real,             parameter   :: SIGMAS(NBLOBS)    = [2.0, 2.5, 1.8, 2.2]
+    real,             parameter   :: AMPS(NBLOBS)      = [1.0, 0.8, 0.6, 0.5]
+    real,             parameter   :: KV                = 300., CS = 2.7, FRACA = 0.1
+    real,             parameter   :: DFX_VALS(NCTF)    = [1.0, 1.5, 2.0, 2.5, 3.0]
+    real,             parameter   :: ASTIG_VALS(NCTF)  = [0.10, 0.15, 0.20, 0.12, 0.18]
+    real,             parameter   :: ANGAST_VALS(NCTF) = [0., 20., 40., 60., 80.]
+    type(reconstructor_pcg)       :: pcgop, pcg_reduce, pcg_crop, pcg_ml, pcg_c
+    type(image)                   :: ptcl_native, ptcl_work, obs_g, obs_p, pad_g, mskimg, wimg
+    logical,          allocatable :: lmsk_native(:,:,:), lmsk_crop(:,:,:)
+    real,             allocatable :: rm_pad(:,:,:), obsg(:,:), obsp(:,:), proj2d(:,:,:), window(:,:,:)
+    real,             allocatable :: x_c(:,:,:)
+    real                          :: obs_scale, obs_err, rms_c, rms_first, rms_last, support_leak
+    integer                       :: npad, irep
+    type(oris)                    :: projdirs, projdirs_exp, projdirs_crop
+    type(ori)                     :: e, e_exp
+    type(ctfparams)               :: ctfparms
+    type(sym)                     :: c1sym, c2sym
+    type(string)                  :: raw_part1, raw_part2, raw_ml
+    type(pcg_solver_outcome)      :: solver_outcome
+    real,             allocatable :: phantom(:,:,:), p_probe(:,:,:), q_probe(:,:,:)
+    real,             allocatable :: hp(:,:,:), hq(:,:,:), hm(:,:,:), hk(:,:,:)
+    real,             allocatable :: recon(:,:,:), recon_str(:,:,:), rel_res_hist(:)
+    real,             allocatable :: recon_mf(:,:,:), recon_kernel(:,:,:)
+    real,             allocatable :: recon_mass(:,:,:), recon_mass_dup(:,:,:)
+    real,             allocatable :: p_crop(:,:,:), hm_crop(:,:,:), hk_crop(:,:,:)
+    real,             allocatable :: hm_ml(:,:,:), hk_ml(:,:,:)
+    real,             allocatable :: xdiv(:,:,:), recon_on(:,:,:)
+    real,             allocatable :: invenv(:,:,:), inv1d(:), g_probe(:,:,:)
+    real,             allocatable :: khat_a(:,:,:), khat_b(:,:,:), b_mono(:,:,:), b_str(:,:,:)
+    real,             allocatable :: sig2arr(:)
+    real,             allocatable :: sig2_crop(:), draw_full(:,:,:), draw_crop(:,:,:), fsc_prior(:)
+    complex,          allocatable :: y_planes(:,:,:), y_exp(:,:,:), y_crop(:,:,:)
+    complex,          allocatable :: braw_full(:,:,:), braw_crop(:,:,:)
+    integer                       :: lims2(2,2), i, j, k, b, g, c, niters
+    integer                       :: R, margin, lo, hi, nb, nsym, nraw, nraw_total, ml_prior_npositive
+    integer                       :: lims2_crop(2,2), lims3_crop(3,2), raw_lim, hraw, kraw, mraw
+    real                          :: ctr, dx, dy, dz, adjoint_err, corr, shift(2)
+    real                          :: err_all, err_int, err_max, den_all, den_int, kdiff, stream_err, kscale
+    real                          :: solution_err, solution_norm_ratio, energy_ratio
+    real                          :: corr_on, corr_apod, corr_over
+    real                          :: data_scale, data_scale_dup, lambda_eff, lambda_eff_dup
+    real                          :: mass_scale_err, mass_lambda_err, mass_solution_err
+    real                          :: crop_b_err, crop_d_err, crop_kernel_err, crop_factor, b_err, d_err
+    real                          :: ml_kernel_err
+    real                          :: ml_prior_positive_min, ml_prior_positive_max, ml_prior_to_khat_l1, ml_prior_to_khat_rms
+    real(dp)                      :: dp_p_hq, dp_hp_q, dp_p_hp
+    real(dp)                      :: crop_b_num, crop_b_den, crop_d_num, crop_d_den, ml_prior_energy
+    type(test_gate)               :: gate
+    type(string)                  :: cwd_saved
+    logical                       :: all_ok, l_stage_ok
     all_ok = .true.
     call simple_getcwd(cwd_saved)
     call gate%new(filepath(cwd_saved, 'metrics.tsv'))
@@ -1067,7 +1067,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         type(image)          :: padded
         type(ori)            :: o
         complex, allocatable :: cmat(:,:,:)
-        integer :: iori
+        integer              :: iori
         call padded%new([pcgop%boxpd,pcgop%boxpd,pcgop%boxpd], SMPD)
         call padded%set_rmat(center_embed_real3d(vol, pcgop%boxpd), .false.)
         call padded%fft()

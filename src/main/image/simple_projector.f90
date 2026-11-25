@@ -10,12 +10,12 @@ private
 
 type, extends(image) :: projector
     private
-    type(kbinterpol)             :: kbwin                   !< window function object
-    integer                      :: ldim_exp(3,2) = 0       !< expanded FT matrix limits
-    complex, public, allocatable :: cmat_exp(:,:,:)         !< expanded FT matrix, made public for the sole purpose of GPU optimization
-    integer                      :: wdim      = 0           !< dimension of K-B window
-    integer                      :: iwinsz    = 0           !< integer half-window size
-    logical                      :: expanded_exists=.false. !< indicates FT matrix existence
+    type(kbinterpol)             :: kbwin                     !< window function object
+    integer                      :: ldim_exp(3,2)   = 0       !< expanded FT matrix limits
+    complex, public, allocatable :: cmat_exp(:,:,:)           !< expanded FT matrix, made public for the sole purpose of GPU optimization
+    integer                      :: wdim            = 0       !< dimension of K-B window
+    integer                      :: iwinsz          = 0       !< integer half-window size
+    logical                      :: expanded_exists = .false. !< indicates FT matrix existence
   contains
     ! CONSTRUCTORS
     procedure :: expand_cmat
@@ -43,7 +43,7 @@ contains
     subroutine expand_cmat( self )
         class(projector), intent(inout) :: self
         integer, allocatable :: cyck(:), cycm(:), cych(:)
-        integer :: h, k, m, phys(3), logi(3), lims(2,3), ldim(3)
+        integer              :: h, k, m, phys(3), logi(3), lims(2,3), ldim(3)
         call self%kill_expanded
         ldim = self%get_ldim()
         if( .not.self%is_ft() ) THROW_HARD('volume needs to be FTed before call; expand_cmat')
@@ -196,10 +196,10 @@ contains
         real,             intent(in) :: loc(3)     ! ORIGINAL logical Fourier coords
         integer, parameter :: PAD_FAC         = OSMPL_PAD_FAC
         real,    parameter :: PAD_FAC_SCALING = real(PAD_FAC**3)
-        complex :: comp
-        real    :: locpd(3)
-        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
-        integer :: i0p(3)
+        complex            :: comp
+        real               :: locpd(3)
+        real               :: w(1:self%wdim,1:self%wdim,1:self%wdim)
+        integer            :: i0p(3)
         ! Work in PADDED logical coordinates
         locpd = loc * real(PAD_FAC)
         ! Window geometry on PADDED lattice

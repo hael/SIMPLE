@@ -20,79 +20,79 @@ public :: POSE_STUDENT_VERSION, run_all_pose_student_tests
 private
 #include "simple_local_flags.inc"
 
-integer,  parameter :: POSE_STUDENT_VERSION = 4     !< 4: the weights a file name beside the header, the threshold written to round-trip
-real(sp), parameter :: CONE_MASS            = 0.99  !< the cone holds this share of the posterior
-character(len=*), parameter :: MODEL_TITLE  = 'pose student model'
+integer,          parameter :: POSE_STUDENT_VERSION = 4    !< 4: the weights a file name beside the header, the threshold written to round-trip
+real(sp),         parameter :: CONE_MASS            = 0.99 !< the cone holds this share of the posterior
+character(len=*), parameter :: MODEL_TITLE          = 'pose student model'
 
 !> the record of one prediction on the folded sphere (ruling R1: a direction and its mirror partner, the antipode,
 !! are one class to the Friedel-symmetric student, so their masses are summed before the cone is read): the mode,
 !! the cone (the smallest set of folded directions holding CONE_MASS, at most KMAX_STUDENT), its mass and its
 !! angular radius about the mode (the spread on the folded sphere). mode and cone(:) name the partner of larger mass
 type :: student_pred
-    integer  :: mode   = 0     !< the direction of largest folded mass (its heavier partner)
-    real(sp) :: pmax   = 0.    !< the folded mass of the mode
-    integer  :: k99    = 0     !< folded directions holding CONE_MASS
-    integer  :: ncone  = 0     !< the cone's size (k99 capped)
-    real(sp) :: conf   = 0.    !< the folded mass inside the cone
-    real(sp) :: radius = 0.    !< the cone's angular radius about the mode on the folded sphere (degrees)
+    integer  :: mode               = 0  !< the direction of largest folded mass (its heavier partner)
+    real(sp) :: pmax               = 0. !< the folded mass of the mode
+    integer  :: k99                = 0  !< folded directions holding CONE_MASS
+    integer  :: ncone              = 0  !< the cone's size (k99 capped)
+    real(sp) :: conf               = 0. !< the folded mass inside the cone
+    real(sp) :: radius             = 0. !< the cone's angular radius about the mode on the folded sphere (degrees)
     integer  :: cone(KMAX_STUDENT) = 0
 end type student_pred
 
 type :: pose_student
     private
-    type(polar_student), allocatable :: core   !< the network, the features, the band, the training, the common model file
-    integer :: nspace = 0
-    character(len=:), allocatable :: pgrp
-    type(oris), allocatable :: grid
-    integer,    allocatable :: mirr(:)           !< the grid's mirror partner per direction (the antipode's class)
-    integer,    allocatable :: rep(:)            !< (nspace/2) the network's classes: the unmirrored direction of each mirror pair
-    integer,    allocatable :: pair_of(:)        !< (nspace) the class of each direction, the pair it belongs to
-    real(sp),   allocatable :: frame(:)          !< (nspace/2) each pair's mirror frame angle (the partner's psi, degrees)
-    integer                 :: nclass = 0
-    type(sym),  allocatable :: symop
-    real(sp)       :: cone_bound = 0.   !< the route's bound on the folded cone's radius (degrees; ruling R1: the dense search's cell), recorded with the threshold it was calibrated with
-    integer(int64) :: vol1_hash  = 0_int64
-    logical :: exists = .false.
+    type(polar_student), allocatable :: core            !< the network, the features, the band, the training, the common model file
+    integer                          :: nspace     = 0
+    character(len=:),    allocatable :: pgrp
+    type(oris),          allocatable :: grid
+    integer,             allocatable :: mirr(:)         !< the grid's mirror partner per direction (the antipode's class)
+    integer,             allocatable :: rep(:)          !< (nspace/2) the network's classes: the unmirrored direction of each mirror pair
+    integer,             allocatable :: pair_of(:)      !< (nspace) the class of each direction, the pair it belongs to
+    real(sp),            allocatable :: frame(:)        !< (nspace/2) each pair's mirror frame angle (the partner's psi, degrees)
+    integer                          :: nclass     = 0
+    type(sym),           allocatable :: symop
+    real(sp)                         :: cone_bound = 0. !< the route's bound on the folded cone's radius (degrees; ruling R1: the dense search's cell), recorded with the threshold it was calibrated with
+    integer(int64)                   :: vol1_hash  = 0_int64
+    logical                          :: exists     = .false.
   contains
-    procedure :: new
-    procedure :: init_readout
-    procedure :: train
-    procedure :: prepare_predict
-    procedure :: predict_feat
-    procedure :: predict_tensor
-    procedure :: get_features
-    procedure :: get_nfeat
-    procedure :: cone_of
-    procedure :: pose_of
-    procedure :: fold_index
-    procedure :: mirror_of
+    procedure          :: new
+    procedure          :: init_readout
+    procedure          :: train
+    procedure          :: prepare_predict
+    procedure          :: predict_feat
+    procedure          :: predict_tensor
+    procedure          :: get_features
+    procedure          :: get_nfeat
+    procedure          :: cone_of
+    procedure          :: pose_of
+    procedure          :: fold_index
+    procedure          :: mirror_of
     procedure, private :: heavier
-    procedure :: write
-    procedure :: read
-    procedure :: get_pftsz
-    procedure :: get_kfromto
-    procedure :: get_nspace
-    procedure :: get_lp
-    procedure :: get_pgrp
-    procedure :: get_box
-    procedure :: get_box_crop
-    procedure :: get_smpd
-    procedure :: get_mskdiam
-    procedure :: get_with_ctf
-    procedure :: get_weights
-    procedure :: get_grid
-    procedure :: grid_euler
-    procedure :: grid_closest
-    procedure :: grid_spacing
-    procedure :: angle_between
-    procedure :: get_record
-    procedure :: get_train_profile
-    procedure :: set_provenance
-    procedure :: set_threshold
-    procedure :: get_threshold
-    procedure :: set_cone_bound
-    procedure :: get_cone_bound
-    procedure :: kill
+    procedure          :: write
+    procedure          :: read
+    procedure          :: get_pftsz
+    procedure          :: get_kfromto
+    procedure          :: get_nspace
+    procedure          :: get_lp
+    procedure          :: get_pgrp
+    procedure          :: get_box
+    procedure          :: get_box_crop
+    procedure          :: get_smpd
+    procedure          :: get_mskdiam
+    procedure          :: get_with_ctf
+    procedure          :: get_weights
+    procedure          :: get_grid
+    procedure          :: grid_euler
+    procedure          :: grid_closest
+    procedure          :: grid_spacing
+    procedure          :: angle_between
+    procedure          :: get_record
+    procedure          :: get_train_profile
+    procedure          :: set_provenance
+    procedure          :: set_threshold
+    procedure          :: get_threshold
+    procedure          :: set_cone_bound
+    procedure          :: get_cone_bound
+    procedure          :: kill
 end type pose_student
 
 interface
@@ -114,7 +114,7 @@ contains
         real(sp),            intent(in)    :: wk(kfromto(1):kfromto(2),2)
         logical,             intent(in)    :: with_ctf
         integer(int64),      intent(in)    :: seed
-        integer :: k
+        integer              :: k
         integer, allocatable :: half_partners(:)
         real,    allocatable :: half_frames(:)
         call self%kill
@@ -168,8 +168,8 @@ contains
         logical,             intent(in)    :: held(n)
         real(sp),            intent(in)    :: dists(self%nspace, n), temps(n), prob_beta, shift_aug_px
         real(sp), allocatable :: targets(:,:)
-        real(sp) :: tdir(self%nspace)
-        integer  :: isample, idir
+        real(sp)              :: tdir(self%nspace)
+        integer               :: isample, idir
         if( .not. self%exists ) THROW_HARD('student not constructed; pose_student%train')
         allocate(targets(self%nclass, n))
         !$omp parallel do default(shared) private(isample,idir,tdir) schedule(static) proc_bind(close)
@@ -378,15 +378,15 @@ contains
     !> the header fname (key=value) and the weights beside it (the core's model file), with the grid's keys and the
     !! caller's after the core's
     subroutine write( self, fname, extra_keys, extra_vals )
-        class(pose_student),        intent(in) :: self
-        class(string),              intent(in) :: fname
-        character(len=*), optional, intent(in) :: extra_keys(:), extra_vals(:)
-        integer, parameter :: NOWN = 6
-        character(len=64)   :: keys(NOWN)
-        character(len=1024) :: vals(NOWN)
+        class(pose_student),        intent(in)           :: self
+        class(string),              intent(in)           :: fname
+        character(len=*),           optional, intent(in) :: extra_keys(:), extra_vals(:)
+        integer,             parameter   :: NOWN = 6
+        character(len=64)                :: keys(NOWN)
+        character(len=1024)              :: vals(NOWN)
         character(len=64),   allocatable :: allkeys(:)
         character(len=1024), allocatable :: allvals(:)
-        integer :: nextra
+        integer                          :: nextra
         if( .not. self%exists ) THROW_HARD('student not constructed; pose_student%write')
         keys(1) = 'nspace';         write(vals(1),'(I0)')    self%nspace
         keys(2) = 'pgrp';           vals(2) = self%pgrp
@@ -412,11 +412,11 @@ contains
     subroutine read( self, fname )
         class(pose_student), intent(inout) :: self
         class(string),       intent(in)    :: fname
-        type(polar_student_header) :: hdr
+        type(polar_student_header)    :: hdr
         character(len=:), allocatable :: pgrp, key, val
-        real(sp)       :: cone_bound
-        integer(int64) :: vol1_hash
-        integer        :: nspace, i
+        real(sp)                      :: cone_bound
+        integer(int64)                :: vol1_hash
+        integer                       :: nspace, i
         call hdr%read(fname)
         if( hdr%version /= POSE_STUDENT_VERSION ) THROW_HARD('model_version mismatch; pose_student%read')
         nspace     = 0
@@ -498,8 +498,8 @@ contains
     end function get_with_ctf
 
     subroutine get_weights( self, wk )
-        class(pose_student),   intent(in)  :: self
-        real(sp), allocatable, intent(out) :: wk(:,:)
+        class(pose_student),   intent(in)               :: self
+        real(sp),              allocatable, intent(out) :: wk(:,:)
         call self%core%get_weights(wk)
     end subroutine get_weights
 

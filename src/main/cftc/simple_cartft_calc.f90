@@ -23,9 +23,9 @@ public :: run_all_cartft_calc_tests
 
 real(dp), parameter :: NUMERIC_FLOOR = epsilon(1._dp)**2
 ! range of the regression slope of data on model that scales the Gauss-Newton matrices
-real(dp), parameter :: CURVATURE_SCALE_MIN = 0.05_dp, CURVATURE_SCALE_MAX = 20._dp
+real(dp), parameter :: CURVATURE_SCALE_MIN         = 0.05_dp, CURVATURE_SCALE_MAX = 20._dp
 integer,  parameter :: CART_REFVOLS_FORMAT_VERSION = 1 !< format_version of the reference-volume files (6.6)
-integer,  parameter :: CART_REFVOLS_NHEADER = 5        !< [format_version, box_crop, nstates, kfrom, kto]
+integer,  parameter :: CART_REFVOLS_NHEADER        = 5 !< [format_version, box_crop, nstates, kfrom, kto]
 
 !> One reference: the padded Fourier transform of a prepared physical volume, weighted by
 !! ref_weight, times padf**3 (matcher side), or the staged prepared volume itself (materializer
@@ -41,37 +41,37 @@ end type cartft_ref
 type :: cartft_ptcl
     complex, allocatable :: observed(:,:)
     real,    allocatable :: transfer(:,:)
-    real(dp) :: power   = 0._dp                 !< sum |X|^2 (whitened under OBJFUN_EUCLID)
-    integer  :: kfromto(2) = 0
-    integer  :: npix    = 0                     !< pixels of its shells in the full disk
-    integer  :: half    = 0                     !< column of its half in sigma2 (OBJFUN_EUCLID only)
-    integer  :: objfun  = 0                     !< OBJFUN_CC or OBJFUN_EUCLID once prepared
-    logical  :: valid   = .false.
-    logical  :: stale   = .false.   !< unprepared by new spectra (set_sigma2): stops when used
+    real(dp)             :: power      = 0._dp   !< sum |X|^2 (whitened under OBJFUN_EUCLID)
+    integer              :: kfromto(2) = 0
+    integer              :: npix       = 0       !< pixels of its shells in the full disk
+    integer              :: half       = 0       !< column of its half in sigma2 (OBJFUN_EUCLID only)
+    integer              :: objfun     = 0       !< OBJFUN_CC or OBJFUN_EUCLID once prepared
+    logical              :: valid      = .false.
+    logical              :: stale      = .false. !< unprepared by new spectra (set_sigma2): stops when used
 end type cartft_ptcl
 
 type :: cartft_calc
     private
-    integer :: nstates = 0                  !< number of states
-    integer :: nptcls  = 0                  !< number of particle slots
-    integer :: box     = 0                  !< (cropped) box of particles and references
-    integer :: boxpd   = 0                  !< padded box of the references
-    integer :: padf    = 1                  !< padding factor
-    integer :: iwinsz  = 0                  !< integer half-width of the gather stencil
-    integer :: lims2(2,2) = 0               !< full-disk 2D Fourier limits
-    real    :: padsc   = 1.                 !< padf**3, the native Fourier scale folded into the references
-    type(kbinterpol)               :: kbwin !< KB window of the polar branch (particle taper, ref_weight)
-    real,              allocatable :: ref_weight(:)  !< (boxpd) per-axis weight of the padded reference (set_ref)
-    integer,           allocatable :: wrap(:)     !< periodic wrap table of the padded grid
-    type(cartft_ref),  allocatable :: refs(:,:)   !< (2,nstates): 1 even, 2 odd
-    type(cartft_ptcl), allocatable :: ptcls(:)    !< (nptcls) prepared particles
-    integer,           allocatable :: slots(:)    !< particle index -> slot of the current batch (0 when absent)
-    integer,           allocatable :: shells(:,:) !< (lims2) shell nint(sqrt(h*h+k*k)) of a pixel inside the Nyquist disk, -1 outside
-    integer,           allocatable :: shell_npix(:) !< (0:box/2) pixels of each shell in the full disk
+    integer                        :: nstates    = 0    !< number of states
+    integer                        :: nptcls     = 0    !< number of particle slots
+    integer                        :: box        = 0    !< (cropped) box of particles and references
+    integer                        :: boxpd      = 0    !< padded box of the references
+    integer                        :: padf       = 1    !< padding factor
+    integer                        :: iwinsz     = 0    !< integer half-width of the gather stencil
+    integer                        :: lims2(2,2) = 0    !< full-disk 2D Fourier limits
+    real                           :: padsc      = 1.   !< padf**3, the native Fourier scale folded into the references
+    type(kbinterpol)               :: kbwin             !< KB window of the polar branch (particle taper, ref_weight)
+    real,              allocatable :: ref_weight(:)     !< (boxpd) per-axis weight of the padded reference (set_ref)
+    integer,           allocatable :: wrap(:)           !< periodic wrap table of the padded grid
+    type(cartft_ref),  allocatable :: refs(:,:)         !< (2,nstates): 1 even, 2 odd
+    type(cartft_ptcl), allocatable :: ptcls(:)          !< (nptcls) prepared particles
+    integer,           allocatable :: slots(:)          !< particle index -> slot of the current batch (0 when absent)
+    integer,           allocatable :: shells(:,:)       !< (lims2) shell nint(sqrt(h*h+k*k)) of a pixel inside the Nyquist disk, -1 outside
+    integer,           allocatable :: shell_npix(:)     !< (0:box/2) pixels of each shell in the full disk
     real,              allocatable :: sigma2(:,:)       !< (shell, half) the two global spectra (OBJFUN_EUCLID)
     real,              allocatable :: rsqrt_sigma2(:,:) !< 1/sqrt(sigma2) where valid
     logical,           allocatable :: sigma2_ok(:,:)    !< finite and positive
-    logical :: exists = .false.
+    logical                        :: exists     = .false.
 contains
     ! lifecycle
     procedure          :: new
@@ -136,7 +136,7 @@ contains
         class(cartft_calc), intent(inout) :: self
         integer,            intent(in)    :: nstates, box, nptcls
         real, allocatable :: kb_env(:), bspline_env(:)
-        integer :: h, k
+        integer           :: h, k
         call self%kill
         if( nstates < 1 ) THROW_HARD('cartft_calc requires at least one state')
         if( nptcls  < 1 ) THROW_HARD('cartft_calc requires at least one particle slot')
@@ -211,7 +211,7 @@ contains
         real,               intent(in)    :: volume(:,:,:)
         type(image)       :: padded_image
         real, allocatable :: padded(:,:,:)
-        integer :: lims3(3,2), wlims(2), lo, hi, i, j, k, ihalf
+        integer           :: lims3(3,2), wlims(2), lo, hi, i, j, k, ihalf
         if( .not. self%exists ) THROW_HARD('cartft_calc reference set before new')
         if( state < 1 .or. state > self%nstates ) THROW_HARD('cartft_calc reference state out of range')
         if( any(shape(volume) /= self%box) ) THROW_HARD('cartft_calc reference volume does not match the box')
@@ -282,7 +282,7 @@ contains
         integer,            intent(in) :: kfromto(2)
         real,               intent(in) :: smpd
         character(len=32) :: field
-        integer :: header(CART_REFVOLS_NHEADER), ihalf, state, funit, io_stat
+        integer           :: header(CART_REFVOLS_NHEADER), ihalf, state, funit, io_stat
         if( .not. self%exists ) THROW_HARD('cartft_calc reference volumes written before new')
         header = [CART_REFVOLS_FORMAT_VERSION, self%box, self%nstates, kfromto(1), kfromto(2)]
         if( .not. self%cart_refvols_header_compatible(header, smpd, header, smpd, smpd, field) )then
@@ -322,9 +322,9 @@ contains
         integer,            intent(out)   :: kfromto(2)
         character(len=32) :: field
         real, allocatable :: volume(:,:,:)
-        integer :: header_even(CART_REFVOLS_NHEADER), header_odd(CART_REFVOLS_NHEADER)
-        integer :: funit_even, funit_odd, io_stat, state
-        real    :: smpd_even, smpd_odd
+        integer           :: header_even(CART_REFVOLS_NHEADER), header_odd(CART_REFVOLS_NHEADER)
+        integer           :: funit_even, funit_odd, io_stat, state
+        real              :: smpd_even, smpd_odd
         call self%new(nstates, box, nptcls)
         if( .not. file_exists(fname_even) ) THROW_HARD('missing Cartesian reference volumes: '//fname_even%to_char())
         if( .not. file_exists(fname_odd)  ) THROW_HARD('missing Cartesian reference volumes: '//fname_odd%to_char())
@@ -553,7 +553,7 @@ contains
     function get_ptcl_taper( self ) result( taper )
         class(cartft_calc), intent(in) :: self
         real, allocatable :: taper(:), padded_env(:)
-        integer :: offset
+        integer           :: offset
         if( .not. self%exists ) THROW_HARD('cartft_calc taper requested before new')
         call kb_stencil_envelope_1d(self%kbwin, self%boxpd, padded_env)
         offset = (self%boxpd - self%box)/2
@@ -754,12 +754,12 @@ contains
     !! Hermitian between Friedel mates); with shell_residual the whitened |r|^2 per shell of a
     !! euclid slot (zero for cc), for sigma_from_shell_residual. NaN objective when a correlation is undefined.
     subroutine pose_normal_terms( self, state, iseven, iptcl, rotmat, shift, objective, gradient, hessian, shell_residual )
-        class(cartft_calc), intent(in)  :: self
-        integer,            intent(in)  :: state, iptcl
-        logical,            intent(in)  :: iseven
-        real(dp),           intent(in)  :: rotmat(3,3), shift(2)
-        real(dp),           intent(out) :: objective, gradient(5), hessian(5,5)
-        real(dp), optional, intent(out) :: shell_residual(self%ptcls(iptcl)%kfromto(1):self%ptcls(iptcl)%kfromto(2))
+        class(cartft_calc), intent(in)            :: self
+        integer,            intent(in)            :: state, iptcl
+        logical,            intent(in)            :: iseven
+        real(dp),           intent(in)            :: rotmat(3,3), shift(2)
+        real(dp),           intent(out)           :: objective, gradient(5), hessian(5,5)
+        real(dp),           optional, intent(out) :: shell_residual(self%ptcls(iptcl)%kfromto(1):self%ptcls(iptcl)%kfromto(2))
         complex(dp) :: eh(0:self%ptcls(iptcl)%kfromto(2)), ek(-self%ptcls(iptcl)%kfromto(2):self%ptcls(iptcl)%kfromto(2))
         complex     :: val, dval(3)
         complex(dp) :: wp, model, particle, residual, xm, jacobian(3)
@@ -1058,22 +1058,22 @@ contains
     !! unallocated arrays. THROW_HARD for an OBJFUN_CC slot: a correlation pass writes no
     !! sigma2 (C5).
     subroutine sigma_contribution( self, state, iseven, iptcl, rotmat, shift, sigma_contrib, ref_pow, ptcl_pow, v )
-        class(cartft_calc),          intent(in)  :: self
-        integer,                     intent(in)  :: state, iptcl
-        logical,                     intent(in)  :: iseven
-        real(dp),                    intent(in)  :: rotmat(3,3), shift(2)
-        real, allocatable,           intent(out) :: sigma_contrib(:)
-        real, allocatable, optional, intent(out) :: ref_pow(:), ptcl_pow(:)
-        real,              optional, intent(out) :: v
+        class(cartft_calc),          intent(in)                         :: self
+        integer,                     intent(in)                         :: state, iptcl
+        logical,                     intent(in)                         :: iseven
+        real(dp),                    intent(in)                         :: rotmat(3,3), shift(2)
+        real,                        allocatable,           intent(out) :: sigma_contrib(:)
+        real,                        allocatable, optional, intent(out) :: ref_pow(:), ptcl_pow(:)
+        real,                        optional, intent(out)              :: v
         complex(dp), allocatable :: eh(:), ek(:)
-        complex     :: val, dval(3)
-        complex(dp) :: model, raw_observed, residual
-        real(dp), allocatable :: sigma_sum(:), ref_sum(:), ptcl_sum(:), root_sigma2(:)
-        real(dp)    :: row1(3), row2(3), root_sigma, vnum, vden, weight
-        real(sp)    :: loc(3)
-        integer, allocatable :: counts(:)
-        integer     :: h, k, shell, lower_shell, upper_shell, ihalf, multiplicity
-        logical     :: inside, l_diag
+        complex                  :: val, dval(3)
+        complex(dp)              :: model, raw_observed, residual
+        real(dp),    allocatable :: sigma_sum(:), ref_sum(:), ptcl_sum(:), root_sigma2(:)
+        real(dp)                 :: row1(3), row2(3), root_sigma, vnum, vden, weight
+        real(sp)                 :: loc(3)
+        integer,     allocatable :: counts(:)
+        integer                  :: h, k, shell, lower_shell, upper_shell, ihalf, multiplicity
+        logical                  :: inside, l_diag
         if( .not. self%ref_exists(state, iseven) ) THROW_HARD('cartft_calc sigma contribution from an absent reference')
         if( iptcl < 1 .or. iptcl > self%nptcls )   THROW_HARD('cartft_calc particle slot out of range')
         l_diag = present(ref_pow) .or. present(ptcl_pow) .or. present(v)
@@ -1148,10 +1148,10 @@ contains
     !! evaluation (pose_normal_terms): residual power over two per sample, unwhitened by the half's
     !! spectrum, as sigma_contribution sums it at that pose without a pass of its own.
     subroutine sigma_from_shell_residual( self, iptcl, shell_residual, sigma_contrib )
-        class(cartft_calc), intent(in)  :: self
-        integer,            intent(in)  :: iptcl
-        real(dp),           intent(in)  :: shell_residual(:)
-        real, allocatable,  intent(out) :: sigma_contrib(:)
+        class(cartft_calc), intent(in)                :: self
+        integer,            intent(in)                :: iptcl
+        real(dp),           intent(in)                :: shell_residual(:)
+        real,               allocatable,  intent(out) :: sigma_contrib(:)
         integer :: shell, lower_shell, upper_shell
         if( iptcl < 1 .or. iptcl > self%nptcls ) THROW_HARD('cartft_calc particle slot out of range')
         if( .not. self%ptcls(iptcl)%valid ) THROW_HARD('cartft_calc sigma contribution requires a valid particle slot')
@@ -1191,17 +1191,17 @@ contains
     !! present exactly for OBJFUN_EUCLID (set_ptcl_euclid): its spectrum whitens observation and
     !! transfer.
     subroutine fill_ptcl( self, iptcl, objfun, observed, ctfparms, lower_shell, upper_shell, half )
-        class(cartft_calc), intent(inout) :: self
-        integer,            intent(in)    :: iptcl, objfun, lower_shell, upper_shell
-        complex,            intent(in)    :: observed(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2))
-        type(ctfparams),    intent(in)    :: ctfparms
-        integer, optional,  intent(in)    :: half
+        class(cartft_calc), intent(inout)         :: self
+        integer,            intent(in)            :: iptcl, objfun, lower_shell, upper_shell
+        complex,            intent(in)            :: observed(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2))
+        type(ctfparams),    intent(in)            :: ctfparms
+        integer,            optional,  intent(in) :: half
         type(ctf)     :: tfun
         type(ctfvars) :: ctfvals
-        real     :: cval, weight
-        real(dp) :: half_power, dc_power
-        integer  :: h, k, shell
-        logical  :: use_ctf
+        real          :: cval, weight
+        real(dp)      :: half_power, dc_power
+        integer       :: h, k, shell
+        logical       :: use_ctf
         select case(ctfparms%ctfflag)
             case(CTFFLAG_NO, CTFFLAG_YES, CTFFLAG_FLIP)
             case DEFAULT
@@ -1315,12 +1315,12 @@ contains
     !> The DC pixel of a band from shell 0, its own Friedel mate: no Jacobian, its objective and
     !! power terms once
     subroutine add_dc_pixel( self, p, cmat, l_euclid, objective, prediction_power, cross_real, dc_residual )
-        class(cartft_calc), intent(in)    :: self
-        type(cartft_ptcl),  intent(in)    :: p
-        complex,            intent(in)    :: cmat(:,:,:)
-        logical,            intent(in)    :: l_euclid
-        real(dp),           intent(inout) :: objective, prediction_power, cross_real
-        real(dp), optional, intent(out)   :: dc_residual
+        class(cartft_calc), intent(in)            :: self
+        type(cartft_ptcl),  intent(in)            :: p
+        complex,            intent(in)            :: cmat(:,:,:)
+        logical,            intent(in)            :: l_euclid
+        real(dp),           intent(inout)         :: objective, prediction_power, cross_real
+        real(dp),           optional, intent(out) :: dc_residual
         complex     :: val, dval(3)
         complex(dp) :: model, particle, residual
         logical     :: inside

@@ -19,18 +19,18 @@ integer, parameter :: SLAB_OK = 0, SLAB_OVER_BUDGET = 1, SLAB_NO_MEMORY = 2
 type :: image_slab
     private
     real(c_float), allocatable :: pix(:,:,:)   !< box x box x n decoded pixels
-    integer :: box = 0, n = 0
-    logical :: l_sealed = .false.
+    integer                    :: box      = 0, n = 0
+    logical                    :: l_sealed = .false.
 contains
-    procedure :: new
-    procedure :: put
-    procedure :: seal
-    procedure :: get
-    procedure :: get_many
+    procedure          :: new
+    procedure          :: put
+    procedure          :: seal
+    procedure          :: get
+    procedure          :: get_many
     procedure, private :: copy_slot
-    procedure :: bytes
-    procedure :: exists
-    procedure :: kill
+    procedure          :: bytes
+    procedure          :: exists
+    procedure          :: kill
 end type image_slab
 
 contains
@@ -64,7 +64,7 @@ contains
         integer,           intent(in)    :: k
         class(image),      intent(inout) :: img
         real(c_float), pointer :: rmat(:,:,:)
-        integer :: ldim(3)
+        integer                :: ldim(3)
         if( self%l_sealed ) THROW_HARD('the slab is sealed; put')
         if( k < 1 .or. k > self%n ) THROW_HARD('slot out of range; put')
         ldim = img%get_ldim()

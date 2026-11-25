@@ -55,11 +55,11 @@ contains
     subroutine exec_tseries_import( self, cline )
         class(commander_tseries_import), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        type(ctfparams)  :: ctfvars
+        type(parameters)          :: params
+        type(sp_project)          :: spproj
+        type(ctfparams)           :: ctfvars
         type(string), allocatable :: filenames(:)
-        integer :: iframe, nfiles, numlen
+        integer                   :: iframe, nfiles, numlen
         call cline%set('oritype','mic')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
@@ -145,8 +145,8 @@ contains
         type(motion_correct_iter) :: mciter
         type(ctfparams)           :: ctfvars
         type(ori)                 :: o
-        integer :: i, iframe, nframes, frame_counter, ldim(3), fromto(2), nframesgrp
-        integer :: numlen_nframes, cnt
+        integer                   :: i, iframe, nframes, frame_counter, ldim(3), fromto(2), nframesgrp
+        integer                   :: numlen_nframes, cnt
         call cline%set('mkdir',       'no') ! shared-memory workflow, dir making in driver
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',     5)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
@@ -226,8 +226,8 @@ contains
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_bspline_smoother,            only: bspline_smoother
         class(commander_tseries_make_pickavg), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        real, parameter :: LAM_TV = 1.5
+        class(cmdline),                        intent(inout) :: cline
+        real,         parameter   :: LAM_TV = 1.5
         type(string), allocatable :: framenames(:)
         type(sp_project)          :: spproj
         type(parameters)          :: params, params_mc

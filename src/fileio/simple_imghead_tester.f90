@@ -32,8 +32,8 @@ contains
     ! boxes 32 and 120 need several records, 300 fits in one
     subroutine test_spider_geometry()
         integer, parameter :: NXS(3) = [32, 120, 300], LABRECS(3) = [8, 3, 1], LABBYTS(3) = [1024, 1440, 1200]
-        type(SpiImgHead) :: hed
-        integer :: i
+        type(SpiImgHead)   :: hed
+        integer            :: i
         write(*,'(A)') 'test_spider_geometry'
         do i = 1,3
             call hed%new([NXS(i),NXS(i),1])
@@ -47,10 +47,10 @@ contains
 
     ! write a header, check the file holds exactly the header, read it back into a fresh object
     subroutine test_spider_roundtrip()
-        integer, parameter :: LDIMS(3,3) = reshape([32,32,1, 120,120,1, 32,32,32], [3,3])
-        type(SpiImgHead) :: hed, back
-        integer(kind=8)  :: fsize
-        integer          :: i, funit, ios, maxim
+        integer,          parameter   :: LDIMS(3,3) = reshape([32,32,1, 120,120,1, 32,32,32], [3,3])
+        type(SpiImgHead)              :: hed, back
+        integer(kind=8)               :: fsize
+        integer                       :: i, funit, ios, maxim
         character(len=:), allocatable :: tag
         write(*,'(A)') 'test_spider_roundtrip'
         do i = 1,3
@@ -88,7 +88,7 @@ contains
     ! probes of the image layer read the same fields
     subroutine test_spider_probe()
         type(SpiImgHead) :: hed, probe
-        integer :: funit, ios, ldim(3), nptcls
+        integer          :: funit, ios, ldim(3), nptcls
         write(*,'(A)') 'test_spider_probe'
         call del_file(TMP_SPI)
         call hed%new([120,120,1])
@@ -116,7 +116,7 @@ contains
     subroutine test_mrc_roundtrip()
         type(MrcImgHead) :: hed, back
         integer(kind=8)  :: fsize
-        integer :: funit, ios
+        integer          :: funit, ios
         write(*,'(A)') 'test_mrc_roundtrip'
         call del_file(TMP_MRC)
         call hed%new([40,30,5])

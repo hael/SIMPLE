@@ -83,7 +83,7 @@ contains
 
     subroutine test_make_dir_and_file_names()
         type(string), allocatable :: dirs(:), files(:)
-        integer :: i
+        integer                   :: i
         write(*,'(A)') 'test_make_dir_and_file_names'
         dirs = make_dirnames('run_', 3)
         call assert_int(3, size(dirs), 'make_dirnames: size=3')
@@ -127,7 +127,7 @@ contains
 
     subroutine test_fname2iter()
         type(string) :: s
-        integer :: it
+        integer      :: it
         write(*,'(A)') 'test_fname2iter'
         s = string('run_iter0100_extra.mrc')
         it = fname2iter(s)
@@ -175,7 +175,7 @@ contains
 
     subroutine test_get_relative_path()
         type(string) :: full, root, rel
-        integer :: trimlen
+        integer      :: trimlen
         write(*,'(A)') 'test_get_relative_path'
         full = string('/home/user/project/data/file.dat')
         root = string('project/')
@@ -223,7 +223,7 @@ contains
 
     subroutine test_fopen_and_fclose_basic()
         type(string) :: fname
-        integer :: funit, ios
+        integer      :: funit, ios
         write(*,'(A)') 'test_fopen_and_fclose_basic'
         fname = string('tmp_fileio_fopen_basic.dat')
         call fopen(funit, fname, status='replace', action='write', iostat=ios)
@@ -238,8 +238,8 @@ contains
 
     subroutine test_nlines_and_filelength()
         type(string) :: fname
-        integer :: funit, ios
-        integer :: n, lenbytes
+        integer      :: funit, ios
+        integer      :: n, lenbytes
         write(*,'(A)') 'test_nlines_and_filelength'
         fname = string('tmp_fileio_nlines.dat')
         call fopen(funit, fname, status='replace', action='write', iostat=ios)
@@ -258,10 +258,10 @@ contains
     end subroutine test_nlines_and_filelength
 
     subroutine test_arr2file_sp_dp_roundtrip()
-        type(string) :: fsp, fdp
-        real, allocatable     :: arr_sp(:), arr_sp_back(:)
+        type(string)          :: fsp, fdp
+        real,     allocatable :: arr_sp(:), arr_sp_back(:)
         real(dp), allocatable :: arr_dp(:), arr_dp_back(:)
-        integer :: i
+        integer               :: i
         write(*,'(A)') 'test_arr2file_sp_dp_roundtrip'
         allocate(arr_sp(3))
         arr_sp = [1.0, 2.0, 3.5]
@@ -287,10 +287,10 @@ contains
     end subroutine test_arr2file_sp_dp_roundtrip
 
     subroutine test_arr2txtfile_roundtrip()
-        type(string) :: fsp, fint
+        type(string)         :: fsp, fint
         real,    allocatable :: arr_sp(:), arr_sp_back(:)
         integer, allocatable :: arr_i(:), arr_i_back(:)
-        integer :: i, funit, ios
+        integer              :: i, funit, ios
         write(*,'(A)') 'test_arr2txtfile_roundtrip'
         allocate(arr_sp(3))
         arr_sp = [1.0, 2.5, -3.0]
@@ -330,10 +330,10 @@ contains
     end subroutine test_arr2txtfile_roundtrip
 
     subroutine test_rmat_lmat_roundtrip()
-        type(string) :: fR, fL
+        type(string)         :: fR, fL
         real,    allocatable :: rmat(:,:), rback(:,:)
         logical, allocatable :: lmat(:,:), lback(:,:)
-        integer :: i,j
+        integer              :: i,j
         write(*,'(A)') 'test_rmat_lmat_roundtrip'
         allocate(rmat(2,3))
         rmat = reshape([1.0,2.0,3.0,4.0,5.0,6.0], shape(rmat))
@@ -367,9 +367,9 @@ contains
     end subroutine test_rmat_lmat_roundtrip
 
     subroutine test_read_write_filetable()
-        type(string) :: table, a, b, c, a_read, c_read
+        type(string)              :: table, a, b, c, a_read, c_read
         type(string), allocatable :: names_out(:), names_in(:)
-        integer :: i
+        integer                   :: i
         write(*,'(A)') 'test_read_write_filetable'
         table = string('tmp_filetable.txt')
         a = string('fileA.mrc')
@@ -406,8 +406,8 @@ contains
     subroutine test_write_singlelineoftext_and_read_exit_code()
         type(string) :: fname_text, fname_exit
         type(string) :: line
-        integer :: funit, ios, exit_code
-        logical :: err
+        integer      :: funit, ios, exit_code
+        logical      :: err
         write(*,'(A)') 'test_write_singlelineoftext_and_read_exit_code'
         fname_text = string('tmp_singleline.txt')
         fname_exit = string('tmp_exitcode.txt')
@@ -435,8 +435,8 @@ contains
     end subroutine test_write_singlelineoftext_and_read_exit_code
 
     subroutine test_simple_copy_file()
-        type(string) :: src, dst
-        integer :: funit, ios
+        type(string)      :: src, dst
+        integer           :: funit, ios
         character(len=64) :: text
         character(len=64) :: text2
         write(*,'(A)') 'test_simple_copy_file'
@@ -538,7 +538,7 @@ contains
 
     subroutine test_simple_touch_rename_abspath()
         type(string) :: f1, f2, abs2, base2
-        integer :: status_here
+        integer      :: status_here
         write(*,'(A)') 'test_simple_touch_rename_abspath'
         f1 = string('tmp_sys_touch_1.dat')
         f2 = string('tmp_sys_touch_2.dat')
@@ -562,10 +562,10 @@ contains
     end subroutine test_simple_touch_rename_abspath
 
     subroutine test_simple_list_files_and_regexp()
-        type(string) :: f1, f2, f3, dir
+        type(string)              :: f1, f2, f3, dir
         type(string), allocatable :: list(:)
-        integer :: funit, ios, i
-        logical :: found1, found2, found3
+        integer                   :: funit, ios, i
+        logical                   :: found1, found2, found3
         write(*,'(A)') 'test_simple_list_files_and_regexp'
         dir = string('.')
         f1  = string('a1.txt')

@@ -11,13 +11,13 @@ public :: ft_map_get_lfny, ft_map_get_farray_shape, ft_maps_match
 private
 #include "simple_local_flags.inc"
 
-type(ftiter), private :: ftiterator
-integer               :: ft_map_lims(3,2)    = 0     ! Redundant Fourier limits
-integer               :: ft_map_lims_nr(3,2) = 0     ! Non-redudant Fourier limits
-integer,  allocatable :: ft_map_phys_addrh(:,:)      ! Physical address along h-axis
-integer,  allocatable :: ft_map_phys_addrk(:,:)      ! Physical address along k-axis
-real,     allocatable :: ft_map_spafreqsq(:,:)       ! Spatial frequency squared
-real,     allocatable :: ft_map_astigang(:,:)        ! Angle of astigmatism
+type(ftiter), private     :: ftiterator
+integer                   :: ft_map_lims(3,2)    = 0 ! Redundant Fourier limits
+integer                   :: ft_map_lims_nr(3,2) = 0 ! Non-redudant Fourier limits
+integer,      allocatable :: ft_map_phys_addrh(:,:)  ! Physical address along h-axis
+integer,      allocatable :: ft_map_phys_addrk(:,:)  ! Physical address along k-axis
+real,         allocatable :: ft_map_spafreqsq(:,:)   ! Spatial frequency squared
+real,         allocatable :: ft_map_astigang(:,:)    ! Angle of astigmatism
 
 contains
 

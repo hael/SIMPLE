@@ -30,26 +30,26 @@ integer, parameter :: KMAX_STUDENT   = 64   !< the pose student's cone cap: a pa
 integer, parameter :: KMAX_CLASS     = 16   !< the class student's candidate cap: a particle whose 99% needs more classes is searched densely
 
 ! ---- the teacher's rows and the training
-integer, parameter :: STUDENT_KMAX_ROW        = 256   !< the row record's kept entries, the tail's mass beside them
-integer, parameter :: STUDENT_WIDTHS(3)       = [16, 32, 64] !< the designs, cheapest first: the first block's channels
-integer, parameter :: STUDENT_WIDEST_MIN_ROWS = 10000 !< the widest design is tried from this many training rows: below, it rarely beats the next and costs two and a half times it
-integer, parameter :: CLASS_STUDENT_NDESIGNS  = 1     !< the class student's designs tried, cheapest first: in 2D a wider one has not paid for its time (doc/algorithms/class_student.md); raise it to restore the choice
-integer, parameter :: STUDENT_MAX_EPOCHS      = 30    !< the training budget in epochs (the best held-out epoch comes at 3 to 7 on the fixed sets)
-integer, parameter :: STUDENT_PATIENCE_EPOCHS = 3     !< epochs without a held-out improvement before the training stops (improvements came at most 2 epochs apart)
-real,    parameter :: STUDENT_SHIFT_AUG_NSIG  = 3.    !< the augmentation's disk: this many prior widths (the dynamic centring's disk)
-real,    parameter :: STUDENT_SHIFT_SIGMA     = 2.    !< the training's shift-prior width (A): the teacher's particles are centred (10 A taught the 2D student nothing)
-real,    parameter :: STUDENT_TRS             = 5.    !< the teacher's shift refinement box (pixels)
-integer, parameter :: CLASS_STUDENT_TEACHER_ITER = 1  !< the class averages prepared as a first iteration's: every class polarized, none re-centred
+integer, parameter :: STUDENT_KMAX_ROW           = 256          !< the row record's kept entries, the tail's mass beside them
+integer, parameter :: STUDENT_WIDTHS(3)          = [16, 32, 64] !< the designs, cheapest first: the first block's channels
+integer, parameter :: STUDENT_WIDEST_MIN_ROWS    = 10000        !< the widest design is tried from this many training rows: below, it rarely beats the next and costs two and a half times it
+integer, parameter :: CLASS_STUDENT_NDESIGNS     = 1            !< the class student's designs tried, cheapest first: in 2D a wider one has not paid for its time (doc/algorithms/class_student.md); raise it to restore the choice
+integer, parameter :: STUDENT_MAX_EPOCHS         = 30           !< the training budget in epochs (the best held-out epoch comes at 3 to 7 on the fixed sets)
+integer, parameter :: STUDENT_PATIENCE_EPOCHS    = 3            !< epochs without a held-out improvement before the training stops (improvements came at most 2 epochs apart)
+real,    parameter :: STUDENT_SHIFT_AUG_NSIG     = 3.           !< the augmentation's disk: this many prior widths (the dynamic centring's disk)
+real,    parameter :: STUDENT_SHIFT_SIGMA        = 2.           !< the training's shift-prior width (A): the teacher's particles are centred (10 A taught the 2D student nothing)
+real,    parameter :: STUDENT_TRS                = 5.           !< the teacher's shift refinement box (pixels)
+integer, parameter :: CLASS_STUDENT_TEACHER_ITER = 1            !< the class averages prepared as a first iteration's: every class polarized, none re-centred
 
 ! ---- the class student's physical teacher (doc/algorithms/class_student.md)
 integer, parameter :: KMAX_INPL_ROW           = 8     !< the teacher's classes of largest in-plane marginal whose in-plane posteriors are the rotation targets
 real,    parameter :: CLASS_STUDENT_PROB_BETA = 1.    !< the class teacher's tempering factor (and the validation reference's): the physical posterior
 
 ! ---- the held-out calibration and the design choice
-integer, parameter :: STUDENT_HOLDOUT_EVERY = 10      !< every tenth of the selected particles' micrographs (stacks) is held out, every tenth selected particle when they lie on fewer stacks
-real,    parameter :: STUDENT_CONF_FRACTION = 0.95    !< the confidence threshold: above it the teacher's answer lies among the candidates for this fraction of the held-out particles
-real,    parameter :: STUDENT_CONF_NONE     = 1.00001 !< the threshold when no prefix qualifies: above every confidence, so that the student seeds nobody
-integer, parameter :: STUDENT_NBOOT         = 1000    !< resamples by micrograph of the paired difference between two designs
+integer, parameter :: STUDENT_HOLDOUT_EVERY   = 10      !< every tenth of the selected particles' micrographs (stacks) is held out, every tenth selected particle when they lie on fewer stacks
+real,    parameter :: STUDENT_CONF_FRACTION   = 0.95    !< the confidence threshold: above it the teacher's answer lies among the candidates for this fraction of the held-out particles
+real,    parameter :: STUDENT_CONF_NONE       = 1.00001 !< the threshold when no prefix qualifies: above every confidence, so that the student seeds nobody
+integer, parameter :: STUDENT_NBOOT           = 1000    !< resamples by micrograph of the paired difference between two designs
 real,    parameter :: STUDENT_DESIGN_QUANTILE = 0.05    !< a wider design is kept when this quantile of its resampled recovery gain is above zero
 
 ! ---- a model's geometry against a project's
@@ -74,23 +74,23 @@ real,    parameter :: CLASS_DENSE_SHIFT_SIGMA = 10.  !< the reference pass's and
 integer, parameter :: CLASS_MINPOP_FRC        = 10   !< a class's average is compared when both routes hold this many particles
 
 ! ---- file names
-character(len=*), parameter :: STUDENT_TRAIN_PROJ            = 'training_set.simple'
-character(len=*), parameter :: STUDENT_ALL_PROJ              = 'all_particles.simple'
-character(len=*), parameter :: STUDENT_UNSEEN_PROJ           = 'unseen_particles.simple'
-character(len=*), parameter :: POSE_STUDENT_MODEL_FNAME      = 'pose_student.txt'
-character(len=*), parameter :: POSE_STUDENT_PRED_TABLE       = 'pose_student_pred.txt'
-character(len=*), parameter :: POSE_STUDENT_PRED_TIMES       = 'pose_student_times.txt'   !< the prediction's and the alignment's wall times
-character(len=*), parameter :: POSE_REFERENCE_MODEL_FNAME    = 'pose_reference_student.txt' !< a dense pass's base name (its rows)
-character(len=*), parameter :: POSE_REFERENCE_FNAME          = 'pose_reference.txt'   !< the reference's poses (a frozen teacher's directory may hold them)
-character(len=*), parameter :: VALIDATE_POSE_STUDENT_REPORT  = 'validate_pose_student_report.txt'
-character(len=*), parameter :: VALIDATE_POSE_STUDENT_DETAILS = 'validate_pose_student_details.txt'
-character(len=*), parameter :: CLASS_STUDENT_MODEL_FNAME     = 'class_student.txt'
-character(len=*), parameter :: CLASS_STUDENT_PRED_TABLE      = 'class_student_pred.txt'
-character(len=*), parameter :: CLASS_STUDENT_PRED_TIMES      = 'class_student_times.txt'  !< the prediction's and the alignment's wall times
-character(len=*), parameter :: CLASS_STUDENT_CAVGS           = 'cavgs_student.mrc'
-character(len=*), parameter :: CLASS_REFERENCE_FNAME         = 'class_reference.txt'   !< the reference pass's base name (its audit)
-character(len=*), parameter :: CLASS_REFERENCE_CAVGS         = 'cavgs_reference.mrc'   !< the reference's class averages
-character(len=*), parameter :: VALIDATE_CLASS_STUDENT_REPORT = 'validate_class_student_report.txt'
+character(len=*), parameter :: STUDENT_TRAIN_PROJ             = 'training_set.simple'
+character(len=*), parameter :: STUDENT_ALL_PROJ               = 'all_particles.simple'
+character(len=*), parameter :: STUDENT_UNSEEN_PROJ            = 'unseen_particles.simple'
+character(len=*), parameter :: POSE_STUDENT_MODEL_FNAME       = 'pose_student.txt'
+character(len=*), parameter :: POSE_STUDENT_PRED_TABLE        = 'pose_student_pred.txt'
+character(len=*), parameter :: POSE_STUDENT_PRED_TIMES        = 'pose_student_times.txt'     !< the prediction's and the alignment's wall times
+character(len=*), parameter :: POSE_REFERENCE_MODEL_FNAME     = 'pose_reference_student.txt' !< a dense pass's base name (its rows)
+character(len=*), parameter :: POSE_REFERENCE_FNAME           = 'pose_reference.txt'         !< the reference's poses (a frozen teacher's directory may hold them)
+character(len=*), parameter :: VALIDATE_POSE_STUDENT_REPORT   = 'validate_pose_student_report.txt'
+character(len=*), parameter :: VALIDATE_POSE_STUDENT_DETAILS  = 'validate_pose_student_details.txt'
+character(len=*), parameter :: CLASS_STUDENT_MODEL_FNAME      = 'class_student.txt'
+character(len=*), parameter :: CLASS_STUDENT_PRED_TABLE       = 'class_student_pred.txt'
+character(len=*), parameter :: CLASS_STUDENT_PRED_TIMES       = 'class_student_times.txt'    !< the prediction's and the alignment's wall times
+character(len=*), parameter :: CLASS_STUDENT_CAVGS            = 'cavgs_student.mrc'
+character(len=*), parameter :: CLASS_REFERENCE_FNAME          = 'class_reference.txt'        !< the reference pass's base name (its audit)
+character(len=*), parameter :: CLASS_REFERENCE_CAVGS          = 'cavgs_reference.mrc'        !< the reference's class averages
+character(len=*), parameter :: VALIDATE_CLASS_STUDENT_REPORT  = 'validate_class_student_report.txt'
 character(len=*), parameter :: VALIDATE_CLASS_STUDENT_DETAILS = 'validate_class_student_details.txt'
 
 end module simple_defs_hhcnn

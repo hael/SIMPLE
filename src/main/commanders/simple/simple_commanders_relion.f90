@@ -14,7 +14,7 @@ contains
 
     subroutine exec_export_relion( self, cline )
         class(commander_export_relion), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
+        class(cmdline),                 intent(inout) :: cline
         type(parameters)     :: params
         type(sp_project)     :: spproj
         type(relion_project) :: relionproj

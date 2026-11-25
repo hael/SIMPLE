@@ -25,9 +25,9 @@ contains
 
     !> n1 points around c1 and n2 around c2 with standard deviations sd(1:2) per axis, in that order
     subroutine two_blobs( X, n1, c1, n2, c2, sd )
-        real(dp), allocatable, intent(out) :: X(:,:)
-        integer,               intent(in)  :: n1, n2
-        real(dp),              intent(in)  :: c1(2), c2(2), sd(2)
+        real(dp),              allocatable, intent(out) :: X(:,:)
+        integer,               intent(in)               :: n1, n2
+        real(dp),              intent(in)               :: c1(2), c2(2), sd(2)
         integer :: i
         allocate(X(n1+n2,2))
         do i = 1, n1 + n2
@@ -43,10 +43,10 @@ contains
 
     subroutine test_gmm_recovery()
         real(dp), allocatable :: X(:,:), resp(:,:)
-        real(dp) :: means(2,2), cov(2,2), pival(2), sep(2,2), rowsum
-        integer  :: labels(2000), labels2(2000), i
-        logical  :: ok, l_floor_ok
-        type(gmm) :: gm
+        real(dp)              :: means(2,2), cov(2,2), pival(2), sep(2,2), rowsum
+        integer               :: labels(2000), labels2(2000), i
+        logical               :: ok, l_floor_ok
+        type(gmm)             :: gm
         write(*,'(A)') 'test_gmm_recovery'
         call set_fixed_seed(20261008)
         call two_blobs(X, 1400, [0._dp,0._dp], 600, [6._dp,0._dp], [1._dp,0.5_dp])
@@ -100,9 +100,9 @@ contains
     !! about 0.2/1.1 after renormalization
     subroutine test_gmm_pi_floor()
         real(dp), allocatable :: X(:,:)
-        real(dp) :: means(2,2), pival(2)
-        logical  :: ok
-        type(gmm) :: gm
+        real(dp)              :: means(2,2), pival(2)
+        logical               :: ok
+        type(gmm)             :: gm
         write(*,'(A)') 'test_gmm_pi_floor'
         call set_fixed_seed(20261009)
         call two_blobs(X, 1800, [0._dp,0._dp], 200, [8._dp,0._dp], [0.5_dp,0.5_dp])

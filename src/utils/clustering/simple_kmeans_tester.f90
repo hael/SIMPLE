@@ -26,7 +26,7 @@ contains
         integer,  intent(in)    :: i0, npts
         real(dp), intent(in)    :: cx, cy
         real(dp), parameter :: TWOPI = 6.283185307179586_dp
-        integer :: i
+        integer             :: i
         do i = 1, npts
             X(i0+i-1,1) = cx + 0.5_dp*cos(TWOPI*real(i,dp)/real(npts,dp))
             X(i0+i-1,2) = cy + 0.5_dp*sin(TWOPI*real(i,dp)/real(npts,dp))
@@ -37,8 +37,8 @@ contains
     !! (the 30 first), every group is one cluster and the centroids are the group means; a second call on
     !! the same construction gives the same labels
     subroutine test_kmeans_separated_groups()
-        real(dp) :: X(60,2), cen(2,3), gmean(2)
-        integer  :: labels(60), labels2(60)
+        real(dp)     :: X(60,2), cen(2,3), gmean(2)
+        integer      :: labels(60), labels2(60)
         type(kmeans) :: km
         write(*,'(A)') 'test_kmeans_separated_groups'
         call ring(X,  1, 10,  0._dp,  0._dp)
@@ -63,8 +63,8 @@ contains
     !! the first seeds; the farthest from it is (1,10); the split is along y, {1,3} and {2,4}. Weights
     !! (1000,1): the farthest from (0,0) is again (1,10), but x now dominates and the split is {1,2}, {3,4}
     subroutine test_kmeans_weighted_metric()
-        real(dp) :: X(4,2), cen(2,2)
-        integer  :: labels(4)
+        real(dp)     :: X(4,2), cen(2,2)
+        integer      :: labels(4)
         type(kmeans) :: km
         write(*,'(A)') 'test_kmeans_weighted_metric'
         X(:,1) = [0._dp, 0._dp, 1._dp,  1._dp]
@@ -82,8 +82,8 @@ contains
     !> k = 1: one cluster, centroid the mean; k = n on distinct points: every point its own cluster,
     !! labelled by index (all populations 1, ties by member index)
     subroutine test_kmeans_edges()
-        real(dp) :: X(5,1), cen1(1,1), cen5(1,5)
-        integer  :: labels(5)
+        real(dp)     :: X(5,1), cen1(1,1), cen5(1,5)
+        integer      :: labels(5)
         type(kmeans) :: km
         write(*,'(A)') 'test_kmeans_edges'
         X(:,1) = [0._dp, 1._dp, 3._dp, 7._dp, 8._dp]

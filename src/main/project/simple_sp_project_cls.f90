@@ -5,18 +5,18 @@ implicit none
 contains 
 
     module subroutine shape_ranked_cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles, mskdiam_px )
-        class(sp_project),    intent(inout) :: self
-        integer, allocatable, intent(inout) :: cavg_inds(:)
-        class(string),        intent(in)    :: jpgname
-        integer,              intent(out)   :: xtiles, ytiles
-        integer, optional,    intent(in)    :: mskdiam_px
+        class(sp_project),    intent(inout)              :: self
+        integer,              allocatable, intent(inout) :: cavg_inds(:)
+        class(string),        intent(in)                 :: jpgname
+        integer,              intent(out)                :: xtiles, ytiles
+        integer,              optional,    intent(in)    :: mskdiam_px
         integer,          allocatable :: shape_ranks(:)
-        type(string)   :: cavgsstk
-        type(image)    :: img, jpegimg
-        type(stack_io) :: stkio_r
-        integer        :: icls, ncls, ncls_stk, ldim_read(3), ncls_sel, ix, iy, ntiles
-        real           :: smpd
-        logical        :: present_mskdiam_px
+        type(string)                  :: cavgsstk
+        type(image)                   :: img, jpegimg
+        type(stack_io)                :: stkio_r
+        integer                       :: icls, ncls, ncls_stk, ldim_read(3), ncls_sel, ix, iy, ntiles
+        real                          :: smpd
+        logical                       :: present_mskdiam_px
         ncls = self%os_cls2D%get_noris()
         if( ncls == 0 ) return
         if( .not. self%os_cls2D%isthere('shape_rank') ) THROW_HARD('No shape ranking available!')
@@ -72,18 +72,18 @@ contains
     end subroutine shape_ranked_cavgs2jpg
 
     module subroutine cavgs2jpg( self, cavg_inds, jpgname, xtiles, ytiles, ignore_states, invert_states )
-        class(sp_project),    intent(inout) :: self
-        integer, allocatable, intent(inout) :: cavg_inds(:)
-        class(string),        intent(in)    :: jpgname
-        integer,              intent(out)   :: xtiles, ytiles
-        logical, optional,    intent(in)    :: ignore_states, invert_states
+        class(sp_project),    intent(inout)              :: self
+        integer,              allocatable, intent(inout) :: cavg_inds(:)
+        class(string),        intent(in)                 :: jpgname
+        integer,              intent(out)                :: xtiles, ytiles
+        logical,              optional,    intent(in)    :: ignore_states, invert_states
         logical, allocatable       :: cls_mask(:)
-        type(string)   :: cavgsstk
-        type(image)    :: img, jpegimg
-        type(stack_io) :: stkio_r
-        integer        :: icls, isel, ncls, ncls_stk, ldim_read(3), ncls_sel, ix, iy, ntiles
-        logical        :: l_ignore_states = .true., l_invert_states = .false.
-        real           :: smpd
+        type(string)               :: cavgsstk
+        type(image)                :: img, jpegimg
+        type(stack_io)             :: stkio_r
+        integer                    :: icls, isel, ncls, ncls_stk, ldim_read(3), ncls_sel, ix, iy, ntiles
+        logical                    :: l_ignore_states = .true., l_invert_states = .false.
+        real                       :: smpd
         if( present(ignore_states) ) l_ignore_states = ignore_states
         if( present(invert_states) ) l_invert_states = invert_states
         ncls = self%os_cls2D%get_noris()
@@ -160,11 +160,11 @@ contains
     module subroutine cavgs2mrc( self )
         class(sp_project), intent(inout) :: self
         logical, allocatable       :: cls_mask(:)
-        type(string)   :: cavgsstk
-        type(image)    :: img
-        type(stack_io) :: stkio_r, stkio_w
-        integer        :: icls, ncls, ncls_stk, isel, ldim_read(3), ncls_sel
-        real           :: smpd
+        type(string)               :: cavgsstk
+        type(image)                :: img
+        type(stack_io)             :: stkio_r, stkio_w
+        integer                    :: icls, ncls, ncls_stk, isel, ldim_read(3), ncls_sel
+        real                       :: smpd
         ncls = self%os_cls2D%get_noris()
         if( ncls == 0 ) return
         allocate(cls_mask(ncls))
@@ -202,7 +202,7 @@ contains
     module function get_selected_clsinds( self ) result( clsinds )
         class(sp_project),    intent(inout) :: self
         integer, allocatable :: tmpinds(:), states_cavgs(:), clsinds(:)
-        integer :: ncls, icls
+        integer              :: ncls, icls
         ncls         = self%os_cls2D%get_noris()
         if( ncls == 0 ) THROW_HARD('no entries in cls2D field of project')
         tmpinds      = (/(icls,icls=1,ncls)/)
@@ -217,17 +217,17 @@ contains
     end function get_selected_clsinds
 
     module subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail, out_ind, box )
-        class(sp_project),          intent(inout) :: self
-        class(string),              intent(inout) :: stkname
-        integer,                    intent(out)   :: ncls
-        real,                       intent(out)   :: smpd
-        character(len=*), optional, intent(in)    :: imgkind
-        logical,          optional, intent(in)    :: fail
-        integer,          optional, intent(inout) :: out_ind
-        real,             optional, intent(inout) :: box
+        class(sp_project),          intent(inout)           :: self
+        class(string),              intent(inout)           :: stkname
+        integer,                    intent(out)             :: ncls
+        real,                       intent(out)             :: smpd
+        character(len=*),           optional, intent(in)    :: imgkind
+        logical,                    optional, intent(in)    :: fail
+        integer,                    optional, intent(inout) :: out_ind
+        real,                       optional, intent(inout) :: box
         type(string) :: ikind, iimgkind, stkpath
-        integer :: n_os_out, ind, i, cnt
-        logical :: fail_here
+        integer      :: n_os_out, ind, i, cnt
+        logical      :: fail_here
         if( present(imgkind) )then
             iimgkind = trim(imgkind)
         else

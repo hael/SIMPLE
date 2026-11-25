@@ -22,7 +22,7 @@ integer(kind(ENUM_ORISEG)), parameter :: MAX_N_SEGMENTS     = 20
 integer(kind=8),            parameter :: N_VARS_HEAD_SEG    = 5
 integer(kind=8),            parameter :: N_BYTES_HEADER     = MAX_N_SEGMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
 integer,                    parameter :: THREAD_NSTRINGS    = 2000
-integer,                    parameter :: PTCL_BYTES_PER_REC = N_PTCL_RECORD_REALS * 4 ! padded on disk
+integer,                    parameter :: PTCL_BYTES_PER_REC = N_PTCL_RECORD_REALS * 4              ! padded on disk
 
 type binoris_seginfo
     integer(kind=8) :: fromto(2)          = 0
@@ -53,14 +53,14 @@ type binoris
     procedure, private :: byte_manager4seg_inside_restore
     procedure, private :: write_segment_oris
     procedure, private :: write_segment_strs
-    generic            :: write_segment => write_segment_oris, write_segment_strs
+    generic            :: write_segment        => write_segment_oris, write_segment_strs
     procedure, private :: add_segment_oris
     procedure, private :: add_segment_strs
-    generic            :: add_segment => add_segment_oris, add_segment_strs
+    generic            :: add_segment          => add_segment_oris, add_segment_strs
     procedure          :: update_byte_ranges
     procedure          :: read_first_segment_record
     procedure, private :: read_segment_oris, read_segment_strs
-    generic            :: read_segment => read_segment_oris, read_segment_strs
+    generic            :: read_segment         => read_segment_oris, read_segment_strs
     procedure          :: read_record
     ! getters
     procedure          :: get_segments_info
@@ -78,10 +78,10 @@ contains
     ! I/O
 
     subroutine open( self, fname, del_if_exists )
-        class(binoris),    intent(inout) :: self          !< instance
-        class(string),     intent(in)    :: fname         !< filename
-        logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace
-        integer(kind=8) :: filesz
+        class(binoris),    intent(inout)        :: self          !< instance
+        class(string),     intent(in)           :: fname         !< filename
+        logical,           optional, intent(in) :: del_if_exists !< If the file already exists on disk, replace
+        integer(kind=8)            :: filesz
         integer(kind(ENUM_ORISEG)) :: isegment
         if( present(del_if_exists) )then
             if( del_if_exists )then
@@ -171,10 +171,10 @@ contains
     end subroutine write_header
 
     subroutine write_segment_inside_oris( self, isegment, os, fromto )
-        class(binoris),             intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        class(oris),                intent(in)    :: os ! indexed from 1 to nptcls
-        integer,     optional,      intent(in)    :: fromto(2)
+        class(binoris),             intent(inout)             :: self
+        integer(kind(ENUM_ORISEG)), intent(in)                :: isegment
+        class(oris),                intent(in)                :: os ! indexed from 1 to nptcls
+        integer,                    optional,      intent(in) :: fromto(2)
         type(string)                  :: str_dyn
         integer                       :: i, nspaces, noris
         integer(kind(ENUM_ORISEG))    :: iseg
@@ -255,10 +255,10 @@ contains
         class(string),              intent(in)    :: os_strings(:)
         integer,                    intent(in)    :: fromto(2), strlen_max
         character(len=1), allocatable :: bytearr_part3(:)
-        integer(kind(ENUM_ORISEG)) :: iseg
-        integer                    :: i, nspaces, noris
-        integer(kind=8)            :: end_part1, start_part3, end_part3
-        integer(kind=8)            :: ibytes, first_data_byte
+        integer(kind(ENUM_ORISEG))    :: iseg
+        integer                       :: i, nspaces, noris
+        integer(kind=8)               :: end_part1, start_part3, end_part3
+        integer(kind=8)               :: ibytes, first_data_byte
         noris = size(os_strings)
         if( noris == 0 ) return
         if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
@@ -311,7 +311,7 @@ contains
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         character(len=1), allocatable :: bytearr_part3(:)
-        integer(kind=8) :: end_part1, start_part3, end_part3
+        integer(kind=8)               :: end_part1, start_part3, end_part3
         if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         if( isegment < 1 .or. isegment > self%n_segments ) return
         if( self%header(isegment)%n_records <= 0 ) return
@@ -325,10 +325,10 @@ contains
     end subroutine empty_segment_inside
 
     subroutine byte_manager4seg_inside_save( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
-        class(binoris),                intent(inout) :: self
-        integer(kind(ENUM_ORISEG)),    intent(in)    :: isegment
-        integer(kind=8),               intent(out)   :: end_part1, start_part3, end_part3
-        character(len=1), allocatable, intent(out)   :: bytearr_part3(:)
+        class(binoris),                intent(inout)            :: self
+        integer(kind(ENUM_ORISEG)),    intent(in)               :: isegment
+        integer(kind=8),               intent(out)              :: end_part1, start_part3, end_part3
+        character(len=1),              allocatable, intent(out) :: bytearr_part3(:)
         integer(kind(ENUM_ORISEG))  :: iseg
         ! READ RAW BYTES OF PART 1 OF FILE
         ! figure out byte range
@@ -359,10 +359,10 @@ contains
     end subroutine byte_manager4seg_inside_save
 
     subroutine byte_manager4seg_inside_restore( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
-        class(binoris),                intent(inout) :: self
-        integer(kind(ENUM_ORISEG)),       intent(in) :: isegment
-        integer(kind=8),               intent(in)    :: end_part1, start_part3, end_part3
-        character(len=1), allocatable, intent(in)    :: bytearr_part3(:)
+        class(binoris),                   intent(inout)           :: self
+        integer(kind(ENUM_ORISEG)),       intent(in)              :: isegment
+        integer(kind=8),                  intent(in)              :: end_part1, start_part3, end_part3
+        character(len=1),                 allocatable, intent(in) :: bytearr_part3(:)
         integer(kind=8)            :: n_bytes_part3_orig, n_bytes_part3
         integer(kind(ENUM_ORISEG)) :: iseg
         ! update byte ranges in header
@@ -394,10 +394,10 @@ contains
     end subroutine byte_manager4seg_inside_restore
 
     subroutine write_segment_oris( self, isegment, os, fromto )
-        class(binoris),             intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        class(oris),                intent(in)    :: os ! indexed from 1 to nptcls
-        integer, optional,          intent(in)    :: fromto(2)
+        class(binoris),             intent(inout)                 :: self
+        integer(kind(ENUM_ORISEG)), intent(in)                    :: isegment
+        class(oris),                intent(in)                    :: os ! indexed from 1 to nptcls
+        integer,                    optional,          intent(in) :: fromto(2)
         type(string)    :: str_dyn
         real            :: ptcl_record(N_PTCL_ORIPARAMS)
         real            :: disk_record(N_PTCL_RECORD_REALS) ! named slots, then zero padding
@@ -450,7 +450,7 @@ contains
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         integer,                    intent(in)    :: fromto(2), strlen_max
         class(string),              intent(inout) :: sarr(:) ! indexed from 1 to nptcls
-        integer :: i, nspaces
+        integer         :: i, nspaces
         integer(kind=8) :: ibytes
         if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         ! add segment to stack
@@ -471,10 +471,10 @@ contains
     end subroutine write_segment_strs
 
     subroutine add_segment_oris( self, isegment, os, fromto )
-        class(binoris),             intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        class(oris),                intent(in)    :: os
-        integer, optional,          intent(in)    :: fromto(2)
+        class(binoris),             intent(inout)                 :: self
+        integer(kind(ENUM_ORISEG)), intent(in)                    :: isegment
+        class(oris),                intent(in)                    :: os
+        integer,                    optional,          intent(in) :: fromto(2)
         integer :: strlen_max
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGMENTS )then
@@ -559,17 +559,17 @@ contains
     end subroutine read_first_segment_record
 
     subroutine read_segment_oris( self, isegment, os, fromto, only_ctfparams_state_eo, wthreads )
-        class(binoris),             intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        class(oris),                intent(inout) :: os
-        integer,          optional, intent(in)    :: fromto(2)
-        logical,          optional, intent(in)    :: only_ctfparams_state_eo, wthreads
+        class(binoris),             intent(inout)        :: self
+        integer(kind(ENUM_ORISEG)), intent(in)           :: isegment
+        class(oris),                intent(inout)        :: os
+        integer,                    optional, intent(in) :: fromto(2)
+        logical,                    optional, intent(in) :: only_ctfparams_state_eo, wthreads
         integer,          allocatable :: batches(:,:)
         character(len=:), allocatable :: tmp_string
-        integer(kind=8) :: ibytes, ipos
-        real            :: ptcl_record(N_PTCL_ORIPARAMS)
-        integer         :: fromto_here(2), i, irec, n, nl, nbatches, ibatch, nbatch, nthr
-        logical         :: oonly_ctfparams_state_eo
+        integer(kind=8)               :: ibytes, ipos
+        real                          :: ptcl_record(N_PTCL_ORIPARAMS)
+        integer                       :: fromto_here(2), i, irec, n, nl, nbatches, ibatch, nbatch, nthr
+        logical                       :: oonly_ctfparams_state_eo
         if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         if( isegment < 1 .or. isegment > self%n_segments )then
             write(logfhandle,*) 'filename', self%fname%to_char()
@@ -642,8 +642,8 @@ contains
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(string),              intent(inout) :: sarr(:)
         character(len=:), allocatable :: buffer
-        integer         :: i
-        integer(kind=8) :: ibytes
+        integer                       :: i
+        integer(kind=8)               :: ibytes
         if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         if( isegment < 1 .or. isegment > self%n_segments )then
             write(logfhandle,*) 'filename', self%fname%to_char()
@@ -671,8 +671,8 @@ contains
         integer(kind=8),               intent(inout) :: ibytes
         class(string),                 intent(inout) :: str
         character(len=:), allocatable :: buffer
-        type(ori) :: o
-        real      :: ptcl_record(N_PTCL_ORIPARAMS)
+        type(ori)                     :: o
+        real                          :: ptcl_record(N_PTCL_ORIPARAMS)
         call str%kill
         if( is_particle_seg(isegment) )then ! ptcl2D/3D segment, see simple_sp_project
             call o%new(is_ptcl=.true.)
@@ -692,13 +692,13 @@ contains
     !! a record narrower than the on-disk width (a project written by an earlier release)
     !! reads with zeros in the slots it lacks; a wider one (a later release) is refused.
     subroutine read_particle_record(self,isegment,ibytes,ptcl_record)
-        class(binoris), intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in) :: isegment
-        integer(kind=8), intent(in) :: ibytes
-        real, intent(out) :: ptcl_record(N_PTCL_ORIPARAMS)
-        real :: disk_record(N_PTCL_RECORD_REALS)
+        class(binoris),             intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        integer(kind=8),            intent(in)    :: ibytes
+        real,                       intent(out)   :: ptcl_record(N_PTCL_ORIPARAMS)
+        real                          :: disk_record(N_PTCL_RECORD_REALS)
         character(len=:), allocatable :: errmsg
-        integer :: nvalues
+        integer                       :: nvalues
         if( mod(self%header(isegment)%n_bytes_per_record,4_8) /= 0_8 ) &
             &THROW_HARD('particle record byte count is not a multiple of four')
         nvalues = int(self%header(isegment)%n_bytes_per_record/4_8)
@@ -716,9 +716,9 @@ contains
     ! getters
 
     subroutine get_segments_info( self, seginds, info_struct )
-        class(binoris),                     intent(in)  :: self
-        integer,               allocatable, intent(out) :: seginds(:)
-        type(binoris_seginfo), allocatable, intent(out) :: info_struct(:)
+        class(binoris),                     intent(in)               :: self
+        integer,                            allocatable, intent(out) :: seginds(:)
+        type(binoris_seginfo),              allocatable, intent(out) :: info_struct(:)
         integer(kind(ENUM_ORISEG)) :: isegment, cnt
         if( allocated(seginds)     ) deallocate(seginds)
         if( allocated(info_struct) ) deallocate(info_struct)
@@ -785,7 +785,7 @@ contains
     end function get_n_bytes_tot
 
     pure integer(kind=8) function get_first_data_byte( self, isegment )
-        class(binoris),          intent(in) :: self
+        class(binoris),             intent(in) :: self
         integer(kind(ENUM_ORISEG)), intent(in) :: isegment
         get_first_data_byte = self%header(isegment)%first_data_byte
     end function get_first_data_byte
@@ -809,9 +809,9 @@ contains
     subroutine check_particle_slots( os, fromto )
         class(oris), intent(in) :: os
         integer,     intent(in) :: fromto(2)
-        type(string) :: key
+        type(string)                  :: key
         character(len=:), allocatable :: msg
-        integer :: i
+        integer                       :: i
         do i = fromto(1), fromto(2)
             key = os%nonslot_key(i)
             if( key%strlen_trim() > 0 )then

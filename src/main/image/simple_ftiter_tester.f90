@@ -58,12 +58,12 @@ contains
     ! (ldim(1)/2+1, ldim(2), ldim(3)); comp_addr_logi inverts it; a negative h lands on the storage of
     ! its Friedel mate; the three forms of comp_addr_phys agree
     subroutine test_address_maps()
-        integer, parameter :: NBOX = 6
-        integer, parameter :: BOXES(3,NBOX) = reshape([100,100,1, 101,101,1, 120,90,1, 40,40,40, 21,21,21, 24,18,16], [3,NBOX])
+        integer, parameter   :: NBOX          = 6
+        integer, parameter   :: BOXES(3,NBOX) = reshape([100,100,1, 101,101,1, 120,90,1, 40,40,40, 21,21,21, 24,18,16], [3,NBOX])
         type(ftiter)         :: fit
         integer, allocatable :: hits(:,:,:)
-        integer :: ib, h, k, l, lims(3,2), phys(3), phys2(2), logi(3), ldim(3)
-        logical :: inverse_ok, forms_ok, friedel_ok, in_bounds
+        integer              :: ib, h, k, l, lims(3,2), phys(3), phys2(2), logi(3), ldim(3)
+        logical              :: inverse_ok, forms_ok, friedel_ok, in_bounds
         write(*,'(A)') 'test_address_maps'
         do ib = 1,NBOX
             ldim = BOXES(:,ib)

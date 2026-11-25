@@ -43,15 +43,15 @@ contains
     !> a partition script records itself and writes its exit status; a submitted part without its
     !! finished sentinel fails on a non-zero or lost status, not on a zero one or none
     subroutine test_failed_parts()
-        type(qsys_local)             :: qsys_obj
-        integer, allocatable, target :: parts(:,:)
-        type(qsys_ctrl)              :: ctrl
-        type(chash)                  :: job_descr, q_descr
-        type(string)                 :: cwd_saved, root
-        character(len=:), allocatable :: txt
-        logical, allocatable         :: done(:), submitted(:)
-        integer, allocatable         :: failed(:)
-        integer :: nfail0
+        type(qsys_local)                      :: qsys_obj
+        integer,          allocatable, target :: parts(:,:)
+        type(qsys_ctrl)                       :: ctrl
+        type(chash)                           :: job_descr, q_descr
+        type(string)                          :: cwd_saved, root
+        character(len=:), allocatable         :: txt
+        logical,          allocatable         :: done(:), submitted(:)
+        integer,          allocatable         :: failed(:)
+        integer                               :: nfail0
         write(*,'(A)') 'test_failed_parts'
         nfail0 = tests_failed
         call enter_fixture('qsys_failed_parts', cwd_saved, root)
@@ -87,15 +87,15 @@ contains
     !> local part scripts whose executable fails are submitted for real: the master sees both
     !! failed parts within seconds instead of waiting for their finished sentinels
     subroutine test_failed_local_parts()
-        integer, parameter :: WAIT_S = 30
-        type(qsys_local)             :: qsys_obj
-        integer, allocatable, target :: parts(:,:)
-        type(qsys_ctrl)              :: ctrl
-        type(chash)                  :: job_descr, q_descr
-        type(string)                 :: cwd_saved, root
-        character(len=:), allocatable :: cwd_glob_saved
-        integer, allocatable         :: failed(:)
-        integer :: nfail0, it
+        integer,          parameter           :: WAIT_S = 30
+        type(qsys_local)                      :: qsys_obj
+        integer,          allocatable, target :: parts(:,:)
+        type(qsys_ctrl)                       :: ctrl
+        type(chash)                           :: job_descr, q_descr
+        type(string)                          :: cwd_saved, root
+        character(len=:), allocatable         :: cwd_glob_saved
+        integer,          allocatable         :: failed(:)
+        integer                               :: nfail0, it
         write(*,'(A)') 'test_failed_local_parts'
         nfail0 = tests_failed
         call enter_fixture('qsys_failed_local_parts', cwd_saved, root)
@@ -132,9 +132,9 @@ contains
     !! host cannot be told; a job gone at two checks in a row gets the lost status written
     subroutine test_job_liveness()
         character(len=*), parameter :: EXIT_CODE = 'EXIT_CODE_live'
-        type(string) :: cwd_saved, root, host
-        integer      :: nfail0, last_check, nmisses, code
-        logical      :: l_lost, err
+        type(string)                :: cwd_saved, root, host
+        integer                     :: nfail0, last_check, nmisses, code
+        logical                     :: l_lost, err
         write(*,'(A)') 'test_job_liveness'
         nfail0 = tests_failed
         call enter_fixture('qsys_job_liveness', cwd_saved, root)
@@ -194,8 +194,8 @@ contains
     !! job starts there; a finished job is never cancelled and its directory is kept
     subroutine test_async_job_record_and_fresh_dir()
         character(len=*), parameter :: EXIT_CODE = 'job/EXIT_CODE_test'
-        type(string) :: cwd_saved, root
-        integer      :: nfail0
+        type(string)                :: cwd_saved, root
+        integer                     :: nfail0
         write(*,'(A)') 'test_async_job_record_and_fresh_dir'
         nfail0 = tests_failed
         call enter_fixture('qsys_async_fresh_dir', cwd_saved, root)
@@ -222,8 +222,8 @@ contains
 
     !> writes up to three lines to @p fname
     subroutine write_lines( fname, line1, line2, line3 )
-        character(len=*),           intent(in) :: fname, line1
-        character(len=*), optional, intent(in) :: line2, line3
+        character(len=*),           intent(in)           :: fname, line1
+        character(len=*),           optional, intent(in) :: line2, line3
         integer :: funit, ios
         open(newunit=funit, file=fname, status='replace', action='write', iostat=ios)
         if( ios /= 0 ) return
@@ -235,10 +235,10 @@ contains
 
     !> a local backend, the even parts table and a controller over all partitions
     subroutine make_ctrl( qsys_obj, parts, ctrl, stream )
-        type(qsys_local),     intent(out), target :: qsys_obj
-        integer, allocatable, intent(out), target :: parts(:,:)
-        type(qsys_ctrl),      intent(out) :: ctrl
-        logical, optional,    intent(in)  :: stream
+        type(qsys_local),     intent(out), target              :: qsys_obj
+        integer,              allocatable, intent(out), target :: parts(:,:)
+        type(qsys_ctrl),      intent(out)                      :: ctrl
+        logical,              optional,    intent(in)          :: stream
         logical :: sstream
         sstream = .false.
         if( present(stream) ) sstream = stream
@@ -251,8 +251,8 @@ contains
     function file_text( fname ) result( txt )
         character(len=*), intent(in) :: fname
         character(len=:), allocatable :: txt
-        character(len=4096) :: line
-        integer :: funit, ios
+        character(len=4096)           :: line
+        integer                       :: funit, ios
         txt = ''
         open(newunit=funit, file=fname, status='old', action='read', iostat=ios)
         if( ios /= 0 ) return
@@ -316,12 +316,12 @@ contains
 
     !> one script per partition carrying its particle range; the job description is restored
     subroutine test_prep_part_jobs()
-        type(qsys_local)             :: qsys_obj
-        integer, allocatable, target :: parts(:,:)
-        type(qsys_ctrl)              :: ctrl
-        type(chash)                  :: job_descr, q_descr
-        character(len=:), allocatable :: txt
-        integer :: ip, nmissing
+        type(qsys_local)                      :: qsys_obj
+        integer,          allocatable, target :: parts(:,:)
+        type(qsys_ctrl)                       :: ctrl
+        type(chash)                           :: job_descr, q_descr
+        character(len=:), allocatable         :: txt
+        integer                               :: ip, nmissing
         write(*,'(A)') 'test_prep_part_jobs'
         call make_ctrl(qsys_obj, parts, ctrl)
         call job_descr%new(20)
@@ -354,12 +354,12 @@ contains
 
     !> a single-job script from a chash (explicit executable) and from a cmdline
     subroutine test_single_job_scripts()
-        type(qsys_local)             :: qsys_obj
-        integer, allocatable, target :: parts(:,:)
-        type(qsys_ctrl)              :: ctrl
-        type(chash)                  :: job_descr, q_descr
-        type(cmdline)                :: cline
-        character(len=*), parameter  :: SNAME2 = 'test_single_script_2', SNAME3 = 'test_single_script_3'
+        type(qsys_local)                      :: qsys_obj
+        integer,          allocatable, target :: parts(:,:)
+        type(qsys_ctrl)                       :: ctrl
+        type(chash)                           :: job_descr, q_descr
+        type(cmdline)                         :: cline
+        character(len=*), parameter           :: SNAME2 = 'test_single_script_2', SNAME3 = 'test_single_script_3'
         write(*,'(A)') 'test_single_job_scripts'
         call make_ctrl(qsys_obj, parts, ctrl)
         call job_descr%new(10)
@@ -390,14 +390,14 @@ contains
 
     !> three job descriptions packed into one sequential script
     subroutine test_multi_job_script()
-        type(qsys_local)             :: qsys_obj
-        integer, allocatable, target :: parts(:,:)
-        type(qsys_ctrl)              :: ctrl
-        type(chash), allocatable     :: jobs(:)
-        type(chash)                  :: q_descr
-        character(len=*), parameter  :: SNAME = 'test_multi_script_4'
-        character(len=:), allocatable :: txt
-        integer :: ij
+        type(qsys_local)                      :: qsys_obj
+        integer,          allocatable, target :: parts(:,:)
+        type(qsys_ctrl)                       :: ctrl
+        type(chash),      allocatable         :: jobs(:)
+        type(chash)                           :: q_descr
+        character(len=*), parameter           :: SNAME = 'test_multi_script_4'
+        character(len=:), allocatable         :: txt
+        integer                               :: ij
         write(*,'(A)') 'test_multi_job_script'
         call make_ctrl(qsys_obj, parts, ctrl)
         allocate(jobs(3))
@@ -434,12 +434,12 @@ contains
 
     !> the streaming job pool, exercised without scheduling
     subroutine test_streaming_stack()
-        type(qsys_local)             :: qsys_obj
-        integer, allocatable, target :: parts(:,:)
-        type(qsys_ctrl)              :: ctrl
-        type(cmdline)                :: cline1, cline2, cline3
-        class(cmdline), allocatable  :: done_stack(:), fail_stack(:)
-        integer :: nfail
+        type(qsys_local)                    :: qsys_obj
+        integer,        allocatable, target :: parts(:,:)
+        type(qsys_ctrl)                     :: ctrl
+        type(cmdline)                       :: cline1, cline2, cline3
+        class(cmdline), allocatable         :: done_stack(:), fail_stack(:)
+        integer                             :: nfail
         write(*,'(A)') 'test_streaming_stack'
         call make_ctrl(qsys_obj, parts, ctrl, stream=.true.)
         call cline1%set('prg', 'refine2D'); call cline1%set('fromp',   1.); call cline1%set('top', 25.)

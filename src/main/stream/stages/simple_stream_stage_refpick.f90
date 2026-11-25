@@ -89,50 +89,50 @@ public :: run_all_stream_stage_refpick_tests
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: NTHUMB_MAX          = 20                 ! most recent micrograph thumbnails sent to the GUI
-integer, parameter :: DEFAULT_EXTRACT_BOX = DEFAULT_COARSE_BOX ! smallest extraction box
-integer, parameter :: STAR_EVERY_NMICS    = 1000 ! below this many micrographs the STAR file is rewritten on every import...
-integer, parameter :: STAR_STEP_NMICS     = 100  ! ...above it, every this many new micrographs
-character(len=*), parameter :: PICKREFS_JOB_DIR = 'make_pickrefs' ! the folder of the make_pickrefs job
+integer,          parameter :: NTHUMB_MAX          = 20                 ! most recent micrograph thumbnails sent to the GUI
+integer,          parameter :: DEFAULT_EXTRACT_BOX = DEFAULT_COARSE_BOX ! smallest extraction box
+integer,          parameter :: STAR_EVERY_NMICS    = 1000               ! below this many micrographs the STAR file is rewritten on every import...
+integer,          parameter :: STAR_STEP_NMICS     = 100                ! ...above it, every this many new micrographs
+character(len=*), parameter :: PICKREFS_JOB_DIR    = 'make_pickrefs'    ! the folder of the make_pickrefs job
 
 ! Components and steps are public so simple_stream_stage_refpick_tester can assemble a stage
 ! and run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_refpick
     type(parameters), allocatable     :: params
     ! allocatable (compile-time policy), allocated in init_params and released in kill
-    type(cmdline),    allocatable     :: cline_exec       ! command line of the pick_extract worker jobs
-    type(cmdline),    allocatable     :: cline_pickrefs   ! make_pickrefs, run once the pixel size is known
+    type(cmdline),    allocatable     :: cline_exec                    ! command line of the pick_extract worker jobs
+    type(cmdline),    allocatable     :: cline_pickrefs                ! make_pickrefs, run once the pixel size is known
     type(qsys_env),   allocatable     :: qenv
-    type(qsys_env),   allocatable     :: qenv_local       ! jobs that run on this machine (make_pickrefs)
-    type(qsys_async_job)              :: pickrefs_job     ! make_pickrefs, once
-    type(sp_project), allocatable     :: spproj           ! every imported micrograph; stacks and particles when written
-    type(stream_job_sets)             :: sets             ! one per upstream project, picked and extracted by one job
-    type(stream_watcher)              :: project_buff     ! completed preprocessing projects
+    type(qsys_env),   allocatable     :: qenv_local                    ! jobs that run on this machine (make_pickrefs)
+    type(qsys_async_job)              :: pickrefs_job                  ! make_pickrefs, once
+    type(sp_project), allocatable     :: spproj                        ! every imported micrograph; stacks and particles when written
+    type(stream_job_sets)             :: sets                          ! one per upstream project, picked and extracted by one job
+    type(stream_watcher)              :: project_buff                  ! completed preprocessing projects
     type(starproject_stream)          :: starproj_stream
-    type(stream_pipe)                 :: pipe             ! to the master
+    type(stream_pipe)                 :: pipe                          ! to the master
     type(gui_metadata_stream_picking) :: meta_status
     type(gui_metadata_micrograph)     :: meta_micrograph
     type(gui_metadata_cavg2D)         :: meta_pickrefs
-    type(string), allocatable         :: set_projects(:)  ! imported sets (completed folder), in import order
-    type(string), allocatable         :: restored_sources(:) ! restart: upstream projects for the watcher history
-    type(string)                      :: cwd              ! absolute stage directory
-    integer :: n_mics_submitted = 0       ! micrographs sent to picking
-    integer :: nptcls_glob      = 0       ! particles of the imported micrographs
-    integer :: n_failed_jobs    = 0
-    integer :: nmic_star        = 0       ! micrographs in the last STAR snapshot (above STAR_EVERY_NMICS)
-    integer :: prev_stacksz     = 0
-    integer :: box              = 0       ! the extraction box make_pickrefs decided (px)
-    integer :: last_injection   = 0       ! time of the last import
-    integer :: last_watch       = 0       ! time of the last watch of the upstream folder
-    integer :: upstream_done_since = 0    ! when preprocessing was first seen idle or stopped; 0: it is not
-    logical :: l_attached       = .false. ! the upstream completed-projects folder exists and is watched
-    logical :: l_waiting_logged = .false.
-    logical :: l_pickrefs_found = .false. ! the input picking references exist
-    logical :: l_pickrefs_ready = .false. ! make_pickrefs has run; the workers have their references
-    logical :: l_projects_left  = .false. ! the last watch was capped, more upstream projects may be waiting
-    logical :: l_haschanged     = .false. ! imports since the last idle project write
-    logical :: l_restart        = .false.
-    logical :: l_exists         = .false.
+    type(string),     allocatable     :: set_projects(:)               ! imported sets (completed folder), in import order
+    type(string),     allocatable     :: restored_sources(:)           ! restart: upstream projects for the watcher history
+    type(string)                      :: cwd                           ! absolute stage directory
+    integer                           :: n_mics_submitted    = 0       ! micrographs sent to picking
+    integer                           :: nptcls_glob         = 0       ! particles of the imported micrographs
+    integer                           :: n_failed_jobs       = 0
+    integer                           :: nmic_star           = 0       ! micrographs in the last STAR snapshot (above STAR_EVERY_NMICS)
+    integer                           :: prev_stacksz        = 0
+    integer                           :: box                 = 0       ! the extraction box make_pickrefs decided (px)
+    integer                           :: last_injection      = 0       ! time of the last import
+    integer                           :: last_watch          = 0       ! time of the last watch of the upstream folder
+    integer                           :: upstream_done_since = 0       ! when preprocessing was first seen idle or stopped; 0: it is not
+    logical                           :: l_attached          = .false. ! the upstream completed-projects folder exists and is watched
+    logical                           :: l_waiting_logged    = .false.
+    logical                           :: l_pickrefs_found    = .false. ! the input picking references exist
+    logical                           :: l_pickrefs_ready    = .false. ! make_pickrefs has run; the workers have their references
+    logical                           :: l_projects_left     = .false. ! the last watch was capped, more upstream projects may be waiting
+    logical                           :: l_haschanged        = .false. ! imports since the last idle project write
+    logical                           :: l_restart           = .false.
+    logical                           :: l_exists            = .false.
     ! waits (s); tests set them to 0, and settle_s to -1 to take files written in the same second
     integer :: settle_s         = SHORTWAIT ! an upstream project is taken once untouched longer than this
     integer :: wait_s           = WAITTIME  ! pause at the end of a pass
@@ -146,26 +146,26 @@ contains
     procedure, private :: init_params
     procedure, private :: init_job_dirs
     procedure, private :: resume_previous_run
-    procedure :: init_queue
+    procedure          :: init_queue
     procedure, private :: build_worker_cline
     procedure, private :: init_gui
     ! the steps of iterate() and their helpers
     procedure, private :: attach_upstream
     procedure, private :: pickrefs_available
-    procedure :: submit_new_projects
+    procedure          :: submit_new_projects
     procedure, private :: create_set_project
-    procedure :: prepare_pickrefs
+    procedure          :: prepare_pickrefs
     procedure, private :: first_mics_smpd
-    procedure :: install_pickrefs
-    procedure :: schedule_jobs
-    procedure :: collect_jobs
+    procedure          :: install_pickrefs
+    procedure          :: schedule_jobs
+    procedure          :: collect_jobs
     procedure, private :: import_finished_sets
     procedure, private :: import_sets
-    procedure :: import_previous_sets
-    procedure :: process_imports
-    procedure :: idle
+    procedure          :: import_previous_sets
+    procedure          :: process_imports
+    procedure          :: idle
     procedure, private :: update_idle_marker
-    procedure :: apply_optics_map
+    procedure          :: apply_optics_map
     procedure, private :: write_mic_star
     procedure, private :: write_project
     procedure, private :: send_status
@@ -493,7 +493,7 @@ contains
     subroutine submit_new_projects( self )
         class(stream_stage_refpick), intent(inout) :: self
         type(string), allocatable :: projects(:)
-        integer :: nprojects, iproj, nselected, nmics
+        integer                   :: nprojects, iproj, nselected, nmics
         self%l_projects_left = .false.
         self%last_watch      = simple_gettime()
         call self%project_buff%watch(nprojects, projects, max_nmovies=self%params%nparts)
@@ -524,8 +524,8 @@ contains
         class(string),               intent(in)    :: upstream_fname
         integer,                     intent(out)   :: nselected
         character(len=*), parameter :: PICK_PREP_KEYS(4) = [character(len=8) :: 'mic_den', 'mic_topo', 'mic_bin', 'mic_diam']
-        type(sp_project) :: upstream, set_proj
-        integer          :: imic, cnt, ikey
+        type(sp_project)            :: upstream, set_proj
+        integer                     :: imic, cnt, ikey
         call upstream%read_segment('mic', upstream_fname)
         nselected = upstream%os_mic%count_state_gt_zero()
         if( nselected == 0 )then
@@ -588,7 +588,7 @@ contains
         class(stream_stage_refpick), intent(inout) :: self
         type(string), allocatable :: projects(:)
         type(sp_project)          :: upstream
-        integer :: nprojects, iproj, imic
+        integer                   :: nprojects, iproj, imic
         smpd = 0.
         call self%project_buff%watch(nprojects, projects, max_nmovies=self%params%nparts)
         do iproj = 1,nprojects
@@ -654,7 +654,7 @@ contains
         class(stream_stage_refpick), intent(inout) :: self
         integer,                     intent(out)   :: n_imported
         type(string), allocatable :: done(:)
-        integer :: n_failed
+        integer                   :: n_failed
         ! the micrographs of the failed jobs
         call self%sets%collect(self%qenv, done, n_failed)
         self%n_failed_jobs = self%n_failed_jobs + n_failed
@@ -671,7 +671,7 @@ contains
         type(sp_project)          :: job
         type(string), allocatable :: completed(:)
         type(string)              :: completed_fname
-        integer :: iset
+        integer                   :: iset
         n_imported = 0
         allocate(completed(0))
         do iset = 1,size(job_fnames)
@@ -705,7 +705,7 @@ contains
     subroutine import_previous_sets( self )
         class(stream_stage_refpick), intent(inout) :: self
         type(string), allocatable :: completed(:), sources(:)
-        integer :: nmics
+        integer                   :: nmics
         call self%sets%restore(completed, sources)
         if( size(completed) == 0 ) return
         call self%import_sets(completed, nmics)

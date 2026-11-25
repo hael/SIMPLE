@@ -27,7 +27,7 @@ integer, parameter :: FLEX_GATE_SEED = 202610063
 integer, parameter :: STATE_REFINE_SEED   = 202610071
 integer, parameter :: STATE_REFINE_MAXITS = 5
 real,    parameter :: STATE_REFINE_MARGIN = 0.01
-real,    parameter :: MAP_CORR_LP = 8.0
+real,    parameter :: MAP_CORR_LP         = 8.0
 !> the class-average state refinement (refine3D_states_cavgs): CAVGS_NVIEWS directions, each an exact 2D
 !! class of 60 particles over CAVGS_NSTATES planted states, split by cls_expansion into CAVGS_NSUB
 !! sub-classes each (ncls is the total; the project has no class averages, so every view is its own group,
@@ -66,7 +66,7 @@ integer, parameter :: CAVGS_MIN_COMMITTED      = 90
 !! mode) for the FLEX modes, three beta-galactosidase states in exact views (views mode) for the
 !! class-average state refinement; the true state of every particle is read from the fixture's truth
 !! document, and the geometry of the class-average dataset (box, pixel, mask) from the fixture
-real,    parameter :: PHANTOM_SNR = 1.0
+real,    parameter   :: PHANTOM_SNR   = 1.0
 integer, allocatable :: truth_states_ab(:), truth_states_abc(:)
 type(string)         :: truth_doc_abc
 integer              :: cavgs_box     = 0
@@ -74,29 +74,29 @@ real                 :: cavgs_smpd    = 0.
 real                 :: cavgs_mskdiam = 0.
 
 type :: flex_gate_result
-    logical :: valid = .false.
-    logical :: embedding_found = .false.
-    integer :: nstates = 0
-    integer :: matched_a = 0
-    integer :: matched_b = 0
-    real    :: label_accuracy = 0.0
-    real    :: pc_corr = 0.0
-    real(real64) :: noise_scale = 1.0_real64
-    integer, allocatable :: predicted_truth(:)
+    logical                   :: valid           = .false.
+    logical                   :: embedding_found = .false.
+    integer                   :: nstates         = 0
+    integer                   :: matched_a       = 0
+    integer                   :: matched_b       = 0
+    real                      :: label_accuracy  = 0.0
+    real                      :: pc_corr         = 0.0
+    real(real64)              :: noise_scale     = 1.0_real64
+    integer,      allocatable :: predicted_truth(:)
     real(real64), allocatable :: z(:,:)
-    type(string) :: map_a
-    type(string) :: map_b
+    type(string)              :: map_a
+    type(string)              :: map_b
 end type flex_gate_result
 
 contains
 
 module subroutine exec_test_flex_pca_blobs( self, cline )
-    class(commander_test_flex_pca_blobs), intent(inout) :: self
+    class(commander_test_flex_pca_blobs),  intent(inout) :: self
     class(cmdline),                        intent(inout) :: cline
     class(parameters), allocatable :: params
-    type(string) :: cwd_saved, fixture_root
-    integer :: nthr, status
-    logical :: all_ok
+    type(string)                   :: cwd_saved, fixture_root
+    integer                        :: nthr, status
+    logical                        :: all_ok
     call simple_getcwd(cwd_saved)
     fixture_root = filepath(cwd_saved, 'test_flex_pca_blobs_'//int2str(get_process_id()))
     if( dir_exists(fixture_root) ) call simple_rmdir(fixture_root)
@@ -125,11 +125,11 @@ subroutine run_flex_pca_blobs_gate( nthr, metrics_file, all_ok )
     integer,       intent(in)    :: nthr
     class(string), intent(in)    :: metrics_file
     logical,       intent(inout) :: all_ok
-    type(test_gate) :: gate
+    type(test_gate)        :: gate
     type(flex_gate_result) :: shared, distributed
-    type(state_fixture) :: fix
-    type(string) :: root, truth_a, truth_b, truth_mean, truth_diff, phantom
-    real :: latent_corr, truth_label_agreement, map_a_corr, map_b_corr
+    type(state_fixture)    :: fix
+    type(string)           :: root, truth_a, truth_b, truth_mean, truth_diff, phantom
+    real                   :: latent_corr, truth_label_agreement, map_a_corr, map_b_corr
     call make_ui
     call simple_getcwd(root)
     CWD_GLOB = root%to_char()
@@ -172,15 +172,15 @@ subroutine run_flex_pca_blobs_gate( nthr, metrics_file, all_ok )
 end subroutine run_flex_pca_blobs_gate
 
 subroutine run_flex_mode( tag, nparts, nthr, root, truth_a, truth_b, truth_mean, truth_diff, phantom, gate, result )
-    character(len=*), intent(in) :: tag
-    integer,          intent(in) :: nparts, nthr
-    class(string),    intent(in) :: root, truth_a, truth_b, truth_mean, truth_diff, phantom
-    type(test_gate),  intent(inout) :: gate
-    type(flex_gate_result), intent(out) :: result
+    character(len=*),       intent(in)    :: tag
+    integer,                intent(in)    :: nparts, nthr
+    class(string),          intent(in)    :: root, truth_a, truth_b, truth_mean, truth_diff, phantom
+    type(test_gate),        intent(inout) :: gate
+    type(flex_gate_result), intent(out)   :: result
     class(commander_flex_pca), allocatable :: flex_pca
-    class(cmdline), allocatable :: cline
-    type(string) :: run_dir
-    integer :: status, i
+    class(cmdline),            allocatable :: cline
+    type(string)                           :: run_dir
+    integer                                :: status, i
     run_dir = root//'/'//trim(tag)
     call simple_mkdir(run_dir)
     call simple_copy_file(phantom, run_dir//'/phantom.simple')
@@ -219,20 +219,20 @@ contains
 end subroutine run_flex_mode
 
 subroutine inspect_flex_result( tag, truth_a, truth_b, truth_diff, gate, result )
-    character(len=*), intent(in) :: tag
-    class(string),    intent(in) :: truth_a, truth_b, truth_diff
-    type(test_gate),  intent(inout) :: gate
-    type(flex_gate_result), intent(out) :: result
+    character(len=*),       intent(in)    :: tag
+    class(string),          intent(in)    :: truth_a, truth_b, truth_diff
+    type(test_gate),        intent(inout) :: gate
+    type(flex_gate_result), intent(out)   :: result
     class(sp_project), allocatable :: project
-    class(oris), allocatable :: field
-    real(real32), allocatable :: weights(:,:)
-    real(real64), allocatable :: precision(:,:,:)
-    integer, allocatable :: labels(:), deconv_labels(:), truth_counts(:,:), state_truth(:), map_states(:), shuffled(:)
-    real, allocatable :: corr(:,:)
-    type(string) :: map
-    character(len=STDLEN) :: message
-    integer :: status, i, state, truth_label, predicted, nlabel_mismatch, nweight_mismatch, map_box
-    real :: best_score, fsc05, fsc0143, map_smpd
+    class(oris),       allocatable :: field
+    real(real32),      allocatable :: weights(:,:)
+    real(real64),      allocatable :: precision(:,:,:)
+    integer,           allocatable :: labels(:), deconv_labels(:), truth_counts(:,:), state_truth(:), map_states(:), shuffled(:)
+    real,              allocatable :: corr(:,:)
+    type(string)                   :: map
+    character(len=STDLEN)          :: message
+    integer                        :: status, i, state, truth_label, predicted, nlabel_mismatch, nweight_mismatch, map_box
+    real                           :: best_score, fsc05, fsc0143, map_smpd
     result = flex_gate_result()
     allocate(project, field)
     call project%read(string('phantom.simple'))
@@ -338,12 +338,12 @@ subroutine inspect_flex_result( tag, truth_a, truth_b, truth_diff, gate, result 
 end subroutine inspect_flex_result
 
 subroutine inspect_eigenvolume( tag, truth_diff, gate, corr )
-    character(len=*), intent(in) :: tag
-    class(string),    intent(in) :: truth_diff
+    character(len=*), intent(in)    :: tag
+    class(string),    intent(in)    :: truth_diff
     type(test_gate),  intent(inout) :: gate
-    real,             intent(out) :: corr
+    real,             intent(out)   :: corr
     class(image), allocatable :: truth, pc
-    type(string) :: pcfile
+    type(string)              :: pcfile
     pcfile = 'flex_pca_fullset_pc001.mrc'
     corr = 0.0
     call gate%check(trim(tag)//': full-set leading eigenvolume is delivered', file_exists(pcfile))
@@ -372,8 +372,8 @@ subroutine run_state_refinements( root, nthr, truth_a, truth_b, shared, gate )
     type(test_gate),        intent(inout) :: gate
     type(string)   :: run_dir, parent
     integer(int64) :: checksum_before
-    real    :: corr_flex, corr_hard
-    integer :: status, k, state
+    real           :: corr_flex, corr_hard
+    integer        :: status, k, state
     run_dir = root//'/shared'
     parent  = run_dir//'/phantom.simple'
     checksum_before = sigma2_state_digest_file(parent)
@@ -410,12 +410,12 @@ subroutine refine_flex_state( run_dir, projfile, state, mode, nthr, truth, gate,
     class(commander_refine3D_auto), allocatable :: xrefine
     class(cmdline),                 allocatable :: cline
     class(sp_project),              allocatable :: work
-    type(state_weight_set) :: wset
-    type(string)           :: work_dir, work_projfile, map, imgkind
-    character(len=STDLEN)  :: tag, message
-    real    :: map_smpd, fsc05, fsc0143
-    integer :: map_box, status, i, ind
-    logical :: l_registered
+    type(state_weight_set)                      :: wset
+    type(string)                                :: work_dir, work_projfile, map, imgkind
+    character(len=STDLEN)                       :: tag, message
+    real                                        :: map_smpd, fsc05, fsc0143
+    integer                                     :: map_box, status, i, ind
+    logical                                     :: l_registered
     corr = 0.
     tag  = 'state'//int2str(state)//'_'//trim(mode)
     call simple_chdir(run_dir, status)
@@ -490,7 +490,7 @@ end subroutine match_truth_maps
 
 real function best_latent_correlation( a, b ) result( score )
     real(real64), intent(in) :: a(:,:), b(:,:)
-    real :: corr(FLEX_PHANTOM_NCOMP,FLEX_PHANTOM_NCOMP)
+    real    :: corr(FLEX_PHANTOM_NCOMP,FLEX_PHANTOM_NCOMP)
     integer :: i, j
     do i = 1, FLEX_PHANTOM_NCOMP
         do j = 1, FLEX_PHANTOM_NCOMP
@@ -514,7 +514,7 @@ real function vector_correlation( a, b ) result( corr )
 end function vector_correlation
 
 subroutine map_pair_correlation( a, b, corr )
-    class(string), intent(in) :: a, b
+    class(string), intent(in)  :: a, b
     real,          intent(out) :: corr
     real :: fsc05, fsc0143
     call compare_to_truth(a, b, FLEX_PHANTOM_MSKDIAM, corr, fsc05, fsc0143, corr_lp=MAP_CORR_LP)
@@ -527,7 +527,7 @@ subroutine write_mean_and_difference( truths, dir, box, smpd, truth_mean, truth_
     real,          intent(in)  :: smpd
     type(string),  intent(out) :: truth_mean, truth_diff
     type(image) :: vol, acc, first
-    integer :: k
+    integer     :: k
     truth_mean = dir//'/truth_mean.mrc'
     truth_diff = dir//'/truth_a_minus_b.mrc'
     call vol%new([box,box,box], smpd, wthreads=.false.)
@@ -553,7 +553,7 @@ function read_truth_states( doc, n ) result( states )
     class(string), intent(in) :: doc
     integer,       intent(in) :: n
     integer, allocatable :: states(:)
-    type(oris) :: truth
+    type(oris)           :: truth
     call truth%new(n, is_ptcl=.true.)
     call truth%read(doc, [1, n])
     states = nint(truth%get_all('state'))
@@ -576,9 +576,9 @@ subroutine run_states_cavgs_gate( root, nthr, gate )
     integer,         intent(in)    :: nthr
     type(test_gate), intent(inout) :: gate
     class(sp_project), allocatable :: expanded, sorted
-    type(string) :: fixture, run_dir, expansion_projfile, sorted_projfile, work_projfile, truth_mean
-    type(string) :: truths(CAVGS_NSTATES)
-    integer      :: status, nsel
+    type(string)                   :: fixture, run_dir, expansion_projfile, sorted_projfile, work_projfile, truth_mean
+    type(string)                   :: truths(CAVGS_NSTATES)
+    integer                        :: status, nsel
     fixture = root//'/states_cavgs'
     run_dir = fixture//'/run'
     call simple_mkdir(fixture)
@@ -624,14 +624,14 @@ subroutine check_memberless_halves( spproj, gate )
     use simple_fileio, only: add2fbody, fname2ext
     class(sp_project), intent(inout) :: spproj
     type(test_gate),   intent(inout) :: gate
-    character(len=4), parameter :: HALVES(2) = ['even', 'odd ']
-    type(image)          :: img
-    type(string)         :: stk, ext, stk_half
-    real,    allocatable :: rmat(:,:,:)
-    integer, allocatable :: npop(:,:), parent_eo(:,:)
-    real    :: smpd
-    integer :: ncavgs, icls, ih, iptcl, ldim(3), nflag(2), nmismatch, nblank_active, half_state, eo, parent
-    logical :: l_blank
+    character(len=4), parameter   :: HALVES(2) = ['even', 'odd ']
+    type(image)                   :: img
+    type(string)                  :: stk, ext, stk_half
+    real,             allocatable :: rmat(:,:,:)
+    integer,          allocatable :: npop(:,:), parent_eo(:,:)
+    real                          :: smpd
+    integer                       :: ncavgs, icls, ih, iptcl, ldim(3), nflag(2), nmismatch, nblank_active, half_state, eo, parent
+    logical                       :: l_blank
     call spproj%get_cavgs_stk(stk, ncavgs, smpd)
     ! the members of every sub-class in each half, and which halves each parent class has at all
     allocate(npop(2,ncavgs), source=0)
@@ -685,9 +685,9 @@ subroutine prepare_states_cavgs_project( fixture, run_dir, nthr, truths, truth_m
     integer,       intent(in)  :: nthr
     type(string),  intent(out) :: truths(CAVGS_NSTATES), truth_mean
     class(sp_project), allocatable :: project
-    type(state_fixture) :: fix
-    type(string) :: truth_diff, projfile, cwd
-    integer :: k, status
+    type(state_fixture)            :: fix
+    type(string)                   :: truth_diff, projfile, cwd
+    integer                        :: k, status
     call simple_getcwd(cwd)
     call simple_chdir(fixture, status)
     if( status /= 0 ) THROW_HARD('FLEX_PCA_BLOBS FAILED: could not enter the states_cavgs fixture directory')
@@ -723,8 +723,8 @@ subroutine run_cls_expansion_stage( run_dir, nthr, projfile_out )
     type(string),  intent(out) :: projfile_out
     class(commander_cls_expansion), allocatable :: xexpansion
     class(cmdline),                 allocatable :: cline
-    type(string) :: exec_dir
-    integer      :: status
+    type(string)                                :: exec_dir
+    integer                                     :: status
     call simple_chdir(run_dir, status)
     if( status /= 0 ) THROW_HARD('FLEX_PCA_BLOBS FAILED: could not enter the class-average run directory')
     CWD_GLOB = run_dir%to_char()
@@ -754,8 +754,8 @@ subroutine run_states_cavgs_stage( run_dir, projfile_in, nthr, projfile_out, wor
     type(string),  intent(out) :: projfile_out, work_projfile
     class(commander_refine3D_states_cavgs), allocatable :: xstates
     class(cmdline),                         allocatable :: cline
-    type(string) :: exec_dir
-    integer      :: status
+    type(string)                                        :: exec_dir
+    integer                                             :: status
     call simple_chdir(run_dir, status)
     if( status /= 0 ) THROW_HARD('FLEX_PCA_BLOBS FAILED: could not enter the class-average run directory')
     CWD_GLOB = run_dir%to_char()
@@ -782,18 +782,18 @@ subroutine inspect_states_cavgs( expanded, sorted, truths, truth_mean, gate )
     class(sp_project), intent(in)    :: expanded, sorted
     class(string),     intent(in)    :: truths(:), truth_mean
     type(test_gate),   intent(inout) :: gate
-    character(len=8), parameter :: CLS2D_KEYS(3) = [character(len=8) :: 'state', 'pop', 'cluster']
-    character(len=8), parameter :: CLS3D_KEYS(2) = [character(len=8) :: 'cluster', 'accept']
-    character(len=8), parameter :: POSE_KEYS(5)  = [character(len=8) :: 'e1', 'e2', 'e3', 'x', 'y']
-    class(oris), allocatable :: poses, est, tru
-    integer, allocatable :: sub_counts(:,:), sub_views(:,:), sub_truth(:), sub_view(:), states(:), ptcl_states(:)
-    integer, allocatable :: cavg_counts(:,:), ptcl_counts(:,:), committed(:), expected(:), best_truth(:), map_states(:)
-    real,    allocatable :: corr(:,:)
-    type(string) :: map
-    real    :: smpd, fsc05, fsc0143, err, frac5, acc_null_med, acc_null_p999
-    integer :: nsub, nposes, nposes_per_view, i, k, s, t, nstates_out, ncommitted, view, box
-    integer :: nmajority, nmembers
-    logical :: l_ok
+    character(len=8), parameter   :: CLS2D_KEYS(3) = [character(len=8) :: 'state', 'pop', 'cluster']
+    character(len=8), parameter   :: CLS3D_KEYS(2) = [character(len=8) :: 'cluster', 'accept']
+    character(len=8), parameter   :: POSE_KEYS(5)  = [character(len=8) :: 'e1', 'e2', 'e3', 'x', 'y']
+    class(oris),      allocatable :: poses, est, tru
+    integer,          allocatable :: sub_counts(:,:), sub_views(:,:), sub_truth(:), sub_view(:), states(:), ptcl_states(:)
+    integer,          allocatable :: cavg_counts(:,:), ptcl_counts(:,:), committed(:), expected(:), best_truth(:), map_states(:)
+    real,             allocatable :: corr(:,:)
+    type(string)                  :: map
+    real                          :: smpd, fsc05, fsc0143, err, frac5, acc_null_med, acc_null_p999
+    integer                       :: nsub, nposes, nposes_per_view, i, k, s, t, nstates_out, ncommitted, view, box
+    integer                       :: nmajority, nmembers
+    logical                       :: l_ok
     nsub            = expanded%os_cls2D%get_noris()
     nposes          = CAVGS_NPTCLS
     nposes_per_view = CAVGS_NPTCLS / CAVGS_NVIEWS
@@ -979,11 +979,11 @@ subroutine write_state_weights_from_labels( cline, w_own )
     class(cmdline), intent(inout) :: cline
     real,           intent(in)    :: w_own
     class(sp_project), allocatable :: project
-    type(state_weight_set) :: wset
-    type(string)           :: projfile
-    real,    allocatable   :: weights(:,:)
-    integer, allocatable   :: pinds(:), labels(:)
-    integer :: nstates, nsel, i, s
+    type(state_weight_set)         :: wset
+    type(string)                   :: projfile
+    real,              allocatable :: weights(:,:)
+    integer,           allocatable :: pinds(:), labels(:)
+    integer                        :: nstates, nsel, i, s
     if( .not. cline%defined('projfile') ) THROW_HARD('projfile= is required')
     if( .not. cline%defined('nstates')  ) THROW_HARD('nstates= is required')
     projfile = cline%get_carg('projfile')

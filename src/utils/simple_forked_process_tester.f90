@@ -163,11 +163,11 @@ contains
   ! NOTE: the expected hash is tied to the 'LOGFILE CONTENTS TEST' sentinel in
   !       execute_test — update it if that string changes.
   subroutine test_logfile_redirection()
-    type(forked_process) :: proc
-    type(string)         :: log_contents, log_hash, log_fname
-    character(len=8192)  :: line   ! XLONGSTRLEN, the length the hash was taken with
+    type(forked_process)          :: proc
+    type(string)                  :: log_contents, log_hash, log_fname
+    character(len=8192)           :: line ! XLONGSTRLEN, the length the hash was taken with
     character(len=:), allocatable :: buf
-    integer              :: ios, unit
+    integer                       :: ios, unit
     write(*,'(A)') 'test_logfile_redirection'
     log_fname = 'test_logfile_redirection.log'
     call proc%start(name=string('TEST_LOGFILE_REDIRECTION'), logfile=log_fname)

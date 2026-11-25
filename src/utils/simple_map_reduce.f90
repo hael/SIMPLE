@@ -13,10 +13,10 @@ contains
 
     !>  \brief  for generating balanced partitions of nobjs objects
     function split_nobjs_even( nobjs, nparts, szmax ) result( parts )
-        integer,           intent(in)  :: nobjs, nparts
-        integer, optional, intent(out) :: szmax
+        integer,           intent(in)            :: nobjs, nparts
+        integer,           optional, intent(out) :: szmax
         integer, allocatable :: parts(:,:)
-        integer :: nobjs_per_part, leftover, istop, istart, ipart, sszmax
+        integer              :: nobjs_per_part, leftover, istop, istart, ipart, sszmax
         allocate(parts(nparts,2))
         nobjs_per_part = nobjs/nparts
         leftover = nobjs-nobjs_per_part*nparts
@@ -51,9 +51,9 @@ contains
     !!          result is split_nobjs_even; with none active, or fewer objects than parts, it falls back
     !!          to it. szmax returns the largest number of active objects in a part.
     function split_nobjs_active( l_active, nparts, szmax ) result( parts )
-        logical,           intent(in)  :: l_active(:)
-        integer,           intent(in)  :: nparts
-        integer, optional, intent(out) :: szmax
+        logical,           intent(in)            :: l_active(:)
+        integer,           intent(in)            :: nparts
+        integer,           optional, intent(out) :: szmax
         integer, allocatable :: parts(:,:), shares(:,:), active_inds(:)
         integer              :: nobjs, nactive, ipart, i, last
         nobjs   = size(l_active)
@@ -92,7 +92,7 @@ contains
         integer              :: npairs, cnt, funit, i, j
         integer              :: ipart, io_stat, numlen
         integer, allocatable :: pairs(:,:), parts(:,:)
-        type(string) :: fname
+        type(string)         :: fname
         ! generate all pairs
         npairs = (nobjs*(nobjs-1))/2
         allocate( pairs(npairs,2))

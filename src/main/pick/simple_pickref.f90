@@ -11,7 +11,7 @@ private
 #include "simple_local_flags.inc"
 
 ! class constants
-real,    parameter :: LP_PICK = 15.
+real,    parameter :: LP_PICK        = 15.
 integer, parameter :: OFFSET_DEFAULT = 3
 
 ! class variables
@@ -23,13 +23,13 @@ type(image) :: mic_raw
 type pickref
     private
     ! control parameters
-    real                     :: smpd_shrink = 0., maxdiam = 0., t = 0.
-    real                     :: dist_thres  = 0.
+    real                     :: smpd_shrink      = 0., maxdiam = 0., t = 0.
+    real                     :: dist_thres       = 0.
     integer                  :: ldim(3), ldim_box(3), ldim_raw_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
-    integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
+    integer                  :: nx_offset        = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
     integer                  :: peak_thres_level = 2, nboxes_max = 0
     ! peak stats
-    real                     :: smd_corr = 0., ksstat_corr = 0., prob_corr = 0.
+    real                     :: smd_corr    = 0., ksstat_corr = 0., prob_corr = 0.
     real                     :: a_corr_peak = 0., s_corr_peak = 0., a_corr_nonpeak = 0., s_corr_nonpeak = 0.
     ! images
     type(image)              :: mic_shrink, mic_roi, mic_copy
@@ -68,9 +68,9 @@ end type
 contains
 
     subroutine read_mic_raw_pickref( micname, smpd, subtr_backgr )
-        class(string),     intent(in) :: micname !< micrograph file name
-        real,              intent(in) :: smpd    !< sampling distance in A
-        logical, optional, intent(in) :: subtr_backgr
+        class(string),     intent(in)           :: micname !< micrograph file name
+        real,              intent(in)           :: smpd    !< sampling distance in A
+        logical,           optional, intent(in) :: subtr_backgr
         integer :: nframes
         ! set micrograph info
         call find_ldim_nptcls(micname, ldim_raw, nframes)
@@ -86,8 +86,8 @@ contains
 
     subroutine refpick( self, self_refine )
         use simple_micproc, only: flag_amorphous_carbon, flag_ice
-        class(pickref),           intent(inout) :: self
-        class(pickref), optional, intent(inout) :: self_refine
+        class(pickref),           intent(inout)           :: self
+        class(pickref),           optional, intent(inout) :: self_refine
         integer, allocatable :: pos(:,:)
         if( present(self_refine) ) call self_refine%setup_iterators
         if( self%l_roi )then
@@ -119,14 +119,14 @@ contains
     end subroutine refpick
 
     subroutine new( self, pcontrast, pdensity, smpd_shrink, imgs, offset, roi, nboxes_max, thres )
-        class(pickref),    intent(inout) :: self
-        character(len=*),  intent(in)    :: pcontrast, pdensity
-        real,              intent(in)    :: smpd_shrink
-        class(image),      intent(inout) :: imgs(:)
-        integer, optional, intent(in)    :: offset
-        real,    optional, intent(in)    :: thres   !< distance threshold in A for peak separation
-        logical, optional, intent(in)    :: roi
-        integer, optional, intent(in)    :: nboxes_max
+        class(pickref),    intent(inout)        :: self
+        character(len=*),  intent(in)           :: pcontrast, pdensity
+        real,              intent(in)           :: smpd_shrink
+        class(image),      intent(inout)        :: imgs(:)
+        integer,           optional, intent(in) :: offset
+        real,              optional, intent(in) :: thres !< distance threshold in A for peak separation
+        logical,           optional, intent(in) :: roi
+        integer,           optional, intent(in) :: nboxes_max
         real    :: scale, threshold
         integer :: iref, box
         if( self%exists ) call self%kill
@@ -272,8 +272,8 @@ contains
     subroutine match_boximgs( self )
         class(pickref), intent(inout) :: self
         type(pickref_corr_batch) :: corr
-        real, allocatable :: scores(:)
-        integer :: ioff, joff, ipos
+        real, allocatable        :: scores(:)
+        integer                  :: ioff, joff, ipos
         call corr%new(self%mic_shrink, self%boxrefs, .not. self%l_err_refs)
         allocate(scores(self%nboxes), source=-1.)
         call corr%score_positions(self%positions(:self%nboxes,:), scores)
@@ -294,7 +294,7 @@ contains
     subroutine detect_peaks( self )
         class(pickref), intent(inout) :: self
         real, allocatable :: tmp(:)
-        integer :: n
+        integer           :: n
         n = count(self%box_scores > 0.)
         if( n == 0 )then
             self%npeaks = 0
@@ -337,10 +337,10 @@ contains
 
     subroutine limit_nboxes( self )
         class(pickref), intent(inout) :: self
-        real, allocatable :: scores(:)
+        real,    allocatable :: scores(:)
         integer, allocatable :: order(:)
         logical, allocatable :: candidate_mask(:,:), keep_mask(:,:), selected(:)
-        integer :: i, npeaks
+        integer              :: i, npeaks
         if( self%nboxes_max <= 0 .or. self%npeaks <= self%nboxes_max ) return
         candidate_mask = self%box_scores >= self%t
         scores          = pack(self%box_scores, mask=candidate_mask)
@@ -364,10 +364,10 @@ contains
     subroutine distance_filter_grid( self )
         class(pickref), intent(inout) :: self
         integer, allocatable :: pos_inds(:), order(:)
-        real, allocatable :: pos_scores(:), tmp(:)
+        real,    allocatable :: pos_scores(:), tmp(:)
         logical, allocatable :: mask(:), selected_pos(:), keep_position(:), valid_grid(:,:)
-        integer :: nbox, npeaks, ibox, jbox, loc, ioff, joff, i
-        real :: dist
+        integer              :: nbox, npeaks, ibox, jbox, loc, ioff, joff, i
+        real                 :: dist
         allocate(valid_grid(self%nx_offset,self%ny_offset), &
             source=self%box_scores >= self%t .and. self%inds_offset > 0)
         pos_inds = pack(self%inds_offset, mask=valid_grid)
@@ -426,9 +426,9 @@ contains
         class(pickref), intent(inout) :: self
         real,    allocatable :: corrs_peak(:), corrs_nonpeak(:)
         integer, allocatable :: pos(:,:)
-        real    :: pixrad_shrink, rpos(2)
-        integer :: xrange(2), yrange(2), ibox, xind, yind, nx_offset, ny_offset, mask_count
-        logical :: mask_backgr(0:self%nx,0:self%ny), mask_backgr_offset(self%nx_offset,self%ny_offset)
+        real                 :: pixrad_shrink, rpos(2)
+        integer              :: xrange(2), yrange(2), ibox, xind, yind, nx_offset, ny_offset, mask_count
+        logical              :: mask_backgr(0:self%nx,0:self%ny), mask_backgr_offset(self%nx_offset,self%ny_offset)
         ! prepare background mask
         call self%get_positions(pos)
         mask_backgr   = .true. 
@@ -479,12 +479,12 @@ contains
     end subroutine peak_vs_nonpeak_stats
 
     subroutine get_positions( self, pos, smpd_new )
-        class(pickref),       intent(in)    :: self
-        integer, allocatable, intent(inout) :: pos(:,:)
-        real, optional,       intent(in)    :: smpd_new
+        class(pickref),       intent(in)                 :: self
+        integer,              allocatable, intent(inout) :: pos(:,:)
+        real,                 optional,       intent(in) :: smpd_new
         integer, allocatable :: pos_inds(:)
-        real    :: scale
-        integer :: nbox, ibox
+        real                 :: scale
+        integer              :: nbox, ibox
         pos_inds = pack(self%inds_offset(:,:), mask=self%box_scores(:,:) >= self%t)
         nbox     = size(pos_inds)
         if( allocated(pos) ) deallocate(pos)
@@ -500,8 +500,8 @@ contains
     end subroutine get_positions
 
     subroutine get_scores( self, scores )
-        class(pickref),       intent(in)    :: self
-        real,    allocatable, intent(inout) :: scores(:)
+        class(pickref),       intent(in)                 :: self
+        real,                 allocatable, intent(inout) :: scores(:)
         if( allocated(scores) ) deallocate(scores)
         scores = pack(self%box_scores(:,:), mask=self%box_scores(:,:) >= self%t)
     end subroutine get_scores
@@ -527,7 +527,7 @@ contains
         class(pickref), intent(in) :: self
         class(string),  intent(in) :: fname
         integer, allocatable :: pos(:,:)
-        integer :: funit, ibox, iostat
+        integer              :: funit, ibox, iostat
         call self%get_positions(pos)
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
         call fileiochk('simple_pickref; write_boxfile ', iostat)
@@ -541,7 +541,7 @@ contains
         use simple_micproc,   only: bs_smoother_biomol
         use simple_gui_utils, only: mic2thumb
         class(pickref), intent(inout) :: self
-        class(string),  intent(in)    :: fname_thumb_den 
+        class(string),  intent(in)    :: fname_thumb_den
         call bs_smoother_biomol(self%mic_copy)
         call mic2thumb(self%mic_copy, fname_thumb_den, l_neg=self%l_black_ptcls_input) ! particles black
     end subroutine report_thumb_den
@@ -553,10 +553,10 @@ contains
         real,           intent(in)  :: smpd
         class(string),  intent(in)  :: fname
         integer,        intent(out) :: nptcls
-        logical,   parameter :: l_write_outside = .false.
-        integer, allocatable :: pos(:,:), updated_pos(:,:)
-        logical, allocatable :: mask(:)
-        integer :: i,j, ninside, funit, iostat
+        logical,   parameter   :: l_write_outside = .false.
+        integer,   allocatable :: pos(:,:), updated_pos(:,:)
+        logical,   allocatable :: mask(:)
+        integer                :: i,j, ninside, funit, iostat
         nptcls  = self%npeaks
         if( nptcls == 0 ) return
         call self%get_positions(pos, smpd_new=smpd)
@@ -624,11 +624,11 @@ contains
         real,           intent(in)    :: smpd_old
         integer,        intent(in)    :: offset_old
         type(pickref_corr_batch) :: corr
-        integer, allocatable :: candidates(:,:), starts(:), ends(:), pos_refined(:,:)
-        real, allocatable :: candidate_scores(:), scores_refined(:)
-        logical, allocatable :: valid_refined(:)
-        real :: factor, rpos(2), best_score
-        integer :: nbox, ibox, icand, ind, xrange(2), yrange(2), xind, yind, ioff, joff, nx_cand, ny_cand
+        integer, allocatable     :: candidates(:,:), starts(:), ends(:), pos_refined(:,:)
+        real,    allocatable     :: candidate_scores(:), scores_refined(:)
+        logical, allocatable     :: valid_refined(:)
+        real                     :: factor, rpos(2), best_score
+        integer                  :: nbox, ibox, icand, ind, xrange(2), yrange(2), xind, yind, ioff, joff, nx_cand, ny_cand
         if( self%offset /= 1 ) THROW_HARD('Pixel offset in reference refinement must be 1')
         nbox = size(pos,dim=1)
         self%box_scores = -1.

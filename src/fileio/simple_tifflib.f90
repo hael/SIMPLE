@@ -12,17 +12,17 @@ interface
 
     function TIFFGetField(tiff, flag, val) bind(C,name="TIFFGetField")
         use iso_c_binding, only : c_int16_t, c_ptr
-        integer(kind=c_int16_t)     ::  TIFFGetField
-        type(c_ptr),        value   ::  tiff
-        integer(kind=c_int16_t)     ::  flag, val
+        integer(kind=c_int16_t)     :: TIFFGetField
+        type(c_ptr),        value   :: tiff
+        integer(kind=c_int16_t)     :: flag, val
     end function  TIFFGetField
 
     ! TIFF* TIFFOpen(const char *filename, const char *mode)
     function TIFFOpen(cfilename, cmode) bind(c,name='TIFFOpen')
         use iso_c_binding, only : c_ptr, c_char
-        type(c_ptr) ::  TIFFOpen
-        character(kind=c_char)  ::  cfilename(*)
-        character(kind=c_char)  ::  cmode(*)
+        type(c_ptr)             :: TIFFOpen
+        character(kind=c_char)  :: cfilename(*)
+        character(kind=c_char)  :: cmode(*)
     end function TIFFOpen
 
     function TIFFGetVersion() bind(c,name='TIFFGetVersion')
@@ -36,72 +36,72 @@ interface
     ! tsize_t is int32
     function TIFFReadEncodedStrip(tiff,strip,buf,my_size) bind(c,name='TIFFReadEncodedStrip')
         use iso_c_binding, only : c_int32_t, c_ptr
-        integer(kind=c_int32_t)         ::  TIFFReadEncodedStrip
-        type(c_ptr),            value   ::  tiff
-        integer(kind=c_int32_t),value   ::  strip
-        type(c_ptr),            value   ::  buf
-        integer(kind=c_int32_t)         ::  my_size
+        integer(kind=c_int32_t)         :: TIFFReadEncodedStrip
+        type(c_ptr),            value   :: tiff
+        integer(kind=c_int32_t),value   :: strip
+        type(c_ptr),            value   :: buf
+        integer(kind=c_int32_t)         :: my_size
     end function
 
     function TIFFReadRawStrip(tiff,strip,buf,my_size) bind(c,name='TIFFReadRawStrip')
         use iso_c_binding, only : c_int32_t, c_ptr
-        integer(kind=c_int32_t)         ::  TIFFReadRawStrip
-        type(c_ptr),            value   ::  tiff
-        integer(kind=c_int32_t),value   ::  strip
-        type(c_ptr),            value   ::  buf
-        integer(kind=c_int32_t)         ::  my_size
+        integer(kind=c_int32_t)         :: TIFFReadRawStrip
+        type(c_ptr),            value   :: tiff
+        integer(kind=c_int32_t),value   :: strip
+        type(c_ptr),            value   :: buf
+        integer(kind=c_int32_t)         :: my_size
     end function
 
     function TIFFLastDirectory(tiff) bind(c,name='TIFFLastDirectory')
         use iso_c_binding, only : c_int, c_ptr
-        integer(kind=c_int)         ::  TIFFLastDirectory
-        type(c_ptr),        value   ::  tiff
+        integer(kind=c_int)         :: TIFFLastDirectory
+        type(c_ptr),        value   :: tiff
     end function
 
     function TIFFIsTiled(tiff) bind(c,name='TIFFIsTiled')
         use iso_c_binding, only : c_int, c_ptr
-        integer(kind=c_int)         ::  TIFFIsTiled
-        type(c_ptr),        value   ::  tiff
+        integer(kind=c_int)         :: TIFFIsTiled
+        type(c_ptr),        value   :: tiff
     end function
 
     ! tstrip_t TIFFNumberOfStrips(TIFF *tif)
     ! tstrip_t is uint32
     function TIFFNumberOfStrips(tiff) bind(c,name='TIFFNumberOfStrips')
         use iso_c_binding, only : c_ptr, c_int
-        integer(kind=c_int)         ::  TIFFNumberOfStrips
-        type(c_ptr),        value   ::  tiff
+        integer(kind=c_int)         :: TIFFNumberOfStrips
+        type(c_ptr),        value   :: tiff
     end function
 
     ! tsize_t TIFFStripSize(TIFF *tif)
     ! tsize_t is int32
     function TIFFStripSize(tiff) bind(c,name='TIFFStripSize')
         use iso_c_binding, only : c_ptr, c_int32_t
-        integer(kind=c_int32_t)     ::  TIFFStripSize
-        type(c_ptr),        value   ::  tiff
+        integer(kind=c_int32_t)     :: TIFFStripSize
+        type(c_ptr),        value   :: tiff
     end function
 
     ! tdir_t (uint16)
     function TIFFCurrentDirectory(tiff) bind(c,name='TIFFCurrentDirectory')
         use iso_c_binding, only : c_int16_t, c_ptr
-        integer(kind=c_int16_t)     ::  TIFFCurrentDirectory
-        type(c_ptr),        value   ::  tiff
+        integer(kind=c_int16_t)     :: TIFFCurrentDirectory
+        type(c_ptr),        value   :: tiff
     end function
 
     ! int TIFFSetDirectory(TIFF *tif, tdir_t dirnum)
     ! tdir_t is uint16
     function TIFFSetDirectory(tiff,dirnum) bind(c,name='TIFFSetDirectory')
         use iso_c_binding, only : c_ptr, c_int, c_int16_t
-        integer(kind=c_int)            ::  TIFFSetDirectory
-        type(c_ptr),             value ::  tiff
-        integer(kind=c_int16_t), value ::  dirnum
+        integer(kind=c_int)            :: TIFFSetDirectory
+        type(c_ptr),             value :: tiff
+        integer(kind=c_int16_t), value :: dirnum
     end function
 
     ! int TIFFReadDirectory(TIFF *tif)
     !
     function TIFFReadDirectory(tiff) bind(c,name='TIFFReadDirectory')
         use iso_c_binding, only : c_ptr, c_int
-        integer(kind=c_int)         ::  TIFFReadDirectory
-        type(c_ptr),        value   ::  tiff
+        integer(kind=c_int)         :: TIFFReadDirectory
+        type(c_ptr),        value   :: tiff
     end function
 
     subroutine TIFFClose(tiff) bind(c,name='TIFFClose')
@@ -116,64 +116,64 @@ interface
     function TIFFRawStripSizer(my_tiff,strip) bind(c,name='TIFFRawStripSizer')
         use iso_c_binding, only: c_ptr, c_int, c_int32_t
         integer(kind=c_int)              :: TIFFRawStripSizer
-        type(c_ptr),             value :: my_tiff
-        integer(kind=c_int32_t), value :: strip
+        type(c_ptr),             value   :: my_tiff
+        integer(kind=c_int32_t), value   :: strip
     end function TIFFRawStripSizer
 
     function TIFFGetWidth(my_tiff) bind(c,name='TIFFGetWidth')
         use iso_c_binding, only : c_ptr, c_int
-        integer(kind=c_int) :: TIFFGetWidth
+        integer(kind=c_int)   :: TIFFGetWidth
         type(c_ptr),    value :: my_tiff
     end function
     function TIFFGetLength(my_tiff) bind(c,name='TIFFGetLength')
         use iso_c_binding, only : c_ptr, c_int
-        integer(kind=c_int) :: TIFFGetLength
+        integer(kind=c_int)   :: TIFFGetLength
         type(c_ptr),    value :: my_tiff
     end function
     function TIFFGetCompression(my_tiff) bind(c,name='TIFFGetCompression')
         use iso_c_binding, only : c_ptr, c_int
-        integer(kind=c_int) :: TIFFGetCompression
+        integer(kind=c_int)   :: TIFFGetCompression
         type(c_ptr),    value :: my_tiff
     end function
     function TIFFNumDirectories(my_tiff) bind(c,name='TIFFNumDirectories')
         use iso_c_binding, only : c_ptr, c_int
-        integer(kind=c_int) :: TIFFNumDirectories
+        integer(kind=c_int)   :: TIFFNumDirectories
         type(c_ptr),    value :: my_tiff
     end function
     ! int TIFFGetSampleFormat(TIFF *my_tiff)
     function TIFFGetSampleFormat(my_tiff) bind(c,name='TIFFGetSampleFormat')
         use iso_c_binding, only : c_ptr, c_int
-        integer(kind=c_int) :: TIFFGetSampleFormat
+        integer(kind=c_int)   :: TIFFGetSampleFormat
         type(c_ptr),    value :: my_tiff
     end function
     ! int TIFFGetSamplesPerPixel(TIFF *my_tiff)
     function TIFFGetSamplesPerPixel(my_tiff) bind(c,name='TIFFGetSamplesPerPixel')
         use iso_c_binding, only : c_ptr, c_int
-        integer(kind=c_int) :: TIFFGetSamplesPerPixel
+        integer(kind=c_int)   :: TIFFGetSamplesPerPixel
         type(c_ptr),    value :: my_tiff
     end function
     ! int TIFFGetBitsPerSample(TIFF *my_tiff)
     function TIFFGetBitsPerSample(my_tiff) bind(c,name='TIFFGetBitsPerSample')
         use iso_c_binding, only : c_ptr, c_int
-        integer(kind=c_int) :: TIFFGetBitsPerSample
+        integer(kind=c_int)   :: TIFFGetBitsPerSample
         type(c_ptr),    value :: my_tiff
     end function
     ! intTIFFGetRowsPerStrip(TIFF *my_tiff)
     function TIFFGetRowsPerStrip(my_tiff) bind(c,name='TIFFGetRowsPerStrip')
         use iso_c_binding, only : c_ptr, c_int
-        integer(kind=c_int) :: TIFFGetRowsPerStrip
+        integer(kind=c_int)   :: TIFFGetRowsPerStrip
         type(c_ptr),    value :: my_tiff
     end function
     ! intTIFFGetMinVal(TIFF *my_tiff)
     function TIFFGetMinVal(my_tiff) bind(c,name='TIFFGetMinVal')
         use iso_c_binding, only : c_ptr, c_int
-        integer(kind=c_int) :: TIFFGetMinVal
+        integer(kind=c_int)   :: TIFFGetMinVal
         type(c_ptr),    value :: my_tiff
     end function
     ! intTIFFGetMaxVal(TIFF *my_tiff)
     function TIFFGetMaxVal(my_tiff) bind(c,name='TIFFGetMaxVal')
         use iso_c_binding, only : c_ptr, c_int
-        integer(kind=c_int) :: TIFFGetMaxVal
+        integer(kind=c_int)   :: TIFFGetMaxVal
         type(c_ptr),    value :: my_tiff
     end function
 
@@ -192,8 +192,8 @@ interface
     ! tdata_t TIFFAllocateStripBuffer(TIFF *my_tiff)
     function TIFFAllocateStripBuffer(tiff) bind(c,name='TIFFAllocateStripBuffer')
         use iso_c_binding, only : c_ptr
-        type(c_ptr)        ::  TIFFAllocateStripBuffer
-        type(c_ptr), value ::  tiff
+        type(c_ptr)        :: TIFFAllocateStripBuffer
+        type(c_ptr), value :: tiff
     end function
 
     subroutine TIFFPrintInfo(tiff) bind(c,name='TIFFPrintInfo')

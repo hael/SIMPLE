@@ -95,8 +95,8 @@ contains
     end subroutine delete_entry_by_ind
 
     module subroutine delete_2Dclustering_all( self, keepshifts, keepcls )
-        class(oris),       intent(inout) :: self
-        logical, optional, intent(in)    :: keepshifts, keepcls
+        class(oris),       intent(inout)        :: self
+        logical,           optional, intent(in) :: keepshifts, keepcls
         integer :: i
         do i=1,self%n
             call self%o(i)%delete_2Dclustering(keepshifts, keepcls)
@@ -104,9 +104,9 @@ contains
     end subroutine delete_2Dclustering_all
 
     module subroutine delete_2Dclustering_by_ind( self, i, keepshifts, keepcls )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: i
-        logical, optional, intent(in)    :: keepshifts, keepcls
+        class(oris),       intent(inout)        :: self
+        integer,           intent(in)           :: i
+        logical,           optional, intent(in) :: keepshifts, keepcls
         if( i < 0 .or. i > self%n )then
             THROW_WARN('index out of range; simple_oris % delete_2Dclustering_by_ind')
             return
@@ -115,8 +115,8 @@ contains
     end subroutine delete_2Dclustering_by_ind
 
     module subroutine delete_3Dalignment( self, keepshifts )
-        class(oris),       intent(inout) :: self
-        logical, optional, intent(in)    :: keepshifts
+        class(oris),       intent(inout)        :: self
+        logical,           optional, intent(in) :: keepshifts
         integer :: i
         do i=1,self%n
             call self%o(i)%delete_3Dalignment(keepshifts)
@@ -139,8 +139,8 @@ contains
     end subroutine delete
 
     module subroutine transfer_2Dshifts( self_out, self_in )
-        class(oris), intent(inout) :: self_out
-        type(oris),   intent(in)   :: self_in
+        class(oris),  intent(inout) :: self_out
+        type(oris),   intent(in)    :: self_in
         integer :: i
         do i = 1,self_out%n
             call self_out%o(i)%set_shift(self_in%o(i)%get_2Dshift())
@@ -457,7 +457,7 @@ contains
     module subroutine swape1e3( self )
         class(oris), intent(inout) :: self
         integer :: i
-        real :: e, euls(3)
+        real    :: e, euls(3)
         do i=1,self%n
             euls = self%get_euler(i)
             e = euls(1)
@@ -504,9 +504,9 @@ contains
     end subroutine mul_shifts
 
     module subroutine rnd_oris( self, trs, eullims )
-        class(oris),    intent(inout) :: self
-        real, optional, intent(in)    :: trs
-        real, optional, intent(inout) :: eullims(3,2)
+        class(oris),    intent(inout)           :: self
+        real,           optional, intent(in)    :: trs
+        real,           optional, intent(inout) :: eullims(3,2)
         integer :: i
         do i=1,self%n
             call self%o(i)%rnd_ori(trs, eullims)
@@ -523,18 +523,18 @@ contains
     end subroutine gau_rnd_shifts
 
     module subroutine rnd_ori( self, i, trs, eullims )
-        class(oris),    intent(inout) :: self
-        integer,        intent(in)    :: i
-        real, optional, intent(in)    :: trs
-        real, optional, intent(inout) :: eullims(3,2)
+        class(oris),    intent(inout)           :: self
+        integer,        intent(in)              :: i
+        real,           optional, intent(in)    :: trs
+        real,           optional, intent(inout) :: eullims(3,2)
         call self%o(i)%rnd_ori( trs, eullims )
     end subroutine rnd_ori
 
     module subroutine rnd_inpls( self, trs )
-        class(oris),    intent(inout) :: self
-        real, optional, intent(in)    :: trs
+        class(oris),    intent(inout)        :: self
+        real,           optional, intent(in) :: trs
         integer :: i
-        real :: x, y
+        real    :: x, y
         do i=1,self%n
             if( present(trs) )then
                 if( abs(trs) < TINY )then
@@ -555,9 +555,9 @@ contains
     end subroutine rnd_inpls
 
     module subroutine rnd_ctf( self, kv, cs, fraca, defocus, deferr, astigerr )
-        class(oris),    intent(inout) :: self
-        real,           intent(in)    :: kv, cs, fraca, defocus, deferr
-        real, optional, intent(in)    :: astigerr
+        class(oris),    intent(inout)        :: self
+        real,           intent(in)           :: kv, cs, fraca, defocus, deferr
+        real,           optional, intent(in) :: astigerr
         integer :: i
         real    :: dfx, dfy, angast, err
         do i=1,self%n
@@ -597,7 +597,7 @@ contains
         integer,     intent(in)    :: nstates
         integer, allocatable       :: states(:)
         type(ran_tabu)             :: rt
-        integer :: i, state
+        integer                    :: i, state
         if( nstates > 1 )then
             allocate( states(self%n) )
             rt = ran_tabu(self%n)
@@ -638,11 +638,11 @@ contains
     end subroutine rnd_corrs
 
     module subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: nsample
-        class(ori), optional, intent(inout) :: o_prev
-        real,       optional, intent(inout) :: eullims(3,2)
-        real,       optional, intent(in)    :: thres
+        class(oris),          intent(inout)           :: self
+        integer,              intent(in)              :: nsample
+        class(ori),           optional, intent(inout) :: o_prev
+        real,                 optional, intent(inout) :: eullims(3,2)
+        real,                 optional, intent(in)    :: thres
         type(ori) :: o_stoch
         integer   :: i
         logical   :: within_lims, found
@@ -695,7 +695,7 @@ contains
     module subroutine revshsgn( self )
         class(oris), intent(inout) :: self
         integer :: i
-        real :: x, y
+        real    :: x, y
         do i=1,self%n
             x = self%o(i)%get('x')
             y = self%o(i)%get('y')
@@ -720,7 +720,7 @@ contains
         integer,          intent(in)    :: nsplit
         character(len=*), intent(in)    :: state_or_class
         integer, allocatable :: parts(:,:)
-        integer :: ipart, iptcl
+        integer              :: ipart, iptcl
         parts = split_nobjs_even(self%n, nsplit)
         do ipart=1,nsplit
             do iptcl=parts(ipart,1),parts(ipart,2)
@@ -834,12 +834,12 @@ contains
     end subroutine set_ctfvars
 
     module subroutine gen_balanced_partitions( self, nparts, parts, err )
-        class(oris),          intent(in)    :: self
-        integer,              intent(in)    :: nparts
-        integer, allocatable, intent(inout) :: parts(:,:)
-        logical,              intent(out)   :: err
+        class(oris),          intent(in)                 :: self
+        integer,              intent(in)                 :: nparts
+        integer,              allocatable, intent(inout) :: parts(:,:)
+        logical,              intent(out)                :: err
         real, allocatable :: rstates(:)
-        integer :: nobjs_per_part, i, ipart, m
+        integer           :: nobjs_per_part, i, ipart, m
         err = .false.
         if( allocated(parts) ) deallocate(parts)
         if( .not.self%isthere('state') )then

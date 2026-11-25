@@ -26,7 +26,7 @@ implicit none
 private
 public :: run_all_wave_imaging_tests
 
-integer, parameter :: NAT = 24, R = NAT/2, OSF = 2
+integer, parameter :: NAT  = 24, R = NAT/2, OSF = 2
 real,    parameter :: BFAC = 20.
 
 contains
@@ -60,10 +60,10 @@ contains
     subroutine test_adjoint_and_gradient( model )
         integer, intent(in) :: model
         type(wave_imaging) :: wi
-        complex  :: s(-R:R,-R:R), ds(-R:R,-R:R), q(-R:R,-R:R), y(-R:R,-R:R), ihat(-R:R,-R:R)
-        complex  :: jds(-R:R,-R:R), jtq(-R:R,-R:R), grad(-R:R,-R:R)
-        real(dp) :: lhs, rhs, fd, an
-        real     :: h, hdata
+        complex            :: s(-R:R,-R:R), ds(-R:R,-R:R), q(-R:R,-R:R), y(-R:R,-R:R), ihat(-R:R,-R:R)
+        complex            :: jds(-R:R,-R:R), jtq(-R:R,-R:R), grad(-R:R,-R:R)
+        real(dp)           :: lhs, rhs, fd, an
+        real               :: h, hdata
         call wi%new(NAT, OSF, model)
         call wi%set_optics(optics(), BFAC, real(R))
         ! about half a radian of phase: u ~ |s|/nat^2 summed over the disk
@@ -103,9 +103,9 @@ contains
         type(wave_imaging) :: wi
         type(ctfparams)    :: c
         type(ctf)          :: tfun
-        complex :: s0(-R:R,-R:R), ds(-R:R,-R:R), ihat(-R:R,-R:R), jds(-R:R,-R:R), expected(-R:R,-R:R)
-        real    :: sig, acc, ph, s2, ang, env, err
-        integer :: h, k
+        complex            :: s0(-R:R,-R:R), ds(-R:R,-R:R), ihat(-R:R,-R:R), jds(-R:R,-R:R), expected(-R:R,-R:R)
+        real               :: sig, acc, ph, s2, ang, env, err
+        integer            :: h, k
         c = optics()
         call wi%new(NAT, OSF, model)
         call wi%set_optics(c, BFAC, real(R))
@@ -140,7 +140,7 @@ contains
 
     subroutine test_born_is_rytov_linearised()
         type(wave_imaging) :: wr, wb
-        complex :: s0(-R:R,-R:R), ds(-R:R,-R:R), ihat(-R:R,-R:R), jr(-R:R,-R:R), jb(-R:R,-R:R)
+        complex            :: s0(-R:R,-R:R), ds(-R:R,-R:R), ihat(-R:R,-R:R), jr(-R:R,-R:R), jb(-R:R,-R:R)
         call wr%new(NAT, OSF, WAVE_RYTOV)
         call wb%new(NAT, OSF, WAVE_FIRST_BORN)
         call wr%set_optics(optics(), BFAC, real(R))
@@ -157,11 +157,11 @@ contains
     end subroutine test_born_is_rytov_linearised
 
     subroutine test_exit_wave()
-        type(wave_imaging) :: wp, wm
+        type(wave_imaging)   :: wp, wm
         complex, allocatable :: psi(:,:), dpsi(:,:), adj(:,:)
-        complex  :: s(-R:R,-R:R), ihat(-R:R,-R:R), ihat_m(-R:R,-R:R), q(-R:R,-R:R), dihat(-R:R,-R:R)
-        real     :: re(NAT*OSF,NAT*OSF), im(NAT*OSF,NAT*OSF)
-        real(dp) :: lhs, rhs
+        complex              :: s(-R:R,-R:R), ihat(-R:R,-R:R), ihat_m(-R:R,-R:R), q(-R:R,-R:R), dihat(-R:R,-R:R)
+        real                 :: re(NAT*OSF,NAT*OSF), im(NAT*OSF,NAT*OSF)
+        real(dp)             :: lhs, rhs
         call wp%new(NAT, OSF, WAVE_PROJECTION)
         call wm%new(NAT, OSF, WAVE_MSLICE)
         call wp%set_optics(optics(), BFAC, 0.)

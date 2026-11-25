@@ -7,7 +7,7 @@ use simple_projfile_utils, only: merge_selected_project_files
 implicit none
 
 integer,          parameter :: REFUSE_WORKER_MISSING = 1, REFUSE_MASTER_INCONSISTENT = 2
-character(len=*), parameter :: EO_PROJ = 'eo_partition_test.simple'
+character(len=*), parameter :: EO_PROJ               = 'eo_partition_test.simple'
 
 !> a process that must stop: the project's halves are refused
 type, extends(forked_process) :: refusing_partition
@@ -41,13 +41,13 @@ contains
 
     subroutine test_selected_score_pairs()
         class(sp_project), allocatable :: project
-        type(class_sample) :: groups(3)
-        integer, parameter :: FIRST(3) = [1,6,9], LAST(3) = [5,8,9]
-        integer, parameter :: EXPECTED(9) = [0,1,1,0,0,1,0,1,1]
-        integer :: group, particle, stack, labels(9), counts(2), status
-        real :: scores(0:1)
-        logical :: changed
-        character(len=STDLEN) :: msg
+        type(class_sample)             :: groups(3)
+        integer,           parameter   :: FIRST(3)    = [1,6,9], LAST(3) = [5,8,9]
+        integer,           parameter   :: EXPECTED(9) = [0,1,1,0,0,1,0,1,1]
+        integer                        :: group, particle, stack, labels(9), counts(2), status
+        real                           :: scores(0:1)
+        logical                        :: changed
+        character(len=STDLEN)          :: msg
         allocate(project)
         call make_groups_project(project,[4,4,1],.true.,'score_pairs')
         call project%os_ptcl2D%set_all2single('state',1)
@@ -182,10 +182,10 @@ contains
 
     subroutine test_micrograph_groups()
         class(sp_project), allocatable :: proj
-        integer, allocatable :: sizes(:)
-        character(len=STDLEN) :: msg
-        integer :: s, pops(2)
-        logical :: l_changed
+        integer,           allocatable :: sizes(:)
+        character(len=STDLEN)          :: msg
+        integer                        :: s, pops(2)
+        logical                        :: l_changed
         write(*,'(A)') 'test_micrograph_groups'
         allocate(proj)
         sizes = [(1 + mod(17*s, 23), s=1,40)]
@@ -208,10 +208,10 @@ contains
 
     subroutine test_no_split_by_size()
         class(sp_project), allocatable :: proj
-        integer, allocatable :: sizes(:)
-        character(len=STDLEN) :: msg
-        integer :: s, pops(2)
-        logical :: l_changed
+        integer,           allocatable :: sizes(:)
+        character(len=STDLEN)          :: msg
+        integer                        :: s, pops(2)
+        logical                        :: l_changed
         write(*,'(A)') 'test_no_split_by_size'
         allocate(proj)
         sizes = [500, (10, s=1,25)]
@@ -227,7 +227,7 @@ contains
     !> one micrograph group with active particles cannot give two halves; the run stops (checked in a child)
     subroutine test_too_few_groups_status()
         class(sp_project), allocatable :: proj
-        character(len=STDLEN) :: msg
+        character(len=STDLEN)          :: msg
         write(*,'(A)') 'test_too_few_groups_status'
         allocate(proj)
         call make_groups_project(proj, [30], .true., 'single')
@@ -237,10 +237,10 @@ contains
 
     subroutine test_per_index_route()
         class(sp_project), allocatable :: proj
-        type(oris) :: ref
-        character(len=STDLEN) :: msg
-        integer :: i, n
-        logical :: l_changed, l_same
+        type(oris)                     :: ref
+        character(len=STDLEN)          :: msg
+        integer                        :: i, n
+        logical                        :: l_changed, l_same
         write(*,'(A)') 'test_per_index_route'
         allocate(proj)
         ! imported stacks without micrograph rows, as the beta-galactosidase test set
@@ -265,9 +265,9 @@ contains
     !> class-average fields keep the per-index routine, the project's particle partition is not involved
     subroutine test_class_average_route()
         class(sp_project), allocatable :: proj
-        type(oris) :: ref
-        integer :: i
-        logical :: l_same
+        type(oris)                     :: ref
+        integer                        :: i
+        logical                        :: l_same
         write(*,'(A)') 'test_class_average_route'
         allocate(proj)
         call make_groups_project(proj, [20, 20, 20], .true., 'cavgs')
@@ -295,10 +295,10 @@ contains
     !> stacks appended to a partitioned project get labels by the same rule; existing labels stay
     subroutine test_appended_stacks()
         class(sp_project), allocatable :: proj, more
-        integer, allocatable :: sizes(:), more_sizes(:), before(:)
-        character(len=STDLEN) :: msg
-        integer :: s, i, n0, nstk0
-        logical :: l_changed, l_kept
+        integer,           allocatable :: sizes(:), more_sizes(:), before(:)
+        character(len=STDLEN)          :: msg
+        integer                        :: s, i, n0, nstk0
+        logical                        :: l_changed, l_kept
         write(*,'(A)') 'test_appended_stacks'
         allocate(proj, more)
         sizes      = [(5 + mod(11*s, 13), s=1,24)]
@@ -351,10 +351,10 @@ contains
     !> a project of an earlier release: labels (in one field), no provenance; the labels are kept
     subroutine test_earlier_release()
         class(sp_project), allocatable :: proj
-        integer, allocatable :: before(:)
-        character(len=STDLEN) :: msg
-        integer :: i, n, s
-        logical :: l_changed, l_kept
+        integer,           allocatable :: before(:)
+        character(len=STDLEN)          :: msg
+        integer                        :: i, n, s
+        logical                        :: l_changed, l_kept
         write(*,'(A)') 'test_earlier_release'
         allocate(proj)
         call make_groups_project(proj, [(9, s=1,30)], .true., 'legacy')
@@ -379,9 +379,9 @@ contains
 
     subroutine test_inconsistent()
         class(sp_project), allocatable :: proj
-        character(len=STDLEN) :: msg
-        integer :: s, i
-        logical :: l_changed
+        character(len=STDLEN)          :: msg
+        integer                        :: s, i
+        logical                        :: l_changed
         write(*,'(A)') 'test_inconsistent'
         allocate(proj)
         call make_groups_project(proj, [(8, s=1,24)], .true., 'bad')
@@ -401,9 +401,9 @@ contains
     !> a worker without halves and a master with an inconsistent partition stop rather than make one
     subroutine test_refusals()
         class(sp_project), allocatable :: proj
-        type(refusing_partition) :: child
-        integer :: s
-        logical :: l_changed
+        type(refusing_partition)       :: child
+        integer                        :: s
+        logical                        :: l_changed
         write(*,'(A)') 'test_refusals'
         allocate(proj)
         call make_groups_project(proj, [(6, s=1,24)], .true., 'refuse')
@@ -455,11 +455,11 @@ contains
     !> the transaction through the project file, a field loaded alone, and the labels after a merge
     subroutine test_project_file_and_merge()
         class(sp_project), allocatable :: proj, part2D, reread, merged
-        type(string), allocatable :: files(:)
-        integer, allocatable :: eo1(:), eo2(:)
-        character(len=STDLEN) :: msg
-        integer :: s, i, n1, n2
-        logical :: l_same
+        type(string),      allocatable :: files(:)
+        integer,           allocatable :: eo1(:), eo2(:)
+        character(len=STDLEN)          :: msg
+        integer                        :: s, i, n1, n2
+        logical                        :: l_same
         write(*,'(A)') 'test_project_file_and_merge'
         allocate(proj, part2D, reread, merged)
         ! a 2D run loads ptcl2D and stk only: the transaction reads the rest from the file
@@ -521,10 +521,10 @@ contains
     !> making the split draws nothing from the process-wide stream; a fixed seed gives the same split
     subroutine test_isolated_stream_and_seed()
         class(sp_project), allocatable :: proj
-        integer, allocatable :: sizes(:), eo_a(:), eo_b(:), eo_c(:)
-        real    :: draws_ref(5), draws(5)
-        integer :: s, i, n, k
-        logical :: l_changed
+        integer,           allocatable :: sizes(:), eo_a(:), eo_b(:), eo_c(:)
+        real                           :: draws_ref(5), draws(5)
+        integer                        :: s, i, n, k
+        logical                        :: l_changed
         write(*,'(A)') 'test_isolated_stream_and_seed'
         allocate(proj)
         sizes = [(2 + mod(13*s, 17), s=1,60)]

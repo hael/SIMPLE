@@ -45,8 +45,8 @@ contains
     end subroutine simple_exception_opt
 
     subroutine simple_error_check(io_stat, msg)
-        integer,                    intent(in) :: io_stat
-        character(len=*), optional, intent(in) :: msg
+        integer,                    intent(in)           :: io_stat
+        character(len=*),           optional, intent(in) :: msg
         if( io_stat /= 0 .and. io_stat /= IOSTAT_END .and. io_stat /= IOSTAT_EOR ) then
             write(logfhandle,'(a,1x,I0 )') 'ERROR: IOS# ', io_stat
             if(present(msg)) write(logfhandle,'(a)') trim(adjustl(msg))

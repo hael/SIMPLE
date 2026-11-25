@@ -27,8 +27,8 @@ contains
         integer,  intent(in)    :: itmax    !< maximum number of iterations
         integer,  intent(inout) :: nevals   !< number of costfun evals counter
         procedure(costfun), pointer :: func
-        real, parameter :: tiny=1.0e-10
-        integer         :: ihi,ndim
+        real, parameter            :: tiny=1.0e-10
+        integer                    :: ihi,ndim
         real, dimension(size(p,2)) :: psum
         call amoeba_private
 
@@ -36,7 +36,7 @@ contains
 
             subroutine amoeba_private
                 integer :: i,ilo,inhi,loc(1)
-                real :: rtol,ysave,ytry,ytmp
+                real    :: rtol,ysave,ytry,ytmp
                 if(size(p,2) == size(p,1)-1 .and. size(p,1)-1 == size(y)-1 .and. size(y)-1 == size(pb)) then
                     ndim = size(p,2)
                 else
@@ -103,8 +103,8 @@ contains
             !!          high point, tries it, and replaces the high point if the new point is better
             function amotry(fac)
                 real, intent(in) :: fac
-                real :: amotry
-                real :: fac1,fac2,ytry
+                real                       :: amotry
+                real                       :: fac1,fac2,ytry
                 real, dimension(size(p,2)) :: ptry
                 fac1=(1.0-fac)/ndim
                 fac2=fac1-fac

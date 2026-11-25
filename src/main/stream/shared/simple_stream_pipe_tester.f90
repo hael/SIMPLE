@@ -26,13 +26,13 @@ contains
     !> with a limit, a frame still part-written when the limit runs out is abandoned: the channel
     !! is broken until discard mends it (the master's update writer, whose reader may have stopped)
     subroutine test_partial_frame_abandoned()
-        integer, parameter :: BLOCK = 4096, NBIG = 3 * BLOCK
+        integer,                parameter           :: BLOCK = 4096, NBIG = 3 * BLOCK
         type(stream_pipe)                           :: pipe
         character(kind=c_char), allocatable, target :: raw(:)
         character(len=NBIG)                         :: big
-        integer(c_int)    :: fds(2), rc, flags
-        integer(c_size_t) :: nio
-        integer           :: nfilled
+        integer(c_int)                              :: fds(2), rc, flags
+        integer(c_size_t)                           :: nio
+        integer                                     :: nfilled
         write(*,'(A)') 'test_partial_frame_abandoned'
         call open_loopback(fds, pipe)
         flags = c_fcntl(fds(2), F_GETFL, 0_c_int)
@@ -94,13 +94,13 @@ contains
 
     !> a frame whose header and payload arrive in pieces is returned once, when complete
     subroutine test_frame_split_across_writes()
-        character(len=*), parameter :: PAYLOAD = 'split frame'
+        character(len=*),       parameter           :: PAYLOAD = 'split frame'
         type(stream_pipe)                           :: pipe
         character(len=:),       allocatable         :: buffer
         character(kind=c_char), allocatable, target :: frame(:)
-        integer(c_int)    :: fds(2), msg_len
-        integer(c_size_t) :: nwritten
-        integer           :: header_bytes, nframe, nrest
+        integer(c_int)                              :: fds(2), msg_len
+        integer(c_size_t)                           :: nwritten
+        integer                                     :: header_bytes, nframe, nrest
         write(*,'(A)') 'test_frame_split_across_writes'
         call open_loopback(fds, pipe)
         msg_len      = int(len(PAYLOAD), c_int)
@@ -133,9 +133,9 @@ contains
         type(stream_pipe)                           :: pipe
         character(len=:),       allocatable         :: buffer
         character(kind=c_char), allocatable, target :: header(:)
-        integer(c_int)    :: fds(2), bad_len
-        integer(c_size_t) :: nwritten
-        integer           :: header_bytes
+        integer(c_int)                              :: fds(2), bad_len
+        integer(c_size_t)                           :: nwritten
+        integer                                     :: header_bytes
         write(*,'(A)') 'test_bad_length_resyncs'
         call open_loopback(fds, pipe)
         bad_len      = int(MAX_FRAME + 1, c_int)
@@ -158,8 +158,8 @@ contains
         type(stream_pipe)                           :: pipe
         character(len=:),       allocatable         :: buffer
         character(kind=c_char), allocatable, target :: header(:)
-        integer(c_int)    :: fds(2), msg_len
-        integer(c_size_t) :: nwritten
+        integer(c_int)                              :: fds(2), msg_len
+        integer(c_size_t)                           :: nwritten
         write(*,'(A)') 'test_discard'
         call open_loopback(fds, pipe)
         call pipe%send('stale 1')

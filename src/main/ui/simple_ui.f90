@@ -22,12 +22,12 @@ public :: print_stream_ui_json, validate_ui_json, validate_ui_presentation
 private
 #include "simple_local_flags.inc"
 
-character(len=26), parameter :: UI_FNAME = 'simple_ui.json'
-character(len=*),  parameter :: UI_JSON_REAL_FORMAT = '(ss,G0.6)'
-logical,           parameter :: DEBUG    = .false.
-type(ui_hash)                :: prgtab, tsttab
-type(string), allocatable    :: prgnames(:)
-type(string), allocatable    :: tstnames(:)
+character(len=26), parameter   :: UI_FNAME            = 'simple_ui.json'
+character(len=*),  parameter   :: UI_JSON_REAL_FORMAT = '(ss,G0.6)'
+logical,           parameter   :: DEBUG               = .false.
+type(ui_hash)                  :: prgtab, tsttab
+type(string),      allocatable :: prgnames(:)
+type(string),      allocatable :: tstnames(:)
 
 contains
     
@@ -61,8 +61,8 @@ contains
     end subroutine make_test_ui
 
     subroutine get_prg_ptr( which_program, ptr2prg )
-        class(string),             intent(in)    :: which_program
-        type(ui_program), pointer, intent(inout) :: ptr2prg
+        class(string),             intent(in)             :: which_program
+        type(ui_program),          pointer, intent(inout) :: ptr2prg
         ptr2prg => null()
         call prgtab%get_ui_program(which_program, ptr2prg)
     end subroutine get_prg_ptr
@@ -117,8 +117,8 @@ contains
         class(ui_hash), intent(in) :: program_table
         type(string),   intent(in) :: program_names(:)
         type(ui_program), pointer :: first_program, second_program
-        type(string) :: errmsg
-        integer :: ifirst, isecond
+        type(string)              :: errmsg
+        integer                   :: ifirst, isecond
         do ifirst = 1, size(program_names)
             call program_table%get_ui_program(program_names(ifirst), first_program)
             if( len_trim(first_program%category%to_char()) == 0 .or. &
@@ -148,8 +148,8 @@ contains
     end subroutine validate_category_metadata
 
     subroutine get_test_prg_ptr( which_program, ptr2prg )
-        class(string),             intent(in)    :: which_program
-        type(ui_program), pointer, intent(inout) :: ptr2prg
+        class(string),             intent(in)             :: which_program
+        type(ui_program),          pointer, intent(inout) :: ptr2prg
         ptr2prg => null()
         call tsttab%get_ui_program(which_program, ptr2prg)
     end subroutine get_test_prg_ptr
@@ -171,14 +171,14 @@ contains
     end subroutine list_single_prgs_in_ui
 
     subroutine print_registered_programs( program_table, program_names, executable )
-        class(ui_hash), intent(in) :: program_table
-        type(string),   intent(in) :: program_names(:)
+        class(ui_hash),   intent(in)           :: program_table
+        type(string),     intent(in)           :: program_names(:)
         character(len=*), optional, intent(in) :: executable
-        type(ui_program), pointer :: program
+        type(ui_program),          pointer     :: program
         type(category_descriptor), allocatable :: categories(:)
-        type(category_descriptor) :: category
-        integer :: icategory, iprogram, jcategory
-        logical :: found
+        type(category_descriptor)              :: category
+        integer                                :: icategory, iprogram, jcategory
+        logical                                :: found
 
         do iprogram = 1, size(program_names)
             call program_table%get_ui_program(program_names(iprogram), program)
@@ -266,7 +266,7 @@ contains
         type(json_core)           :: json
         type(json_value), pointer :: all_programs, program_entry
         type(ui_program), pointer :: ptr2prg
-        integer :: iprg
+        integer                   :: iprg
         ! JSON init
         call json%initialize(real_format=UI_JSON_REAL_FORMAT)
         ! create array of program entries
@@ -501,9 +501,9 @@ contains
         use json_module
         use json_kinds
         use json_file_module
-        type(json_core)                       :: json
-        type(json_value),             pointer :: p
-        character(kind=CK,len=:), allocatable :: fname
+        type(json_core)                           :: json
+        type(json_value),             pointer     :: p
+        character(kind=CK,len=:),     allocatable :: fname
         ! Builds & writes UI
         call make_ui
         write(*,*)'Constructed UI'

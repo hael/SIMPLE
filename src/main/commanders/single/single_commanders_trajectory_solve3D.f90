@@ -37,44 +37,44 @@ contains
         use simple_refine3D_fnames,       only: refine3D_reproj_model_fname
         class(commander_trajectory_solve3D), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        integer,          parameter :: NSTAGES = 11
-        integer,          parameter :: S_IMPORT = 1, S_CENTER2D = 2, S_DIAM = 3, S_STARTVOL = 4, S_REFINE2D = 5
-        integer,          parameter :: S_GATE1 = 6, S_GATE2 = 7, S_EXTRACT = 8, S_DENOISE = 9, S_SWAP = 10
+        integer,          parameter :: NSTAGES        = 11
+        integer,          parameter :: S_IMPORT       = 1, S_CENTER2D = 2, S_DIAM = 3, S_STARTVOL = 4, S_REFINE2D = 5
+        integer,          parameter :: S_GATE1        = 6, S_GATE2 = 7, S_EXTRACT = 8, S_DENOISE = 9, S_SWAP = 10
         integer,          parameter :: S_AUTOREFINE3D = 11
         character(len=*), parameter :: STAGE_PRGS(NSTAGES) = [character(len=26) :: 'trajectory_import', &
             &'center2D_nano', 'estimate_diam', 'simulate_nanoparticle', 'refine2D_nano', 'model_cavgs_rejection', &
             &'refine3D_nano', 'trajectory_extract_substk', 'trajectory_denoise', 'trajectory_swap_stack', &
             &'autorefine3D_nano']
-        character(len=*), parameter :: RECORDS     = 'trajectory_solve3D.txt'
-        character(len=*), parameter :: KEPT        = 'kept_frames'//STK_EXT
-        character(len=*), parameter :: DENOISED    = 'trajectory_denoised'//STK_EXT
-        character(len=*), parameter :: STARTVOL    = 'startvol.mrc'
-        character(len=*), parameter :: GATE_TABLE  = 'model_gate_classes.tsv'
-        character(len=*), parameter :: GATE_REJ    = 'model_gate_rejected_pairs.mrc'
-        character(len=*), parameter :: GATE_KEPT   = 'model_gate_kept_pairs.mrc'
-        character(len=*), parameter :: GATE_REPROJ = 'reprojs_startvol.mrc'
-        integer,          parameter :: NCHUNKS     = 10      !< the centering's time-chunk averages
-        integer,          parameter :: NKEPT_PAIRS = 20      !< kept classes shown beside the rejected ones
-        real,             parameter :: LP_EST_DIAM = 3.      !< as analysis2D_nano
-        real,             parameter :: MSK_FAC     = 1.5     !< mskdiam = MSK_FAC x the largest diameter
-        type(commander_trajectory_import)     :: ximport
-        type(commander_center2D_nano)         :: xcenter2D_nano
-        type(commander_estimate_diam)         :: xest_diam
-        type(commander_simulate_nanoparticle) :: xsim_np
-        type(commander_refine2D_nano)         :: xrefine2D_nano
-        type(commander_model_cavgs_rejection) :: xgate1
-        type(commander_refine3D_nano)         :: xrefine3D_nano
-        type(commander_reproject)             :: xreproject
+        character(len=*), parameter               :: RECORDS     = 'trajectory_solve3D.txt'
+        character(len=*), parameter               :: KEPT        = 'kept_frames'//STK_EXT
+        character(len=*), parameter               :: DENOISED    = 'trajectory_denoised'//STK_EXT
+        character(len=*), parameter               :: STARTVOL    = 'startvol.mrc'
+        character(len=*), parameter               :: GATE_TABLE  = 'model_gate_classes.tsv'
+        character(len=*), parameter               :: GATE_REJ    = 'model_gate_rejected_pairs.mrc'
+        character(len=*), parameter               :: GATE_KEPT   = 'model_gate_kept_pairs.mrc'
+        character(len=*), parameter               :: GATE_REPROJ = 'reprojs_startvol.mrc'
+        integer,          parameter               :: NCHUNKS     = 10  !< the centering's time-chunk averages
+        integer,          parameter               :: NKEPT_PAIRS = 20  !< kept classes shown beside the rejected ones
+        real,             parameter               :: LP_EST_DIAM = 3.  !< as analysis2D_nano
+        real,             parameter               :: MSK_FAC     = 1.5 !< mskdiam = MSK_FAC x the largest diameter
+        type(commander_trajectory_import)         :: ximport
+        type(commander_center2D_nano)             :: xcenter2D_nano
+        type(commander_estimate_diam)             :: xest_diam
+        type(commander_simulate_nanoparticle)     :: xsim_np
+        type(commander_refine2D_nano)             :: xrefine2D_nano
+        type(commander_model_cavgs_rejection)     :: xgate1
+        type(commander_refine3D_nano)             :: xrefine3D_nano
+        type(commander_reproject)                 :: xreproject
         type(commander_trajectory_extract_substk) :: xextract
-        type(commander_trajectory_denoise)    :: xdenoise
-        type(commander_trajectory_swap_stack) :: xswap
-        type(commander_autorefine3D_nano)     :: xautorefine3D_nano
-        type(parameters) :: params
-        type(oris)       :: recs
-        type(string)     :: exec_dir, stk, projname, stage_dirs(NSTAGES), stage_proj(NSTAGES), map_fname
-        integer(timer_int_kind) :: t0
-        integer :: istage, ldim(3), nframes, box
-        real    :: mskdiam, moldiam, lat_thres
+        type(commander_trajectory_denoise)        :: xdenoise
+        type(commander_trajectory_swap_stack)     :: xswap
+        type(commander_autorefine3D_nano)         :: xautorefine3D_nano
+        type(parameters)                          :: params
+        type(oris)                                :: recs
+        type(string)                              :: exec_dir, stk, projname, stage_dirs(NSTAGES), stage_proj(NSTAGES), map_fname
+        integer(timer_int_kind)                   :: t0
+        integer                                   :: istage, ldim(3), nframes, box
+        real                                      :: mskdiam, moldiam, lat_thres
         ! the program's defaults and checks, on the command line before the one params%new (the parameter class
         ! holds no program-specific checks)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
@@ -298,9 +298,9 @@ contains
         !! copy of from_proj when it reads a project) and entered, and every later stage marked as not done; .false.
         !! when its record says it is done
         logical function begin_stage( istg, l_proj, from_proj )
-            integer,                 intent(in) :: istg
-            logical,                 intent(in) :: l_proj
-            class(string), optional, intent(in) :: from_proj
+            integer,                 intent(in)           :: istg
+            logical,                 intent(in)           :: l_proj
+            class(string),           optional, intent(in) :: from_proj
             integer :: j
             begin_stage = recs%get_int(istg, 'done') /= 1
             if( .not. begin_stage )then
@@ -351,7 +351,7 @@ contains
             integer,       intent(in) :: istg
             class(string), intent(in) :: cavgs
             type(cmdline) :: cl
-            real :: dmin, dmax, mskdiam, moldiam
+            real          :: dmin, dmax, mskdiam, moldiam
             call cl%set('prg',     'estimate_diam')
             call cl%set('mkdir',   'no')
             call cl%set('stk',     cavgs)
@@ -404,7 +404,7 @@ contains
             integer, intent(in) :: istg
             type(sp_project)     :: spproj
             integer, allocatable :: cls(:), pops(:)
-            integer :: n
+            integer              :: n
             call spproj%read_segment('ptcl2D', stage_proj(istg))
             call spproj%read_segment('cls2D',  stage_proj(istg))
             cls  = spproj%os_ptcl2D%get_all_asint('class')
@@ -450,9 +450,9 @@ contains
         subroutine record_shifts( istg, field )
             integer,          intent(in) :: istg
             character(len=*), intent(in) :: field
-            type(sp_project)  :: spproj
-            class(oris), pointer :: os
-            real, allocatable :: x(:), y(:), r(:)
+            type(sp_project)         :: spproj
+            class(oris), pointer     :: os
+            real,        allocatable :: x(:), y(:), r(:)
             call spproj%read_segment(field, stage_proj(istg))
             call spproj%ptr2oritype(field, os)
             x = os%get_all('x')
@@ -476,8 +476,8 @@ contains
             type(string)         :: cavgs, errmsg
             real,    allocatable :: corrs(:), peaks(:)
             integer, allocatable :: states1(:), states2(:), pops(:), pstates(:)
-            real    :: nsd, med, sd, cut, smpd, euls(3)
-            integer :: ncls, icls, funit, io_stat, nframes_in, iptcl
+            real                 :: nsd, med, sd, cut, smpd, euls(3)
+            integer              :: ncls, icls, funit, io_stat, nframes_in, iptcl
             call cl%set('prg',      'refine3D_nano')
             call cl%set('mkdir',    'no')
             call cl%set('projfile', stage_proj(S_GATE2))
@@ -571,7 +571,7 @@ contains
             type(cmdline)        :: cl
             type(image)          :: img
             integer, allocatable :: kept(:), order(:)
-            integer :: icls, i, nkept, nshow, cnt
+            integer              :: icls, i, nkept, nshow, cnt
             call spproj%os_cls3D%write(string('cavgs_oris.txt'))
             call cl%set('prg',    'reproject')
             call cl%set('vol1',   filepath(stage_dirs(S_STARTVOL), STARTVOL))
@@ -621,8 +621,8 @@ contains
         !> the final map of autorefine3D_nano: final_results/<fbody>_iter<NNN>.mrc of its last round
         type(string) function final_map() result( fname )
             type(string), allocatable :: maps(:)
-            type(string) :: fbody, pattern
-            integer :: i
+            type(string)              :: fbody, pattern
+            integer                   :: i
             fbody   = refine3D_state_vol_fbody(1)
             pattern = filepath(filepath(stage_dirs(S_AUTOREFINE3D), 'final_results'), fbody%to_char()//'_iter???'//MRC_EXT)
             call simple_list_files(pattern%to_char(), maps)

@@ -31,11 +31,11 @@ contains
     !> Read a part's particle-index list (one integer per line, as written by the master's
     !! flex_pca_plan_partitions through arr2txtfile).
     subroutine read_pind_list( fname, pinds, nptcls )
-        character(len=*),     intent(in)  :: fname
-        integer, allocatable, intent(out) :: pinds(:)
-        integer,              intent(out) :: nptcls
+        character(len=*),     intent(in)               :: fname
+        integer,              allocatable, intent(out) :: pinds(:)
+        integer,              intent(out)              :: nptcls
         type(string) :: fn
-        integer :: funit, io_stat, i, n
+        integer      :: funit, io_stat, i, n
         fn = trim(fname)
         if( .not. file_exists(fn) ) THROW_HARD('flex_pca worker: particle list not found: '//trim(fname))
         n = nlines(fn)
@@ -52,13 +52,13 @@ contains
     end subroutine read_pind_list
 
     subroutine validate_covariance_inputs( params, l_vol1_explicit, l_pindfile, build, pinds, nptcls, rounds )
-        class(flex_pca_rounds), intent(inout) :: rounds
-        type(parameters),       intent(inout) :: params
-        logical,                intent(in)    :: l_vol1_explicit, l_pindfile
-        type(builder),          intent(inout) :: build
-        integer, allocatable,   intent(out)   :: pinds(:)
-        integer,                intent(out)   :: nptcls
-        integer :: q, i, cnt, ihalf
+        class(flex_pca_rounds), intent(inout)              :: rounds
+        type(parameters),       intent(inout)              :: params
+        logical,                intent(in)                 :: l_vol1_explicit, l_pindfile
+        type(builder),          intent(inout)              :: build
+        integer,                allocatable,   intent(out) :: pinds(:)
+        integer,                intent(out)                :: nptcls
+        integer              :: q, i, cnt, ihalf
         integer, allocatable :: sel(:)
         if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('flex_pca requires oritype=ptcl3D')
         if( .not. l_vol1_explicit )then
@@ -215,7 +215,7 @@ contains
         class(builder),    intent(inout) :: build
         character(len=*),  intent(in)    :: fname
         type(string) :: path
-        integer :: ind
+        integer      :: ind
         if( .not. file_exists(fname) ) return
         path = simple_abspath(fname)
         call build%spproj%add_entry2os_out('flex_embedding', ind)
@@ -237,7 +237,7 @@ contains
         integer,          intent(in)    :: pinds(:), labels(:), nstates
         type(string),     intent(in)    :: projfile
         logical, allocatable :: assigned(:)
-        integer :: i, iptcl, state, nptcls, nexcluded
+        integer              :: i, iptcl, state, nptcls, nexcluded
         if( size(pinds) < 1 .or. size(labels) /= size(pinds) .or. nstates < 2 ) &
             &THROW_HARD('invalid flex_pca discrete-state assignment')
         if( len_trim(projfile%to_char()) == 0 ) THROW_HARD('flex_pca discrete-state project file is empty')
@@ -291,7 +291,7 @@ contains
         type(commander_rec3D) :: xrec3D
         type(cmdline)         :: cline_rec
         type(string)          :: vol_fname, fsc_fname
-        integer :: state, nstates_out
+        integer               :: state, nstates_out
         call cline_rec%set('prg',         'reconstruct3D')
         call cline_rec%set('projfile',    params%projfile%to_char())
         call cline_rec%set('mkdir',       'no')

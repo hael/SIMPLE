@@ -29,7 +29,7 @@ module simple_gui_metadata_stream_initial_analysis
     integer               :: last_particles_imported      = 0       ! Unix timestamp of most recent import event
     real                  :: mask_scale                   = 0.0     ! box size in A (box_size * smpd)
   contains
-    procedure :: kill => kill_override
+    procedure :: kill    => kill_override
     procedure :: set
     procedure :: get
     procedure :: jsonise => jsonise_override

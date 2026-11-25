@@ -18,9 +18,9 @@ integer, parameter :: MODELSZ       = 18   ! number of the models polynomial coe
 type :: motion_model
     class(parameters), pointer :: p_ptr => null()
     ! Files
-    type(string)         :: file_name
-    type(string)         :: movie
-    type(string)         :: gain
+    type(string)          :: file_name
+    type(string)          :: movie
+    type(string)          :: gain
     character(len=STDLEN) :: flipgain = 'no'
     ! Decoded movie geometry and scaled motion-correction geometry
     real                 :: smpd_movie
@@ -44,12 +44,12 @@ type :: motion_model
     real,    allocatable :: drift_offsets_x(:), drift_offsets_y(:)
     real,    allocatable :: frameweights(:)
     ! Local motion & patches
-    integer              :: npatch=0, nx_patch=0, ny_patch=0
-    integer              :: ldim_patch(2)=0
+    integer              :: npatch         = 0, nx_patch=0, ny_patch=0
+    integer              :: ldim_patch(2)  = 0
     integer, allocatable :: patch_bounds(:,:,:,:)                               ! Patch boundaries
     real,    allocatable :: patch_coords(:,:,:)                                 ! Patch center coordinates
     real,    allocatable :: local_offsets_x(:,:,:), local_offsets_y(:,:,:)      ! Local offsets
-    real                 :: rmsd_fit(2)=0.0
+    real                 :: rmsd_fit(2)    = 0.0
     logical              :: patch_accepted = .true.
     ! Polynomial models
     integer              :: fixed_frame                                         ! Index of reference frame
@@ -82,18 +82,18 @@ contains
     subroutine new( self, params, movie, ldim_movie, smpd_movie, scaled_frames,&
             &total_nframes, fixed_frame, voltage, dose_per_frame, eer_fraction, gain )
         use simple_motion_correct_utils, only: eer_scale_movie_convention
-        class(motion_model), intent(inout) :: self
-        class(parameters), target, intent(in) :: params
-        class(string),             intent(in) :: movie
-        integer,                   intent(in) :: ldim_movie(2)
-        real,                      intent(in) :: smpd_movie
-        class(image),     pointer, intent(in) :: scaled_frames(:)
-        integer,                   intent(in) :: total_nframes
-        integer,                   intent(in) :: fixed_frame
-        real,                      intent(in) :: voltage
-        real,                      intent(in) :: dose_per_frame
-        integer,                   intent(in) :: eer_fraction
-        class(string),   optional, intent(in) :: gain
+        class(motion_model),       intent(inout)        :: self
+        class(parameters),         target, intent(in)   :: params
+        class(string),             intent(in)           :: movie
+        integer,                   intent(in)           :: ldim_movie(2)
+        real,                      intent(in)           :: smpd_movie
+        class(image),              pointer, intent(in)  :: scaled_frames(:)
+        integer,                   intent(in)           :: total_nframes
+        integer,                   intent(in)           :: fixed_frame
+        real,                      intent(in)           :: voltage
+        real,                      intent(in)           :: dose_per_frame
+        integer,                   intent(in)           :: eer_fraction
+        class(string),             optional, intent(in) :: gain
         integer :: ldim(3)
         call self%kill
         self%p_ptr => params
@@ -210,7 +210,7 @@ contains
         class(motion_model), intent(inout) :: self
         real,                intent(in)    :: drift_x(:), drift_y(:)
         character(len=:), allocatable :: error_message
-        logical :: valid_dimensions
+        logical                       :: valid_dimensions
         valid_dimensions = size(drift_x) == self%nframes .and. size(drift_y) == self%nframes
         if( .not.valid_dimensions )then
             error_message = 'motion model drift-offset dimensions do not match: size(drift_x)='//&
@@ -236,22 +236,22 @@ contains
 
     subroutine set_model_coeffs( self, coeffs_x, coeffs_y )
         class(motion_model), intent(inout) :: self
-        real(dp), intent(in) :: coeffs_x(MODELSZ), coeffs_y(MODELSZ)
+        real(dp),            intent(in)    :: coeffs_x(MODELSZ), coeffs_y(MODELSZ)
         self%model_coeffs_x = coeffs_x
         self%model_coeffs_y = coeffs_y
     end subroutine set_model_coeffs
 
     subroutine set_frameweights( self, weights )
         class(motion_model), intent(inout) :: self
-        real, intent(in) :: weights(:)
+        real,                intent(in)    :: weights(:)
         if( size(weights) /= self%nframes ) THROW_HARD('motion model frame-weight dimensions do not match')
         if( .not. allocated(self%frameweights) ) allocate(self%frameweights(self%nframes))
         self%frameweights = weights
     end subroutine set_frameweights
 
     subroutine set_outlier_coords( self, coords )
-        class(motion_model),  intent(inout) :: self
-        integer, allocatable, intent(in)    :: coords(:,:)
+        class(motion_model),  intent(inout)           :: self
+        integer,              allocatable, intent(in) :: coords(:,:)
         if( allocated(coords) )then
             if( size(coords,1) /= 2 ) THROW_HARD('motion model outlier coordinates must have two rows')
             if( allocated(self%outlier_coords) ) deallocate(self%outlier_coords)
@@ -265,7 +265,7 @@ contains
     subroutine refit_polynomial( self, ref_frame )
         use simple_motion_correct_utils, only: patch_poly, pix2polycoords, apply_patch_poly
         class(motion_model), intent(inout) :: self
-        integer,             intent(in) :: ref_frame
+        integer,             intent(in)    :: ref_frame
         real(dp) :: yx(self%nframes*self%nx_patch*self%ny_patch)      ! along x
         real(dp) :: yy(self%nframes*self%nx_patch*self%ny_patch)      ! along y
         real(dp) :: x(3,self%nframes*self%nx_patch*self%ny_patch)     ! x,y,t
@@ -369,8 +369,8 @@ contains
 
     subroutine write( self, star_fname, bin_fname, patch_accepted )
         class(motion_model), intent(inout) :: self
-        class(string),       intent(in) :: star_fname, bin_fname
-        logical,             intent(in) :: patch_accepted
+        class(string),       intent(in)    :: star_fname, bin_fname
+        logical,             intent(in)    :: patch_accepted
         self%patch_accepted = patch_accepted
         call self%write_doc(star_fname)
         call self%write_bin(bin_fname)
@@ -378,13 +378,13 @@ contains
 
     subroutine write_doc( self, star_fname )
         use simple_starfile_wrappers
-        class(motion_model), intent(inout) :: self
-        class(string),                  intent(in) :: star_fname
+        class(motion_model),            intent(inout) :: self
+        class(string),                  intent(in)    :: star_fname
         real(dp),     allocatable :: poly_coeffs(:)
         type(starfile_table_type) :: table
-        real(dp)     :: shift(2), scale
-        integer      :: i,iframe, ncoeffs, ndeadpixels, motion_model_version
-        logical      :: do_scale, l_outliers, l_gain
+        real(dp)                  :: shift(2), scale
+        integer                   :: i,iframe, ncoeffs, ndeadpixels, motion_model_version
+        logical                   :: do_scale, l_outliers, l_gain
         l_outliers = allocated(self%outlier_coords)
         l_gain = .not.self%gain%is_blank()
         scale        = 1.d0 / real(self%binning)
@@ -538,9 +538,9 @@ contains
     end subroutine write_bin
 
     subroutine read( self, bin_fname, params )
-        class(motion_model), intent(inout) :: self
-        class(string),                  intent(in)    :: bin_fname
-        class(parameters), target,      intent(in)    :: params
+        class(motion_model),            intent(inout)           :: self
+        class(string),                  intent(in)              :: bin_fname
+        class(parameters),              target,      intent(in) :: params
         type(string)  :: stored_flipgain
         integer(int8) :: flag
         integer       :: funit, ios, stored_file_version, stored_model_version, noutliers
@@ -726,10 +726,10 @@ contains
     ! PRIVATE TYPE UNBOUND HELPERS
 
     subroutine write_string(funit, value)
-        integer, intent(in) :: funit
+        integer,       intent(in) :: funit
         class(string), intent(in) :: value
         character(len=:), allocatable :: text
-        integer(int32) :: n
+        integer(int32)                :: n
         text = value%to_char()
         n = len(text)
         write(funit) n
@@ -737,10 +737,10 @@ contains
     end subroutine write_string
 
     subroutine read_string(funit, value)
-        integer, intent(in) :: funit
+        integer,       intent(in)    :: funit
         class(string), intent(inout) :: value
         character(len=:), allocatable :: text
-        integer(int32) :: n
+        integer(int32)                :: n
         read(funit) n
         if( n < 0 ) THROW_HARD('invalid motion model string length')
         if( n > 0 )then

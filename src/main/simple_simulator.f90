@@ -9,13 +9,13 @@ contains
     subroutine simimg( img, orientation, tfun, ctfflag, snr, bfac, apply_ctf )
         use simple_image, only: image
         use simple_ctf,   only: ctf
-        class(image),      intent(inout) :: img
-        class(ori),        intent(inout) :: orientation
-        class(ctf),        intent(inout) :: tfun
-        character(len=*),  intent(in)    :: ctfflag
-        real,              intent(in)    :: snr
-        real,    optional, intent(in)    :: bfac
-        logical, optional, intent(in)    :: apply_ctf
+        class(image),      intent(inout)        :: img
+        class(ori),        intent(inout)        :: orientation
+        class(ctf),        intent(inout)        :: tfun
+        character(len=*),  intent(in)           :: ctfflag
+        real,              intent(in)           :: snr
+        real,              optional, intent(in) :: bfac
+        logical,           optional, intent(in) :: apply_ctf
         type(ctfparams) :: ctfparms
         logical         :: aapply_ctf
         aapply_ctf = .true.
@@ -53,11 +53,11 @@ contains
     subroutine simimg_wave( img, total_dose, snr, shot_noise )
         use simple_image,        only: image
         use simple_wave_imaging, only: detect_intensity
-        class(image),      intent(inout) :: img
-        real,              intent(in)    :: total_dose, snr
-        logical, optional, intent(in)    :: shot_noise
+        class(image),      intent(inout)        :: img
+        real,              intent(in)           :: total_dose, snr
+        logical,           optional, intent(in) :: shot_noise
         real, allocatable :: rmat(:,:,:)
-        real :: dose_px, sdev, var, dose
+        real              :: dose_px, sdev, var, dose
         if( total_dose <= 0. ) THROW_HARD('total_dose must be positive; simimg_wave')
         dose_px = total_dose * img%get_smpd()**2
         ! the noise of a relative intensity: the counts' standard deviation over D a^2

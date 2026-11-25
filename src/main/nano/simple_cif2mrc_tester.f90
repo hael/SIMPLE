@@ -12,12 +12,12 @@ implicit none
 private
 public :: run_all_cif2mrc_tests
 
-integer, parameter :: NELEMENTS = 96, EXPECTED_BOX = 52
-real,    parameter :: SMPD = 1.0
-real(dp), parameter :: MAX_ABS_TOL = 2.0e-3_dp, RMS_TOL = 2.0e-4_dp, REL_SUM_TOL = 5.0e-5_dp
-character(len=*), parameter :: CIF_FILE = 'cif2mrc_test.cif'
-character(len=*), parameter :: PDB_FILE = 'cif2mrc_test.pdb'
-character(len=*), parameter :: MRC_FILE = 'cif2mrc_test.mrc'
+integer,          parameter :: NELEMENTS         = 96, EXPECTED_BOX = 52
+real,             parameter :: SMPD              = 1.0
+real(dp),         parameter :: MAX_ABS_TOL       = 2.0e-3_dp, RMS_TOL = 2.0e-4_dp, REL_SUM_TOL = 5.0e-5_dp
+character(len=*), parameter :: CIF_FILE          = 'cif2mrc_test.cif'
+character(len=*), parameter :: PDB_FILE          = 'cif2mrc_test.pdb'
+character(len=*), parameter :: MRC_FILE          = 'cif2mrc_test.mrc'
 character(len=*), parameter :: CENTERED_PDB_FILE = 'cif2mrc_test_centered.pdb'
 character(len=2), parameter :: ELEMENTS(NELEMENTS) = [character(len=2) :: &
     &'H ', 'HE', 'LI', 'BE', 'B ', 'C ', 'N ', 'O ', 'F ', 'NE', 'NA', 'MG', 'AL', 'SI', 'P ', 'S ', &
@@ -30,14 +30,14 @@ character(len=2), parameter :: ELEMENTS(NELEMENTS) = [character(len=2) :: &
 contains
 
     subroutine run_all_cif2mrc_tests
-        type(atoms) :: molecule
-        type(image) :: volume
-        real, pointer :: rmat(:,:,:), density(:,:,:)
+        type(atoms)           :: molecule
+        type(image)           :: volume
+        real,     pointer     :: rmat(:,:,:), density(:,:,:)
         real(dp), allocatable :: reference(:,:,:), error(:,:,:)
-        real(dp) :: max_abs_error, rms_error, rel_sum_error, local_error
-        real :: smpd_out
-        integer :: ldim(3), nptcls, z, peak_actual(3), peak_reference(3), center(3), lo(3), hi(3)
-        character(len=160) :: message
+        real(dp)              :: max_abs_error, rms_error, rel_sum_error, local_error
+        real                  :: smpd_out
+        integer               :: ldim(3), nptcls, z, peak_actual(3), peak_reference(3), center(3), lo(3), hi(3)
+        character(len=160)    :: message
 
         call write_all_element_fixture
         call molecule%cif2mrc(string(CIF_FILE), SMPD)
@@ -98,7 +98,7 @@ contains
     end subroutine run_all_cif2mrc_tests
 
     subroutine write_all_element_fixture
-        integer :: file_unit, z
+        integer  :: file_unit, z
         real(dp) :: xyz(3)
         open(newunit=file_unit, file=CIF_FILE, status='replace', action='write')
         write(file_unit,'(A)') 'data_cif2mrc_all_elements'
@@ -141,13 +141,13 @@ contains
     end function expected_position
 
     subroutine build_analytical_reference( ldim, reference )
-        integer, intent(in) :: ldim(3)
+        integer,  intent(in)               :: ldim(3)
         real(dp), allocatable, intent(out) :: reference(:,:,:)
-        real(dp), parameter :: C = 2132.79_dp
+        real(dp), parameter :: C        = 2132.79_dp
         real(dp), parameter :: FOURPISQ = 4._dp * acos(-1._dp)**2
-        real(dp), parameter :: BFAC = 64._dp, CUTOFFSQ = 64._dp
-        real(dp) :: a(5), b(5), aterm(5), xyz(3), r2
-        integer :: z, i, j, k
+        real(dp), parameter :: BFAC     = 64._dp, CUTOFFSQ = 64._dp
+        real(dp)            :: a(5), b(5), aterm(5), xyz(3), r2
+        integer             :: z, i, j, k
         allocate(reference(ldim(1), ldim(2), ldim(3)), source=0._dp)
         do z = 1, NELEMENTS
             call reference_coefficients(z, a, b)

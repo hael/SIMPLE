@@ -35,16 +35,16 @@ type xd_gmm
     real(dp), allocatable :: pik(:)           !< (k)
     logical               :: exists = .false.
   contains
-    procedure :: new
-    procedure :: init
-    procedure :: fit
-    procedure :: loglik
-    procedure :: posterior
-    procedure :: get_means
-    procedure :: get_covs
-    procedure :: get_pi
-    procedure :: get_loglik
-    procedure :: kill
+    procedure          :: new
+    procedure          :: init
+    procedure          :: fit
+    procedure          :: loglik
+    procedure          :: posterior
+    procedure          :: get_means
+    procedure          :: get_covs
+    procedure          :: get_pi
+    procedure          :: get_loglik
+    procedure          :: kill
     procedure, private :: order_by_weight
 end type xd_gmm
 
@@ -70,10 +70,10 @@ contains
     !!          caller supplies), every Sigma_k the observed covariance minus the mean noise (PSD-clipped),
     !!          uniform mixing proportions
     subroutine init( self, X, Nz, means0 )
-        class(xd_gmm),      intent(inout) :: self
-        real(dp),           intent(in)    :: X(:,:)      !< (n,d) observations
-        real(dp),           intent(in)    :: Nz(:,:,:)   !< (d,d,n) noise covariances
-        real(dp), optional, intent(in)    :: means0(:,:) !< (d,k) initial means
+        class(xd_gmm),      intent(inout)        :: self
+        real(dp),           intent(in)           :: X(:,:)      !< (n,d) observations
+        real(dp),           intent(in)           :: Nz(:,:,:)   !< (d,d,n) noise covariances
+        real(dp),           optional, intent(in) :: means0(:,:) !< (d,k) initial means
         real(dp) :: cobs(self%d,self%d), xmean(self%d), S(self%d,self%d), Nbar(self%d,self%d), ridge
         integer  :: n, i, q, r, jbest
         n = size(X,1)
@@ -115,11 +115,11 @@ contains
         real(dp),      intent(in)    :: R(:,:,:)   !< (d,d,n) projections
         real(dp),      intent(in)    :: Nz(:,:,:)  !< (d,d,n) noise covariances
         real(dp), allocatable :: sw(:,:), sb(:,:,:), sBB(:,:,:,:)
-        real(dp) :: Lk(self%d,self%d,self%k), RSk(self%d,self%d,self%k), yk(self%d,self%k), b(self%d)
-        real(dp) :: Bk(self%d,self%d), logp(self%k), lse, rk(self%k), xi(self%d)
-        real(dp) :: ll, ll_prev, ridge, trc, wk
-        integer  :: n, d, nk, it, i, c, ithr, nthr, q
-        logical  :: okk(self%k)
+        real(dp)              :: Lk(self%d,self%d,self%k), RSk(self%d,self%d,self%k), yk(self%d,self%k), b(self%d)
+        real(dp)              :: Bk(self%d,self%d), logp(self%k), lse, rk(self%k), xi(self%d)
+        real(dp)              :: ll, ll_prev, ridge, trc, wk
+        integer               :: n, d, nk, it, i, c, ithr, nthr, q
+        logical               :: okk(self%k)
         n  = size(X,1)
         d  = self%d
         nk = self%k
@@ -187,7 +187,7 @@ contains
         class(xd_gmm), intent(inout) :: self
         integer,  allocatable :: order(:)
         real(dp), allocatable :: tmu(:,:), tSig(:,:,:), tpik(:)
-        integer :: i, j, tmp
+        integer               :: i, j, tmp
         allocate(order(self%k))
         order = [(i, i=1,self%k)]
         do i = 2, self%k
@@ -232,11 +232,11 @@ contains
 
     !>  \brief  posterior mean and covariance of every underlying point, and its component responsibilities
     subroutine posterior( self, X, R, Nz, xhat, xcov, resp )
-        class(xd_gmm),      intent(in)  :: self
-        real(dp),           intent(in)  :: X(:,:), R(:,:,:), Nz(:,:,:)
-        real(dp),           intent(out) :: xhat(:,:)    !< (n,d)
-        real(dp),           intent(out) :: xcov(:,:,:)  !< (d,d,n)
-        real(dp), optional, intent(out) :: resp(:,:)    !< (n,k)
+        class(xd_gmm),      intent(in)            :: self
+        real(dp),           intent(in)            :: X(:,:), R(:,:,:), Nz(:,:,:)
+        real(dp),           intent(out)           :: xhat(:,:)   !< (n,d)
+        real(dp),           intent(out)           :: xcov(:,:,:) !< (d,d,n)
+        real(dp),           optional, intent(out) :: resp(:,:)   !< (n,k)
         real(dp) :: L(self%d,self%d), RS(self%d,self%d), y(self%d), b(self%d,self%k), Bk(self%d,self%d,self%k)
         real(dp) :: logp(self%k), lse, rk(self%k), xi(self%d)
         integer  :: i, c
@@ -311,7 +311,7 @@ contains
         integer,  intent(out) :: kbest
         real(dp), intent(out) :: scores(:)   !< (kmax)
         logical, allocatable :: inA(:), inB(:)
-        integer :: n, i, kcv, ndrop, stride
+        integer              :: n, i, kcv, ndrop, stride
         n = size(X,1)
         if( kmax < 1 .or. size(scores) < kmax ) THROW_HARD('kmax must be >= 1 and scores hold kmax entries; xd_select_k')
         allocate(inA(n), inB(n))
@@ -345,8 +345,8 @@ contains
             integer, intent(in) :: nk
             logical, intent(in) :: sel(n), tst(n)
             real(dp), allocatable :: Xsel(:,:), Rsel(:,:,:), Nsel(:,:,:), Xtst(:,:), Rtst(:,:,:), Ntst(:,:,:)
-            type(xd_gmm) :: xd
-            integer :: n_sel, n_tst, j, jj, ii, d
+            type(xd_gmm)          :: xd
+            integer               :: n_sel, n_tst, j, jj, ii, d
             d     = size(X,2)
             n_sel = count(sel)
             n_tst = count(tst)

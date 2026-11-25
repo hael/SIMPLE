@@ -17,10 +17,10 @@ private
 public :: run_all_ctf_tests
 
 integer, parameter :: LDIM(3) = [64,64,1]
-integer, parameter :: H = 5, K = 3
-real,    parameter :: SMPD = 1.0, DFX = 2.0, DFY = 2.3, ANGAST = 27.
-real,    parameter :: KV = 300., CS = 2.0, AC = 0.1
-real,    parameter :: TOL = 2.e-6   ! Fortran-vs-Fortran comparisons
+integer, parameter :: H       = 5, K = 3
+real,    parameter :: SMPD    = 1.0, DFX = 2.0, DFY = 2.3, ANGAST = 27.
+real,    parameter :: KV      = 300., CS = 2.0, AC = 0.1
+real,    parameter :: TOL     = 2.e-6 ! Fortran-vs-Fortran comparisons
 ! 3.0 rad ~ 172 deg exercises the near-pi regime typical of a laser phase plate,
 ! where an erroneous fold at pi would flip the sign of the transfer function
 real,    parameter :: PHASES(4) = [0., PI/4., PIO2, 3.0]
@@ -55,7 +55,7 @@ contains
     subroutine test_fit_kill_keeps_ft_maps()
         use simple_ctf_estimate_fit, only: ctf_estimate_fit
         class(ctf_estimate_fit), allocatable :: fit
-        integer :: shape_before(3)
+        integer                              :: shape_before(3)
         write(*,'(A)') 'test_fit_kill_keeps_ft_maps'
         allocate(fit)
         call memoize_ft_maps(LDIM, SMPD)
@@ -248,11 +248,11 @@ contains
     ! conventional, intermediate, and near-quadrature phase shifts; ft2img places component (h,k) at
     ! (h+mh+1, k+mk+1) where mh, mk are the lower Fourier limits
     subroutine test_fast_kernel_and_ft2img()
-        type(image) :: img, img_spec
-        type(ctf)   :: tfun
+        type(image)     :: img, img_spec
+        type(ctf)       :: tfun
         type(ctfparams) :: parms
-        real        :: s2, ang, expected, actual, conventional, shifted
-        integer     :: iph, lims(3,2), mh, mk
+        real            :: s2, ang, expected, actual, conventional, shifted
+        integer         :: iph, lims(3,2), mh, mk
         write(*,'(A)') 'test_fast_kernel_and_ft2img'
         call img%new(LDIM, SMPD)
         call img_spec%new(LDIM, SMPD)
@@ -318,8 +318,8 @@ contains
         ! heap-allocated: GCC flags the hidden descriptor fields of a local fplane_type passed to
         ! the intent(out) dummy of gen_fplane4rec as uninitialized (a -Wuninitialized false positive)
         type(fplane_type), allocatable :: fplane
-        type(fplane_grid) :: grid
-        real              :: actual
+        type(fplane_grid)              :: grid
+        real                           :: actual
         write(*,'(A)') 'test_restoration_contracts'
         allocate(fplane)
         call img%new(LDIM, SMPD)

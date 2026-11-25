@@ -4,10 +4,10 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('volume', 'Volume Processing', 180)
-type(ui_program), target :: center
-type(ui_program), target :: detect_calpha
-type(ui_program), target :: reproject
-type(ui_program), target :: volops
+type(ui_program),          target    :: center
+type(ui_program),          target    :: detect_calpha
+type(ui_program),          target    :: reproject
+type(ui_program),          target    :: volops
 
 contains
 

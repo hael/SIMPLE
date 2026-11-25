@@ -37,10 +37,10 @@ end type
 contains
 
     subroutine new( self, fname, access_type, wanted_recs_per_line )
-        class(nrtxtfile),  intent(inout) :: self
-        class(string),     intent(in)    :: fname       !< filename
-        integer,           intent(in)    :: access_type !< Either OPEN_TO_READ or OPEN_TO_WRITE
-        integer, optional, intent(in)    :: wanted_recs_per_line
+        class(nrtxtfile),  intent(inout)        :: self
+        class(string),     intent(in)           :: fname       !< filename
+        integer,           intent(in)           :: access_type !< Either OPEN_TO_READ or OPEN_TO_WRITE
+        integer,           optional, intent(in) :: wanted_recs_per_line
         character(len=XLONGSTRLEN)       :: buffer      !< will hold a line from the file
         integer                          :: recs_on_curr_line
         integer                          :: tot_nr_of_recs, tmpunit
@@ -130,7 +130,7 @@ contains
 
     subroutine writeDataLineReal( self, data_to_write )
         class(nrtxtfile), intent(inout) :: self
-        real, intent(in)                :: data_to_write(:) !< input data
+        real,             intent(in)    :: data_to_write(:) !< input data
         integer                         :: record_counter, ios
         if( self%access_type .ne. OPEN_TO_WRITE )then
             THROW_HARD('File is not OPEN_TO_WRITE')
@@ -152,7 +152,7 @@ contains
 
     subroutine writeDataLineInt( self, data_to_write )
         class(nrtxtfile), intent(inout) :: self
-        integer, intent(inout)          :: data_to_write(:) !< input data
+        integer,          intent(inout) :: data_to_write(:) !< input data
         integer                         :: record_counter, ios
         ! Check we are open to write
         if( self%access_type .ne. OPEN_TO_WRITE )then

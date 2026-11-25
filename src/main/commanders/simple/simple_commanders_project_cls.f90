@@ -49,8 +49,8 @@ contains
         type(image)            :: img
         type(string)           :: cavgs_fname
         logical, allocatable   :: lstates(:)
-        integer :: ldim(3), icls, ncls, ncavgs, cnt
-        real    :: smpd
+        integer                :: ldim(3), icls, ncls, ncavgs, cnt
+        real                   :: smpd
         call cline%set('oritype', 'cls2D')
         call params%new(cline)
         ! read files and sanity checks

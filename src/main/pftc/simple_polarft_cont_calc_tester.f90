@@ -21,14 +21,14 @@ use, intrinsic :: ieee_arithmetic,  only: ieee_is_finite
 implicit none
 
 ! the phantom of simple_pftc_inplane_tester: box 64 at 1.3 A, four Gaussian blobs
-integer,          parameter :: BOX     = 64
-real,             parameter :: SMPD    = 1.3
-real,             parameter :: MSKDIAM = 60.
-real,             parameter :: TRS     = 5.
-real,             parameter :: LP_LOW  = 8.
-real,             parameter :: LP_FULL = 2.7
+integer,          parameter :: BOX          = 64
+real,             parameter :: SMPD         = 1.3
+real,             parameter :: MSKDIAM      = 60.
+real,             parameter :: TRS          = 5.
+real,             parameter :: LP_LOW       = 8.
+real,             parameter :: LP_FULL      = 2.7
 character(len=*), parameter :: PHANTOM_FILE = 'polarft_cont_phantom.mrc'
-integer,          parameter :: NBLOBS = 4
+integer,          parameter :: NBLOBS       = 4
 real,             parameter :: CTRS(3,NBLOBS) = reshape([&
     &-9.0, -5.0,  3.0, &
     & 7.0,  8.0, -5.0, &
@@ -51,16 +51,16 @@ real(dp),         parameter :: FLOOR_FACTOR = 2.d0
 real(dp),         parameter :: KB_REPRO_RTOL = 1.d-3
 real(dp),         parameter :: KB_REPRO_ATOL = real(epsilon(1.0_sp), dp)
 ! the central-difference constants of simple_pftc_inplane_tester (T4 names them)
-real(dp),         parameter :: FD_STEP        = 1.d-3
-real(dp),         parameter :: GRAD_FD_RTOL   = 1.d-2
-real(dp),         parameter :: GRAD_FD_AFLOOR = 3.d-3
+real(dp),         parameter :: FD_STEP           = 1.d-3
+real(dp),         parameter :: GRAD_FD_RTOL      = 1.d-2
+real(dp),         parameter :: GRAD_FD_AFLOOR    = 3.d-3
 real(dp),         parameter :: PROBE_SHIFTS(2,3) = reshape([0.d0,0.d0, 1.7d0,-2.3d0, -0.6d0,0.4d0], [2,3])
 real(dp),         parameter :: PROBE_ROTOFFS(4)  = [0.37d0, -1.42d0, 0.5d0, 1.93d0]
 ! T4's truth pose: the drawn reference, the tilts (rad), a grid rotation index and a shift (px); the probes' tilt offset
-real,             parameter :: REF_EULER(3)  = [47., 63., 0.]
-real(dp),         parameter :: TRUTH_TILT(2) = [0.06d0, -0.04d0]
-integer,          parameter :: TRUTH_IROT    = 11
-real(dp),         parameter :: TRUTH_SH(2)   = [1.4d0, -0.6d0]
+real,             parameter :: REF_EULER(3)   = [47., 63., 0.]
+real(dp),         parameter :: TRUTH_TILT(2)  = [0.06d0, -0.04d0]
+integer,          parameter :: TRUTH_IROT     = 11
+real(dp),         parameter :: TRUTH_SH(2)    = [1.4d0, -0.6d0]
 real(dp),         parameter :: PROBE_DTILT(2) = [0.025d0, -0.03d0]
 ! the particle is the model at the truth: the loss there is zero up to single-precision rounding
 real(dp),         parameter :: ZERO_RESIDUAL_TOL = 1.d-5
@@ -85,10 +85,10 @@ contains
     ! ---- fixture ---------------------------------------------------------------
 
     subroutine write_phantom()
-        type(image) :: vol
+        type(image)       :: vol
         real, allocatable :: rmat(:,:,:)
-        real    :: ctr, dx, dy, dz
-        integer :: ib, i, j, k
+        real              :: ctr, dx, dy, dz
+        integer           :: ib, i, j, k
         allocate(rmat(BOX,BOX,BOX), source=0.)
         ctr = real(BOX)/2. + 1.
         do k = 1, BOX
@@ -110,18 +110,18 @@ contains
     !> the unmasked phantom as the KB bank of nspace spiral directions (even half) and as the B-spline references of one
     !! state (both halves), the polar grid of lp, one particle slot (odd: of the odd half, its sigma2 rising), unit sigma2
     subroutine build_fixture( b, p, pcont, lp, nspace, nthr, odd, nptcls )
-        class(builder),    target, intent(inout) :: b
-        class(parameters), target, intent(inout) :: p
-        class(polarft_cont_calc),  intent(inout) :: pcont
-        real,                      intent(in)    :: lp
-        integer,                   intent(in)    :: nspace
-        integer, optional,         intent(in)    :: nthr
-        logical, optional,         intent(in)    :: odd
-        integer, optional,         intent(in)    :: nptcls
+        class(builder),            target, intent(inout)        :: b
+        class(parameters),         target, intent(inout)        :: p
+        class(polarft_cont_calc),  intent(inout)                :: pcont
+        real,                      intent(in)                   :: lp
+        integer,                   intent(in)                   :: nspace
+        integer,                   optional,         intent(in) :: nthr
+        logical,                   optional,         intent(in) :: odd
+        integer,                   optional,         intent(in) :: nptcls
         class(cmdline), allocatable :: cline
-        real, allocatable :: rmat(:,:,:)
-        logical :: l_odd
-        integer :: k, np
+        real,           allocatable :: rmat(:,:,:)
+        logical                     :: l_odd
+        integer                     :: k, np
         allocate(cline)
         np = 1
         if( present(nptcls) ) np = nptcls
@@ -202,16 +202,16 @@ contains
     subroutine test_section_accuracy()
         class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        type(polarft_cont_calc)  :: pcont
-        complex(sp), allocatable :: sect(:,:), dnv(:,:), bank(:,:)
-        real(sp),    allocatable :: hc(:,:), kc(:,:)
-        real(dp),    allocatable :: nb(:), nk(:), nn(:), den(:), denn(:)
-        complex(dp) :: fa, fan
-        real(dp)    :: frame(3,3), q(3), n(3), err_b, err_k, err_n, repro_tol, t_bspline, t_kb
-        integer     :: pftsz, kfromto(2), iproj, k, irot, rep
-        integer(int64) :: c0, c1, crate
-        logical     :: ok1, ok2, okr, ok_control
-        integer, parameter :: NREP = 10
+        type(polarft_cont_calc)                :: pcont
+        complex(sp),       allocatable         :: sect(:,:), dnv(:,:), bank(:,:)
+        real(sp),          allocatable         :: hc(:,:), kc(:,:)
+        real(dp),          allocatable         :: nb(:), nk(:), nn(:), den(:), denn(:)
+        complex(dp)                            :: fa, fan
+        real(dp)                               :: frame(3,3), q(3), n(3), err_b, err_k, err_n, repro_tol, t_bspline, t_kb
+        integer                                :: pftsz, kfromto(2), iproj, k, irot, rep
+        integer(int64)                         :: c0, c1, crate
+        logical                                :: ok1, ok2, okr, ok_control
+        integer,           parameter           :: NREP = 10
         write(*,'(A)') 'test_section_accuracy (T1, T2)'
         allocate(b, p)
         call build_fixture(b, p, pcont, LP_FULL, NSPACE_T12)
@@ -293,7 +293,7 @@ contains
         real(dp),                 intent(in)    :: rref(3,3)
         complex(sp), allocatable :: sect(:,:), dnv(:,:), rot(:,:), pft(:,:)
         real(dp),    allocatable :: ax(:,:), ay(:,:)
-        integer :: pftsz, kfromto(2), pdim(3), iptcl
+        integer                  :: pftsz, kfromto(2), pdim(3), iptcl
         pftsz   = b%pftc%get_pftsz()
         kfromto = b%pftc%get_kfromto()
         pdim    = b%pftc%get_pdim_interp()
@@ -353,12 +353,12 @@ contains
         logical, intent(in) :: l_odd
         class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        type(polarft_cont_calc) :: pcont
-        real(dp) :: rref(3,3), xt(5), x(5), f, g(5), gflip(5), c(5,5), h(5,5), cbad(5,5), l(5,5), eye(5,5)
-        real(dp) :: err, tol, worst, err_flip, err_c, err_bad, err_blk, flip_ratio
-        integer  :: ishift, ioff, i
-        integer(int64) :: nsolves, nsections, nevals
-        logical  :: all_ok, any_flip_fail, finite, ok
+        type(polarft_cont_calc)                :: pcont
+        real(dp)                               :: rref(3,3), xt(5), x(5), f, g(5), gflip(5), c(5,5), h(5,5), cbad(5,5), l(5,5), eye(5,5)
+        real(dp)                               :: err, tol, worst, err_flip, err_c, err_bad, err_blk, flip_ratio
+        integer                                :: ishift, ioff, i
+        integer(int64)                         :: nsolves, nsections, nevals
+        logical                                :: all_ok, any_flip_fail, finite, ok
         write(*,'(A,L1)') 'test_view_gradient_and_curvature (T4), odd half with rising sigma2: ', l_odd
         allocate(b, p)
         call build_fixture(b, p, pcont, LP_LOW, 2, odd=l_odd)
@@ -432,15 +432,15 @@ contains
     subroutine test_fractional_view_seed()
         use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
         use simple_polarft_calc,    only: shift_ptcl2ref, shift_ref2ptcl
-        class(builder), allocatable, target :: b
+        class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        type(polarft_cont_calc) :: pcont
-        type(pftc_shsrch_grad) :: opt
-        real :: lims(5,2), cxy(3), coord, angle, xy(2)
-        real(dp) :: rref(3,3), xs(5), xr(5), f, g(5), initial, refined_coord
-        integer :: irot, isolver
-        logical :: valid, improved
-        character(len=6), parameter :: SOLVERS(2) = ['lm    ','lbfgsb']
+        type(polarft_cont_calc)                :: pcont
+        type(pftc_shsrch_grad)                 :: opt
+        real                                   :: lims(5,2), cxy(3), coord, angle, xy(2)
+        real(dp)                               :: rref(3,3), xs(5), xr(5), f, g(5), initial, refined_coord
+        integer                                :: irot, isolver
+        logical                                :: valid, improved
+        character(len=6),  parameter           :: SOLVERS(2) = ['lm    ','lbfgsb']
         allocate(b,p)
         call build_fixture(b,p,pcont,LP_LOW,2)
         allocate(b%pcont)
@@ -488,19 +488,19 @@ contains
         use simple_strategy3D_srch,   only: strategy3D_spec, view_solve
         use simple_strategy3D_alloc,  only: prep_strategy3D, clean_strategy3D
         use simple_eul_prob_tab_utils, only: prob_insert_poses, prob_insert_cone
-        integer, parameter :: NP = 6, NS = 20, K = 3, NTEAM = 4
-        class(builder), allocatable, target :: b
-        class(parameters), allocatable, target :: p
+        integer,                   parameter           :: NP = 6, NS = 20, K = 3, NTEAM = 4
+        class(builder),            allocatable, target :: b
+        class(parameters),         allocatable, target :: p
         class(eul_prob_tab_neigh), allocatable, target :: tab
-        class(strategy3D_prob), allocatable :: srch
-        type(strategy3D_spec) :: spec
-        type(polarft_cont_calc) :: pcont
-        type(prob_insert_poses), target :: extras
-        type(prob_insert_cone) :: cone
-        type(view_solve) :: vs
-        real :: serial(9,NP), team(9,NP), batched(9,NP), euls(3), seed_pose(3)
-        real(dp) :: rref(3,3), f, g(5)
-        integer :: pinds(NP), i, saved_team
+        class(strategy3D_prob),    allocatable         :: srch
+        type(strategy3D_spec)                          :: spec
+        type(polarft_cont_calc)                        :: pcont
+        type(prob_insert_poses),   target              :: extras
+        type(prob_insert_cone)                         :: cone
+        type(view_solve)                               :: vs
+        real                                           :: serial(9,NP), team(9,NP), batched(9,NP), euls(3), seed_pose(3)
+        real(dp)                                       :: rref(3,3), f, g(5)
+        integer                                        :: pinds(NP), i, saved_team
         allocate(b, p, tab, srch)
         saved_team = 1
         !$ saved_team = omp_get_max_threads()
@@ -579,8 +579,8 @@ contains
         end subroutine reset_particles
 
         subroutine run_pipeline( nthr, batch, result )
-            integer, intent(in) :: nthr, batch
-            real, intent(out) :: result(9,NP)
+            integer, intent(in)  :: nthr, batch
+            real,    intent(out) :: result(9,NP)
             integer :: first, last, ip, iloc
             call reset_particles()
             !$ call omp_set_num_threads(nthr)
@@ -632,13 +632,13 @@ contains
     subroutine test_threads()
         class(builder),    allocatable, target :: b
         class(parameters), allocatable, target :: p
-        type(polarft_cont_calc) :: pcont
-        integer,  parameter :: NPROBE = 12, NTEAM = 4
+        type(polarft_cont_calc)                :: pcont
+        integer,           parameter           :: NPROBE = 12, NTEAM = 4
         real(dp) :: rref(3,3), x(5,NPROBE), fs(NPROBE), gs(5,NPROBE), cs(5,5,NPROBE), ft(NPROBE), gt(5,NPROBE), &
             &ct(5,5,NPROBE)
-        integer  :: i, nthr_prev
+        integer        :: i, nthr_prev
         integer(int64) :: nsolves, nsect_serial, nsect_team, nevals
-        integer  :: team_size
+        integer        :: team_size
         write(*,'(A)') 'test_threads'
         nthr_prev = 1
         !$ nthr_prev = omp_get_max_threads()

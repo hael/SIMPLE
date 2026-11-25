@@ -10,16 +10,16 @@ contains
  
     !>  \brief  is for applying CTF to an image
     module subroutine apply_ctf_wpad( self, tfun, dfx, mode, phshift, dfy, angast, bfac )
-        class(image),     intent(inout) :: self   !< instance
-        class(ctf),       intent(inout) :: tfun   !< CTF object
-        real,             intent(in)    :: dfx    !< defocus x-axis
-        character(len=*), intent(in)    :: mode   !< abs, ctf, flip, flipneg, neg, square
-        real,             intent(in)    :: phshift !< additive phase shift (radians)
-        real, optional,   intent(in)    :: dfy    !< defocus y-axis
-        real, optional,   intent(in)    :: angast !< angle of astigmatism
-        real, optional,   intent(in)    :: bfac   !< bfactor
+        class(image),     intent(inout)          :: self    !< instance
+        class(ctf),       intent(inout)          :: tfun    !< CTF object
+        real,             intent(in)             :: dfx     !< defocus x-axis
+        character(len=*), intent(in)             :: mode    !< abs, ctf, flip, flipneg, neg, square
+        real,             intent(in)             :: phshift !< additive phase shift (radians)
+        real,             optional,   intent(in) :: dfy     !< defocus y-axis
+        real,             optional,   intent(in) :: angast  !< angle of astigmatism
+        real,             optional,   intent(in) :: bfac    !< bfactor
         integer         :: ldim(3), ldim_pd(3)
-        type(ctfparams) :: ctfparms 
+        type(ctfparams) :: ctfparms
         type(image)     :: img_pd
         ldim = self%get_ldim()
         if( self%is_3d() )then
@@ -58,11 +58,11 @@ contains
         class(ctf),       intent(inout) :: tfun     !< CTF object
         character(len=*), intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
-        type(ctfvars) :: ctfvals
+        type(ctfvars)   :: ctfvals
         real, parameter :: ZERO = 0., ONE = 1.0, MIN_SQUARE = 0.001
-        integer :: h,k,physh,physk
-        real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, tval, t
-        logical :: is_abs,is_ctf,is_flip,is_flipneg,is_neg,is_square
+        integer         :: h,k,physh,physk
+        real            :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, tval, t
+        logical         :: is_abs,is_ctf,is_flip,is_flipneg,is_neg,is_square
         ! Convert mode string to logical flags (SIMD-compatible)
         is_abs     = (mode == 'abs')
         is_ctf     = (mode == 'ctf')
@@ -105,16 +105,16 @@ contains
     !! spectrum, a non-positive wiener_const selects the Xmipp/FREALIGN-style
     !! regularizer: 10% of the mean CTF squared over the Fourier plane.
     module subroutine apply_ctf_wiener( self, tfun, ctfparms, wiener_const, noise_to_signal )
-        class(image),     intent(inout) :: self
-        class(ctf),       intent(inout) :: tfun
-        type(ctfparams),  intent(in)    :: ctfparms
-        real,             intent(in)    :: wiener_const
-        real, optional,   intent(in)    :: noise_to_signal(:)
+        class(image),     intent(inout)          :: self
+        class(ctf),       intent(inout)          :: tfun
+        type(ctfparams),  intent(in)             :: ctfparms
+        real,             intent(in)             :: wiener_const
+        real,             optional,   intent(in) :: noise_to_signal(:)
         type(ctfvars) :: ctfvals
-        real :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs
-        real :: ctfval, ctf2, regularizer, ctf2_sum
-        integer :: h, k, phys(2), shell, ncoeff, lims(3,2)
-        logical :: phase_flipped
+        real          :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs
+        real          :: ctfval, ctf2, regularizer, ctf2_sum
+        integer       :: h, k, phys(2), shell, ncoeff, lims(3,2)
+        logical       :: phase_flipped
         if( .not. self%is_ft() ) THROW_HARD('image must be Fourier transformed; apply_ctf_wiener')
         if( self%is_3d() ) THROW_HARD('Wiener CTF correction is 2D only; apply_ctf_wiener')
         select case(ctfparms%ctfflag)
@@ -169,13 +169,13 @@ contains
     !> Use twofold zero padding before correction, as in Xmipp's
     !! ctf_correct_wiener2d, and return to the original box afterwards.
     module subroutine apply_ctf_wiener_wpad( self, tfun, ctfparms, wiener_const, noise_to_signal )
-        class(image),     intent(inout) :: self
-        class(ctf),       intent(inout) :: tfun
-        type(ctfparams),  intent(in)    :: ctfparms
-        real,             intent(in)    :: wiener_const
-        real, optional,   intent(in)    :: noise_to_signal(:)
+        class(image),     intent(inout)          :: self
+        class(ctf),       intent(inout)          :: tfun
+        type(ctfparams),  intent(in)             :: ctfparms
+        real,             intent(in)             :: wiener_const
+        real,             optional,   intent(in) :: noise_to_signal(:)
         type(image) :: img_pad
-        integer :: ldim(3)
+        integer     :: ldim(3)
         if( self%is_ft() ) THROW_HARD('Wiener CTF correction expects a real-space image; apply_ctf_wiener_wpad')
         if( self%is_3d() ) THROW_HARD('Wiener CTF correction is 2D only; apply_ctf_wiener_wpad')
         ldim = 2 * self%get_ldim()
@@ -199,29 +199,29 @@ contains
     module subroutine gen_fplane4rec( self, smpd_crop, ctfparms, shift, fplane, grid, half, &
         &store_transfer, observation_model )
         use simple_math,          only: ceil_div, floor_div
-        class(image),      intent(inout) :: self
-        real,              intent(in)    :: smpd_crop
-        class(ctfparams),  intent(in)    :: ctfparms
-        real,              intent(in)    :: shift(2)
-        type(fplane_type), intent(out)   :: fplane
-        type(fplane_grid), intent(in)    :: grid
-        integer, optional, intent(in)    :: half
-        logical, optional, intent(in)    :: store_transfer
-        logical, optional, intent(in)    :: observation_model
+        class(image),      intent(inout)        :: self
+        real,              intent(in)           :: smpd_crop
+        class(ctfparams),  intent(in)           :: ctfparms
+        real,              intent(in)           :: shift(2)
+        type(fplane_type), intent(out)          :: fplane
+        type(fplane_grid), intent(in)           :: grid
+        integer,           optional, intent(in) :: half
+        logical,           optional, intent(in) :: store_transfer
+        logical,           optional, intent(in) :: observation_model
         type(ctf)                :: tfun
         type(ctfvars)            :: ctfvals
         complex(c_float_complex) :: c, transfer, phase, w1, w2, ph0, ph_h, ph_k
         real(dp)                 :: pshift(2)
-        logical :: l_ml_reg, l_store_transfer, l_observation_model
-        type(ftiter) :: fiterator
+        logical                  :: l_ml_reg, l_store_transfer, l_observation_model
+        type(ftiter)             :: fiterator
         ! CTF kernel scalars (precomputed)
-        real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, ker, tval, tvalsq
-        integer :: physh, physk, h, k, shell, hmin, hmax, kmin, kmax, ih
-        integer :: box_croppd
-        integer :: hloop_min, hloop_max, kloop_min, sample_stride
-        integer :: hlo_nat, hhi_nat, klo_nat
-        logical :: l_ctf, l_flip
-        integer :: r2
+        real                          :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, ker, tval, tvalsq
+        integer                       :: physh, physk, h, k, shell, hmin, hmax, kmin, kmax, ih
+        integer                       :: box_croppd
+        integer                       :: hloop_min, hloop_max, kloop_min, sample_stride
+        integer                       :: hlo_nat, hhi_nat, klo_nat
+        logical                       :: l_ctf, l_flip
+        integer                       :: r2
         character(len=:), allocatable :: msg
         l_ml_reg = present(half)
         l_store_transfer = .false.
@@ -382,8 +382,8 @@ contains
         class(ctfparams), intent(in)    :: ctfparms
         real,             intent(out)   :: score
         real, allocatable :: res(:)
-        real    :: phshift, start_freq, end_freq, ice_avg, band_avg, mag_max, mag, g
-        integer :: lims(3,2), box, sh, h,k, start_find, end_find, ice_maxind, hmax, kmax, cnt
+        real              :: phshift, start_freq, end_freq, ice_avg, band_avg, mag_max, mag, g
+        integer           :: lims(3,2), box, sh, h,k, start_find, end_find, ice_maxind, hmax, kmax, cnt
         score = 0.
         if( abs(self%smpd-ctfparms%smpd) > 1.d-4) THROW_HARD('Inconsistent SMPD; calc_ice_frac')
         if( self%smpd > (ICE_BAND1/2.) ) return

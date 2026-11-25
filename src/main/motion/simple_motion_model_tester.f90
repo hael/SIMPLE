@@ -50,9 +50,9 @@ contains
         class(cmdline),       intent(inout) :: cline
         class(motion_correct_iter), allocatable :: mciter
         class(parameters),          allocatable :: params
-        type(ctfparams) :: ctfp
-        type(ori)       :: orientation
-        integer         :: frame_counter
+        type(ctfparams)                         :: ctfp
+        type(ori)                               :: orientation
+        integer                                 :: frame_counter
         allocate(mciter, params)
         params%nframesgrp = 2
         frame_counter     = 0
@@ -63,12 +63,12 @@ contains
 
     subroutine test_flipgain_lifecycle()
         use simple_image, only: image
-        character(len=2), parameter :: EXPECTED_MODES(5) = ['NO', 'X ', 'Y ', 'XY', 'YX']
-        class(motion_model), allocatable :: model
-        class(parameters), allocatable, target :: params
-        class(image), pointer :: frames(:)
-        type(string) :: movie, gain
-        integer :: imode
+        character(len=2),    parameter           :: EXPECTED_MODES(5) = ['NO', 'X ', 'Y ', 'XY', 'YX']
+        class(motion_model), allocatable         :: model
+        class(parameters),   allocatable, target :: params
+        class(image),        pointer             :: frames(:)
+        type(string)                             :: movie, gain
+        integer                                  :: imode
         write(*,'(A)') 'test_flipgain_lifecycle'
         allocate(model, params)
         allocate(frames(1))
@@ -106,20 +106,20 @@ contains
             &starfile_table__read, starfile_table__firstobject, starfile_table__nextobject,&
             &starfile_table__getValue_int, starfile_table__getValue_double, EMDL_IMAGE_SIZE_X, EMDL_IMAGE_SIZE_Y,&
             &EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, EMDL_MICROGRAPH_BINNING, EMDL_MICROGRAPH_SHIFT_X
-        integer, parameter :: INPUT_DIMS(2) = [8,4], MODES(4) = [1,2,2,2]
-        integer, parameter :: MOVIE_X(4) = [8,16,16,8], MOVIE_Y(4) = [4,8,8,4]
-        integer, parameter :: OUTPUT_X(4) = [8,8,4,8], OUTPUT_Y(4) = [4,4,2,4]
-        real, parameter :: PHYSICAL_SMPD = 1.5, MOVIE_SMPD(4) = [1.5,0.75,0.75,1.5]
-        real, parameter :: OUTPUT_SMPD(4) = [1.5,1.5,3.,1.5], BINNING(4) = [1.,2.,4.,1.]
-        class(motion_model), allocatable :: model, reread
-        class(parameters), allocatable, target :: params
-        class(image), pointer :: frames(:)
-        type(starfile_table_type) :: table
-        type(string) :: movie, binfile, starfile
-        real(dp) :: value
-        real :: smpd_decoded
-        integer :: icase, iframe, funit, ios, ivalue, iobject, ldim_decoded(2)
-        logical :: ok
+        integer,             parameter           :: INPUT_DIMS(2)  = [8,4], MODES(4) = [1,2,2,2]
+        integer,             parameter           :: MOVIE_X(4)     = [8,16,16,8], MOVIE_Y(4) = [4,8,8,4]
+        integer,             parameter           :: OUTPUT_X(4)    = [8,8,4,8], OUTPUT_Y(4) = [4,4,2,4]
+        real,                parameter           :: PHYSICAL_SMPD  = 1.5, MOVIE_SMPD(4) = [1.5,0.75,0.75,1.5]
+        real,                parameter           :: OUTPUT_SMPD(4) = [1.5,1.5,3.,1.5], BINNING(4) = [1.,2.,4.,1.]
+        class(motion_model), allocatable         :: model, reread
+        class(parameters),   allocatable, target :: params
+        class(image),        pointer             :: frames(:)
+        type(starfile_table_type)                :: table
+        type(string)                             :: movie, binfile, starfile
+        real(dp)                                 :: value
+        real                                     :: smpd_decoded
+        integer                                  :: icase, iframe, funit, ios, ivalue, iobject, ldim_decoded(2)
+        logical                                  :: ok
         write(*,'(A)') 'test_movie_geometry'
         allocate(model, reread, params, frames(2))
         params%fraction_dose_target = 1.
@@ -206,16 +206,16 @@ contains
         integer, parameter :: NFRAMES_TEST = 7, NGRID = 3, REF_FRAMES(2) = [1,4]
         ! Three samples per spatial axis and six nonzero times give full rank.
         ! Dyadic coordinates/coefficients keep the fixture exact in single precision.
-        real(dp), parameter :: GRID(NGRID) = [-0.5_dp, 0.0_dp, 0.5_dp]
-        real(dp), parameter :: COEFF_TOL = 1.e-10_dp
-        real, parameter :: RMSD_TOL = 32.0 * epsilon(1.0) ! single-precision evaluation/accumulation
+        real(dp), parameter :: GRID(NGRID)    = [-0.5_dp, 0.0_dp, 0.5_dp]
+        real(dp), parameter :: COEFF_TOL      = 1.e-10_dp
+        real,     parameter :: RMSD_TOL       = 32.0 * epsilon(1.0) ! single-precision evaluation/accumulation
         real(dp), parameter :: RESIDUAL_SCALE = 1.0_dp / 65536.0_dp
-        type(motion_model) :: model
-        real(dp) :: coeffs(3,6,2), expected(3,6,2), spatial(6), tau, delta, value(2)
-        real(dp) :: residual(NFRAMES_TEST), expected_rmsd
-        real :: local_x(NFRAMES_TEST,NGRID,NGRID), local_y(NFRAMES_TEST,NGRID,NGRID)
-        integer :: i, j, iframe, itest, ref_frame, term, axis
-        character(len=96) :: message
+        type(motion_model)  :: model
+        real(dp)            :: coeffs(3,6,2), expected(3,6,2), spatial(6), tau, delta, value(2)
+        real(dp)            :: residual(NFRAMES_TEST), expected_rmsd
+        real                :: local_x(NFRAMES_TEST,NGRID,NGRID), local_y(NFRAMES_TEST,NGRID,NGRID)
+        integer             :: i, j, iframe, itest, ref_frame, term, axis
+        character(len=96)   :: message
         write(*,'(A)') 'test_refit_polynomial_known_coefficients'
         ! Every temporal/spatial coefficient is nonzero; X and Y are independent.
         coeffs(:,:,1) = reshape([ &
@@ -318,10 +318,10 @@ contains
     subroutine test_binary_roundtrip( input_bin, output_bin, output_star, with_optional_arrays, patch_accepted )
         type(string), intent(in) :: input_bin, output_bin, output_star
         logical,      intent(in) :: with_optional_arrays, patch_accepted
-        class(motion_model), allocatable :: model
-        class(parameters), allocatable, target :: params
-        class(cmdline), allocatable :: cline
-        integer :: imode
+        class(motion_model), allocatable         :: model
+        class(parameters),   allocatable, target :: params
+        class(cmdline),      allocatable         :: cline
+        integer                                  :: imode
         allocate(model, params, cline)
         ! a program outside every UI table: parameters is only the container
         ! here, and a registered program (motion_correct requires a project)
@@ -361,22 +361,22 @@ contains
     end subroutine test_binary_roundtrip
 
     subroutine write_reference_binary( fname, with_optional_arrays, patch_accepted, flipgain )
-        type(string), intent(in) :: fname
-        logical,      intent(in) :: with_optional_arrays, patch_accepted
+        type(string),     intent(in) :: fname
+        logical,          intent(in) :: with_optional_arrays, patch_accepted
         character(len=*), intent(in) :: flipgain
-        integer(int8) :: flag
-        integer       :: funit, ios, i, noutliers
-        integer       :: file_version, model_version
-        integer       :: ldim_movie(2), ldim(2), ldim_patch(2)
-        integer       :: nframes, total_nframes, npatch, nx_patch, ny_patch
-        integer       :: fixed_frame, eer_fraction, eer_upsampling
-        integer, allocatable :: patch_bounds(:,:,:,:), outlier_coords(:,:)
-        real          :: smpd_movie, smpd, binning
-        real          :: voltage, dose_per_frame, target_dose_per_frame
-        real          :: total_dose, accumulated_dose, rmsd_fit(2)
-        real, allocatable :: drift_x(:), drift_y(:), frameweights(:)
-        real, allocatable :: patch_coords(:,:,:), local_x(:,:,:), local_y(:,:,:)
-        real(dp)      :: coeffs_x(18), coeffs_y(18)
+        integer(int8)                 :: flag
+        integer                       :: funit, ios, i, noutliers
+        integer                       :: file_version, model_version
+        integer                       :: ldim_movie(2), ldim(2), ldim_patch(2)
+        integer                       :: nframes, total_nframes, npatch, nx_patch, ny_patch
+        integer                       :: fixed_frame, eer_fraction, eer_upsampling
+        integer,          allocatable :: patch_bounds(:,:,:,:), outlier_coords(:,:)
+        real                          :: smpd_movie, smpd, binning
+        real                          :: voltage, dose_per_frame, target_dose_per_frame
+        real                          :: total_dose, accumulated_dose, rmsd_fit(2)
+        real,             allocatable :: drift_x(:), drift_y(:), frameweights(:)
+        real,             allocatable :: patch_coords(:,:,:), local_x(:,:,:), local_y(:,:,:)
+        real(dp)                      :: coeffs_x(18), coeffs_y(18)
         character(len=:), allocatable :: gain
         file_version         = 1
         model_version        = 0
@@ -473,8 +473,8 @@ contains
 
     logical function binary_files_equal( fname1, fname2 )
         type(string), intent(in) :: fname1, fname2
-        integer(int64) :: nbytes1, nbytes2
-        integer     :: unit1, unit2, ios
+        integer(int64)             :: nbytes1, nbytes2
+        integer                    :: unit1, unit2, ios
         integer(int8), allocatable :: bytes1(:), bytes2(:)
         binary_files_equal = .false.
         inquire(file=fname1%to_char(), size=nbytes1, iostat=ios)

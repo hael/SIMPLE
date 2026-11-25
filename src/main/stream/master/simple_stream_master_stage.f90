@@ -53,14 +53,14 @@ contains
 end type stream_master_stage_fork
 
 type :: stream_master_stage
-    integer                        :: id        = 0
+    integer                        :: id               = 0
     type(stream_master_stage_fork) :: fork                ! holds the stage's command line (set_cline)
     type(stream_pipe)              :: reader              ! the stage's GUI messages
     type(stream_pipe)              :: writer              ! the GUI updates, to a stage that reads them
     character(len=:), allocatable  :: last_update         ! the last update sent since the stage started
-    logical                        :: l_updates = .false.
+    logical                        :: l_updates        = .false.
     logical                        :: l_stop_requested = .false.
-    logical                        :: l_exists  = .false.
+    logical                        :: l_exists         = .false.
 contains
     procedure :: new
     procedure :: start
@@ -178,7 +178,7 @@ contains
     !! The caller holds the lock of the thread that reads the stage's messages.
     subroutine discard_pipes( self, max_frame_bytes )
         class(stream_master_stage), intent(inout) :: self
-        integer,                  intent(in)    :: max_frame_bytes
+        integer,                    intent(in)    :: max_frame_bytes
         type(stream_pipe) :: stale_updates
         integer           :: fd_write, fd_read
         call self%reader%discard()
@@ -195,7 +195,7 @@ contains
     !! every answer.
     subroutine send_update( self, buffer )
         class(stream_master_stage), intent(inout) :: self
-        character(len=*),         intent(in)    :: buffer
+        character(len=*),           intent(in)    :: buffer
         if( .not. self%l_updates ) return
         if( self%l_stop_requested ) return
         if( .not. self%is_running() ) return

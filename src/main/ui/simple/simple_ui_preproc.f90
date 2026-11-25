@@ -4,17 +4,17 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('preproc', 'Pre-processing', 20)
-type(ui_program), target :: assign_optics_groups
-type(ui_program), target :: ctf_estimate
-type(ui_program), target :: extract
-type(ui_program), target :: refine_motion_model
-type(ui_program), target :: gen_pspecs_and_thumbs
-type(ui_program), target :: motion_correct
-type(ui_program), target :: particle_sieving
-type(ui_program), target :: particle_sieving_2
-type(ui_program), target :: pick
-type(ui_program), target :: preprocess
-type(ui_program), target :: reextract
+type(ui_program),          target    :: assign_optics_groups
+type(ui_program),          target    :: ctf_estimate
+type(ui_program),          target    :: extract
+type(ui_program),          target    :: refine_motion_model
+type(ui_program),          target    :: gen_pspecs_and_thumbs
+type(ui_program),          target    :: motion_correct
+type(ui_program),          target    :: particle_sieving
+type(ui_program),          target    :: particle_sieving_2
+type(ui_program),          target    :: pick
+type(ui_program),          target    :: preprocess
+type(ui_program),          target    :: reextract
 
 contains
 

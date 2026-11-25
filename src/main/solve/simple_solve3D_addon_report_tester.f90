@@ -40,10 +40,10 @@ contains
 
     !> an asymmetric map of four blobs over weak noise
     subroutine write_fixtures()
-        real, parameter :: CENTRES(3,4) = reshape([-10.,4.,2., 9.,-6.,0., 2.,11.,-8., -3.,-9.,7.], [3,4])
+        real, parameter   :: CENTRES(3,4) = reshape([-10.,4.,2., 9.,-6.,0., 2.,11.,-8., -3.,-9.,7.], [3,4])
         real, allocatable :: rmat(:,:,:), noise(:,:,:)
-        real    :: d2
-        integer :: i, j, k, b, c
+        real              :: d2
+        integer           :: i, j, k, b, c
         call set_fixed_seed(SEED)
         allocate(rmat(BOX_MAP,BOX_MAP,BOX_MAP), source=0.)
         allocate(noise(BOX_MAP,BOX_MAP,BOX_MAP))
@@ -77,7 +77,7 @@ contains
     function fsc_curve( n, k0 ) result( fsc )
         integer, intent(in) :: n
         real,    intent(in) :: k0
-        real :: fsc(n)
+        real    :: fsc(n)
         integer :: k
         fsc = [(1. / (1. + exp((real(k) - k0) / 1.5)), k = 1, n)]
     end function fsc_curve
@@ -86,8 +86,8 @@ contains
 
     subroutine test_fsc_verdicts()
         type(solve3D_addon_report) :: report
-        real, allocatable :: res(:), base(:)
-        integer :: n
+        real, allocatable          :: res(:), base(:)
+        integer                    :: n
         write(logfhandle,'(A)') '-- test_fsc_verdicts'
         res  = get_resarr(BOX_FSC, SMPD)
         n    = size(res)
@@ -111,7 +111,7 @@ contains
 
     subroutine test_map_comparison()
         type(solve3D_addon_report) :: report
-        real, allocatable :: res(:)
+        real, allocatable          :: res(:)
         write(logfhandle,'(A)') '-- test_map_comparison'
         res = get_resarr(BOX_FSC, SMPD)
         call report%new(1, 8, SMPD, MSKDIAM)
@@ -127,7 +127,7 @@ contains
 
     subroutine test_round_trip()
         type(solve3D_addon_report) :: report, back
-        real, allocatable :: res(:)
+        real, allocatable          :: res(:)
         write(logfhandle,'(A)') '-- test_round_trip'
         res = get_resarr(BOX_FSC, SMPD)
         call report%new(2, 8, SMPD, MSKDIAM)

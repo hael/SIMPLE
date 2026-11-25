@@ -43,14 +43,14 @@ contains
         real(dp), optional, intent(in)    :: pimin
         real(dp), parameter :: GMM_REG = 1.d-6, GMM_TOL = 1.d-5
         !> responsibilities below this are zeroed so the reconstructor's live-state compaction works
-        real(dp), parameter :: RESP_FLOOR = 1.d-3
-        integer,  parameter :: GMM_MAXIT  = 60
-        type(gmm) :: gm
+        real(dp), parameter   :: RESP_FLOOR = 1.d-3
+        integer,  parameter   :: GMM_MAXIT  = 60
+        type(gmm)             :: gm
         real(dp), allocatable :: y(:,:), mu(:,:), resp(:,:), S(:,:), pival(:), nresp(:)
-        real(dp) :: bicval, icl, trS
-        integer  :: i, q, state, maxit_eff
-        integer(kind=8) :: nact_tot
-        logical  :: l_respawn, ok
+        real(dp)              :: bicval, icl, trS
+        integer               :: i, q, state, maxit_eff
+        integer(kind=8)       :: nact_tot
+        logical               :: l_respawn, ok
         l_respawn = .true.
         if( present(respawn) ) l_respawn = respawn
         if( present(pairsep) ) pairsep = -1.d0
@@ -150,24 +150,24 @@ contains
         !! covariances, per-particle noise, held-out K): the discovery fit and the tied-covariance
         !! unimodality merge are skipped; too-small clusters still fold into their nearest, and
         !! clusters beyond the state budget fold smallest-first
-        integer, optional, intent(in)    :: macro_in(:)
-        real(dp),          intent(in)    :: z(nptcls,ncomp), wcomp(nk)
-        real(dp),          intent(inout) :: tcen(nk,nstates)
-        real,              intent(inout) :: weights(nptcls,nstates), neff(nstates), bandwidths(nstates)
-        integer,           intent(inout) :: labels(nptcls)
+        integer,           optional, intent(in) :: macro_in(:)
+        real(dp),          intent(in)           :: z(nptcls,ncomp), wcomp(nk)
+        real(dp),          intent(inout)        :: tcen(nk,nstates)
+        real,              intent(inout)        :: weights(nptcls,nstates), neff(nstates), bandwidths(nstates)
+        integer,           intent(inout)        :: labels(nptcls)
         integer, parameter :: KFIT_MAX    = 24
         !> minimum deliverable state occupancy: below this a map is noise, so no macro-cluster
         !! or seat allocation may create one
-        integer, parameter :: GMM_MIN_OCC = 5000
+        integer,  parameter   :: GMM_MIN_OCC = 5000
         real(dp), allocatable :: tcen_d(:,:), sep(:,:), pifit(:), mass(:)
         real(dp), allocatable :: zsub(:,:), tcen_m(:,:)
         real,     allocatable :: w_d(:,:), neff_d(:), bw_d(:), w_m(:,:), neff_m(:), bw_m(:)
         integer,  allocatable :: lab_d(:), lab_m(:), macro(:), idx(:), budget(:), cnt(:)
-        real(dp) :: best, share
+        real(dp)              :: best, share
         real(dp), allocatable :: mn(:,:)
-        integer  :: kfit, nmac, minisl, nseat, gstate, nm, bm, minocc
-        integer  :: i, j, s, q, m, jbest, msmall, mbest
-        logical  :: changed
+        integer               :: kfit, nmac, minisl, nseat, gstate, nm, bm, minocc
+        integer               :: i, j, s, q, m, jbest, msmall, mbest
+        logical               :: changed
         minocc = GMM_MIN_OCC
         kfit = min(KFIT_MAX, 2*nstates)
         kfit = min(kfit, max(2, nptcls/(3*max(nk, 1))))
@@ -483,8 +483,8 @@ contains
         real,     intent(out) :: w_m(nm,bm), neff_m(bm), bw_m(bm)
         integer,  intent(out) :: lab_m(nm)
         real(dp), allocatable :: dsum(:)
-        real(dp) :: d2, dbest
-        integer  :: j, s, q, sbest
+        real(dp)              :: d2, dbest
+        integer               :: j, s, q, sbest
         call kmeans_latent_targets(zsub, nm, nk, bm, wcomp, tcen_m)
         allocate(dsum(bm), source=0.d0)
         w_m = 0.

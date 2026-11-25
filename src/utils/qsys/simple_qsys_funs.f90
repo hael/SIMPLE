@@ -14,11 +14,11 @@ integer, parameter :: SHORTTIME = 3
 contains
 
     subroutine qsys_cleanup( params, keep2D  )
-        class(parameters), intent(in) :: params
-        logical, optional, intent(in) :: keep2D
+        class(parameters), intent(in)           :: params
+        logical,           optional, intent(in) :: keep2D
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
-        logical :: l_keep2D
-        integer :: nparts, nstates, ipart
+        logical            :: l_keep2D
+        integer            :: nparts, nstates, ipart
         l_keep2D = .true.
         if(present(keep2D)) l_keep2D = keep2D
         nparts  = params%nparts
@@ -68,8 +68,8 @@ contains
 
     !>  returns when the inputted file exists in cwd
     subroutine qsys_watcher_file( fname, wtime )
-        class(string),     intent(in) :: fname
-        integer, optional, intent(in) :: wtime
+        class(string),     intent(in)           :: fname
+        integer,           optional, intent(in) :: wtime
         integer :: wwtime
         logical :: there
         wwtime = SHORTTIME
@@ -83,8 +83,8 @@ contains
 
     !>  returns when the inputted files exist in cwd
     subroutine qsys_watcher_files( fnames, wtime )
-        class(string),     intent(in) :: fnames(:)
-        integer, optional, intent(in) :: wtime
+        class(string),     intent(in)           :: fnames(:)
+        integer,           optional, intent(in) :: wtime
         integer, parameter   :: MAXITS=20000
         integer              :: wwtime, nfiles, ifile, i
         logical              :: doreturn, fexists
@@ -108,8 +108,8 @@ contains
     !> Diagnostic watcher with periodic missing-file reporting and timeout hard-stop.
     !! Orthogonal to qsys_watcher so existing behavior elsewhere is untouched.
     subroutine qsys_watcher_diag( fnames, wtime, maxits, log_every )
-        class(string),     intent(in) :: fnames(:)
-        integer, optional, intent(in) :: wtime, maxits, log_every
+        class(string),     intent(in)           :: fnames(:)
+        integer,           optional, intent(in) :: wtime, maxits, log_every
         integer :: wwtime, mmaxits, llog_every
         integer :: nfiles, ifile, i, nmissing
         logical :: doreturn

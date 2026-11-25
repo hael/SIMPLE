@@ -84,21 +84,21 @@ contains
     end subroutine new
 
     subroutine search( self, workvol, angstep, npeaks, score_threshold, pdbout, scorevol, search_mask )
-        class(calpha_finder), intent(in)    :: self
-        class(image),         intent(inout) :: workvol
-        real,                 intent(in)    :: angstep
-        integer,              intent(in)    :: npeaks
-        real,                 intent(in)    :: score_threshold
-        class(string),        intent(in)    :: pdbout, scorevol
-        class(image), optional, intent(inout) :: search_mask
-        type(image) :: work_ft, work_sq_ft, weighted_template, support_template
-        type(image) :: data_target_corr, data_sum_corr, data_sq_sum_corr, best_scores
-        real(kind=c_float), pointer :: workptr(:,:,:), sqptr(:,:,:), bestptr(:,:,:), maskptr(:,:,:)
-        real,    allocatable :: rotations(:,:,:)
-        integer, allocatable :: best_rotation(:,:,:)
-        logical, allocatable :: search_region(:,:,:)
-        real(dp) :: sum_w, sum_t, sum_tt
-        integer  :: ldim(3), irot, nrot, nsearch
+        class(calpha_finder), intent(in)              :: self
+        class(image),         intent(inout)           :: workvol
+        real,                 intent(in)              :: angstep
+        integer,              intent(in)              :: npeaks
+        real,                 intent(in)              :: score_threshold
+        class(string),        intent(in)              :: pdbout, scorevol
+        class(image),         optional, intent(inout) :: search_mask
+        type(image)                     :: work_ft, work_sq_ft, weighted_template, support_template
+        type(image)                     :: data_target_corr, data_sum_corr, data_sq_sum_corr, best_scores
+        real(kind=c_float), pointer     :: workptr(:,:,:), sqptr(:,:,:), bestptr(:,:,:), maskptr(:,:,:)
+        real,               allocatable :: rotations(:,:,:)
+        integer,            allocatable :: best_rotation(:,:,:)
+        logical,            allocatable :: search_region(:,:,:)
+        real(dp)                        :: sum_w, sum_t, sum_tt
+        integer                         :: ldim(3), irot, nrot, nsearch
 
         if(.not.self%existence)  THROW_HARD('C-alpha finder is not initialized; search')
         if(.not.workvol%is_3d()) THROW_HARD('Search input must be a 3D map; search')
@@ -235,12 +235,12 @@ contains
     end function trilinear_value
 
     subroutine build_rotation_grid( angstep, rotations )
-        real,              intent(in)  :: angstep
-        real, allocatable, intent(out) :: rotations(:,:,:)
+        real,              intent(in)               :: angstep
+        real,              allocatable, intent(out) :: rotations(:,:,:)
         type(oris) :: sphere_dirs
-        real    :: delta, zaxis(3), uaxis(3), vaxis(3), xaxis(3), yaxis(3)
-        real    :: euls(3), theta, phi, roll, radial
-        integer :: naxes, nroll, iaxis, iroll, irot
+        real       :: delta, zaxis(3), uaxis(3), vaxis(3), xaxis(3), yaxis(3)
+        real       :: euls(3), theta, phi, roll, radial
+        integer    :: naxes, nroll, iaxis, iroll, irot
         delta = angstep * PI_LOCAL / 180.
         naxes = max(1, ceiling(4. * PI_LOCAL / (delta * delta)))
         nroll = max(1, ceiling(2. * PI_LOCAL / delta))
@@ -281,9 +281,9 @@ contains
         class(image),         intent(inout) :: weighted_template, support_template
         real(dp),             intent(out)   :: sum_w, sum_t, sum_tt
         real(kind=c_float), pointer :: weighted(:,:,:), support(:,:,:)
-        integer :: ldim(3), center(3), reach, ix, iy, iz
-        real    :: map_offset(3), target_offset(3), target_value, weight
-        logical :: valid
+        integer                     :: ldim(3), center(3), reach, ix, iy, iz
+        real                        :: map_offset(3), target_offset(3), target_value, weight
+        logical                     :: valid
 
         call weighted_template%zero_and_unflag_ft()
         call support_template%zero_and_unflag_ft()
@@ -341,8 +341,8 @@ contains
         class(image),   intent(inout) :: best_scores
         integer,        intent(inout) :: best_rotation(:,:,:)
         real(kind=c_float), pointer :: td(:,:,:), d(:,:,:), dd(:,:,:), best(:,:,:)
-        real(dp) :: scale, target_var, data_var, numerator, score, data_sum, data_sq_sum
-        integer  :: ix, iy, iz
+        real(dp)                    :: scale, target_var, data_var, numerator, score, data_sum, data_sq_sum
+        integer                     :: ix, iy, iz
 
         target_var = sum_tt - sum_t * sum_t / sum_w
         if(target_var <= epsilon(1._dp)) return
@@ -376,7 +376,7 @@ contains
         class(calpha_finder), intent(in)    :: self
         class(image),         intent(inout) :: scores
         real(kind=c_float), pointer :: values(:,:,:)
-        integer :: ldim(3), border
+        integer                     :: ldim(3), border
         ldim   = scores%get_ldim()
         border = ceiling(self%radius / self%smpd) + 1
         call scores%get_rmat_ptr(values)
@@ -394,12 +394,12 @@ contains
         integer,              intent(in)    :: best_rotation(:,:,:), npeaks
         real,                 intent(in)    :: rotations(:,:,:), threshold
         class(string),        intent(in)    :: pdbout
-        real(kind=c_float), pointer :: scoremat(:,:,:)
-        real, allocatable    :: selection(:,:,:), eligible_scores(:), xyz(:,:), found_scores(:)
-        real, allocatable    :: found_rotations(:,:,:)
-        integer, allocatable :: eligible_indices(:)
-        integer :: ldim(3), location(3), neligible, icandidate, nfound, irot
-        integer :: ix, iy, iz, linear_index, plane_index
+        real(kind=c_float), pointer     :: scoremat(:,:,:)
+        real,               allocatable :: selection(:,:,:), eligible_scores(:), xyz(:,:), found_scores(:)
+        real,               allocatable :: found_rotations(:,:,:)
+        integer,            allocatable :: eligible_indices(:)
+        integer                         :: ldim(3), location(3), neligible, icandidate, nfound, irot
+        integer                         :: ix, iy, iz, linear_index, plane_index
 
         ldim = scores%get_ldim()
         allocate(selection(ldim(1),ldim(2),ldim(3)))
@@ -473,7 +473,7 @@ contains
         integer,       intent(in) :: nfound
         type(atoms)  :: candidates
         type(string) :: csvfile
-        integer :: ipeak, funit, io_stat
+        integer      :: ipeak, funit, io_stat
 
         if(nfound > 0)then
             call candidates%new(nfound, .true.)

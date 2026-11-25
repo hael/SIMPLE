@@ -28,14 +28,14 @@ private
 public :: run_all_pftc_inplane_tests
 
 ! the phantom: box 64 at 1.3 A, four Gaussian blobs inside a 60 A mask
-integer,          parameter :: BOX     = 64
-real,             parameter :: SMPD    = 1.3
-real,             parameter :: MSKDIAM = 60.
-real,             parameter :: LP_LOW  = 8.
-real,             parameter :: LP_FULL = 2.7
-real,             parameter :: TRS     = 5.
+integer,          parameter :: BOX          = 64
+real,             parameter :: SMPD         = 1.3
+real,             parameter :: MSKDIAM      = 60.
+real,             parameter :: LP_LOW       = 8.
+real,             parameter :: LP_FULL      = 2.7
+real,             parameter :: TRS          = 5.
 character(len=*), parameter :: PHANTOM_FILE = 'pftc_inplane_phantom.mrc'
-integer,          parameter :: NBLOBS = 4
+integer,          parameter :: NBLOBS       = 4
 real,             parameter :: CTRS(3,NBLOBS) = reshape([&
     &-9.0, -5.0,  3.0, &
     & 7.0,  8.0, -5.0, &
@@ -48,10 +48,10 @@ real,             parameter :: TRUTH_ANGLE    = 37.
 real,             parameter :: TRUTH_SHIFT(2) = [2., -1.5]
 ! FD noise floor: single-precision coefficient series differentiated with h=1e-3
 ! leave ~1e-3 absolute noise; a broken gradient errs at O(|grad|)
-real(dp),         parameter :: FD_STEP        = 1.d-3
-real(dp),         parameter :: GRAD_FD_RTOL   = 1.d-2
-real(dp),         parameter :: GRAD_FD_AFLOOR = 3.d-3
-real(dp),         parameter :: IDENTITY_ATOL  = 1.d-4
+real(dp),         parameter :: FD_STEP           = 1.d-3
+real(dp),         parameter :: GRAD_FD_RTOL      = 1.d-2
+real(dp),         parameter :: GRAD_FD_AFLOOR    = 3.d-3
+real(dp),         parameter :: IDENTITY_ATOL     = 1.d-4
 real(dp),         parameter :: PROBE_SHIFTS(2,3) = reshape([0.d0,0.d0, 1.7d0,-2.3d0, -0.6d0,0.4d0], [2,3])
 real(dp),         parameter :: PROBE_ROTOFFS(4)  = [0.37d0, -1.42d0, 0.5d0, 1.93d0]
 
@@ -96,15 +96,15 @@ contains
     !! central-difference Hessian of the analytic gradient, within the gradient check's GRAD_FD_RTOL, and PSD
     subroutine test_lm_curvature_oracles()
         use simple_linalg, only: cholesky
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(pftc_shsrch_grad)   :: srch
-        real(sp), allocatable :: scores(:)
-        real(dp) :: dang, theta, sstar(2), vec2(2), vec3(3), f, g2(2), g3(3), gp2(2), gm2(2), gp3(3), gm3(3)
-        real(dp) :: c2(2,2), h2(2,2), c3(3,3), h3(3,3), l3(3,3), err
-        real     :: limits(2,2), joint_limits(3,2), ta
-        integer  :: iobj, irot, d
-        logical  :: ok
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(pftc_shsrch_grad)        :: srch
+        real(sp),         allocatable :: scores(:)
+        real(dp)                      :: dang, theta, sstar(2), vec2(2), vec3(3), f, g2(2), g3(3), gp2(2), gm2(2), gp3(3), gm3(3)
+        real(dp)                      :: c2(2,2), h2(2,2), c3(3,3), h3(3,3), l3(3,3), err
+        real                          :: limits(2,2), joint_limits(3,2), ta
+        integer                       :: iobj, irot, d
+        logical                       :: ok
         write(*,'(A)') 'test_lm_curvature_oracles'
         do iobj = OBJ_EUCLID, OBJ_CC
             call build_fixture(b, p, iobj, LP_LOW, 0., [0.,0.], .false.)
@@ -180,11 +180,11 @@ contains
     !! reference and zero view columns, is gen_raw_euclid_grad_at_angle (f, grad(1:3)) within IDENTITY_ATOL and its
     !! Gauss-Newton block (1:3,1:3) gen_joint_curv_at_angle's, relative, at the probe shifts and grid and fractional angles
     subroutine test_sect_evaluator_identity()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        complex(sp), allocatable :: sect(:,:), dsect(:,:,:)
-        real(dp) :: f0, g0(3), c0(3,3), f1, g1(5), c1(5,5), ri, worst_f, worst_g, worst_c, view_g
-        integer  :: kfromto(2), pftsz, ishift, irot, ioff
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        complex(sp),      allocatable :: sect(:,:), dsect(:,:,:)
+        real(dp)                      :: f0, g0(3), c0(3,3), f1, g1(5), c1(5,5), ri, worst_f, worst_g, worst_c, view_g
+        integer                       :: kfromto(2), pftsz, ishift, irot, ioff
         write(*,'(A)') 'test_sect_evaluator_identity'
         call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
         pftsz   = b%pftc%get_pftsz()
@@ -223,21 +223,21 @@ contains
     !! route with the median seconds per solve (reported, not gated)
     subroutine test_lm_solver_comparison()
         use simple_stat, only: median
-        integer, parameter :: NTIME = 20
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(pftc_shsrch_grad)   :: srch
-        character(len=6), parameter :: SOLVERS(2) = ['lbfgsb', 'lm    ']
-        character(len=11), parameter :: ROUTES(3) = ['alternating', 'fixed      ', 'joint      ']
-        real(sp), allocatable :: scores(:)
-        real(dp) :: theta, expected(2), joint_coord, err_sh, err_ang, sum_sh, sum_ang, max_sh
-        real     :: limits(2,2), joint_limits(3,2), cxy(3)
-        integer  :: iobj, isolver, iroute, istart, igrid, irot, joint_index, ncases
-        integer(int64) :: obj_evals, grad_evals, alternations, grid_points, minimize_calls, gsum
-        integer(int64) :: c0, c1, crate, csum, ncallbacks, nchanges, nreevals, cbsum, chsum, resum
-        real(dp) :: times(NTIME*size(PROBE_SHIFTS,2))
-        integer  :: irep, ntimed
-        logical  :: valid, improved
+        integer,           parameter   :: NTIME      = 20
+        type(builder),     target      :: b
+        type(parameters),  target      :: p
+        type(pftc_shsrch_grad)         :: srch
+        character(len=6),  parameter   :: SOLVERS(2) = ['lbfgsb', 'lm    ']
+        character(len=11), parameter   :: ROUTES(3)  = ['alternating', 'fixed      ', 'joint      ']
+        real(sp),          allocatable :: scores(:)
+        real(dp)                       :: theta, expected(2), joint_coord, err_sh, err_ang, sum_sh, sum_ang, max_sh
+        real                           :: limits(2,2), joint_limits(3,2), cxy(3)
+        integer                        :: iobj, isolver, iroute, istart, igrid, irot, joint_index, ncases
+        integer(int64)                 :: obj_evals, grad_evals, alternations, grid_points, minimize_calls, gsum
+        integer(int64)                 :: c0, c1, crate, csum, ncallbacks, nchanges, nreevals, cbsum, chsum, resum
+        real(dp)                       :: times(NTIME*size(PROBE_SHIFTS,2))
+        integer                        :: irep, ntimed
+        logical                        :: valid, improved
         write(*,'(A)') 'test_lm_solver_comparison'
         theta    = real(TRUTH_ANGLE,dp) * acos(-1.d0) / 180.d0
         expected = [cos(theta)*real(TRUTH_SHIFT(1),dp) - sin(theta)*real(TRUTH_SHIFT(2),dp), &
@@ -335,10 +335,10 @@ contains
     ! ---- fixture ---------------------------------------------------------------
 
     subroutine write_phantom()
-        type(image) :: vol
+        type(image)       :: vol
         real, allocatable :: rmat(:,:,:)
-        real    :: ctr, dx, dy, dz
-        integer :: b, i, j, k
+        real              :: ctr, dx, dy, dz
+        integer           :: b, i, j, k
         allocate(rmat(BOX,BOX,BOX), source=0.)
         ctr = real(BOX)/2. + 1.
         do k = 1, BOX
@@ -361,16 +361,16 @@ contains
     !! are the phantom's projections along the other directions of the spiral
     subroutine build_fixture( b, p, objfun, lp, truth_angle, shift, hard_edge, nrefs, nthr )
         use simple_projector_pft_batch, only: fproject_polar_batch_opt
-        type(builder),    target, intent(inout) :: b
-        type(parameters), target, intent(inout) :: p
-        integer,                  intent(in)    :: objfun
-        real,                     intent(in)    :: lp, truth_angle, shift(2)
-        logical,                  intent(in)    :: hard_edge
-        integer,        optional, intent(in)    :: nrefs, nthr
-        type(cmdline) :: cline
-        type(ori)     :: o_ref, o_particle
+        type(builder),            target, intent(inout) :: b
+        type(parameters),         target, intent(inout) :: p
+        integer,                  intent(in)            :: objfun
+        real,                     intent(in)            :: lp, truth_angle, shift(2)
+        logical,                  intent(in)            :: hard_edge
+        integer,                  optional, intent(in)  :: nrefs, nthr
+        type(cmdline)            :: cline
+        type(ori)                :: o_ref, o_particle
         complex(sp), allocatable :: sections(:,:,:), pft(:,:)
-        integer :: pftsz, kfromto(2), pdim(3)
+        integer                  :: pftsz, kfromto(2), pdim(3)
         call cline%set('vol1',    PHANTOM_FILE)
         call cline%set('mskdiam', MSKDIAM)
         call cline%set('smpd',    SMPD)
@@ -532,9 +532,9 @@ contains
         integer,          intent(in)    :: objfun, nrots
         character(len=*), intent(in)    :: label
         real(sp), allocatable :: scores(:)
-        real(dp) :: f, grad(3), worst
-        integer  :: ishift, irot
-        logical  :: finite
+        real(dp)              :: f, grad(3), worst
+        integer               :: ishift, irot
+        logical               :: finite
         allocate(scores(nrots))
         worst  = 0.d0
         finite = .true.
@@ -577,20 +577,20 @@ contains
 
     !> raw Euclidean: route identities, gradient, parity, stress, seed parity, joint recovery
     subroutine test_euclid_routes_and_recovery()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(pftc_shsrch_grad) :: fixed_search, joint_search
-        real(sp), allocatable :: scores(:)
-        real(dp), allocatable :: raw_losses(:)
-        real(dp), parameter   :: PARITY_SHIFTS(2,3) = reshape([1.7d0,-2.3d0, -0.6d0,0.4d0, 3.1d0,1.2d0], [2,3])
-        real(dp) :: f_cont, g_cont(3), f_disc, g_disc(2)
-        real(dp) :: max_legacy, parity_err, parity_scale, tol
-        real(dp) :: series_min, stale_parity, fresh_parity
-        real(dp) :: grid_loss, joint_loss, initial_loss, joint_coord, recovered(2), expected(2), theta, g3(3)
-        real(dp) :: grid_angle_err, joint_angle_err, shift_rms
-        real     :: cxy(3), seed(2), corr, limits(2,2), joint_limits(3,2)
-        integer  :: nrots, irot, igrid, irots(3), j, m, k, selected, expected_irot, irot_fixed, joint_index
-        logical  :: finite, valid, improved
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(pftc_shsrch_grad)        :: fixed_search, joint_search
+        real(sp),         allocatable :: scores(:)
+        real(dp),         allocatable :: raw_losses(:)
+        real(dp),         parameter   :: PARITY_SHIFTS(2,3) = reshape([1.7d0,-2.3d0, -0.6d0,0.4d0, 3.1d0,1.2d0], [2,3])
+        real(dp)                      :: f_cont, g_cont(3), f_disc, g_disc(2)
+        real(dp)                      :: max_legacy, parity_err, parity_scale, tol
+        real(dp)                      :: series_min, stale_parity, fresh_parity
+        real(dp)                      :: grid_loss, joint_loss, initial_loss, joint_coord, recovered(2), expected(2), theta, g3(3)
+        real(dp)                      :: grid_angle_err, joint_angle_err, shift_rms
+        real                          :: cxy(3), seed(2), corr, limits(2,2), joint_limits(3,2)
+        integer                       :: nrots, irot, igrid, irots(3), j, m, k, selected, expected_irot, irot_fixed, joint_index
+        logical                       :: finite, valid, improved
         write(*,'(A)') 'test_euclid_routes_and_recovery'
         call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
         nrots = b%pftc%get_nrots()
@@ -719,11 +719,11 @@ contains
 
     !> the wrap-around angle with a hard mask edge at the full band, and the zero angle
     subroutine test_euclid_band_edges()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        real(dp), allocatable :: raw_losses(:)
-        real(dp) :: f, g(3)
-        integer  :: nrots, igrid
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        real(dp),         allocatable :: raw_losses(:)
+        real(dp)                      :: f, g(3)
+        integer                       :: nrots, igrid
         write(*,'(A)') 'test_euclid_band_edges'
         ! full band, hard edge, truth just below 360
         call build_fixture(b, p, OBJ_EUCLID, LP_FULL, 359.375, [0.,0.], .true.)
@@ -753,12 +753,12 @@ contains
 
     !> cc: grid identity, gradient, and the finite penalty for an undefined denominator
     subroutine test_cc_evaluator()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        real(sp),    allocatable :: scores(:)
-        complex(sp), allocatable :: zero_pft(:,:)
-        real(dp) :: f, grad(3)
-        integer  :: nrots, igrid
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        real(sp),         allocatable :: scores(:)
+        complex(sp),      allocatable :: zero_pft(:,:)
+        real(dp)                      :: f, grad(3)
+        integer                       :: nrots, igrid
         write(*,'(A)') 'test_cc_evaluator'
         call build_fixture(b, p, OBJ_CC, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
         nrots = b%pftc%get_nrots()
@@ -786,10 +786,10 @@ contains
     subroutine test_strategy2D_route_flags()
         type(builder),    target :: b
         type(parameters), target :: p
-        type(strategy2D_srch) :: srch
-        type(strategy2D_spec) :: spec
-        type(pftc_shsrch_grad) :: alternating
-        real :: limits(2,2)
+        type(strategy2D_srch)    :: srch
+        type(strategy2D_spec)    :: spec
+        type(pftc_shsrch_grad)   :: alternating
+        real                     :: limits(2,2)
         write(*,'(A)') 'test_strategy2D_route_flags'
         call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
         limits(:,1) = -1.; limits(:,2) = 1.
@@ -842,8 +842,8 @@ contains
     !> the pure step: exact recovery of a quadratic's stationary point, and each guard that refuses a fit
     subroutine test_grid_fit_step()
         real(dp), parameter :: HESS(2,2) = reshape([2.d0, 0.5d0, 0.5d0, 1.5d0], [2,2])
-        real(dp) :: v(-1:1,-1:1), da, db
-        integer  :: ia, ib, reason
+        real(dp)            :: v(-1:1,-1:1), da, db
+        integer             :: ia, ib, reason
         write(*,'(A)') 'test_grid_fit_step'
         ! an exact quadratic with its stationary point inside the centre cell
         call fill_quadratic([0.3d0, -0.2d0], v)
@@ -922,13 +922,13 @@ contains
         !> one phantom fixture per call, so the builder and parameters are fresh every time
         subroutine grid_fit_case( icase_loc )
             integer, intent(in) :: icase_loc
-            real(sp), parameter :: TRUE_SHIFTS(2,3) = reshape([0.5, 0.3, 1.2, -0.8, 4.6, 0.0], [2,3])
-            type(builder),    target :: b
-            type(parameters), target :: p
-            type(pftc_shsrch_grad) :: base, with_fit, off
-            integer(int64) :: counts(0:5), counts_off(0:5)
-            real    :: limits(2,2), lims_init(2,2), cxy_a(3), cxy_b(3), cxy_c(3)
-            integer :: irot_a, irot_b, irot_c
+            real(sp),         parameter :: TRUE_SHIFTS(2,3) = reshape([0.5, 0.3, 1.2, -0.8, 4.6, 0.0], [2,3])
+            type(builder),    target    :: b
+            type(parameters), target    :: p
+            type(pftc_shsrch_grad)      :: base, with_fit, off
+            integer(int64)              :: counts(0:5), counts_off(0:5)
+            real                        :: limits(2,2), lims_init(2,2), cxy_a(3), cxy_b(3), cxy_c(3)
+            integer                     :: irot_a, irot_b, irot_c
             limits(:,1)    = -TRS
             limits(:,2)    =  TRS
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
@@ -980,7 +980,7 @@ contains
 
     !> the two frame conversions: a quarter turn, the round trip, and a lattice corner that leaves the box
     subroutine test_shift_frames()
-        real :: u(2), s(2), c(2)
+        real    :: u(2), s(2), c(2)
         integer :: irot
         write(*,'(A)') 'test_shift_frames'
         u = shift_ref2ptcl([1., 0.], 90.)
@@ -1002,14 +1002,14 @@ contains
     !> a bank entry (shifted particle memo) against the direct sum at the reference-frame shift it corresponds to
     !! at every rotation, for both objectives, and the posterior route on the same entry
     subroutine test_particle_bank()
-        real(dp), parameter :: TODAY_ATOL = 1.d-4 ! both kernels carry the Nyquist bin; a frame error is O(1)
-        type(builder),    target :: b
-        type(parameters), target :: p
-        complex(sp), allocatable :: bank(:,:)
-        real(sp),    allocatable :: vals(:), vals_today(:), pvec(:)
-        real(dp) :: max_err, max_today, direct
-        real(sp) :: t(2), s(2), dist
-        integer  :: iobj, ish, irot, irot_s, nrots, kfromto(2), irot_seed
+        real(dp),         parameter   :: TODAY_ATOL = 1.d-4 ! both kernels carry the Nyquist bin; a frame error is O(1)
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        complex(sp),      allocatable :: bank(:,:)
+        real(sp),         allocatable :: vals(:), vals_today(:), pvec(:)
+        real(dp)                      :: max_err, max_today, direct
+        real(sp)                      :: t(2), s(2), dist
+        integer                       :: iobj, ish, irot, irot_s, nrots, kfromto(2), irot_seed
         write(*,'(A)') 'test_particle_bank'
         do iobj = OBJ_EUCLID, OBJ_CC
             call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, [2., -1.5], .false.)
@@ -1090,13 +1090,13 @@ contains
 
         subroutine grid_ptcl_case( icase_loc )
             integer, intent(in) :: icase_loc
-            real(sp), parameter :: TRUE_SHIFTS(2,3) = reshape([0.5, 0.3, 1.2, -0.8, 4.6, 0.0], [2,3])
-            type(builder),    target :: b
-            type(parameters), target :: p
-            type(pftc_shsrch_grad) :: base, off, ptcl, ptcl_fit
-            integer(int64) :: counts(0:5)
-            real    :: limits(2,2), lims_init(2,2), cxy_a(3), cxy_o(3), cxy_p(3), cxy_f(3)
-            integer :: irot_a, irot_o, irot_p, irot_f, nrots, drot
+            real(sp),         parameter :: TRUE_SHIFTS(2,3) = reshape([0.5, 0.3, 1.2, -0.8, 4.6, 0.0], [2,3])
+            type(builder),    target    :: b
+            type(parameters), target    :: p
+            type(pftc_shsrch_grad)      :: base, off, ptcl, ptcl_fit
+            integer(int64)              :: counts(0:5)
+            real                        :: limits(2,2), lims_init(2,2), cxy_a(3), cxy_o(3), cxy_p(3), cxy_f(3)
+            integer                     :: irot_a, irot_o, irot_p, irot_f, nrots, drot
             limits(:,1)    = -TRS
             limits(:,2)    =  TRS
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
@@ -1158,12 +1158,12 @@ contains
     !> the evaluations of the shift search with the reference loaded once equal those that copy it every time and those
     !! after a fresh load, exactly, also when other evaluations and loads come in between
     subroutine test_loaded_reference()
-        integer, parameter :: NREFS_LR = 6
-        type(builder),    target :: b
-        type(parameters), target :: p
-        real(sp), allocatable :: vals(:)
-        real(dp) :: f_load, f_copy, g_load(2), g_copy(2), c_load, c_copy
-        integer  :: iobj, iref, ish, irot, nrots, ndiff
+        integer,          parameter   :: NREFS_LR = 6
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        real(sp),         allocatable :: vals(:)
+        real(dp)                      :: f_load, f_copy, g_load(2), g_copy(2), c_load, c_copy
+        integer                       :: iobj, iref, ish, irot, nrots, ndiff
         write(*,'(A)') 'test_loaded_reference'
         do iobj = OBJ_EUCLID, OBJ_CC
             call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false., nrefs=NREFS_LR)
@@ -1202,13 +1202,13 @@ contains
     !! for bit the same; and a draw at the particle's own temperature always returns a rotation of its row at the
     !! row's value. cc has no posterior kernel: its rows are gen_objfun_vals and gen_objfun_vals_bank
     subroutine test_posterior_threads()
-        integer, parameter :: NREFS_LT = 24, NRES = 10
-        real(sp), parameter :: COLD = huge(1._sp)
-        type(builder),    target :: b
-        type(parameters), target :: p
-        complex(sp), allocatable :: bank(:,:)
-        real(sp),    allocatable :: res1(:,:), resn(:,:), rows1(:,:,:), rowsn(:,:,:)
-        integer :: iobj, nthr_prev, nthr_full, kfromto(2), irep, ndiff, nrots, nbad
+        integer,          parameter   :: NREFS_LT = 24, NRES = 10
+        real(sp),         parameter   :: COLD     = huge(1._sp)
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        complex(sp),      allocatable :: bank(:,:)
+        real(sp),         allocatable :: res1(:,:), resn(:,:), rows1(:,:,:), rowsn(:,:,:)
+        integer                       :: iobj, nthr_prev, nthr_full, kfromto(2), irep, ndiff, nrots, nbad
         write(*,'(A)') 'test_posterior_threads'
         nthr_prev = 1
         nthr_full = 1
@@ -1303,17 +1303,17 @@ contains
     !! on the joint refinement alike. And the width from a field: half the mean squared increment of the sampled
     !! particles, floored by the band
     subroutine test_shift_prior()
-        real, parameter :: START(2) = [1.5, -1.0]
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(pftc_shsrch_grad)   :: srch
-        type(oris) :: os
-        real(dp) :: w, g, rotind_frac, cost_free, cost_prior, best
-        real     :: limits(2,2), lims_init(2,2), joint_lims(3,2), temp, cxy_free(3), cxy_again(3), cxy(3)
-        real     :: corr_prior, sigma2, sigma2_weak, sigma2_strong, u0(2), u0_joint(2)
-        real,    allocatable :: scores(:)
-        integer  :: irot_free, irot_again, irot, irot2, irot3, irot_seed, i
-        logical  :: l_valid, l_improved
+        real,             parameter   :: START(2) = [1.5, -1.0]
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(pftc_shsrch_grad)        :: srch
+        type(oris)                    :: os
+        real(dp)                      :: w, g, rotind_frac, cost_free, cost_prior, best
+        real                          :: limits(2,2), lims_init(2,2), joint_lims(3,2), temp, cxy_free(3), cxy_again(3), cxy(3)
+        real                          :: corr_prior, sigma2, sigma2_weak, sigma2_strong, u0(2), u0_joint(2)
+        real,             allocatable :: scores(:)
+        integer                       :: irot_free, irot_again, irot, irot2, irot3, irot_seed, i
+        logical                       :: l_valid, l_improved
         write(*,'(A)') 'test_shift_prior'
         limits(:,1)    = -TRS
         limits(:,2)    =  TRS
@@ -1438,15 +1438,15 @@ contains
     !! rotation; a zero seed is the same centre in every frame. And the search: a narrow prior keeps the stored
     !! shift at the seed whatever rotation it ends on
     subroutine test_shift_prior_frame()
-        real,     parameter :: U0(2) = [2.0, -1.5]
-        real(dp), parameter :: W_FRAME = 0.1d0 ! per px^2: a factor from 1 to exp(-2.5) over the rotations at |U0|
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(pftc_shsrch_grad)   :: srch
-        real, allocatable :: scores(:)
-        real     :: limits(2,2), temp, xy_seed(2), xy_other(2), cxy(3), sigma2, sigma2_strong
-        real(dp) :: w
-        integer  :: irot_seed, irot_other, irot, nrots
+        real,             parameter   :: U0(2)   = [2.0, -1.5]
+        real(dp),         parameter   :: W_FRAME = 0.1d0 ! per px^2: a factor from 1 to exp(-2.5) over the rotations at |U0|
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(pftc_shsrch_grad)        :: srch
+        real,             allocatable :: scores(:)
+        real                          :: limits(2,2), temp, xy_seed(2), xy_other(2), cxy(3), sigma2, sigma2_strong
+        real(dp)                      :: w
+        integer                       :: irot_seed, irot_other, irot, nrots
         write(*,'(A)') 'test_shift_prior_frame'
         limits(:,1) = -TRS
         limits(:,2) =  TRS
@@ -1517,18 +1517,18 @@ contains
     !! exercised. w = 0.01 per px^2 is weak on the noise-free phantom (the search moves as without it) but its
     !! factor, 0.3% to 2% at the cases' shifts, is far above the tolerance
     subroutine test_shift_prior_grid_fit()
-        real(sp), parameter :: TRUE_SHIFTS(2,3) = reshape([0.5, 0.3, 1.2, -0.8, 4.6, 0.0], [2,3])
-        real(dp), parameter :: W_PRIOR = 1.d-2 ! the prior's weight per px^2, in loss units
-        type(builder),    target :: b
-        type(parameters), target :: p
-        type(pftc_shsrch_grad)   :: srch
-        complex(sp), allocatable :: bank(:,:)
-        real,        allocatable :: vals(:)
-        integer(int64) :: counts(0:5)
-        real     :: limits(2,2), lims_init(2,2), cxy(3), temp, u(2)
-        real(dp) :: g, raw
-        integer  :: icase, ilat, irot, nkept(2), kfromto(2)
-        logical  :: l_ptcl, l_kept
+        real(sp),         parameter   :: TRUE_SHIFTS(2,3) = reshape([0.5, 0.3, 1.2, -0.8, 4.6, 0.0], [2,3])
+        real(dp),         parameter   :: W_PRIOR          = 1.d-2 ! the prior's weight per px^2, in loss units
+        type(builder),    target      :: b
+        type(parameters), target      :: p
+        type(pftc_shsrch_grad)        :: srch
+        complex(sp),      allocatable :: bank(:,:)
+        real,             allocatable :: vals(:)
+        integer(int64)                :: counts(0:5)
+        real                          :: limits(2,2), lims_init(2,2), cxy(3), temp, u(2)
+        real(dp)                      :: g, raw
+        integer                       :: icase, ilat, irot, nkept(2), kfromto(2)
+        logical                       :: l_ptcl, l_kept
         write(*,'(A)') 'test_shift_prior_grid_fit'
         limits(:,1)    = -TRS
         limits(:,2)    =  TRS
@@ -1582,15 +1582,15 @@ contains
     !> the alternating shift search (as the probabilistic tables run it) over 24 references and three start shifts,
     !! euclid and cc, at one thread and 20 times at every processor: every result bit for bit the same
     subroutine test_search_threads()
-        integer,  parameter :: NREFS_TH = 24, NSTARTS = 3
-        real,     parameter :: STARTS(2,NSTARTS) = reshape([0.,0., 1.5,-1., -2.,0.5], [2,NSTARTS])
-        type(builder),    target :: b
-        type(parameters), target :: p
+        integer,                parameter   :: NREFS_TH          = 24, NSTARTS = 3
+        real,                   parameter   :: STARTS(2,NSTARTS) = reshape([0.,0., 1.5,-1., -2.,0.5], [2,NSTARTS])
+        type(builder),          target      :: b
+        type(parameters),       target      :: p
         type(pftc_shsrch_grad), allocatable :: srch(:)
-        real,    allocatable :: cxy1(:,:,:), cxy4(:,:,:)
-        integer, allocatable :: irot1(:,:), irot4(:,:)
-        real    :: limits(2,2), lims_init(2,2)
-        integer :: iobj, nthr_prev, ithr, nthr_full, irep, ndiff
+        real,                   allocatable :: cxy1(:,:,:), cxy4(:,:,:)
+        integer,                allocatable :: irot1(:,:), irot4(:,:)
+        real                                :: limits(2,2), lims_init(2,2)
+        integer                             :: iobj, nthr_prev, ithr, nthr_full, irep, ndiff
         write(*,'(A)') 'test_search_threads'
         limits(:,1)    = -TRS
         limits(:,2)    =  TRS

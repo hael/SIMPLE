@@ -79,8 +79,8 @@ contains
     subroutine write_fixtures( fnames )
         type(string), intent(inout) :: fnames(2)
         integer, parameter :: STATES(6) = [1, 0, 1, 1, 1, 0]
-        type(sp_project) :: proj
-        integer          :: ifile, imic, iglob
+        type(sp_project)   :: proj
+        integer            :: ifile, imic, iglob
         do ifile = 1,2
             fnames(ifile) = 'mic_import_test_'//int2str(get_process_id())//'_'//int2str(ifile)//'.simple'
             call proj%os_mic%new(3, is_ptcl=.false.)

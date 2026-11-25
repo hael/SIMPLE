@@ -70,7 +70,7 @@ contains
         class(polarft_calc), intent(in) :: self
         real(sp),            intent(in) :: rot
         real(sp) :: dists(self%nrots)
-        integer :: ind
+        integer  :: ind
         dists = abs(self%angtab-rot)
         where(dists>180.)dists = 360.-dists
         ind = minloc(dists, dim=1)
@@ -109,8 +109,8 @@ contains
     end subroutine get_polar_coords
 
     module subroutine get_ptcl_line(self, iptcl, irot, line)
-        class(polarft_calc), intent(in) :: self
-        integer,             intent(in) :: iptcl, irot
+        class(polarft_calc), intent(in)    :: self
+        integer,             intent(in)    :: iptcl, irot
         complex(sp),         intent(inout) :: line(self%kfromto(1):self%kfromto(2))
         if( iptcl < self%pfromto(1) .or. iptcl > self%pfromto(2) )then
             write(logfhandle,*) 'iptcl: ', iptcl
@@ -127,18 +127,18 @@ contains
 
     !> the particle's CTF matrix over the searched shells (ones without a CTF)
     module subroutine get_ref_pft(self, iref, iseven, pft)
-        class(polarft_calc), intent(in) :: self
-        integer,             intent(in) :: iref
-        logical,             intent(in) :: iseven
-        complex(sp), intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        class(polarft_calc), intent(in)    :: self
+        integer,             intent(in)    :: iref
+        logical,             intent(in)    :: iseven
+        complex(sp),         intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         integer :: ieo
         ieo = merge(REF_EVEN, REF_ODD, iseven)
         pft = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
     end subroutine get_ref_pft
 
     module subroutine get_ptcl_pft(self, iptcl, pft)
-        class(polarft_calc), intent(in) :: self
-        integer,             intent(in) :: iptcl
+        class(polarft_calc), intent(in)    :: self
+        integer,             intent(in)    :: iptcl
         complex(sp),         intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
         if( iptcl < self%pfromto(1) .or. iptcl > self%pfromto(2) )then
             write(logfhandle,*) 'iptcl: ', iptcl
@@ -162,8 +162,8 @@ contains
 
     !> the Euclidean shell weights k/sigma2(k) of the two halves (shell, half), as memoize_sigma2_weights formed them
     module subroutine get_sigma2_weights(self, wk)
-        class(polarft_calc),   intent(in)  :: self
-        real(sp), allocatable, intent(out) :: wk(:,:)
+        class(polarft_calc),   intent(in)               :: self
+        real(sp),              allocatable, intent(out) :: wk(:,:)
         if( .not. allocated(self%sigma2_wk) ) THROW_HARD('no sigma2 weights memoized; get_sigma2_weights')
         allocate(wk(self%kfromto(1):self%kfromto(2),2), source=self%sigma2_wk)
     end subroutine get_sigma2_weights
@@ -190,8 +190,8 @@ contains
     end function get_nptcls
 
     module subroutine get_pinds(self, pinds)
-        class(polarft_calc),  intent(in)  :: self
-        integer, allocatable, intent(out) :: pinds(:)
+        class(polarft_calc),  intent(in)               :: self
+        integer,              allocatable, intent(out) :: pinds(:)
         pinds = self%pinds
     end subroutine get_pinds
 

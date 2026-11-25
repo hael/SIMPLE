@@ -32,7 +32,7 @@ contains
     subroutine test_median()
         real, parameter :: EVEN(10) = [4., 15., 3., 36., 9., 19., 27., 10., 35., 8.]
         real, parameter :: ODD(11)  = [25., 23., 20., 28., 6., 4., 31., 13., 24., 35., 29.]
-        real :: work(11)
+        real            :: work(11)
         write(*,'(A)') 'test_median'
         call assert_real(12.5, median(EVEN), 0., 'median of an even count is the mean of the two middle values')
         call assert_real(24.0, median(ODD),  0., 'median of an odd count is the middle value')
@@ -47,9 +47,9 @@ contains
 
     ! calc_stats on the even array above and on its masked half
     subroutine test_calc_stats()
-        real, parameter :: EVEN(10) = [4., 15., 3., 36., 9., 19., 27., 10., 35., 8.]
+        real, parameter    :: EVEN(10) = [4., 15., 3., 36., 9., 19., 27., 10., 35., 8.]
         type(stats_struct) :: st
-        logical :: mask(10)
+        logical            :: mask(10)
         write(*,'(A)') 'test_calc_stats'
         call calc_stats(EVEN, st)
         call assert_real(16.6,     st%avg,  1.e-4, 'calc_stats: mean')
@@ -85,7 +85,7 @@ contains
     ! non-increasing in rank and sum to one
     subroutine test_rank_weight_kernels()
         integer, parameter :: N = 200
-        real :: w(N)
+        real               :: w(N)
         write(*,'(A)') 'test_rank_weight_kernels'
         call rank_sum_weights(N, w)
         call check_kernel(w, 'rank_sum_weights')
@@ -122,10 +122,10 @@ contains
     !---------------- conv2rank_weights ----------------
 
     subroutine test_conv2rank_weights()
-        real    :: w(6), w_in(6)
+        real                           :: w(6), w_in(6)
         integer(kind=kind(ENUM_WCRIT)) :: crit_list(4)
-        integer :: ic
-        character(len=16) :: crit_name(4)
+        integer                        :: ic
+        character(len=16)              :: crit_name(4)
         write(*,'(A)') 'test_conv2rank_weights'
         ! one non-zero entry takes all the weight
         w = [0.0, 0.0, 0.3, 0.0, 0.0, 0.0]
@@ -161,8 +161,8 @@ contains
     subroutine test_corrs2weights_corrw()
         real, parameter   :: corrs(12) = [-1.0, 0.0, 0.005, 0.1, 0.2, 0.3, 0.4, 0.5, 0.51, 0.52, 0.53, 0.6]
         real, allocatable :: w(:)
-        integer :: i
-        logical :: nondecreasing
+        integer           :: i
+        logical           :: nondecreasing
         write(*,'(A)') 'test_corrs2weights_corrw'
         w = corrs2weights(corrs, CORRW_CRIT)
         call assert_int(12, size(w),               'corrs2weights returns one weight per correlation')

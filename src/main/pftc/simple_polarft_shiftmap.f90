@@ -146,8 +146,8 @@ contains
             integer,  intent(in) :: imap, kstop
             real(dp), intent(in) :: radius
             real(dp), allocatable :: rhos(:)
-            real(dp) :: step
-            integer  :: nrho, i, nalpha
+            real(dp)              :: step
+            integer               :: nrho, i, nalpha
             step = real(self%ldim(1), dp) / real(kstop, dp) / 4.d0
             nrho = floor(radius / step) + 1
             if( nrho < 2 )then
@@ -262,9 +262,9 @@ contains
     !! for cc, k/sigma2 for euclid
     module subroutine gen_shiftmap( self, imap, iref, iptcl )
         class(polarft_calc), target, intent(inout) :: self
-        integer, intent(in) :: imap, iref, iptcl
+        integer,             intent(in)            :: imap, iref, iptcl
         real(dp) :: t0
-        integer :: ithr
+        integer  :: ithr
         call self%check_ptcl_memo
         ithr = omp_get_thread_num() + 1
         t0 = omp_get_wtime()
@@ -283,11 +283,11 @@ contains
 
     !> The pair's shell sums, folded orders and grid on the calling thread's work (gen_shiftmap)
     subroutine gen_shiftmap_kernel( self, imap, iref, iptcl )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: imap, iref, iptcl
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: imap, iref, iptcl
         type(shiftmap_work), pointer :: wk
-        real(dp) :: w(self%kfromto(1):self%kfromto(2)), wj(self%kfromto(1):self%kfromto(2))
-        integer  :: ithr, i, ieo, ih, k, m, n, irho, nrho, nmax, nalpha, nh, jn, sgn, kb(2), k1, k2, nwrap, ir0
+        real(dp)                     :: w(self%kfromto(1):self%kfromto(2)), wj(self%kfromto(1):self%kfromto(2))
+        integer                      :: ithr, i, ieo, ih, k, m, n, irho, nrho, nmax, nalpha, nh, jn, sgn, kb(2), k1, k2, nwrap, ir0
         if( .not. self%has_shiftmap(imap) ) THROW_HARD('no shift map; new_shiftmap first; gen_shiftmap')
         ithr   =  omp_get_thread_num() + 1
         i      =  self%pinds(iptcl)
@@ -395,8 +395,8 @@ contains
     !! stay on the calling thread whether or not it runs in a team
     subroutine shell_sums( wk, n, ir0, ncol )
         use, intrinsic :: iso_c_binding, only: c_loc
-        type(shiftmap_work), target, intent(inout) :: wk
-        integer,                     intent(in)    :: n, ir0, ncol
+        type(shiftmap_work),         target, intent(inout) :: wk
+        integer,                     intent(in)            :: n, ir0, ncol
         real(sp), pointer, contiguous :: a(:), c(:)
         integer                       :: k1, nk, nrows, ldc, mblk, r0, mrows, m0
         k1    = lbound(wk%prod, 2)
@@ -421,10 +421,10 @@ contains
     !! the indices modulo the ring and nalpha. gh is explicit-shape: the transform's input is a pointer view, and as a
     !! contiguous assumed-shape dummy it made the map 7 % slower at 24 threads
     pure subroutine hermitian_half( nalpha, f0, g, gh )
-        integer,                 intent(in)  :: nalpha
-        real(sp),                intent(in)  :: f0
-        complex(sp), contiguous, intent(in)  :: g(:,0:)
-        complex(sp),             intent(out) :: gh(nalpha/2+1,size(g,1))
+        integer,                 intent(in)             :: nalpha
+        real(sp),                intent(in)             :: f0
+        complex(sp),             contiguous, intent(in) :: g(:,0:)
+        complex(sp),             intent(out)            :: gh(nalpha/2+1,size(g,1))
         complex(sp) :: a, b
         integer     :: nrots, nhv, m, mm, n, j2
         nrots = size(g, 1)
@@ -489,13 +489,13 @@ contains
     !! normalised Euclidean loss L = 1 + (|CTF R|^2_w - 2 C) / wsqsum (lower is better) for euclid, over the map's
     !! band. The data term only: the sampler adds the untempered prior and the cell measure itself
     module subroutine shiftmap_objfun_grid( self, imap, vals )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: imap
-        real(sp),                    intent(out)   :: vals(:,:,:)
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: imap
+        real(sp),                    intent(out)           :: vals(:,:,:)
         type(shiftmap_work), pointer :: wk
-        real(sp) :: scal(self%nrots), offs(self%nrots)
-        real(dp) :: invn
-        integer  :: ithr, nrho, nalpha, irho, irot
+        real(sp)                     :: scal(self%nrots), offs(self%nrots)
+        real(dp)                     :: invn
+        integer                      :: ithr, nrho, nalpha, irho, irot
         ithr =  omp_get_thread_num() + 1
         wk   => self%smwork(ithr,imap)
         if( wk%iref < 1 ) THROW_HARD('gen_shiftmap first, on this thread; shiftmap_objfun_grid')
@@ -571,24 +571,24 @@ contains
             &temp_phys, sdev, width_cutoff, ordinal )
         use simple_rnd,  only: rnd_keyed, rnd_draw_key, RND_FAM_DISK
         use simple_math, only: rotmat2d
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: imap
-        real(dp),                    intent(in)    :: temp, prior_w, lse_prior
-        logical,                     intent(in)    :: l_greedy
-        real(dp),          optional, intent(out)   :: logz
-        integer,                     intent(out)   :: irot, irho, ialpha
-        real(sp),                    intent(out)   :: loss
-        real(dp),          optional, intent(in)    :: temp_phys
-        real(sp),          optional, intent(out)   :: sdev
-        real(sp),          optional, intent(in)    :: width_cutoff
-        integer,           optional, intent(in)    :: ordinal      !< the draw's ordinal for the pair (the screen's); 0 by default
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: imap
+        real(dp),                    intent(in)            :: temp, prior_w, lse_prior
+        logical,                     intent(in)            :: l_greedy
+        real(dp),                    optional, intent(out) :: logz
+        integer,                     intent(out)           :: irot, irho, ialpha
+        real(sp),                    intent(out)           :: loss
+        real(dp),                    optional, intent(in)  :: temp_phys
+        real(sp),                    optional, intent(out) :: sdev
+        real(sp),                    optional, intent(in)  :: width_cutoff
+        integer,                     optional, intent(in)  :: ordinal !< the draw's ordinal for the pair (the screen's); 0 by default
         type(shiftmap_work), pointer :: wk
-        real(dp) :: offs(self%nrots), scal(self%nrots), rho, loga, lmax, s, tgt, l, pen
-        real(dp) :: dcell, lphys, lmax_phys, w, w0, w1(2,self%nrots), w2, xc(2), mean(2), tphys
-        real(dp) :: t0, t1
-        real     :: rotmat(2,2), v(2)
-        integer  :: ithr, nrho, nalpha, ir, ro, j, imax(3), iord
-        logical  :: l_width, l_mass
+        real(dp)                     :: offs(self%nrots), scal(self%nrots), rho, loga, lmax, s, tgt, l, pen
+        real(dp)                     :: dcell, lphys, lmax_phys, w, w0, w1(2,self%nrots), w2, xc(2), mean(2), tphys
+        real(dp)                     :: t0, t1
+        real                         :: rotmat(2,2), v(2)
+        integer                      :: ithr, nrho, nalpha, ir, ro, j, imax(3), iord
+        logical                      :: l_width, l_mass
         l_width = present(temp_phys) .and. present(sdev)
         l_mass  = present(logz) .or. .not. l_greedy
         tphys   = temp
@@ -715,7 +715,7 @@ contains
         real(sp), intent(in) :: lw(:,:,:)
         real(dp), intent(in) :: lmax
         real(dp) :: l, ring_sum
-        integer :: ir, ro, j
+        integer  :: ir, ro, j
         s = 0.d0
         do ir = 1, size(lw,3)
             ring_sum = 0.d0
@@ -732,24 +732,24 @@ contains
     !> The posterior mode and optional physical width, without evidence or a draw.
     !! A loss strictly above width_cutoff returns sdev=-1 without reducing physical moments.
     module subroutine shiftmap_mode( self, imap, temp, prior_w, irot, irho, ialpha, loss, temp_phys, sdev, width_cutoff )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: imap
-        real(dp),                    intent(in)    :: temp, prior_w
-        integer,                     intent(out)   :: irot, irho, ialpha
-        real(sp),                    intent(out)   :: loss
-        real(dp),          optional, intent(in)    :: temp_phys
-        real(sp),          optional, intent(out)   :: sdev
-        real(sp),          optional, intent(in)    :: width_cutoff
+        class(polarft_calc),         target, intent(inout) :: self
+        integer,                     intent(in)            :: imap
+        real(dp),                    intent(in)            :: temp, prior_w
+        integer,                     intent(out)           :: irot, irho, ialpha
+        real(sp),                    intent(out)           :: loss
+        real(dp),                    optional, intent(in)  :: temp_phys
+        real(sp),                    optional, intent(out) :: sdev
+        real(sp),                    optional, intent(in)  :: width_cutoff
         call self%shiftmap_draw(imap, temp, prior_w, 0.d0, .true., irot=irot, irho=irho, ialpha=ialpha, &
             &loss=loss, temp_phys=temp_phys, sdev=sdev, width_cutoff=width_cutoff)
     end subroutine shiftmap_mode
 
     !> Cumulative thread-seconds and work counts over every map/batch in this calculator's lifetime.
     module subroutine get_shiftmap_profile( self, times, counts, geometry )
-        class(polarft_calc), intent(in) :: self
-        real(dp), intent(out) :: times(6)
-        integer(int64), intent(out) :: counts(8)
-        integer, optional, intent(out) :: geometry(3,NSHIFTMAPS)
+        class(polarft_calc), intent(in)            :: self
+        real(dp),            intent(out)           :: times(6)
+        integer(int64),      intent(out)           :: counts(8)
+        integer,             optional, intent(out) :: geometry(3,NSHIFTMAPS)
         integer :: imap
         times = 0.d0
         counts = 0_int64

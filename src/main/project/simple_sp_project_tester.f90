@@ -42,9 +42,9 @@ contains
     procedure :: execute => read_mic_range
 end type range_reader
 
-integer,          parameter :: NMICS  = 7
-integer,          parameter :: NPTCLS = 300
-real,             parameter :: TOL    = 1.0e-6
+integer,          parameter :: NMICS      = 7
+integer,          parameter :: NPTCLS     = 300
+real,             parameter :: TOL        = 1.0e-6
 character(len=*), parameter :: PROJ_FILE  = 'sp_project_tester.simple'
 character(len=*), parameter :: JSON_FILE  = 'sp_project_tester.json'
 character(len=*), parameter :: IMG_FILE   = 'sp_project_tester_record.mrc'
@@ -76,8 +76,8 @@ contains
 
     !> one owner per project: a partition worker writes its part files, never its master's project
     subroutine test_worker_writes_no_project()
-        type(sp_project)    :: proj
-        type(worker_writer) :: child
+        type(sp_project)            :: proj
+        type(worker_writer)         :: child
         character(len=*), parameter :: WPROJ = 'worker_owner.simple', WPART = 'worker_algndoc_1.simple'
         write(*,'(A)') 'test_worker_writes_no_project'
         call proj%os_ptcl2D%new(4, is_ptcl=.true.)
@@ -181,9 +181,9 @@ contains
 
     ! writes an 8x8 image (or box x box) to fname (nimgs times) so the add_* front doors find a stack on disk
     subroutine write_dummy_stack( fname, nimgs, box )
-        character(len=*),  intent(in) :: fname
-        integer,           intent(in) :: nimgs
-        integer, optional, intent(in) :: box
+        character(len=*),  intent(in)           :: fname
+        integer,           intent(in)           :: nimgs
+        integer,           optional, intent(in) :: box
         type(image) :: img
         integer     :: i, bbox
         bbox = 8
@@ -520,13 +520,13 @@ contains
     ! classes 1-3 at states 2, 0 and 1; particle 4 is inactive and particle 5 has no class, so both end at
     ! state 0; the poses and the ptcl2D states are not touched
     subroutine test_map_cls3D_states2ptcls()
-        integer, parameter :: N = 6
-        integer, parameter :: CLASSES(N)  = [1, 2, 3, 3, 0, 1]
-        integer, parameter :: EXPECTED(N) = [2, 0, 1, 0, 0, 2]
+        integer,           parameter   :: N           = 6
+        integer,           parameter   :: CLASSES(N)  = [1, 2, 3, 3, 0, 1]
+        integer,           parameter   :: EXPECTED(N) = [2, 0, 1, 0, 0, 2]
         class(sp_project), allocatable :: proj
-        logical :: active(N)
-        real    :: e1_before(N)
-        integer :: i
+        logical                        :: active(N)
+        real                           :: e1_before(N)
+        integer                        :: i
         write(*,'(A)') 'test_map_cls3D_states2ptcls'
         allocate(proj)
         call proj%os_ptcl2D%new(N, is_ptcl=.true.)
@@ -559,17 +559,17 @@ contains
     ! stack 1 is intact, stack 2 has state 0 while its particles are active, stack 3 has one inactive particle;
     ! the prune drops stack 2 with its particles and particle 8, renumbers the rest and keeps the physical indstk
     subroutine test_prune_particles()
-        integer, parameter :: N = 10
-        integer, parameter :: STK_FROMP(3)   = [1, 4, 7]
-        integer, parameter :: STK_TOP(3)     = [3, 6, 10]
-        integer, parameter :: STK_STATE(3)   = [1, 0, 1]
-        integer, parameter :: STKINDS(N)     = [1,1,1, 2,2,2, 3,3,3,3]
-        integer, parameter :: INDSTKS(N)     = [1,2,3, 1,2,3, 1,2,3,4]
-        integer, parameter :: KEPT(6)        = [1,2,3, 7,9,10]
-        integer, parameter :: NEW_STKINDS(6) = [1,1,1, 2,2,2]
-        integer, parameter :: NEW_INDSTKS(6) = [1,2,3, 1,3,4]
+        integer,           parameter   :: N              = 10
+        integer,           parameter   :: STK_FROMP(3)   = [1, 4, 7]
+        integer,           parameter   :: STK_TOP(3)     = [3, 6, 10]
+        integer,           parameter   :: STK_STATE(3)   = [1, 0, 1]
+        integer,           parameter   :: STKINDS(N)     = [1,1,1, 2,2,2, 3,3,3,3]
+        integer,           parameter   :: INDSTKS(N)     = [1,2,3, 1,2,3, 1,2,3,4]
+        integer,           parameter   :: KEPT(6)        = [1,2,3, 7,9,10]
+        integer,           parameter   :: NEW_STKINDS(6) = [1,1,1, 2,2,2]
+        integer,           parameter   :: NEW_INDSTKS(6) = [1,2,3, 1,3,4]
         class(sp_project), allocatable :: proj
-        integer :: i
+        integer                        :: i
         write(*,'(A)') 'test_prune_particles'
         allocate(proj)
         call proj%os_stk%new(3, is_ptcl=.false.)
@@ -663,15 +663,15 @@ contains
     ! it back: the data window, the indices before/after it, sorting in both directions, and the
     ! histogram and plot blocks
     subroutine test_print_segment_json()
-        type(sp_project)          :: proj
-        type(json_core)           :: json
-        type(json_value), pointer :: root, data, child, block
-        real(RK)                  :: dval, prev
-        real(RK),    allocatable  :: dvec(:)
-        integer(IK), allocatable  :: ivec(:)
-        real                      :: dfx_sorted(NMICS)
-        integer                   :: order(NMICS), i, unit, logfhandle_saved, n
-        logical                   :: found, l_sorted
+        type(sp_project)              :: proj
+        type(json_core)               :: json
+        type(json_value), pointer     :: root, data, child, block
+        real(RK)                      :: dval, prev
+        real(RK),         allocatable :: dvec(:)
+        integer(IK),      allocatable :: ivec(:)
+        real                          :: dfx_sorted(NMICS)
+        integer                       :: order(NMICS), i, unit, logfhandle_saved, n
+        logical                       :: found, l_sorted
         write(*,'(A)') 'test_print_segment_json'
         call make_project(proj)
         dfx_sorted = proj%os_mic%get_all('dfx')
@@ -817,10 +817,10 @@ contains
 
             ! absent optionals are passed on as absent
             subroutine dump_json( proj, oritype, fromto, sort_key, sort_asc, hist, plot_key )
-                type(sp_project),           intent(inout) :: proj
-                character(len=*),           intent(in)    :: oritype
-                integer,          optional, intent(in)    :: fromto(2)
-                character(len=*), optional, intent(in)    :: sort_key, sort_asc, hist, plot_key
+                type(sp_project),           intent(inout)        :: proj
+                character(len=*),           intent(in)           :: oritype
+                integer,                    optional, intent(in) :: fromto(2)
+                character(len=*),           optional, intent(in) :: sort_key, sort_asc, hist, plot_key
                 logfhandle_saved = logfhandle
                 open(newunit=unit, file=JSON_FILE, status='replace', action='write')
                 logfhandle = unit

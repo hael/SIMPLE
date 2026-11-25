@@ -15,10 +15,10 @@ contains
     !> overwrite header word iword of the store fname (the header carries no checksum)
     subroutine patch_sigma2_header_word( fname, iword, value )
         character(len=*), intent(in) :: fname
-        integer,        intent(in) :: iword
-        integer(int64), intent(in) :: value
+        integer,          intent(in) :: iword
+        integer(int64),   intent(in) :: value
         integer(int64) :: words(32)
-        integer :: funit, io_stat
+        integer        :: funit, io_stat
         open(newunit=funit, file=fname, access='stream', form='unformatted', status='old', &
             &action='readwrite', iostat=io_stat)
         call assert_true(io_stat == 0, 'store can be opened for patching')
@@ -36,9 +36,9 @@ contains
         integer,          intent(in) :: nptcls, box
         type(sigma2_state_header) :: header
         real(real32), allocatable :: records(:,:)
-        real(real32) :: globals(box/2,2)
-        character(len=128) :: candidate, message
-        integer :: status
+        real(real32)              :: globals(box/2,2)
+        character(len=128)        :: candidate, message
+        integer                   :: status
         candidate = trim(fname)//'.next'
         call del_file(fname)
         call del_file(candidate)

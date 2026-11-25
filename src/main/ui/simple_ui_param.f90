@@ -13,17 +13,17 @@ public :: ui_placeholder_is_standard
 ! common input parameter type
 type ui_param
     ! deliberately made public (close entaglement with simple_ui_program)
-    type(string) :: key
-    type(string) :: keytype
-    type(string) :: label
-    type(string) :: help
-    type(string) :: placeholder
-    type(string) :: units
-    type(string) :: example_value
-    type(string) :: cval_default
-    real         :: rval_default = 0.
-    logical      :: required = .true.
-    logical      :: has_default = .false.
+    type(string)                 :: key
+    type(string)                 :: keytype
+    type(string)                 :: label
+    type(string)                 :: help
+    type(string)                 :: placeholder
+    type(string)                 :: units
+    type(string)                 :: example_value
+    type(string)                 :: cval_default
+    real                         :: rval_default = 0.
+    logical                      :: required     = .true.
+    logical                      :: has_default  = .false.
     type(ui_choice), allocatable :: choices(:)
 contains
     procedure, private :: set_param_1
@@ -38,11 +38,11 @@ end type ui_param
 contains
 
     subroutine set_param_1( self, key, keytype, label, help, placeholder, required, default_value, choices )
-        class(ui_param), intent(inout) :: self
-        character(len=*),       intent(in)    :: key, keytype, label, help, placeholder
-        logical,                intent(in)    :: required
-        real,                   intent(in)    :: default_value
-        type(ui_choice), optional, intent(in)  :: choices(:)
+        class(ui_param),        intent(inout)        :: self
+        character(len=*),       intent(in)           :: key, keytype, label, help, placeholder
+        logical,                intent(in)           :: required
+        real,                   intent(in)           :: default_value
+        type(ui_choice),        optional, intent(in) :: choices(:)
         self%key         = trim(key)
         self%keytype     = trim(keytype)
         self%label       = trim(label)
@@ -55,11 +55,11 @@ contains
     end subroutine set_param_1
 
     subroutine set_param_2( self, key, keytype, label, help, placeholder, required, default_value, choices )
-        class(ui_param), intent(inout) :: self
-        character(len=*),       intent(in)    :: key, keytype, label, help, placeholder
-        logical,                intent(in)    :: required
-        character(len=*),       intent(in)    :: default_value
-        type(ui_choice), optional, intent(in)  :: choices(:)
+        class(ui_param),        intent(inout)        :: self
+        character(len=*),       intent(in)           :: key, keytype, label, help, placeholder
+        logical,                intent(in)           :: required
+        character(len=*),       intent(in)           :: default_value
+        type(ui_choice),        optional, intent(in) :: choices(:)
         self%key         = trim(key)
         self%keytype     = trim(keytype)
         self%label       = trim(label)
@@ -78,7 +78,7 @@ contains
     end subroutine set_param_2
 
     subroutine set_choices( self, choices )
-        class(ui_param), intent(inout) :: self
+        class(ui_param), intent(inout)        :: self
         type(ui_choice), optional, intent(in) :: choices(:)
         if( allocated(self%choices) ) deallocate(self%choices)
         if( present(choices) )then
@@ -93,9 +93,9 @@ contains
     end subroutine set_choices
 
     subroutine set_placeholder( self, placeholder, example_value )
-        class(ui_param), intent(inout) :: self
-        character(len=*), intent(in)   :: placeholder, example_value
-        character(len=:), allocatable  :: keytype
+        class(ui_param),  intent(inout) :: self
+        character(len=*), intent(in)    :: placeholder, example_value
+        character(len=:), allocatable         :: keytype
         character(len=UI_PLACEHOLDER_MAX_LEN) :: standard_placeholder
         keytype = trim(self%keytype%to_char())
         self%units = infer_units(keytype, self%label%to_char(), self%help%to_char(), placeholder)
@@ -126,9 +126,9 @@ contains
     end subroutine set_placeholder
 
     subroutine set_generated_default( self, value, found )
-        class(ui_param), intent(inout) :: self
-        character(len=*), intent(in)   :: value
-        logical,          intent(in)   :: found
+        class(ui_param),  intent(inout) :: self
+        character(len=*), intent(in)    :: value
+        logical,          intent(in)    :: found
         integer :: ios
         logical :: had_default
         if( .not. found ) return
@@ -334,7 +334,7 @@ contains
 
     pure function infer_units( keytype, label, help, placeholder ) result( units )
         character(len=*), intent(in) :: keytype, label, help, placeholder
-        character(len=16)            :: units
+        character(len=16)             :: units
         character(len=:), allocatable :: text
         units = ''
         select case( trim(keytype) )

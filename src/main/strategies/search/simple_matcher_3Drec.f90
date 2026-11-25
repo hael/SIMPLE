@@ -31,25 +31,25 @@ contains
     subroutine calc_3Drec( params, build, nptcls, pinds, wset, wtab, extra )
         use simple_image,        only: image
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
-        class(parameters), target,         intent(inout) :: params
-        class(builder),                    intent(inout) :: build
-        integer,                           intent(in)    :: nptcls
-        integer,                           intent(in)    :: pinds(nptcls)
-        class(state_weight_set), optional, intent(inout) :: wset
-        real,                    optional, intent(in)    :: wtab(:,:)
-        type(prob_insert_poses), optional, intent(in)    :: extra  !< the weighted insertion's poses (topk > 1)
+        class(parameters),                 target,         intent(inout) :: params
+        class(builder),                    intent(inout)                 :: build
+        integer,                           intent(in)                    :: nptcls
+        integer,                           intent(in)                    :: pinds(nptcls)
+        class(state_weight_set),           optional, intent(inout)       :: wset
+        real,                              optional, intent(in)          :: wtab(:,:)
+        type(prob_insert_poses),           optional, intent(in)          :: extra !< the weighted insertion's poses (topk > 1)
         type(fplane_type), allocatable   :: fpls(:)
         type(image),       allocatable   :: crop_imgs(:)
-        type(reconstructor) :: recvol
-        integer, allocatable :: grouped_pinds(:), state_eo_offsets(:)
-        real,    allocatable :: grouped_w(:)
-        integer :: batchlims(2), ibatch, batchsz, state, eo, group
-        real    :: shift_scale
-        logical :: l_records, l_extra
-        type(ptcl_read_counts)  :: reads0
-        type(ptcl_read_session) :: reads
-        integer(timer_int_kind) :: t, t0
-        real(timer_int_kind)    :: rt_init, rt_prep, rt_grid
+        type(reconstructor)              :: recvol
+        integer,           allocatable   :: grouped_pinds(:), state_eo_offsets(:)
+        real,              allocatable   :: grouped_w(:)
+        integer                          :: batchlims(2), ibatch, batchsz, state, eo, group
+        real                             :: shift_scale
+        logical                          :: l_records, l_extra
+        type(ptcl_read_counts)           :: reads0
+        type(ptcl_read_session)          :: reads
+        integer(timer_int_kind)          :: t, t0
+        real(timer_int_kind)             :: rt_init, rt_prep, rt_grid
         if( nptcls < 1 ) return
         if( L_BENCH_GLOB )then
             t0     = tic()
@@ -190,12 +190,12 @@ contains
     !! even/odd half.  This lets a worker construct only one half-volume at a
     !! time while preserving the existing paired partial-file contract.
     subroutine group_pinds_by_state_eo( params, build, nptcls, pinds, grouped_pinds, state_eo_offsets )
-        class(parameters),              intent(in)  :: params
-        class(builder),                 intent(in)  :: build
-        integer,                        intent(in)  :: nptcls, pinds(nptcls)
-        integer, allocatable,           intent(out) :: grouped_pinds(:), state_eo_offsets(:)
+        class(parameters),              intent(in)                         :: params
+        class(builder),                 intent(in)                         :: build
+        integer,                        intent(in)                         :: nptcls, pinds(nptcls)
+        integer,                        allocatable,           intent(out) :: grouped_pinds(:), state_eo_offsets(:)
         integer, allocatable :: group_counts(:), next_pos(:)
-        integer :: i, iptcl, state, eo, group, nvalid, ninvalid
+        integer              :: i, iptcl, state, eo, group, nvalid, ninvalid
         allocate(group_counts(2*params%nstates), source=0)
         ninvalid = 0
         do i = 1,nptcls
@@ -237,20 +237,20 @@ contains
     !! of every state whose weight for it is above zero (only params%state when state= was given),
     !! in selection order within a group, with its weight beside it
     subroutine group_pinds_by_weights( params, build, nptcls, pinds, grouped_pinds, grouped_w, state_eo_offsets, wset, wtab )
-        class(parameters),                 intent(in)    :: params
-        class(builder),                    intent(in)    :: build
-        integer,                           intent(in)    :: nptcls, pinds(nptcls)
-        integer, allocatable,              intent(out)   :: grouped_pinds(:), state_eo_offsets(:)
-        real,    allocatable,              intent(out)   :: grouped_w(:)
-        class(state_weight_set), optional, intent(inout) :: wset
-        real,                    optional, intent(in)    :: wtab(:,:)
+        class(parameters),                 intent(in)                            :: params
+        class(builder),                    intent(in)                            :: build
+        integer,                           intent(in)                            :: nptcls, pinds(nptcls)
+        integer,                           allocatable,              intent(out) :: grouped_pinds(:), state_eo_offsets(:)
+        real,                              allocatable,              intent(out) :: grouped_w(:)
+        class(state_weight_set),           optional, intent(inout)               :: wset
+        real,                              optional, intent(in)                  :: wtab(:,:)
         type :: state_members
             integer, allocatable :: rows(:)
             real,    allocatable :: w(:)
         end type state_members
         type(state_members), allocatable :: mem(:)
-        integer, allocatable :: next_pos(:)
-        integer :: i, state, eo, group, ntot
+        integer,             allocatable :: next_pos(:)
+        integer                          :: i, state, eo, group, ntot
         if( present(wset) )then
             if( wset%get_nstates() /= params%nstates ) THROW_HARD('nstates differs from the state weight set; group_pinds_by_weights')
         else
@@ -298,9 +298,9 @@ contains
     !> Initialize one half-map worker reconstructor. Pair assembly owns explicit
     !! even and odd operands only where both halves are required.
     subroutine init_state_half_rec( params, build, recvol )
-        class(parameters), target, intent(inout) :: params
-        class(builder),        intent(inout) :: build
-        class(reconstructor),  intent(inout) :: recvol
+        class(parameters),     target, intent(inout) :: params
+        class(builder),        intent(inout)         :: build
+        class(reconstructor),  intent(inout)         :: recvol
         call recvol%new_accumulator(params, build%spproj, expand=.true.)
     end subroutine init_state_half_rec
 
@@ -316,18 +316,18 @@ contains
     !! the committed one (fplane_shift: a phase ramp, no second read or transform), with the extra's weight;
     !! a particle without an entry enters as without extra, so topk = 1 is this routine's plain path bit for bit
     subroutine update_state_half_rec( state, eo, build, nptcls, pinds, fplanes, recvol, weights, extra, shift_scale )
-        integer,                           intent(in)    :: state, eo, nptcls, pinds(nptcls)
-        class(builder),                    intent(inout) :: build
-        type(fplane_type),                 intent(inout) :: fplanes(nptcls)
-        class(reconstructor),              intent(inout) :: recvol
-        real,                    optional, intent(in)    :: weights(nptcls)
-        type(prob_insert_poses), optional, intent(in)    :: extra
-        real,                    optional, intent(in)    :: shift_scale  !< the planes' pixels per stored-shift pixel
+        integer,                           intent(in)           :: state, eo, nptcls, pinds(nptcls)
+        class(builder),                    intent(inout)        :: build
+        type(fplane_type),                 intent(inout)        :: fplanes(nptcls)
+        class(reconstructor),              intent(inout)        :: recvol
+        real,                              optional, intent(in) :: weights(nptcls)
+        type(prob_insert_poses),           optional, intent(in) :: extra
+        real,                              optional, intent(in) :: shift_scale !< the planes' pixels per stored-shift pixel
         type(fplane_type) :: fpl_shifted
-        type(ori) :: orientation
-        real    :: wbase, scale
-        integer :: iptcl, i, iloc
-        logical :: l_entry
+        type(ori)         :: orientation
+        real              :: wbase, scale
+        integer           :: iptcl, i, iloc
+        logical           :: l_entry
         scale = 1.
         if( present(shift_scale) ) scale = shift_scale
         do i = 1,nptcls
@@ -375,8 +375,8 @@ contains
         real,                    intent(in)    :: wbase, scale
         type(fplane_type),       intent(inout) :: fpl_shifted
         type(ori) :: o_extra
-        real    :: sh_committed(2), dshift(2)
-        integer :: k, ipose
+        real      :: sh_committed(2), dshift(2)
+        integer   :: k, ipose
         if( extra%nextra(iloc) < 1 ) return
         sh_committed = orientation%get_2Dshift()
         o_extra      = orientation
@@ -394,8 +394,8 @@ contains
     !> the poses a reconstruction pass inserts: one per particle image (its committed pose) and one per extra of the
     !! weighted insertion that the search filled with a positive weight
     integer(int64) function count_inserted_poses( pinds, extra ) result( nposes )
-        integer,                           intent(in) :: pinds(:)
-        type(prob_insert_poses), optional, intent(in) :: extra
+        integer,                           intent(in)           :: pinds(:)
+        type(prob_insert_poses),           optional, intent(in) :: extra
         integer :: i, iloc, k
         nposes = int(size(pinds), int64)
         if( .not. present(extra) ) return
@@ -415,7 +415,7 @@ contains
         class(reconstructor),  intent(inout) :: recvol
         integer,               intent(in)    :: state, eo
         type(string) :: fbody, numerator_fname, density_fname
-        integer :: numlen_part
+        integer      :: numlen_part
         numlen_part = max(1, params%numlen)
         fbody = refine3D_partial_rec_fbody(state, params%part, numlen_part)
         call recvol%compress_exp
@@ -444,8 +444,8 @@ contains
     !> Release reconstruction-only buffers after the final state is written.
     subroutine cleanup_rec_buffers( build, fplanes )
         use simple_imgarr_utils, only: dealloc_imgarr
-        class(builder),                 intent(inout) :: build
-        type(fplane_type), allocatable, intent(inout) :: fplanes(:)
+        class(builder),                 intent(inout)              :: build
+        type(fplane_type),              allocatable, intent(inout) :: fplanes(:)
         integer :: i
         if( allocated(fplanes) )then
             do i = 1,size(fplanes)
@@ -467,11 +467,11 @@ contains
     !!  callers (flex, offload) keep full-size buffers unless they opt in.
     subroutine init_rec( params, build, maxbatchsz, fplanes, cropped )
         use simple_imgarr_utils, only: alloc_imgarr
-        class(parameters),              intent(in)    :: params
-        class(builder),                 intent(inout) :: build
-        integer,                        intent(in)    :: maxbatchsz
-        type(fplane_type), allocatable, intent(inout) :: fplanes(:)
-        logical, optional,              intent(in)    :: cropped
+        class(parameters),              intent(in)                        :: params
+        class(builder),                 intent(inout)                     :: build
+        integer,                        intent(in)                        :: maxbatchsz
+        type(fplane_type),              allocatable, intent(inout)        :: fplanes(:)
+        logical,                        optional,              intent(in) :: cropped
         logical :: l_cropped
         l_cropped = .false.
         if( present(cropped) ) l_cropped = cropped
@@ -506,18 +506,18 @@ contains
     subroutine prep_imgs4rec( params, build, nptcls, ptcl_imgs, pinds, fplanes, crop_imgs, kfromto, &
             &observation_model, whiten, records )
         use simple_image, only: image
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: nptcls
-        class(image),      intent(inout) :: ptcl_imgs(nptcls)
-        integer,           intent(in)    :: pinds(nptcls)
-        type(fplane_type), intent(inout) :: fplanes(nptcls)
-        type(image), allocatable, optional, intent(inout) :: crop_imgs(:)
-        integer,                  optional, intent(in)    :: kfromto(2)
-        logical,                  optional, intent(in)    :: observation_model, whiten, records
+        class(parameters),        intent(in)                           :: params
+        class(builder),           intent(inout)                        :: build
+        integer,                  intent(in)                           :: nptcls
+        class(image),             intent(inout)                        :: ptcl_imgs(nptcls)
+        integer,                  intent(in)                           :: pinds(nptcls)
+        type(fplane_type),        intent(inout)                        :: fplanes(nptcls)
+        type(image),              allocatable, optional, intent(inout) :: crop_imgs(:)
+        integer,                  optional, intent(in)                 :: kfromto(2)
+        logical,                  optional, intent(in)                 :: observation_model, whiten, records
         type(fplane_grid) :: grid
-        integer :: i, ithr, kfromto_here(2), box_pd
-        logical :: l_crop, l_band, l_obs, l_whiten, l_records
+        integer           :: i, ithr, kfromto_here(2), box_pd
+        logical           :: l_crop, l_band, l_obs, l_whiten, l_records
         l_crop = present(crop_imgs)
         if( l_crop ) l_crop = allocated(crop_imgs)
         l_records = .false.
@@ -600,8 +600,8 @@ contains
         logical,           intent(in)    :: cropped, whiten, observation_model, cap
         type(fplane_type), intent(inout) :: fplane
         type(ctfparams) :: ctfparms
-        real    :: shift(2), crop_factor
-        integer :: ih
+        real            :: shift(2), crop_factor
+        integer         :: ih
         ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
         shift    = build%spproj_field%get_2Dshift(iptcl)
         if( cropped )then

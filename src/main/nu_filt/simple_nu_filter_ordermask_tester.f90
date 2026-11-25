@@ -8,7 +8,7 @@ contains
     !! a core of 4096 dense voxels (margin 0.9-1.1, label 6 A) and 4096 dense voxels around it (margin 0-0.05,
     !! label 20 A), unit half-map products; the expected values are those of the Phase 0 NumPy dry run.
     module subroutine run_all_nu_order_mask_tests()
-        integer, parameter :: n = 32, ncore = 4096, nperi = 4096
+        integer, parameter   :: n = 32, ncore = 4096, nperi = 4096
         real                 :: margin(n,n,n), locres(n,n,n), even(n,n,n), odd(n,n,n), factor(n,n,n), ref(n,n,n)
         logical              :: dense(n,n,n), core(n,n,n), peri(n,n,n)
         type(nu_order_stats) :: st, base

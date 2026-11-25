@@ -9,10 +9,10 @@ implicit none
 public :: init_graphene_subtr, calc_peaks, remove_lattices, kill_graphene_subtr
 private
 
-real, parameter :: angular_threshold = 3.0    ! Degrees
-real, parameter :: REMOVAL_HWIDTH1 = 3.       ! pixels, obscuring half-width 1
-real, parameter :: REMOVAL_HWIDTH2 = sqrt(6.) ! obscuring half-width 2
-real, parameter :: REMOVAL_HWIDTH3 = sqrt(3.) ! obscuring half-width 3
+real, parameter :: angular_threshold = 3.0      ! Degrees
+real, parameter :: REMOVAL_HWIDTH1   = 3.       ! pixels, obscuring half-width 1
+real, parameter :: REMOVAL_HWIDTH2   = sqrt(6.) ! obscuring half-width 2
+real, parameter :: REMOVAL_HWIDTH3   = sqrt(3.) ! obscuring half-width 3
 
 type(polarft_calc) :: pftc
 type(image)        :: pspec_img, filter_img
@@ -25,17 +25,17 @@ contains
     !! the calculator keeps a pointer to them until kill_graphene_subtr
     subroutine init_graphene_subtr( params )
         class(parameters), target, intent(in) :: params
-        real,      parameter :: gdist = 1.42
-        real,      parameter :: gx    = 0.5
-        real,      parameter :: gy    = sin(PI/3.)
-        type(atoms)          :: sheet
-        type(image)          :: vol, img
-        real,    allocatable :: x(:)
-        logical, allocatable :: resmask(:)
-        complex, allocatable :: pft(:,:)
-        real    :: l, cen, offset,y
-        integer :: phys2d(3),phys3d(3),lims(3,2),h,k,i,j,nx,ny,cnt,natoms,imgcen,sh,nyq,box
-        real    :: smpd
+        real,      parameter   :: gdist = 1.42
+        real,      parameter   :: gx    = 0.5
+        real,      parameter   :: gy    = sin(PI/3.)
+        type(atoms)            :: sheet
+        type(image)            :: vol, img
+        real,      allocatable :: x(:)
+        logical,   allocatable :: resmask(:)
+        complex,   allocatable :: pft(:,:)
+        real                   :: l, cen, offset,y
+        integer                :: phys2d(3),phys3d(3),lims(3,2),h,k,i,j,nx,ny,cnt,natoms,imgcen,sh,nyq,box
+        real                   :: smpd
         box  = params%box
         smpd = params%smpd
         call kill_graphene_subtr
@@ -134,9 +134,9 @@ contains
         class(image), intent(inout) :: img_in
         real,         intent(out)   :: ang1, ang2
         complex, allocatable :: pft(:,:)
-        real    :: corrs(nrots), ang, corr, rot, diffang
-        logical :: corrs_mask(nrots)
-        integer :: i,j,il,ir
+        real                 :: corrs(nrots), ang, corr, rot, diffang
+        logical              :: corrs_mask(nrots)
+        integer              :: i,j,il,ir
         ! rotational average
         call img_in%roavg(60,pspec_img)
         ! bands filtering
@@ -249,8 +249,8 @@ contains
                 real, intent(in) :: ang
                 real,  parameter :: pionsix   = PI/6.
                 real,  parameter :: pionthree = PI/3.
-                real :: b1(2), b1b2(2), rp, r, angp, rot, rxy(2), Rm(2,2)
-                integer :: rot_ind
+                real             :: b1(2), b1b2(2), rp, r, angp, rot, rxy(2), Rm(2,2)
+                integer          :: rot_ind
                 rp   = real(band_inds(2))
                 r    = rp / (2.*cos(pionsix))
                 angp = ang+pionsix

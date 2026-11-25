@@ -56,9 +56,9 @@ contains
     subroutine build_atoms( pos )
         real, allocatable, intent(out) :: pos(:,:)
         real(dp), parameter :: G = 1.2207440846057595_dp   ! the root of x**4 = x + 1
-        real(dp) :: a(3), u(3)
-        real     :: p(3), acc(3,NATOMS)
-        integer  :: n, na
+        real(dp)            :: a(3), u(3)
+        real                :: p(3), acc(3,NATOMS)
+        integer             :: n, na
         a  = [1._dp/G, 1._dp/G**2, 1._dp/G**3]
         na = 0
         n  = 0
@@ -78,8 +78,8 @@ contains
 
     !> Gaussian atoms sampled at the voxel centres, origin at voxel BOX/2+1
     subroutine build_truth( pos, vol )
-        real,              intent(in)  :: pos(:,:)
-        real, allocatable, intent(out) :: vol(:,:,:)
+        real,              intent(in)               :: pos(:,:)
+        real,              allocatable, intent(out) :: vol(:,:,:)
         real    :: x(3), c
         integer :: i, j, k, ia
         c = real(BOX/2 + 1)
@@ -102,8 +102,8 @@ contains
         real, intent(in)  :: pos(:,:), rot(3,3)
         real, intent(out) :: img(BOX,BOX)
         real, allocatable :: xy(:,:)
-        real    :: c, amp
-        integer :: i, j, ia
+        real              :: c, amp
+        integer           :: i, j, ia
         c   = real(BOX/2 + 1)
         amp = sqrt(2. * PI) * ATOM_SIGMA
         allocate(xy(2,size(pos,2)))
@@ -150,14 +150,14 @@ contains
 
     !> the production PCG path: raw accumulation, sphere support, kernel operator, MAXITS fixed iterations from zero
     subroutine reconstruct_pcg( os, images, vol, niters )
-        type(oris),        intent(inout) :: os
-        real,              intent(in)    :: images(:,:,:)
-        real, allocatable, intent(out)   :: vol(:,:,:)
-        integer,           intent(out)   :: niters
+        type(oris),        intent(inout)            :: os
+        real,              intent(in)               :: images(:,:,:)
+        real,              allocatable, intent(out) :: vol(:,:,:)
+        integer,           intent(out)              :: niters
         class(reconstructor_pcg), allocatable :: pcgop
-        complex, allocatable :: planes(:,:,:)
-        type(image) :: proj
-        integer     :: i, n, lims2(2,2)
+        complex,                  allocatable :: planes(:,:,:)
+        type(image)                           :: proj
+        integer                               :: i, n, lims2(2,2)
         n = os%get_noris()
         allocate(pcgop)
         call pcgop%new(BOX, SMPD, PCG_LAMBDA)
@@ -184,19 +184,19 @@ contains
 
     !> production gridding (KB insertion, no CTF), shipped under the soft window the PCG map carries
     subroutine reconstruct_gridding( os, images, vol )
-        type(oris),        intent(inout) :: os
-        real,              intent(in)    :: images(:,:,:)
-        real, allocatable, intent(out)   :: vol(:,:,:)
+        type(oris),        intent(inout)            :: os
+        real,              intent(in)               :: images(:,:,:)
+        real,              allocatable, intent(out) :: vol(:,:,:)
         class(parameters),    allocatable, target :: params
-        class(reconstructor), allocatable :: gridder
-        class(sp_project),    allocatable :: project
-        type(ctfparams)   :: ctfparms
-        type(fplane_type) :: fplane
-        type(fplane_grid) :: grid
-        type(image)       :: observation, observation_padded, restored
-        type(ori)         :: o
-        type(sym)         :: c1sym
-        integer :: i
+        class(reconstructor), allocatable         :: gridder
+        class(sp_project),    allocatable         :: project
+        type(ctfparams)                           :: ctfparms
+        type(fplane_type)                         :: fplane
+        type(fplane_grid)                         :: grid
+        type(image)                               :: observation, observation_padded, restored
+        type(ori)                                 :: o
+        type(sym)                                 :: c1sym
+        integer                                   :: i
         allocate(params, gridder, project)
         params%box        = BOX
         params%box_crop   = BOX
@@ -249,9 +249,9 @@ contains
     real(dp) function corr_sphere( a, b )
         real, intent(in) :: a(:,:,:), b(:,:,:)
         logical, allocatable :: inside(:,:,:)
-        real(dp) :: am, bm, n, sab, saa, sbb
-        real     :: c
-        integer  :: i, j, k
+        real(dp)             :: am, bm, n, sab, saa, sbb
+        real                 :: c
+        integer              :: i, j, k
         c = real(BOX/2 + 1)
         allocate(inside(BOX,BOX,BOX))
         do k = 1, BOX
@@ -273,10 +273,10 @@ contains
     !> fraction of the Fourier power beyond the Nyquist sphere, where no view has data
     real(dp) function beyond_nyquist_fraction( vol )
         real, intent(in) :: vol(:,:,:)
-        type(image) :: img
+        type(image)          :: img
         complex, allocatable :: cmat(:,:,:)
-        real(dp) :: w, p, total, beyond
-        integer  :: cdim(3), logi(3), i, j, k, nyq
+        real(dp)             :: w, p, total, beyond
+        integer              :: cdim(3), logi(3), i, j, k, nyq
         nyq = BOX / 2
         call img%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
         call img%set_rmat(vol, .false.)
@@ -331,10 +331,10 @@ contains
     subroutine test_view_set( kind, label, corr_slack )
         character(len=*), intent(in) :: kind, label
         real(dp),         intent(in) :: corr_slack
-        type(oris) :: os
+        type(oris)        :: os
         real, allocatable :: pos(:,:), truth(:,:,:), images(:,:,:), vpcg(:,:,:), vgrid(:,:,:)
-        real(dp) :: corr_pcg, corr_grid, beyond_pcg, beyond_grid
-        integer  :: i, n, niters
+        real(dp)          :: corr_pcg, corr_grid, beyond_pcg, beyond_grid
+        integer           :: i, n, niters
         write(*,'(A)') 'test_view_set: '//trim(label)
         call build_atoms(pos)
         call build_truth(pos, truth)

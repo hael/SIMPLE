@@ -19,7 +19,7 @@ contains
     function serialize_class_sample( cs_entry ) result( rarr )
         type(class_sample), intent(in)  :: cs_entry
         real, allocatable :: rarr(:)
-        integer :: sz_pinds, sz_rarr, cnt, i
+        integer           :: sz_pinds, sz_rarr, cnt, i
         sz_pinds = 0
         if( allocated(cs_entry%pinds) ) sz_pinds = size(cs_entry%pinds)
         sz_rarr  = NHEAD + sz_pinds
@@ -41,7 +41,7 @@ contains
         type(class_sample), intent(in) :: csarr(:)
         class(string),      intent(in) :: fname
         real, allocatable :: rarr(:), rmat(:,:)
-        integer :: i, nx, ny, sz_rarr
+        integer           :: i, nx, ny, sz_rarr
         ! turn data into 2D matrix
         ny = size(csarr)
         nx = 0
@@ -61,10 +61,10 @@ contains
     end subroutine write_class_samples
 
     subroutine read_class_samples( csarr, fname ) 
-        type(class_sample), allocatable, intent(inout) :: csarr(:)
-        class(string),                   intent(in)    :: fname
+        type(class_sample),              allocatable, intent(inout) :: csarr(:)
+        class(string),                   intent(in)                 :: fname
         real, allocatable :: rmat(:,:)
-        integer :: i, j, nx, ny, cnt
+        integer           :: i, j, nx, ny, cnt
         ! read matrix
         call file2rmat(fname, rmat)
         ny = size(rmat, dim=1)

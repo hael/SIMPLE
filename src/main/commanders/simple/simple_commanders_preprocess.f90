@@ -91,7 +91,7 @@ contains
         class(commander_gen_pspecs_and_thumbs), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         class(gen_pspecs_and_thumbs_strategy), allocatable :: strategy
-        type(parameters) :: params
+        type(parameters)                                   :: params
         ! Helps distributed job script generation if it relies on 'prg'
         call cline%set('prg', 'gen_pspecs_and_thumbs')
         strategy = create_gen_pspecs_and_thumbs_strategy(cline)

@@ -14,7 +14,7 @@ use simple_shiftmap_srch,    only: shiftmap_srch
 use simple_ori_utils,        only: euler_about_cell, euler2m, m2euler
 implicit none
 
-integer, parameter :: CONT_ROUTE_NOT_ATTEMPTED = 0
+integer, parameter :: CONT_ROUTE_NOT_ATTEMPTED  = 0
 integer, parameter :: CONT_ROUTE_IMPROVED       = 1
 integer, parameter :: CONT_ROUTE_NO_IMPROVEMENT = 2
 integer, parameter :: CONT_ROUTE_INVALID        = 3
@@ -28,108 +28,108 @@ private
 !! exp(-cost) at x (the raw Euclidean loss with the shift prior, the matcher's corr)
 type view_solve
     logical  :: evaluated = .false., committed = .false.
-    real(dp) :: x(5) = 0.d0, rref(3,3) = 0.d0
-    real     :: score = 0.
-    integer  :: state = 0
+    real(dp) :: x(5)      = 0.d0, rref(3,3) = 0.d0
+    real     :: score     = 0.
+    integer  :: state     = 0
 end type view_solve
 
 type strategy3D_spec
     class(eul_prob_tab),      pointer :: eulprob_obj_part => null()
-    type(prob_insert_poses),  pointer :: extra_poses => null() !< the weighted insertion's poses of the part (topk > 1), filled by the prob strategy
-    integer :: iptcl=0, iptcl_map=0
+    type(prob_insert_poses),  pointer :: extra_poses      => null() !< the weighted insertion's poses of the part (topk > 1), filled by the prob strategy
+    integer                           :: iptcl            = 0, iptcl_map=0
 end type strategy3D_spec
 
 type strategy3D_srch
-    character(len=:), allocatable :: refine                   !< 3D refinement flag
-    type(pftc_shsrch_grad)     :: grad_shsrch_obj             !< origin shift search object, L-BFGS with gradient
-    type(pftc_shsrch_grad)     :: grad_shsrch_obj2            !<
-    type(pftc_shsrch_grad)     :: grad_shsrch_first_obj       !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
-    type(pftc_shsrch_grad)     :: joint_inpl_optimizer        !< selected-reference joint (sx,sy,rotind_frac) refinement
-    type(pftc_shsrch_grad)     :: view_optimizer              !< the committed pose's joint solve with its view (cont_view)
-    type(shiftmap_srch), allocatable :: smap                  !< the polar shift map under the key (l_map)
-    type(ori)                  :: o_prev                      !< previous orientation
-    type(oris)                 :: opeaks                      !< peak orientations to consider for refinement
-    class(parameters), pointer :: p_ptr        => null()      !< global parameters
-    class(builder),    pointer :: b_ptr        => null()      !< build handle for access to spproj/eulspace/symmetry
-    integer                    :: iptcl           = 0         !< global particle index
-    integer                    :: iptcl_map       = 0         !< map particle index
-    integer                    :: ithr            = 0         !< thread index
-    integer                    :: nrefs           = 0         !< total # references (nstates*nprojs)
-    integer                    :: nrefs_sub       = 0         !< total # references (nstates*nprojs), subspace
-    integer                    :: npeaks          = 0         !< # peak subspace orientations to consider
-    integer                    :: npeaks_inpl     = 0         !< # # multi-neighborhood peaks to refine with L-BFGS
-    integer                    :: nstates         = 0         !< # states
-    integer                    :: nprojs          = 0         !< # projections
-    integer                    :: nprojs_sub      = 0         !< # projections, subspace
-    integer                    :: nrots           = 0         !< # in-plane rotations
-    integer                    :: nsym            = 0         !< symmetry order
-    integer                    :: nnn             = 0         !< # nearest neighbors
-    integer                    :: nbetter         = 0         !< # better orientations identified
-    integer                    :: nrefs_eval      = 0         !< # references evaluated
-    integer                    :: nsolns          = 0         !< # distinct refs with a stored solution this search
-    integer                    :: ntrs_eval       = 0         !< # shifts evaluated
-    integer                    :: prev_roind      = 0         !< previous in-plane rotation index
-    integer                    :: prev_state      = 0         !< previous state index
-    integer                    :: prev_ref        = 0         !< previous reference index
-    integer                    :: prev_proj       = 0         !< previous projection direction index
-    real                       :: prev_corr       = 1.        !< previous best correlation
-    real                       :: prev_shvec(2)   = 0.        !< previous origin shift vector
-    real                       :: xy_first(2)     = 0.        !< initial shifts identified by searching the previous best reference
-    real                       :: xy_first_rot(2) = 0.        !< initial shifts identified by searching the previous best reference, rotated
-    logical                    :: l_neigh         = .false.   !< neighbourhood refinement flag
-    logical                    :: l_greedy        = .false.   !< greedy        refinement flag
-    logical                    :: l_sh_first      = .false.   !< use previous-ref shift seed before orientation/state scoring
-    logical                    :: l_map           = .false.   !< the classic search centres with the polar shift map (shift_sigma)
-    logical                    :: continuous_active = .false. !< selected candidates receive continuous in-plane refinement
-    integer                    :: continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED !< final selected-reference route outcome
-    logical                    :: view_active     = .false.   !< the committed pose's view is refined (cont_view)
-    type(view_solve)           :: view                        !< the committed pose's view solve
-    real                       :: tilt_bound      = 0.        !< the tilts' bound, two grid spacings (decision 3 of polar_continuous_view.md)
-    integer                    :: view_nsolved    = 0         !< the extras given the view solve (cont_view, topk > 1)
-    integer                    :: view_ninserted  = 0         !< of them inserted as basins of their own after the merge
-    integer                    :: view_nmerged    = 0         !< merged into another basin
-    real                       :: view_wc         = 1.        !< the committed basin's weight after the merge
-    logical                    :: view_extras_done = .false.  !< the extras were resolved with the view
-    logical                    :: doshift         = .true.    !< 2 indicate whether 2 serch shifts
-    logical                    :: exists          = .false.   !< 2 indicate existence
+    character(len=:),    allocatable :: refine                                              !< 3D refinement flag
+    type(pftc_shsrch_grad)           :: grad_shsrch_obj                                     !< origin shift search object, L-BFGS with gradient
+    type(pftc_shsrch_grad)           :: grad_shsrch_obj2                                    !<
+    type(pftc_shsrch_grad)           :: grad_shsrch_first_obj                               !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
+    type(pftc_shsrch_grad)           :: joint_inpl_optimizer                                !< selected-reference joint (sx,sy,rotind_frac) refinement
+    type(pftc_shsrch_grad)           :: view_optimizer                                      !< the committed pose's joint solve with its view (cont_view)
+    type(shiftmap_srch), allocatable :: smap                                                !< the polar shift map under the key (l_map)
+    type(ori)                        :: o_prev                                              !< previous orientation
+    type(oris)                       :: opeaks                                              !< peak orientations to consider for refinement
+    class(parameters),   pointer     :: p_ptr                    => null()                  !< global parameters
+    class(builder),      pointer     :: b_ptr                    => null()                  !< build handle for access to spproj/eulspace/symmetry
+    integer                          :: iptcl                    = 0                        !< global particle index
+    integer                          :: iptcl_map                = 0                        !< map particle index
+    integer                          :: ithr                     = 0                        !< thread index
+    integer                          :: nrefs                    = 0                        !< total # references (nstates*nprojs)
+    integer                          :: nrefs_sub                = 0                        !< total # references (nstates*nprojs), subspace
+    integer                          :: npeaks                   = 0                        !< # peak subspace orientations to consider
+    integer                          :: npeaks_inpl              = 0                        !< # # multi-neighborhood peaks to refine with L-BFGS
+    integer                          :: nstates                  = 0                        !< # states
+    integer                          :: nprojs                   = 0                        !< # projections
+    integer                          :: nprojs_sub               = 0                        !< # projections, subspace
+    integer                          :: nrots                    = 0                        !< # in-plane rotations
+    integer                          :: nsym                     = 0                        !< symmetry order
+    integer                          :: nnn                      = 0                        !< # nearest neighbors
+    integer                          :: nbetter                  = 0                        !< # better orientations identified
+    integer                          :: nrefs_eval               = 0                        !< # references evaluated
+    integer                          :: nsolns                   = 0                        !< # distinct refs with a stored solution this search
+    integer                          :: ntrs_eval                = 0                        !< # shifts evaluated
+    integer                          :: prev_roind               = 0                        !< previous in-plane rotation index
+    integer                          :: prev_state               = 0                        !< previous state index
+    integer                          :: prev_ref                 = 0                        !< previous reference index
+    integer                          :: prev_proj                = 0                        !< previous projection direction index
+    real                             :: prev_corr                = 1.                       !< previous best correlation
+    real                             :: prev_shvec(2)            = 0.                       !< previous origin shift vector
+    real                             :: xy_first(2)              = 0.                       !< initial shifts identified by searching the previous best reference
+    real                             :: xy_first_rot(2)          = 0.                       !< initial shifts identified by searching the previous best reference, rotated
+    logical                          :: l_neigh                  = .false.                  !< neighbourhood refinement flag
+    logical                          :: l_greedy                 = .false.                  !< greedy        refinement flag
+    logical                          :: l_sh_first               = .false.                  !< use previous-ref shift seed before orientation/state scoring
+    logical                          :: l_map                    = .false.                  !< the classic search centres with the polar shift map (shift_sigma)
+    logical                          :: continuous_active        = .false.                  !< selected candidates receive continuous in-plane refinement
+    integer                          :: continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED !< final selected-reference route outcome
+    logical                          :: view_active              = .false.                  !< the committed pose's view is refined (cont_view)
+    type(view_solve)                 :: view                                                !< the committed pose's view solve
+    real                             :: tilt_bound               = 0.                       !< the tilts' bound, two grid spacings (decision 3 of polar_continuous_view.md)
+    integer                          :: view_nsolved             = 0                        !< the extras given the view solve (cont_view, topk > 1)
+    integer                          :: view_ninserted           = 0                        !< of them inserted as basins of their own after the merge
+    integer                          :: view_nmerged             = 0                        !< merged into another basin
+    real                             :: view_wc                  = 1.                       !< the committed basin's weight after the merge
+    logical                          :: view_extras_done         = .false.                  !< the extras were resolved with the view
+    logical                          :: doshift                  = .true.                   !< 2 indicate whether 2 serch shifts
+    logical                          :: exists                   = .false.                  !< 2 indicate existence
   contains
-    procedure :: new
-    procedure :: prep4srch
-    procedure :: prep4prob
-    procedure :: inpl_srch_first
-    procedure :: inpl_srch
-    procedure :: inpl_srch_peaks
+    procedure          :: new
+    procedure          :: prep4srch
+    procedure          :: prep4prob
+    procedure          :: inpl_srch_first
+    procedure          :: inpl_srch
+    procedure          :: inpl_srch_peaks
     procedure, private :: map_srch
-    procedure :: record_shift
-    procedure :: refine_selected_continuously
-    procedure :: refine_assignment_continuously
-    procedure :: refine_extra_pose_continuously
+    procedure          :: record_shift
+    procedure          :: refine_selected_continuously
+    procedure          :: refine_assignment_continuously
+    procedure          :: refine_extra_pose_continuously
     procedure, private :: refine_selected_continuously_impl
     procedure, private :: refine_assignment_continuously_impl
-    procedure :: commit_view
-    procedure :: view_pose
-    procedure :: get_view_solution
-    procedure :: set_view
-    procedure :: uses_view_refinement
-    procedure :: set_view_extras_counts
-    procedure :: get_view_extras_counts
+    procedure          :: commit_view
+    procedure          :: view_pose
+    procedure          :: get_view_solution
+    procedure          :: set_view
+    procedure          :: uses_view_refinement
+    procedure          :: set_view_extras_counts
+    procedure          :: get_view_extras_counts
     procedure, private :: write_continuous_route_status
-    procedure :: store_solution
-    procedure :: store_continuous_solution
-    procedure :: store_discrete_seed_solution
-    procedure :: uses_continuous_refinement
-    procedure :: joint_evaluation_invalid
-    procedure :: get_continuous_route_status
-    procedure :: kill
+    procedure          :: store_solution
+    procedure          :: store_continuous_solution
+    procedure          :: store_discrete_seed_solution
+    procedure          :: uses_continuous_refinement
+    procedure          :: joint_evaluation_invalid
+    procedure          :: get_continuous_route_status
+    procedure          :: kill
 end type strategy3D_srch
 
 contains
 
     subroutine new( self, params, spec, build )
-        class(strategy3D_srch),    intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(strategy3D_spec),    intent(in)    :: spec
-        class(builder),    target, intent(in)    :: build
+        class(strategy3D_srch),    intent(inout)      :: self
+        class(parameters),         target, intent(in) :: params
+        class(strategy3D_spec),    intent(in)         :: spec
+        class(builder),            target, intent(in) :: build
         real :: lims(2,2), lims_init(2,2), joint_lims(3,2), view_lims(5,2)
         ! set pointers
         self%p_ptr         => params
@@ -326,9 +326,9 @@ contains
     end subroutine inpl_srch_first
 
     subroutine inpl_srch( self, ref, irot_in )
-        class(strategy3D_srch), intent(inout) :: self
-        integer, optional,      intent(in)    :: ref
-        integer, optional,      intent(inout) :: irot_in
+        class(strategy3D_srch), intent(inout)                :: self
+        integer,                optional,      intent(in)    :: ref
+        integer,                optional,      intent(inout) :: irot_in
         real    :: cxy(3)
         integer :: iref, irot, loc(1)
         if( .not. self%doshift ) return
@@ -396,14 +396,14 @@ contains
     !! across states: the reference ref alone when given, else every scored reference, npeaks refined. A refined
     !! pose that beat its reference's stored-shift score replaces the reference's entry
     subroutine map_srch( self, npeaks, ref )
-        class(strategy3D_srch), intent(inout) :: self
-        integer,                intent(in)    :: npeaks
-        integer, optional,      intent(in)    :: ref
+        class(strategy3D_srch), intent(inout)             :: self
+        integer,                intent(in)                :: npeaks
+        integer,                optional,      intent(in) :: ref
         integer, allocatable :: refs(:)
         real,    allocatable :: corrs0(:)
-        real    :: corr, sh(2), sdev
-        integer :: i, iref, irot_m
-        logical :: found, valid
+        real                 :: corr, sh(2), sdev
+        integer              :: i, iref, irot_m
+        logical              :: found, valid
         if( present(ref) )then
             refs   = [ref]
             corrs0 = [s3D%proj_space_corrs(ref,self%ithr)]
@@ -435,10 +435,10 @@ contains
     end subroutine record_shift
 
     subroutine store_solution( self, ref, inpl_ind, corr, sh )
-        class(strategy3D_srch), intent(inout) :: self
-        integer,                intent(in)    :: ref, inpl_ind
-        real,                   intent(in)    :: corr
-        real,       optional,   intent(in)    :: sh(2)
+        class(strategy3D_srch), intent(inout)          :: self
+        integer,                intent(in)             :: ref, inpl_ind
+        real,                   intent(in)             :: corr
+        real,                   optional,   intent(in) :: sh(2)
         if( s3D%proj_space_corrs(ref, self%ithr) <= -huge(1.0)/2.0 )then
             self%nsolns = self%nsolns + 1
         elseif( corr <= s3D%proj_space_corrs(ref, self%ithr) )then
@@ -563,14 +563,14 @@ contains
     !! the view when the committed pose takes it (cont_view: the extras' basins, section 6 of polar_continuous_view.md),
     !! the solve returned in vs; the particle's route status stays the committed pose's
     subroutine refine_extra_pose_continuously( self, ref, inpl, corr, sh, inpl_coord, inpl_valid, vs, seed_coord )
-        class(strategy3D_srch), intent(inout) :: self
-        integer,                intent(in)    :: ref
-        integer,                intent(inout) :: inpl
-        real,                   intent(inout) :: corr, sh(2)
-        real,                   intent(out)   :: inpl_coord
-        logical,                intent(out)   :: inpl_valid
-        type(view_solve),       intent(out)   :: vs
-        real, optional,        intent(in)    :: seed_coord
+        class(strategy3D_srch), intent(inout)               :: self
+        integer,                intent(in)                  :: ref
+        integer,                intent(inout)               :: inpl
+        real,                   intent(inout)               :: corr, sh(2)
+        real,                   intent(out)                 :: inpl_coord
+        logical,                intent(out)                 :: inpl_valid
+        type(view_solve),       intent(out)                 :: vs
+        real,                   optional,        intent(in) :: seed_coord
         call self%refine_assignment_continuously_impl(ref, inpl, corr, sh, inpl_coord, inpl_valid, self%view_active, vs, seed_coord)
     end subroutine refine_extra_pose_continuously
 
@@ -579,15 +579,15 @@ contains
     !! on the B-spline sections of build%pcont, returned in vs: a valid view solve's point (the seed when it did not
     !! improve) gives the sigma2 residual on its own section, an improving one the pose (view_pose, commit_view)
     subroutine refine_assignment_continuously_impl( self, ref, inpl, corr, sh, inpl_coord, inpl_valid, l_view, vs, seed_coord )
-        class(strategy3D_srch), intent(inout) :: self
-        integer,                intent(in)    :: ref
-        integer,                intent(inout) :: inpl
-        real,                   intent(inout) :: corr, sh(2)
-        real,                   intent(out)   :: inpl_coord
-        logical,                intent(out)   :: inpl_valid
-        logical,                intent(in)    :: l_view
-        type(view_solve),       intent(out)   :: vs
-        real, optional,        intent(in)    :: seed_coord
+        class(strategy3D_srch), intent(inout)               :: self
+        integer,                intent(in)                  :: ref
+        integer,                intent(inout)               :: inpl
+        real,                   intent(inout)               :: corr, sh(2)
+        real,                   intent(out)                 :: inpl_coord
+        logical,                intent(out)                 :: inpl_valid
+        logical,                intent(in)                  :: l_view
+        type(view_solve),       intent(out)                 :: vs
+        real,                   optional,        intent(in) :: seed_coord
         real     :: cxy(3), lims(5,2), xy_ref(2), rbox, seed_angle
         real(dp) :: rotind_frac, xsol(5)
         integer  :: refined_inpl, iproj, state

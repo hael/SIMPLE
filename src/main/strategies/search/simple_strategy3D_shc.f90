@@ -34,9 +34,9 @@ contains
     end subroutine new_shc
 
     subroutine srch_shc( self, os, ithr )
-        class(strategy3D_shc), intent(inout) :: self
+        class(strategy3D_shc),  intent(inout) :: self
         class(oris),            intent(inout) :: os
-        integer,               intent(in)    :: ithr
+        integer,                intent(in)    :: ithr
         integer :: iref, isample, loc(1)
         real    :: inpl_corrs(self%s%nrots)
         if( os%get_state(self%s%iptcl) > 0 )then

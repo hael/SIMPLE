@@ -15,51 +15,51 @@ private
 #include "simple_local_flags.inc"
 
 character(len=*), parameter :: ADDON_REPORT_FNAME = 'solve3D_addon_report.txt'
-integer,          parameter :: SHELL_TOL       = 1     !< FSC=0.143 shells within which a state is UNCHANGED
-real,             parameter :: FSC_CRIT        = 0.143 !< the resolution criterion the verdict uses
-real,             parameter :: DOCK_CORR_FLOOR = 0.9   !< in-frame correlation below which the union map is docked
-real,             parameter :: DOCK_HP         = 100.  !< docking band, high-pass (A)
-real,             parameter :: DOCK_LP_MIN     = 8.    !< docking band, low-pass: the base resolution, no finer (A)
-integer,          parameter :: VERDICT_LEN     = 12
-character(len=*), parameter :: V_NONE = 'NOT_COMPARED', V_UP = 'IMPROVED', V_SAME = 'UNCHANGED', V_DOWN = 'REGRESSED'
+integer,          parameter :: SHELL_TOL          = 1     !< FSC=0.143 shells within which a state is UNCHANGED
+real,             parameter :: FSC_CRIT           = 0.143 !< the resolution criterion the verdict uses
+real,             parameter :: DOCK_CORR_FLOOR    = 0.9   !< in-frame correlation below which the union map is docked
+real,             parameter :: DOCK_HP            = 100.  !< docking band, high-pass (A)
+real,             parameter :: DOCK_LP_MIN        = 8.    !< docking band, low-pass: the base resolution, no finer (A)
+integer,          parameter :: VERDICT_LEN        = 12
+character(len=*), parameter :: V_NONE             = 'NOT_COMPARED', V_UP = 'IMPROVED', V_SAME = 'UNCHANGED', V_DOWN = 'REGRESSED'
 
 type :: state_record
-    integer :: pop_union = 0, pop_frozen = 0, dshell = 0
-    logical :: l_fsc = .false., l_map = .false., l_docked = .false., l_cohort = .false.
-    real    :: res05_base = 0., res0143_base = 0., res05_union = 0., res0143_union = 0., fsc_gain = 0.
-    real    :: lp_corr = 0., corr = 0., dock_angle = 0., dock_shift = 0., dock_corr = 0.
-    real    :: res05_cohort = 0., res0143_cohort = 0., corr_cohort = 0.
-    character(len=VERDICT_LEN) :: verdict = V_NONE
+    integer                    :: pop_union    = 0, pop_frozen = 0, dshell = 0
+    logical                    :: l_fsc        = .false., l_map = .false., l_docked = .false., l_cohort = .false.
+    real                       :: res05_base   = 0., res0143_base = 0., res05_union = 0., res0143_union = 0., fsc_gain = 0.
+    real                       :: lp_corr      = 0., corr = 0., dock_angle = 0., dock_shift = 0., dock_corr = 0.
+    real                       :: res05_cohort = 0., res0143_cohort = 0., corr_cohort = 0.
+    character(len=VERDICT_LEN) :: verdict      = V_NONE
 end type state_record
 
 type :: stage_record
-    logical :: l_set = .false., l_base = .false.
+    logical :: l_set    = .false., l_base = .false.
     real    :: lp_addon = 0., lpstop_addon = 0., lp_base = 0., lpstop_base = 0.
 end type stage_record
 
 type :: solve3D_addon_report
     private
-    integer :: nstates = 0, nstages = 0
-    real    :: smpd = 0., mskdiam = 0.
+    integer                         :: nstates = 0, nstages = 0
+    real                            :: smpd    = 0., mskdiam = 0.
     type(state_record), allocatable :: states(:)
     type(stage_record), allocatable :: stages(:)
   contains
-    procedure :: new
-    procedure :: set_stage
-    procedure :: set_populations
-    procedure :: compare_fsc
-    procedure :: compare_maps
-    procedure :: compare_cohort
-    procedure :: get_nstates
-    procedure :: get_verdict
-    procedure :: get_dshell
-    procedure :: get_corr
-    procedure :: get_cohort_res0143
-    procedure :: any_regressed
-    procedure :: print
-    procedure :: write
-    procedure :: read
-    procedure :: kill
+    procedure          :: new
+    procedure          :: set_stage
+    procedure          :: set_populations
+    procedure          :: compare_fsc
+    procedure          :: compare_maps
+    procedure          :: compare_cohort
+    procedure          :: get_nstates
+    procedure          :: get_verdict
+    procedure          :: get_dshell
+    procedure          :: get_corr
+    procedure          :: get_cohort_res0143
+    procedure          :: any_regressed
+    procedure          :: print
+    procedure          :: write
+    procedure          :: read
+    procedure          :: kill
     procedure, private :: check_state
     procedure, private :: corr_lp
     procedure, private :: dock
@@ -76,7 +76,7 @@ contains
     !> nstates states, stages 1..nstages, maps sampled at smpd (A) and masked
     !! at the base run's mskdiam (A)
     subroutine new( self, nstates, nstages, smpd, mskdiam )
-        class(solve3D_addon_report), intent(inout) :: self
+        class(solve3D_addon_report),    intent(inout) :: self
         integer,                        intent(in)    :: nstates, nstages
         real,                           intent(in)    :: smpd, mskdiam
         call self%kill
@@ -90,7 +90,7 @@ contains
     !> the limits the add-on emitted at a stage and the base run's (a negative
     !! base limit means the base run did not run the stage)
     subroutine set_stage( self, istage, lp_addon, lpstop_addon, lp_base, lpstop_base )
-        class(solve3D_addon_report), intent(inout) :: self
+        class(solve3D_addon_report),    intent(inout) :: self
         integer,                        intent(in)    :: istage
         real,                           intent(in)    :: lp_addon, lpstop_addon, lp_base, lpstop_base
         if( istage < 1 .or. istage > self%nstages ) THROW_HARD('stage out of range; set_stage')
@@ -103,7 +103,7 @@ contains
     end subroutine set_stage
 
     subroutine set_populations( self, s, pop_union, pop_frozen )
-        class(solve3D_addon_report), intent(inout) :: self
+        class(solve3D_addon_report),    intent(inout) :: self
         integer,                        intent(in)    :: s, pop_union, pop_frozen
         call self%check_state(s)
         self%states(s)%pop_union  = pop_union
@@ -115,7 +115,7 @@ contains
     !! base run's FSC=0.143 shell and the verdict (curves of another length are
     !! not compared)
     subroutine compare_fsc( self, s, fsc_base, fsc_union, res )
-        class(solve3D_addon_report), intent(inout) :: self
+        class(solve3D_addon_report),    intent(inout) :: self
         integer,                        intent(in)    :: s
         real,                           intent(in)    :: fsc_base(:), fsc_union(:), res(:)
         integer :: kbase, kunion
@@ -143,11 +143,11 @@ contains
     !! run's FSC=0.143 resolution (Nyquist before compare_fsc); docked when the
     !! correlation falls below DOCK_CORR_FLOOR
     subroutine compare_maps( self, s, base_fname, union_fname )
-        class(solve3D_addon_report), intent(inout) :: self
+        class(solve3D_addon_report),    intent(inout) :: self
         integer,                        intent(in)    :: s
         class(string),                  intent(in)    :: base_fname, union_fname
         real, allocatable :: fsc(:), res(:)
-        logical :: ok
+        logical           :: ok
         call self%check_state(s)
         associate( st => self%states(s) )
             st%lp_corr = self%corr_lp(s)
@@ -161,11 +161,11 @@ contains
     !! two come from disjoint particles) and their correlation up to the base
     !! run's FSC=0.143 resolution
     subroutine compare_cohort( self, s, base_fname, cohort_fname )
-        class(solve3D_addon_report), intent(inout) :: self
+        class(solve3D_addon_report),    intent(inout) :: self
         integer,                        intent(in)    :: s
         class(string),                  intent(in)    :: base_fname, cohort_fname
         real, allocatable :: fsc(:), res(:)
-        logical :: ok
+        logical           :: ok
         call self%check_state(s)
         associate( st => self%states(s) )
             call compare_volpair(base_fname, cohort_fname, self%mskdiam, self%corr_lp(s), st%corr_cohort, fsc, res, ok)
@@ -182,7 +182,7 @@ contains
     end function get_nstates
 
     function get_verdict( self, s ) result( verdict )
-        class(solve3D_addon_report), intent(in) :: self
+        class(solve3D_addon_report),    intent(in) :: self
         integer,                        intent(in) :: s
         character(len=VERDICT_LEN) :: verdict
         call self%check_state(s)
@@ -190,7 +190,7 @@ contains
     end function get_verdict
 
     integer function get_dshell( self, s )
-        class(solve3D_addon_report), intent(in) :: self
+        class(solve3D_addon_report),    intent(in) :: self
         integer,                        intent(in) :: s
         call self%check_state(s)
         get_dshell = self%states(s)%dshell
@@ -198,7 +198,7 @@ contains
 
     !> the union map's correlation with the base map (0 when not compared)
     real function get_corr( self, s )
-        class(solve3D_addon_report), intent(in) :: self
+        class(solve3D_addon_report),    intent(in) :: self
         integer,                        intent(in) :: s
         call self%check_state(s)
         get_corr = self%states(s)%corr
@@ -207,7 +207,7 @@ contains
     !> the FSC=0.143 resolution of the cohort-only map against the base map
     !! (A; 0 when not compared)
     real function get_cohort_res0143( self, s )
-        class(solve3D_addon_report), intent(in) :: self
+        class(solve3D_addon_report),    intent(in) :: self
         integer,                        intent(in) :: s
         call self%check_state(s)
         get_cohort_res0143 = self%states(s)%res0143_cohort
@@ -225,7 +225,7 @@ contains
     subroutine print( self )
         class(solve3D_addon_report), intent(in) :: self
         character(len=*), parameter :: PFX = '>>> SOLVE3D_ADDON REPORT '
-        integer :: i, s
+        integer                     :: i, s
         do i = 1, self%nstages
             associate( sg => self%stages(i) )
                 if( .not. sg%l_set ) cycle
@@ -268,7 +268,7 @@ contains
 
     !> one text record per listed stage, per state and per compared cohort
     subroutine write( self, fname )
-        class(solve3D_addon_report), intent(in) :: self
+        class(solve3D_addon_report),    intent(in) :: self
         class(string),                  intent(in) :: fname
         type(oris) :: os
         integer    :: i, s, n
@@ -330,7 +330,7 @@ contains
     !> the report as write left it (sampling and mask diameter are not
     !! recorded: a read report compares nothing more)
     subroutine read( self, fname )
-        class(solve3D_addon_report), intent(inout) :: self
+        class(solve3D_addon_report),    intent(inout) :: self
         class(string),                  intent(in)    :: fname
         type(oris)   :: os
         type(string) :: rec_kind, verdict
@@ -403,7 +403,7 @@ contains
     ! private
 
     subroutine check_state( self, s )
-        class(solve3D_addon_report), intent(in) :: self
+        class(solve3D_addon_report),    intent(in) :: self
         integer,                        intent(in) :: s
         if( s < 1 .or. s > self%nstates ) THROW_HARD('state out of range; solve3D_addon_report')
     end subroutine check_state
@@ -411,7 +411,7 @@ contains
     !> the correlation band's low-pass limit: the base run's FSC=0.143
     !! resolution once compare_fsc found one, else Nyquist (0)
     real function corr_lp( self, s )
-        class(solve3D_addon_report), intent(in) :: self
+        class(solve3D_addon_report),    intent(in) :: self
         integer,                        intent(in) :: s
         corr_lp = 0.
         if( self%states(s)%l_fsc .and. self%states(s)%res0143_base > 0. ) corr_lp = self%states(s)%res0143_base
@@ -420,12 +420,12 @@ contains
     !> the union map docked onto the base map: rotation (deg), shift (A) and
     !! docked correlation
     subroutine dock( self, s, base_fname, union_fname )
-        class(solve3D_addon_report), intent(inout) :: self
+        class(solve3D_addon_report),    intent(inout) :: self
         integer,                        intent(in)    :: s
         class(string),                  intent(in)    :: base_fname, union_fname
         type(dock_vols) :: docker
         type(ori)       :: o_dock, o_ident
-        real :: eul(3), shift(3), cc
+        real            :: eul(3), shift(3), cc
         call docker%new(base_fname, union_fname, self%smpd, DOCK_HP, max(DOCK_LP_MIN, self%corr_lp(s)), self%mskdiam)
         call docker%srch()
         call docker%get_dock_info(eul, shift, cc)

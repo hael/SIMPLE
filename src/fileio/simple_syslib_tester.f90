@@ -46,9 +46,9 @@ contains
     !---------------- test environment helpers ----------------
 
     subroutine test_project_discovery()
-        type(string) :: saved, fixture, previous
+        type(string)              :: saved, fixture, previous
         type(string), allocatable :: projects(:)
-        integer :: next_dir, nfail0
+        integer                   :: next_dir, nfail0
         write(*,'(A)') 'test_project_discovery'
         nfail0 = tests_failed
         call enter_fixture('project_discovery', saved, fixture)
@@ -126,7 +126,7 @@ contains
 
     subroutine test_simple_mkdir_dir_exists_rmdir()
         type(string) :: dname
-        integer :: istat
+        integer      :: istat
         write(*,'(A)') 'test_simple_mkdir_dir_exists_rmdir'
         dname = 'test_dir'
         call assert_true(.not. dir_exists(dname), 'mkdir: dir does not exist at start')
@@ -206,8 +206,8 @@ contains
     end subroutine test_simple_rename_and_del_file
 
     subroutine test_simple_atomic_replace_and_sync()
-        type(string) :: src, dst
-        integer :: funit, io_stat, sync_stat
+        type(string)     :: src, dst
+        integer          :: funit, io_stat, sync_stat
         character(len=8) :: value
         write(*,'(A)') 'test_simple_atomic_replace_and_sync'
         src = 'atomic_src.txt'
@@ -240,7 +240,7 @@ contains
 
     subroutine test_simple_rmfile()
         type(string) :: fname
-        integer :: istat
+        integer      :: istat
         write(*,'(A)') 'test_simple_rmfile'
         fname = 'rmfile_test.txt'
         call simple_touch(fname)
@@ -285,9 +285,9 @@ contains
     !---------------- simple_file_stat ----------------
 
     subroutine test_simple_file_stat()
-        type(string) :: fname
+        type(string)         :: fname
         integer, allocatable :: buf(:)
-        integer :: istat
+        integer              :: istat
         write(*,'(A)') 'test_simple_file_stat'
         fname = 'stat_test.txt'
         call simple_touch(fname)
@@ -320,7 +320,7 @@ contains
 
     subroutine test_is_file_open()
         type(string) :: fname
-        integer :: u, ios
+        integer      :: u, ios
         write(*,'(A)') 'test_is_file_open'
         fname = 'open_test.txt'
         open(newunit=u, file=fname%to_char(), status='replace', iostat=ios)
@@ -355,9 +355,9 @@ contains
     !---------------- simple_list_dirs ----------------
 
     subroutine test_simple_list_dirs()
-        type(string) :: d1, d2
+        type(string)              :: d1, d2
         type(string), allocatable :: dirs(:)
-        integer :: i, stat
+        integer                   :: i, stat
         write(*,'(A)') 'test_simple_list_dirs'
         d1 = 'ldir_1'
         d2 = 'ldir_2'
@@ -377,9 +377,9 @@ contains
 
     subroutine test_simple_list_files()
         type(string), allocatable :: list(:)
-        type(string) :: f1, f2, d1, nested, marker
-        integer      :: i, istat
-        logical      :: has_blank
+        type(string)              :: f1, f2, d1, nested, marker
+        integer                   :: i, istat
+        logical                   :: has_blank
         write(*,'(A)') 'test_simple_list_files'
         f1     = 'list_item_a.txt'
         f2     = 'list_item_b.txt'
@@ -416,8 +416,8 @@ contains
 
     subroutine test_simple_list_files_regexp()
         type(string), allocatable :: list(:)
-        type(string) :: d, f1, f2
-        integer      :: istat
+        type(string)              :: d, f1, f2
+        integer                   :: istat
         write(*,'(A)') 'test_simple_list_files_regexp'
         d  = 'regdir'
         call simple_mkdir(d, verbose=.false.)
@@ -439,7 +439,7 @@ contains
 
     subroutine test_simple_abspath()
         type(string) :: fname, absname, cwd
-        integer :: istat
+        integer      :: istat
         write(*,'(A)') 'test_simple_abspath'
         fname = 'abs_test.txt'
         call simple_touch(fname)
@@ -546,7 +546,7 @@ contains
 
     subroutine test_find_next_int_dir_prefix()
         type(string) :: base, d1, d2, last
-        integer :: next
+        integer      :: next
         write(*,'(A)') 'test_find_next_int_dir_prefix'
         base = '.'
         d1 = '1run'

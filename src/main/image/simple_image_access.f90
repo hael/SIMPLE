@@ -71,7 +71,7 @@ contains
     module pure function get_rmat( self ) result( rmat )
         class(image), intent(in) :: self
         real, allocatable :: rmat(:,:,:)
-        integer :: ldim(3)
+        integer           :: ldim(3)
         ldim = self%ldim
         allocate(rmat(ldim(1),ldim(2),ldim(3)), source=self%rmat(:ldim(1),:ldim(2),:ldim(3)))
     end function get_rmat
@@ -82,8 +82,8 @@ contains
     !!          not contiguous in memory (the stride of the second dimension is that of the
     !!          padded buffer): pass it to assumed-shape or pointer dummies
     module subroutine get_rmat_ptr( self, rmat_ptr )
-        class(image), target,        intent(in)  :: self
-        real(kind=c_float), pointer, intent(out) :: rmat_ptr(:,:,:)
+        class(image),       target,        intent(in) :: self
+        real(kind=c_float), pointer, intent(out)      :: rmat_ptr(:,:,:)
         rmat_ptr => self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
     end subroutine get_rmat_ptr
 
@@ -91,8 +91,8 @@ contains
     !!          box and the padding rows of the first dimension. Only for a caller that needs the
     !!          FFT layout (Fourier data handed on as reals); everything else uses get_rmat_ptr
     module subroutine get_rmat_ptr_padded( self, rmat_ptr )
-        class(image), target,        intent(in)  :: self
-        real(kind=c_float), pointer, intent(out) :: rmat_ptr(:,:,:)
+        class(image),       target,        intent(in) :: self
+        real(kind=c_float), pointer, intent(out)      :: rmat_ptr(:,:,:)
         rmat_ptr => self%rmat
     end subroutine get_rmat_ptr_padded
 
@@ -129,8 +129,8 @@ contains
     !!          reads and writes components in place only, never reallocates or frees the target,
     !!          sets the Fourier flag through set_ft, and drops the pointer before kill or new
     module subroutine get_cmat_ptr( self, cmat_ptr )
-        class(image), target,                   intent(in)  :: self
-        complex(kind=c_float_complex), pointer, intent(out) :: cmat_ptr(:,:,:)
+        class(image),                  target,                   intent(in) :: self
+        complex(kind=c_float_complex), pointer, intent(out)                 :: cmat_ptr(:,:,:)
         cmat_ptr => self%cmat
     end subroutine get_cmat_ptr
 
@@ -263,8 +263,8 @@ contains
 
     module pure subroutine set_cmat_at( self, h, k, l, comp)
         class(image), intent(inout) :: self
-        integer, intent(in) :: h,k,l
-        complex, intent(in) :: comp
+        integer,      intent(in)    :: h,k,l
+        complex,      intent(in)    :: comp
         self%cmat(h,k,l) =  comp
     end subroutine set_cmat_at
 
@@ -406,7 +406,7 @@ contains
         class(image), intent(in) :: self
         logical,      intent(in) :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
         real, allocatable :: pcavec(:)
-        integer :: sz, cnt, i, j, k
+        integer           :: sz, cnt, i, j, k
         sz = count(l_msk)
         allocate(pcavec(sz))
         cnt = 0

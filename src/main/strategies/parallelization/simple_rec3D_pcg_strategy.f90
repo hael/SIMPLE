@@ -55,15 +55,15 @@ real,    parameter :: ATM_AMP_RTOL   = 1.0e-3
 !> wall-clock phases of one distributed PCG master assembly (BENCH/PCG_ASSEMBLE_BENCH.txt); index
 !! 1 of the pairs is the base solve kind, 2 the regularized (ml); the caller times the handoff and total
 type :: pcg_assemble_bench
-    real(dp) :: rt_init = 0._dp, rt_support = 0._dp, rt_op_setup = 0._dp, rt_chain = 0._dp
-    real(dp) :: rt_read = 0._dp, rt_sum = 0._dp, rt_finalize(2) = 0._dp, rt_solve(2) = 0._dp
-    real(dp) :: rt_prior_resolve = 0._dp, rt_finish = 0._dp
-    real(dp) :: rt_fsc = 0._dp, rt_map_output = 0._dp, rt_nu_filter = 0._dp
-    real(dp) :: rt_proj_write = 0._dp, rt_cleanup = 0._dp, rt_nu_handoff = 0._dp, rt_tot = 0._dp
-    real(dp) :: rt_half_solve(2,2) = 0._dp !< (even/odd, kind): each half's own solve time
+    real(dp)                      :: rt_init            = 0._dp, rt_support = 0._dp, rt_op_setup = 0._dp, rt_chain = 0._dp
+    real(dp)                      :: rt_read            = 0._dp, rt_sum = 0._dp, rt_finalize(2) = 0._dp, rt_solve(2) = 0._dp
+    real(dp)                      :: rt_prior_resolve   = 0._dp, rt_finish = 0._dp
+    real(dp)                      :: rt_fsc             = 0._dp, rt_map_output = 0._dp, rt_nu_filter = 0._dp
+    real(dp)                      :: rt_proj_write      = 0._dp, rt_cleanup = 0._dp, rt_nu_handoff = 0._dp, rt_tot = 0._dp
+    real(dp)                      :: rt_half_solve(2,2) = 0._dp !< (even/odd, kind): each half's own solve time
     type(nu_state_filter_timings) :: nu
-    integer(int64) :: raw_bytes = 0_int64
-    integer  :: nraw = 0, niters(2,2) = 0, nstates_solved = 0, nthr_master = 0, nthr_half = 0
+    integer(int64)                :: raw_bytes          = 0_int64
+    integer                       :: nraw               = 0, niters(2,2) = 0, nstates_solved = 0, nthr_master = 0, nthr_half = 0
 end type pcg_assemble_bench
 
 contains
@@ -128,10 +128,10 @@ contains
     !> Install the solve support P of (P H P) u = P b: an explicit pcg_mskfile,
     !! else the state's density envelope when built, else the mskdiam sphere.
     subroutine set_pcg_solve_support( pcgop, params, state_support, l_state_support )
-        class(reconstructor_pcg),  intent(inout) :: pcgop
-        class(parameters),         intent(in)    :: params
-        class(image),    optional, intent(in)    :: state_support
-        logical,         optional, intent(in)    :: l_state_support
+        class(reconstructor_pcg),  intent(inout)        :: pcgop
+        class(parameters),         intent(in)           :: params
+        class(image),              optional, intent(in) :: state_support
+        logical,                   optional, intent(in) :: l_state_support
         type(image) :: mskvol
         logical     :: l_state
         if( params%pcg_mskfile%is_allocated() )then
@@ -290,21 +290,21 @@ contains
     !! With a state weight set, a particle is a member of every state it weighs
     !! into above PCG_WEIGHT_THRESHOLD and enters with its noise spectrum over w.
     subroutine execute_rec3D_pcg_worker( params, build, cline, selected_pinds, wset, wtab, extra )
-        type(parameters),                  intent(inout) :: params
-        type(builder),                     intent(inout) :: build
-        class(cmdline),                    intent(inout) :: cline
-        integer,                           intent(in)    :: selected_pinds(:)
-        class(state_weight_set), optional, intent(inout) :: wset
-        real,                    optional, intent(in)    :: wtab(:,:)   !< caller's weight table, rows of selected_pinds
-        type(prob_insert_poses), optional, intent(in)    :: extra       !< the weighted insertion's poses (topk > 1)
-        integer, allocatable :: half_pinds(:)
-        real,    allocatable :: half_w(:)
-        logical :: l_weighted
-        character(len=256) :: provenance
-        integer(int64)     :: wset_id(2)
-        integer :: state, eo, n_half, nimgs
-        integer(int64) :: nposes
-        logical :: l_sigma_loaded
+        type(parameters),                  intent(inout)           :: params
+        type(builder),                     intent(inout)           :: build
+        class(cmdline),                    intent(inout)           :: cline
+        integer,                           intent(in)              :: selected_pinds(:)
+        class(state_weight_set),           optional, intent(inout) :: wset
+        real,                              optional, intent(in)    :: wtab(:,:) !< caller's weight table, rows of selected_pinds
+        type(prob_insert_poses),           optional, intent(in)    :: extra     !< the weighted insertion's poses (topk > 1)
+        integer, allocatable    :: half_pinds(:)
+        real,    allocatable    :: half_w(:)
+        logical                 :: l_weighted
+        character(len=256)      :: provenance
+        integer(int64)          :: wset_id(2)
+        integer                 :: state, eo, n_half, nimgs
+        integer(int64)          :: nposes
+        logical                 :: l_sigma_loaded
         type(ptcl_read_counts)  :: reads0, reads
         type(ptcl_read_session) :: rsess
         integer(timer_int_kind) :: t0, t_half
@@ -375,13 +375,13 @@ contains
 
         !> the state's weighted members of one half (only params%state when state= was given)
         subroutine collect_weighted_state_half( state_here, eo_here, pinds, selected, weights )
-            integer,              intent(in)  :: state_here, eo_here, pinds(:)
-            integer, allocatable, intent(out) :: selected(:)
-            real,    allocatable, intent(out) :: weights(:)
+            integer,              intent(in)               :: state_here, eo_here, pinds(:)
+            integer,              allocatable, intent(out) :: selected(:)
+            real,                 allocatable, intent(out) :: weights(:)
             integer, allocatable :: members(:)
             real,    allocatable :: wmem(:)
             logical, allocatable :: l_half(:)
-            integer :: i
+            integer              :: i
             if( params%l_state_defined .and. state_here /= params%state )then
                 allocate(selected(0), weights(0))
                 return
@@ -405,7 +405,7 @@ contains
             integer,          intent(in) :: state_here, eo_here, pinds(:)
             character(len=*), intent(in) :: provenance_here
             type(reconstructor_pcg) :: pcgop
-            type(string)    :: fname
+            type(string)            :: fname
 
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             fname = refine3D_pcg_raw_accum_fname(state_here, params%part, params%numlen, &
@@ -443,21 +443,21 @@ contains
     !! with an entry enters at its committed pose with its committed weight and at each extra pose as one more
     !! entry from the same observation (pcg_extra_entries), as the gridding insertion has it
     subroutine accumulate_pcg_state_half( params, build, rsess, eo_here, pinds, pcgop, rt_prep, weights, extra )
-        class(parameters),                 intent(in)    :: params
-        class(builder),                    intent(inout) :: build
-        class(ptcl_read_session),          intent(inout) :: rsess
-        integer,                           intent(in)    :: eo_here, pinds(:)
-        class(reconstructor_pcg),          intent(inout) :: pcgop
-        real(timer_int_kind),              intent(inout) :: rt_prep
-        real,                    optional, intent(in)    :: weights(:)
-        type(prob_insert_poses), optional, intent(in)    :: extra
-        type(oris)  :: selection, entries
+        class(parameters),                 intent(in)           :: params
+        class(builder),                    intent(inout)        :: build
+        class(ptcl_read_session),          intent(inout)        :: rsess
+        integer,                           intent(in)           :: eo_here, pinds(:)
+        class(reconstructor_pcg),          intent(inout)        :: pcgop
+        real(timer_int_kind),              intent(inout)        :: rt_prep
+        real,                              optional, intent(in) :: weights(:)
+        type(prob_insert_poses),           optional, intent(in) :: extra
+        type(oris)               :: selection, entries
         type(image), allocatable :: obs(:)
         complex,     allocatable :: y_batch(:,:,:), y_x(:,:,:)
         real,        allocatable :: inv_sig2(:), wbase(:), wts(:)
         integer,     allocatable :: xptcl(:), xfirst(:)
-        integer :: lims2(2,2), R, batchlims(2), batchsz, ibatch, nthr, n, nxmax
-        logical :: l_extra
+        integer                  :: lims2(2,2), R, batchlims(2), batchsz, ibatch, nthr, n, nxmax
+        logical                  :: l_extra
         call pcgop%set_sym(build%pgrpsyms)
         lims2 = pcgop%get_lims2()
         R     = lims2(1,2)
@@ -525,13 +525,13 @@ contains
     !! the pose's weight). xptcl: each extra entry's particle; xfirst(i): the first extra entry of particle i
     !! (xfirst(n+1) one past the last), both counted within the extras
     subroutine pcg_extra_entries( selection, pinds, wbase, extra, crop_factor, entries, wts, xptcl, xfirst )
-        class(oris),             intent(inout) :: selection
-        integer,                 intent(in)    :: pinds(:)
-        real,                    intent(in)    :: wbase(:), crop_factor
-        type(prob_insert_poses), intent(in)    :: extra
-        type(oris),              intent(inout) :: entries
-        real,    allocatable,    intent(out)   :: wts(:)
-        integer, allocatable,    intent(out)   :: xptcl(:), xfirst(:)
+        class(oris),             intent(inout)               :: selection
+        integer,                 intent(in)                  :: pinds(:)
+        real,                    intent(in)                  :: wbase(:), crop_factor
+        type(prob_insert_poses), intent(in)                  :: extra
+        type(oris),              intent(inout)               :: entries
+        real,                    allocatable,    intent(out) :: wts(:)
+        integer,                 allocatable,    intent(out) :: xptcl(:), xfirst(:)
         type(ori) :: o
         integer   :: n, nx, i, k, iloc, ipose, ix
         n = size(pinds)
@@ -597,66 +597,66 @@ contains
     !! prepared PCG solves execute concurrently with disjoint thread budgets.
     subroutine execute_rec3D_pcg_distributed_master( params, build, cline, nu_align_lps, bench )
         type :: distributed_half_job
-            type(reconstructor_pcg) :: pcgop
+            type(reconstructor_pcg)  :: pcgop
             type(pcg_solver_outcome) :: result
-            real, allocatable :: x(:,:,:), x_cf(:,:,:), rel_res_hist(:)
+            real, allocatable        :: x(:,:,:), x_cf(:,:,:), rel_res_hist(:)
             ! the base operator kept for the regularized pair, with its raw density and the count and mass it represents
             real, allocatable :: d_raw(:,:,:)
-            integer  :: nptcls_raw = 0
-            real(dp) :: mass_raw = 0.0_dp
-            logical  :: l_keep_op = .false.
-            integer :: state = 0, eo = 0, nptcls = 0, niters = 0
-            real(dp) :: mass = 0.0_dp  !< applied weight mass of the reduction (nptcls under hard labels)
-            integer :: band_shell = 0 !< the pair's FSC=0.143 shell (regularized solve; agreement diagnostic)
-            integer :: prior_npositive = 0
-            character(len=8) :: half = '', solve_kind = ''
-            real(dp) :: time_reduce = 0.0_dp, time_finalize = 0.0_dp, time_solve = 0.0_dp
-            real :: prior_positive_min = 0.0, prior_positive_max = 0.0
-            real :: prior_to_khat_l1 = 0.0, prior_to_khat_rms = 0.0
-            logical :: l_ml_solve = .false., ready = .false., l_concurrent = .false.
-            logical :: l_nonzero = .false. !< nonzero initial guess: eligible for the cold restart
-            logical :: l_atm_solve = .false. !< the atomicity-prior re-solve: maxits_atm/rtol_atm budget
+            integer           :: nptcls_raw         = 0
+            real(dp)          :: mass_raw           = 0.0_dp
+            logical           :: l_keep_op          = .false.
+            integer           :: state              = 0, eo = 0, nptcls = 0, niters = 0
+            real(dp)          :: mass               = 0.0_dp  !< applied weight mass of the reduction (nptcls under hard labels)
+            integer           :: band_shell         = 0       !< the pair's FSC=0.143 shell (regularized solve; agreement diagnostic)
+            integer           :: prior_npositive    = 0
+            character(len=8)  :: half               = '', solve_kind = ''
+            real(dp)          :: time_reduce        = 0.0_dp, time_finalize = 0.0_dp, time_solve = 0.0_dp
+            real              :: prior_positive_min = 0.0, prior_positive_max = 0.0
+            real              :: prior_to_khat_l1   = 0.0, prior_to_khat_rms = 0.0
+            logical           :: l_ml_solve         = .false., ready = .false., l_concurrent = .false.
+            logical           :: l_nonzero          = .false. !< nonzero initial guess: eligible for the cold restart
+            logical           :: l_atm_solve        = .false. !< the atomicity-prior re-solve: maxits_atm/rtol_atm budget
         end type distributed_half_job
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
-        real,    optional, intent(out)  :: nu_align_lps(:)
+        type(parameters),         intent(inout)           :: params
+        type(builder),            intent(inout)           :: build
+        class(cmdline),           intent(inout)           :: cline
+        real,                     optional, intent(out)   :: nu_align_lps(:)
         type(pcg_assemble_bench), optional, intent(inout) :: bench
-        type(image)  :: half_even, half_odd, ml_even, ml_odd, merged, atm_even, atm_odd
-        type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
-        type(string) :: fname_restxt, eonames(2)
+        type(image)                      :: half_even, half_odd, ml_even, ml_odd, merged, atm_even, atm_odd
+        type(string)                     :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
+        type(string)                     :: fname_restxt, eonames(2)
         type(halfmap_diagnostics_result) :: hm_diag
-        real, allocatable :: fsc(:), res0143s(:), res05s(:), cfars(:), align_lps(:)
-        real, allocatable :: realized_fractions(:), update_weights(:), chain_weights(:), current_scales(:)
-        integer, allocatable :: nrep(:), nsmp(:), rep_rows(:), smp_rows(:), rec_rows(:)
-        real,    allocatable :: rnrep(:), rnsmp(:) !< N(s), n(s) of the population rule: applied masses
-        logical, allocatable :: state_written(:), state_carried(:), state_empty(:)
-        type(state_weight_set) :: wset
-        integer(int64) :: wset_id(2)
-        real(dp)       :: chain_mass(2)
-        integer        :: chain_contrib(2), chain_gen_prev
-        logical        :: chain_written(2), l_weighted
-        character(len=:), allocatable :: errmsg
-        character(len=256) :: provenance, chain_provenance
-        integer :: state, part, eo, n_even, n_odd, iptcl, istate
-        real    :: n_active_state, n_sampled_state
-        integer :: pcg_master_nthreads, pcg_half_nthreads
-        type(distributed_half_job) :: even_job, odd_job
-        type(image_msk) :: state_support_msk
-        logical :: l_state_support, l_base_support_constrained, l_nu_base_constrained
-        logical :: l_has_updates, l_sample_seed, l_chain_carry, l_even_chain, l_odd_chain
-        logical :: l_shipped_support_constrained
+        real,             allocatable    :: fsc(:), res0143s(:), res05s(:), cfars(:), align_lps(:)
+        real,             allocatable    :: realized_fractions(:), update_weights(:), chain_weights(:), current_scales(:)
+        integer,          allocatable    :: nrep(:), nsmp(:), rep_rows(:), smp_rows(:), rec_rows(:)
+        real,             allocatable    :: rnrep(:), rnsmp(:) !< N(s), n(s) of the population rule: applied masses
+        logical,          allocatable    :: state_written(:), state_carried(:), state_empty(:)
+        type(state_weight_set)           :: wset
+        integer(int64)                   :: wset_id(2)
+        real(dp)                         :: chain_mass(2)
+        integer                          :: chain_contrib(2), chain_gen_prev
+        logical                          :: chain_written(2), l_weighted
+        character(len=:), allocatable    :: errmsg
+        character(len=256)               :: provenance, chain_provenance
+        integer                          :: state, part, eo, n_even, n_odd, iptcl, istate
+        real                             :: n_active_state, n_sampled_state
+        integer                          :: pcg_master_nthreads, pcg_half_nthreads
+        type(distributed_half_job)       :: even_job, odd_job
+        type(image_msk)                  :: state_support_msk
+        logical                          :: l_state_support, l_base_support_constrained, l_nu_base_constrained
+        logical                          :: l_has_updates, l_sample_seed, l_chain_carry, l_even_chain, l_odd_chain
+        logical                          :: l_shipped_support_constrained
         ! atm_prior=yes: the prior shared by both half operators, its strength and the products of the current state
-        type(pcg_atomic_prior), target :: atm_prior
-        type(image)  :: atm_res
-        real(dp), allocatable :: atm_c(:,:)       !< (natoms,2) amplitudes fitted per half
-        real    :: atm_lambda_rel, atm_lambda_abs(2), atm_amp_rres(2), atm_resid(2), atm_mres(2)
-        integer :: atm_amp_nits(2), atm_nits(2)
-        logical :: l_atm_resolved
-        character(len=16) :: state_support_kind, base_support_kind, shipped_support_kind
-        integer(timer_int_kind) :: t_state_phase, t_bench
-        real(dp) :: time_map_output, time_fsc_output, time_nu_filter
-        type(pcg_assemble_bench) :: bt !< this assembly's phases, handed to bench
+        type(pcg_atomic_prior), target      :: atm_prior
+        type(image)                         :: atm_res
+        real(dp),               allocatable :: atm_c(:,:) !< (natoms,2) amplitudes fitted per half
+        real                                :: atm_lambda_rel, atm_lambda_abs(2), atm_amp_rres(2), atm_resid(2), atm_mres(2)
+        integer                             :: atm_amp_nits(2), atm_nits(2)
+        logical                             :: l_atm_resolved
+        character(len=16)                   :: state_support_kind, base_support_kind, shipped_support_kind
+        integer(timer_int_kind)             :: t_state_phase, t_bench
+        real(dp)                            :: time_map_output, time_fsc_output, time_nu_filter
+        type(pcg_assemble_bench)            :: bt         !< this assembly's phases, handed to bench
 
         if( L_BENCH_GLOB ) t_bench = tic()
         call validate_pcg_common(params)
@@ -1053,9 +1053,9 @@ contains
         subroutine set_chain_blend_weights( state_here )
             integer, intent(in) :: state_here
             type(trail_chain_manifest) :: man
-            type(string) :: manifest
-            real    :: mnew, mrep
-            integer :: status, nnew
+            type(string)               :: manifest
+            real                       :: mnew, mrep
+            integer                    :: status, nnew
             ! M: the mass the chain pair represents, from its manifest (validated by discard_stale_trail_chain_pair)
             manifest = refine3D_pcg_trail_manifest_fname(state_here)
             call man%read(manifest, status)
@@ -1124,11 +1124,11 @@ contains
         !! state= run.
         subroutine find_empty_states( l_empty )
             logical, allocatable, intent(out) :: l_empty(:)
-            integer :: nptcls_state(params%nstates), istate_here, part_here, eo_here, status
-            integer :: hstate, heo, hpart, hnparts, hnptcls, hbox
-            real    :: hsmpd
+            integer            :: nptcls_state(params%nstates), istate_here, part_here, eo_here, status
+            integer            :: hstate, heo, hpart, hnparts, hnptcls, hbox
+            real               :: hsmpd
             character(len=256) :: hprov
-            type(string) :: fname
+            type(string)       :: fname
             allocate(l_empty(params%nstates), source=.false.)
             if( params%nstates <= 1 .or. params%l_state_defined ) return
             nptcls_state = 0
@@ -1173,7 +1173,7 @@ contains
             integer, allocatable :: rows(:), members(:)
             real,    allocatable :: wmem(:)
             logical, allocatable :: l_row(:)
-            integer :: p
+            integer              :: p
             n    = 0
             mass = 0.0_dp
             if( l_weighted )then
@@ -1207,8 +1207,8 @@ contains
             class(string),            intent(in)    :: fname
             integer,                  intent(in)    :: state_here, eo_here
             type(string) :: manifest
-            integer  :: n
-            real(dp) :: mass
+            integer      :: n
+            real(dp)     :: mass
             if( .not. any(chain_written) )then
                 manifest = refine3D_pcg_trail_manifest_fname(state_here)
                 call del_file(manifest)
@@ -1225,10 +1225,10 @@ contains
         subroutine write_chain_manifest( state_here )
             integer, intent(in) :: state_here
             type(trail_chain_manifest) :: man
-            type(string)    :: manifest, half_fname, files(3)
-            integer(int64)  :: sizes(4)
-            integer         :: io_stat, gen
-            integer(timer_int_kind) :: t_manifest
+            type(string)               :: manifest, half_fname, files(3)
+            integer(int64)             :: sizes(4)
+            integer                    :: io_stat, gen
+            integer(timer_int_kind)    :: t_manifest
             if( L_BENCH_GLOB ) t_manifest = tic()
             sizes = 0_int64
             half_fname = refine3D_pcg_trail_accum_fname(state_here, 'even')
@@ -1257,9 +1257,9 @@ contains
         logical function chain_manifest_valid( state_here ) result( l_valid )
             integer, intent(in) :: state_here
             type(trail_chain_manifest) :: man
-            type(string)   :: manifest, half_fname
-            integer(int64) :: sz_even, sz_odd
-            integer        :: status
+            type(string)               :: manifest, half_fname
+            integer(int64)             :: sz_even, sz_odd
+            integer                    :: status
             l_valid  = .false.
             manifest = refine3D_pcg_trail_manifest_fname(state_here)
             call man%read(manifest, status)
@@ -1284,13 +1284,13 @@ contains
         !! lambda_atm), amplitudes fitted per half through that half's operator, then the prior on both operators
         subroutine prepare_atomic_prior_on_pair( state_here )
             integer, intent(in) :: state_here
-            type(atoms)       :: model
+            type(atoms)                  :: model
             type(pcg_atomic_prior_stats) :: astats
-            real, allocatable :: pos(:,:), supp(:,:,:), xb(:,:,:), model_map(:,:,:)
-            real, allocatable :: atom_bfac(:), atom_occ(:), atom_prior_intensity(:)
-            real    :: bdata, lambda_rel_est, shift_a
-            integer :: i, nsh
-            logical :: l_widths, l_fitted_model
+            real, allocatable            :: pos(:,:), supp(:,:,:), xb(:,:,:), model_map(:,:,:)
+            real, allocatable            :: atom_bfac(:), atom_occ(:), atom_prior_intensity(:)
+            real                         :: bdata, lambda_rel_est, shift_a
+            integer                      :: i, nsh
+            logical                      :: l_widths, l_fitted_model
             call model%new(params%pdbfile)
             if( model%get_n() < 1 ) THROW_HARD('the atom model pdbfile holds no atoms; atm_prior')
             ! PDB A = 0-based native voxel * smpd; the crop keeps the box centre and the field of view
@@ -1375,14 +1375,14 @@ contains
         !! the fitted model up to one scale. Columns are found by name; a PDB without a table keeps the position-only
         !! prior at one width
         subroutine read_species_prior_fields( natoms, bfacs, occupancies, prior_intensities, found_widths, found_model )
-            integer,           intent(in)  :: natoms
-            real, allocatable, intent(out) :: bfacs(:), occupancies(:), prior_intensities(:)
-            logical,           intent(out) :: found_widths, found_model
-            character(len=*), parameter :: ATMS_TAG = '_ATMS'
+            integer,           intent(in)               :: natoms
+            real,              allocatable, intent(out) :: bfacs(:), occupancies(:), prior_intensities(:)
+            logical,           intent(out)              :: found_widths, found_model
+            character(len=*), parameter   :: ATMS_TAG = '_ATMS'
             character(len=:), allocatable :: stem
-            type(string) :: csvfile, stem_str
-            character(len=LONGSTRLEN) :: line
-            integer :: funit, io_stat, i, ncol, col_b, col_int, col_occ, nzero, lstem
+            type(string)                  :: csvfile, stem_str
+            character(len=LONGSTRLEN)     :: line
+            integer                       :: funit, io_stat, i, ncol, col_b, col_int, col_occ, nzero, lstem
             found_widths = .false.
             found_model  = .false.
             stem_str = get_fbody(params%pdbfile, 'pdb')
@@ -1492,7 +1492,7 @@ contains
         !> the per-half amplitude fits, concurrently as the half solves
         subroutine fit_amplitudes_pair
             real(dp), allocatable :: c_even(:), c_odd(:)
-            integer :: previous_max_active_levels
+            integer               :: previous_max_active_levels
             if( pcg_master_nthreads >= 2 )then
                 previous_max_active_levels = 1
                 !$ previous_max_active_levels = omp_get_max_active_levels()
@@ -1524,8 +1524,8 @@ contains
         subroutine write_atomic_prior_products( state_here )
             integer, intent(in) :: state_here
             type(pcg_atomic_prior_stats) :: astats
-            type(string) :: fname
-            integer :: funit
+            type(string)                 :: fname
+            integer                      :: funit
             fname = add2fbody(refine3D_state_halfvol_fname(state_here, 'even'), MRC_EXT, '_base')
             call half_even%write(fname, del_if_exists=.true.)
             fname = add2fbody(refine3D_state_halfvol_fname(state_here, 'odd'), MRC_EXT, '_base')
@@ -1589,15 +1589,15 @@ contains
         !> Solve the prior-free base pair or the regularized replay.
         subroutine reduce_solve_state_pair( state_here, even, odd, n_even_here, n_odd_here, solve_kind, &
                 &fsc_prior, warm_even, warm_odd, atm_even, atm_odd )
-            integer,          intent(in)    :: state_here
-            character(len=*), intent(in)    :: solve_kind
-            type(image),      intent(inout) :: even, odd
-            integer,          intent(out)   :: n_even_here, n_odd_here
-            real, optional,   intent(in)    :: fsc_prior(:)
-            type(image), optional, intent(in) :: warm_even, warm_odd
-            type(image), optional, intent(inout) :: atm_even, atm_odd !< atm_prior=yes: the prior'd pair
+            integer,          intent(in)              :: state_here
+            character(len=*), intent(in)              :: solve_kind
+            type(image),      intent(inout)           :: even, odd
+            integer,          intent(out)             :: n_even_here, n_odd_here
+            real,             optional,   intent(in)  :: fsc_prior(:)
+            type(image),      optional, intent(in)    :: warm_even, warm_odd
+            type(image),      optional, intent(inout) :: atm_even, atm_odd !< atm_prior=yes: the prior'd pair
             integer(timer_int_kind) :: t_pair
-            integer :: ikind
+            integer                 :: ikind
             ikind = merge(2, 1, present(fsc_prior))
 
             if( present(fsc_prior) )then
@@ -1693,19 +1693,19 @@ contains
         ! cross the OpenMP sections boundary below.
         subroutine prepare_distributed_half_job( state_here, eo_here, half, solve_kind, job, &
                 &fsc_prior, warm_start )
-            integer,          intent(in)    :: state_here, eo_here
-            character(len=*), intent(in)    :: half, solve_kind
-            type(distributed_half_job), intent(inout) :: job
-            real, optional,   intent(in)    :: fsc_prior(:)
-            type(image), optional, intent(in) :: warm_start
-            type(string) :: fname
-            integer :: part_here, n_part, n_full_half
-            real(dp) :: part_mass
-            integer(int64) :: part_wset_id(2)
+            integer,                    intent(in)             :: state_here, eo_here
+            character(len=*),           intent(in)             :: half, solve_kind
+            type(distributed_half_job), intent(inout)          :: job
+            real,                       optional,   intent(in) :: fsc_prior(:)
+            type(image),                optional, intent(in)   :: warm_start
+            type(string)            :: fname
+            integer                 :: part_here, n_part, n_full_half
+            real(dp)                :: part_mass
+            integer(int64)          :: part_wset_id(2)
             integer(timer_int_kind) :: t_phase, t_bench_half
-            real(dp) :: rt_sum_part, rt_sum_half
-            real :: realized_fraction, update_weight, current_scale
-            logical :: l_chain_exists, l_seed_chain
+            real(dp)                :: rt_sum_part, rt_sum_half
+            real                    :: realized_fraction, update_weight, current_scale
+            logical                 :: l_chain_exists, l_seed_chain
 
             job%state = state_here
             job%eo = eo_here
@@ -1931,9 +1931,9 @@ contains
         ! Finalization is serial for deterministic logging, diagnostics and
         ! image/FFTW lifecycle management.
         subroutine finish_distributed_half_job( job, volume, warm_start )
-            type(distributed_half_job), intent(inout) :: job
-            type(image), intent(inout) :: volume
-            type(image), optional, intent(in) :: warm_start
+            type(distributed_half_job), intent(inout)        :: job
+            type(image),                intent(inout)        :: volume
+            type(image),                optional, intent(in) :: warm_start
             if( .not. job%ready ) return
             call handle_cold_restart_outcome(job%result, 'distributed', job%half, job%solve_kind)
             call validate_solved_map(job%x, 'distributed', job%state, job%half, job%solve_kind)
@@ -1970,19 +1970,19 @@ contains
         subroutine write_distributed_diagnostics( state_here, half, solve_kind, l_concurrent, nptcls, result, &
                 &history, reduce_time, finalize_time, solve_time, data_scale, lambda_eff, prior_npositive, &
                 &prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms, pcgop )
-            integer,                  intent(in) :: state_here, nptcls
-            character(len=*),         intent(in) :: half, solve_kind
-            logical,                  intent(in) :: l_concurrent
-            type(pcg_solver_outcome), intent(in) :: result
-            real,                     intent(in) :: history(:)
-            real(dp),                 intent(in) :: reduce_time, finalize_time, solve_time
-            real,                     intent(in) :: data_scale, lambda_eff
-            integer, optional,        intent(in) :: prior_npositive
-            real, optional,           intent(in) :: prior_positive_min, prior_positive_max
-            real, optional,           intent(in) :: prior_to_khat_l1, prior_to_khat_rms
-            type(reconstructor_pcg),   intent(in) :: pcgop
+            integer,                   intent(in)                     :: state_here, nptcls
+            character(len=*),          intent(in)                     :: half, solve_kind
+            logical,                   intent(in)                     :: l_concurrent
+            type(pcg_solver_outcome),  intent(in)                     :: result
+            real,                      intent(in)                     :: history(:)
+            real(dp),                  intent(in)                     :: reduce_time, finalize_time, solve_time
+            real,                      intent(in)                     :: data_scale, lambda_eff
+            integer,                   optional,        intent(in)    :: prior_npositive
+            real,                      optional,           intent(in) :: prior_positive_min, prior_positive_max
+            real,                      optional,           intent(in) :: prior_to_khat_l1, prior_to_khat_rms
+            type(reconstructor_pcg),   intent(in)                     :: pcgop
             type(string) :: fname
-            integer :: funit, i
+            integer      :: funit, i
             fname = 'reconstruct3D_pcg_state'//int2str_pad(state_here,2)//'_'//trim(half)//'_'// &
                 &trim(solve_kind)//'_diagnostics.txt'
             call fopen(funit, file=fname, status='replace', action='write')
@@ -2059,11 +2059,11 @@ contains
         integer,          intent(in) :: state
         character(len=*), intent(in) :: half, solve_kind
         real, parameter :: EXCESS_REPORT_RATIO = 10.
-        type(image) :: tmpvol
-        complex  :: comp
-        real(dp) :: sumsq_edge, sumsq_beyond
-        real     :: ratio
-        integer  :: lims(3,2), phys(3), h, k, l, sh, n_edge, n_beyond, kstop
+        type(image)     :: tmpvol
+        complex         :: comp
+        real(dp)        :: sumsq_edge, sumsq_beyond
+        real            :: ratio
+        integer         :: lims(3,2), phys(3), h, k, l, sh, n_edge, n_beyond, kstop
         kstop = matched_band_kstop(params, volume)
         if( kstop < 1 ) return
         call tmpvol%copy(volume)
@@ -2104,12 +2104,12 @@ contains
     end subroutine report_beyond_band_excess
 
     subroutine write_output_diagnostics( state, execution_mode, map_time, fsc_time, nu_filter_time )
-        integer,            intent(in) :: state
-        character(len=*),   intent(in) :: execution_mode
-        real(dp),           intent(in) :: map_time, fsc_time
-        real(dp), optional, intent(in) :: nu_filter_time
+        integer,            intent(in)           :: state
+        character(len=*),   intent(in)           :: execution_mode
+        real(dp),           intent(in)           :: map_time, fsc_time
+        real(dp),           optional, intent(in) :: nu_filter_time
         type(string) :: fname
-        integer :: funit
+        integer      :: funit
         fname = 'reconstruct3D_pcg_state'//int2str_pad(state,2)//'_output_diagnostics.txt'
         call fopen(funit, file=fname, status='replace', action='write')
         write(funit,'(A,A)')     'execution_mode=', trim(execution_mode)
@@ -2202,8 +2202,8 @@ contains
     end function pcg_trail_seed_requested
 
     subroutine validate_pcg_common( params, check_solver )
-        type(parameters), intent(in) :: params
-        logical, optional, intent(in) :: check_solver
+        type(parameters), intent(in)           :: params
+        logical,          optional, intent(in) :: check_solver
         logical :: l_check_solver
         l_check_solver = .true.
         if( present(check_solver) ) l_check_solver = check_solver

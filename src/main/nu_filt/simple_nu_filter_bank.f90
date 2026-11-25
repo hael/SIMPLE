@@ -8,19 +8,19 @@ contains
 
     module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
             &evidence_source, fsc_res )
-        class(image),          intent(in) :: vol_even, vol_odd
-        real,                  intent(in) :: mskdiam
-        real,                  intent(in) :: aux_resolutions(:)
-        type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
-        character(len=*), optional, intent(in) :: evidence_source
-        real,        optional, intent(in) :: fsc_res
-        type(image) :: vol_even_filt, vol_odd_filt, vol_support, vol_even_ft, vol_odd_ft
-        real, allocatable :: dmat_tmp(:,:,:), dmat_cand(:,:,:)
-        real :: noise_scale, finest_lp
-        integer :: i, n_candidates, aux_replacement_idx, aux_find
-        real    :: x
-        real,    allocatable :: bwfilters_tmp(:,:)
-        integer, allocatable :: cutoff_finds_tmp(:)
+        class(image),          intent(in)           :: vol_even, vol_odd
+        real,                  intent(in)           :: mskdiam
+        real,                  intent(in)           :: aux_resolutions(:)
+        type(image),           optional, intent(in) :: aux_even(:), aux_odd(:)
+        character(len=*),      optional, intent(in) :: evidence_source
+        real,                  optional, intent(in) :: fsc_res
+        type(image)             :: vol_even_filt, vol_odd_filt, vol_support, vol_even_ft, vol_odd_ft
+        real,    allocatable    :: dmat_tmp(:,:,:), dmat_cand(:,:,:)
+        real                    :: noise_scale, finest_lp
+        integer                 :: i, n_candidates, aux_replacement_idx, aux_find
+        real                    :: x
+        real,    allocatable    :: bwfilters_tmp(:,:)
+        integer, allocatable    :: cutoff_finds_tmp(:)
         integer(timer_int_kind) :: t0
         ! the previous pair's background clamp and null shell would carry into this one
         if( nu_l_solvent_clamp ) THROW_HARD('the previous pair''s solvent clamp is still set: cleanup_nu_filter first')
@@ -202,10 +202,10 @@ contains
     end function get_nu_filter_bank_finest_lp
 
     module subroutine optimize_nu_cutoff_finds()
-        integer :: nx, ny, nz, i, j, k, icand, n_base, n_candidates, imask, n_clamped, ilevel
-        integer, allocatable :: sel(:)
-        real,    allocatable :: lvl(:,:), full(:,:,:), tmp(:,:,:)
-        real    :: lp_level
+        integer                 :: nx, ny, nz, i, j, k, icand, n_base, n_candidates, imask, n_clamped, ilevel
+        integer, allocatable    :: sel(:)
+        real,    allocatable    :: lvl(:,:), full(:,:,:), tmp(:,:,:)
+        real                    :: lp_level
         integer(timer_int_kind) :: t0, t1
         if( L_BENCH_GLOB ) t0 = tic()
         if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
@@ -333,13 +333,13 @@ contains
 
     module subroutine log_nu_candidate_selection_counts( candmap, n_base, stage )
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
-        integer,          intent(in) :: n_base
-        character(len=*), intent(in) :: stage
+        integer,                     intent(in) :: n_base
+        character(len=*),            intent(in) :: stage
         integer, allocatable :: cand_counts(:)
-        integer :: icand, n_candidates, nmask, nvox
-        integer :: i, j, k, imask
-        real    :: pct
-        character(len=16) :: source_tag
+        integer              :: icand, n_candidates, nmask, nvox
+        integer              :: i, j, k, imask
+        real                 :: pct
+        character(len=16)    :: source_tag
         if( .not.allocated(nu_lmask) ) return
         if( .not.allocated(candidate_coords) ) return
         n_candidates = size(candidate_coords)
@@ -426,8 +426,8 @@ contains
     end subroutine log_nu_candidate_coords
 
     subroutine log_nu_objective_smoothing_bank()
-        integer :: i
-        real    :: lp_angstrom, radius_angstrom
+        integer           :: i
+        real              :: lp_angstrom, radius_angstrom
         character(len=10) :: source_tag
         write(logfhandle,'(A,F6.2,A,F6.2,A,F7.2,A)') &
             &'>>> NU objective AWF smoothing: radius_A=', NU_OBJECTIVE_SMOOTH_RADIUS_FRAC, &

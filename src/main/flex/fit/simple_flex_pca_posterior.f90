@@ -219,7 +219,7 @@ contains
         type(kmeans)          :: km
         real(dp), allocatable :: zrows(:,:)
         integer,  allocatable :: lab(:), cnt(:)
-        integer  :: n, i, j, k
+        integer               :: n, i, j, k
         if( kmix == 1 )then
             xi  = 0.d0
             ppi = 1.d0

@@ -28,46 +28,46 @@ private
 
 
 type :: eul_prob_tab
-    class(builder),    pointer  :: b_ptr => null()
-    class(parameters), pointer  :: p_ptr => null()
-    type(ptcl_ref), allocatable :: assgn_map(:)    !< assignment map                  (nptcls)
-    real,           allocatable :: seed_shifts(:,:) !< per-particle seeded shift       (2,nptcls)
-    real,           allocatable :: temps(:)         !< per-particle posterior temperature pi wsqsum / (2 pftsz) (nptcls; the fill writes it, the selection draws at it)
-    logical,        allocatable :: seed_has_sh(:)   !< per-particle seeded shift flag  (nptcls)
-    integer                     :: seed_nrots = 0   !< rotation grid of the table (checked when the parts are read)
-    integer,        allocatable :: pinds(:)        !< particle indices for processing
-    integer,        allocatable :: ssinds(:)       !< non-empty state indices
-    integer,        allocatable :: state_to_active_rank(:) !< requested state -> compact active-state rank
-    logical,        allocatable :: state_exists(:)
-    integer                     :: post_unit      = -1      !< the pose-posterior diagnostic file (prob_post_diag=yes)
-    logical                     :: post_is_open   = .false.
-    logical                     :: post_slots_identical = .false. !< the two reference slots hold the same sections (header)
-    logical                     :: post_has_halves = .false. !< the real halves are loaded beside the references (header)
-    integer                     :: post_ref_offset = 0       !< the diagnostic model's first reference minus one: the full production model's size nspace*nstates (not nrefs, which counts the active states only)
-    integer                     :: nptcls          !< size of pinds array
-    integer                     :: nstates         !< states number
-    integer                     :: nrefs           !< reference number
-    type(prob_fill_profile)     :: fill_profile    !< accumulated cost record of fill_tab_range (bench file)
-    type(prob_insert_table)     :: insert_tab      !< the weighted insertion's extra poses of the assignment (topk > 1)
-    type(prob_insert_cone)      :: insert_cone     !< the weighted insertion's cone about the committed pose (set_insert_cone; unset: no extras)
-    type(rnd_key)               :: rnd_scope       !< the keyed draws' scope of the iteration (prob_rnd_scope), taken at every fill and assignment
-    integer                     :: projs_ns_model = 0      !< the iteration's refined-reference budget (calc_num2sample), set by the fill's caller
-    real                        :: sigma2_prior_model = 0. !< the iteration's shift prior variance per axis (shift_prior_sigma2), set by the fill's caller
-    logical                     :: l_model_set = .false.   !< set_iteration_model called
+    class(builder),    pointer     :: b_ptr                => null()
+    class(parameters), pointer     :: p_ptr                => null()
+    type(ptcl_ref),    allocatable :: assgn_map(:)                   !< assignment map                  (nptcls)
+    real,              allocatable :: seed_shifts(:,:)               !< per-particle seeded shift       (2,nptcls)
+    real,              allocatable :: temps(:)                       !< per-particle posterior temperature pi wsqsum / (2 pftsz) (nptcls; the fill writes it, the selection draws at it)
+    logical,           allocatable :: seed_has_sh(:)                 !< per-particle seeded shift flag  (nptcls)
+    integer                        :: seed_nrots           = 0       !< rotation grid of the table (checked when the parts are read)
+    integer,           allocatable :: pinds(:)                       !< particle indices for processing
+    integer,           allocatable :: ssinds(:)                      !< non-empty state indices
+    integer,           allocatable :: state_to_active_rank(:)        !< requested state -> compact active-state rank
+    logical,           allocatable :: state_exists(:)
+    integer                        :: post_unit            = -1      !< the pose-posterior diagnostic file (prob_post_diag=yes)
+    logical                        :: post_is_open         = .false.
+    logical                        :: post_slots_identical = .false. !< the two reference slots hold the same sections (header)
+    logical                        :: post_has_halves      = .false. !< the real halves are loaded beside the references (header)
+    integer                        :: post_ref_offset      = 0       !< the diagnostic model's first reference minus one: the full production model's size nspace*nstates (not nrefs, which counts the active states only)
+    integer                        :: nptcls                         !< size of pinds array
+    integer                        :: nstates                        !< states number
+    integer                        :: nrefs                          !< reference number
+    type(prob_fill_profile)        :: fill_profile                   !< accumulated cost record of fill_tab_range (bench file)
+    type(prob_insert_table)        :: insert_tab                     !< the weighted insertion's extra poses of the assignment (topk > 1)
+    type(prob_insert_cone)         :: insert_cone                    !< the weighted insertion's cone about the committed pose (set_insert_cone; unset: no extras)
+    type(rnd_key)                  :: rnd_scope                      !< the keyed draws' scope of the iteration (prob_rnd_scope), taken at every fill and assignment
+    integer                        :: projs_ns_model       = 0       !< the iteration's refined-reference budget (calc_num2sample), set by the fill's caller
+    real                           :: sigma2_prior_model   = 0.      !< the iteration's shift prior variance per axis (shift_prior_sigma2), set by the fill's caller
+    logical                        :: l_model_set          = .false. !< set_iteration_model called
     ! the batch's rows, kept by the fill for the batch's own selection
-    type(prob_dense_entry),   allocatable :: batch_rows(:,:)    !< (nrefs, i_first:i_last) the batch's rows
-    type(prob_refined_entry), allocatable :: batch_refined(:,:) !< (max(1,projs_ns), i_first:i_last) its refined entries
-    integer,                  allocatable :: batch_nrefined(:)  !< (i_first:i_last)
+    type(prob_dense_entry),   allocatable :: batch_rows(:,:)      !< (nrefs, i_first:i_last) the batch's rows
+    type(prob_refined_entry), allocatable :: batch_refined(:,:)   !< (max(1,projs_ns), i_first:i_last) its refined entries
+    integer,                  allocatable :: batch_nrefined(:)    !< (i_first:i_last)
     ! the assignment across the batches (open_assignment .. close_assignment): the readout and the counts
     type(prob_neff_readout)     :: neff
-    type(prob_state_readout)    :: state_rd                 !< the state readout of the joint draw (more than one active state)
-    type(prob_readout)          :: rec_last                 !< the last closed assignment's readout record (get_readout)
-    integer                     :: view_nptcls = 0, view_npose = 0, view_nmerged = 0 !< the extras after the view solves (set_view_readout)
-    real(dp)                    :: view_wc_sum = 0.d0
+    type(prob_state_readout)    :: state_rd                                            !< the state readout of the joint draw (more than one active state)
+    type(prob_readout)          :: rec_last                                            !< the last closed assignment's readout record (get_readout)
+    integer                     :: view_nptcls   = 0, view_npose = 0, view_nmerged = 0 !< the extras after the view solves (set_view_readout)
+    real(dp)                    :: view_wc_sum   = 0.d0
     logical                     :: l_assign_open = .false.
-    logical                     :: l_extras      = .false.  !< the weighted insertion's extras are selected (topk > 1, a cone)
-    integer                     :: kmax = 1                 !< poses per particle of the weighted insertion
-    integer                     :: nmode = 0, ntemp_missing = 0, nbad = 0, nflat = 0
+    logical                     :: l_extras      = .false.                             !< the weighted insertion's extras are selected (topk > 1, a cone)
+    integer                     :: kmax          = 1                                   !< poses per particle of the weighted insertion
+    integer                     :: nmode         = 0, ntemp_missing = 0, nbad = 0, nflat = 0
     contains
     ! CONSTRUCTOR
     procedure          :: new_pipeline
@@ -106,12 +106,12 @@ contains
     ! CONSTRUCTORS
 
     subroutine new_common( self, params, build, pinds )
-        class(eul_prob_tab),       intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(builder),    target, intent(in)    :: build
-        integer,                   intent(in)    :: pinds(:)
+        class(eul_prob_tab),       intent(inout)      :: self
+        class(parameters),         target, intent(in) :: params
+        class(builder),            target, intent(in) :: build
+        integer,                   intent(in)         :: pinds(:)
         integer, parameter :: MIN_POP = 5   ! ignoring cavgs with less than 5 particles
-        integer :: istate, si
+        integer            :: istate, si
         call self%kill
         self%p_ptr => params
         self%b_ptr  => build
@@ -174,11 +174,11 @@ contains
     !! batch by batch, the rows the fill keeps for the batch's own selection (fill_tab_range, assign_batch); with
     !! block_memo the calculator's bin-major reference memo the dense fill's block kernel reads (after memoize_refs)
     subroutine new_pipeline( self, params, build, pinds, block_memo )
-        class(eul_prob_tab),       intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(builder),    target, intent(in)    :: build
-        integer,                   intent(in)    :: pinds(:)
-        logical, optional,         intent(in)    :: block_memo
+        class(eul_prob_tab),       intent(inout)                :: self
+        class(parameters),         target, intent(in)           :: params
+        class(builder),            target, intent(in)           :: build
+        integer,                   intent(in)                   :: pinds(:)
+        logical,                   optional,         intent(in) :: block_memo
         call self%new_common(params,build,pinds)
         allocate(self%assgn_map(self%nptcls))
         call self%initialize_storage
@@ -221,49 +221,49 @@ contains
     subroutine fill_tab_range( self, i_first, i_last )
         class(eul_prob_tab), intent(inout) :: self
         integer,             intent(in)    :: i_first, i_last
-        integer, allocatable   :: locn(:,:)
-        type(pftc_shsrch_grad), target :: grad_shsrch_obj(nthr_glob)  !< the shift search object, L-BFGS with gradient
-        type(pftc_shsrch_grad), target :: grad_shsrch_disk(nthr_glob) !< the disk's (shift_sigma > 0): its limits bound the refinement box
-        type(prob_dense_entry),   allocatable :: rows_batch(:,:)     !< the batch's rows (nrefs,i_first:i_last)
-        type(prob_refined_entry), allocatable :: refined_batch(:,:)  !< refined entries per particle (projs_ns,i_first:i_last)
-        integer,                  allocatable :: nrefined_batch(:)
-        type(prob_posterior_stat), allocatable :: post_batch(:)      !< pose-posterior statistics per particle (prob_post_diag=yes)
-        real,                      allocatable :: post_w(:,:)        !< per thread: the posterior over the row, sorted
-        integer,                   allocatable :: post_inds(:,:)     !< per thread: its reference order
-        real,                      allocatable :: post_d(:,:)        !< per thread: the deterministic row, own slot
-        real,                      allocatable :: post_wd(:,:)       !< per thread: its posterior, sorted
-        integer,                   allocatable :: post_indsd(:,:)    !< per thread: its reference order
-        real,                      allocatable :: post_h(:,:)        !< per thread: the deterministic row, own real half
-        real,                      allocatable :: post_wh(:,:)       !< per thread: its posterior, sorted
-        integer,                   allocatable :: post_indsh(:,:)    !< per thread: its reference order
-        real,                      allocatable :: post_x(:,:)        !< per thread: the deterministic row, other real half
-        real,                      allocatable :: post_wx(:,:)       !< per thread: its posterior, sorted
-        integer,                   allocatable :: post_indsx(:,:)    !< per thread: its reference order
-        logical :: l_post
-        integer :: i, projs_ns, ithr, nper, ncap, nteam, nblocks, ib
-        real    :: lims(2,2), lims_init(2,2)
-        logical :: l_sh_first, l_grid
-        real    :: sigma2_prior  !< the shift prior's variance per axis (shift_prior=yes)
-        complex(sp), allocatable :: seed_bank(:,:,:,:) !< per thread: the block's seed-shifted particle memos (single state)
-        real(sp),    allocatable :: dists_blk(:,:)     !< per thread: the block kernel's drawn distances (references x block)
-        integer,     allocatable :: irots_blk(:,:)     !< per thread: its drawn in-plane indices
-        integer,     allocatable :: irefs_tab(:)       !< the calculator's reference of every table reference
-        integer,     allocatable :: porder(:), blocks(:,:) !< the batch's particles by half, and its blocks in porder
-        integer(int64) :: seed_builds, bank_ithr
-        integer :: kfromto_loc(2)
-        integer(int64) :: fit_ithr(0:5)
-        integer(int64) :: rank_ithr(0:11,nthr_glob)  !< per thread: the refined argmin's unrefined rank (bench, prob_fill_profile%rank_counts)
-        real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
-        integer(int64) :: obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr
-        integer(int64) :: ndisk_thr(nthr_glob), nscreens_thr(nthr_glob)
-        real(dp)       :: prior_w, sigma_px, radius_disk
-        real           :: lims_disk(2,2)
-        real           :: step_map(NSHIFTMAPS)
-        real           :: scr_xy(2,self%nrefs,nthr_glob), scr_loss(self%nrefs,nthr_glob) !< per thread: the screen's coarse optima and losses
-        real           :: scr_sdev(self%nrefs,nthr_glob)  !< per thread: the screen's posterior widths
-        integer        :: scr_irot(self%nrefs,nthr_glob)
-        integer        :: kscreen
-        logical        :: l_map
+        integer,                   allocatable :: locn(:,:)
+        type(pftc_shsrch_grad),    target      :: grad_shsrch_obj(nthr_glob)                                     !< the shift search object, L-BFGS with gradient
+        type(pftc_shsrch_grad),    target      :: grad_shsrch_disk(nthr_glob)                                    !< the disk's (shift_sigma > 0): its limits bound the refinement box
+        type(prob_dense_entry),    allocatable :: rows_batch(:,:)                                                !< the batch's rows (nrefs,i_first:i_last)
+        type(prob_refined_entry),  allocatable :: refined_batch(:,:)                                             !< refined entries per particle (projs_ns,i_first:i_last)
+        integer,                   allocatable :: nrefined_batch(:)
+        type(prob_posterior_stat), allocatable :: post_batch(:)                                                  !< pose-posterior statistics per particle (prob_post_diag=yes)
+        real,                      allocatable :: post_w(:,:)                                                    !< per thread: the posterior over the row, sorted
+        integer,                   allocatable :: post_inds(:,:)                                                 !< per thread: its reference order
+        real,                      allocatable :: post_d(:,:)                                                    !< per thread: the deterministic row, own slot
+        real,                      allocatable :: post_wd(:,:)                                                   !< per thread: its posterior, sorted
+        integer,                   allocatable :: post_indsd(:,:)                                                !< per thread: its reference order
+        real,                      allocatable :: post_h(:,:)                                                    !< per thread: the deterministic row, own real half
+        real,                      allocatable :: post_wh(:,:)                                                   !< per thread: its posterior, sorted
+        integer,                   allocatable :: post_indsh(:,:)                                                !< per thread: its reference order
+        real,                      allocatable :: post_x(:,:)                                                    !< per thread: the deterministic row, other real half
+        real,                      allocatable :: post_wx(:,:)                                                   !< per thread: its posterior, sorted
+        integer,                   allocatable :: post_indsx(:,:)                                                !< per thread: its reference order
+        logical                                :: l_post
+        integer                                :: i, projs_ns, ithr, nper, ncap, nteam, nblocks, ib
+        real                                   :: lims(2,2), lims_init(2,2)
+        logical                                :: l_sh_first, l_grid
+        real                                   :: sigma2_prior                                                   !< the shift prior's variance per axis (shift_prior=yes)
+        complex(sp),               allocatable :: seed_bank(:,:,:,:)                                             !< per thread: the block's seed-shifted particle memos (single state)
+        real(sp),                  allocatable :: dists_blk(:,:)                                                 !< per thread: the block kernel's drawn distances (references x block)
+        integer,                   allocatable :: irots_blk(:,:)                                                 !< per thread: its drawn in-plane indices
+        integer,                   allocatable :: irefs_tab(:)                                                   !< the calculator's reference of every table reference
+        integer,                   allocatable :: porder(:), blocks(:,:)                                         !< the batch's particles by half, and its blocks in porder
+        integer(int64)                         :: seed_builds, bank_ithr
+        integer                                :: kfromto_loc(2)
+        integer(int64)                         :: fit_ithr(0:5)
+        integer(int64)                         :: rank_ithr(0:11,nthr_glob)                                      !< per thread: the refined argmin's unrefined rank (bench, prob_fill_profile%rank_counts)
+        real(dp)                               :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
+        integer(int64)                         :: obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr
+        integer(int64)                         :: ndisk_thr(nthr_glob), nscreens_thr(nthr_glob)
+        real(dp)                               :: prior_w, sigma_px, radius_disk
+        real                                   :: lims_disk(2,2)
+        real                                   :: step_map(NSHIFTMAPS)
+        real                                   :: scr_xy(2,self%nrefs,nthr_glob), scr_loss(self%nrefs,nthr_glob) !< per thread: the screen's coarse optima and losses
+        real                                   :: scr_sdev(self%nrefs,nthr_glob)                                 !< per thread: the screen's posterior widths
+        integer                                :: scr_irot(self%nrefs,nthr_glob)
+        integer                                :: kscreen
+        logical                                :: l_map
         if( i_first < 1 .or. i_last > self%nptcls .or. i_last < i_first )then
             THROW_HARD('invalid particle range in eul_prob_tab%fill_tab_range')
         endif
@@ -583,12 +583,12 @@ contains
         subroutine finish_particle_map( i_loc, iptcl_loc, ithr_loc, l_disk, l_prior )
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
             logical, intent(in) :: l_disk, l_prior
-            type(pftc_shsrch_grad), pointer :: gso
-            integer, allocatable :: pool(:)
-            real(dp) :: t0, temp_i, temp_s, xcell(2), prior_w_map
-            real     :: loss_cell, loss_pose, dist_loc, cxy(3), width_best(max(1,nper),self%nstates)
-            integer  :: imap, ri_loc, irot_loc, irho_loc, ialpha_loc, j_loc, k_loc, npool, nbest, nblk, si_loc, nb_loc
-            logical  :: l_cont_refined
+            type(pftc_shsrch_grad), pointer     :: gso
+            integer,                allocatable :: pool(:)
+            real(dp)                            :: t0, temp_i, temp_s, xcell(2), prior_w_map
+            real                                :: loss_cell, loss_pose, dist_loc, cxy(3), width_best(max(1,nper),self%nstates)
+            integer                             :: imap, ri_loc, irot_loc, irho_loc, ialpha_loc, j_loc, k_loc, npool, nbest, nblk, si_loc, nb_loc
+            logical                             :: l_cont_refined
             imap        = SHIFTMAP_WINDOW
             prior_w_map = 0.d0
             gso         => grad_shsrch_obj(ithr_loc)
@@ -688,11 +688,11 @@ contains
             logical, intent(in) :: l_bank
             type(ori) :: o_prev_loc
             logical   :: l_refined
-            real     :: temp, pmax, neff, euls_min(3), euls_d(3), euls_h(3), euls_x(3), euls_sym(3), euldist, inpldist
-            real     :: sh_mode(2), sh_kernel(2), dist_loc, dist_at, dist_own, dist_other, euls_prev(3)
-            integer  :: imin, k99, nvalid, ri_loc, istate_min, iproj_min, irot_loc, irot_min, j_loc
-            integer  :: imin_d, k99_d, nvalid_d, imin_h, k99_h, nvalid_h, imin_x, k99_x, nvalid_x
-            integer  :: prev_state, prev_proj, irot_prev, irot_ctrl, iref_prev, nrots_loc
+            real      :: temp, pmax, neff, euls_min(3), euls_d(3), euls_h(3), euls_x(3), euls_sym(3), euldist, inpldist
+            real      :: sh_mode(2), sh_kernel(2), dist_loc, dist_at, dist_own, dist_other, euls_prev(3)
+            integer   :: imin, k99, nvalid, ri_loc, istate_min, iproj_min, irot_loc, irot_min, j_loc
+            integer   :: imin_d, k99_d, nvalid_d, imin_h, k99_h, nvalid_h, imin_x, k99_x, nvalid_x
+            integer   :: prev_state, prev_proj, irot_prev, irot_ctrl, iref_prev, nrots_loc
             temp = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             call posterior_row_stats(self%nrefs, rows_batch(:,i_loc)%dist, temp, post_w(:,ithr_loc), &
                 &post_inds(:,ithr_loc), imin, pmax, neff, k99, nvalid)
@@ -994,7 +994,7 @@ contains
         integer,                   intent(in)    :: i_first, i_last
         type(prob_posterior_stat), intent(in)    :: post_batch(i_first:i_last)
         type(string) :: fname
-        integer :: i, io_stat
+        integer      :: i, io_stat
         if( .not. self%post_is_open )then
             fname = string('prob_posterior_')
             if( self%p_ptr%which_iter > 0 ) fname = fname//'iter'//int2str_pad(self%p_ptr%which_iter,3)//'_'
@@ -1060,10 +1060,10 @@ contains
 
     !> the batch's rows and refined entries, kept for assign_batch; the fill's arrays move in
     subroutine keep_batch_rows( self, rows, refined, nrefined )
-        class(eul_prob_tab),                   intent(inout) :: self
-        type(prob_dense_entry),   allocatable, intent(inout) :: rows(:,:)
-        type(prob_refined_entry), allocatable, intent(inout) :: refined(:,:)
-        integer,                  allocatable, intent(inout) :: nrefined(:)
+        class(eul_prob_tab),                   intent(inout)              :: self
+        type(prob_dense_entry),                allocatable, intent(inout) :: rows(:,:)
+        type(prob_refined_entry),              allocatable, intent(inout) :: refined(:,:)
+        integer,                               allocatable, intent(inout) :: nrefined(:)
         if( allocated(self%batch_rows) ) THROW_HARD('the previous batch is not assigned yet; eul_prob_tab%keep_batch_rows')
         call move_alloc(rows,     self%batch_rows)
         call move_alloc(refined,  self%batch_refined)
@@ -1093,15 +1093,15 @@ contains
     !! the fill refined it at, when it did; the optional dists return the whole row's losses. A row without a
     !! temperature (a particle without a scale) is read at its argmin, as the assignment draws it
     subroutine get_posterior_row( self, i, beta, kmax, rec, dists )
-        class(eul_prob_tab),   intent(in)    :: self
-        integer,               intent(in)    :: i, kmax
-        real,                  intent(in)    :: beta
-        type(prob_row_record), intent(inout) :: rec
-        real, optional,        intent(inout) :: dists(:)
+        class(eul_prob_tab),   intent(in)                     :: self
+        integer,               intent(in)                     :: i, kmax
+        real,                  intent(in)                     :: beta
+        type(prob_row_record), intent(inout)                  :: rec
+        real,                  optional,        intent(inout) :: dists(:)
         real,    allocatable :: w(:)
         integer, allocatable :: inds(:)
-        real(dp) :: tot
-        integer  :: j, k, n
+        real(dp)             :: tot
+        integer              :: j, k, n
         if( .not. allocated(self%batch_rows) ) THROW_HARD('no rows kept; eul_prob_tab%get_posterior_row')
         if( i < lbound(self%batch_rows,2) .or. i > ubound(self%batch_rows,2) )&
             &THROW_HARD('the row is not in the kept batch; eul_prob_tab%get_posterior_row')
@@ -1158,7 +1158,7 @@ contains
         type(prob_dense_entry),   intent(in) :: row(:)
         type(prob_refined_entry), intent(in) :: refined(:)
         type(prob_candidate) :: candidate
-        integer :: j
+        integer              :: j
         candidate%iref = self%ref_full(ri)
         candidate%inpl = row(ri)%inpl
         candidate%dist = row(ri)%dist
@@ -1177,8 +1177,8 @@ contains
     !! sample (nglob its size, rank0 the rank before this table's first row: a part's offset), the draws' scope, the
     !! counts; by default the table's own rows are the sample
     subroutine open_assignment( self, nglob, rank0 )
-        class(eul_prob_tab), intent(inout) :: self
-        integer, optional,   intent(in)    :: nglob, rank0
+        class(eul_prob_tab), intent(inout)          :: self
+        integer,             optional,   intent(in) :: nglob, rank0
         integer :: nglob_here, rank0_here
         if( self%l_assign_open ) THROW_HARD('the assignment is open; eul_prob_tab%open_assignment')
         nglob_here = self%nptcls
@@ -1266,13 +1266,13 @@ contains
         integer,             intent(in)    :: i_first, i_last
         type(prob_dense_entry),   allocatable :: row(:)
         type(prob_refined_entry), allocatable :: refined(:)
-        type(prob_candidate) :: candidate
-        logical, allocatable :: l_refined(:), l_ref_entry(:)
-        integer, allocatable :: ref_states(:)
-        real,    allocatable :: w(:)
-        integer :: i, j, iref, iref_best, which, assigned_iref, nrefined, maxref
-        real    :: score, score_best, dist, temp, invalid_dist
-        logical :: l_neff_row
+        type(prob_candidate)                  :: candidate
+        logical,                  allocatable :: l_refined(:), l_ref_entry(:)
+        integer,                  allocatable :: ref_states(:)
+        real,                     allocatable :: w(:)
+        integer                               :: i, j, iref, iref_best, which, assigned_iref, nrefined, maxref
+        real                                  :: score, score_best, dist, temp, invalid_dist
+        logical                               :: l_neff_row
         if( .not. self%l_assign_open ) THROW_HARD('no open assignment; eul_prob_tab%assign_rows')
         invalid_dist = 0.1 * huge(invalid_dist)
         maxref = self%max_refined()
@@ -1375,13 +1375,13 @@ contains
         !! the committed poses, so the particles run in parallel after the draws, each thread on its own row and
         !! eligibility mask; the table takes the result in particle order
         subroutine select_extras
-            type(prob_candidate) :: cands(self%kmax)
+            type(prob_candidate)                  :: cands(self%kmax)
             type(prob_dense_entry),   allocatable :: rowt(:,:)
             type(prob_refined_entry), allocatable :: refinedt(:,:)
-            integer, allocatable :: kinds(:,:), nkept(:), nelig(:), nreft(:)
-            real,    allocatable :: kw(:,:), pose_loss(:,:)
-            logical, allocatable :: eligible(:,:)
-            integer :: i_loc, si_loc, ifirst_loc, ilast_loc, istate_loc, j, k, ithr, nthr_team
+            integer,                  allocatable :: kinds(:,:), nkept(:), nelig(:), nreft(:)
+            real,                     allocatable :: kw(:,:), pose_loss(:,:)
+            logical,                  allocatable :: eligible(:,:)
+            integer                               :: i_loc, si_loc, ifirst_loc, ilast_loc, istate_loc, j, k, ithr, nthr_team
             nthr_team = omp_get_max_threads() ! the per-thread rows and masks are sized by the team the region runs
             allocate(kinds(self%kmax,i_first:i_last), nkept(i_first:i_last), nelig(i_first:i_last), source=0)
             allocate(kw(self%kmax,i_first:i_last), source=0.)

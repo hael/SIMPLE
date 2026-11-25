@@ -54,15 +54,15 @@ contains
 
     !> a class of n members, y_i = c_i (mu + z_i v) + noise; ainfo the latent information of v over the fit band at c = 1
     subroutine make_class( n, ztrue, ainfo, seed, y, c, w, mu, v, fitmask )
-        integer,                  intent(in)  :: n, seed
-        real(dp),                 intent(in)  :: ztrue(:), ainfo
-        complex(sp), allocatable, intent(out) :: y(:,:), mu(:), v(:)
-        real(sp),    allocatable, intent(out) :: c(:,:), w(:,:)
-        logical,     allocatable, intent(out) :: fitmask(:)
+        integer,                  intent(in)               :: n, seed
+        real(dp),                 intent(in)               :: ztrue(:), ainfo
+        complex(sp),              allocatable, intent(out) :: y(:,:), mu(:), v(:)
+        real(sp),                 allocatable, intent(out) :: c(:,:), w(:,:)
+        logical,                  allocatable, intent(out) :: fitmask(:)
         integer,  allocatable :: hidx(:), kidx(:), shell(:)
         real(sp), allocatable :: wq(:)
-        real(sp) :: defoc
-        integer  :: nc, i, j
+        real(sp)              :: defoc
+        integer               :: nc, i, j
         call lattice(hidx, kidx, shell, wq)
         nc = size(hidx)
         call seed_rnd_fixed(seed)
@@ -122,8 +122,8 @@ contains
         integer,  allocatable :: hidx(:), kidx(:), shell(:)
         real(sp), allocatable :: wq(:)
         logical,  allocatable :: fitmask(:), seta(:), setb(:)
-        integer :: j, l, na, nb
-        logical :: l_const
+        integer               :: j, l, na, nb
+        logical               :: l_const
         write(*,'(A)') 'test_coeff_sets'
         call lattice(hidx, kidx, shell, wq)
         allocate(fitmask(size(hidx)), seta(size(hidx)), setb(size(hidx)))
@@ -148,14 +148,14 @@ contains
     !> noise-free members: the ML latent is the generating latent, its covariance (sum wq w c^2 Re(U^H U))^-1, and a
     !! nuisance column is profiled out without biasing it
     subroutine test_ml_latents_exact()
-        integer, parameter :: N = 5
-        type(flex_cls_model) :: model
+        integer,     parameter   :: N = 5
+        type(flex_cls_model)     :: model
         complex(sp), allocatable :: y(:,:), mu(:), v(:), u(:,:)
         real(sp),    allocatable :: c(:,:), w(:,:), wq(:)
         integer,     allocatable :: hidx(:), kidx(:), shell(:)
         logical,     allocatable :: fitmask(:), info(:)
-        real(dp) :: ztrue(N), z(N,2), cov(2,2,N), a(2,2), ainv(2,2), nu(N), z1(N,1), cov1(1,1,N)
-        integer  :: i, j, jj
+        real(dp)                 :: ztrue(N), z(N,2), cov(2,2,N), a(2,2), ainv(2,2), nu(N), z1(N,1), cov1(1,1,N)
+        integer                  :: i, j, jj
         write(*,'(A)') 'test_ml_latents_exact'
         ztrue = [-1.5d0, -0.3d0, 0.d0, 0.7d0, 2.d0]
         call make_class(N, ztrue, 4.d0, SEED0 + 1, y, c, w, mu, v, fitmask)
@@ -208,13 +208,13 @@ contains
     !! (coverage before redundancy), every member labelled with a representative of its cluster, every one holding
     !! minpop; the budget filled when no pre-image reaches minpop
     subroutine test_representatives()
-        integer,  parameter :: NA = 200, NB = 150
-        real(dp), parameter :: CA(2) = [-1.d0, 0.d0], CB(2) = [1.2d0, 0.3d0], S2 = 0.02d0
+        integer,  parameter   :: NA    = 200, NB = 150
+        real(dp), parameter   :: CA(2) = [-1.d0, 0.d0], CB(2) = [1.2d0, 0.3d0], S2 = 0.02d0
         type(flex_cls_kernel) :: k
-        integer, allocatable  :: lab(:)
-        real(dp) :: cen(2,4)
-        integer  :: i, r, ia, ib
-        logical  :: l_ina(4)
+        integer,  allocatable :: lab(:)
+        real(dp)              :: cen(2,4)
+        integer               :: i, r, ia, ib
+        logical               :: l_ina(4)
         write(*,'(A)') 'test_representatives'
         call seed_rnd_fixed(SEED0 + 2)
         k%n = NA + NB; k%nk = 2; k%nsig = 2; k%tau = 0.1d0; k%exists = .true.
@@ -259,17 +259,17 @@ contains
     !! direction by cen cov / (2 cov + covc + tau^2) (tau = 0; 0.5 cen without covc, cen / 3 with covc = cov);
     !! Stein's identity with the kernel's own precision removes it
     subroutine test_stein_correction()
-        integer,  parameter :: N = 6000
-        real(dp), parameter :: CEN0 = 1.d0
-        type(flex_cls_model)  :: model
-        type(flex_cls_kernel) :: k
+        integer,     parameter   :: N    = 6000
+        real(dp),    parameter   :: CEN0 = 1.d0
+        type(flex_cls_model)     :: model
+        type(flex_cls_kernel)    :: k
         complex(sp), allocatable :: y(:,:), mu(:), v(:), avg(:)
         real(sp),    allocatable :: c(:,:), w(:,:), wq(:)
         integer,     allocatable :: hidx(:), kidx(:), shell(:)
         logical,     allocatable :: fitmask(:), members(:), okl(:)
         real(dp),    allocatable :: z(:,:), lw(:,:), wts(:)
-        real(dp) :: ztrue(N), d_plain, d_stein, expected, unorm, covmean
-        integer  :: icase
+        real(dp)                 :: ztrue(N), d_plain, d_stein, expected, unorm, covmean
+        integer                  :: icase
         write(*,'(A)') 'test_stein_correction'
         ztrue = 0.d0
         call make_class(N, ztrue, 1.d0, SEED0 + 3, y, c, w, mu, v, fitmask)
@@ -316,13 +316,13 @@ contains
     !> a homogeneous class: no significant CV gain over its mean, still the budget of four pre-images at a finite
     !! bandwidth; with a budget of one, the class mean, also as every member's pre-image
     subroutine test_kernel_null()
-        integer, parameter :: N = 400
-        type(flex_cls_kernel) :: k
-        type(flex_cls_model)  :: model
+        integer,     parameter   :: N = 400
+        type(flex_cls_kernel)    :: k
+        type(flex_cls_model)     :: model
         complex(sp), allocatable :: y(:,:), mu(:), v(:), avg(:), ref(:)
         real(sp),    allocatable :: c(:,:), w(:,:)
         logical,     allocatable :: fitmask(:), members(:)
-        real(dp) :: ztrue(N)
+        real(dp)                 :: ztrue(N)
         write(*,'(A)') 'test_kernel_null'
         ztrue = 0.d0
         call make_class(N, ztrue, 6.d0, SEED0 + 4, y, c, w, mu, v, fitmask)
@@ -349,15 +349,15 @@ contains
     !! rank 1, two pre-images at the CV optimum, hard labels at least 90% pure (the best is about 96%), the averages
     !! on either side of the class mean along the state direction
     subroutine test_kernel_two_states()
-        integer, parameter :: N = 400
-        type(flex_cls_kernel) :: k
-        type(flex_cls_model)  :: model
+        integer,     parameter   :: N = 400
+        type(flex_cls_kernel)    :: k
+        type(flex_cls_model)     :: model
         complex(sp), allocatable :: y(:,:), mu(:), v(:), avg(:)
         real(sp),    allocatable :: c(:,:), w(:,:), wq(:)
         integer,     allocatable :: hidx(:), kidx(:), shell(:), lab(:)
         logical,     allocatable :: fitmask(:), members(:)
-        real(dp) :: ztrue(N), zmean, proj, pmax, pmin, vnorm
-        integer  :: r, nplus, ncorrect
+        real(dp)                 :: ztrue(N), zmean, proj, pmax, pmin, vnorm
+        integer                  :: r, nplus, ncorrect
         write(*,'(A)') 'test_kernel_two_states'
         call two_states(ztrue)
         zmean = sum(ztrue) / real(N,dp)
@@ -400,16 +400,16 @@ contains
     !> the same two states and a budget of six: six pre-images, each holding minpop effective members, both states
     !! represented, every representative's average the pre-image of its member
     subroutine test_kernel_budget()
-        integer, parameter :: N = 400, NSUB = 6
-        type(flex_cls_kernel) :: k
-        type(flex_cls_model)  :: model
+        integer,     parameter   :: N = 400, NSUB = 6
+        type(flex_cls_kernel)    :: k
+        type(flex_cls_model)     :: model
         complex(sp), allocatable :: y(:,:), mu(:), v(:), avg(:), pre(:)
         real(sp),    allocatable :: c(:,:), w(:,:)
         integer,     allocatable :: lab(:)
         logical,     allocatable :: fitmask(:), members(:)
-        real(dp) :: ztrue(N)
-        integer  :: r, nplus
-        logical  :: l_plus, l_minus, l_same
+        real(dp)                 :: ztrue(N)
+        integer                  :: r, nplus
+        logical                  :: l_plus, l_minus, l_same
         write(*,'(A)') 'test_kernel_budget'
         call two_states(ztrue)
         call make_class(N, ztrue, 6.d0, SEED0 + 6, y, c, w, mu, v, fitmask)

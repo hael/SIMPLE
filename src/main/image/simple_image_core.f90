@@ -14,12 +14,12 @@ contains
     !! which is zeroed again after planning, and the plan's wisdom serves every later plan of the
     !! same problem (size, threads, alignment) in this process
     module subroutine new( self, ldim, smpd, wthreads, fft_nthreads, fft_measure )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: ldim(3)
-        real,              intent(in)    :: smpd
-        logical, optional, intent(in)    :: wthreads
-        integer, optional, intent(in)    :: fft_nthreads
-        logical, optional, intent(in)    :: fft_measure
+        class(image),      intent(inout)        :: self
+        integer,           intent(in)           :: ldim(3)
+        real,              intent(in)           :: smpd
+        logical,           optional, intent(in) :: wthreads
+        integer,           optional, intent(in) :: fft_nthreads
+        logical,           optional, intent(in) :: fft_measure
         integer(kind=c_int) :: rc, planner_flags
         integer             :: i, plan_nthreads
         logical             :: do_allocate, l_measure
@@ -178,10 +178,10 @@ contains
     !========================================
 
     module subroutine disc_img( self, ldim, smpd, radius, npix )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: ldim(3)
-        real,              intent(in)    :: smpd, radius
-        integer, optional, intent(inout) :: npix
+        class(image),      intent(inout)           :: self
+        integer,           intent(in)              :: ldim(3)
+        real,              intent(in)              :: smpd, radius
+        integer,           optional, intent(inout) :: npix
         call self%new(ldim, smpd)
         call self%cendist
         ! logical dimensions only: cendist leaves the Fourier padding columns with a
@@ -195,11 +195,11 @@ contains
     end subroutine disc_img
 
     module subroutine disc_lmsk( self, ldim, smpd, radius, lmsk, npix )
-        class(image),         intent(inout) :: self
-        integer,              intent(in)    :: ldim(3)
-        real,                 intent(in)    :: smpd, radius
-        logical, allocatable, intent(out)   :: lmsk(:,:,:)
-        integer, optional,    intent(inout) :: npix
+        class(image),         intent(inout)              :: self
+        integer,              intent(in)                 :: ldim(3)
+        real,                 intent(in)                 :: smpd, radius
+        logical,              allocatable, intent(out)   :: lmsk(:,:,:)
+        integer,              optional,    intent(inout) :: npix
         call self%new(ldim, smpd)
         call self%cendist
         if( allocated(lmsk) ) deallocate(lmsk)
@@ -215,10 +215,10 @@ contains
     end subroutine disc_lmsk
 
     module subroutine ring( self, ldim, smpd, outer_radius, inner_radius, npix )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: ldim(3)
-        real,              intent(in)    :: smpd, outer_radius, inner_radius
-        integer, optional, intent(inout) :: npix
+        class(image),      intent(inout)           :: self
+        integer,           intent(in)              :: ldim(3)
+        real,              intent(in)              :: smpd, outer_radius, inner_radius
+        integer,           optional, intent(inout) :: npix
         call self%new(ldim, smpd)
         call self%cendist
         where(self%rmat(:ldim(1),:ldim(2),:ldim(3)) <= outer_radius .and. self%rmat(:ldim(1),:ldim(2),:ldim(3)) >= inner_radius )
@@ -236,8 +236,8 @@ contains
         real,              intent(in)    :: radius ! in pixels
         real, parameter :: K     = 2.0
         real, parameter :: THETA = 2.0
-        real    :: d,km1,mode,val,scale
-        integer :: c(3),i,j,l
+        real            :: d,km1,mode,val,scale
+        integer         :: c(3),i,j,l
         call self%new(ldim, smpd)
         c     = nint(real(self%ldim)/2.)+1
         km1   = K-1.
@@ -266,8 +266,8 @@ contains
         real,              intent(in)    :: smpd
         real,              intent(in)    :: radius ! in pixels
         integer, parameter :: B = 3
-        real    :: t,d
-        integer :: c(3),i,j,h,f
+        real               :: t,d
+        integer            :: c(3),i,j,h,f
         if( ldim(3) > 1 ) THROW_HARD('2D only; membrane')
         call self%new(ldim, smpd)
         c = nint(real(self%ldim)/2.)+1

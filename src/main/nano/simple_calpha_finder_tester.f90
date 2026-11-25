@@ -21,17 +21,17 @@ contains
     end subroutine run_all_calpha_finder_tests
 
     subroutine test_three_residues()
-        character(len=*), parameter :: PDB_FILE = 'test_calpha_candidates.pdb'
-        character(len=*), parameter :: CSV_FILE = 'test_calpha_candidates.csv'
-        character(len=*), parameter :: MRC_FILE = 'test_calpha_scores.mrc'
-        integer,          parameter :: TEST_BOX = 32, NRES = 3
-        type(image)         :: workvol
-        type(atoms)         :: candidates
-        type(calpha_finder) :: finder
-        real(kind=c_float), pointer :: density(:,:,:)
-        real    :: centers(3,NRES), atom_sites(3,3), amplitudes(3), rotation(3,3)
-        real    :: xyz(3), site(3), delta(3), distance, closest
-        integer :: ldim(3), ires, iatom, ix, iy, iz, ncand
+        character(len=*),   parameter :: PDB_FILE = 'test_calpha_candidates.pdb'
+        character(len=*),   parameter :: CSV_FILE = 'test_calpha_candidates.csv'
+        character(len=*),   parameter :: MRC_FILE = 'test_calpha_scores.mrc'
+        integer,            parameter :: TEST_BOX = 32, NRES = 3
+        type(image)                   :: workvol
+        type(atoms)                   :: candidates
+        type(calpha_finder)           :: finder
+        real(kind=c_float), pointer   :: density(:,:,:)
+        real                          :: centers(3,NRES), atom_sites(3,3), amplitudes(3), rotation(3,3)
+        real                          :: xyz(3), site(3), delta(3), distance, closest
+        integer                       :: ldim(3), ires, iatom, ix, iy, iz, ncand
         write(*,'(A)') 'test_three_residues'
         ldim            = [TEST_BOX,TEST_BOX,TEST_BOX]
         centers(:,1)    = [8.,8.,8.]

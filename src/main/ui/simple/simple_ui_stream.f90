@@ -4,14 +4,14 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('stream', 'Stream Workflows', 10)
-type(ui_program), target :: pool2D
-type(ui_program), target :: solve3D_stream
-type(ui_program), target :: assign_optics
-type(ui_program), target :: gen_pickrefs
-type(ui_program), target :: master
-type(ui_program), target :: pick_extract
-type(ui_program), target :: preproc
-type(ui_program), target :: sieve_cavgs
+type(ui_program),          target    :: pool2D
+type(ui_program),          target    :: solve3D_stream
+type(ui_program),          target    :: assign_optics
+type(ui_program),          target    :: gen_pickrefs
+type(ui_program),          target    :: master
+type(ui_program),          target    :: pick_extract
+type(ui_program),          target    :: preproc
+type(ui_program),          target    :: sieve_cavgs
 
 contains
 

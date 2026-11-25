@@ -17,8 +17,8 @@ contains
     end function get_sum_int
 
     module function minmax( self, radius )result( mm )
-        class(image),   intent(in) :: self
-        real, optional, intent(in) :: radius
+        class(image),   intent(in)           :: self
+        real,           optional, intent(in) :: radius
         real    :: mm(2), radsq
         integer :: c(3),i,j,k,dksq,djsq,dsq
         if( present(radius) )then
@@ -45,10 +45,10 @@ contains
     end function minmax
 
     module subroutine loc_sdev( self, winsz, sdevimg, asdev )
-        class(image),   intent(in)    :: self
-        integer,        intent(in)    :: winsz
-        class(image),   intent(inout) :: sdevimg
-        real, optional, intent(inout) :: asdev
+        class(image),   intent(in)              :: self
+        integer,        intent(in)              :: winsz
+        class(image),   intent(inout)           :: sdevimg
+        real,           optional, intent(inout) :: asdev
         real                 :: avg
         integer              :: i, j, k, ir(2), jr(2), kr(2), isz, jsz, ksz, npix
         logical              :: isvol
@@ -151,9 +151,9 @@ contains
     end function avg_loc_sdev
 
     module subroutine loc_var( self, varimg, avar )
-        class(image),   intent(in)    :: self
-        class(image),   intent(inout) :: varimg
-        real, optional, intent(inout) :: avar
+        class(image),   intent(in)              :: self
+        class(image),   intent(inout)           :: varimg
+        real,           optional, intent(inout) :: avar
         real    :: avg, ep, val, var
         integer :: i, j, l, nsz, n_4(3,8)
         if( self%ldim(3) /= 1 ) THROW_HARD('not for 3d')
@@ -183,9 +183,9 @@ contains
     end subroutine loc_var
 
     module subroutine loc_var3D( self, varimg, avar )
-        class(image),   intent(in)    :: self
-        class(image),   intent(inout) :: varimg
-        real, optional, intent(inout) :: avar
+        class(image),   intent(in)              :: self
+        class(image),   intent(inout)           :: varimg
+        real,           optional, intent(inout) :: avar
         real    :: avg, ep, val, var
         integer :: i, j, k, l, nsz, n_4(3,6)
         if( self%ldim(3) == 1 ) THROW_HARD('not for 2d')
@@ -234,9 +234,9 @@ contains
         real,         intent(out) :: var_bg         ! mean local variance over background
         ! SAT indexed 0:nr, 0:nc so that border queries at i0-1=0 need no guard
         real(8), allocatable :: sat(:,:), sat2(:,:)
-        real    :: rmat(self%ldim(1), self%ldim(2), 1)
-        real(8) :: v, s, s2, bvar, acc_fg, acc_bg
-        integer :: nr, nc, hw, i, j, i0, i1, j0, j1, n, n_fg, n_bg
+        real                 :: rmat(self%ldim(1), self%ldim(2), 1)
+        real(8)              :: v, s, s2, bvar, acc_fg, acc_bg
+        integer              :: nr, nc, hw, i, j, i0, i1, j0, j1, n, n_fg, n_bg
         nr = self%ldim(1)
         nc = self%ldim(2)
         if (size(bin_mask,1) /= nr .or. size(bin_mask,2) /= nc) &
@@ -278,9 +278,9 @@ contains
     end subroutine loc_var_masked
 
     module subroutine rmsd( self, dev, mean )
-        class(image),   intent(inout) :: self
-        real,           intent(out)   :: dev
-        real, optional, intent(out)   :: mean
+        class(image),   intent(inout)         :: self
+        real,           intent(out)           :: dev
+        real,           optional, intent(out) :: mean
         real :: avg
         if( self%ft )then
             dev = 0.
@@ -299,12 +299,12 @@ contains
     end subroutine rmsd
 
     module subroutine stats_region( self, which, ave, sdev, maxv, minv, msk, med, errout )
-        class(image),      intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        real,              intent(out)   :: ave, sdev, maxv, minv
-        real,    optional, intent(in)    :: msk
-        real,    optional, intent(out)   :: med
-        logical, optional, intent(out)   :: errout
+        class(image),      intent(inout)         :: self
+        character(len=*),  intent(in)            :: which
+        real,              intent(out)           :: ave, sdev, maxv, minv
+        real,              optional, intent(in)  :: msk
+        real,              optional, intent(out) :: med
+        logical,           optional, intent(out) :: errout
         integer           :: i, j, k, npix, minlen
         real              :: ci, cj, ck, mskrad, e, var
         logical           :: err, didft, background
@@ -403,11 +403,11 @@ contains
     end subroutine stats_region
 
     module subroutine stats_mskimg( self, ave, sdev, maxv, minv, mskimg, med, errout )
-        class(image),           intent(inout) :: self
-        real,                   intent(out)   :: ave, sdev, maxv, minv
-        class(image), optional, intent(in)    :: mskimg
-        real,         optional, intent(out)   :: med
-        logical,      optional, intent(out)   :: errout
+        class(image),           intent(inout)         :: self
+        real,                   intent(out)           :: ave, sdev, maxv, minv
+        class(image),           optional, intent(in)  :: mskimg
+        real,                   optional, intent(out) :: med
+        logical,                optional, intent(out) :: errout
         real              :: var
         logical           :: err
         real, allocatable :: pixels(:)
@@ -500,16 +500,16 @@ contains
     end function variance
 
     module real function skew( self, mask )
-        class(image),      intent(in)  :: self
-        logical, optional, intent(in)  :: mask(self%ldim(1),self%ldim(2))
+        class(image),      intent(in)           :: self
+        logical,           optional, intent(in) :: mask(self%ldim(1),self%ldim(2))
         if( self%is_3d() ) THROW_HARD('2D only!')
         if( self%is_ft() ) THROW_HARD('Real space only!')
         skew = skewness(self%rmat(1:self%ldim(1),1:self%ldim(2),1), mask)
     end function skew
 
     module real function kurt( self, mask )
-        class(image),      intent(in)  :: self
-        logical, optional, intent(in)  :: mask(self%ldim(1),self%ldim(2))
+        class(image),      intent(in)           :: self
+        logical,           optional, intent(in) :: mask(self%ldim(1),self%ldim(2))
         if( self%is_3d() ) THROW_HARD('2D only!')
         if( self%is_ft() ) THROW_HARD('Real space only!')
         kurt = kurtosis(self%rmat(1:self%ldim(1),1:self%ldim(2),1), mask)
@@ -579,13 +579,13 @@ contains
     end function snr
 
     module real function center_edge_snr( self, mskrad )
-        class(image), intent(inout) :: self
-        real, optional,  intent(in) :: mskrad
-        integer :: nx, ny
-        integer :: cx, cy, r
-        integer :: r1x, r1y
-        integer :: r2x, r2y
-        integer :: ix, iy
+        class(image), intent(inout)         :: self
+        real,         optional,  intent(in) :: mskrad
+        integer  :: nx, ny
+        integer  :: cx, cy, r
+        integer  :: r1x, r1y
+        integer  :: r2x, r2y
+        integer  :: ix, iy
         integer  :: n_cen, n_edge
         real(8)  :: centre_s2, edge_s2
         real(4)  :: mn, centre_std, edge_std
@@ -635,10 +635,10 @@ contains
     module real function presence( self )
         class(image), intent(in) :: self
         integer,       parameter :: BORDER = 8
-        integer :: nx, ny
-        integer :: cx, cy, r, i, j
-        integer :: ncnt, nbg
-        real    :: csum, bgsum, bgsum2, bgmean, bgstd
+        integer                  :: nx, ny
+        integer                  :: cx, cy, r, i, j
+        integer                  :: ncnt, nbg
+        real                     :: csum, bgsum, bgsum2, bgmean, bgstd
         if( self%is_3d() ) THROW_HARD('2D only!')
         if( self%is_ft() ) THROW_HARD('Real space only!')
         nx = self%ldim(1)
@@ -844,9 +844,9 @@ contains
 
     module function dead_hot_positions( self, frac ) result( pos )
         class(image), intent(in) :: self
-        real, intent(in)         :: frac
+        real,         intent(in) :: frac
         logical, allocatable     :: pos(:,:)
-        integer :: ipix, jpix, cnt
+        integer                  :: ipix, jpix, cnt
         allocate(pos(self%ldim(1),self%ldim(2)))
         pos = .false.
         cnt = 0
@@ -881,16 +881,16 @@ contains
     !                     1) isotropic noise suppression
     !                     2) the estimation of the gradient is still precise
     module subroutine calc_gradient(self, grad, Dc, Dr)
-        class(image),   intent(inout) :: self
-        real,           intent(out)   :: grad(self%ldim(1), self%ldim(2), self%ldim(3)) ! gradient matrix
-        real, optional, intent(out)   :: Dc(self%ldim(1), self%ldim(2), self%ldim(3)), Dr(self%ldim(1), self%ldim(2), self%ldim(3)) ! derivates column and row matrices
-        type(image)        :: img_p                         ! padded image
-        real, allocatable  :: wc(:,:), wr(:,:)              ! row and column Sobel masks
-        integer, parameter :: L1 = 5 , L2 = 3               ! dimension of the masks
-        integer            :: ldim(3)                       ! dimension of the image, save just for comfort
-        integer            :: i,j,m,n                       ! loop indeces
-        real :: Ddc(self%ldim(1),self%ldim(2),self%ldim(3))
-        real :: Ddr(self%ldim(1),self%ldim(2),self%ldim(3)) ! column and row derivates
+        class(image),   intent(inout)         :: self
+        real,           intent(out)           :: grad(self%ldim(1), self%ldim(2), self%ldim(3)) ! gradient matrix
+        real,           optional, intent(out) :: Dc(self%ldim(1), self%ldim(2), self%ldim(3)), Dr(self%ldim(1), self%ldim(2), self%ldim(3)) ! derivates column and row matrices
+        type(image)          :: img_p                                       ! padded image
+        real,    allocatable :: wc(:,:), wr(:,:)                            ! row and column Sobel masks
+        integer, parameter   :: L1 = 5 , L2 = 3                             ! dimension of the masks
+        integer              :: ldim(3)                                     ! dimension of the image, save just for comfort
+        integer              :: i,j,m,n                                     ! loop indeces
+        real                 :: Ddc(self%ldim(1),self%ldim(2),self%ldim(3))
+        real                 :: Ddr(self%ldim(1),self%ldim(2),self%ldim(3)) ! column and row derivates
         ldim = self%ldim
         allocate(wc((-(L1-1)/2):((L1-1)/2),(-(L2-1)/2):((L2-1)/2)),&
         &        wr(-(L2-1)/2:(L2-1)/2,-(L1-1)/2:(L1-1)/2), source = 0.)
@@ -1008,13 +1008,13 @@ contains
     module subroutine calc_ice_score( self, score )
         class(image), intent(in)  :: self
         real,         intent(out) :: score
-        real,   parameter :: START_FREQ = 15.
-        real,   parameter :: END_FREQ   = 6.
-        real, allocatable :: res(:), tmp(:)
-        real    :: powspec(fdim(self%ldim(1)) - 1)
-        real    :: g, gs, ge, mag, mag_max, band_avg, ice_avg
-        integer :: lims(3,2), ice_maxind, start_find, end_find
-        integer :: nbands, s, e, h, k, hmax, kmax, sh, cnt
+        real,   parameter   :: START_FREQ = 15.
+        real,   parameter   :: END_FREQ   = 6.
+        real,   allocatable :: res(:), tmp(:)
+        real                :: powspec(fdim(self%ldim(1)) - 1)
+        real                :: g, gs, ge, mag, mag_max, band_avg, ice_avg
+        integer             :: lims(3,2), ice_maxind, start_find, end_find
+        integer             :: nbands, s, e, h, k, hmax, kmax, sh, cnt
         score = 0.
         if( self%smpd > (ICE_BAND1/2.) ) return
         if( .not.self%is_ft() ) THROW_HARD('Image input must be in the Fourier domain!; calc_ice_score')
@@ -1133,8 +1133,8 @@ contains
     module subroutine calc_3D_shape_descriptors( self, radius, eccentricity, anisotropy, asphericity, acylindricity, rg_sq )
         class(image), intent(in)  :: self
         real,         intent(in)  :: radius
-        real,         intent(out) :: eccentricity, anisotropy      ! dimensionless
-        real,         intent(out) :: asphericity, acylindricity    ! dimensionless, normalized by rg_sq
+        real,         intent(out) :: eccentricity, anisotropy       ! dimensionless
+        real,         intent(out) :: asphericity, acylindricity     ! dimensionless, normalized by rg_sq
         real,         intent(out) :: rg_sq                          ! voxel squared
         real :: eigvals(3), eigvecs(3,3), gyr_eigvals(3)
         eccentricity  = 0.
@@ -1174,9 +1174,9 @@ contains
     !===========================
 
     module function loop_lims( self, mode, lp_dyn ) result( lims )
-        class(image), intent(in)   :: self
-        integer, intent(in)        :: mode
-        real, intent(in), optional :: lp_dyn
+        class(image), intent(in)           :: self
+        integer,      intent(in)           :: mode
+        real,         intent(in), optional :: lp_dyn
         integer                    :: lims(3,2)
         if( present(lp_dyn) )then
             lims = self%fit%loop_lims(mode, lp_dyn)
@@ -1218,8 +1218,8 @@ contains
     !===========================
 
     module function corr( self1, self2, lp_dyn, hp_dyn ) result( r )
-        class(image),   intent(inout) :: self1, self2
-        real, optional, intent(in)    :: lp_dyn, hp_dyn
+        class(image),   intent(inout)        :: self1, self2
+        real,           optional, intent(in) :: lp_dyn, hp_dyn
         real    :: r, sumasq, sumbsq, eps
         integer :: h, k, l, phys(3), lims(3,2), sqarg, sqlp, sqhp
         logical :: didft1, didft2
@@ -1283,9 +1283,9 @@ contains
     end function corr
 
     module function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
-        class(image),   intent(inout) :: self_ref, self_ptcl
-        real,           intent(in)    :: shvec(3)
-        real, optional, intent(in)    :: lp_dyn, hp_dyn
+        class(image),   intent(inout)        :: self_ref, self_ptcl
+        real,           intent(in)           :: shvec(3)
+        real,           optional, intent(in) :: lp_dyn, hp_dyn
         real                          :: r, sumasq, sumbsq
         complex                       :: shcomp
         integer                       :: h, k, l, phys(3), lims(3,2), sqarg, sqlp, sqhp
@@ -1410,11 +1410,11 @@ contains
         class(image),      intent(inout) :: self1, self2, pc
         real,              intent(in)    :: lp
         real, parameter :: width = 3.
-        complex     :: c1,c2
-        real        :: w,rw,rlplim,rsh,normsq
-        real(dp)    :: sqsum1,sqsum2
-        integer     :: nrflims(3,2),phys(3)
-        integer     :: h,k,l,shsq, lplim, lplimsq, bplplimsq
+        complex         :: c1,c2
+        real            :: w,rw,rlplim,rsh,normsq
+        real(dp)        :: sqsum1,sqsum2
+        integer         :: nrflims(3,2),phys(3)
+        integer         :: h,k,l,shsq, lplim, lplimsq, bplplimsq
         if( .not. all([self1%is_ft(),self2%is_ft(),pc%is_ft()]) )then
             THROW_HARD('All inputted images must be FTed')
         endif
@@ -1486,10 +1486,10 @@ contains
     end subroutine phase_corr
 
     module subroutine fcorr_shift( self1, self2, trs, shift, peak_interp )
-        class(image),      intent(inout) :: self1, self2
-        real,              intent(in)    :: trs
-        real,              intent(inout) :: shift(2)
-        logical, optional, intent(in)    :: peak_interp
+        class(image),      intent(inout)        :: self1, self2
+        real,              intent(in)           :: trs
+        real,              intent(inout)        :: shift(2)
+        logical,           optional, intent(in) :: peak_interp
         real    :: alpha, beta, gamma, denom
         integer :: center(2), pos(2), itrs
         logical :: l_interp
@@ -1534,10 +1534,10 @@ contains
     end subroutine fcorr_shift
 
     module subroutine fcorr_shift3D( self1, self2, trs, shift, peak_interp )
-        class(image),      intent(inout) :: self1, self2
-        real,              intent(in)    :: trs
-        real,              intent(inout) :: shift(3)
-        logical, optional, intent(in)    :: peak_interp
+        class(image),      intent(inout)        :: self1, self2
+        real,              intent(in)           :: trs
+        real,              intent(inout)        :: shift(3)
+        logical,           optional, intent(in) :: peak_interp
         real    :: alpha, beta, gamma, denom
         integer :: cen(3), pos(3), itrs
         logical :: l_interp
@@ -1670,15 +1670,15 @@ contains
     end function real_corr_prenorm_inplace
 
     module subroutine radial_cc( self1, self2, self_w, smpd, rad_corrs, rad_dists )
-        class(image), intent(inout):: self1, self2, self_w
-        real,         intent(in)   :: smpd
-        real,         intent(out)  :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
+        class(image), intent(inout) :: self1, self2, self_w
+        real,         intent(in)    :: smpd
+        real,         intent(out)   :: rad_corrs(int(self1%ldim(1)/2.)), rad_dists(int(self1%ldim(1)/2.))
         real                 :: rad_weights(int(self1%ldim(1)/2.))
         type(image)          :: distimg
         logical, allocatable :: mask(:,:,:), shell_mask(:,:,:)
         real,    parameter   :: shell_size_pix = 1
-        integer :: ldim3, n, n_shells
-        real    :: dist_lbound, dist_ubound
+        integer              :: ldim3, n, n_shells
+        real                 :: dist_lbound, dist_ubound
         if( .not. (self1.eqdims.self2) ) THROW_HARD('Nonconforming dimensions in image; radial_cc')
         call distimg%new(self1%ldim,smpd)
         n_shells    = int(self1%ldim(1) / 2.)
@@ -1740,8 +1740,8 @@ contains
         class(image),  intent(in) :: even_raw, odd_raw
         logical,       intent(in) :: l_mask(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
         real, allocatable :: vals(:)
-        real    :: med
-        integer :: nx, ny, nz, i, j, k, nobserved, nmask
+        real              :: med
+        integer           :: nx, ny, nz, i, j, k, nobserved, nmask
         nx = even_raw%ldim(1)
         ny = even_raw%ldim(2)
         nz = even_raw%ldim(3)
@@ -1796,8 +1796,8 @@ contains
         real,          intent(in)  :: noise_scale
         ! saturate in dp; keeps the smoother stable beside hard-support zeros
         real, parameter :: NU_LOSS_CAP = 1. / epsilon(1.)
-        real(dp) :: half_inv_var
-        integer  :: nx, ny, nz, i, j, k
+        real(dp)        :: half_inv_var
+        integer         :: nx, ny, nz, i, j, k
         nx = even_raw%ldim(1)
         ny = even_raw%ldim(2)
         nz = even_raw%ldim(3)
@@ -2008,9 +2008,9 @@ contains
 
     !>  \brief  returns the real argument transfer matrix components at point logi in a Fourier transform
     module function gen_argtransf_comp( self, logi, ldim ) result( arg )
-        class(image), intent(in)      :: self
-        real, intent(in)              :: logi(3)
-        integer, intent(in), optional :: ldim
+        class(image), intent(in)           :: self
+        real,         intent(in)           :: logi(3)
+        integer,      intent(in), optional :: ldim
         real                          :: arg(3)
         integer                       :: lstop, i
         lstop = 2

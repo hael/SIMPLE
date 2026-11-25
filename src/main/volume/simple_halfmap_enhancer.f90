@@ -14,25 +14,25 @@ private
 
 public :: halfmap_enhancer
 
-real, parameter :: FSC_CUTOFF            = 0.143
-real, parameter :: ENVELOPE_FULL_SUPPORT = 0.05
-real, parameter :: MAX_SHARPEN_B          = 200.
-real, parameter :: MAX_SPECTRAL_GAIN      = 8.
-real, parameter :: TARGET_WINDOW_A        = 48.
-real, parameter :: CORRELATED_NOISE_RATIO = 1.10
-integer, parameter :: MIN_WINDOW          = 16
-integer, parameter :: MAX_WINDOW          = 64
+real,    parameter :: FSC_CUTOFF             = 0.143
+real,    parameter :: ENVELOPE_FULL_SUPPORT  = 0.05
+real,    parameter :: MAX_SHARPEN_B          = 200.
+real,    parameter :: MAX_SPECTRAL_GAIN      = 8.
+real,    parameter :: TARGET_WINDOW_A        = 48.
+real,    parameter :: CORRELATED_NOISE_RATIO = 1.10
+integer, parameter :: MIN_WINDOW             = 16
+integer, parameter :: MAX_WINDOW             = 64
 
 type :: halfmap_enhancer
     private
-    logical :: l_exists = .false.
-    integer :: ldim(3)  = 0
-    integer :: window   = 0
-    integer :: stride   = 0
-    real    :: smpd     = 0.
-    real    :: noise_mean = 0.
-    real    :: noise_sdev = 0.
-    real    :: correlated_sdev = 0.
+    logical           :: l_exists        = .false.
+    integer           :: ldim(3)         = 0
+    integer           :: window          = 0
+    integer           :: stride          = 0
+    real              :: smpd            = 0.
+    real              :: noise_mean      = 0.
+    real              :: noise_sdev      = 0.
+    real              :: correlated_sdev = 0.
     real, allocatable :: taper(:,:,:)
   contains
     procedure :: new
@@ -45,12 +45,12 @@ end type halfmap_enhancer
 contains
 
     subroutine new( self, ldim, smpd, window, stride )
-        class(halfmap_enhancer), intent(inout) :: self
-        integer,                 intent(in)    :: ldim(3)
-        real,                    intent(in)    :: smpd
-        integer, optional,       intent(in)    :: window, stride
+        class(halfmap_enhancer), intent(inout)              :: self
+        integer,                 intent(in)                 :: ldim(3)
+        real,                    intent(in)                 :: smpd
+        integer,                 optional,       intent(in) :: window, stride
         real, allocatable :: w1(:)
-        integer :: i, j, k, win
+        integer           :: i, j, k, win
         call self%kill()
         if( any(ldim < MIN_WINDOW) ) THROW_HARD('half-map dimensions must be at least 16 voxels; halfmap_enhancer%new')
         if( smpd <= 0. ) THROW_HARD('sampling distance must be positive; halfmap_enhancer%new')
@@ -83,18 +83,18 @@ contains
     end subroutine new
 
     subroutine enhance( self, even, odd, enhanced, confidence, local_resolution, envelope )
-        class(halfmap_enhancer), intent(inout) :: self
-        class(image), target,     intent(in)    :: even, odd
-        class(image),             intent(inout) :: enhanced, confidence, local_resolution, envelope
-        type(image) :: even_win, odd_win, merged_win
-        real, pointer :: even_r(:,:,:), odd_r(:,:,:)
-        real, allocatable :: even_patch(:,:,:), odd_patch(:,:,:), merged_patch(:,:,:), filtered_patch(:,:,:)
-        real, allocatable :: accum(:,:,:), norm(:,:,:), conf_accum(:,:,:), res_accum(:,:,:), env_accum(:,:,:)
-        real, allocatable :: out(:,:,:), conf(:,:,:), locres(:,:,:), env(:,:,:)
-        real, allocatable :: fsc(:), fsc_reg(:), wiener(:), lowpass(:), cap(:), res(:)
+        class(halfmap_enhancer),  intent(inout)          :: self
+        class(image),             target,     intent(in) :: even, odd
+        class(image),             intent(inout)          :: enhanced, confidence, local_resolution, envelope
+        type(image)          :: even_win, odd_win, merged_win
+        real,    pointer     :: even_r(:,:,:), odd_r(:,:,:)
+        real,    allocatable :: even_patch(:,:,:), odd_patch(:,:,:), merged_patch(:,:,:), filtered_patch(:,:,:)
+        real,    allocatable :: accum(:,:,:), norm(:,:,:), conf_accum(:,:,:), res_accum(:,:,:), env_accum(:,:,:)
+        real,    allocatable :: out(:,:,:), conf(:,:,:), locres(:,:,:), env(:,:,:)
+        real,    allocatable :: fsc(:), fsc_reg(:), wiener(:), lowpass(:), cap(:), res(:)
         integer, allocatable :: xs(:), ys(:), zs(:)
-        real :: local_res, local_conf, env_conf, bfac
-        integer :: ix, iy, iz, i0, j0, k0, i1, j1, k1, k, kcut, fromk, nyq
+        real                 :: local_res, local_conf, env_conf, bfac
+        integer              :: ix, iy, iz, i0, j0, k0, i1, j1, k1, k, kcut, fromk, nyq
         if( .not. self%l_exists ) THROW_HARD('halfmap_enhancer must be constructed before enhance')
         if( even%is_ft() .or. odd%is_ft() ) THROW_HARD('halfmap_enhancer expects real-space half-maps')
         if( any(even%get_ldim() /= self%ldim) .or. any(odd%get_ldim() /= self%ldim) ) &
@@ -214,8 +214,8 @@ contains
         class(halfmap_enhancer), intent(inout) :: self
         real,                    intent(in)    :: even(:,:,:), odd(:,:,:)
         real, allocatable :: merged_outer(:), diff_outer(:)
-        real :: med_diff, merged_sdev, diff_sdev
-        integer :: i, j, k, n, edge
+        real              :: med_diff, merged_sdev, diff_sdev
+        integer           :: i, j, k, n, edge
         edge = max(2, minval(self%ldim) / 16)
         n = count_outer(self%ldim, edge)
         allocate(merged_outer(n), diff_outer(n))
@@ -269,7 +269,7 @@ contains
         real,    intent(in)  :: raw(:)
         real,    intent(out) :: regularized(size(raw))
         integer, intent(out) :: kcut
-        real :: work(size(raw))
+        real    :: work(size(raw))
         integer :: k
         work = min(0.99999, max(-1., raw))
         regularized = work
@@ -290,7 +290,7 @@ contains
     function window_starts( n, window, stride ) result( starts )
         integer, intent(in) :: n, window, stride
         integer, allocatable :: starts(:), work(:)
-        integer :: current, next, count
+        integer              :: current, next, count
         allocate(work(n), source=0)
         count = 1
         current = 1
@@ -307,8 +307,8 @@ contains
     end function window_starts
 
     subroutine get_noise_stats( self, mean, sdev )
-        class(halfmap_enhancer), intent(in) :: self
-        real, intent(out) :: mean, sdev
+        class(halfmap_enhancer), intent(in)  :: self
+        real,                    intent(out) :: mean, sdev
         mean = self%noise_mean
         sdev = sqrt(self%noise_sdev**2 + self%correlated_sdev**2)
     end subroutine get_noise_stats

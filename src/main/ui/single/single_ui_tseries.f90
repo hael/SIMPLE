@@ -4,11 +4,11 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('tseries', 'Time-series Pre-processing', 10)
-type(ui_program), target :: tseries_track_particles
-type(ui_program), target :: tseries_import
-type(ui_program), target :: tseries_make_pickavg
-type(ui_program), target :: tseries_motion_correct
-type(ui_program), target :: tseries_prep4tracking
+type(ui_program),          target    :: tseries_track_particles
+type(ui_program),          target    :: tseries_import
+type(ui_program),          target    :: tseries_make_pickavg
+type(ui_program),          target    :: tseries_motion_correct
+type(ui_program),          target    :: tseries_prep4tracking
 
 contains
 

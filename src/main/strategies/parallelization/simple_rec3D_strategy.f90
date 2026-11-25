@@ -96,7 +96,7 @@ contains
     function create_rec3D_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
         class(rec3D_strategy), allocatable :: strategy
-        type(string) :: backend
+        type(string)                       :: backend
         backend = string('gridding')
         if( cline%defined('rec_backend') ) backend = cline%get_carg('rec_backend')
         select case(rec3D_backend_id(backend%to_char()))
@@ -275,12 +275,12 @@ contains
     !! state > 0 (and updatecnt > 0 once any was updated); a row filter, so a part's range of the master's
     !! rows equals the part's own sampling
     subroutine sample_rows(params, build, fromto, pinds)
-        type(parameters),     intent(in)    :: params
-        type(builder),        intent(inout) :: build
-        integer,              intent(in)    :: fromto(2)
-        integer, allocatable, intent(inout) :: pinds(:)
+        type(parameters),     intent(in)                 :: params
+        type(builder),        intent(inout)              :: build
+        integer,              intent(in)                 :: fromto(2)
+        integer,              allocatable, intent(inout) :: pinds(:)
         integer, allocatable :: labels(:)
-        integer :: nptcls2update, i
+        integer              :: nptcls2update, i
         if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod(fromto, nptcls2update, pinds)
         else
@@ -318,8 +318,8 @@ contains
     subroutine run_rec3D( cline )
         class(cmdline), intent(inout) :: cline
         class(rec3D_strategy), allocatable :: strategy
-        type(parameters) :: params
-        type(builder)    :: build
+        type(parameters)                   :: params
+        type(builder)                      :: build
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')         ) call cline%set('trs', 5.)     ! to assure that shifts are being used
         if( .not. cline%defined('rec_backend') ) call cline%set('rec_backend', 'gridding')

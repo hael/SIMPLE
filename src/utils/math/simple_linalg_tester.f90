@@ -11,7 +11,7 @@ implicit none
 private
 public :: run_all_linalg_tests
 
-integer, parameter :: N = 5
+integer, parameter :: N   = 5
 real,    parameter :: TOL = 1.0e-4 ! single-precision LAPACK on a well-conditioned 5x5
 ! the LAPACK ssyevr example matrix (symmetric positive definite); reference values from numpy.linalg
 real, parameter :: EIGVALS_ASC(N) = [0.43302180, 2.14494666, 3.36808674, 4.27915302, 6.93479178]
@@ -86,8 +86,8 @@ contains
 
     subroutine test_eigh_largest()
         integer, parameter :: NEIGS = 3
-        real :: mat(N,N), work(N,N), eigvals(NEIGS), eigvecs(N,NEIGS)
-        integer :: i
+        real               :: mat(N,N), work(N,N), eigvals(NEIGS), eigvecs(N,NEIGS)
+        integer            :: i
         write(*,'(A)') 'test_eigh_largest'
         mat  = example_matrix()
         work = mat
@@ -100,8 +100,8 @@ contains
 
     subroutine test_eigh_smallest()
         integer, parameter :: NEIGS = 3
-        real :: mat(N,N), work(N,N), eigvals(NEIGS), eigvecs(N,NEIGS)
-        integer :: i
+        real               :: mat(N,N), work(N,N), eigvals(NEIGS), eigvecs(N,NEIGS)
+        integer            :: i
         write(*,'(A)') 'test_eigh_smallest'
         mat  = example_matrix()
         work = mat
@@ -132,9 +132,9 @@ contains
 
     subroutine test_svdcmp()
         integer, parameter :: M = 4, K = 3
-        real    :: a(N,N), u(N,N), w(N), v(N,N), rec(N,N), wsorted(N)
-        real    :: b(M,K), ub(M,K), wb(K), vb(K,K), recb(M,K)
-        integer :: i, j
+        real               :: a(N,N), u(N,N), w(N), v(N,N), rec(N,N), wsorted(N)
+        real               :: b(M,K), ub(M,K), wb(K), vb(K,K), recb(M,K)
+        integer            :: i, j
         write(*,'(A)') 'test_svdcmp'
         a = example_matrix()
         u = a
@@ -184,8 +184,8 @@ contains
 
     subroutine test_svdfit_polynomial()
         integer, parameter :: NPTS = 20, MA = 3
-        real    :: x(NPTS), y(NPTS), sig(NPTS), a(MA), v(MA,MA), w(MA), chisq
-        integer :: i
+        real               :: x(NPTS), y(NPTS), sig(NPTS), a(MA), v(MA,MA), w(MA), chisq
+        integer            :: i
         write(*,'(A)') 'test_svdfit_polynomial'
         do i = 1,NPTS
             x(i) = 0.1 * real(i - 1)
@@ -206,8 +206,8 @@ contains
 
     subroutine test_svd_multifit_plane()
         integer, parameter :: NPTS = 12, MA = 3
-        real    :: x(2,NPTS), y(NPTS), sig(NPTS), a(MA), v(MA,MA), w(MA), chisq
-        integer :: i
+        real               :: x(2,NPTS), y(NPTS), sig(NPTS), a(MA), v(MA,MA), w(MA), chisq
+        integer            :: i
         write(*,'(A)') 'test_svd_multifit_plane'
         do i = 1,NPTS
             x(1,i) = real(mod(i, 4))
@@ -224,8 +224,8 @@ contains
 
     subroutine test_fit_straight_line()
         integer, parameter :: NPTS = 10
-        real    :: datavec(NPTS,2), slope, intercept, corr
-        integer :: i
+        real               :: datavec(NPTS,2), slope, intercept, corr
+        integer            :: i
         write(*,'(A)') 'test_fit_straight_line'
         do i = 1,NPTS
             datavec(i,1) = real(i)
@@ -248,11 +248,11 @@ contains
     !! slopes -5 to 5 through near-flat and flat, intercepts -10 to 10; slope and intercept within 1e-5.
     !! r squared is not asserted: ill-conditioned for (near-)flat lines, and guinier_bfac uses only the slope.
     subroutine test_fit_straight_line_recovery()
-        integer, parameter :: NPTS = 100
+        integer, parameter :: NPTS          = 100
         real,    parameter :: SLOPES(7)     = [-5., -0.5, -1.e-5, 0., 1.e-5, 0.5, 5.]
         real,    parameter :: INTERCEPTS(5) = [-10., -1., 0., 3., 10.]
-        real    :: datavec(NPTS,2), slope, intercept, corr, x, err_slope, err_intercept
-        integer :: i, j, k
+        real               :: datavec(NPTS,2), slope, intercept, corr, x, err_slope, err_intercept
+        integer            :: i, j, k
         write(*,'(A)') 'test_fit_straight_line_recovery'
         err_slope     = 0.
         err_intercept = 0.
@@ -275,9 +275,9 @@ contains
 
     subroutine test_plane_fits()
         integer, parameter :: NPTS = 9
-        real    :: xyz(NPTS,3), points(3,NPTS), a, b, c, sol(3), line(4,3)
-        logical :: err
-        integer :: i
+        real               :: xyz(NPTS,3), points(3,NPTS), a, b, c, sol(3), line(4,3)
+        logical            :: err
+        integer            :: i
         write(*,'(A)') 'test_plane_fits'
         do i = 1,NPTS
             xyz(i,1) = real(mod(i-1, 3)) - 1.0
@@ -332,7 +332,7 @@ contains
     end subroutine test_vector_helpers
 
     subroutine test_gemm_tn()
-        real :: a(3,2), b(3,4), c(2,4)
+        real    :: a(3,2), b(3,4), c(2,4)
         integer :: i, j
         write(*,'(A)') 'test_gemm_tn'
         do j = 1,2

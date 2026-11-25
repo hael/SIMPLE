@@ -47,22 +47,22 @@ contains
     !! state; 0 with one state).
     subroutine match_cavgs_to_states( cavgs, vols, nspace, lp, trs, mskdiam, nthr, states, eulers, shifts,&
             &corrs, margins )
-        class(image),         intent(inout) :: cavgs(:), vols(:)
-        integer,              intent(in)    :: nspace, nthr
-        real,                 intent(in)    :: lp, trs, mskdiam
-        integer, allocatable, intent(inout) :: states(:)
-        real,    allocatable, intent(inout) :: eulers(:,:), shifts(:,:), corrs(:), margins(:)
+        class(image),         intent(inout)              :: cavgs(:), vols(:)
+        integer,              intent(in)                 :: nspace, nthr
+        real,                 intent(in)                 :: lp, trs, mskdiam
+        integer,              allocatable, intent(inout) :: states(:)
+        real,                 allocatable, intent(inout) :: eulers(:,:), shifts(:,:), corrs(:), margins(:)
         type(image),       allocatable :: cavgs_crop(:), vols_crop(:), refs(:), projs(:)
         type(inpl_struct), allocatable :: algninfo(:,:)
         real,              allocatable :: corrmat(:,:)
         logical,           allocatable :: l_msk(:,:,:)
         integer,           allocatable :: best_ref(:)
-        type(parameters), allocatable  :: params_match
-        type(cmdline) :: cline_match
-        type(oris)    :: eulspace
-        type(image)   :: img_msk
-        integer     :: ncls, nstates, ldim(3), box_c, box_v, box_c2, box_v2, box_crop, s, icls, i, iref
-        real        :: smpd_c, smpd_v, smpd_crop, mskrad, scale
+        type(parameters),  allocatable :: params_match
+        type(cmdline)                  :: cline_match
+        type(oris)                     :: eulspace
+        type(image)                    :: img_msk
+        integer                        :: ncls, nstates, ldim(3), box_c, box_v, box_c2, box_v2, box_crop, s, icls, i, iref
+        real                           :: smpd_c, smpd_v, smpd_crop, mskrad, scale
         ncls    = size(cavgs)
         nstates = size(vols)
         if( ncls < 1 )    THROW_HARD('no class averages to match; match_cavgs_to_states')

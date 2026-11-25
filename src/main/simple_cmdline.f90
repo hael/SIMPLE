@@ -23,8 +23,8 @@ character(len=*), parameter :: INPROCESS_KEYS(5) = [character(len=14) :: &
 !> cmdarg key/value pair command-line type
 type cmdarg
     type(string) :: key, carg
-    logical      :: defined=.false.
-    real(dp)     :: rarg=0.d0
+    logical      :: defined = .false.
+    real(dp)     :: rarg    = 0.d0
 end type cmdarg
 
 type cmdline
@@ -42,7 +42,7 @@ type cmdline
     procedure, private :: assign
     generic            :: assignment(=) => assign
     procedure, private :: set_1, set_2, set_3, set_4, set_5, set_6
-    generic            :: set => set_1, set_2, set_3, set_4, set_5, set_6
+    generic            :: set           => set_1, set_2, set_3, set_4, set_5, set_6
     procedure          :: set_from_text
     procedure          :: copy_arg
     procedure          :: lookup
@@ -66,13 +66,13 @@ contains
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse( self )
         class(cmdline), intent(inout)  :: self
-        type(string), allocatable      :: keys_required(:), defined_keys(:)
+        type(string),     allocatable  :: keys_required(:), defined_keys(:)
         type(args)                     :: allowed_args
         type(ui_program), pointer      :: ptr2prg => null()
         type(string)                   :: prgname, exec_cmd_ui, executable
         character(len=XLONGSTRLEN)     :: arg
-        integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
-        logical :: skip_required_keys
+        integer                        :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
+        logical                        :: skip_required_keys
         ! parse command line
         self%argcnt = command_argument_count()
         call get_command(self%entire_line)
@@ -203,12 +203,12 @@ contains
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse_private( self )
         class(cmdline), intent(inout) :: self
-        type(string), allocatable     :: keys_required(:), defined_keys(:)
-        type(args)                    :: allowed_args
+        type(string),     allocatable  :: keys_required(:), defined_keys(:)
+        type(args)                     :: allowed_args
         character(len=XLONGSTRLEN)     :: arg
-        type(ui_program), pointer :: ptr2prg => null()
-        integer :: i, ikey, pos, cmdstat, cmdlen, sz_keys_req, nargs_required
-        logical :: skip_required_keys
+        type(ui_program), pointer      :: ptr2prg => null()
+        integer                        :: i, ikey, pos, cmdstat, cmdlen, sz_keys_req, nargs_required
+        logical                        :: skip_required_keys
         ! parse command line
         self%argcnt = command_argument_count()
         call get_command(self%entire_line)
@@ -306,12 +306,12 @@ contains
     subroutine parse_private_line( self, line )
         class(cmdline),   intent(inout) :: self
         character(len=*), intent(in)    :: line
-        type(string), allocatable       :: keys_required(:), defined_keys(:)
+        type(string),     allocatable   :: keys_required(:), defined_keys(:)
         type(args)                      :: allowed_args
         character(len=XLONGSTRLEN)      :: arg(MAX_CMDARGS)
         type(ui_program), pointer       :: ptr2prg => null()
-        integer :: i, ikey, pos, sz_keys_req, nargs_required
-        logical :: skip_required_keys
+        integer                         :: i, ikey, pos, sz_keys_req, nargs_required
+        logical                         :: skip_required_keys
         call self%kill
         self%entire_line = adjustl(trim(line))
         cmdline_glob     = trim(self%entire_line)
@@ -397,8 +397,8 @@ contains
         character(len=*), intent(in)    :: arg
         class(args),      intent(in)    :: allowed_args
         character(len=:), allocatable   :: form
-        real(kind=dp) :: rval
-        integer       :: pos1, io_stat, ival
+        real(kind=dp)                   :: rval
+        integer                         :: pos1, io_stat, ival
         pos1 = index(arg, '=') ! position of '='
         ! parse everyting containing '='
         if( pos1 /= 0 )then
@@ -455,7 +455,7 @@ contains
     !>  \brief  polymorphic assignment (=)
     subroutine assign( self, self2copy )
         class(cmdline), intent(inout) :: self
-        class(cmdline), intent(in) :: self2copy
+        class(cmdline), intent(in)    :: self2copy
         call self%copy(self2copy)
     end subroutine assign
 
@@ -567,8 +567,8 @@ contains
         class(cmdline),   intent(inout) :: self
         character(len=*), intent(in)    :: key, val
         character(len=:), allocatable :: form
-        real(kind=dp) :: rval
-        integer       :: ival, io_stat
+        real(kind=dp)                 :: rval
+        integer                       :: ival, io_stat
         call str2format(val, form, rval, ival)
         select case(form)
             case('real')
@@ -671,8 +671,8 @@ contains
 
     !> \brief  for writing the command line
     subroutine printline( self, tag, unit )
-        class(cmdline),             intent(inout) :: self
-        character(len=*), optional, intent(in)    :: tag; integer, optional, intent(in) :: unit
+        class(cmdline),             intent(inout)        :: self
+        character(len=*),           optional, intent(in) :: tag; integer, optional, intent(in) :: unit
         integer :: i, funit
         funit = logfhandle; if( present(unit) ) funit = unit; if( present(tag) )then
             do i=1,self%argcnt
@@ -747,7 +747,7 @@ contains
     function get_keys( self ) result( keys )
         class(cmdline),   intent(in) :: self
         type(string), allocatable :: keys(:)
-        integer :: i
+        integer                   :: i
         if( self%argcnt > 0 )then
             allocate(keys(self%argcnt))
             do i=1,self%argcnt
@@ -760,7 +760,7 @@ contains
     elemental function get_rarg( self, key ) result( rval )
         class(cmdline),   intent(in) :: self
         character(len=*), intent(in) :: key
-        real :: rval
+        real    :: rval
         integer :: i
         rval = 0.
         do i=1,self%argcnt
@@ -794,7 +794,7 @@ contains
         class(cmdline),   intent(in) :: self
         character(len=*), intent(in) :: key
         type(string) :: cval
-        integer :: i
+        integer      :: i
         do i=1,self%argcnt
             if( self%cmds(i)%key%is_allocated() )then
                 if( self%cmds(i)%key .eq. trim(key) )then
@@ -807,9 +807,9 @@ contains
 
     !> \brief for generating a job description (prg overrides prg in cline)
     subroutine gen_job_descr( self, hash, prg )
-        class(cmdline),          intent(in)    :: self
-        class(chash),            intent(inout) :: hash
-        class(string), optional, intent(in)    :: prg
+        class(cmdline),          intent(in)           :: self
+        class(chash),            intent(inout)        :: hash
+        class(string),           optional, intent(in) :: prg
         integer :: i
         call hash%new(MAX_CMDARGS)
         do i=1,self%argcnt
@@ -842,7 +842,7 @@ contains
 
     !> \brief  is for raising command line exception
     subroutine cmdline_err( cmdstat, cmdlen, arg, pos )
-        integer, intent(in)          :: cmdstat, cmdlen, pos
+        integer,          intent(in) :: cmdstat, cmdlen, pos
         character(len=*), intent(in) :: arg
         if( cmdstat == -1 )then
             write(logfhandle,*) 'ERROR! while parsing the command line'

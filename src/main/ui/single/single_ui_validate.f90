@@ -4,10 +4,10 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('validate', 'Validation', 70)
-type(ui_program), target :: cavgseoproc_nano
-type(ui_program), target :: cavgsproc_nano
-type(ui_program), target :: ptclsproc_nano
-type(ui_program), target :: validate_cavgs_vs_model
+type(ui_program),          target    :: cavgseoproc_nano
+type(ui_program),          target    :: cavgsproc_nano
+type(ui_program),          target    :: ptclsproc_nano
+type(ui_program),          target    :: validate_cavgs_vs_model
 
 contains
 

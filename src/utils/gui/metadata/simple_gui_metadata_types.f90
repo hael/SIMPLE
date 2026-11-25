@@ -48,9 +48,9 @@ enum, bind(c)
   enumerator :: GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE     ! 31
   enumerator :: GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE ! 32
   ! pool 2D stage
-  enumerator :: GUI_METADATA_STREAM_POOL2D_TYPE               ! 33
-  enumerator :: GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE         ! 34
-  enumerator :: GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE      ! 35
+  enumerator :: GUI_METADATA_STREAM_POOL2D_TYPE                ! 33
+  enumerator :: GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE          ! 34
+  enumerator :: GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE       ! 35
   enumerator :: GUI_METADATA_STREAM_POOL2D_SNAPSHOT_CLS2D_TYPE ! 36
   ! multistate solve3D stage
   enumerator :: GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE          ! 37

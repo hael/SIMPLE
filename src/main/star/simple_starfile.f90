@@ -45,10 +45,10 @@ contains
     ! Removes any stale .tmp file left by a previous run.
     ! -------------------------------------------------------------------------
     subroutine init( self, fname, verbose, optics_offset )
-        class(starfile),   intent(inout) :: self
-        class(string),     intent(in)    :: fname
-        logical, optional, intent(in)    :: verbose
-        integer, optional, intent(in)    :: optics_offset
+        class(starfile),   intent(inout)        :: self
+        class(string),     intent(in)           :: fname
+        logical,           optional, intent(in) :: verbose
+        integer,           optional, intent(in) :: optics_offset
         type(string) :: cwd
         call simple_getcwd(cwd)
         if( present(verbose)       ) self%verbose = verbose
@@ -80,8 +80,8 @@ contains
     ! When nparts <= 1 the single partition covers [1, n].
     ! -------------------------------------------------------------------------
     subroutine calc_part_boundaries( part_boundaries, n )
-        integer, allocatable, intent(inout) :: part_boundaries(:,:)
-        integer,              intent(in)    :: n
+        integer,              allocatable, intent(inout) :: part_boundaries(:,:)
+        integer,              intent(in)                 :: n
         integer :: nparts, batchdelta, batchbase, nstart, nend, part
         nparts = omp_get_max_threads()
         allocate( part_boundaries(nparts, 2) )
@@ -339,9 +339,9 @@ contains
     ! is written for each particle.
     ! -------------------------------------------------------------------------
     subroutine write_ptcl2D_table( self, ptcl2d_oris, stk_oris, mics_oris )
-        class(starfile),       intent(inout) :: self
-        class(oris),           intent(in)    :: ptcl2d_oris, stk_oris
-        class(oris), optional, intent(in)    :: mics_oris
+        class(starfile),       intent(inout)        :: self
+        class(oris),           intent(in)           :: ptcl2d_oris, stk_oris
+        class(oris),           optional, intent(in) :: mics_oris
         type(starfile_table_type)            :: ptcl_table
         integer                              :: iptcl, pathtrim, half_boxsize, stkind, indstk
         character(len=XLONGSTRLEN)           :: stkname, micname
@@ -419,9 +419,9 @@ contains
     ! because their Fortran/C wrappers use temporary allocatable strings.
     ! -------------------------------------------------------------------------
     subroutine write_ptcl2D_table_parallel( self, ptcl2d_oris, stk_oris, mics_oris )
-        class(starfile),       intent(inout) :: self
-        class(oris),           intent(in)    :: ptcl2d_oris, stk_oris
-        class(oris), optional, intent(in)    :: mics_oris
+        class(starfile),       intent(inout)        :: self
+        class(oris),           intent(in)           :: ptcl2d_oris, stk_oris
+        class(oris),           optional, intent(in) :: mics_oris
         type(starfile_table_type)            :: part_table
         integer, allocatable                 :: part_boundaries(:,:)
         character(len=XLONGSTRLEN)           :: micname, str_stk
@@ -562,7 +562,7 @@ contains
     subroutine check_origin_smpd( ptcl2d_oris, stk_oris )
         class(oris), intent(in) :: ptcl2d_oris, stk_oris
         character(len=XLONGSTRLEN) :: msg, stkname
-        integer :: iptcl, stkind
+        integer                    :: iptcl, stkind
         do iptcl = 1, ptcl2d_oris%get_noris()
             if( ptcl2d_oris%get_state(iptcl) == 0 ) cycle
             stkind = ptcl2d_oris%get_int(iptcl, 'stkind')

@@ -29,8 +29,8 @@ contains
     module subroutine copy_fast( self, self2copy, is, ft )
         class(cavgs_set), intent(inout) :: self
         class(cavgs_set), intent(in)    :: self2copy
-        integer,         intent(in)    :: is
-        logical,         intent(in)    :: ft
+        integer,          intent(in)    :: is
+        logical,          intent(in)    :: ft
         self%even%cmat(:,:,is)    = self2copy%even%cmat(:,:,is)
         self%odd%cmat(:,:,is)     = self2copy%odd%cmat(:,:,is)
         self%merged%cmat(:,:,is)  = self2copy%merged%cmat(:,:,is)
@@ -54,9 +54,9 @@ contains
     ! Type stack
 
     module subroutine new_stack( self, ldim, nslices, alloc_ctfsq )
-        class(stack),      intent(inout) :: self
-        integer,           intent(in)    :: ldim(2), nslices
-        logical, optional, intent(in)    :: alloc_ctfsq
+        class(stack),      intent(inout)        :: self
+        integer,           intent(in)           :: ldim(2), nslices
+        logical,           optional, intent(in) :: alloc_ctfsq
         real             :: center(2),e, r
         integer          :: phys(2), h, i, j, k, sh, nyq
         logical          :: l_alloc_ctfsq
@@ -138,11 +138,11 @@ contains
     ! numerator/CTF^2 sum.  This is the common KB interpolation primitive used
     ! by both class averaging and projection-direction reconstruction.
     module subroutine stack_accumulate_fplane( self, e3, fpl, islice, weight )
-        class(stack),      intent(inout) :: self
-        real,              intent(in)    :: e3
-        type(fplane_type), intent(in)    :: fpl
-        integer,           intent(in)    :: islice
-        real, optional,    intent(in)    :: weight
+        class(stack),      intent(inout)           :: self
+        real,              intent(in)              :: e3
+        type(fplane_type), intent(in)              :: fpl
+        integer,           intent(in)              :: islice
+        real,              optional,    intent(in) :: weight
         complex :: fcomp, fc
         real    :: loc(2), mat(2,2), hrow(2), wx(CAVG_KB_WDIM), wy(CAVG_KB_WDIM), base(2)
         real    :: m11, m12, m21, m22, tvalsq, w, w_particle, rh, rk, h_sq, sx, sy

@@ -68,13 +68,13 @@ contains
     !> for de novo map determination from class averages
     subroutine exec_solve3D_cavgs( self, cline )
         use simple_estimate_ssnr, only: lpstages_fast
-        class(commander_solve3D_cavgs), intent(inout) :: self
+        class(commander_solve3D_cavgs),    intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! shared-mem commanders
-        type(commander_refine3D)  :: xrefine3D
-        type(commander_rec3D)     :: xrec3D
+        type(commander_refine3D)        :: xrefine3D
+        type(commander_rec3D)           :: xrec3D
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
-        type(commander_reproject) :: xreproject
+        type(commander_reproject)       :: xreproject
         ! other
         type(string)              :: stk, orig_stk, stk_even, stk_odd, ext
         integer, allocatable      :: states(:)
@@ -90,7 +90,7 @@ contains
         integer                   :: nstates_target, pop
         integer                   :: cavg_ldim(3), cavg_nimgs, final_nstates, fsc_box
         real                      :: cavg_smpd
-        real                      :: eo_angdist, eo_state_overlap ! the last stage's even/odd agreement (-1: not measured)
+        real                      :: eo_angdist, eo_state_overlap       ! the last stage's even/odd agreement (-1: not measured)
         real                      :: eo_angdist_same, eo_angdist_median ! the angular distance over the halves in one state
         logical                   :: l_reseed, l_reseeded
         if( cline%defined('part') )then
@@ -438,7 +438,7 @@ contains
                 logical, intent(out) :: l_moved
                 integer, allocatable :: labels(:), labels_prev(:)
                 real,    allocatable :: scores(:)
-                integer :: nmoved, s
+                integer              :: nmoved, s
                 l_moved = .false.
                 call work_proj%read_segment('ptcl3D', work_projfile)
                 labels      = work_proj%os_ptcl3D%get_all_asint('state')
@@ -461,7 +461,7 @@ contains
                 class(cmdline), intent(inout) :: cline
                 type(string)  :: src, dest
                 type(cmdline) :: local_cline_rec
-                integer :: s
+                integer       :: s
                 call work_proj%os_ptcl3D%rnd_oris
                 call work_proj%os_ptcl3D%zero_shifts
                 if( params%nstates > 1 )then
@@ -501,12 +501,12 @@ contains
             ! noise; the state agreement itself is conv_eo_states'. With one state the two means agree.
             subroutine conv_eo( os )
                 class(oris), intent(in) :: os
-                type(sym) :: se
-                type(ori) :: o_odd, o_even
+                type(sym)         :: se
+                type(ori)         :: o_odd, o_even
                 real, allocatable :: dists_same(:)
-                real      :: avg_euldist, euldist
-                integer   :: icls, ncls, nsame
-                logical   :: l_same
+                real              :: avg_euldist, euldist
+                integer           :: icls, ncls, nsame
+                logical           :: l_same
                 call se%new(params%pgrp)
                 allocate(dists_same(max(1, os%get_noris()/2)))
                 avg_euldist = 0.
@@ -611,13 +611,13 @@ contains
     end subroutine exec_solve3D_cavgs
 
     subroutine exec_solve3D_cavgs_conditional_restarts( self, cline )
-        class(commander_solve3D_cavgs_conditional_restarts), intent(inout) :: self
+        class(commander_solve3D_cavgs_conditional_restarts),    intent(inout) :: self
         class(cmdline),                                         intent(inout) :: cline
         type(commander_solve3D_cavgs) :: xcommander_solve3D_cavgs
-        type(cmdline) :: cline_backup
-        type(string)  :: run_dir
-        integer       :: nrestarts, irestart, final_nstates, input_nstates, nstates_collapse
-        logical       :: state_collapse, l_mkdir
+        type(cmdline)                 :: cline_backup
+        type(string)                  :: run_dir
+        integer                       :: nrestarts, irestart, final_nstates, input_nstates, nstates_collapse
+        logical                       :: state_collapse, l_mkdir
         if( .not. cline%defined('nrestarts_collapse') )then
             THROW_HARD('nrestarts_collapse needs to be on the command line for solve3D_cavgs state collapse conditional restarts')
         endif
@@ -682,21 +682,21 @@ contains
     subroutine exec_solve3D_addon( self, cline )
         use simple_ui,         only: get_prg_ptr
         use simple_ui_program, only: ui_program
-        class(commander_solve3D_addon), intent(inout) :: self
+        class(commander_solve3D_addon),    intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(commander_solve3D)       :: xsolve3D
         type(solve3D_manifest)        :: man
-        type(solve3D_stage_record) :: stage
+        type(solve3D_stage_record)    :: stage
         type(sp_project)              :: spproj_cur, spproj_frz
         type(project_superset)        :: superset
         type(ui_program), pointer     :: ui_addon => null()
         type(cmdline)                 :: cline_run
-        type(string), allocatable     :: keys(:)
+        type(string),     allocatable :: keys(:)
         type(string)                  :: projfile, projfile_frz, sigma_path, base_backend
         character(len=STDLEN)         :: msg
         character(len=:), allocatable :: key
-        integer :: i, status
-        logical :: found
+        integer                       :: i, status
+        logical                       :: found
         ! The command line is the program's UI contract: its declared inputs and
         ! the execution environment. A setting of the frozen solution comes
         ! from its manifest; refusal is by key, so an inherited value cannot be
@@ -812,7 +812,7 @@ contains
         !! run's replayed value (or none) and the value that replaces it
         subroutine log_override( key )
             character(len=*), intent(in) :: key
-            type(string) :: base, given
+            type(string)      :: base, given
             character(len=32) :: buf
             select case(key)
                 case('balance')
@@ -848,11 +848,11 @@ contains
         !! mkdir=no the working project is the original, already in place.
         subroutine publish_result( working )
             class(string), intent(in) :: working
-            type(solve3D_manifest) :: man_run
+            type(solve3D_manifest)    :: man_run
             type(sp_project)          :: spproj_out
             type(string)              :: working_abs, tmpname, manifest_abs
             character(len=STDLEN)     :: msg_here
-            integer :: status_here
+            integer                   :: status_here
             working_abs = simple_abspath(working)
             if( working_abs%to_char() == projfile%to_char() ) return
             call spproj_out%read(working_abs)
@@ -879,7 +879,7 @@ contains
 
     !> for generation of an initial 3d model from particles
     subroutine exec_solve3D( self, cline )
-        class(commander_solve3D), intent(inout) :: self
+        class(commander_solve3D),    intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         ! commanders
         type(commander_refine3D)        :: xrefine3D
@@ -892,21 +892,21 @@ contains
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(gui_communicator)          :: gui_comm
-        real    :: lprange(2)
-        integer :: state, istage, start_stage, nptcls2update, noris, nstates_on_cline
-        integer :: nstates_in_project, last_stage, pose_init_iter
-        logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
-        logical :: l_state_continue
-        logical :: l_force_full_sampling
-        logical :: l_sticky_prev !< the previous stage refined a sticky subset (release_sticky_subset)
-        logical :: l_no2D   !< the project carries no usable 2D solution (no classes, class averages or class FRCs): balance=none only
-        logical :: l_virgin2D !< ptcl2D never searched: no 2D shifts to transfer
-        type(string) :: frcs_probe
-        integer :: nthr_view
-        integer :: automsk_last_stage
-        type(string) :: automsk_req
-        character(len=5) :: smpl_units
-        real    :: sampled_active_frac
+        real                            :: lprange(2)
+        integer                         :: state, istage, start_stage, nptcls2update, noris, nstates_on_cline
+        integer                         :: nstates_in_project, last_stage, pose_init_iter
+        logical                         :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
+        logical                         :: l_state_continue
+        logical                         :: l_force_full_sampling
+        logical                         :: l_sticky_prev !< the previous stage refined a sticky subset (release_sticky_subset)
+        logical                         :: l_no2D        !< the project carries no usable 2D solution (no classes, class averages or class FRCs): balance=none only
+        logical                         :: l_virgin2D    !< ptcl2D never searched: no 2D shifts to transfer
+        type(string)                    :: frcs_probe
+        integer                         :: nthr_view
+        integer                         :: automsk_last_stage
+        type(string)                    :: automsk_req
+        character(len=5)                :: smpl_units
+        real                            :: sampled_active_frac
         ! run manifest: the command line as given and the emitted stage ladder
         type(cmdline)     :: cline_entry
         real, allocatable :: emitted_lp(:), emitted_lpstop(:)
@@ -914,19 +914,19 @@ contains
         ! solve3D_addon route, selected only by the internal addon_manifest
         ! handshake that commander_solve3D_addon sets (outside the argument
         ! vocabulary, so no command line can select it)
-        type(solve3D_manifest)     :: man_addon
-        type(project_superset)     :: superset
-        type(sp_project)           :: spproj_frz
-        type(solve3D_addon_ctx) :: addon_ctx
-        type(string)               :: frozen_copy, frozen_ctx_fname, frozen_sigma_copy
-        type(string)               :: carry_ctx_fname, carry_bundle_fname, carry_members_fname, frozen_bundle_dir
-        type(carried_bundle)       :: bundle_frz          !< the frozen run's carried bundle (carried route)
-        integer, allocatable       :: members_frz(:)      !< its membership: state per frozen-project row, 0 outside
-        logical :: l_addon, l_cohort_chain_seeded, l_carried
-        character(len=*), parameter :: ADDON_DIAG_DIR  = 'addon_diag' !< addon_diag=yes: the cohort-only map
-        character(len=*), parameter :: FROZEN_COPY_DIR = 'frozen'     !< the frozen project's copy
-        integer(timer_int_kind) :: t_tot, t_phase
-        real(timer_int_kind)    :: rt_setup, rt_start, rt_register, rt_stages, rt_final, rt_epilogue, rt_tot
+        type(solve3D_manifest)        :: man_addon
+        type(project_superset)        :: superset
+        type(sp_project)              :: spproj_frz
+        type(solve3D_addon_ctx)       :: addon_ctx
+        type(string)                  :: frozen_copy, frozen_ctx_fname, frozen_sigma_copy
+        type(string)                  :: carry_ctx_fname, carry_bundle_fname, carry_members_fname, frozen_bundle_dir
+        type(carried_bundle)          :: bundle_frz                     !< the frozen run's carried bundle (carried route)
+        integer,          allocatable :: members_frz(:)                 !< its membership: state per frozen-project row, 0 outside
+        logical                       :: l_addon, l_cohort_chain_seeded, l_carried
+        character(len=*), parameter   :: ADDON_DIAG_DIR  = 'addon_diag' !< addon_diag=yes: the cohort-only map
+        character(len=*), parameter   :: FROZEN_COPY_DIR = 'frozen'     !< the frozen project's copy
+        integer(timer_int_kind)       :: t_tot, t_phase
+        real(timer_int_kind)          :: rt_setup, rt_start, rt_register, rt_stages, rt_final, rt_epilogue, rt_tot
         if( L_BENCH_GLOB )then
             rt_setup    = 0.
             rt_start    = 0.
@@ -1498,8 +1498,8 @@ contains
         !! context; the add-on keys leave the command line so no child sees them
         subroutine addon_parse
             character(len=STDLEN) :: msg
-            type(string) :: mpath
-            integer :: status
+            type(string)          :: mpath
+            integer               :: status
             mpath = cline%get_carg('addon_manifest')
             call man_addon%read(mpath, status, msg)
             if( status /= 0 ) THROW_HARD(trim(msg))
@@ -1535,9 +1535,9 @@ contains
         !! open the run's own sigma2 state (copy-on-write).
         subroutine addon_prologue
             character(len=STDLEN) :: msg
-            type(string) :: sigma_src, bundle_src
-            integer :: status
-            logical :: found
+            type(string)          :: sigma_src, bundle_src
+            integer               :: status
+            logical               :: found
             call spproj_frz%read(params%projfile_frozen)
             call man_addon%get_artifact('carried_bundle', 0, bundle_src, l_carried)
             if( l_carried ) call adopt_frozen_bundle(bundle_src)
@@ -1579,8 +1579,8 @@ contains
         subroutine adopt_frozen_bundle( bundle_src )
             class(string), intent(in) :: bundle_src
             type(solve3D_stage_record) :: last
-            character(len=STDLEN) :: msg
-            integer :: status
+            character(len=STDLEN)      :: msg
+            integer                    :: status
             if( .not. man_addon%matches_artifact('carried_bundle', 0, bundle_src) ) &
                 &THROW_HARD('the frozen run''s carried bundle is missing or changed: '//bundle_src%to_char())
             call bundle_frz%read(bundle_src, status, msg)
@@ -1612,11 +1612,11 @@ contains
         !! power. The halves are the project's partition, made here before any record is seeded.
         subroutine open_addon_sigma2_state
             type(sigma2_state_header) :: frozen_header, header
-            type(string) :: committed, candidate
-            logical, allocatable :: l_frz(:), l_coh(:), l_ret(:), copy_rows(:)
-            integer, allocatable :: eo(:)
-            character(len=STDLEN) :: msg
-            integer :: status, i, nrows, nrows_frz
+            type(string)              :: committed, candidate
+            logical, allocatable      :: l_frz(:), l_coh(:), l_ret(:), copy_rows(:)
+            integer, allocatable      :: eo(:)
+            character(len=STDLEN)     :: msg
+            integer                   :: status, i, nrows, nrows_frz
             call ensure_field_halves(spproj, 'ptcl3D', params%projfile)
             call spproj%read(params%projfile)
             call sigma2_state_read_header(frozen_sigma_copy%to_char(), frozen_header, status, msg)
@@ -1652,12 +1652,12 @@ contains
         !! means republished on request, or the frozen and retired rows masked again
         subroutine switch_addon_membership( l_union, l_means )
             logical, intent(in) :: l_union, l_means
-            type(string) :: sigma_path
-            logical, allocatable :: active(:)
-            integer, allocatable :: eo(:)
+            type(string)          :: sigma_path
+            logical, allocatable  :: active(:)
+            integer, allocatable  :: eo(:)
             character(len=STDLEN) :: msg
-            integer :: status, i
-            logical :: found
+            integer               :: status, i
+            logical               :: found
             call spproj%read(params%projfile)
             if( l_union )then
                 call superset%restore(spproj, spproj_frz)
@@ -1697,12 +1697,12 @@ contains
         !! run's carried sums instead and starts from the frozen run's final maps,
         !! which are their restoration at the native box.
         subroutine addon_starting_state
-            type(frozen_accum) :: store, src
-            type(string) :: src_vol, dest
+            type(frozen_accum)    :: store, src
+            type(string)          :: src_vol, dest
             character(len=STDLEN) :: msg
-            integer, allocatable :: boxes(:)
-            real,    allocatable :: smpds(:)
-            integer :: s, b, status, nstates_counts(params%nstates)
+            integer, allocatable  :: boxes(:)
+            real,    allocatable  :: smpds(:)
+            integer               :: s, b, status, nstates_counts(params%nstates)
             call reset_ptcl3D_from_ptcl2D_selection
             call spproj%os_ptcl3D%rnd_oris
             if( params%nstates > 1 ) call gen_labelling(spproj%os_ptcl3D, params%nstates, 'uniform')
@@ -1793,7 +1793,7 @@ contains
             integer,          intent(in) :: s
             class(string),    intent(in) :: dest
             type(string) :: src
-            logical :: found
+            logical      :: found
             call man_addon%get_artifact(kind, s, src, found)
             if( .not. found ) THROW_HARD('the frozen run recorded no '//kind//' map')
             if( .not. man_addon%matches_artifact(kind, s, src) ) &
@@ -1828,8 +1828,8 @@ contains
             integer, intent(in) :: s
             type(image)  :: vol_frozen, vol_base
             type(string) :: fname
-            integer :: box_here, ldim(3), nfoo
-            real    :: smpd_here, corr
+            integer      :: box_here, ldim(3), nfoo
+            real         :: smpd_here, corr
             if( .not. spproj_frz%isthere_in_osout('vol', s) ) return
             call spproj_frz%get_vol('vol', s, fname, smpd_here, box_here)
             if( .not. file_exists(fname) ) return
@@ -1885,8 +1885,8 @@ contains
             logical, allocatable :: l_frz(:), l_coh(:), l_ret(:)
             integer, allocatable :: members(:), boxes(:)
             real,    allocatable :: smpds(:)
-            integer :: i, s, nrows, nrows_frz
-            logical :: found
+            integer              :: i, s, nrows, nrows_frz
+            logical              :: found
             call spproj%read(params%projfile)
             nrows     = spproj%os_ptcl3D%get_noris()
             nrows_frz = spproj_frz%os_ptcl3D%get_noris()
@@ -1942,11 +1942,11 @@ contains
         subroutine addon_epilogue
             type(solve3D_addon_report) :: report
             type(solve3D_stage_record) :: base_stage
-            real, allocatable :: fsc(:), res(:), fsc_base(:)
-            type(string) :: fsc_name, vol_base
-            real    :: fsc05, fsc0143, lp_base, lpstop_base, smpd_vol
-            integer :: s, i, box_fsc, box_vol
-            logical :: l_union, l_base
+            real, allocatable          :: fsc(:), res(:), fsc_base(:)
+            type(string)               :: fsc_name, vol_base
+            real                       :: fsc05, fsc0143, lp_base, lpstop_base, smpd_vol
+            integer                    :: s, i, box_fsc, box_vol
+            logical                    :: l_union, l_base
             if( trim(params%addon_diag) == 'yes' ) call addon_cohort_diagnostic
             call spproj%read(params%projfile)
             call report%new(params%nstates, size(emitted_lp), params%smpd, params%mskdiam)
@@ -2011,8 +2011,8 @@ contains
             type(sp_project) :: spproj_diag
             type(cmdline)    :: cline_diag
             type(string)     :: diag_proj, sigma_path, cwd_run
-            logical :: found
-            integer :: status, s
+            logical          :: found
+            integer          :: status, s
             call simple_mkdir(ADDON_DIAG_DIR)
             call simple_getcwd(cwd_run)
             ! the working copy's file name keeps the sigma2 layout lineage
@@ -2061,11 +2061,11 @@ contains
             logical,          intent(in) :: l_eligible
             character(len=*), intent(in) :: program_name
             type(solve3D_manifest)                     :: man
-            type(solve3D_stage_record), allocatable :: stages(:)
-            type(sp_project)      :: spproj_man
-            type(string)          :: fname
-            character(len=STDLEN) :: msg
-            integer :: i, status
+            type(solve3D_stage_record), allocatable    :: stages(:)
+            type(sp_project)                           :: spproj_man
+            type(string)                               :: fname
+            character(len=STDLEN)                      :: msg
+            integer                                    :: i, status
             call spproj_man%read(params%projfile)
             call man%new(run_id, program_name, l_eligible, spproj_man)
             call man%set_solution(nstates_glob, params%pgrp, params%box, params%smpd, params%mskdiam)
@@ -2321,9 +2321,9 @@ contains
         subroutine ini3D_from_cavgs( cline )
             use simple_default_clines, only: strip_sigma2_anneal_args
             class(cmdline),    intent(inout) :: cline
-            type(commander_solve3D_cavgs) :: xini3D
+            type(commander_solve3D_cavgs)    :: xini3D
             type(cmdline)                    :: cline_ini3D
-            type(string),    allocatable     :: files_that_stay(:)
+            type(string),     allocatable    :: files_that_stay(:)
             character(len=*), parameter      :: INI3D_DIR='solve3D_cavgs/'
             cline_ini3D = cline
             call strip_sigma2_anneal_args(cline_ini3D)
@@ -2394,7 +2394,7 @@ contains
     function new_run_id( prefix ) result( id )
         character(len=*), intent(in) :: prefix
         character(len=64) :: id
-        integer :: v(8)
+        integer           :: v(8)
         call date_and_time(values=v)
         write(id,'(A,A,I4.4,2I2.2,A,3I2.2,A,I3.3,A,I0)') trim(prefix), '_', v(1), v(2), v(3), 'T', v(5), v(6), v(7), &
             &'.', v(8), '_', get_process_id()

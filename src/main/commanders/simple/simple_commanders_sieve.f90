@@ -126,12 +126,12 @@ contains
         class(commander_sieve_ptcls2), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         class(ptcl_sieve2), allocatable :: sieve
-        type(sieve2_settings) :: settings
-        type(parameters)      :: params
-        type(string)          :: retrain
-        integer, allocatable  :: rounds(:)
-        real                  :: mskdiam
-        logical               :: l_parts
+        type(sieve2_settings)           :: settings
+        type(parameters)                :: params
+        type(string)                    :: retrain
+        integer,            allocatable :: rounds(:)
+        real                            :: mskdiam
+        logical                         :: l_parts
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('nmics') ) call cline%set('nmics', SIEVE2_NMICS)
         if( .not. cline%defined('ncls')  ) call cline%set('ncls',  SIEVE2_NCLS)

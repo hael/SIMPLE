@@ -178,8 +178,8 @@ contains
     module subroutine pad_fft( self, self_out )
         class(image), intent(in)    :: self
         class(image), intent(inout) :: self_out
-        integer :: n1, n2, n3, n1o, n2o, n3o, h1o, h2o, h3o
-        integer :: i, j, k, starts(3), stops(3), x0, y0, z0, xo, yo, zo
+        integer       :: n1, n2, n3, n1o, n2o, n3o, h1o, h2o, h3o
+        integer       :: i, j, k, starts(3), stops(3), x0, y0, z0, xo, yo, zo
         real(c_float) :: scale_cmat
         ! determine input dims
         n1 = self%ldim(1)
@@ -306,10 +306,10 @@ contains
     !!  so re-normalizing against the cropped background would rescale the image by the
     !!  crop factor while leaving the CTF and sigma2 weights untouched.
     module subroutine norm_noise_taper_edge_pad_fft(self, lmsk, self_out, renorm)
-        class(image),      intent(inout) :: self
-        logical,           intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
-        class(image),      intent(inout) :: self_out
-        logical, optional, intent(in)    :: renorm
+        class(image),      intent(inout)        :: self
+        logical,           intent(in)           :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
+        class(image),      intent(inout)        :: self_out
+        logical,           optional, intent(in) :: renorm
         logical       :: l_renorm
         integer       :: n1, n2, n1o, n2o, h1o, h2o
         integer       :: i, j, npix, starts(3), x0, y0, xo, yo, winsz
@@ -491,7 +491,7 @@ contains
         real,         parameter     :: SHTHRESH = 0.001
         ! FFT / phase
         complex(c_float_complex) :: w1, w2, ph0, ph_h, ph_k, phase
-        real(dp)      :: sh(2)
+        real(dp)                 :: sh(2)
         ! dimensions / indices
         integer       :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo, npix
         ! normalization
@@ -628,7 +628,7 @@ contains
         real,            parameter     :: SHTHRESH = 0.001
         ! FFT / phase
         complex(c_float_complex) :: w1, w2, ph0, ph_h, ph_k, phase
-        real(dp)        :: sh(2)
+        real(dp)                 :: sh(2)
         ! dimensions / indices
         integer         :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo, npix
         ! normalization
@@ -781,11 +781,11 @@ contains
         class(image), intent(inout) :: self_out
         real,         intent(in)    :: shvec(2)
         real,         parameter     :: SHTHRESH = 0.001
-        complex(c_float_complex) :: w1, w2, ph0, ph_h, ph_k, phase
-        real(dp)      :: sh(2)
-        integer       :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo
-        real(c_float) :: scale_cmat, ratio, rswap
-        logical       :: k_neg
+        complex(c_float_complex)    :: w1, w2, ph0, ph_h, ph_k, phase
+        real(dp)                    :: sh(2)
+        integer                     :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo
+        real(c_float)               :: scale_cmat, ratio, rswap
+        logical                     :: k_neg
         n1 = self%ldim(1)
         n2 = self%ldim(2)
         h1 = n1/2
@@ -859,14 +859,14 @@ contains
         class(ctf),      intent(inout) :: tfun     !< CTF object
         type(ctfparams), intent(in)    :: ctfparms !< CTF parameters
         real,            parameter     :: SHTHRESH = 0.001
-        complex(c_float_complex) :: w1, w2, ph0, ph_h, ph_k, phase
-        real(dp)        :: sh(2)
-        integer         :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo
-        real(c_float)   :: scale_cmat, ratio, rswap
-        logical         :: k_neg
-        type(ctfvars)   :: ctfvals
-        real, parameter :: ONE = 1.0
-        real            :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, tval
+        complex(c_float_complex)       :: w1, w2, ph0, ph_h, ph_k, phase
+        real(dp)                       :: sh(2)
+        integer                        :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo
+        real(c_float)                  :: scale_cmat, ratio, rswap
+        logical                        :: k_neg
+        type(ctfvars)                  :: ctfvals
+        real,            parameter     :: ONE      = 1.0
+        real                           :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, tval
         n1 = self%ldim(1)
         n2 = self%ldim(2)
         h1 = n1/2
@@ -960,8 +960,8 @@ contains
         real,         intent(in)    :: mskrad
         real,         intent(inout) :: spec(fdim(self%ldim(1)) - 1)
         ! ---- locals: norm_noise_fft ----
-        integer  :: n1, n2, h1, h2, i, j, ii, jj, npix
-        real(dp) :: sum_dp, sum_sq_dp, mean_dp, var_dp, rnpix, xdp
+        integer       :: n1, n2, h1, h2, i, j, ii, jj, npix
+        real(dp)      :: sum_dp, sum_sq_dp, mean_dp, var_dp, rnpix, xdp
         real(c_float) :: mean_sp, invstd_sp, scale_cmat, rswap
         ! ---- locals: mask2D_softavg ----
         real     :: ave, e
@@ -1092,9 +1092,9 @@ contains
     module subroutine mask_fft( self, mskrad )
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
-        integer       :: n1, n2, h1, h2, i, j, ii, jj, minlen
-        real(c_float) :: temp(self%ldim(1), self%ldim(2)), r2, scale_cmat, cjs2
-        real(c_float) :: v_val
+        integer                  :: n1, n2, h1, h2, i, j, ii, jj, minlen
+        real(c_float)            :: temp(self%ldim(1), self%ldim(2)), r2, scale_cmat, cjs2
+        real(c_float)            :: v_val
         real(c_float), parameter :: EPS_E = 1.e-4_c_float
         real(c_float), parameter :: ONE   = 1.0_c_float
         n1 = self%ldim(1)
@@ -1144,7 +1144,7 @@ contains
         integer       :: wbg, wbg1, wbg2, i1, i2, j1, j2, border_count
         real(dp)      :: sv, border_sum_dp, edge_mean_dp
         ! Masking vars
-        real(c_float) :: rad_sq, ave, r2, e, scale_cmat, cis2, cjs2, v_val, edge_mean_sp
+        real(c_float)            :: rad_sq, ave, r2, e, scale_cmat, cis2, cjs2, v_val, edge_mean_sp
         real(c_float), parameter :: EPS_E = 1.e-4_c_float
         real(c_float), parameter :: ONE   = 1.0_c_float
         ! Precomputed output index maps (avoid modulo in inner loop)
@@ -1321,10 +1321,10 @@ contains
     module subroutine ifft_mask_fft( self, mskrad )
         class(image), intent(inout) :: self
         real,         intent(in)    :: mskrad
-        integer       :: n1, n2, h1, h2, i, j, ii, jj, minlen, np
-        real(dp)      :: sv
-        real(c_float) :: temp(self%ldim(1),self%ldim(2)), rad_sq, ave, r2, e, scale_cmat, cis2, cjs2
-        real(c_float) :: v_val
+        integer                  :: n1, n2, h1, h2, i, j, ii, jj, minlen, np
+        real(dp)                 :: sv
+        real(c_float)            :: temp(self%ldim(1),self%ldim(2)), rad_sq, ave, r2, e, scale_cmat, cis2, cjs2
+        real(c_float)            :: v_val
         real(c_float), parameter :: EPS_E   = 1.e-4_c_float
         real(c_float), parameter :: ONE     = 1.0_c_float
         n1 = self%ldim(1)
@@ -1418,7 +1418,7 @@ contains
         integer       :: wbg, wbg1, wbg2, i1, i2, j1, j2, border_count
         real(dp)      :: sv, border_sum_dp, edge_mean_dp
         ! Masking vars
-        real(c_float) :: rad_sq, ave, r2, e, scale_cmat, cis2, cjs2, v_val, edge_mean_sp
+        real(c_float)            :: rad_sq, ave, r2, e, scale_cmat, cis2, cjs2, v_val, edge_mean_sp
         real(c_float), parameter :: EPS_E = 1.e-4_c_float
         real(c_float), parameter :: ONE   = 1.0_c_float
         ! Precomputed output index maps (avoid modulo in inner loop)
@@ -1612,7 +1612,7 @@ contains
     module function expand_ft( self ) result( fplane )
         class(image), intent(in) :: self
         complex, allocatable :: fplane(:,:)
-        integer :: xdim, ydim, h, k, phys(3)
+        integer              :: xdim, ydim, h, k, phys(3)
         xdim = self%ldim(1)/2
         ydim = self%ldim(2)/2
         allocate(fplane(-xdim:xdim,-ydim:ydim))

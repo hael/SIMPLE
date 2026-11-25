@@ -23,16 +23,16 @@ integer, parameter :: BUFFSZ_DEFAULT = 5
 !> Simple chash type
 type :: chash
     private
-    type(string), allocatable :: keys(:)    !< chash keys
-    type(string), allocatable :: values(:)  !< chash values
-    integer :: buffsz      = BUFFSZ_DEFAULT !< size of first buffer and subsequent allocation increments
-    integer :: chash_index = 0              !< current highest index in hash
-    logical :: exists      = .false.        !< to indicate existence
+    type(string), allocatable :: keys(:)                      !< chash keys
+    type(string), allocatable :: values(:)                    !< chash values
+    integer                   :: buffsz      = BUFFSZ_DEFAULT !< size of first buffer and subsequent allocation increments
+    integer                   :: chash_index = 0              !< current highest index in hash
+    logical                   :: exists      = .false.        !< to indicate existence
   contains
     !< CONSTRUCTORS
     procedure, private :: new_default
     procedure, private :: new_by_sz
-    generic            :: new => new_default, new_by_sz
+    generic            :: new           => new_default, new_by_sz
     procedure, private :: alloc_chash
     procedure, private :: realloc_chash
     procedure, private :: copy
@@ -41,9 +41,9 @@ type :: chash
     procedure          :: gen_job_descr
     !< SETTERS
     procedure, private :: push_char, push_char_str, push_str
-    generic            :: push => push_char, push_char_str, push_str
+    generic            :: push              => push_char, push_char_str, push_str
     procedure, private :: set_char, set_char_str, set_str
-    generic            :: set => set_char, set_char_str, set_str
+    generic            :: set               => set_char, set_char_str, set_str
     procedure          :: delete
     procedure, private :: move_key_to_front_char, move_key_to_front_str
     generic            :: move_key_to_front => move_key_to_front_char, move_key_to_front_str
@@ -86,8 +86,8 @@ contains
 
     !>  \brief  is a constructor
     function constructor_by_sz( sz, buffsz ) result( self )
-        integer,           intent(in)    :: sz     !< initial size
-        integer, optional, intent(in)    :: buffsz !< size of subsequent allocation increments
+        integer,           intent(in)           :: sz     !< initial size
+        integer,           optional, intent(in) :: buffsz !< size of subsequent allocation increments
         type(chash) :: self
         call self%new_by_sz(sz, buffsz)
     end function constructor_by_sz
@@ -103,9 +103,9 @@ contains
 
     !>  \brief  is a constructor
     subroutine new_by_sz( self, sz, buffsz )
-        class(chash),      intent(inout) :: self   !< instance
-        integer,           intent(in)    :: sz     !< initial size
-        integer, optional, intent(in)    :: buffsz !< size of subsequent allocation increments
+        class(chash),      intent(inout)        :: self   !< instance
+        integer,           intent(in)           :: sz     !< initial size
+        integer,           optional, intent(in) :: buffsz !< size of subsequent allocation increments
         call self%kill
         if( present(buffsz) )then
             self%buffsz = buffsz
@@ -128,7 +128,7 @@ contains
     subroutine realloc_chash( self )
         class(chash), intent(inout) :: self
         type(string), allocatable :: keys_copy(:), values_copy(:)
-        integer :: newsz, oldsz, i
+        integer                   :: newsz, oldsz, i
         if( self%exists )then
             ! old/new size
             oldsz = size(self%keys)
@@ -173,7 +173,7 @@ contains
     subroutine parse_cmdline( self )
         class(chash), intent(inout) :: self
         character(len=STDLEN)       :: arg
-        integer :: cmdstat, cmdlen, i, argcnt, pos1
+        integer                     :: cmdstat, cmdlen, i, argcnt, pos1
         argcnt  = command_argument_count()
         if( .not. self%exists ) call self%new
         do i=1,argcnt
@@ -194,7 +194,7 @@ contains
     !>  \brief  for generating a job description for distributed execution
     subroutine gen_job_descr( self, prg )
         class(chash),  intent(inout) :: self
-        class(string), intent(in)   :: prg
+        class(string), intent(in)    :: prg
         call self%parse_cmdline
         call self%set('prg', prg%to_char())
     end subroutine gen_job_descr
@@ -419,7 +419,7 @@ contains
         class(chash),     intent(in)  :: self
         character(len=*), intent(in)  :: key
         type(string) :: val
-        integer :: i
+        integer      :: i
         val = ''
         do i=1,self%chash_index
             if( self%keys(i) .eq. trim(key) )then
@@ -469,9 +469,9 @@ contains
     !>  \brief  concatenates the chash into a string
     function chash2str( self ) result( str_out )
         class(chash), intent(in) :: self
-        type(string) :: str_out
+        type(string)                  :: str_out
         character(len=:), allocatable :: str
-        integer :: i, len
+        integer                       :: i, len
         if( self%chash_index > 0 )then
             if (self%chash_index == 1) then
                 str_out = self%keys(1)%to_char()//'='//self%values(1)%to_char()
@@ -522,9 +522,9 @@ contains
     subroutine sort( self )
         class(chash),          intent(inout) :: self
         character(len=STDLEN), allocatable   :: keys_sorted(:)
-        type(string) :: val
-        type(chash)  :: tmp
-        integer      :: ikey
+        type(string)                         :: val
+        type(chash)                          :: tmp
+        integer                              :: ikey
         if( self%chash_index > 1 )then
             ! fill in keys
             allocate(keys_sorted(self%chash_index))
@@ -548,14 +548,14 @@ contains
 
     !>  \brief  pretty printing of a key-value pair
     subroutine print_key_val_pair_by_key( self, key, maxlen, fhandle, ansi_flag )
-        class(chash),               intent(in) :: self
-        character(len=*),           intent(in) :: key
-        integer,                    intent(in) :: maxlen
-        integer,                    intent(in) :: fhandle
-        character(len=*), optional, intent(in) :: ansi_flag
+        class(chash),               intent(in)           :: self
+        character(len=*),           intent(in)           :: key
+        integer,                    intent(in)           :: maxlen
+        integer,                    intent(in)           :: fhandle
+        character(len=*),           optional, intent(in) :: ansi_flag
         character(len=:), allocatable :: aansi_flag, str2print
-        character(len=maxlen) :: key_padded
-        integer               :: which
+        character(len=maxlen)         :: key_padded
+        integer                       :: which
         if( present(ansi_flag) )then
             allocate(aansi_flag, source=trim(ansi_flag))
         else
@@ -577,11 +577,11 @@ contains
 
     !>  \brief  pretty printing of a key-value pair
     subroutine print_key_val_pair_by_ind( self, ikey, maxlen, fhandle, ansi_flag )
-        class(chash), intent(in)      :: self
-        integer,                    intent(in) :: ikey
-        integer,                    intent(in) :: maxlen
-        integer,                    intent(in) :: fhandle
-        character(len=*), optional, intent(in) :: ansi_flag
+        class(chash),               intent(in)           :: self
+        integer,                    intent(in)           :: ikey
+        integer,                    intent(in)           :: maxlen
+        integer,                    intent(in)           :: fhandle
+        character(len=*),           optional, intent(in) :: ansi_flag
         character(len=maxlen)         :: key_padded
         character(len=:), allocatable :: aansi_flag, str2print
         if( present(ansi_flag) )then
@@ -599,13 +599,13 @@ contains
 
     !>  \brief  pretty printing of all key-value  pairs
     subroutine print_key_val_pairs( self, fhandle, keys2print, mask )
-        class(chash),               intent(in) :: self
-        integer,                    intent(in) :: fhandle
-        character(len=*), optional, intent(in) :: keys2print(:)
-        logical,          optional, intent(in) :: mask(:) ! mask true -> C_BOLD
+        class(chash),               intent(in)           :: self
+        integer,                    intent(in)           :: fhandle
+        character(len=*),           optional, intent(in) :: keys2print(:)
+        logical,                    optional, intent(in) :: mask(:) ! mask true -> C_BOLD
         logical, allocatable :: mmask(:)
-        logical :: present_mask
-        integer :: maxlen, ikey, sz, keylen
+        logical              :: present_mask
+        integer              :: maxlen, ikey, sz, keylen
         maxlen  = 0
         ikey    = 0
         sz      = 0

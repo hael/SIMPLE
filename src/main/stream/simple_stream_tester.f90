@@ -40,22 +40,22 @@ contains
     !! stage imports a project only once it is LONGTIME (60 s) old, so this takes a minute.
     subroutine test_assign_optics_two_shift_clusters()
         use simple_commanders_stream_p02_assign_optics, only: commander_stream_p02_assign_optics
-        character(len=*), parameter :: TEST_PROJFILE = 'test_assign_optics.simple'
-        character(len=*), parameter :: TEST_OUTDIR   = 'stream_assign_optics'
-        real,             parameter :: SMPD  = 1.3
-        real,             parameter :: CS    = 2.7
-        real,             parameter :: KV    = 300.0
-        real,             parameter :: FRACA = 0.1
-        real,             parameter :: SHIFT_X(STREAM_NMOVS_SET) = [0.0, 0.1, 5.0, 5.1, 4.9]
-        real,             parameter :: SHIFT_Y(STREAM_NMOVS_SET) = [0.0,-0.1, 5.0, 4.9, 5.1]
-        integer,          parameter :: TILT_GROUP(STREAM_NMOVS_SET) = [1, 1, 2, 2, 2]
+        character(len=*),  parameter             :: TEST_PROJFILE                = 'test_assign_optics.simple'
+        character(len=*),  parameter             :: TEST_OUTDIR                  = 'stream_assign_optics'
+        real,              parameter             :: SMPD                         = 1.3
+        real,              parameter             :: CS                           = 2.7
+        real,              parameter             :: KV                           = 300.0
+        real,              parameter             :: FRACA                        = 0.1
+        real,              parameter             :: SHIFT_X(STREAM_NMOVS_SET)    = [0.0, 0.1, 5.0, 5.1, 4.9]
+        real,              parameter             :: SHIFT_Y(STREAM_NMOVS_SET)    = [0.0,-0.1, 5.0, 4.9, 5.1]
+        integer,           parameter             :: TILT_GROUP(STREAM_NMOVS_SET) = [1, 1, 2, 2, 2]
         type(commander_stream_p02_assign_optics) :: xassign_optics
-        class(cmdline), allocatable    :: cline_assign
-        class(sp_project), allocatable :: upstream, result
-        type(string)                   :: cwd_saved, fixture_root, preproc_root, completed_dir
-        type(string)                   :: batch_path, project_path, output_dir, fname
-        integer                        :: i, nfail0, group_a, group_b
-        logical                        :: l_groups
+        class(cmdline),    allocatable           :: cline_assign
+        class(sp_project), allocatable           :: upstream, result
+        type(string)                             :: cwd_saved, fixture_root, preproc_root, completed_dir
+        type(string)                             :: batch_path, project_path, output_dir, fname
+        integer                                  :: i, nfail0, group_a, group_b
+        logical                                  :: l_groups
         allocate(cline_assign, upstream, result)
         write(*,'(A)') 'test_assign_optics_two_shift_clusters'
         nfail0 = tests_failed
@@ -156,17 +156,17 @@ contains
     !! source preview and the completion marker
     subroutine test_make_pickrefs_expansion()
         use simple_commanders_pick, only: commander_make_pickrefs
-        character(len=*), parameter :: SOURCE_STACK   = 'source_references.mrcs'
-        character(len=*), parameter :: TEST_OUTDIR    = 'stream_gen_pickrefs'
-        character(len=*), parameter :: OUTPUT_STACK   = PICKREFS_FBODY//MRC_EXT
-        character(len=*), parameter :: SOURCE_PREVIEW = 'pickrefs_source.jpeg'
-        character(len=*), parameter :: FINISHED_FILE  = 'MAKE_PICKREFS_FINISHED'
-        real,             parameter :: SMPD           = 2.0
-        integer,          parameter :: SOURCE_BOX     = 64
-        integer,          parameter :: NSOURCE_REFS   = 3
-        integer,          parameter :: NROTS          = 4
+        character(len=*), parameter   :: SOURCE_STACK   = 'source_references.mrcs'
+        character(len=*), parameter   :: TEST_OUTDIR    = 'stream_gen_pickrefs'
+        character(len=*), parameter   :: OUTPUT_STACK   = PICKREFS_FBODY//MRC_EXT
+        character(len=*), parameter   :: SOURCE_PREVIEW = 'pickrefs_source.jpeg'
+        character(len=*), parameter   :: FINISHED_FILE  = 'MAKE_PICKREFS_FINISHED'
+        real,             parameter   :: SMPD           = 2.0
+        integer,          parameter   :: SOURCE_BOX     = 64
+        integer,          parameter   :: NSOURCE_REFS   = 3
+        integer,          parameter   :: NROTS          = 4
         type(commander_make_pickrefs) :: xmake_pickrefs
-        class(cmdline), allocatable   :: cline_make_pickrefs
+        class(cmdline),   allocatable :: cline_make_pickrefs
         type(image)                   :: reference, feature
         type(oris)                    :: moldiam_meta
         type(string)                  :: cwd_saved, fixture_root, source_path, output_dir, output_path, moldiam_path
@@ -249,25 +249,25 @@ contains
     !! particle centre within POSITION_TOL pixels.
     subroutine test_pick_extract_three_particles()
         use simple_commanders_pick, only: commander_pick_extract
-        character(len=*), parameter :: MICROGRAPH_FILE = 'synthetic_micrograph.mrc'
-        character(len=*), parameter :: PICKREFS_FILE   = 'synthetic_pickrefs.mrcs'
-        character(len=*), parameter :: TEST_PROJFILE   = 'test_pick_extract.simple'
-        real,             parameter :: SMPD            = 2.0
-        integer,          parameter :: MICROGRAPH_BOX  = 256
-        integer,          parameter :: PICKREF_BOX     = 64
-        integer,          parameter :: EXTRACT_BOX     = 64
-        integer,          parameter :: NPARTICLES      = 3
-        integer,          parameter :: PARTICLE_CORNERS(2, NPARTICLES) = reshape([32, 32, 160, 40, 96, 152], [2, NPARTICLES])
-        real,             parameter :: POSITION_TOL    = 4.0
-        type(commander_pick_extract) :: xpick_extract
-        class(cmdline), allocatable  :: cline_pick_extract
-        type(image)                  :: micrograph, reference, feature, extracted
-        class(sp_project), allocatable:: fixture, result
-        type(string)                 :: cwd_saved, fixture_root, micrograph_path, pickrefs_path
-        type(string)                 :: project_path, boxfile_path, thumbnail_path, stack_path
-        integer                      :: i, nfail0, npicked, nimages, ldim(3)
-        real                         :: extracted_variance, picked_centres(2, NPARTICLES)
-        logical                      :: positions_match
+        character(len=*),  parameter   :: MICROGRAPH_FILE                 = 'synthetic_micrograph.mrc'
+        character(len=*),  parameter   :: PICKREFS_FILE                   = 'synthetic_pickrefs.mrcs'
+        character(len=*),  parameter   :: TEST_PROJFILE                   = 'test_pick_extract.simple'
+        real,              parameter   :: SMPD                            = 2.0
+        integer,           parameter   :: MICROGRAPH_BOX                  = 256
+        integer,           parameter   :: PICKREF_BOX                     = 64
+        integer,           parameter   :: EXTRACT_BOX                     = 64
+        integer,           parameter   :: NPARTICLES                      = 3
+        integer,           parameter   :: PARTICLE_CORNERS(2, NPARTICLES) = reshape([32, 32, 160, 40, 96, 152], [2, NPARTICLES])
+        real,              parameter   :: POSITION_TOL                    = 4.0
+        type(commander_pick_extract)   :: xpick_extract
+        class(cmdline),    allocatable :: cline_pick_extract
+        type(image)                    :: micrograph, reference, feature, extracted
+        class(sp_project), allocatable :: fixture, result
+        type(string)                   :: cwd_saved, fixture_root, micrograph_path, pickrefs_path
+        type(string)                   :: project_path, boxfile_path, thumbnail_path, stack_path
+        integer                        :: i, nfail0, npicked, nimages, ldim(3)
+        real                           :: extracted_variance, picked_centres(2, NPARTICLES)
+        logical                        :: positions_match
         allocate(cline_pick_extract, fixture, result)
         write(*,'(A)') 'test_pick_extract_three_particles'
         nfail0 = tests_failed
@@ -382,7 +382,7 @@ contains
     logical function distinct_position_match( observed, truth, tol ) result( matches )
         real, intent(in) :: observed(2, 3), truth(2, 3), tol
         integer, parameter :: PERMUTATIONS(3, 6) = reshape([1,2,3, 1,3,2, 2,1,3, 2,3,1, 3,1,2, 3,2,1], [3,6])
-        integer :: iperm, i
+        integer            :: iperm, i
         matches = .false.
         do iperm = 1, size(PERMUTATIONS, 2)
             matches = .true.

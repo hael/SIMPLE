@@ -70,9 +70,9 @@ contains
     contains
 
         subroutine make_accum( img, rho, map_value, density )
-            type(image),       intent(inout) :: img
-            real, allocatable, intent(inout) :: rho(:,:,:)
-            real,              intent(in)    :: map_value, density
+            type(image),       intent(inout)              :: img
+            real,              allocatable, intent(inout) :: rho(:,:,:)
+            real,              intent(in)                 :: map_value, density
             integer :: shp(3)
             call img%new([8,8,8], 1.0)
             call img%set_ft(.true.)
@@ -232,9 +232,9 @@ contains
         end subroutine blend
 
         subroutine make_unit_accum( img, rho, map_value, density )
-            type(image),       intent(inout) :: img
-            real, allocatable, intent(inout) :: rho(:,:,:)
-            real,              intent(in)    :: map_value, density
+            type(image),       intent(inout)              :: img
+            real,              allocatable, intent(inout) :: rho(:,:,:)
+            real,              intent(in)                 :: map_value, density
             integer :: shp(3)
             call img%new([8,8,8], 1.0)
             call img%set_ft(.true.)
@@ -251,16 +251,16 @@ contains
     !! 1-u. The even and odd chains and their density must follow the closed form: map coefficient of the
     !! sticky subset 1 - (1-u)^k, earlier maps fading as (1-u)^k, density D throughout.
     subroutine test_trail_rec_sticky()
-        real,    parameter :: D_FULL = 2.0
-        real,    parameter :: V_PREV(2) = [1.0, 2.0]  ! even, odd previous maps
-        real,    parameter :: V_STK(2)  = [3.0, 5.0]  ! even, odd sticky subset maps
-        real,    parameter :: TOL    = 1.e-4
-        integer, parameter :: NITS   = 4
-        real,    parameter :: F_STK  = 0.25           ! realized fraction of the sticky subset; u = f
-        type(image)       :: cur, chain
-        real, allocatable :: rho_cur(:,:,:), rho_chain(:,:,:)
-        real    :: coef
-        integer :: ieo, k
+        real,    parameter   :: D_FULL    = 2.0
+        real,    parameter   :: V_PREV(2) = [1.0, 2.0] ! even, odd previous maps
+        real,    parameter   :: V_STK(2)  = [3.0, 5.0] ! even, odd sticky subset maps
+        real,    parameter   :: TOL       = 1.e-4
+        integer, parameter   :: NITS      = 4
+        real,    parameter   :: F_STK     = 0.25       ! realized fraction of the sticky subset; u = f
+        type(image)          :: cur, chain
+        real,    allocatable :: rho_cur(:,:,:), rho_chain(:,:,:)
+        real                 :: coef
+        integer              :: ieo, k
         write(*,'(A)') 'test_trail_rec_sticky'
         do ieo = 1, 2
             call make_unit_density_accum(chain, rho_chain, V_PREV(ieo), D_FULL)
@@ -286,9 +286,9 @@ contains
     contains
 
         subroutine make_unit_density_accum( img, rho, map_value, density )
-            type(image),       intent(inout) :: img
-            real, allocatable, intent(inout) :: rho(:,:,:)
-            real,              intent(in)    :: map_value, density
+            type(image),       intent(inout)              :: img
+            real,              allocatable, intent(inout) :: rho(:,:,:)
+            real,              intent(in)                 :: map_value, density
             integer :: shp(3)
             call img%new([8,8,8], 1.0)
             call img%set_ft(.true.)

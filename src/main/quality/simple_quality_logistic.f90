@@ -19,12 +19,12 @@ public :: LEARN_BALANCED_GOOD_LOSS_WEIGHT, LEARN_BALANCED_BAD_LOSS_WEIGHT
 public :: run_all_quality_logistic_tests
 public :: stable_sigmoid_8
 
-integer, parameter :: QUALITY_MAX_FEATS        = 16   !< the largest feature bank of any quality model
-integer, parameter :: QUALITY_MAX_INTERACTIONS = (QUALITY_MAX_FEATS * (QUALITY_MAX_FEATS - 1)) / 2
-integer, parameter :: LEARN_ROLE_SKIP             = 0
-integer, parameter :: LEARN_ROLE_BALANCED         = 1
-integer, parameter :: LEARN_ROLE_RECALL_ONLY      = 2
-integer, parameter :: LEARN_ROLE_SPECIFICITY_ONLY = 3
+integer, parameter :: QUALITY_MAX_FEATS               = 16 !< the largest feature bank of any quality model
+integer, parameter :: QUALITY_MAX_INTERACTIONS        = (QUALITY_MAX_FEATS * (QUALITY_MAX_FEATS - 1)) / 2
+integer, parameter :: LEARN_ROLE_SKIP                 = 0
+integer, parameter :: LEARN_ROLE_BALANCED             = 1
+integer, parameter :: LEARN_ROLE_RECALL_ONLY          = 2
+integer, parameter :: LEARN_ROLE_SPECIFICITY_ONLY     = 3
 real,    parameter :: LEARN_ROBUST_TAIL_FRAC          = 0.25
 real,    parameter :: LEARN_ROBUST_TAIL_WEIGHT        = 0.50
 real,    parameter :: LEARN_BALANCED_GOOD_LOSS_WEIGHT = 0.65
@@ -35,22 +35,22 @@ real,    parameter :: LOGISTIC_THRESHOLDS(20) = [0.02, 0.05, 0.075, 0.10, 0.15, 
                                                  0.25, 0.30, 0.35, 0.40, 0.45, 0.50, &
                                                  0.55, 0.60, 0.65, 0.70, 0.75, 0.80, &
                                                  0.85, 0.90]
-real,    parameter :: LOGISTIC_COEFF_ABS_BOUND = 20.0
-character(len=*), parameter :: LOGISTIC_SOLVER = 'lm' !< the fit's optimiser (R6); testers pass either to new
+real,             parameter :: LOGISTIC_COEFF_ABS_BOUND = 20.0
+character(len=*), parameter :: LOGISTIC_SOLVER          = 'lm' !< the fit's optimiser (R6); testers pass either to new
 
 !> the design: intercept, the policy's features, their pairwise products, optionally one extra (relational) column
 type :: quality_logistic_problem
     private
-    integer, public :: nobs           = 0
-    integer, public :: ndim           = 0
-    integer, public :: n_linear       = 0
-    integer, public :: n_interactions = 0
-    integer, public :: linear_features(QUALITY_MAX_FEATS) = 0
-    integer, public :: interaction_terms(QUALITY_MAX_INTERACTIONS,2) = 0
-    logical, public :: has_extra      = .false.
-    real(kind=8), public :: lambda       = 0.0d0
-    real(kind=8), public :: total_weight = 0.0d0
-    character(len=8)          :: solver = LOGISTIC_SOLVER
+    integer,      public      :: nobs                                          = 0
+    integer,      public      :: ndim                                          = 0
+    integer,      public      :: n_linear                                      = 0
+    integer,      public      :: n_interactions                                = 0
+    integer,      public      :: linear_features(QUALITY_MAX_FEATS)            = 0
+    integer,      public      :: interaction_terms(QUALITY_MAX_INTERACTIONS,2) = 0
+    logical,      public      :: has_extra                                     = .false.
+    real(kind=8), public      :: lambda                                        = 0.0d0
+    real(kind=8), public      :: total_weight                                  = 0.0d0
+    character(len=8)          :: solver                                        = LOGISTIC_SOLVER
     real(kind=8), allocatable :: design(:,:)
     real(kind=8), allocatable :: labels(:)
     real(kind=8), allocatable :: weights(:)
@@ -75,11 +75,11 @@ contains
     !> feature indices of the policy (into the caller's bank), the number of observations, the extra column, lambda;
     !! solver ('lbfgsb' or 'lm') only from testers
     subroutine new( self, linear_features, nobs, has_extra, lambda, solver )
-        class(quality_logistic_problem), intent(inout) :: self
-        integer,                         intent(in)    :: linear_features(:), nobs
-        logical,                         intent(in)    :: has_extra
-        real,                            intent(in)    :: lambda
-        character(len=*), optional,      intent(in)    :: solver
+        class(quality_logistic_problem), intent(inout)             :: self
+        integer,                         intent(in)                :: linear_features(:), nobs
+        logical,                         intent(in)                :: has_extra
+        real,                            intent(in)                :: lambda
+        character(len=*),                optional,      intent(in) :: solver
         integer :: ilinear, jlinear
         call self%kill()
         if( present(solver) ) self%solver = solver
@@ -106,12 +106,12 @@ contains
 
     !> row iobs from the full feature vector of the caller's bank (single precision, as the training tables hold it)
     subroutine set_row( self, iobs, features, good, weight, extra )
-        class(quality_logistic_problem), intent(inout) :: self
-        integer,                         intent(in)    :: iobs
-        real,                            intent(in)    :: features(:)
-        logical,                         intent(in)    :: good
-        real(kind=8),                    intent(in)    :: weight
-        real, optional,                  intent(in)    :: extra
+        class(quality_logistic_problem), intent(inout)                         :: self
+        integer,                         intent(in)                            :: iobs
+        real,                            intent(in)                            :: features(:)
+        logical,                         intent(in)                            :: good
+        real(kind=8),                    intent(in)                            :: weight
+        real,                            optional,                  intent(in) :: extra
         integer :: ilinear, iterm, ifeat, jfeat
         if( iobs < 1 .or. iobs > self%nobs ) THROW_HARD('row out of range; quality_logistic_problem%set_row')
         self%design(iobs,1) = 1.0d0
@@ -145,16 +145,16 @@ contains
     !> LOGISTIC_SOLVER (or the solver new was given) from the weighted log-odds intercept, coefficients bounded by
     !! LOGISTIC_COEFF_ABS_BOUND; nevals and niter (testers) are the optimiser's counts
     subroutine fit( self, solution, objective, nevals, niter )
-        class(quality_logistic_problem), intent(inout) :: self
-        real(kind=8), allocatable,       intent(inout) :: solution(:)
-        real,                            intent(out)   :: objective
-        integer, optional,               intent(out)   :: nevals, niter
-        type(opt_factory)         :: ofac
-        type(opt_spec)            :: ospec
-        class(optimizer), pointer :: opt_obj
-        real, allocatable         :: limits(:,:)
-        real(kind=8)              :: pos_weight, neg_weight
-        integer :: i
+        class(quality_logistic_problem), intent(inout)                       :: self
+        real(kind=8),                    allocatable,       intent(inout)    :: solution(:)
+        real,                            intent(out)                         :: objective
+        integer,                         optional,               intent(out) :: nevals, niter
+        type(opt_factory)             :: ofac
+        type(opt_spec)                :: ospec
+        class(optimizer), pointer     :: opt_obj
+        real,             allocatable :: limits(:,:)
+        real(kind=8)                  :: pos_weight, neg_weight
+        integer                       :: i
         if( allocated(solution) ) deallocate(solution)
         allocate(solution(self%ndim), source=0.0d0)
         allocate(limits(self%ndim,2), source=0.0)
@@ -191,7 +191,7 @@ contains
         integer,                         intent(in)  :: D
         real(kind=8),                    intent(in)  :: vec(D)
         real(kind=8),                    intent(out) :: f, grad(D)
-        integer :: iobs, idim
+        integer      :: iobs, idim
         real(kind=8) :: eta, prob, resid, loss
         if( D /= self%ndim ) THROW_HARD('dimension mismatch; quality_logistic_problem%fdf')
         if( self%total_weight <= 0.0d0 ) THROW_HARD('nonpositive total weight; quality_logistic_problem%fdf')
@@ -225,7 +225,7 @@ contains
         integer,                         intent(in)  :: D
         real(kind=8),                    intent(in)  :: vec(D)
         real(kind=8),                    intent(out) :: curv(D,D)
-        integer :: iobs, idim, jdim
+        integer      :: iobs, idim, jdim
         real(kind=8) :: prob, wpq
         if( D /= self%ndim ) THROW_HARD('dimension mismatch; quality_logistic_problem%curvature')
         curv = 0.0d0
@@ -272,7 +272,7 @@ contains
         integer,      intent(in)    :: D
         real(kind=8), intent(in)    :: vec(D)
         real(kind=8)                :: cost
-        real(kind=8) :: grad(D)
+        real(kind=8)                :: grad(D)
         select type(problem => fun_self)
         class is(quality_logistic_problem)
             call problem%fdf(vec, cost, grad, D)

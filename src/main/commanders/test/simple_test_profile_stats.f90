@@ -28,31 +28,31 @@ end type gate_row
 
 !> one metric over the executions of a profile
 type :: metric_dist
-    character(len=NAMELEN) :: name   = ''
-    character(len=8)       :: sense  = ''
-    integer :: runs         = 0   !< executions that wrote it
-    integer :: nexec        = 0   !< executions of the profile
-    real    :: floor        = 0.  !< median of the floors written
-    real    :: med          = 0.
-    real    :: spread       = 0.
-    real    :: vmin         = 0.
-    real    :: vmax         = 0.
-    real    :: worst        = 0.
-    real    :: failure_rate = 0.
-    integer :: successes    = 0   !< executions with the value 1 (success metrics)
+    character(len=NAMELEN) :: name         = ''
+    character(len=8)       :: sense        = ''
+    integer                :: runs         = 0  !< executions that wrote it
+    integer                :: nexec        = 0  !< executions of the profile
+    real                   :: floor        = 0. !< median of the floors written
+    real                   :: med          = 0.
+    real                   :: spread       = 0.
+    real                   :: vmin         = 0.
+    real                   :: vmax         = 0.
+    real                   :: worst        = 0.
+    real                   :: failure_rate = 0.
+    integer                :: successes    = 0  !< executions with the value 1 (success metrics)
 end type metric_dist
 
 contains
 
     !> the rows of a metrics.tsv; none when the file is absent or unreadable
     subroutine read_gate_table( fname, rows )
-        character(len=*),            intent(in)  :: fname
-        type(gate_row), allocatable, intent(out) :: rows(:)
+        character(len=*),            intent(in)               :: fname
+        type(gate_row),              allocatable, intent(out) :: rows(:)
         type(gate_row), allocatable :: tmp(:)
-        character(len=1024) :: line
-        character(len=NAMELEN) :: fields(5)
-        integer :: funit, ios, n, nf
-        logical :: exists
+        character(len=1024)         :: line
+        character(len=NAMELEN)      :: fields(5)
+        integer                     :: funit, ios, n, nf
+        logical                     :: exists
         allocate(rows(0))
         inquire(file=fname, exist=exists)
         if( .not. exists ) return
@@ -97,7 +97,7 @@ contains
         real,             intent(in) :: vals(:), floors(:)
         logical,          intent(in) :: passes(:)
         integer,          intent(in) :: nexec
-        type(metric_dist) :: d
+        type(metric_dist)    :: d
         logical, allocatable :: finite(:)
         real,    allocatable :: v(:)
         d%name  = name
@@ -132,16 +132,16 @@ contains
     !! itself passed (exec_ok: it ended with exit code 0 inside its deadline), and takes the sense of
     !! its bounded rows
     subroutine profile_table( fnames, exec_ok, dists )
-        character(len=*),               intent(in)  :: fnames(:)
-        logical,                        intent(in)  :: exec_ok(:)
-        type(metric_dist), allocatable, intent(out) :: dists(:)
-        type(gate_row), allocatable :: rows(:), allrows(:)
+        character(len=*),               intent(in)               :: fnames(:)
+        logical,                        intent(in)               :: exec_ok(:)
+        type(metric_dist),              allocatable, intent(out) :: dists(:)
+        type(gate_row),         allocatable :: rows(:), allrows(:)
         character(len=NAMELEN), allocatable :: names(:)
         character(len=8),       allocatable :: senses(:)
         integer,                allocatable :: iexec(:)
-        logical, allocatable :: sel(:), bounded(:), passes(:)
-        real,    allocatable :: vals(:)
-        integer :: i, j, k, n
+        logical,                allocatable :: sel(:), bounded(:), passes(:)
+        real,                   allocatable :: vals(:)
+        integer                             :: i, j, k, n
         allocate(allrows(0), names(0), senses(0), iexec(0))
         do i = 1, size(fnames)
             call read_gate_table(trim(fnames(i)), rows)
@@ -180,7 +180,7 @@ contains
         character(len=*),  intent(in) :: fname
         type(metric_dist), intent(in) :: dists(:)
         character(len=1), parameter :: T = achar(9)
-        integer :: funit, i
+        integer                     :: funit, i
         open(newunit=funit, file=fname, action='write', status='replace')
         write(funit,'(a)') 'name'//T//'sense'//T//'floor'//T//'runs'//T//'executions'//T//'median'//T//'spread'//T//&
             &'min'//T//'max'//T//'worst'//T//'failure_rate'//T//'successes'
@@ -195,12 +195,12 @@ contains
 
     !> a table written by write_profile
     subroutine read_profile( fname, dists )
-        character(len=*),               intent(in)  :: fname
-        type(metric_dist), allocatable, intent(out) :: dists(:)
+        character(len=*),               intent(in)               :: fname
+        type(metric_dist),              allocatable, intent(out) :: dists(:)
         type(metric_dist)      :: d
         character(len=2048)    :: line
         character(len=NAMELEN) :: f(12)
-        integer :: funit, ios, nf
+        integer                :: funit, ios, nf
         allocate(dists(0))
         open(newunit=funit, file=fname, action='read', status='old', iostat=ios)
         if( ios /= 0 ) return
@@ -243,8 +243,8 @@ contains
         type(metric_dist), intent(in) :: a(:), b(:)
         character(len=*),  intent(in) :: fname
         character(len=1), parameter :: T = achar(9)
-        real    :: s, shift
-        integer :: funit, i, j
+        real                        :: s, shift
+        integer                     :: funit, i, j
         open(newunit=funit, file=fname, action='write', status='replace')
         write(funit,'(a)') 'name'//T//'sense'//T//'median_a'//T//'median_b'//T//'shift_in_spreads'//T//&
             &'failure_rate_a'//T//'failure_rate_b'

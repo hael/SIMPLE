@@ -114,32 +114,32 @@ type :: refs_check
     real    :: smpd        = 0.
     real    :: angdist     = -1.   !< the even/odd angular distance checked (degrees): the median over the class
                                    !! averages whose halves are in one state, else the mean over all (-1: none)
-    real    :: angdist_all = -1.   !< the mean over every class (degrees)
-    real    :: overlap     = -1.   !< the even/odd state agreement (%)
-    real    :: cc_max      = -1.   !< the largest correlation of two docked states (-1: not compared)
-    integer, allocatable :: counts(:)     !< class averages per state
-    real,    allocatable :: cc_pairs(:,:) !< each pair's docked correlation, the better hand (-1: not compared)
-    logical :: l_vols      = .false. !< a volume for every state that holds class averages
-    logical :: l_pass      = .false. !< the check passed (refs_usable)
+    real                 :: angdist_all = -1.     !< the mean over every class (degrees)
+    real                 :: overlap     = -1.     !< the even/odd state agreement (%)
+    real                 :: cc_max      = -1.     !< the largest correlation of two docked states (-1: not compared)
+    integer, allocatable :: counts(:)             !< class averages per state
+    real,    allocatable :: cc_pairs(:,:)         !< each pair's docked correlation, the better hand (-1: not compared)
+    logical              :: l_vols      = .false. !< a volume for every state that holds class averages
+    logical              :: l_pass      = .false. !< the check passed (refs_usable)
 end type refs_check
 
 !> the values of an assignment (map_assignment), for the log and the reports
 type :: assign_stats
-    integer :: ncls       = 0  !< (sub-)classes matched
-    integer :: ncand      = 0  !< candidates: with a state and particles
-    integer :: nrej       = 0  !< rejected by fit
-    integer :: namb       = 0  !< flagged ambiguous (assigned)
-    integer :: nmax       = 0  !< the cap on the rejection
-    real    :: med        = 0. !< the candidates' median best correlation, its median absolute deviation and
-    real    :: mad        = 0. !! the threshold below which one is rejected
-    real    :: thres      = 0.
-    integer :: nassigned  = 0  !< particles given a state
-    integer :: ndesel     = 0  !< particles selected before and deselected
-    logical :: l_model    = .false. !< the pool model's verdict was given: the next three are counted
-    integer :: nboth      = 0  !< particles rejected by the fit and the model
-    integer :: nmodel     = 0  !< by the model alone (not applied)
-    integer :: nfit       = 0  !< by the fit alone
-    integer, allocatable :: counts(:) !< particles per state
+    integer              :: ncls       = 0       !< (sub-)classes matched
+    integer              :: ncand      = 0       !< candidates: with a state and particles
+    integer              :: nrej       = 0       !< rejected by fit
+    integer              :: namb       = 0       !< flagged ambiguous (assigned)
+    integer              :: nmax       = 0       !< the cap on the rejection
+    real                 :: med        = 0.      !< the candidates' median best correlation, its median absolute deviation and
+    real                 :: mad        = 0.      !! the threshold below which one is rejected
+    real                 :: thres      = 0.
+    integer              :: nassigned  = 0       !< particles given a state
+    integer              :: ndesel     = 0       !< particles selected before and deselected
+    logical              :: l_model    = .false. !< the pool model's verdict was given: the next three are counted
+    integer              :: nboth      = 0       !< particles rejected by the fit and the model
+    integer              :: nmodel     = 0       !< by the model alone (not applied)
+    integer              :: nfit       = 0       !< by the fit alone
+    integer, allocatable :: counts(:)            !< particles per state
 end type assign_stats
 
 interface
@@ -176,14 +176,14 @@ contains
     !! (@p l_rej), the worst first, at most FIT_REJECT_MAX of the candidates (@p nmax_out). The
     !! median, the deviation and the threshold are returned for the log (0 without candidates).
     pure subroutine reject_by_fit( corrs, l_cand, l_rej, med_out, mad_out, thres_out, nmax_out )
-        real,                 intent(in)    :: corrs(:)
-        logical,              intent(in)    :: l_cand(:)
-        logical, allocatable, intent(inout) :: l_rej(:)
-        real,    optional,    intent(out)   :: med_out, mad_out, thres_out
-        integer, optional,    intent(out)   :: nmax_out
+        real,                 intent(in)                 :: corrs(:)
+        logical,              intent(in)                 :: l_cand(:)
+        logical,              allocatable, intent(inout) :: l_rej(:)
+        real,                 optional,    intent(out)   :: med_out, mad_out, thres_out
+        integer,              optional,    intent(out)   :: nmax_out
         real, allocatable :: vals(:)
-        real    :: med, mad, thres, worst
-        integer :: ncand, nmax, i, iworst
+        real              :: med, mad, thres, worst
+        integer           :: ncand, nmax, i, iworst
         if( allocated(l_rej) ) deallocate(l_rej)
         allocate(l_rej(size(corrs)), source=.false.)
         if( present(med_out)   ) med_out   = 0.
@@ -230,9 +230,9 @@ contains
     !> The positive states of @p states renumbered from 1 in ascending order, in place; @p newind(s)
     !! is state s's new number (0 for a state none holds) and @p nstates its count.
     pure subroutine compact_states( states, newind, nstates )
-        integer,              intent(inout) :: states(:)
-        integer, allocatable, intent(inout) :: newind(:)
-        integer,              intent(out)   :: nstates
+        integer,              intent(inout)              :: states(:)
+        integer,              allocatable, intent(inout) :: newind(:)
+        integer,              intent(out)                :: nstates
         integer :: s, smax, i
         nstates = 0
         smax    = 0
@@ -264,7 +264,7 @@ contains
     pure integer function count_active_classes( states, classes ) result( n )
         integer, intent(in) :: states(:), classes(:)
         logical, allocatable :: l_seen(:)
-        integer :: i, cmax
+        integer              :: i, cmax
         n    = 0
         cmax = 0
         do i = 1,min(size(states), size(classes))
@@ -343,11 +343,11 @@ contains
     !! rejected). The selected and rejected class averages are written with JPEGs in @p dir.
     !! Nothing in @p proj changes. .false. when @p proj has no class averages.
     logical function score_cavgs_with_model( proj, preset, mskdiam, dir, cls_states ) result( l_ok )
-        class(sp_project),    intent(inout) :: proj
-        character(len=*),     intent(in)    :: preset
-        real,                 intent(in)    :: mskdiam
-        class(string),        intent(in)    :: dir
-        integer, allocatable, intent(inout) :: cls_states(:)
+        class(sp_project),    intent(inout)              :: proj
+        character(len=*),     intent(in)                 :: preset
+        real,                 intent(in)                 :: mskdiam
+        class(string),        intent(in)                 :: dir
+        integer,              allocatable, intent(inout) :: cls_states(:)
         type(cavg_quality_model)  :: model
         type(cavg_quality_result) :: quality
         type(image), allocatable  :: cavg_imgs(:)
@@ -388,7 +388,7 @@ contains
         real,              intent(in)    :: mskdiam
         class(string),     intent(in)    :: dir
         integer, allocatable :: states2D(:), states3D(:), cls_states(:)
-        logical :: l_kept
+        logical              :: l_kept
         states2D = proj%os_ptcl2D%get_all_asint('state')
         states3D = proj%os_ptcl3D%get_all_asint('state')
         l_kept   = .false.
@@ -418,7 +418,7 @@ contains
         class(sp_project), intent(inout) :: proj
         integer,           intent(in)    :: cls_states(:)
         logical, allocatable :: l_rej(:)
-        integer :: n, i, icls
+        integer              :: n, i, icls
         n = proj%os_ptcl2D%get_noris()
         allocate(l_rej(n), source=.false.)
         do i = 1,n
@@ -453,9 +453,9 @@ contains
         type(refs_check),  intent(out)   :: chk
         integer,      allocatable :: cls_states(:), newind(:)
         type(string), allocatable :: names(:)
-        type(string) :: volpath, src
-        real         :: smpd, cc, cc_direct, cc_mirror, msk
-        integer      :: s, s2, i, box, ncopied, funit, ios
+        type(string)              :: volpath, src
+        real                      :: smpd, cc, cc_direct, cc_mirror, msk
+        integer                   :: s, s2, i, box, ncopied, funit, ios
         if( res%os_cls3D%get_noris() > 0 ) cls_states = res%os_cls3D%get_all_asint('state')
         if( .not. allocated(cls_states) ) allocate(cls_states(0))
         call compact_states(cls_states, newind, chk%nheld)
@@ -554,9 +554,9 @@ contains
         ! grouped by their renumbered state into dir: none when they are not on disk
         subroutine write_check_cavgs()
             type(image), allocatable :: cavgs(:)
-            type(string) :: stk
-            real         :: smpd_stk
-            integer      :: ncls_stk
+            type(string)             :: stk
+            real                     :: smpd_stk
+            integer                  :: ncls_stk
             ncls_stk = 0
             call res%get_cavgs_stk(stk, ncls_stk, smpd_stk, fail=.false.)
             if( ncls_stk < 1 .or. ncls_stk /= size(cls_states) .or. .not. file_exists(stk) )then
@@ -582,8 +582,8 @@ contains
         type(dock_vols) :: docker
         type(image)     :: vol
         type(string)    :: mirror
-        real    :: eul(3), shift(3)
-        integer :: ldim(3), nimgs
+        real            :: eul(3), shift(3)
+        integer         :: ldim(3), nimgs
         ! vol2 mirrored, beside it
         mirror = add2fbody(vol2, MRC_EXT, '_mirror')
         call find_ldim_nptcls(vol2, ldim, nimgs)
@@ -613,14 +613,14 @@ contains
     !! absolute paths, @p box and @p smpd. .false., with none taken, when the record is missing or
     !! unreadable, holds more than @p nstates_max, or a volume is not on disk.
     logical function read_refs_record( dir, nstates_max, vols, box, smpd ) result( l_ok )
-        class(string),             intent(in)    :: dir
-        integer,                   intent(in)    :: nstates_max
-        type(string), allocatable, intent(inout) :: vols(:)
-        integer,                   intent(out)   :: box
-        real,                      intent(out)   :: smpd
+        class(string),             intent(in)                 :: dir
+        integer,                   intent(in)                 :: nstates_max
+        type(string),              allocatable, intent(inout) :: vols(:)
+        integer,                   intent(out)                :: box
+        real,                      intent(out)                :: smpd
         type(string), allocatable :: names(:)
-        character(len=1024) :: line
-        integer :: funit, ios, n, s
+        character(len=1024)       :: line
+        integer                   :: funit, ios, n, s
         l_ok = .false.
         box  = 0
         smpd = 0.
@@ -668,16 +668,16 @@ contains
     !! @p stats returns them. .false., with @p spproj and @p desel unchanged, when @p res holds
     !! other rows or no matching.
     logical function map_assignment( spproj, res, nrefs, what, stats, desel, model_rej ) result( l_ok )
-        class(sp_project),    intent(inout) :: spproj, res
-        integer,              intent(in)    :: nrefs
-        character(len=*),     intent(in)    :: what
-        type(assign_stats),   intent(out)   :: stats
-        logical, allocatable, intent(inout) :: desel(:)
-        logical, optional,    intent(in)    :: model_rej(:)
+        class(sp_project),    intent(inout)              :: spproj, res
+        integer,              intent(in)                 :: nrefs
+        character(len=*),     intent(in)                 :: what
+        type(assign_stats),   intent(out)                :: stats
+        logical,              allocatable, intent(inout) :: desel(:)
+        logical,              optional,    intent(in)    :: model_rej(:)
         integer, allocatable :: cls_states(:)
         real,    allocatable :: corrs(:), margins(:), pops(:)
         logical, allocatable :: l_cand(:), l_rej(:), l_amb(:), l_sel(:), l_mapped(:)
-        integer :: n, ncls, icls, i, s
+        integer              :: n, ncls, icls, i, s
         l_ok = .false.
         n    = spproj%os_ptcl3D%get_noris()
         ncls = res%os_cls2D%get_noris()
@@ -770,8 +770,8 @@ contains
         ! the rejection follows the classes' sizes more than their fit)
         subroutine log_fit()
             real, allocatable :: x(:), y(:)
-            real    :: r, sx, sy
-            integer :: j
+            real              :: r, sx, sy
+            integer           :: j
             write(logfhandle,'(A,F7.4,A,F7.4,A,F7.4,A,I6,A,I6,A)') '>>> FIT: MEDIAN BEST CORRELATION ', stats%med, ', MAD ',&
                 &stats%mad, ', THRESHOLD ', stats%thres, ' (', count(l_cand .and. corrs < stats%thres),&
                 &' CANDIDATES BELOW IT, AT MOST ', stats%nmax, ' REJECTED)'
@@ -812,9 +812,9 @@ contains
         type(image), allocatable :: cavgs(:)
         integer,     allocatable :: states(:)
         logical,     allocatable :: l_rej(:), l_amb(:)
-        type(string) :: stk
-        real         :: smpd_stk
-        integer      :: ncls, ncls_stk, icls
+        type(string)             :: stk
+        real                     :: smpd_stk
+        integer                  :: ncls, ncls_stk, icls
         ncls     = res%os_cls3D%get_noris()
         ncls_stk = 0
         call res%get_cavgs_stk(stk, ncls_stk, smpd_stk, fail=.false.)
@@ -886,9 +886,9 @@ contains
         integer,           intent(in)    :: nstates_max
         integer, allocatable :: states_job(:), newind(:)
         logical, allocatable :: l_vol(:)
-        type(string) :: vol, fsc
-        real         :: smpd
-        integer      :: n, s, i, box, fsc_box, nposes, nheld
+        type(string)         :: vol, fsc
+        real                 :: smpd
+        integer              :: n, s, i, box, fsc_box, nposes, nheld
         nreg = 0
         n    = spproj%os_ptcl3D%get_noris()
         if( n == 0 .or. res%os_ptcl3D%get_noris() /= n ) return
@@ -934,11 +934,11 @@ contains
     !! (cavgs_rejected) and one of those @p l_amb marks (cavgs_ambiguous); each JPEG logged
     !! (log_jpeg) under @p label. A group without class averages writes nothing and is logged.
     subroutine write_state_cavgs( cavgs, states, nstates, dir, label, l_rej, l_amb )
-        class(image),      intent(inout) :: cavgs(:)
-        integer,           intent(in)    :: states(:), nstates
-        class(string),     intent(in)    :: dir
-        character(len=*),  intent(in)    :: label
-        logical, optional, intent(in)    :: l_rej(:), l_amb(:)
+        class(image),      intent(inout)        :: cavgs(:)
+        integer,           intent(in)           :: states(:), nstates
+        class(string),     intent(in)           :: dir
+        character(len=*),  intent(in)           :: label
+        logical,           optional, intent(in) :: l_rej(:), l_amb(:)
         integer :: s
         if( size(states) /= size(cavgs) ) THROW_HARD('# states /= # class averages; write_state_cavgs')
         do s = 1,nstates

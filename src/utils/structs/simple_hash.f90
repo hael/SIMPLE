@@ -15,15 +15,15 @@ integer, parameter :: BUFFSZ_DEFAULT = 10
 !> hash stuct
 type :: hash
     private
-    type(string), allocatable :: keys(:)    !< hash keys
-    real(dp),     allocatable :: values(:)  !< hash values
-    integer :: buffsz     = BUFFSZ_DEFAULT  !< size of first buffer and subsequent allocation increments
-    integer :: hash_index = 0               !< index
-    logical :: exists     = .false.
+    type(string), allocatable :: keys(:)                     !< hash keys
+    real(dp),     allocatable :: values(:)                   !< hash values
+    integer                   :: buffsz     = BUFFSZ_DEFAULT !< size of first buffer and subsequent allocation increments
+    integer                   :: hash_index = 0              !< index
+    logical                   :: exists     = .false.
   contains
     !< CONSTRUCTORS
     procedure, private :: new_default, new_by_sz
-    generic            :: new => new_default, new_by_sz
+    generic            :: new           => new_default, new_by_sz
     procedure, private :: alloc_hash
     procedure, private :: realloc_hash
     procedure, private :: copy
@@ -32,7 +32,7 @@ type :: hash
     procedure, private :: push_dp, push_int
     generic            :: push => push_dp, push_int
     procedure, private :: set_real, set_int, set_dp
-    generic            :: set => set_real, set_int, set_dp
+    generic            :: set  => set_real, set_int, set_dp
     procedure          :: delete
     !< GETTERS
     procedure          :: isthere
@@ -71,8 +71,8 @@ contains
 
     !>  \brief  is a constructor
     function constructor_by_sz( sz, buffsz ) result( self )
-        integer,           intent(in)    :: sz     !< initial size
-        integer, optional, intent(in)    :: buffsz !< size of subsequent allocation increments
+        integer,           intent(in)           :: sz     !< initial size
+        integer,           optional, intent(in) :: buffsz !< size of subsequent allocation increments
         type(hash) :: self
         call self%new_by_sz(sz, buffsz)
     end function constructor_by_sz
@@ -88,9 +88,9 @@ contains
 
     !>  \brief  is a constructor
     subroutine new_by_sz( self, sz, buffsz )
-        class(hash),       intent(inout) :: self   !< instance
-        integer,           intent(in)    :: sz     !< initial size
-        integer, optional, intent(in)    :: buffsz !< size of subsequent allocation increments
+        class(hash),       intent(inout)        :: self   !< instance
+        integer,           intent(in)           :: sz     !< initial size
+        integer,           optional, intent(in) :: buffsz !< size of subsequent allocation increments
         call self%kill
         if( present(buffsz) )then
             self%buffsz = buffsz
@@ -103,8 +103,8 @@ contains
 
     !>  \brief  allocates keys and values without touching buffsz and hash_index
     subroutine alloc_hash( self, sz )
-        class(hash), intent(inout) :: self !< instance
-        integer,      intent(in)   :: sz   !< total size
+        class(hash),  intent(inout) :: self !< instance
+        integer,      intent(in)    :: sz   !< total size
         call self%dealloc_hash
         allocate(self%keys(sz), self%values(sz))
     end subroutine alloc_hash
@@ -114,7 +114,7 @@ contains
         class(hash), intent(inout)  :: self
         type(string),   allocatable :: keys_copy(:)
         real(dp),       allocatable :: values_copy(:)
-        integer :: newsz, oldsz, i
+        integer                     :: newsz, oldsz, i
         if( self%exists )then
             ! old/new size
             oldsz = size(self%keys)
@@ -195,7 +195,7 @@ contains
 
     !>  \brief  sets a real value in the hash
     subroutine set_real( self, key, val )
-        class(hash),     intent(inout) :: self
+        class(hash),      intent(inout) :: self
         character(len=*), intent(in)    :: key
         real,             intent(in)    :: val
         integer :: i
@@ -213,7 +213,7 @@ contains
 
     !>  \brief  sets an integer value in the hash
     subroutine set_int( self, key, ival )
-        class(hash),     intent(inout) :: self
+        class(hash),      intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer,          intent(in)    :: ival
         integer :: i
@@ -231,7 +231,7 @@ contains
 
     !>  \brief  sets a real(kind=8) value in the hash
     subroutine set_dp( self, key, rval )
-        class(hash),     intent(inout) :: self
+        class(hash),      intent(inout) :: self
         character(len=*), intent(in)    :: key
         real(dp),         intent(in)    :: rval
         integer :: i
@@ -272,7 +272,7 @@ contains
 
     !>  \brief  check for presence of key in the hash
     pure logical function isthere( self, key )
-        class(hash),      intent(in) :: self
+        class(hash),      intent(in)  :: self
         character(len=*), intent(in)  :: key
         integer :: i
         isthere = .false.
@@ -366,7 +366,7 @@ contains
 
     !>  \brief  gets a value in the hash
     pure real function get_value_at( self, keyindx )
-        class(hash), intent(in) :: self
+        class(hash),  intent(in) :: self
         integer,      intent(in) :: keyindx
         get_value_at = 0.0
         if(keyindx > 0 .and.  keyindx .le. self%hash_index)then
@@ -389,8 +389,8 @@ contains
         class(hash),      intent(in)  :: self
         character(len=XLONGSTRLEN)    :: str_tmp
         character(len=:), allocatable :: str
-        type(string) :: str_out
-        integer :: cnt, i, n
+        type(string)                  :: str_out
+        integer                       :: cnt, i, n
         if( self%hash_index > 0 )then
             write(str_tmp,*)(self%keys(i)%to_char(),'=',self%values(i),'/', i=1,self%hash_index)
             n   = len_trim(str_tmp)
@@ -413,7 +413,7 @@ contains
     pure integer function hash_strlen( self )
         class(hash),      intent(in)  :: self
         character(len=XLONGSTRLEN)    :: str_tmp
-        integer :: i
+        integer                       :: i
         hash_strlen = 0
         if( self%hash_index > 0 )then
             ! no to_char() here: gfortran keeps a deferred-length result's length in a static, which races under OpenMP

@@ -34,12 +34,12 @@ end type ctf_estimate_cost1D
 
 type ctf_estimate_cost2D
     private
-    class(image),     pointer :: pspec              !< reference SQRT( power spectrum )
-    class(ctfparams), pointer :: parms              !< For microscope characteristics
-    integer,          pointer :: inds(:,:)          !< Mask indices
-    type(opt_spec)            :: ospec              !< optimizer specification
-    type(opt_de)              :: diffevol           !< DE optimizer
-    type(ctf)                 :: tfun               !< Transfer function
+    class(image),     pointer :: pspec                !< reference SQRT( power spectrum )
+    class(ctfparams), pointer :: parms                !< For microscope characteristics
+    integer,          pointer :: inds(:,:)            !< Mask indices
+    type(opt_spec)            :: ospec                !< optimizer specification
+    type(opt_de)              :: diffevol             !< DE optimizer
+    type(ctf)                 :: tfun                 !< Transfer function
     real                      :: astigtol     = 0.05  !< Astigmatic tolerance
     integer                   :: ndim         = 0     !< # of dimensions to optimize
     integer                   :: ldim(3)      = 0
@@ -57,19 +57,19 @@ end type ctf_estimate_cost2D
 
 type ctf_estimate_cost4Dcont
     private
-    class(image),     pointer :: pspec   => null()  !< reference SQRT( power spectrum ) normalized
-    class(ctfparams), pointer :: parms   => null()  !< For microscope characteristics
-    class(optimizer), pointer :: opt_obj => null()  !< optimizer object
-    integer,          pointer :: inds(:,:)          !< Mask indices
-    type(opt_spec)            :: ospec              !< optimizer specification object
+    class(image),     pointer :: pspec            => null()                               !< reference SQRT( power spectrum ) normalized
+    class(ctfparams), pointer :: parms            => null()                               !< For microscope characteristics
+    class(optimizer), pointer :: opt_obj          => null()                               !< optimizer object
+    integer,          pointer :: inds(:,:)                                                !< Mask indices
+    type(opt_spec)            :: ospec                                                    !< optimizer specification object
     real(dp)                  :: kv, cs, angast, phshift, smpd, amp_contr_const, wl, wlsq ! CTF
-    real(dp)                  :: conversionfactor = 0.d0    ! unit conversion
-    real(dp)                  :: astigtol         = 0.05d0  !< Astigmatic tolerance (microns)
+    real(dp)                  :: conversionfactor = 0.d0                                  ! unit conversion
+    real(dp)                  :: astigtol         = 0.05d0                                !< Astigmatic tolerance (microns)
     character(len=8)          :: solver           = CTF_CONT_SOLVER
-    integer                   :: ndim             = 0       !< # of dimensions to optimize
-    integer                   :: ldim(3)          = 0       !< dimensions of spectrum
-    integer                   :: flims(3,2)       = 0       !< fourier limits
-    integer                   :: ninds            = 0       !< number of pixels to correlate
+    integer                   :: ndim             = 0                                     !< # of dimensions to optimize
+    integer                   :: ldim(3)          = 0                                     !< dimensions of spectrum
+    integer                   :: flims(3,2)       = 0                                     !< fourier limits
+    integer                   :: ninds            = 0                                     !< number of pixels to correlate
     contains
         procedure, private :: init4Dcont
         procedure, private :: minimize4Dcont
@@ -90,12 +90,12 @@ contains
 
     !>  Constructors
     pure subroutine init1D( self, spec_img, lims, reslims, spec,  parms, resmsk )
-        class(ctf_estimate_cost1D), intent(inout) :: self
-        class(image),               intent(in)    :: spec_img
-        integer,                    intent(in)    :: lims(2), reslims(2)
-        real,             target,   intent(inout) :: spec(lims(1):lims(2))
-        class(ctfparams), target,   intent(inout) :: parms
-        logical,          target,   intent(inout) :: resmsk(lims(1):lims(2))
+        class(ctf_estimate_cost1D), intent(inout)           :: self
+        class(image),               intent(in)              :: spec_img
+        integer,                    intent(in)              :: lims(2), reslims(2)
+        real,                       target,   intent(inout) :: spec(lims(1):lims(2))
+        class(ctfparams),           target,   intent(inout) :: parms
+        logical,                    target,   intent(inout) :: resmsk(lims(1):lims(2))
         call self%kill
         self%spec1d => spec
         self%parms  => parms
@@ -105,13 +105,13 @@ contains
     end subroutine init1D
 
     subroutine init2D( self, pspec, parms, inds, ndim, limits, astigtol, tol )
-        class(ctf_estimate_cost2D), intent(inout) :: self
-        class(image),     target, intent(inout) :: pspec
-        class(ctfparams), target, intent(inout) :: parms
-        integer,          target, intent(inout) :: inds(:,:)
-        integer,                  intent(in)    :: ndim
-        real,                     intent(in)    :: limits(2,ndim)
-        real,                     intent(in)    :: astigtol, tol
+        class(ctf_estimate_cost2D), intent(inout)         :: self
+        class(image),               target, intent(inout) :: pspec
+        class(ctfparams),           target, intent(inout) :: parms
+        integer,                    target, intent(inout) :: inds(:,:)
+        integer,                    intent(in)            :: ndim
+        real,                       intent(in)            :: limits(2,ndim)
+        real,                       intent(in)            :: astigtol, tol
         call self%kill2D
         self%pspec => pspec
         self%parms => parms
@@ -129,14 +129,14 @@ contains
     !> solver ('lbfgsb' or 'lm') only from testers
     subroutine init4Dcont( self, pspec, parms, inds, ndim, limits, astigtol, solver )
         use simple_opt_factory, only: opt_factory
-        class(ctf_estimate_cost4Dcont), intent(inout) :: self
-        class(image),     target, intent(inout) :: pspec
-        class(ctfparams), target, intent(inout) :: parms
-        integer,          target, intent(inout) :: inds(:,:)
-        integer,                  intent(in)    :: ndim
-        real,                     intent(in)    :: limits(2,ndim)
-        real,                     intent(in)    :: astigtol
-        character(len=*), optional, intent(in)  :: solver
+        class(ctf_estimate_cost4Dcont), intent(inout)         :: self
+        class(image),                   target, intent(inout) :: pspec
+        class(ctfparams),               target, intent(inout) :: parms
+        integer,                        target, intent(inout) :: inds(:,:)
+        integer,                        intent(in)            :: ndim
+        real,                           intent(in)            :: limits(2,ndim)
+        real,                           intent(in)            :: astigtol
+        character(len=*),               optional, intent(in)  :: solver
         type(opt_factory) :: opt_fact
         real(dp)          :: amp_contr, phaseq
         real              :: optlims(ndim,2)
@@ -296,7 +296,7 @@ contains
         real,                       intent(in)    :: dfx         !< defocus x-axis
         real,                       intent(in)    :: dfy         !< defocus y-axis
         real,                       intent(in)    :: angast      !< angle of astigmatism
-        real,                       intent(in)    :: phshift !< additive phase shift (radians)
+        real,                       intent(in)    :: phshift     !< additive phase shift (radians)
         real, pointer :: prmat(:,:,:)
         real          :: ang, spaFreqSq
         real(dp)      :: ctf_sqsum,dotproduct,tval,corr,fpen,rn
@@ -394,11 +394,11 @@ contains
     !>  Cost & gradients evaluation; curv is the normalised model's Gauss-Newton matrix plus the penalty's Hessian
     !!  (the cost's Hessian where the normalised model equals the normalised data)
     subroutine fdf( self, D, vec, f, grad, curv )
-        class(ctf_estimate_cost4Dcont), intent(inout) :: self
-        integer,                        intent(in)    :: D
-        real(dp),                       intent(in)    :: vec(D)
-        real(dp),                       intent(inout) :: f, grad(D)
-        real(dp), optional,             intent(out)   :: curv(D,D)
+        class(ctf_estimate_cost4Dcont), intent(inout)                     :: self
+        integer,                        intent(in)                        :: D
+        real(dp),                       intent(in)                        :: vec(D)
+        real(dp),                       intent(inout)                     :: f, grad(D)
+        real(dp),                       optional,             intent(out) :: curv(D,D)
         real, pointer :: prmat(:,:,:)
         real(dp)      :: dcc_dangast(2),dcc_ddfx(2),dcc_ddfy(2),dcc_dphshift(2),gpen(2)
         real(dp)      :: dfx,dfy,angast,phshift, df_eff,ang,spaFreqSq,costerm,signctf,denom,denomsq

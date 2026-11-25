@@ -26,17 +26,17 @@ contains
     subroutine new_greedy_inpl( self, params, spec, build )
         use simple_builder, only: builder
         class(strategy3D_greedy_inpl), intent(inout) :: self
-        class(parameters),        intent(in)    :: params
-        class(strategy3D_spec),   intent(inout) :: spec
-        class(builder),           intent(in)    :: build
+        class(parameters),             intent(in)    :: params
+        class(strategy3D_spec),        intent(inout) :: spec
+        class(builder),                intent(in)    :: build
         call self%s%new(params, spec, build)
         self%spec = spec
     end subroutine new_greedy_inpl
 
     subroutine srch_greedy_inpl( self, os, ithr )
         class(strategy3D_greedy_inpl), intent(inout) :: self
-        class(oris),              intent(inout) :: os
-        integer,                  intent(in)    :: ithr
+        class(oris),                   intent(inout) :: os
+        integer,                       intent(in)    :: ithr
         if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr

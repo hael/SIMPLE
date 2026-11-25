@@ -63,18 +63,18 @@ contains
     !> the exported origins are the particles' shifts (pixels of their stack) times the pixel size
     !! of their stack, in Angstrom; the two stacks have different pixel sizes
     subroutine test_particles2D_origins()
-        real, parameter :: SMPDS(2) = [1.3, 0.9]
-        real, parameter :: XS(4) = [1.5, 0., -2.25, 4.], YS(4) = [-0.5, 0., 3.75, -1.]
+        real,    parameter        :: SMPDS(2)    = [1.3, 0.9]
+        real,    parameter        :: XS(4)       = [1.5, 0., -2.25, 4.], YS(4) = [-0.5, 0., 3.75, -1.]
         type(starproject_stream)  :: star
         type(parameters)          :: params
         type(sp_project)          :: spproj
         type(starfile_table_type) :: tbl
         type(string)              :: cwd_saved, root, cwd
-        real(dp) :: ox, oy
-        real     :: err, smpd
-        logical  :: found
-        integer  :: nfail0, i, n, obj, nmissing
-        integer, parameter :: SELECTED(3) = [1, 3, 4], STKINDS(4) = [1, 1, 2, 2]
+        real(dp)                  :: ox, oy
+        real                      :: err, smpd
+        logical                   :: found
+        integer                   :: nfail0, i, n, obj, nmissing
+        integer, parameter        :: SELECTED(3) = [1, 3, 4], STKINDS(4) = [1, 1, 2, 2]
         write(*,'(A)') 'test_particles2D_origins'
         nfail0 = tests_failed
         call enter_fixture('star_stream_origins', cwd_saved, root)
@@ -123,7 +123,7 @@ contains
         type(sp_project), intent(inout) :: spproj
         class(string),    intent(in)    :: dir
         integer, parameter :: STKINDS(4) = [1, 1, 2, 2], INDSTK(4) = [1, 2, 1, 2], STATES(4) = [1, 0, 1, 1]
-        integer :: i
+        integer            :: i
         call spproj%os_optics%new(1, is_ptcl=.false.)
         call spproj%os_optics%set(1, 'ogid', 1)
         call spproj%os_optics%set(1, 'smpd', 1.0)
@@ -158,7 +158,7 @@ contains
         character(len=LINELEN), intent(out) :: images(MAXROWS), mics(MAXROWS)
         integer,                intent(out) :: n
         character(len=LINELEN) :: line
-        integer :: funit, ios
+        integer                :: funit, ios
         n      = 0
         images = ''
         mics   = ''
@@ -180,7 +180,7 @@ contains
     function field_with( line, key ) result( field )
         character(len=*), intent(in) :: line, key
         character(len=LINELEN) :: field
-        integer :: pos, first, last
+        integer                :: pos, first, last
         field = ''
         pos   = index(line, key)
         if( pos == 0 ) return

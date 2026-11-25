@@ -24,47 +24,47 @@ public :: state_fixture, FIX_SEARCH, FIX_KNOWN, FIX_VIEWS, betagal_frame, point_
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: FIX_SEARCH = 1, FIX_KNOWN = 2, FIX_VIEWS = 3
-integer, parameter :: FIXTURE_VERSION = 2 !< part of the cache key: raise it when the fixture or simulator changes its output
-character(len=6), parameter :: MODE_NAMES(3) = ['search', 'known ', 'views ']
-integer, parameter :: BLOB_BOX = 64, BETAGAL_BOX = 96
-real,    parameter :: BLOB_SMPD = 2.0, BETAGAL_SMPD = 2.2
-real,    parameter :: BLOB_MSKDIAM = 100., BETAGAL_MSKDIAM = 200.
-real,    parameter :: KV = 300., CS = 2.7, FRACA = 0.1
+integer,          parameter :: FIX_SEARCH      = 1, FIX_KNOWN = 2, FIX_VIEWS = 3
+integer,          parameter :: FIXTURE_VERSION = 2 !< part of the cache key: raise it when the fixture or simulator changes its output
+character(len=6), parameter :: MODE_NAMES(3)   = ['search', 'known ', 'views ']
+integer,          parameter :: BLOB_BOX        = 64, BETAGAL_BOX = 96
+real,             parameter :: BLOB_SMPD       = 2.0, BETAGAL_SMPD = 2.2
+real,             parameter :: BLOB_MSKDIAM    = 100., BETAGAL_MSKDIAM = 200.
+real,             parameter :: KV              = 300., CS = 2.7, FRACA = 0.1
 
 !> what to build; dir, the truths and the point groups are set by build
 type :: state_fixture
-    character(len=16)   :: family     = 'blob'     !< blob | betagal
-    character(len=16)   :: kind       = 'distinct' !< blob: distinct | identical; betagal: compositional | conformational | identical
-    integer             :: mode       = FIX_SEARCH
-    integer             :: nstates    = 3
-    real                :: pops(8)    = 0.         !< population fractions (0: equal)
-    integer             :: nptcls     = 600
-    integer             :: nviews     = 0          !< views mode: distinct directions
-    logical             :: state_classes = .false. !< views mode: the 2D class is the view and the true state
-    real                :: snr        = 1.
-    real                :: defocus    = 1.5        !< microns
-    real                :: dferr      = 0.5        !< defocus spread (microns)
-    real                :: astigerr   = 0.1
-    real                :: sherr      = 2.5        !< shift range (pixels) of the search and known modes
-    real                :: conf_angle = 10.        !< betagal conformational: rotation of chain D (deg)
-    integer             :: seed       = 20261017
-    integer             :: nthr       = 1
-    character(len=1024) :: dir        = ''         !< the cache directory, set by build
-    character(len=4)    :: pgrps(8)   = ''         !< the declared point group of each truth
-    logical             :: reused     = .false.    !< build found the dataset in the cache
+    character(len=16)   :: family        = 'blob'     !< blob | betagal
+    character(len=16)   :: kind          = 'distinct' !< blob: distinct | identical; betagal: compositional | conformational | identical
+    integer             :: mode          = FIX_SEARCH
+    integer             :: nstates       = 3
+    real                :: pops(8)       = 0.         !< population fractions (0: equal)
+    integer             :: nptcls        = 600
+    integer             :: nviews        = 0          !< views mode: distinct directions
+    logical             :: state_classes = .false.    !< views mode: the 2D class is the view and the true state
+    real                :: snr           = 1.
+    real                :: defocus       = 1.5        !< microns
+    real                :: dferr         = 0.5        !< defocus spread (microns)
+    real                :: astigerr      = 0.1
+    real                :: sherr         = 2.5        !< shift range (pixels) of the search and known modes
+    real                :: conf_angle    = 10.        !< betagal conformational: rotation of chain D (deg)
+    integer             :: seed          = 20261017
+    integer             :: nthr          = 1
+    character(len=1024) :: dir           = ''         !< the cache directory, set by build
+    character(len=4)    :: pgrps(8)      = ''         !< the declared point group of each truth
+    logical             :: reused        = .false.    !< build found the dataset in the cache
   contains
-    procedure :: new
-    procedure :: kill
-    procedure :: build
-    procedure :: truth_fname
-    procedure :: project_fname
-    procedure :: truth_doc
-    procedure :: stack_fname
-    procedure :: box
-    procedure :: smpd
-    procedure :: mskdiam
-    procedure :: write_lowpassed
+    procedure          :: new
+    procedure          :: kill
+    procedure          :: build
+    procedure          :: truth_fname
+    procedure          :: project_fname
+    procedure          :: truth_doc
+    procedure          :: stack_fname
+    procedure          :: box
+    procedure          :: smpd
+    procedure          :: mskdiam
+    procedure          :: write_lowpassed
     procedure, private :: key_text
 end type state_fixture
 
@@ -73,15 +73,15 @@ contains
     !> describes the dataset to build; the rest keeps its defaults, and build sets dir, pgrps and reused
     subroutine new( self, family, mode, nstates, nptcls, snr, nthr, kind, pops, nviews, state_classes, sherr, &
         &conf_angle, seed )
-        class(state_fixture),       intent(inout) :: self
-        character(len=*),           intent(in)    :: family
-        integer,                    intent(in)    :: mode, nstates, nptcls, nthr
-        real,                       intent(in)    :: snr
-        character(len=*), optional, intent(in)    :: kind
-        real,             optional, intent(in)    :: pops(:)
-        integer,          optional, intent(in)    :: nviews, seed
-        logical,          optional, intent(in)    :: state_classes
-        real,             optional, intent(in)    :: sherr, conf_angle
+        class(state_fixture),       intent(inout)        :: self
+        character(len=*),           intent(in)           :: family
+        integer,                    intent(in)           :: mode, nstates, nptcls, nthr
+        real,                       intent(in)           :: snr
+        character(len=*),           optional, intent(in) :: kind
+        real,                       optional, intent(in) :: pops(:)
+        integer,                    optional, intent(in) :: nviews, seed
+        logical,                    optional, intent(in) :: state_classes
+        real,                       optional, intent(in) :: sherr, conf_angle
         call self%kill
         self%family  = family
         self%mode    = mode
@@ -157,8 +157,8 @@ contains
         use simple_defs,       only: SIMPLE_GIT_VERSION
         class(state_fixture), intent(in) :: self
         character(len=:), allocatable :: key
-        character(len=512) :: buf
-        integer :: k
+        character(len=512)            :: buf
+        integer                       :: k
         write(buf,'(a,i0,1x,a,1x,a,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,5(1x,es12.5),1x,a,es12.5,1x,a,i0,1x,a,i0,1x,a)') &
             &'version=', FIXTURE_VERSION, trim(self%family), trim(self%kind), 'nstates=', self%nstates, 'nptcls=', self%nptcls, &
             &'nviews=', merge(self%nviews, 0, self%mode == FIX_VIEWS), 'snr/defocus/dferr/astigerr/sherr=', self%snr, &
@@ -180,10 +180,10 @@ contains
         use simple_test_utils, only: fix_test_seed
         class(state_fixture), intent(inout) :: self
         character(len=:), allocatable :: key, root, tmp
-        character(len=4096) :: path
-        type(string) :: cwd, keystr, hash
-        integer :: status
-        logical :: l_exists
+        character(len=4096)           :: path
+        type(string)                  :: cwd, keystr, hash
+        integer                       :: status
+        logical                       :: l_exists
         if( self%nstates < 1 .or. self%nstates > 8 ) THROW_HARD('a fixture holds 1 to 8 states')
         if( trim(self%family) == 'blob' .and. self%nstates > 3 ) THROW_HARD('the blob family has three states')
         if( self%mode == FIX_VIEWS .and. (self%nviews < 1 .or. mod(self%nptcls, max(1,self%nviews)) /= 0) )&
@@ -242,8 +242,8 @@ contains
         use simple_test_flex_phantom_fixture, only: write_phantom_truths
         class(state_fixture), intent(inout) :: self
         type(string), allocatable :: truths(:)
-        type(string) :: tmean, tdiff, cwd
-        integer :: k
+        type(string)              :: tmean, tdiff, cwd
+        integer                   :: k
         select case(trim(self%family))
             case('blob')
                 call simple_getcwd(cwd)
@@ -278,11 +278,11 @@ contains
         use simple_molecule_data, only: molecule_data
         type(molecule_data), intent(in)  :: mol
         real,                intent(out) :: o(3), f(3,3)
-        character(len=1), parameter :: CHAINS(4) = ['A','B','C','D']
-        logical, allocatable :: ca(:,:)
-        real    :: c(3,4), x(3), y(3), z(3)
-        integer :: ichain, ires
-        logical :: common
+        character(len=1), parameter   :: CHAINS(4) = ['A','B','C','D']
+        logical,          allocatable :: ca(:,:)
+        real                          :: c(3,4), x(3), y(3), z(3)
+        integer                       :: ichain, ires
+        logical                       :: common
         allocate(ca(mol%n, 4))
         do ichain = 1, 4
             ca(:,ichain) = adjustl(mol%name) == 'CA' .and. .not. mol%het .and. mol%chain == CHAINS(ichain)
@@ -329,11 +329,11 @@ contains
         use simple_test_molecule_fixture, only: betagal_1jyx
         use simple_atoms,         only: atoms
         class(state_fixture), intent(inout) :: self
-        type(molecule_data) :: mol, sub
-        type(atoms)  :: molecule
-        type(image)  :: vol
-        real    :: o(3), f(3,3), ctr(3), com(3), axis(3), r(3,3), dc(3), extent(3)
-        integer :: k, i, ilong
+        type(molecule_data)  :: mol, sub
+        type(atoms)          :: molecule
+        type(image)          :: vol
+        real                 :: o(3), f(3,3), ctr(3), com(3), axis(3), r(3,3), dc(3), extent(3)
+        integer              :: k, i, ilong
         logical, allocatable :: keep(:), dmask(:)
         mol = betagal_1jyx()
         keep = .not. mol%het
@@ -414,7 +414,7 @@ contains
         type(molecule_data), intent(in) :: mol
         logical,             intent(in) :: keep(:)
         type(molecule_data) :: sub
-        integer :: j
+        integer             :: j
         sub%n = count(keep)
         sub%name      = pack(mol%name, keep)
         sub%resname   = pack(mol%resname, keep)
@@ -440,11 +440,11 @@ contains
         use simple_test_utils,     only: set_fixed_seed
         class(state_fixture), intent(in) :: self
         type(commander_simulate_particles) :: xsim
-        class(cmdline), allocatable :: cl
-        type(oris)    :: views, poses
-        character(len=256) :: pops
-        character(len=16)  :: buf
-        integer :: k, i, nrep
+        class(cmdline), allocatable        :: cl
+        type(oris)                         :: views, poses
+        character(len=256)                 :: pops
+        character(len=16)                  :: buf
+        integer                            :: k, i, nrep
         allocate(cl)
         do k = 1, self%nstates
             call cl%set('vol'//int2str(k), 'truth_state'//int2str(k)//'.mrc')
@@ -511,10 +511,10 @@ contains
         use simple_type_defs,  only: CTFFLAG_YES, ctfparams
         class(state_fixture), intent(in) :: self
         class(sp_project), allocatable :: proj
-        type(oris)      :: truth
-        type(ctfparams) :: ctf
-        class(cmdline), allocatable:: cline_compenv
-        integer :: i, nrep
+        type(oris)                     :: truth
+        type(ctfparams)                :: ctf
+        class(cmdline),    allocatable :: cline_compenv
+        integer                        :: i, nrep
         allocate(cline_compenv)
         allocate(proj)
         call truth%new(self%nptcls, is_ptcl=.true.)
@@ -599,7 +599,7 @@ contains
         real,          intent(out) :: cc_group, cc_larger
         type(image) :: vol, rot
         type(ori)   :: o
-        integer :: ldim(3), n, g
+        integer     :: ldim(3), n, g
         call find_ldim_nptcls(fname, ldim, n)
         call vol%new(ldim, find_img_smpd(fname))
         call vol%read(fname)

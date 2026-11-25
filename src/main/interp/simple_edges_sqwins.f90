@@ -52,7 +52,7 @@ contains
 
    pure function hardedge_3( x, y, mskrad ) result( w )
         integer,intent(in) :: x, y
-        real, intent(in)   :: mskrad
+        real,   intent(in) :: mskrad
         real :: w
         w = 1.
         if( real(x * x + y * y) > mskrad * mskrad ) w = 0.
@@ -60,7 +60,7 @@ contains
 
     pure function hardedge_4( x, y, z, mskrad ) result( w )
         integer,intent(in) :: x, y, z
-        real, intent(in)   :: mskrad
+        real,   intent(in) :: mskrad
         real :: w
         w = 1.
         if( real(x * x + y * y + z * z) > mskrad * mskrad ) w = 0.
@@ -108,7 +108,7 @@ contains
 
     pure function hardedge_inner_2( x, y, mskrad ) result( w )
         integer,intent(in) :: x, y
-        real, intent(in) ::mskrad
+        real,   intent(in) :: mskrad
         real :: w
         w = 0.
         if( real(x * x + y * y) > mskrad * mskrad ) w = 1.
@@ -124,7 +124,7 @@ contains
 
     pure function hardedge_inner_4( x, y, z, mskrad ) result( w )
         integer,intent(in) :: x, y,z
-        real, intent(in) ::mskrad
+        real,   intent(in) :: mskrad
         real :: w
         w = 0.
         if( real(x * x + y * y + z * z) > mskrad * mskrad ) w = 1.
@@ -134,9 +134,9 @@ contains
     !! \param x x position
     !! \param y y position
    pure function cosedge_1( x, y, box, mskrad ) result( w )
-       real, intent(in)    :: x, y     !< input points
+       real,    intent(in) :: x, y     !< input points
        integer, intent(in) :: box      !< window size
-       real, intent(in)    :: mskrad   !< mask radius
+       real,    intent(in) :: mskrad   !< mask radius
         real                :: w, rad, width, maxrad
         maxrad = real(box/2)
         rad    = sqrt(x**2.+y**2.)
@@ -154,9 +154,9 @@ contains
     !! \param x x position
     !! \param y y position
     pure function cosedge_2( x, y, z, box, mskrad ) result( w )
-        real, intent(in)    :: x, y, z   !< input points
+        real,    intent(in) :: x, y, z   !< input points
         integer, intent(in) :: box       !< window size
-        real, intent(in)    :: mskrad    !< mask radius
+        real,    intent(in) :: mskrad    !< mask radius
         real                :: w, rad, maxrad, width
         maxrad = real(box/2)
         rad    = sqrt(x**2.+y**2.+z**2.)
@@ -241,7 +241,7 @@ contains
     !! \param z z position
     pure function cosedge_inner_2( x, y, z, width, mskrad ) result( w )
         real, intent(in) :: x, y, z, width !< inner mask radius
-        real, intent(in) :: mskrad !< mask radius
+        real, intent(in) :: mskrad         !< mask radius
         real             :: w, rad
         rad = sqrt(x**2.+y**2.+z**2.)
         if( rad .lt. mskrad-width )then

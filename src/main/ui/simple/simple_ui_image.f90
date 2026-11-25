@@ -4,16 +4,16 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('image', 'General Image Processing', 90)
-type(ui_program), target :: binarize
-type(ui_program), target :: convert
-type(ui_program), target :: ctf_correct
-type(ui_program), target :: ctfops
-type(ui_program), target :: normalize_
-type(ui_program), target :: scale
-type(ui_program), target :: stack
-type(ui_program), target :: stackops
-type(ui_program), target :: split_
-type(ui_program), target :: split_stack
+type(ui_program),          target    :: binarize
+type(ui_program),          target    :: convert
+type(ui_program),          target    :: ctf_correct
+type(ui_program),          target    :: ctfops
+type(ui_program),          target    :: normalize_
+type(ui_program),          target    :: scale
+type(ui_program),          target    :: stack
+type(ui_program),          target    :: stackops
+type(ui_program),          target    :: split_
+type(ui_program),          target    :: split_stack
 
 contains
 

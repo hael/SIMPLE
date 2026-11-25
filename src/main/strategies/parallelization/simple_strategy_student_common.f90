@@ -46,13 +46,13 @@ contains
     !! STUDENT_HOLDOUT_EVERY-th of them in order of stkind (group_of the stack), otherwise every STUDENT_HOLDOUT_EVERY-th particle
     !! (group_of the particle); msg says why a cohort would be empty (too few particles), empty otherwise
     subroutine student_holdout_split( n, stkinds, held, group_of, l_by_stack, msg )
-        integer,                       intent(in)  :: n, stkinds(n)
-        logical,                       intent(out) :: held(n)
-        integer,                       intent(out) :: group_of(n)
-        logical,                       intent(out) :: l_by_stack
-        character(len=:), allocatable, intent(out) :: msg
+        integer,                       intent(in)               :: n, stkinds(n)
+        logical,                       intent(out)              :: held(n)
+        integer,                       intent(out)              :: group_of(n)
+        logical,                       intent(out)              :: l_by_stack
+        character(len=:),              allocatable, intent(out) :: msg
         integer, allocatable :: rank(:)
-        integer :: i, ng, smax
+        integer              :: i, ng, smax
         held       = .false.
         group_of   = 0
         l_by_stack = .false.
@@ -99,10 +99,10 @@ contains
         real,           intent(in) :: gain(:)
         integer,        intent(in) :: ngroups
         integer(int64), intent(in) :: seed
-        real     :: q, boot_means(STUDENT_NBOOT)
-        real(dp) :: gsum
+        real           :: q, boot_means(STUDENT_NBOOT)
+        real(dp)       :: gsum
         integer(int64) :: lehmer
-        integer  :: ib, gg, iq
+        integer        :: ib, gg, iq
         q = 0.
         if( ngroups < 1 ) return
         lehmer = modulo(seed, 2147483646_int64) + 1_int64
@@ -128,7 +128,7 @@ contains
         integer(int64), intent(in) :: seed
         integer, allocatable :: groups(:), gfirst(:), gsize(:)
         real,    allocatable :: gain(:)
-        integer :: jj, gg, ig, ngroups
+        integer              :: jj, gg, ig, ngroups
         allocate(groups(max(1,nheld)), gfirst(max(1,nheld)), source=0)
         ngroups = 0
         do jj = 1,nheld
@@ -176,8 +176,8 @@ contains
         real,                           intent(inout) :: gain_q(:)
         real(timer_int_kind),           intent(inout) :: rt_boot(:)
         integer(timer_int_kind) :: tb
-        real    :: recov_new, recov_best
-        integer :: iw
+        real                    :: recov_new, recov_best
+        integer                 :: iw
         iw_best = 0
         ntried  = 0
         do iw = 1,ntry
@@ -216,7 +216,7 @@ contains
         integer, intent(out) :: nsel, nrec
         real,    allocatable :: negconf(:)
         integer, allocatable :: order(:)
-        integer :: ne, i, k, nq, nr
+        integer              :: ne, i, k, nq, nr
         threshold = STUDENT_CONF_NONE
         nsel      = 0
         nrec      = 0
@@ -276,9 +276,9 @@ contains
     !> the selected particles pinds_sel of part part of nparts within its range fromp..top of a field of nptcls
     !! particles (possibly none); msg says why the part or its range is refused, empty otherwise
     subroutine student_part_pinds( pinds_sel, part, nparts, fromp, top, nptcls, pinds, msg )
-        integer,                       intent(in)  :: pinds_sel(:), part, nparts, fromp, top, nptcls
-        integer, allocatable,          intent(out) :: pinds(:)
-        character(len=:), allocatable, intent(out) :: msg
+        integer,                       intent(in)                        :: pinds_sel(:), part, nparts, fromp, top, nptcls
+        integer,                       allocatable,          intent(out) :: pinds(:)
+        character(len=:),              allocatable, intent(out)          :: msg
         msg = ''
         if( nparts < 1 .or. part < 1 .or. part > nparts )then
             msg = 'a part is one of nparts: 1 <= part <= nparts; student_part_pinds'
@@ -306,15 +306,15 @@ contains
         use simple_defs_fname, only: ALGN_FBODY
         use simple_syslib,     only: del_file
         use simple_string_utils, only: int2str
-        class(parameters),         intent(inout) :: params
-        class(builder),            intent(inout) :: build
-        class(cmdline),            intent(inout) :: cline
-        class(string),             intent(in)    :: base
-        type(string), allocatable, intent(out)   :: part_bases(:)
-        type(qsys_env) :: qenv
-        type(chash)    :: job_descr
+        class(parameters),         intent(inout)            :: params
+        class(builder),            intent(inout)            :: build
+        class(cmdline),            intent(inout)            :: cline
+        class(string),             intent(in)               :: base
+        type(string),              allocatable, intent(out) :: part_bases(:)
+        type(qsys_env)            :: qenv
+        type(chash)               :: job_descr
         type(string), allocatable :: tables(:)
-        integer :: ipart
+        integer                   :: ipart
         write(logfhandle,'(A,I0,A)') '>>> STUDENT PREDICTION: ', params%nparts, ' parts'
         call qenv%new(params, params%nparts, l_active=build%spproj_field%included())
         call cline%gen_job_descr(job_descr)
@@ -361,8 +361,8 @@ contains
     subroutine concat_part_tables( fname_out, part_fnames )
         class(string), intent(in) :: fname_out, part_fnames(:)
         character(len=:), allocatable :: buf
-        integer(int64) :: nbytes
-        integer :: ipart, uin, uout, ios, i0
+        integer(int64)                :: nbytes
+        integer                       :: ipart, uin, uout, ios, i0
         open(newunit=uout, file=fname_out%to_char(), access='stream', form='unformatted', status='replace', &
             &action='write', iostat=ios)
         if( ios /= 0 ) THROW_HARD('could not open '//fname_out%to_char()//'; concat_part_tables')
@@ -464,8 +464,8 @@ contains
     function file_hash( fname ) result( h )
         class(string), intent(in) :: fname
         integer(int32), allocatable :: words(:)
-        integer(int64) :: h, nbytes
-        integer        :: funit, io_stat, nwords
+        integer(int64)              :: h, nbytes
+        integer                     :: funit, io_stat, nwords
         if( .not. file_exists(fname) ) THROW_HARD('no such file: '//fname%to_char()//'; file_hash')
         call fopen(funit, fname, 'old', 'read', iostat=io_stat, access='stream', form='unformatted')
         call fileiochk('file_hash; open '//fname%to_char(), io_stat)
@@ -481,9 +481,9 @@ contains
     !> fname without a trailing .txt
     function fname_base( fname ) result( base )
         class(string), intent(in) :: fname
-        type(string) :: base
+        type(string)                  :: base
         character(len=:), allocatable :: s
-        integer :: n
+        integer                       :: n
         s = fname%to_char()
         n = len_trim(s)
         if( n > 4 )then

@@ -36,7 +36,7 @@ contains
         logical,       intent(in)    :: l_accepted_only
         integer,       intent(out)   :: nappended
         type(sp_project), allocatable :: parts(:)
-        integer :: nfiles, ifile, imic, n_old, j
+        integer                       :: nfiles, ifile, imic, n_old, j
         nappended = 0
         nfiles    = size(fnames)
         if( nfiles == 0 ) return

@@ -55,12 +55,12 @@ contains
 
     subroutine test_adjoint_and_gradient( kappa )
         integer, intent(in) :: kappa
-        integer, parameter :: N = 24, R = N/2, RL = R-1
+        integer,                parameter   :: N = 24, R = N/2, RL = R-1
         class(wave_multislice), allocatable :: ms
-        complex, allocatable :: c(:,:,:), dc(:,:,:), cadj(:,:,:), cg(:,:,:)
-        complex  :: q(-R:R,-R:R), y(-R:R,-R:R), ihat(-R:R,-R:R), jdc(-R:R,-R:R)
-        real(dp) :: lhs, rhs, fd, an
-        real     :: h, sig
+        complex,                allocatable :: c(:,:,:), dc(:,:,:), cadj(:,:,:), cg(:,:,:)
+        complex                             :: q(-R:R,-R:R), y(-R:R,-R:R), ihat(-R:R,-R:R), jdc(-R:R,-R:R)
+        real(dp)                            :: lhs, rhs, fd, an
+        real                                :: h, sig
         allocate(ms)
         call ms%new(N, 2)
         call ms%set_optics(optics(0.1), 20., kappa)
@@ -94,12 +94,12 @@ contains
     end subroutine test_adjoint_and_gradient
 
     subroutine test_weak_sheet()
-        integer, parameter :: N = 64, R = N/2
-        real,    parameter :: PEAK_PHASE = 5.0e-3, ZOFF = 16.
+        integer,                parameter   :: N          = 64, R = N/2
+        real,                   parameter   :: PEAK_PHASE = 5.0e-3, ZOFF = 16.
         class(wave_multislice), allocatable :: ms
-        complex, allocatable :: sj(:,:,:), cube(:,:,:)
-        complex :: ihat(-R:R,-R:R)
-        real    :: err0, errp, errm, errpos
+        complex,                allocatable :: sj(:,:,:), cube(:,:,:)
+        complex                             :: ihat(-R:R,-R:R)
+        real                                :: err0, errp, errm, errpos
         allocate(ms)
         call ms%new(N, 2)
         ! the sheet in the midplane, ewald=neg
@@ -130,8 +130,8 @@ contains
         !> the sheet's section spectra sj(h,k,j) (native DFT units, volts) and its cube spectrum, centred z0
         !! sections downstream of the midplane
         subroutine sheet( z0, sj, cube )
-            real,                 intent(in)  :: z0
-            complex, allocatable, intent(out) :: sj(:,:,:), cube(:,:,:)
+            real,                 intent(in)               :: z0
+            complex,              allocatable, intent(out) :: sj(:,:,:), cube(:,:,:)
             complex :: s0(-R:R,-R:R), a(-R:R,-R:R)
             real    :: g(N), re, im, zj, scale
             integer :: h, k, l, j
@@ -201,11 +201,11 @@ contains
         function weak_phase( sj, side ) result( dihat )
             complex, intent(in) :: sj(-R:R,-R:R,N)
             real,    intent(in) :: side
-            complex :: dihat(-R:R,-R:R)
+            complex         :: dihat(-R:R,-R:R)
             type(ctf)       :: tfun
             type(ctfparams) :: c
-            real    :: sig, acc, ph, ddf
-            integer :: h, k, j
+            real            :: sig, acc, ph, ddf
+            integer         :: h, k, j
             c    = optics(0.1)
             sig  = electron_interaction_constant(KV) * SMPD
             acc  = atan(c%fraca / sqrt(1. - c%fraca**2))
@@ -237,12 +237,12 @@ contains
     end subroutine test_weak_sheet
 
     subroutine test_analytic_limits()
-        integer, parameter :: N = 24, R = N/2
-        real,    parameter :: V0 = 0.25
+        integer,                parameter   :: N  = 24, R = N/2
+        real,                   parameter   :: V0 = 0.25
         class(wave_multislice), allocatable :: ms
-        complex, allocatable :: cube(:,:,:)
-        complex :: ihat(-R:R,-R:R)
-        real    :: expected
+        complex,                allocatable :: cube(:,:,:)
+        complex                             :: ihat(-R:R,-R:R)
+        real                                :: expected
         allocate(ms)
         call ms%new(N, 2)
         allocate(cube(-R:R,-R:R,-(R-1):R-1), source=cmplx(0.,0.))
@@ -289,7 +289,7 @@ contains
         integer, intent(in) :: n
         complex, allocatable :: c(:,:,:)
         real,    allocatable :: re(:,:,:), im(:,:,:)
-        integer :: h, k, l, r
+        integer              :: h, k, l, r
         r = n / 2
         allocate(re(-r:r,-r:r,-(r-1):r-1), im(-r:r,-r:r,-(r-1):r-1))
         call random_number(re)

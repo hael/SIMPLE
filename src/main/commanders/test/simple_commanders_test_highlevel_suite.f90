@@ -21,11 +21,11 @@ module subroutine exec_test_nightly( self, cline )
     class(commander_test_nightly), intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
     type(test_entry), allocatable :: entries(:)
-    type(test_dispatcher) :: dispatcher
-    type(test_execution)  :: exec
+    type(test_dispatcher)         :: dispatcher
+    type(test_execution)          :: exec
     character(len=:), allocatable :: root, simple_path
-    integer :: i
-    logical :: interrupted, all_ok
+    integer                       :: i
+    logical                       :: interrupted, all_ok
     call set_test_environment(simple_path)
     root    = output_root(cline, 'nightly')
     entries = get_test_registry()
@@ -62,21 +62,21 @@ end subroutine exec_test_nightly
 module subroutine exec_test_profile( self, cline )
     class(commander_test_profile), intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
-    type(test_entry), allocatable :: entries(:)
-    type(test_dispatcher) :: dispatcher
-    type(test_execution)  :: exec
-    character(len=:), allocatable :: root, simple_path, target, suite
-    logical,          allocatable :: selected(:)
-    character(len=64)  :: tag
+    type(test_entry),                allocatable :: entries(:)
+    type(test_dispatcher)                        :: dispatcher
+    type(test_execution)                         :: exec
+    character(len=:),                allocatable :: root, simple_path, target, suite
+    logical,                         allocatable :: selected(:)
+    character(len=64)                            :: tag
     character(len=len(exec%dir)+12), allocatable :: tables(:)
-    logical, allocatable :: oks(:)
-    integer, allocatable :: nthrs(:)
-    integer :: i, ient, iseed, ithr, nseeds, nexec, ntables
-    real    :: scale
-    logical :: interrupted, all_ok, l_keep, l_success_ok
-    type(metric_dist), allocatable :: dists(:)
-    type(test_execution) :: done
-    type(string) :: val
+    logical,                         allocatable :: oks(:)
+    integer,                         allocatable :: nthrs(:)
+    integer                                      :: i, ient, iseed, ithr, nseeds, nexec, ntables
+    real                                         :: scale
+    logical                                      :: interrupted, all_ok, l_keep, l_success_ok
+    type(metric_dist),               allocatable :: dists(:)
+    type(test_execution)                         :: done
+    type(string)                                 :: val
     if( cline%defined('dir1') .and. cline%defined('dir2') )then
         call compare_profile_dirs(cline%get_carg('dir1'), cline%get_carg('dir2'))
         return
@@ -183,11 +183,11 @@ module subroutine exec_test_profile( self, cline )
     subroutine compare_profile_dirs( dir1, dir2 )
         use simple_fileio, only: basename
         type(string), intent(in) :: dir1, dir2
-        type(string), allocatable :: list(:)
+        type(string),      allocatable :: list(:)
         type(metric_dist), allocatable :: a(:), b(:)
-        type(string) :: bname
-        integer :: j, ncompared
-        logical :: l_exists
+        type(string)                   :: bname
+        integer                        :: j, ncompared
+        logical                        :: l_exists
         call simple_list_files(dir1%to_char()//'/profile_*.tsv', list)
         ncompared = 0
         do j = 1, size(list)
@@ -212,8 +212,8 @@ module subroutine exec_test_identity( self, cline )
     class(commander_test_identity), intent(inout) :: self
     class(cmdline),                 intent(inout) :: cline
     type(test_entry), allocatable :: entries(:)
-    type(string) :: dir1, dir2, target
-    integer :: ient, nsame, ndiff
+    type(string)                  :: dir1, dir2, target
+    integer                       :: ient, nsame, ndiff
     if( .not. (cline%defined('target') .and. cline%defined('dir1') .and. cline%defined('dir2')) )&
         &THROW_HARD('test=identity needs target=<entry> dir1=<run directory> dir2=<run directory>')
     entries = get_test_registry()
@@ -255,11 +255,11 @@ subroutine write_report( dispatcher, fname, all_ok )
     class(test_dispatcher), intent(in)  :: dispatcher
     character(len=*),       intent(in)  :: fname
     logical,                intent(out) :: all_ok
-    character(len=1), parameter :: T = achar(9)
-    type(test_execution) :: exec
-    type(gate_row), allocatable :: rows(:)
-    character(len=512) :: head
-    integer :: funit, i, j
+    character(len=1), parameter   :: T = achar(9)
+    type(test_execution)          :: exec
+    type(gate_row),   allocatable :: rows(:)
+    character(len=512)            :: head
+    integer                       :: funit, i, j
     all_ok = .true.
     open(newunit=funit, file=fname, action='write', status='replace')
     write(funit,'(a)') 'execution'//T//'outcome'//T//'exit_code'//T//'wall_s'//T//'peak_cpu'//T//'reserved_cpu'//T//&
@@ -288,8 +288,8 @@ function fixed( x, ndec ) result( str )
     real,    intent(in) :: x
     integer, intent(in) :: ndec
     character(len=:), allocatable :: str
-    character(len=32) :: buf
-    character(len=16) :: fmt
+    character(len=32)             :: buf
+    character(len=16)             :: fmt
     write(fmt,'(a,i0,a)') '(f32.', ndec, ')'
     write(buf,fmt) x
     str = trim(adjustl(buf))
@@ -300,9 +300,9 @@ function output_root( cline, kind ) result( root )
     class(cmdline),   intent(in)  :: cline
     character(len=*), intent(in)  :: kind
     character(len=:), allocatable :: root
-    character(len=8)  :: date
-    character(len=10) :: time
-    type(string) :: dir, cwd
+    character(len=8)              :: date
+    character(len=10)             :: time
+    type(string)                  :: dir, cwd
     if( cline%defined('dir') )then
         dir = cline%get_carg('dir')
     else
@@ -329,10 +329,10 @@ function thread_list( cline, nthr_entry ) result( nthrs )
     class(cmdline), intent(in) :: cline
     integer,        intent(in) :: nthr_entry
     integer, allocatable :: nthrs(:)
-    character(len=256) :: list
-    character(len=16)  :: items(32)
-    type(string) :: val
-    integer :: n, i, ios
+    character(len=256)   :: list
+    character(len=16)    :: items(32)
+    type(string)         :: val
+    integer              :: n, i, ios
     if( .not. cline%defined('nthr') )then
         nthrs = [nthr_entry]
         return
@@ -356,9 +356,9 @@ function selected_entries( entries, target ) result( selected )
     type(test_entry), intent(in) :: entries(:)
     character(len=*), intent(in) :: target
     logical, allocatable :: selected(:)
-    character(len=1024) :: list
-    character(len=64)   :: names(64)
-    integer :: n, i, ient
+    character(len=1024)  :: list
+    character(len=64)    :: names(64)
+    integer              :: n, i, ient
     allocate(selected(size(entries)), source=trim(target) == 'all')
     if( trim(target) == 'all' ) return
     list = target
@@ -378,7 +378,7 @@ function thread_args( entry, nthr, suite ) result( args )
     character(len=*), intent(in) :: suite
     character(len=256) :: args
     character(len=16)  :: val
-    integer :: nthr_arg, ios
+    integer            :: nthr_arg, ios
     args = entry%args
     val  = key_value(args, 'nthr')
     if( len_trim(val) > 0 )then
@@ -411,7 +411,7 @@ end function scaled_ncpu
 function key_value( args, key ) result( val )
     character(len=*), intent(in) :: args, key
     character(len=16) :: val
-    integer :: pos, pend
+    integer           :: pos, pend
     val = ''
     pos = index(' '//args, ' '//key//'=')
     if( pos == 0 ) return
@@ -424,7 +424,7 @@ end function key_value
 function with_key( args, key, val ) result( out )
     character(len=*), intent(in) :: args, key, val
     character(len=256) :: out
-    integer :: pos, pend
+    integer            :: pos, pend
     pos = index(' '//args, ' '//key//'=')
     if( pos == 0 )then
         out = trim(adjustl(trim(args)//' '//key//'='//val))

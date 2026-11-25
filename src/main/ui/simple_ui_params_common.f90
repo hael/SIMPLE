@@ -183,7 +183,7 @@ contains
 subroutine set_ui_params
     use simple_ui_default_values, only: get_ui_default
     character(len=3) :: mirror_default
-    logical :: found
+    logical          :: found
     call get_ui_default('', '', 'mirr_proj', found, mirror_default)
     if( .not. found ) THROW_HARD('UI default for mirr_proj is unavailable')
     call mirr_proj%set_param('mirr_proj', 'binary', 'Mirror reference projections', &

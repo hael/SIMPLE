@@ -20,14 +20,14 @@ module simple_gui_metadata_stream_snapshot
 
   type, extends(gui_metadata_base) :: gui_metadata_stream_snapshot
     private
-    character(len=LONGSTRLEN) :: snapshot_filename = '' ! project file name for the snapshot
-    integer                   :: id                = 0
-    integer                   :: snapshot_nptcls   = 0  ! number of particles in the snapshot
-    integer                   :: snapshot_time     = 0  ! Unix timestamp when the snapshot was written
-    integer                   :: nstates           = 0  ! number of selected states (3D)
-    integer                   :: states(MAX_STATES_SOLVE3D_MULTISTATE) = 0 ! the selected states (3D)
+    character(len=LONGSTRLEN) :: snapshot_filename                     = '' ! project file name for the snapshot
+    integer                   :: id                                    = 0
+    integer                   :: snapshot_nptcls                       = 0  ! number of particles in the snapshot
+    integer                   :: snapshot_time                         = 0  ! Unix timestamp when the snapshot was written
+    integer                   :: nstates                               = 0  ! number of selected states (3D)
+    integer                   :: states(MAX_STATES_SOLVE3D_MULTISTATE) = 0  ! the selected states (3D)
   contains
-    procedure :: kill => kill_override
+    procedure :: kill    => kill_override
     procedure :: set
     procedure :: get
     procedure :: get_states
@@ -39,11 +39,11 @@ contains
   ! Assign the snapshot id, filename, particle count and, for a 3D snapshot, its selected states.
   ! Records snapshot_time automatically from the current Unix clock.
   subroutine set( self, id, snapshot_filename, snapshot_nptcls, states )
-    class(gui_metadata_stream_snapshot), intent(inout) :: self
-    integer,                             intent(in)    :: id
-    type(string),                        intent(in)    :: snapshot_filename
-    integer,                             intent(in)    :: snapshot_nptcls
-    integer, optional,                   intent(in)    :: states(:)
+    class(gui_metadata_stream_snapshot), intent(inout)                          :: self
+    integer,                             intent(in)                             :: id
+    type(string),                        intent(in)                             :: snapshot_filename
+    integer,                             intent(in)                             :: snapshot_nptcls
+    integer,                             optional,                   intent(in) :: states(:)
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( snapshot_filename%strlen() > LONGSTRLEN ) THROW_HARD('snapshot_filename exceeds buffer length')
     self%l_assigned        = .true.

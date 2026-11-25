@@ -30,8 +30,8 @@ contains
         real(dp),    allocatable :: pclass(:,:)
         integer,     allocatable :: group(:)
         logical,     allocatable :: empty(:)
-        real    :: smpd, smpd_net, pop, res
-        integer :: ncls, icls, funit, ios, g
+        real                     :: smpd, smpd_net, pop, res
+        integer                  :: ncls, icls, funit, ios, g
         if( .not. params%infile%is_allocated() ) THROW_HARD('infile, the weights file, is required; cavg_cnn_predict')
         if( params%infile%strlen_trim() == 0 )   THROW_HARD('infile, the weights file, is required; cavg_cnn_predict')
         call spproj%read_segment('out',   params%projfile)
@@ -74,7 +74,7 @@ contains
             real(dp),         intent(in)  :: v
             character(len=*), intent(in)  :: f
             character(len=:), allocatable :: str
-            character(len=32) :: buf
+            character(len=32)             :: buf
             write(buf, f) v
             str = trim(adjustl(buf))
         end function fmt_real
@@ -84,12 +84,12 @@ contains
     !> The three probabilities (junk, secondary structure, likely protein) of each of the ncls class averages in stk at
     !! smpd under the weights file, and whether it is empty (no particles: probabilities 0); smpd_net is the network's
     subroutine cavg_cnn_class_probs( weights, stk, ncls, smpd, pclass, empty, smpd_net )
-        class(string),         intent(in)  :: weights, stk
-        integer,               intent(in)  :: ncls
-        real,                  intent(in)  :: smpd
-        real(dp), allocatable, intent(out) :: pclass(:,:)
-        logical,  allocatable, intent(out) :: empty(:)
-        real,                  intent(out) :: smpd_net
+        class(string),         intent(in)               :: weights, stk
+        integer,               intent(in)               :: ncls
+        real,                  intent(in)               :: smpd
+        real(dp),              allocatable, intent(out) :: pclass(:,:)
+        logical,               allocatable, intent(out) :: empty(:)
+        real,                  intent(out)              :: smpd_net
         type(cavg_cnn)           :: net
         type(cavg_cnn_input)     :: inp
         type(image), allocatable :: avgs(:), evens(:), odds(:)
@@ -97,7 +97,7 @@ contains
         real(sp),    allocatable :: raw(:,:,:,:), x(:,:,:,:), r(:,:,:)
         real(dp),    allocatable :: probs(:,:)
         integer,     allocatable :: keep(:)
-        integer :: nch, n, box, icls, nkeep
+        integer                  :: nch, n, box, icls, nkeep
         if( .not. file_exists(stk) ) THROW_HARD('class averages not found: '//stk%to_char())
         call net%new(weights)
         nch      = net%get_nchannels()

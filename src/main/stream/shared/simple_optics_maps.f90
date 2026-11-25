@@ -89,8 +89,8 @@ contains
     !> The table of the newest map in @p dir: the import indices it lists and their group ids
     !! (empty when there is no map, or it cannot be read). Returns the map's id, 0 when none.
     function latest_optics_map_table( dir, importinds, ogids ) result( id )
-        class(string),        intent(in)  :: dir
-        integer, allocatable, intent(out) :: importinds(:), ogids(:)
+        class(string),        intent(in)               :: dir
+        integer,              allocatable, intent(out) :: importinds(:), ogids(:)
         integer         :: id
         type(nrtxtfile) :: mapfile
         type(string)    :: fname

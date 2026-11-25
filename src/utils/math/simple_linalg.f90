@@ -86,102 +86,102 @@ end interface vabs
 
 interface
     subroutine sgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
-        character(len=1), intent(in) :: transa, transb
-        integer(kind=4), intent(in) :: m, n, k, lda, ldb, ldc
-        real(kind=4), intent(in) :: alpha, beta
-        real(kind=4), intent(in) :: a(lda,*), b(ldb,*)
-        real(kind=4), intent(inout) :: c(ldc,*)
+        character(len=1), intent(in)    :: transa, transb
+        integer(kind=4),  intent(in)    :: m, n, k, lda, ldb, ldc
+        real(kind=4),     intent(in)    :: alpha, beta
+        real(kind=4),     intent(in)    :: a(lda,*), b(ldb,*)
+        real(kind=4),     intent(inout) :: c(ldc,*)
     end subroutine sgemm
 
     ! the build's BLAS stays on the calling thread inside an OpenMP team (SIMPLE_BLAS_TEAM_SAFE)
     subroutine cgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
-        character(len=1), intent(in) :: transa, transb
-        integer(kind=4), intent(in) :: m, n, k, lda, ldb, ldc
-        complex(kind=4), intent(in) :: alpha, beta
-        complex(kind=4), intent(in) :: a(lda,*), b(ldb,*)
-        complex(kind=4), intent(inout) :: c(ldc,*)
+        character(len=1), intent(in)    :: transa, transb
+        integer(kind=4),  intent(in)    :: m, n, k, lda, ldb, ldc
+        complex(kind=4),  intent(in)    :: alpha, beta
+        complex(kind=4),  intent(in)    :: a(lda,*), b(ldb,*)
+        complex(kind=4),  intent(inout) :: c(ldc,*)
     end subroutine cgemm
 
     function dnrm2(n, x, incx) result(res)
         integer(kind=4), intent(in) :: n, incx
-        real(kind=8), intent(in) :: x(*)
+        real(kind=8),    intent(in) :: x(*)
         real(kind=8) :: res
     end function dnrm2
 
     subroutine dgelsy(m, n, nrhs, a, lda, b, ldb, jpvt, rcond, rank, work, lwork, info)
-        integer(kind=4), intent(in) :: m, n, nrhs, lda, ldb, lwork
+        integer(kind=4), intent(in)    :: m, n, nrhs, lda, ldb, lwork
         integer(kind=4), intent(inout) :: jpvt(*)
-        integer(kind=4), intent(out) :: rank, info
-        real(kind=8), intent(inout) :: a(lda,*), b(ldb,*), work(*)
-        real(kind=8), intent(in) :: rcond
+        integer(kind=4), intent(out)   :: rank, info
+        real(kind=8),    intent(inout) :: a(lda,*), b(ldb,*), work(*)
+        real(kind=8),    intent(in)    :: rcond
     end subroutine dgelsy
 
     subroutine sgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info)
-        character(len=1), intent(in) :: jobu, jobvt
-        integer(kind=4), intent(in) :: m, n, lda, ldu, ldvt, lwork
-        integer(kind=4), intent(out) :: info
-        real(kind=4), intent(inout) :: a(lda,*), work(*)
-        real(kind=4), intent(out) :: s(*), u(ldu,*), vt(ldvt,*)
+        character(len=1), intent(in)    :: jobu, jobvt
+        integer(kind=4),  intent(in)    :: m, n, lda, ldu, ldvt, lwork
+        integer(kind=4),  intent(out)   :: info
+        real(kind=4),     intent(inout) :: a(lda,*), work(*)
+        real(kind=4),     intent(out)   :: s(*), u(ldu,*), vt(ldvt,*)
     end subroutine sgesvd
 
     subroutine dgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info)
-        character(len=1), intent(in) :: jobu, jobvt
-        integer(kind=4), intent(in) :: m, n, lda, ldu, ldvt, lwork
-        integer(kind=4), intent(out) :: info
-        real(kind=8), intent(inout) :: a(lda,*), work(*)
-        real(kind=8), intent(out) :: s(*), u(ldu,*), vt(ldvt,*)
+        character(len=1), intent(in)    :: jobu, jobvt
+        integer(kind=4),  intent(in)    :: m, n, lda, ldu, ldvt, lwork
+        integer(kind=4),  intent(out)   :: info
+        real(kind=8),     intent(inout) :: a(lda,*), work(*)
+        real(kind=8),     intent(out)   :: s(*), u(ldu,*), vt(ldvt,*)
     end subroutine dgesvd
 
     subroutine sgetrf(m, n, a, lda, ipiv, info)
-        integer(kind=4), intent(in) :: m, n, lda
-        integer(kind=4), intent(out) :: ipiv(*), info
-        real(kind=4), intent(inout) :: a(lda,*)
+        integer(kind=4), intent(in)    :: m, n, lda
+        integer(kind=4), intent(out)   :: ipiv(*), info
+        real(kind=4),    intent(inout) :: a(lda,*)
     end subroutine sgetrf
 
     subroutine dgetrf(m, n, a, lda, ipiv, info)
-        integer(kind=4), intent(in) :: m, n, lda
-        integer(kind=4), intent(out) :: ipiv(*), info
-        real(kind=8), intent(inout) :: a(lda,*)
+        integer(kind=4), intent(in)    :: m, n, lda
+        integer(kind=4), intent(out)   :: ipiv(*), info
+        real(kind=8),    intent(inout) :: a(lda,*)
     end subroutine dgetrf
 
     subroutine sgetri(n, a, lda, ipiv, work, lwork, info)
-        integer(kind=4), intent(in) :: n, lda, lwork
-        integer(kind=4), intent(in) :: ipiv(*)
-        integer(kind=4), intent(out) :: info
-        real(kind=4), intent(inout) :: a(lda,*), work(*)
+        integer(kind=4), intent(in)    :: n, lda, lwork
+        integer(kind=4), intent(in)    :: ipiv(*)
+        integer(kind=4), intent(out)   :: info
+        real(kind=4),    intent(inout) :: a(lda,*), work(*)
     end subroutine sgetri
 
     subroutine dgetri(n, a, lda, ipiv, work, lwork, info)
-        integer(kind=4), intent(in) :: n, lda, lwork
-        integer(kind=4), intent(in) :: ipiv(*)
-        integer(kind=4), intent(out) :: info
-        real(kind=8), intent(inout) :: a(lda,*), work(*)
+        integer(kind=4), intent(in)    :: n, lda, lwork
+        integer(kind=4), intent(in)    :: ipiv(*)
+        integer(kind=4), intent(out)   :: info
+        real(kind=8),    intent(inout) :: a(lda,*), work(*)
     end subroutine dgetri
 
     subroutine ssyev(jobz, uplo, n, a, lda, w, work, lwork, info)
-        character(len=1), intent(in) :: jobz, uplo
-        integer(kind=4), intent(in) :: n, lda, lwork
-        integer(kind=4), intent(out) :: info
-        real(kind=4), intent(inout) :: a(lda,*), work(*)
-        real(kind=4), intent(out) :: w(*)
+        character(len=1), intent(in)    :: jobz, uplo
+        integer(kind=4),  intent(in)    :: n, lda, lwork
+        integer(kind=4),  intent(out)   :: info
+        real(kind=4),     intent(inout) :: a(lda,*), work(*)
+        real(kind=4),     intent(out)   :: w(*)
     end subroutine ssyev
 
     subroutine dsyev(jobz, uplo, n, a, lda, w, work, lwork, info)
-        character(len=1), intent(in) :: jobz, uplo
-        integer(kind=4), intent(in) :: n, lda, lwork
-        integer(kind=4), intent(out) :: info
-        real(kind=8), intent(inout) :: a(lda,*), work(*)
-        real(kind=8), intent(out) :: w(*)
+        character(len=1), intent(in)    :: jobz, uplo
+        integer(kind=4),  intent(in)    :: n, lda, lwork
+        integer(kind=4),  intent(out)   :: info
+        real(kind=8),     intent(inout) :: a(lda,*), work(*)
+        real(kind=8),     intent(out)   :: w(*)
     end subroutine dsyev
 
     subroutine ssyevr(jobz, range, uplo, n, a, lda, vl, vu, il, iu, abstol, &
         m, w, z, ldz, isuppz, work, lwork, iwork, liwork, info)
-        character(len=1), intent(in) :: jobz, range, uplo
-        integer(kind=4), intent(in) :: n, il, iu, ldz, lda, lwork, liwork
-        integer(kind=4), intent(out) :: m, isuppz(*), iwork(*), info
-        real(kind=4), intent(in) :: abstol, vl, vu
-        real(kind=4), intent(inout) :: a(lda,*)
-        real(kind=4), intent(out) :: work(*), z(ldz,*), w(*)
+        character(len=1), intent(in)    :: jobz, range, uplo
+        integer(kind=4),  intent(in)    :: n, il, iu, ldz, lda, lwork, liwork
+        integer(kind=4),  intent(out)   :: m, isuppz(*), iwork(*), info
+        real(kind=4),     intent(in)    :: abstol, vl, vu
+        real(kind=4),     intent(inout) :: a(lda,*)
+        real(kind=4),     intent(out)   :: work(*), z(ldz,*), w(*)
     end subroutine ssyevr
 end interface
 
@@ -206,9 +206,9 @@ pure function arg(vec) result(length)
 end function arg
 
 subroutine eigsrt_sp(d, v, n, np)
-    integer, intent(in) :: n, np
+    integer,      intent(in)    :: n, np
     real(kind=4), intent(inout) :: d(np), v(np,np)
-    integer :: i, j, k
+    integer      :: i, j, k
     real(kind=4) :: p
     do i = 1, n - 1
         k = i
@@ -232,9 +232,9 @@ subroutine eigsrt_sp(d, v, n, np)
 end subroutine eigsrt_sp
 
 subroutine eigsrt_dp(d, v, n, np)
-    integer, intent(in) :: n, np
+    integer,      intent(in)    :: n, np
     real(kind=8), intent(inout) :: d(np), v(np,np)
-    integer :: i, j, k
+    integer      :: i, j, k
     real(kind=8) :: p
     do i = 1, n - 1
         k = i
@@ -258,10 +258,10 @@ subroutine eigsrt_dp(d, v, n, np)
 end subroutine eigsrt_dp
 
 subroutine fit_lsq_plane(n, xyz, a, b, c, err)
-    integer, intent(in) :: n
-    real(kind=4), intent(in) :: xyz(n,3)
+    integer,      intent(in)  :: n
+    real(kind=4), intent(in)  :: xyz(n,3)
     real(kind=4), intent(out) :: a, b, c
-    logical, intent(out) :: err
+    logical,      intent(out) :: err
     real(kind=8) :: sx, sy, sz, sxx, syy, sxy, sxz, syz, denom, rn
     err = .false.
     a = 0.0
@@ -287,11 +287,11 @@ subroutine fit_lsq_plane(n, xyz, a, b, c, err)
 end subroutine fit_lsq_plane
 
 subroutine fit_straight_line(n, datavec, slope, intercept, corr)
-    integer, intent(in) :: n
-    real(kind=4), intent(in) :: datavec(n,2)
+    integer,      intent(in)  :: n
+    real(kind=4), intent(in)  :: datavec(n,2)
     real(kind=4), intent(out) :: slope, intercept, corr
     real(kind=8) :: ave_x, ave_y, ss_xx, ss_yy, ss_xy, x, y, dn
-    integer :: i
+    integer      :: i
     ave_x = 0.d0
     ave_y = 0.d0
     ss_xx = 0.d0
@@ -318,12 +318,12 @@ subroutine fit_straight_line(n, datavec, slope, intercept, corr)
 end subroutine fit_straight_line
 
 subroutine jacobi_sp(a, n, np, d, v, nrot)
-    integer, intent(in) :: n, np
+    integer,      intent(in)    :: n, np
     real(kind=4), intent(inout) :: a(np,np), v(np,np), d(np)
-    integer, intent(inout) :: nrot
-    integer :: info, lwork
+    integer,      intent(inout) :: nrot
+    integer                   :: info, lwork
     real(kind=4), allocatable :: work(:), amat(:,:)
-    real(kind=4) :: work_query(1)
+    real(kind=4)              :: work_query(1)
     allocate(amat(n,n))
     amat = a(1:n,1:n)
     lwork = -1
@@ -340,12 +340,12 @@ subroutine jacobi_sp(a, n, np, d, v, nrot)
 end subroutine jacobi_sp
 
 subroutine jacobi_dp(a, n, np, d, v, nrot)
-    integer, intent(in) :: n, np
+    integer,      intent(in)    :: n, np
     real(kind=8), intent(inout) :: a(np,np), v(np,np), d(np)
-    integer, intent(inout) :: nrot
-    integer :: info, lwork
+    integer,      intent(inout) :: nrot
+    integer                   :: info, lwork
     real(kind=8), allocatable :: work(:), amat(:,:)
-    real(kind=8) :: work_query(1)
+    real(kind=8)              :: work_query(1)
     allocate(amat(n,n))
     amat = a(1:n,1:n)
     lwork = -1
@@ -362,14 +362,14 @@ subroutine jacobi_dp(a, n, np, d, v, nrot)
 end subroutine jacobi_dp
 
 subroutine matinv_sp(matrix, inverse, n, errflg)
-    integer, intent(in) :: n
-    real(kind=4), intent(in) :: matrix(n,n)
+    integer,      intent(in)  :: n
+    real(kind=4), intent(in)  :: matrix(n,n)
     real(kind=4), intent(out) :: inverse(n,n)
-    integer, intent(out) :: errflg
-    integer :: info, lwork
-    integer, allocatable :: ipiv(:)
+    integer,      intent(out) :: errflg
+    integer                   :: info, lwork
+    integer,      allocatable :: ipiv(:)
     real(kind=4), allocatable :: work(:)
-    real(kind=4) :: work_query(1)
+    real(kind=4)              :: work_query(1)
     errflg = 0
     inverse = matrix
     allocate(ipiv(n))
@@ -391,14 +391,14 @@ subroutine matinv_sp(matrix, inverse, n, errflg)
 end subroutine matinv_sp
 
 subroutine matinv_dp(matrix, inverse, n, errflg)
-    integer, intent(in) :: n
-    real(kind=8), intent(in) :: matrix(n,n)
+    integer,      intent(in)  :: n
+    real(kind=8), intent(in)  :: matrix(n,n)
     real(kind=8), intent(out) :: inverse(n,n)
-    integer, intent(out) :: errflg
-    integer :: info, lwork
-    integer, allocatable :: ipiv(:)
+    integer,      intent(out) :: errflg
+    integer                   :: info, lwork
+    integer,      allocatable :: ipiv(:)
     real(kind=8), allocatable :: work(:)
-    real(kind=8) :: work_query(1)
+    real(kind=8)              :: work_query(1)
     errflg = 0
     inverse = matrix
     allocate(ipiv(n))
@@ -439,7 +439,7 @@ function plane_from_points(points) result(sol)
     real(kind=4) :: sol(3)
     real(kind=4) :: m(size(points, dim=2),3), b(size(points, dim=2))
     real(kind=4) :: prod(3,3), prod_inv(3,3), prod1(3,size(points, dim=2))
-    integer :: errflg, p, npts
+    integer      :: errflg, p, npts
     sol = 0.0_sp
     if(size(points, dim=1) /= 3)then
         write(logfhandle,*) 'Need to input points in 3D!; plane_from_points'
@@ -467,17 +467,17 @@ function plane_from_points(points) result(sol)
 end function plane_from_points
 
 subroutine projz(vec3, vec2)
-    real(kind=4), intent(in) :: vec3(3)
+    real(kind=4), intent(in)  :: vec3(3)
     real(kind=4), intent(out) :: vec2(2)
     vec2(1) = vec3(1)
     vec2(2) = vec3(2)
 end subroutine projz
 
 subroutine svbksb_sp(u, w, v, b, x)
-    real(kind=4), intent(in) :: u(:,:), v(:,:), w(:), b(:)
+    real(kind=4), intent(in)  :: u(:,:), v(:,:), w(:), b(:)
     real(kind=4), intent(out) :: x(:)
     real(kind=4) :: tmp(size(x))
-    integer :: j
+    integer      :: j
     tmp = 0.0_sp
     do j = 1, size(x)
         if(w(j) /= 0.0_sp) tmp(j) = dot_product(u(:,j), b) / w(j)
@@ -486,10 +486,10 @@ subroutine svbksb_sp(u, w, v, b, x)
 end subroutine svbksb_sp
 
 subroutine svbksb_dp(u, w, v, b, x)
-    real(kind=8), intent(in) :: u(:,:), v(:,:), w(:), b(:)
+    real(kind=8), intent(in)  :: u(:,:), v(:,:), w(:), b(:)
     real(kind=8), intent(out) :: x(:)
     real(kind=8) :: tmp(size(x))
-    integer :: j
+    integer      :: j
     tmp = 0.0_dp
     do j = 1, size(x)
         if(w(j) /= 0.0_dp) tmp(j) = dot_product(u(:,j), b) / w(j)
@@ -499,10 +499,10 @@ end subroutine svbksb_dp
 
 subroutine svdcmp_sp(a, w, v)
     real(kind=4), intent(inout) :: a(:,:)
-    real(kind=4), intent(out) :: w(:), v(:,:)
-    integer :: m, n, minmn, info, lwork
+    real(kind=4), intent(out)   :: w(:), v(:,:)
+    integer                   :: m, n, minmn, info, lwork
     real(kind=4), allocatable :: acopy(:,:), u(:,:), vt(:,:), work(:)
-    real(kind=4) :: work_query(1)
+    real(kind=4)              :: work_query(1)
     m = size(a, 1)
     n = size(a, 2)
     minmn = min(m, n)
@@ -524,10 +524,10 @@ end subroutine svdcmp_sp
 
 subroutine svdcmp_dp(a, w, v)
     real(kind=8), intent(inout) :: a(:,:)
-    real(kind=8), intent(out) :: w(:), v(:,:)
-    integer :: m, n, minmn, info, lwork
+    real(kind=8), intent(out)   :: w(:), v(:,:)
+    integer                   :: m, n, minmn, info, lwork
     real(kind=8), allocatable :: acopy(:,:), u(:,:), vt(:,:), work(:)
-    real(kind=8) :: work_query(1)
+    real(kind=8)              :: work_query(1)
     m = size(a, 1)
     n = size(a, 2)
     minmn = min(m, n)
@@ -548,17 +548,17 @@ subroutine svdcmp_dp(a, w, v)
 end subroutine svdcmp_dp
 
 subroutine svdfit_sp(x, y, sig, a, v, w, chisq, funcs)
-    real(kind=4), intent(in) :: x(:), y(:), sig(:)
+    real(kind=4), intent(in)  :: x(:), y(:), sig(:)
     real(kind=4), intent(out) :: a(:), v(:,:), w(:), chisq
     interface
         function funcs(x, n)
             real(kind=4), intent(in) :: x
-            integer, intent(in) :: n
+            integer,      intent(in) :: n
             real(kind=4) :: funcs(n)
         end function funcs
     end interface
-    integer :: i, ma, n
-    real(kind=4) :: b(size(x)), sigi(size(x)), u(size(x),size(a)), usav(size(x),size(a))
+    integer                 :: i, ma, n
+    real(kind=4)            :: b(size(x)), sigi(size(x)), u(size(x),size(a)), usav(size(x),size(a))
     real(kind=4), parameter :: tol = 1.0e-5_sp
     n = assert_eq(size(x), size(y), size(sig), 'svdfit_sp: n')
     ma = assert_eq(size(a), size(v,1), size(v,2), size(w), 'svdfit_sp: ma')
@@ -576,17 +576,17 @@ subroutine svdfit_sp(x, y, sig, a, v, w, chisq, funcs)
 end subroutine svdfit_sp
 
 subroutine svdfit_dp(x, y, sig, a, v, w, chisq, funcs)
-    real(kind=8), intent(in) :: x(:), y(:), sig(:)
+    real(kind=8), intent(in)  :: x(:), y(:), sig(:)
     real(kind=8), intent(out) :: a(:), v(:,:), w(:), chisq
     interface
         function funcs(x, n)
             real(kind=8), intent(in) :: x
-            integer, intent(in) :: n
+            integer,      intent(in) :: n
             real(kind=8) :: funcs(n)
         end function funcs
     end interface
-    integer :: i, ma, n
-    real(kind=8) :: b(size(x)), sigi(size(x)), u(size(x),size(a)), usav(size(x),size(a))
+    integer                 :: i, ma, n
+    real(kind=8)            :: b(size(x)), sigi(size(x)), u(size(x),size(a)), usav(size(x),size(a))
     real(kind=8), parameter :: tol = 1.0e-14_dp
     n = assert_eq(size(x), size(y), size(sig), 'svdfit_dp: n')
     ma = assert_eq(size(a), size(v,1), size(v,2), size(w), 'svdfit_dp: ma')
@@ -604,18 +604,18 @@ subroutine svdfit_dp(x, y, sig, a, v, w, chisq, funcs)
 end subroutine svdfit_dp
 
 subroutine svd_multifit_sp(x, y, sig, a, v, w, chisq, funcs)
-    real(kind=4), intent(in) :: x(:,:), y(:), sig(:)
+    real(kind=4), intent(in)  :: x(:,:), y(:), sig(:)
     real(kind=4), intent(out) :: a(:), v(:,:), w(:), chisq
     interface
         function funcs(x, n)
             real(kind=4), intent(in) :: x(:)
-            integer, intent(in) :: n
+            integer,      intent(in) :: n
             real(kind=4) :: funcs(n)
         end function funcs
     end interface
-    integer :: i, ma, n
-    real(kind=4) :: b(size(sig)), sigi(size(sig)), u(size(x,dim=2),size(a))
-    real(kind=4) :: usav(size(x,dim=2),size(a))
+    integer                 :: i, ma, n
+    real(kind=4)            :: b(size(sig)), sigi(size(sig)), u(size(x,dim=2),size(a))
+    real(kind=4)            :: usav(size(x,dim=2),size(a))
     real(kind=4), parameter :: tol = 1.0e-5_sp
     n = assert_eq(size(x, dim=2), size(y), size(sig), 'svd_multifit_sp: n')
     ma = assert_eq(size(a), size(v,1), size(v,2), size(w), 'svd_multifit_sp: ma')
@@ -633,18 +633,18 @@ subroutine svd_multifit_sp(x, y, sig, a, v, w, chisq, funcs)
 end subroutine svd_multifit_sp
 
 subroutine svd_multifit_dp(x, y, sig, a, v, w, chisq, funcs)
-    real(kind=8), intent(in) :: x(:,:), y(:), sig(:)
+    real(kind=8), intent(in)  :: x(:,:), y(:), sig(:)
     real(kind=8), intent(out) :: a(:), v(:,:), w(:), chisq
     interface
         function funcs(x, n)
             real(kind=8), intent(in) :: x(:)
-            integer, intent(in) :: n
+            integer,      intent(in) :: n
             real(kind=8) :: funcs(n)
         end function funcs
     end interface
-    integer :: i, ma, n
-    real(kind=8) :: b(size(sig)), sigi(size(sig)), u(size(x,dim=2),size(a))
-    real(kind=8) :: usav(size(x,dim=2),size(a))
+    integer                 :: i, ma, n
+    real(kind=8)            :: b(size(sig)), sigi(size(sig)), u(size(x,dim=2),size(a))
+    real(kind=8)            :: usav(size(x,dim=2),size(a))
     real(kind=8), parameter :: tol = 1.0e-14_dp
     n = assert_eq(size(x, dim=2), size(y), size(sig), 'svd_multifit_dp: n')
     ma = assert_eq(size(a), size(v,1), size(v,2), size(w), 'svd_multifit_dp: ma')
@@ -664,7 +664,7 @@ end subroutine svd_multifit_dp
 pure function trace(mat) result(tr)
     real(kind=4), intent(in) :: mat(:,:)
     real(kind=4) :: tr
-    integer :: i
+    integer      :: i
     tr = 0.0_sp
     do i = 1, min(size(mat,1), size(mat,2))
         tr = tr + mat(i,i)
@@ -736,7 +736,7 @@ elemental function ang2vox(ang, smpd) result(vox)
 end function ang2vox
 
 elemental function vox2ang(vox, smpd) result(ang)
-    integer, intent(in) :: vox
+    integer,      intent(in) :: vox
     real(kind=4), intent(in) :: smpd
     real(kind=4) :: ang
     ang = (vox - 1.0_sp) * smpd
@@ -793,15 +793,15 @@ function pythag_dp(a, b)
 end function pythag_dp
 
 subroutine eigh_sp(n, mat, neigs, eigvals, eigvecs, smallest)
-    integer, intent(in) :: n, neigs
-    real(kind=4), intent(inout) :: mat(n,n)
-    real(kind=4), intent(out) :: eigvals(neigs), eigvecs(n,neigs)
-    logical, optional, intent(in) :: smallest
-    integer, allocatable :: iwork(:), isuppz(:)
+    integer,      intent(in)           :: n, neigs
+    real(kind=4), intent(inout)        :: mat(n,n)
+    real(kind=4), intent(out)          :: eigvals(neigs), eigvecs(n,neigs)
+    logical,      optional, intent(in) :: smallest
+    integer,      allocatable :: iwork(:), isuppz(:)
     real(kind=4), allocatable :: work(:)
-    integer :: info, il, iu, m, lwork, liwork
-    real(kind=4) :: vl, vu
-    logical :: l_smallest
+    integer                   :: info, il, iu, m, lwork, liwork
+    real(kind=4)              :: vl, vu
+    logical                   :: l_smallest
     l_smallest = .false.
     vl = 0.0_sp
     vu = 0.0_sp
@@ -822,13 +822,13 @@ subroutine eigh_sp(n, mat, neigs, eigvals, eigvecs, smallest)
 end subroutine eigh_sp
 
 subroutine qr_solve(m, n, a, b, x)
-    integer(kind=4), intent(in) :: m, n
-    real(kind=8), intent(in) :: a(m,n), b(m)
-    real(kind=8), intent(out) :: x(n)
+    integer(kind=4), intent(in)  :: m, n
+    real(kind=8),    intent(in)  :: a(m,n), b(m)
+    real(kind=8),    intent(out) :: x(n)
     integer(kind=4), allocatable :: jpvt(:)
-    integer(kind=4) :: info, lda, ldb, lwork, nrhs, rank
-    real(kind=8), allocatable :: a_qr(:,:), rhs(:,:), work(:)
-    real(kind=8) :: rcond, work_query(1)
+    integer(kind=4)              :: info, lda, ldb, lwork, nrhs, rank
+    real(kind=8),    allocatable :: a_qr(:,:), rhs(:,:), work(:)
+    real(kind=8)                 :: rcond, work_query(1)
     if(m <= 0 .or. n <= 0) call lapack_stop('QR_SOLVE', 'DGELSY', -1)
     lda = max(1, m)
     ldb = max(1, m, n)
@@ -901,11 +901,11 @@ end subroutine solve_real_spd_complex
 !> Cholesky factor A = L L' of a real symmetric positive-definite matrix, from its lower triangle.
 !! ok=.false. (L partial) when a pivot is at or below tol (default 0).
 pure subroutine cholesky( A, L, n, ok, tol )
-    integer,            intent(in)  :: n
-    real(dp),           intent(in)  :: A(n,n)
-    real(dp),           intent(out) :: L(n,n)
-    logical,            intent(out) :: ok
-    real(dp), optional, intent(in)  :: tol
+    integer,            intent(in)           :: n
+    real(dp),           intent(in)           :: A(n,n)
+    real(dp),           intent(out)          :: L(n,n)
+    logical,            intent(out)          :: ok
+    real(dp),           optional, intent(in) :: tol
     real(dp) :: s, piv_tol
     integer  :: i, j, k
     piv_tol = 0.d0
@@ -1051,7 +1051,7 @@ end subroutine spd_logdet
 
 subroutine lapack_stop(caller, routine, info)
     character(len=*), intent(in) :: caller, routine
-    integer(kind=4), intent(in) :: info
+    integer(kind=4),  intent(in) :: info
     write(*,'(a)') ' '
     write(*,'(a)') trim(caller) // ' - Failure!'
     write(*,'(a)') '  LAPACK routine ' // trim(routine) // ' returned a nonzero INFO value.'

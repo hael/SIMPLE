@@ -16,38 +16,38 @@ integer, parameter :: TREE_UNASSESSED = 0, TREE_SPLIT = 1, TREE_MERGE = 2, TREE_
 ! One named fit, e.g. initial/focused/paired. The embedding owns latents, eigenvalues and precisions.
 ! Its particle indices are rows of this fit's project; that project's pind maps to the source.
 type :: flex_tree_model
-    type(string) :: name, project_file, embedding_file
-    type(string) :: mean_file, mask_file, noise_file
-    type(string) :: mean_scale_file ! optional scale applied to mean_file for this fit
+    type(string)              :: name, project_file, embedding_file
+    type(string)              :: mean_file, mask_file, noise_file
+    type(string)              :: mean_scale_file         ! optional scale applied to mean_file for this fit
     type(string), allocatable :: basis_files(:)
-    type(string) :: weights_file ! state-weight manifest, distinct from latent coefficients
-    type(string) :: targets_file ! state coordinates, bandwidths and effective populations
-    type(string) :: provenance_file
+    type(string)              :: weights_file            ! state-weight manifest, distinct from latent coefficients
+    type(string)              :: targets_file            ! state coordinates, bandwidths and effective populations
+    type(string)              :: provenance_file
     type(string), allocatable :: diagnostics(:)
-    integer :: ncomp = 0, box = 0
-    real    :: smpd = 0. ! working lattice; zero box/smpd means not recorded
-    logical :: unit_noise = .false. ! true records the unit-spectrum fallback
-    integer(int64) :: layout_digest = 0_int64 ! zero means not recorded
+    integer                   :: ncomp         = 0, box = 0
+    real                      :: smpd          = 0.      ! working lattice; zero box/smpd means not recorded
+    logical                   :: unit_noise    = .false. ! true records the unit-spectrum fallback
+    integer(int64)            :: layout_digest = 0_int64 ! zero means not recorded
 end type flex_tree_model
 
 ! Reports carry split/site evidence; small state-tree merge statistics stay directly accessible.
 type :: flex_tree_decision
-    integer :: outcome = TREE_UNASSESSED
-    type(string) :: reason
+    integer                   :: outcome         = TREE_UNASSESSED
+    type(string)              :: reason
     type(string), allocatable :: reports(:)
-    logical :: has_merge_stats = .false.
-    real(dp) :: merge_d2 = 0._dp, merge_z = 0._dp
-    real(dp), allocatable :: child_populations(:) ! get_children() order
+    logical                   :: has_merge_stats = .false.
+    real(dp)                  :: merge_d2        = 0._dp, merge_z = 0._dp
+    real(dp),     allocatable :: child_populations(:) ! get_children() order
 end type flex_tree_decision
 
 ! Copyable payload: absent fields describe results that have not been produced.
 ! Explicit maps describe this node's result (including an aggregate); otherwise use the project registry.
 type :: flex_tree_node
-    type(string) :: name, project_file
-    integer, allocatable :: project_states(:) ! absent/empty selects the whole node project
-    type(string) :: map_file, even_file, odd_file, mask_file, fsc_file
-    type(string), allocatable :: map_metadata_files(:) ! support/provenance sidecars
-    type(string), allocatable :: site_files(:)
+    type(string)                          :: name, project_file
+    integer,                  allocatable :: project_states(:)     ! absent/empty selects the whole node project
+    type(string)                          :: map_file, even_file, odd_file, mask_file, fsc_file
+    type(string),             allocatable :: map_metadata_files(:) ! support/provenance sidecars
+    type(string),             allocatable :: site_files(:)
     type(flex_tree_model),    allocatable :: models(:)
     type(flex_tree_decision), allocatable :: decision
 end type flex_tree_node
@@ -57,16 +57,16 @@ end type flex_tree_node
 type, extends(indexed_tree) :: flex_tree
     private
     type(flex_tree_node), allocatable :: nodes(:)
-    type(string) :: source_project
+    type(string)                      :: source_project
   contains
-    procedure :: new
-    procedure :: kill
-    procedure :: add_root
-    procedure :: add_child
-    procedure :: set_source_project
-    procedure :: get_source_project
-    procedure :: set_node
-    procedure :: get_node
+    procedure          :: new
+    procedure          :: kill
+    procedure          :: add_root
+    procedure          :: add_child
+    procedure          :: set_source_project
+    procedure          :: get_source_project
+    procedure          :: set_node
+    procedure          :: get_node
     procedure, private :: check_payload_node
     procedure, private :: validate_node
     procedure, private :: reserve_nodes
@@ -76,7 +76,7 @@ contains
 
     ! Keep the base constructor's interface; every payload and the source reference start empty.
     subroutine new( self, nroots )
-        class(flex_tree), intent(inout) :: self
+        class(flex_tree),   intent(inout) :: self
         integer,            intent(in)    :: nroots
         if( nroots < 0 ) THROW_HARD('flex_tree: negative root count; new')
         call self%kill
@@ -100,7 +100,7 @@ contains
 
     ! A changed child list invalidates the parent's earlier split/merge/terminal decision.
     integer function add_child( self, iparent ) result( inode )
-        class(flex_tree), intent(inout) :: self
+        class(flex_tree),   intent(inout) :: self
         integer,            intent(in)    :: iparent
         inode = self%indexed_tree%add_child(iparent)
         call self%reserve_nodes(inode)
@@ -109,7 +109,7 @@ contains
 
     ! Changing the source would reinterpret every stored pind; new/kill starts a new namespace.
     subroutine set_source_project( self, project_file )
-        class(flex_tree), intent(inout) :: self
+        class(flex_tree),   intent(inout) :: self
         class(string),      intent(in)    :: project_file
         if( project_file%is_blank() ) THROW_HARD('flex_tree: empty source project')
         if( .not. self%source_project%is_blank() )then
@@ -126,9 +126,9 @@ contains
 
     ! Replace the complete payload after validation. Intrinsic assignment copies all nested allocations.
     subroutine set_node( self, inode, data )
-        class(flex_tree),     intent(inout) :: self
+        class(flex_tree),       intent(inout) :: self
         integer,                intent(in)    :: inode
-        type(flex_tree_node), intent(in)    :: data
+        type(flex_tree_node),   intent(in)    :: data
         call self%check_payload_node(inode)
         call self%validate_node(inode, data)
         self%nodes(inode) = data
@@ -136,7 +136,7 @@ contains
 
     ! Return a copy: editing it changes the tree only after a successful set_node.
     function get_node( self, inode ) result( data )
-        class(flex_tree), intent(in) :: self
+        class(flex_tree),   intent(in) :: self
         integer,            intent(in) :: inode
         type(flex_tree_node) :: data
         call self%check_payload_node(inode)
@@ -145,11 +145,11 @@ contains
 
     subroutine validate_node( self, inode, data )
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-        class(flex_tree),     intent(in) :: self
+        class(flex_tree),       intent(in) :: self
         integer,                intent(in) :: inode
-        type(flex_tree_node), intent(in) :: data
+        type(flex_tree_node),   intent(in) :: data
         integer, allocatable :: children(:)
-        integer :: i, j
+        integer              :: i, j
         if( allocated(data%project_states) )then
             if( size(data%project_states) > 0 )then
                 if( data%project_file%is_blank() ) THROW_HARD('flex_tree: state selection has no project')
@@ -230,16 +230,16 @@ contains
     end subroutine check_files
 
     subroutine check_payload_node( self, inode )
-        class(flex_tree), intent(in) :: self
+        class(flex_tree),   intent(in) :: self
         integer,            intent(in) :: inode
         if( inode < 1 .or. inode > self%get_nnodes() ) THROW_HARD('flex_tree: node index out of range')
     end subroutine check_payload_node
 
     subroutine reserve_nodes( self, needed )
-        class(flex_tree), intent(inout) :: self
+        class(flex_tree),   intent(inout) :: self
         integer,            intent(in)    :: needed
         type(flex_tree_node), allocatable :: tmp(:)
-        integer :: capacity, newcap
+        integer                           :: capacity, newcap
         capacity = 0
         if( allocated(self%nodes) ) capacity = size(self%nodes)
         if( needed <= capacity ) return

@@ -20,28 +20,28 @@ private
 #include "simple_local_flags.inc"
 
 ! the run's maps, built once before the search's parallel region (setup_shiftmap_srch)
-real(dp) :: prior_w_run = 0.d0
+real(dp) :: prior_w_run          = 0.d0
 real     :: step_run(NSHIFTMAPS) = 0.
-integer  :: kscreen_run = 0
+integer  :: kscreen_run          = 0
 
 type :: shiftmap_srch
     private
-    class(parameters), pointer :: p_ptr => null()
-    class(builder),    pointer :: b_ptr => null()
-    type(pftc_shsrch_grad) :: gso_win              !< the refinement within the window
-    type(pftc_shsrch_grad) :: gso_disk             !< the refinement within the disk
-    real(dp) :: temp_i     = 0.d0                  !< the tempered temperature of the full band (the pool's size)
-    real(dp) :: temp_s     = 0.d0                  !< the tempered temperature of the coarse band (the maps)
-    real(dp) :: prior_w    = 0.d0                  !< the prior's weight: the disk at a particle's first centring
-    integer  :: iptcl      = 0
-    integer  :: imap       = SHIFTMAP_WINDOW
-    logical  :: l_disk     = .false.
-    integer, allocatable :: res_ref(:)             !< the refined candidates of the particle
-    integer, allocatable :: res_irot(:)
-    real,    allocatable :: res_corr(:), res_sh(:,:), res_sdev(:)
-    logical, allocatable :: res_valid(:)           !< the refinement or its cell beat the candidate's stored-shift score
-    integer  :: nres       = 0
-    logical  :: exists     = .false.
+    class(parameters), pointer     :: p_ptr      => null()
+    class(builder),    pointer     :: b_ptr      => null()
+    type(pftc_shsrch_grad)         :: gso_win           !< the refinement within the window
+    type(pftc_shsrch_grad)         :: gso_disk          !< the refinement within the disk
+    real(dp)                       :: temp_i     = 0.d0 !< the tempered temperature of the full band (the pool's size)
+    real(dp)                       :: temp_s     = 0.d0 !< the tempered temperature of the coarse band (the maps)
+    real(dp)                       :: prior_w    = 0.d0 !< the prior's weight: the disk at a particle's first centring
+    integer                        :: iptcl      = 0
+    integer                        :: imap       = SHIFTMAP_WINDOW
+    logical                        :: l_disk     = .false.
+    integer,           allocatable :: res_ref(:)        !< the refined candidates of the particle
+    integer,           allocatable :: res_irot(:)
+    real,              allocatable :: res_corr(:), res_sh(:,:), res_sdev(:)
+    logical,           allocatable :: res_valid(:)      !< the refinement or its cell beat the candidate's stored-shift score
+    integer                        :: nres       = 0
+    logical                        :: exists     = .false.
 contains
     procedure :: new
     procedure :: prep
@@ -70,9 +70,9 @@ contains
     end subroutine setup_shiftmap_srch
 
     subroutine new( self, params, build )
-        class(shiftmap_srch),      intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
-        class(builder),    target, intent(in)    :: build
+        class(shiftmap_srch),      intent(inout)      :: self
+        class(parameters),         target, intent(in) :: params
+        class(builder),            target, intent(in) :: build
         real :: lims(2,2), lims_init(2,2), radius_disk
         call self%kill
         self%p_ptr => params
@@ -129,9 +129,9 @@ contains
         real,                 intent(in)    :: corrs0(:)
         real,    allocatable :: dists(:), scr_loss(:), scr_xy(:,:), scr_sdev(:)
         integer, allocatable :: order(:), scr_irot(:), best(:)
-        real     :: cxy(3), loss, width_best(max(1,nbest))
-        integer  :: n, npool, nb, k, j, ref, irot, irho, ialpha
-        logical  :: l_cont_refined
+        real                 :: cxy(3), loss, width_best(max(1,nbest))
+        integer              :: n, npool, nb, k, j, ref, irot, irho, ialpha
+        logical              :: l_cont_refined
         self%nres = 0
         n = size(refs)
         if( n < 1 .or. nbest < 1 ) return

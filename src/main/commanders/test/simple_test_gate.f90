@@ -26,14 +26,14 @@ type :: test_gate
     logical :: l_open  = .false.
     integer :: nfailed = 0
   contains
-    procedure :: new
-    procedure :: check
-    procedure :: metric
-    procedure :: report
-    procedure :: success
-    procedure :: passed
+    procedure          :: new
+    procedure          :: check
+    procedure          :: metric
+    procedure          :: report
+    procedure          :: success
+    procedure          :: passed
     procedure, private :: write_row
-    procedure :: kill
+    procedure          :: kill
 end type test_gate
 
 contains
@@ -69,13 +69,13 @@ contains
     !> a metric and the floor it is held to; ok is the caller's verdict. upper: the floor is a
     !! ceiling (smaller is better)
     subroutine metric( self, name, val, floor, ok, upper )
-        class(test_gate),  intent(inout) :: self
-        character(len=*),  intent(in)    :: name
-        real,              intent(in)    :: val, floor
-        logical,           intent(in)    :: ok
-        logical, optional, intent(in)    :: upper
+        class(test_gate),  intent(inout)        :: self
+        character(len=*),  intent(in)           :: name
+        real,              intent(in)           :: val, floor
+        logical,           intent(in)           :: ok
+        logical,           optional, intent(in) :: upper
         character(len=3) :: sense
-        logical :: l_ok
+        logical          :: l_ok
         l_ok  = ok .and. ieee_is_finite(val)
         sense = 'min'
         if( present(upper) )then

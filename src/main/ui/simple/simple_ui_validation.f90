@@ -4,9 +4,9 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('validate', 'Validation', 150)
-type(ui_program), target :: check_refpick
-type(ui_program), target :: mini_stream
-type(ui_program), target :: model_validate
+type(ui_program),          target    :: check_refpick
+type(ui_program),          target    :: mini_stream
+type(ui_program),          target    :: model_validate
 
 contains
 

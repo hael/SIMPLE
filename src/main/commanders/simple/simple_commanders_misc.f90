@@ -44,13 +44,13 @@ contains
         class(commander_print_fsc), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         real,  allocatable :: res(:), fsc(:)
-        type(parameters) :: params
-        type(image)      :: img
-        type(class_frcs) :: frcs
-        type(string)     :: tmpl_fname
-        integer          :: k,n
-        real             :: res0143, res05
-        logical :: l_fsc, l_frcs
+        type(parameters)   :: params
+        type(image)        :: img
+        type(class_frcs)   :: frcs
+        type(string)       :: tmpl_fname
+        integer            :: k,n
+        real               :: res0143, res05
+        logical            :: l_fsc, l_frcs
         call params%new(cline)
         l_fsc  = cline%defined('fsc')
         l_frcs = cline%defined('frcs')
@@ -170,7 +170,7 @@ contains
     end subroutine exec_pearsn
 
     subroutine exec_mkdir( self, cline )
-        class(commander_mkdir), intent(inout) :: self
+        class(commander_mkdir),  intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters) :: params
         call cline%set('mkdir', 'yes')
@@ -180,9 +180,9 @@ contains
     ! utility routines
 
     subroutine read_nrs_dat( filename, arr, ndat )
-        class(string),     intent(in)  :: filename
-        real, allocatable, intent(out) :: arr(:)
-        integer,           intent(out) :: ndat
+        class(string),     intent(in)               :: filename
+        real,              allocatable, intent(out) :: arr(:)
+        integer,           intent(out)              :: ndat
         integer            :: ndatlines, nrecs, i, j, cnt
         real, allocatable  :: line(:)
         type(nrtxtfile)    :: nrsfile

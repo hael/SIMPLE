@@ -24,12 +24,12 @@ private
 public :: flex_pca_plane_cache
 public :: plane_cache_contract_header, plane_cache_master_matches, plane_cache_worker_matches
 
-integer(8), parameter :: PLANE_CACHE_MAGIC   = 7134151962_8
-integer(8), parameter :: PLANE_CACHE_VERSION = 3_8   ! 3: FNV-1a project-path hash (string%to_fnv1a_hash64)
-integer,    parameter :: NHEAD               = 11
-integer,    parameter :: IH_NROWS = 5, IH_SMPD = 8, IH_NSEL = 9, IH_HIGHROW = 11
-character(len=*), parameter :: CACHE_DIR_ENV    = 'SIMPLE_PTCL_CACHE_DIR'
-integer(8),       parameter :: FREE_SPACE_DENOM = 4_8
+integer(8),       parameter :: PLANE_CACHE_MAGIC   = 7134151962_8
+integer(8),       parameter :: PLANE_CACHE_VERSION = 3_8 ! 3: FNV-1a project-path hash (string%to_fnv1a_hash64)
+integer,          parameter :: NHEAD               = 11
+integer,          parameter :: IH_NROWS            = 5, IH_SMPD = 8, IH_NSEL = 9, IH_HIGHROW = 11
+character(len=*), parameter :: CACHE_DIR_ENV       = 'SIMPLE_PTCL_CACHE_DIR'
+integer(8),       parameter :: FREE_SPACE_DENOM    = 4_8
 ! rolling-hash constants of the run token
 integer(8),       parameter :: HASH_M1 = 2147483647_8, HASH_A1 = 16807_8  ! 2^31-1
 integer(8),       parameter :: HASH_M2 = 2147483629_8, HASH_A2 = 48271_8  ! largest prime < 2^31-1
@@ -37,22 +37,22 @@ integer(8),       parameter :: HASH_M2 = 2147483629_8, HASH_A2 = 48271_8  ! larg
 type :: flex_pca_plane_cache
     private
     complex, allocatable :: blk(:,:,:,:)  !< (nph, npd, 1, MAXIMGBATCHSZ)
-    integer      :: funit    = 0
-    integer      :: nph      = 0
-    integer      :: npd      = 0
-    integer      :: reclen   = 0
-    logical      :: l_probed = .false.
-    logical      :: l_avail  = .false.
-    type(string) :: fname
+    integer              :: funit    = 0
+    integer              :: nph      = 0
+    integer              :: npd      = 0
+    integer              :: reclen   = 0
+    logical              :: l_probed = .false.
+    logical              :: l_avail  = .false.
+    type(string)         :: fname
   contains
-    procedure, public :: new      => cache_new
-    procedure, public :: kill     => cache_kill
-    procedure, public :: delete   => cache_delete
-    procedure, public :: available => cache_available
-    procedure, public :: ensure    => plane_cache_ensure
-    procedure, public :: adopt     => plane_cache_adopt
+    procedure, public :: new        => cache_new
+    procedure, public :: kill       => cache_kill
+    procedure, public :: delete     => cache_delete
+    procedure, public :: available  => cache_available
+    procedure, public :: ensure     => plane_cache_ensure
+    procedure, public :: adopt      => plane_cache_adopt
     procedure, public :: read_batch => plane_cache_read_batch
-    procedure, public :: fill      => plane_cache_fill
+    procedure, public :: fill       => plane_cache_fill
 end type flex_pca_plane_cache
 
 contains
@@ -102,8 +102,8 @@ contains
     !! (cache_dir, else $SIMPLE_PTCL_CACHE_DIR, else the execution directory). tmp=.true. gives the name it
     !! is built under, which adds the run token, so concurrent runs on one project never write one file.
     function plane_cache_fname( params, tmp ) result( fname )
-        class(parameters), intent(in) :: params
-        logical, optional, intent(in) :: tmp
+        class(parameters), intent(in)           :: params
+        logical,           optional, intent(in) :: tmp
         type(string) :: fname, dir, project_path, hex, basename_here, token
         project_path  = simple_abspath(params%projfile)
         hex           = project_path%to_fnv1a_hash64()
@@ -162,7 +162,7 @@ contains
         real,             intent(in) :: smpd
         integer,          intent(in) :: pinds(:)
         integer(8), allocatable :: key(:)
-        integer :: highrow
+        integer                 :: highrow
         highrow = 0
         if( size(pinds) > 0 ) highrow = maxval(pinds)
         allocate(key(NHEAD))
@@ -197,7 +197,7 @@ contains
         type(string),      intent(out) :: path
         integer(8),        intent(out) :: mtime
         integer, allocatable :: statbuf(:)
-        integer :: stat_status
+        integer              :: stat_status
         path = simple_abspath(params%projfile)
         stat_status = 0
         call simple_file_stat(path, stat_status, statbuf)
@@ -211,9 +211,9 @@ contains
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: pinds(:), nptcls
-        integer(8) :: key(NHEAD), mtime
+        integer(8)              :: key(NHEAD), mtime
         integer(8), allocatable :: encoded(:)
-        type(string) :: project_path
+        type(string)            :: project_path
         call project_provenance(params, project_path, mtime)
         encoded = plane_cache_contract_header(project_path%to_char(), mtime, &
             &build%spproj_field%get_noris(), params%box, params%box_crop, params%smpd, pinds(1:nptcls))
@@ -231,11 +231,11 @@ contains
 
     !> Probe once with the master selection or a worker partition; later calls query that result.
     function plane_cache_probe( self, params, build, pinds, nptcls, worker ) result( in_use )
-        class(flex_pca_plane_cache), intent(inout) :: self
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer, optional, intent(in)    :: pinds(:), nptcls
-        logical, optional, intent(in)    :: worker
+        class(flex_pca_plane_cache), intent(inout)        :: self
+        class(parameters),           intent(in)           :: params
+        class(builder),              intent(inout)        :: build
+        integer,                     optional, intent(in) :: pinds(:), nptcls
+        logical,                     optional, intent(in) :: worker
         integer(8) :: stored(NHEAD), expected(NHEAD), fsize
         integer    :: io, u
         logical    :: in_use, l_worker
@@ -282,9 +282,9 @@ contains
     !> A worker may use the master cache only when its whole partition is covered.
     subroutine plane_cache_adopt( self, params, build, pinds, nptcls )
         class(flex_pca_plane_cache), intent(inout) :: self
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: pinds(:), nptcls
+        class(parameters),           intent(in)    :: params
+        class(builder),              intent(inout) :: build
+        integer,                     intent(in)    :: pinds(:), nptcls
         logical :: adopted
         adopted = plane_cache_probe(self, params, build, pinds, nptcls, worker=.true.)
         if( adopted )then
@@ -298,7 +298,7 @@ contains
 
     subroutine set_geometry( self, params )
         class(flex_pca_plane_cache), intent(inout) :: self
-        class(parameters), intent(in) :: params
+        class(parameters),           intent(in)    :: params
         complex :: probe(1)
         integer :: one_len
         self%npd = params%box_croppd
@@ -312,7 +312,7 @@ contains
 
     subroutine open_for_read( self, params )
         class(flex_pca_plane_cache), intent(inout) :: self
-        class(parameters), intent(in) :: params
+        class(parameters),           intent(in)    :: params
         integer :: io
         if( self%funit /= 0 ) return
         if( self%npd == 0 ) call set_geometry(self, params)
@@ -327,18 +327,18 @@ contains
     !! the run reads its particles natively, as without cache=yes.
     subroutine plane_cache_ensure( self, params, build, pinds, nptcls )
         class(flex_pca_plane_cache), intent(inout) :: self
-        class(parameters), intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: pinds(:), nptcls
+        class(parameters),           intent(inout) :: params
+        class(builder),              intent(inout) :: build
+        integer,                     intent(in)    :: pinds(:), nptcls
         type(fplane_type), allocatable :: fpls(:)
-        type(image)  :: probe_img, tmp_img
-        type(string) :: dirname, tmpname
-        complex, allocatable :: blk1(:,:,:)
-        integer(8)  :: key(NHEAD), want_bytes
-        type(ptcl_read_session) :: reads
-        integer(timer_int_kind) :: t0
-        integer :: ibatch, batchlims(2), batchsz, i, ithr, h, k, kp, io, u
-        real    :: maxdiff
+        type(image)                    :: probe_img, tmp_img
+        type(string)                   :: dirname, tmpname
+        complex,           allocatable :: blk1(:,:,:)
+        integer(8)                     :: key(NHEAD), want_bytes
+        type(ptcl_read_session)        :: reads
+        integer(timer_int_kind)        :: t0
+        integer                        :: ibatch, batchlims(2), batchsz, i, ithr, h, k, kp, io, u
+        real                           :: maxdiff
         if( .not. plane_cache_applicable(params) ) return
         if( nptcls < 1 .or. nptcls > size(pinds) ) return
         if( plane_cache_probe(self, params, build, pinds, nptcls) )then
@@ -450,8 +450,8 @@ contains
     !> Read the blocks of batchlims of the pinds list into the batch buffer (slot i = batch position).
     subroutine plane_cache_read_batch( self, params, n, pinds, batchlims )
         class(flex_pca_plane_cache), intent(inout) :: self
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: n, pinds(n), batchlims(2)
+        class(parameters),           intent(in)    :: params
+        integer,                     intent(in)    :: n, pinds(n), batchlims(2)
         integer :: i, io
         call open_for_read(self, params)
         do i = batchlims(1), batchlims(2)
@@ -463,9 +463,9 @@ contains
 
     !> Load batch slot i into a box_croppd image as its Fourier transform.
     subroutine plane_cache_fill( self, i, img )
-        class(flex_pca_plane_cache), intent(in) :: self
-        integer,      intent(in)    :: i
-        class(image), intent(inout) :: img
+        class(flex_pca_plane_cache), intent(in)    :: self
+        integer,                     intent(in)    :: i
+        class(image),                intent(inout) :: img
         call img%set_cmat(self%blk(:,:,:,i))
         call img%set_ft(.true.)
     end subroutine plane_cache_fill

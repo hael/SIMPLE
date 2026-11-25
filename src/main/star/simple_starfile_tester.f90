@@ -84,7 +84,7 @@ contains
         type(string),     intent(in)           :: path
         character(len=*), intent(in), optional :: tablename
         type(starfile_table_type) :: tbl
-        integer :: obj
+        integer                   :: obj
         count_objects = 0
         call starfile_table__new(tbl)
         if( present(tablename) ) then
@@ -112,8 +112,8 @@ contains
         integer,          intent(in)           :: emdl_label
         character(len=*), intent(in), optional :: tablename
         type(starfile_table_type) :: tbl
-        integer :: iv
-        logical :: ok
+        integer                   :: iv
+        logical                   :: ok
         readback_int = -999999
         call starfile_table__new(tbl)
         if( present(tablename) ) then
@@ -136,8 +136,8 @@ contains
         integer,          intent(in)           :: emdl_label
         character(len=*), intent(in), optional :: tablename
         type(starfile_table_type) :: tbl
-        real(dp) :: dv
-        logical  :: ok
+        real(dp)                  :: dv
+        logical                   :: ok
         readback_double = -1.0_dp
         call starfile_table__new(tbl)
         if( present(tablename) ) then
@@ -171,16 +171,16 @@ contains
     !       four-row loop and a one-row list; names, comment, string, doubles
     !       (%12.6f, or %12.6e beyond 1e5) and absent labels all read back
     subroutine test_table_wrappers_roundtrip()
-        real(dp), parameter :: LATE(4)      = [0.12345678901234567890_dp, 456._dp, 789._dp, 101112345678._dp]
-        real(dp), parameter :: LATE_READ(4) = [0.123457_dp,               456._dp, 789._dp, 1.011123e11_dp]
+        real(dp),         parameter   :: LATE(4)      = [0.12345678901234567890_dp, 456._dp, 789._dp, 101112345678._dp]
+        real(dp),         parameter   :: LATE_READ(4) = [0.123457_dp,               456._dp, 789._dp, 1.011123e11_dp]
         type(starfile_table_type)     :: tbl
         type(string)                  :: path
         type(string),     allocatable :: names(:)
         character(len=:), allocatable :: str
-        real(dp)        :: dv
-        integer(C_long) :: obj, nobj
-        integer         :: irow
-        logical         :: ok
+        real(dp)                      :: dv
+        integer(C_long)               :: obj, nobj
+        integer                       :: irow
+        logical                       :: ok
         write(*,'(A)') 'test_table_wrappers_roundtrip'
         path = tmp('wrappers.star')
         call starfile_table__new(tbl)
@@ -620,12 +620,12 @@ contains
 
     ! 4.5 — micrograph name written when mics_oris present and size matches
     subroutine test_write_ptcl2D_table_with_mics()
-        type(starfile) :: sf
-        type(oris)     :: ptcl, stk, mics
-        type(string)   :: fname
+        type(starfile)                     :: sf
+        type(oris)                         :: ptcl, stk, mics
+        type(string)                       :: fname
         type(starfile_table_type)          :: tbl
         character(len=:), allocatable      :: sv
-        logical :: ok
+        logical                            :: ok
         write(*,'(A)') 'test_write_ptcl2D_table_with_mics'
         fname = tmp('ptcl2D_with_mics.star')
         call sf%init(fname)
@@ -698,9 +698,9 @@ contains
 
     ! 5.3 — verify exact row count for a larger dataset
     subroutine test_write_ptcl2D_parallel_count()
-        type(starfile) :: sf
-        type(oris)     :: ptcl, stk
-        type(string)   :: fname
+        type(starfile)     :: sf
+        type(oris)         :: ptcl, stk
+        type(string)       :: fname
         integer, parameter :: NPTCLS = 200
         write(*,'(A)') 'test_write_ptcl2D_parallel_count'
         fname = tmp('ptcl2D_parallel_count.star')
@@ -720,11 +720,11 @@ contains
 
     ! 5.4 — parallel output must match serial output row-for-row
     subroutine test_write_ptcl2D_parallel_vs_serial()
-        type(starfile) :: sf_ser, sf_par
-        type(oris)     :: ptcl, stk
-        type(string)   :: fname_ser, fname_par
+        type(starfile)     :: sf_ser, sf_par
+        type(oris)         :: ptcl, stk
+        type(string)       :: fname_ser, fname_par
         integer, parameter :: N = 50
-        integer :: nser, npar
+        integer            :: nser, npar
         write(*,'(A)') 'test_write_ptcl2D_parallel_vs_serial'
         fname_ser = tmp('ptcl2D_pvs_serial.star')
         fname_par = tmp('ptcl2D_pvs_parallel.star')
@@ -771,13 +771,13 @@ contains
     ! (two stacks at different pixel sizes), a particle without a shift with a zero origin
     subroutine test_write_ptcl2D_origins_angstrom()
         real,    parameter :: SMPDS(2) = [1.3, 0.9]
-        integer, parameter :: N = 40
-        type(starfile) :: sf_ser, sf_par
-        type(oris)     :: ptcl, stk
-        type(string)   :: fname_ser, fname_par
-        real(dp)       :: ox_ser(N), oy_ser(N), ox_par(N), oy_par(N)
-        real           :: xs(N), ys(N), err, smpd
-        integer        :: i, nser, npar
+        integer, parameter :: N        = 40
+        type(starfile)     :: sf_ser, sf_par
+        type(oris)         :: ptcl, stk
+        type(string)       :: fname_ser, fname_par
+        real(dp)           :: ox_ser(N), oy_ser(N), ox_par(N), oy_par(N)
+        real               :: xs(N), ys(N), err, smpd
+        integer            :: i, nser, npar
         write(*,'(A)') 'test_write_ptcl2D_origins_angstrom'
         fname_ser = tmp('ptcl2D_origins_serial.star')
         fname_par = tmp('ptcl2D_origins_parallel.star')
@@ -833,8 +833,8 @@ contains
         real(dp),     intent(out) :: ox(:), oy(:)
         integer,      intent(out) :: n
         type(starfile_table_type) :: tbl
-        real(dp) :: v
-        integer  :: obj
+        real(dp)                  :: v
+        integer                   :: obj
         ox = -1.e6_dp
         oy = -1.e6_dp
         n  = 0

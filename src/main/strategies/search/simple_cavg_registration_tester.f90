@@ -25,24 +25,24 @@ contains
 
     subroutine test_rotated_copies()
         !$ use omp_lib, only: omp_set_num_threads
-        integer, parameter :: NIMGS     = 5, BOX = 64
-        real,    parameter :: SMPD      = 1.5
-        real,    parameter :: CORR_TOL  = 0.95
-        real,    parameter :: SPATIAL_CORR_TOL = 0.90
-        real,    parameter :: ANG_TOL   = 3.6   ! one polar step: mskdiam 48 A at 1.5 A is a radius of 16 px, 100 rotations
-        real,    parameter :: SHIFT_TOL = 0.5   ! pixels
+        integer,           parameter   :: NIMGS            = 5, BOX = 64
+        real,              parameter   :: SMPD             = 1.5
+        real,              parameter   :: CORR_TOL         = 0.95
+        real,              parameter   :: SPATIAL_CORR_TOL = 0.90
+        real,              parameter   :: ANG_TOL          = 3.6 ! one polar step: mskdiam 48 A at 1.5 A is a radius of 16 px, 100 rotations
+        real,              parameter   :: SHIFT_TOL        = 0.5 ! pixels
         type(inpl_struct), allocatable :: alg_info1(:), alg_info1_serial(:), alg_info2(:,:), alg_info2_serial(:,:)
-        type(inpl_struct) :: one_info(1)
+        type(inpl_struct)              :: one_info(1)
         type(image),       allocatable :: imgs_ref(:), imgs_targ(:), imgs_ref_serial(:), imgs_targ_serial(:), aligned(:)
-        type(image) :: one_aligned(1)
-        type(parameters)   :: params
-        type(cmdline)      :: cline
-        real, allocatable  :: rmat(:,:,:)
-        real               :: rx, ry, ang, dang, shift_applied, shift_found, spatial_corr
-        integer            :: i, j, x, y, nthr_saved
-        logical, allocatable :: non_junk(:), non_junk_serial(:)
-        character(len=1)   :: ci
-        character(len=128) :: message
+        type(image)                    :: one_aligned(1)
+        type(parameters)               :: params
+        type(cmdline)                  :: cline
+        real,              allocatable :: rmat(:,:,:)
+        real                           :: rx, ry, ang, dang, shift_applied, shift_found, spatial_corr
+        integer                        :: i, j, x, y, nthr_saved
+        logical,           allocatable :: non_junk(:), non_junk_serial(:)
+        character(len=1)               :: ci
+        character(len=128)             :: message
         write(*,'(A)') 'test_rotated_copies'
         nthr_saved = nthr_glob
         call cline%set('smpd',    SMPD)

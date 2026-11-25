@@ -15,10 +15,10 @@ private
 public :: fplane_grid
 
 type :: fplane_grid
-    integer :: box_croppd = 0                     !< padded box of the plane grid
-    integer :: nyq        = 0                     !< its Nyquist shell, box_croppd/2
-    integer :: max_r2     = -1                    !< largest h*h+k*k the shell table covers
-    integer :: kfrom      = 0                     !< lowest shell of the attached spectra (lower shells take its value)
+    integer              :: box_croppd = 0        !< padded box of the plane grid
+    integer              :: nyq        = 0        !< its Nyquist shell, box_croppd/2
+    integer              :: max_r2     = -1       !< largest h*h+k*k the shell table covers
+    integer              :: kfrom      = 0        !< lowest shell of the attached spectra (lower shells take its value)
     integer, allocatable :: shell_lut(:)          !< nint(sqrt(r2)) for r2 = 0:max_r2
     real,    allocatable :: inv_sig2(:,:)         !< 1/sigma2 at the padded shells 0:nyq, per half (column 1 even, 2 odd)
     real,    allocatable :: rsqrt_sig2(:,:)       !< 1/sqrt(sigma2), same layout
@@ -57,9 +57,9 @@ contains
         integer,            intent(in)    :: kstart
         real,               intent(in)    :: sigma2(kstart:,:)
         integer,            intent(in)    :: kfrom
-        real, allocatable :: resampled(:)
+        real,             allocatable :: resampled(:)
         character(len=:), allocatable :: msg
-        integer :: sigma_nyq, ih
+        integer                       :: sigma_nyq, ih
         if( .not. allocated(self%shell_lut) ) THROW_HARD('the plane grid has not been built; set_sigma2')
         if( size(sigma2,2) /= 2 ) THROW_HARD('one spectrum per even/odd half; set_sigma2')
         sigma_nyq = (self%box_croppd / OSMPL_PAD_FAC) / 2

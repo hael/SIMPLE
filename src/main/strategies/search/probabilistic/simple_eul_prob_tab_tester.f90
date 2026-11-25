@@ -35,14 +35,14 @@ private
 public :: run_all_eul_prob_tab_tests
 
 ! eight in-plane rotations
-integer, parameter :: NROTS = 8
+integer, parameter :: NROTS   = 8
 real,    parameter :: SEED(2) = [1.5, -0.5]
 ! the synthetic dense tables of the assignment tests
 integer, parameter :: NPTCLS_TAB = 150
 integer, parameter :: SEED_TAB   = 20261016   !< the distances and the particles' angular distances
 integer, parameter :: SEED_DRAW  = 20261017   !< the assignment's draws
 ! the marginal's calculator: random references and particles
-integer, parameter :: MG_BOX = 48, MG_PFTSZ = 16, MG_NREFS = 6, MG_NPTCLS = 3, MG_KIN = 3, MG_KFROMTO(2) = [2, 10]
+integer,  parameter           :: MG_BOX = 48, MG_PFTSZ = 16, MG_NREFS = 6, MG_NPTCLS = 3, MG_KIN = 3, MG_KFROMTO(2) = [2, 10]
 real(sp), allocatable, target :: mg_sigma2(:,:)   !< the calculator keeps a reference to its sigma2: module lifetime
 
 contains
@@ -111,21 +111,21 @@ contains
     !! against the insertion's route at the entry's shift and finds the one at another shift; the entries at a team of
     !! four are those at one thread, bit for bit
     subroutine test_inpl_marginal()
-        real,    parameter :: TEMP = 0.8, S1(2) = [0.7, -0.4], S2(2) = [1.5, 0.9]
-        real(dp), parameter :: TOL_SP = 1.d-6 !< the quadrature's terms are single precision
+        real,                parameter           :: TEMP   = 0.8, S1(2) = [0.7, -0.4], S2(2) = [1.5, 0.9]
+        real(dp),            parameter           :: TOL_SP = 1.d-6 !< the quadrature's terms are single precision
         class(parameters),   allocatable, target :: p
-        class(polarft_calc), allocatable :: calc
-        type(eul_prob_marginal) :: marg
-        type(prob_row_marginal) :: mrow
-        type(rnd_key)           :: scope
-        complex(sp), allocatable :: bank(:,:)
-        real,    allocatable :: row(:), post(:), lm(:), dist1(:,:), distn(:,:), drow(:), dmin_ins(:), wq(:)
-        real(dp),allocatable :: lnz1(:,:), lnzn(:,:), pens(:), lnz_ins(:)
-        integer, allocatable :: irot1(:,:), irotn(:,:), iref_of(:), iq(:)
-        real(dp) :: lnz_bf, lnz_q, dev(7), vdev(2)
-        real     :: dist, dist_ref, dmin_bf, dmin_q, ratio_d, ratio_m, tphys, neff
-        integer  :: iref, irot, irot_ref, nbad_draw, nbad_sum, nbad_bank, nbad_q, k, ir, nrots, nthr_prev, nteam
-        integer  :: order(MG_NREFS), nthr_glob_prev, nent
+        class(polarft_calc), allocatable         :: calc
+        type(eul_prob_marginal)                  :: marg
+        type(prob_row_marginal)                  :: mrow
+        type(rnd_key)                            :: scope
+        complex(sp),         allocatable         :: bank(:,:)
+        real,                allocatable         :: row(:), post(:), lm(:), dist1(:,:), distn(:,:), drow(:), dmin_ins(:), wq(:)
+        real(dp),            allocatable         :: lnz1(:,:), lnzn(:,:), pens(:), lnz_ins(:)
+        integer,             allocatable         :: irot1(:,:), irotn(:,:), iref_of(:), iq(:)
+        real(dp)                                 :: lnz_bf, lnz_q, dev(7), vdev(2)
+        real                                     :: dist, dist_ref, dmin_bf, dmin_q, ratio_d, ratio_m, tphys, neff
+        integer                                  :: iref, irot, irot_ref, nbad_draw, nbad_sum, nbad_bank, nbad_q, k, ir, nrots, nthr_prev, nteam
+        integer                                  :: order(MG_NREFS), nthr_glob_prev, nent
         nthr_glob_prev = nthr_glob
         allocate(p, calc)
         call make_marginal_fixture(p, calc)
@@ -266,10 +266,10 @@ contains
 
         !> ln sum_r exp(-t (d_r - d_min)) over every rotation in double, no term dropped, the minimum, the posterior
         subroutine brute_force( r_here, t_here, lnz_here, dmin_here, p_here )
-            real,           intent(in)  :: r_here(:), t_here
-            real(dp),       intent(out) :: lnz_here
-            real,           intent(out) :: dmin_here
-            real, optional, intent(out) :: p_here(:)
+            real,           intent(in)            :: r_here(:), t_here
+            real(dp),       intent(out)           :: lnz_here
+            real,           intent(out)           :: dmin_here
+            real,           optional, intent(out) :: p_here(:)
             real(dp) :: zz
             integer  :: jj
             dmin_here = minval(r_here)
@@ -292,7 +292,7 @@ contains
             real(dp), intent(out) :: l_out(:,:)
             type(eul_prob_marginal) :: mg
             type(prob_row_marginal) :: mr
-            integer :: ij, ii, jr, ithr_here, nthr_here
+            integer                 :: ij, ii, jr, ithr_here, nthr_here
             nthr_here = 1
             !$ nthr_here = omp_get_max_threads()
             call mg%new(calc, MG_NREFS, MG_KIN, 1, MG_NPTCLS, nthr_here)
@@ -326,9 +326,9 @@ contains
     subroutine make_marginal_fixture( p, calc )
         class(parameters),   intent(inout) :: p
         class(polarft_calc), intent(inout) :: calc
-        type(cmdline) :: cline
+        type(cmdline)            :: cline
         complex(sp), allocatable :: pft(:,:)
-        integer :: iref, iptcl, ieo, k, pp
+        integer                  :: iref, iptcl, ieo, k, pp
         call cline%set('box',     real(MG_BOX))
         call cline%set('smpd',    1.0)
         call cline%set('mskdiam', 40.)
@@ -380,7 +380,7 @@ contains
         type(prob_row_record)   :: rec, back
         type(prob_row_marginal) :: mrow, mback
         type(string)            :: fname
-        real :: dists(5), dback(5)
+        real                    :: dists(5), dback(5)
         fname = 'test_rows_marginal.bin'
         rec%iptcl = 7
         rec%nvalid = 5
@@ -421,9 +421,9 @@ contains
 
     subroutine test_screen_width_shortlist()
         integer, parameter :: N = 12, K = 3
-        real :: losses(N), best(K), work(N), cutoff
-        logical :: measured(N)
-        integer :: icase, i
+        real               :: losses(N), best(K), work(N), cutoff
+        logical            :: measured(N)
+        integer            :: icase, i
         do icase = 1, 4
             select case(icase)
                 case(1)
@@ -454,8 +454,8 @@ contains
 
     subroutine test_neff_report()
         type(prob_neff_readout) :: neff_ro
-        real    :: row(50)
-        integer :: r
+        real                    :: row(50)
+        integer                 :: r
         write(*,'(A)') 'test_neff_report'
         row = 0.
         call neff_ro%new(PROB_NEFF_MIN_ROWS, PROB_NEFF_MIN_ROWS, 6)
@@ -480,11 +480,11 @@ contains
     !! distances than nmin, a non-positive temperature or outside the stride are not kept, invalid distances are
     !! dropped
     subroutine test_neff_readout()
-        integer, parameter :: NROWS_NC = 200, NCAND_NC = 50
+        integer, parameter      :: NROWS_NC = 200, NCAND_NC = 50
         type(prob_neff_readout) :: neff_ro
-        real    :: row(NCAND_NC), prev, neff
-        integer :: r, k, nwanted
-        logical :: l_monotone
+        real                    :: row(NCAND_NC), prev, neff
+        integer                 :: r, k, nwanted
+        logical                 :: l_monotone
         ! one row
         call neff_ro%new(1, 1, 2)
         row = [(0.25 * real(k - 1), k = 1,NCAND_NC)]   ! a = 2 * 0.25 = 0.5 at beta 1
@@ -591,15 +591,15 @@ contains
     !! same assignment, another seed another. Particle 1's candidates all carry a non-finite distance: it is kept
     !! (no assignment, counted in the readout's kept particles).
     subroutine test_ref_assign_neigh_posterior()
-        integer, parameter :: NSPACE = 20, NSTATES = 3, NP = 150
-        class(parameters), allocatable, target :: params
-        class(builder),    allocatable, target :: build
-        type(eul_prob_tab_neigh) :: tab
-        type(prob_readout)       :: rec
-        type(prob_candidate), allocatable :: cands(:)
-        integer, allocatable :: counts(:), pinds(:), state_best(:), ref_best(:), run1(:), run2(:)
-        real,    allocatable :: dist_best(:)
-        integer :: i, k, n, nrefs, nwrong, nmoved, nstate_ok, iref, nvalid
+        integer,              parameter           :: NSPACE = 20, NSTATES = 3, NP = 150
+        class(parameters),    allocatable, target :: params
+        class(builder),       allocatable, target :: build
+        type(eul_prob_tab_neigh)                  :: tab
+        type(prob_readout)                        :: rec
+        type(prob_candidate), allocatable         :: cands(:)
+        integer,              allocatable         :: counts(:), pinds(:), state_best(:), ref_best(:), run1(:), run2(:)
+        real,                 allocatable         :: dist_best(:)
+        integer                                   :: i, k, n, nrefs, nwrong, nmoved, nstate_ok, iref, nvalid
         nrefs = NSPACE * NSTATES
         allocate(params, build)
         params%nspace          = NSPACE
@@ -741,22 +741,22 @@ contains
     !! extras' parallel selection gives the one-thread result bit for bit on the machine's full team, twice
     subroutine test_neigh_pooled_extras( mode )
         character(len=*), intent(in) :: mode
-        integer, parameter :: NSPACE_NB = 50, NSTATES_NB = 2, NP_NB = 40
-        class(parameters), allocatable, target :: params
-        class(builder),    allocatable, target :: build
-        type(eul_prob_tab_neigh) :: tab
-        type(prob_insert_cone)   :: cone
-        type(prob_insert_pose)   :: pose
-        type(prob_readout)       :: rec
-        type(prob_insert_poses)  :: poses
-        type(prob_dense_entry), allocatable :: rows(:,:)
-        real,                   allocatable :: shifts(:,:,:), seeds(:,:)
-        logical,                allocatable :: refined(:,:), incand(:,:)
-        integer,                allocatable :: pinds(:), argmin_state(:)
-        integer :: i, k, ri, nrefs, nwrong_state, nwrong_refined, nwrong_committed, nwrong_weight, nwrong_sdev, nextra_tot
-        integer :: iref_committed, istate, nnot_argmin, nextra_not_argmin, nthr_max, nthr_saved, rep_team
-        real    :: wsum, dbest
-        real, allocatable :: ext1(:,:,:), extn(:,:,:)
+        integer,                parameter           :: NSPACE_NB = 50, NSTATES_NB = 2, NP_NB = 40
+        class(parameters),      allocatable, target :: params
+        class(builder),         allocatable, target :: build
+        type(eul_prob_tab_neigh)                    :: tab
+        type(prob_insert_cone)                      :: cone
+        type(prob_insert_pose)                      :: pose
+        type(prob_readout)                          :: rec
+        type(prob_insert_poses)                     :: poses
+        type(prob_dense_entry), allocatable         :: rows(:,:)
+        real,                   allocatable         :: shifts(:,:,:), seeds(:,:)
+        logical,                allocatable         :: refined(:,:), incand(:,:)
+        integer,                allocatable         :: pinds(:), argmin_state(:)
+        integer                                     :: i, k, ri, nrefs, nwrong_state, nwrong_refined, nwrong_committed, nwrong_weight, nwrong_sdev, nextra_tot
+        integer                                     :: iref_committed, istate, nnot_argmin, nextra_not_argmin, nthr_max, nthr_saved, rep_team
+        real                                        :: wsum, dbest
+        real,                   allocatable         :: ext1(:,:,:), extn(:,:,:)
         call make_dense_rows(params, build, NSPACE_NB, NSTATES_NB, NP_NB, rows, shifts, refined, seeds)
         nrefs = NSPACE_NB * NSTATES_NB
         params%topk            = 3
@@ -858,12 +858,12 @@ contains
         !> a fresh table's assignment of the same store on a team of nthr_team threads: per particle the committed
         !! state, direction and in-plane index, then its extras' reference, in-plane index, shift and weight
         subroutine assign_team( nthr_team, ext )
-            integer,           intent(in)    :: nthr_team
-            real, allocatable, intent(inout) :: ext(:,:,:)
+            integer,           intent(in)                 :: nthr_team
+            real,              allocatable, intent(inout) :: ext(:,:,:)
             type(eul_prob_tab_neigh) :: t
             type(prob_insert_pose)   :: pz
             type(prob_insert_poses)  :: pzs
-            integer :: ip, rr, kk
+            integer                  :: ip, rr, kk
             !$ call omp_set_num_threads(nthr_team)
             if( allocated(ext) ) deallocate(ext)
             allocate(ext(5, params%topk, NP_NB), source=0.)
@@ -914,16 +914,16 @@ contains
     !! nearest representative); for a small cone the prefilter drops most subspaces
     subroutine test_geom_cone_prefilter( pgrp )
         character(len=*), intent(in) :: pgrp
-        integer, parameter :: NSP = 1500, NSTRIDE = 10, NSEEDS = 25
-        real,    parameter :: CONES(3) = [3., 10., 25.]
+        integer, parameter   :: NSP      = 1500, NSTRIDE = 10, NSEEDS = 25
+        real,    parameter   :: CONES(3) = [3., 10., 25.]
         type(sym)            :: se
         type(oris)           :: eul
         integer, allocatable :: sub_inds(:), full2sub(:)
         real,    allocatable :: radius(:)
         logical, allocatable :: l_reach(:)
-        real    :: euls_seed(3), euls_mirr(3), d, dbest
-        integer :: nsub, i, k, iseed, icone, imir, nmiss, nkept_small, nreach_small
-        logical :: l_mirror
+        real                 :: euls_seed(3), euls_mirr(3), d, dbest
+        integer              :: nsub, i, k, iseed, icone, imir, nmiss, nkept_small, nreach_small
+        logical              :: l_mirror
         call seed_rnd_fixed(SEED_TAB)
         call se%new(pgrp)
         call eul%new(NSP, is_ptcl=.false.)
@@ -977,13 +977,13 @@ contains
         use simple_linalg,    only: rad2deg
         character(len=*), intent(in) :: pgrp
         integer, parameter :: NSP = 100, KMAX = 3
-        type(oris) :: bank
-        type(sym)  :: se
-        real :: seed(3), mirrored(3), equivalent(3), ds(NSP), work(NSP), eulers(3,KMAX), cone, dm
-        integer :: refs(KMAX), expected(KMAX), n, nexp, i, g, j, icase, imir, ithr, saved_team
-        integer :: refs_team(KMAX,4), nteam(4)
-        real :: eulers_team(3,KMAX,4)
-        logical :: mirror
+        type(oris)         :: bank
+        type(sym)          :: se
+        real               :: seed(3), mirrored(3), equivalent(3), ds(NSP), work(NSP), eulers(3,KMAX), cone, dm
+        integer            :: refs(KMAX), expected(KMAX), n, nexp, i, g, j, icase, imir, ithr, saved_team
+        integer            :: refs_team(KMAX,4), nteam(4)
+        real               :: eulers_team(3,KMAX,4)
+        logical            :: mirror
         call se%new(pgrp)
         call bank%new(NSP, is_ptcl=.false.)
         call se%build_refspiral(bank)
@@ -1065,11 +1065,11 @@ contains
     !! variate gives the same draw
     subroutine test_draw_posterior_row()
         integer, parameter :: NDRAWS = 20000
-        real     :: dists(6), w(6), dist
-        real(dp) :: u, cdf(6)
-        integer  :: which, i, counts(6), k
-        logical  :: l_ok
-        type(rnd_key) :: key
+        real               :: dists(6), w(6), dist
+        real(dp)           :: u, cdf(6)
+        integer            :: which, i, counts(6), k
+        logical            :: l_ok
+        type(rnd_key)      :: key
         ! the oracle: the cumulative posterior of a row at temperature T over its valid entries
         dists = [0.3, 0.1, 0.15, 0.5, huge(1.), 0.2]
         call oracle_cdf(6, dists, 1., cdf)
@@ -1199,15 +1199,15 @@ contains
         integer, intent(in) :: nspace, nstates
         class(parameters), allocatable, target :: params
         class(builder),    allocatable, target :: build
-        type(eul_prob_tab) :: tab
-        real,    allocatable :: dists(:,:)
-        integer, allocatable :: pinds(:), iref_argmin(:), iref_run1(:), iref_run2(:), iref_run3(:)
-        integer, parameter   :: NTIE = 200
-        real,    allocatable :: w(:)
-        integer :: nrefs, i, iref, nsame, nstate_moved, nmoved, k, ntie2_a, ntie2_b, ntie3_a, ntie3_b, nold_same
-        integer :: ifirst, which, iref_old, i2a, i2b, i3a, i3b
-        real    :: d
-        character(len=64) :: label
+        type(eul_prob_tab)                     :: tab
+        real,              allocatable         :: dists(:,:)
+        integer,           allocatable         :: pinds(:), iref_argmin(:), iref_run1(:), iref_run2(:), iref_run3(:)
+        integer,           parameter           :: NTIE = 200
+        real,              allocatable         :: w(:)
+        integer                                :: nrefs, i, iref, nsame, nstate_moved, nmoved, k, ntie2_a, ntie2_b, ntie3_a, ntie3_b, nold_same
+        integer                                :: ifirst, which, iref_old, i2a, i2b, i3a, i3b
+        real                                   :: d
+        character(len=64)                      :: label
         write(label,'(A,I0,A,I0)') 'nspace ', nspace, ', nstates ', nstates
         nrefs = nspace * nstates
         allocate(params, build)
@@ -1382,15 +1382,15 @@ contains
     !! e^-1 / (1 + e^-1) and 2/3. The same rows over two parts (each its own table and share, the global rank
     !! offset) give records whose sum is the whole's, and a record round-trips its file
     subroutine test_joint_state_draw()
-        integer, parameter :: NJ = 2000, NSP = 4
+        integer,           parameter           :: NJ = 2000, NSP = 4
         class(parameters), allocatable, target :: params
         class(builder),    allocatable, target :: build
-        type(eul_prob_tab) :: tab, tab_a, tab_b
-        type(prob_readout) :: rec_all, rec_a, rec_b, rec_sum, rec_read
-        type(string)       :: fname
-        real    :: dists(2*NSP), p1, h, n1
-        integer :: i, ri
-        integer, allocatable :: pinds(:)
+        type(eul_prob_tab)                     :: tab, tab_a, tab_b
+        type(prob_readout)                     :: rec_all, rec_a, rec_b, rec_sum, rec_read
+        type(string)                           :: fname
+        real                                   :: dists(2*NSP), p1, h, n1
+        integer                                :: i, ri
+        integer,           allocatable         :: pinds(:)
         allocate(params, build)
         params%nspace      = NSP
         params%nstates     = 2
@@ -1496,9 +1496,9 @@ contains
         type(prob_insert_poses) :: poses
         type(prob_insert_pose)  :: pose
         type(prob_candidate)    :: cands(2)
-        integer(int64) :: nelig
-        real(dp)       :: wc_sum
-        integer        :: nptcls, npose, ncapped, kmax
+        integer(int64)          :: nelig
+        real(dp)                :: wc_sum
+        integer                 :: nptcls, npose, ncapped, kmax
         call tab%new(4, [11, 12, 13, 14], 3)
         cands(1) = prob_candidate(101, 7, 0.4, 0.5, 1.5, .true.)
         cands(2) = prob_candidate(102, 8, 0.6, -1.0, 2.0, .true.)
@@ -1535,22 +1535,22 @@ contains
     !! their row argmin's and their extras still come from the drawn state; a second assignment gives the same
     !! extras (the selection is deterministic); topk = 1 records no extra and weight 1 everywhere
     subroutine test_insert_extras_multistate()
-        integer, parameter :: NSPACE_MS = 50, NSTATES_MS = 2, NPTCLS_MS = 40
-        class(parameters), allocatable, target :: params
-        class(builder),    allocatable, target :: build
-        type(eul_prob_tab)      :: master
-        type(prob_insert_poses) :: poses
-        type(prob_insert_pose)  :: pose, pose_a
-        type(prob_insert_cone)  :: cone
-        type(prob_dense_entry), allocatable :: rows(:,:)
-        real,                   allocatable :: shifts(:,:,:), seeds(:,:)
-        logical,                allocatable :: refined(:,:)
-        integer,                allocatable :: pinds(:), nextra_first(:), argmin_state(:)
-        integer :: i, k, nextra_tot, nwrong_state, nwrong_refined, nwrong_committed, nwrong_weight, nwrong_dup, iref_committed
-        integer :: istate, nwrong_order, nwrong_again, nptcls, npose, ncapped, kmax, nnot_argmin, nextra_not_argmin
-        integer(int64) :: nelig
-        real(dp)       :: wc_sum
-        real    :: wsum
+        integer,                parameter           :: NSPACE_MS = 50, NSTATES_MS = 2, NPTCLS_MS = 40
+        class(parameters),      allocatable, target :: params
+        class(builder),         allocatable, target :: build
+        type(eul_prob_tab)                          :: master
+        type(prob_insert_poses)                     :: poses
+        type(prob_insert_pose)                      :: pose, pose_a
+        type(prob_insert_cone)                      :: cone
+        type(prob_dense_entry), allocatable         :: rows(:,:)
+        real,                   allocatable         :: shifts(:,:,:), seeds(:,:)
+        logical,                allocatable         :: refined(:,:)
+        integer,                allocatable         :: pinds(:), nextra_first(:), argmin_state(:)
+        integer                                     :: i, k, nextra_tot, nwrong_state, nwrong_refined, nwrong_committed, nwrong_weight, nwrong_dup, iref_committed
+        integer                                     :: istate, nwrong_order, nwrong_again, nptcls, npose, ncapped, kmax, nnot_argmin, nextra_not_argmin
+        integer(int64)                              :: nelig
+        real(dp)                                    :: wc_sum
+        real                                        :: wsum
         call make_dense_rows(params, build, NSPACE_MS, NSTATES_MS, NPTCLS_MS, rows, shifts, refined, seeds)
         pinds = [(i, i=NPTCLS_MS,1,-1)]
         params%topk = 3
@@ -1700,9 +1700,9 @@ contains
         type(prob_insert_cone) :: cone
         type(oris)             :: eul
         type(sym)              :: se
-        real    :: rmats(3,3,0:3), shifts(2,0:3), scores(0:3), w(0:3), temp, wexp
-        integer :: basin(0:3), nbasins
-        logical :: valid(0:3), best(0:3)
+        real                   :: rmats(3,3,0:3), shifts(2,0:3), scores(0:3), w(0:3), temp, wexp
+        integer                :: basin(0:3), nbasins
+        logical                :: valid(0:3), best(0:3)
         write(*,'(A)') 'test_merge_view_basins'
         call se%new('c1')
         call eul%new(2, is_ptcl=.false.)
@@ -1764,8 +1764,8 @@ contains
         type(prob_insert_cone) :: cone
         type(oris)             :: eul, eul2
         type(sym)              :: se1, se4
-        real    :: e1(3), e2(3), geo
-        integer :: i, ic, inear, ifar
+        real                   :: e1(3), e2(3), geo
+        integer                :: i, ic, inear, ifar
         call cone%new([10.], 100., 1.)
         call assert_real(11.459156, cone%get_angle(1), 1.e-3, 'insertion cone: 10 A at a 100 A particle is 11.46 degrees')
         call assert_true(cone%is_open(), 'insertion cone: open')
@@ -1974,9 +1974,9 @@ contains
     !! distances (exp(H) = 5, k99 = 5); a row of invalid distances gives nvalid 0 and zeros
     subroutine test_posterior_row_stats()
         real,    parameter :: ROW(6) = [0.0, 0.001, 0.002, 0.5, huge(1.), 0.4]
-        real    :: w(6), pmax, neff, temp
-        integer :: inds(6), imin, k99, nvalid, i
-        logical :: l_sorted
+        real               :: w(6), pmax, neff, temp
+        integer            :: inds(6), imin, k99, nvalid, i
+        logical            :: l_sorted
         temp = posterior_temperature(1000.d0, 100)
         call assert_real(15.707963, temp, 1.e-4, 'posterior temperature pi wsqsum / (2 pftsz)')
         call posterior_row_stats(6, ROW, 1000., w, inds, imin, pmax, neff, k99, nvalid)
@@ -2019,8 +2019,8 @@ contains
     subroutine test_bounded_and_power_samplers()
         real,    allocatable :: dists(:), pvec(:), pvec2(:), cdf(:)
         integer, allocatable :: inds(:), inds2(:)
-        real    :: dist1, corr1, dist2, corr2, athres, power
-        integer :: iset, n, nsample, which1, which2, i, nwrong_b, nwrong_p
+        real                 :: dist1, corr1, dist2, corr2, athres, power
+        integer              :: iset, n, nsample, which1, which2, i, nwrong_b, nwrong_p
         call seed_rnd_fixed(SEED_TAB)
         nwrong_b = 0
         nwrong_p = 0
@@ -2191,12 +2191,12 @@ contains
     !! shift on about one entry in ten, a seed per particle; the point group and the direction space as the
     !! assignment needs them (the weighted insertion measures its candidates' poses in the direction space)
     subroutine make_dense_rows( params, build, nspace, nstates, nptcls, rows, shifts, refined, seeds )
-        class(parameters), allocatable, target, intent(inout) :: params
-        class(builder),    allocatable, target, intent(inout) :: build
-        integer,                                intent(in)    :: nspace, nstates, nptcls
-        type(prob_dense_entry), allocatable,    intent(out)   :: rows(:,:)
-        real,                   allocatable,    intent(out)   :: shifts(:,:,:), seeds(:,:)
-        logical,                allocatable,    intent(out)   :: refined(:,:)
+        class(parameters),                      allocatable, target, intent(inout) :: params
+        class(builder),                         allocatable, target, intent(inout) :: build
+        integer,                                intent(in)                         :: nspace, nstates, nptcls
+        type(prob_dense_entry),                 allocatable,    intent(out)        :: rows(:,:)
+        real,                                   allocatable,    intent(out)        :: shifts(:,:,:), seeds(:,:)
+        logical,                                allocatable,    intent(out)        :: refined(:,:)
         integer :: nrefs, i, ri
         nrefs = nspace * nstates
         allocate(params, build)
@@ -2225,7 +2225,7 @@ contains
 
     subroutine test_record_seed_shift()
         type(ptcl_ref) :: assgn
-        integer :: inpl
+        integer        :: inpl
         write(*,'(A)') 'test_record_seed_shift'
         ! the particle-frame seed is recorded whatever the angle
         do inpl = 1, NROTS
@@ -2259,10 +2259,10 @@ contains
     !! worked example (0.4, 0.4, 0.2 at equal minima; a third each when the one-angle minimum is lower by ln 2 / T)
     subroutine test_inpl_view_weights()
         integer,  parameter :: NR = 128, KQ = INPL_POSTERIOR_BUDGET
-        real,     parameter :: T = 2.
-        real     :: rows(NR,4), dmin(4), neff(4), m(4), w(KQ), wq(4)
-        real(dp) :: lnz(4), lnz_ref(4), lm(4), mref(4), pen(4)
-        integer  :: inds(KQ), nent(4), k
+        real,     parameter :: T  = 2.
+        real                :: rows(NR,4), dmin(4), neff(4), m(4), w(KQ), wq(4)
+        real(dp)            :: lnz(4), lnz_ref(4), lm(4), mref(4), pen(4)
+        integer             :: inds(KQ), nent(4), k
         rows = 10.
         rows(5,1)  = 0.3                       ! one angle
         rows(:,2)  = 0.0                       ! flat
@@ -2325,8 +2325,8 @@ contains
     !! master's merge (add_prob_readout)
     subroutine test_inpl_readout_round_trip()
         character(len=*), parameter :: READOUT_FILE = 'tmp_eul_prob_tab_tester_readout.txt'
-        type(prob_readout) :: rec, back, acc
-        type(string)       :: fname
+        type(prob_readout)          :: rec, back, acc
+        type(string)                :: fname
         rec%route         = PROB_READOUT_2D_DENSE
         rec%nptcls        = 10
         rec%inpl_kmax     = INPL_POSTERIOR_BUDGET
@@ -2356,8 +2356,8 @@ contains
     subroutine test_insert_report()
         type(prob_readout) :: rec
         character(len=512) :: line
-        integer :: saved_log, u, ios
-        logical :: inserted, inplane
+        integer            :: saved_log, u, ios
+        logical            :: inserted, inplane
         write(*,'(A)') 'test_insert_report'
         rec%route       = PROB_READOUT_3D_DENSE
         rec%nptcls      = 4

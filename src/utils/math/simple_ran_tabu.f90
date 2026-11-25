@@ -11,9 +11,9 @@ private
 
 type :: ran_tabu
     private
-    integer :: NP=0       !< integer ranges from 1 to NP
-    integer :: N_tabus=0
-    logical, allocatable :: avail(:) !< flags for checking availability
+    integer              :: NP      = 0 !< integer ranges from 1 to NP
+    integer              :: N_tabus = 0
+    logical, allocatable :: avail(:)    !< flags for checking availability
   contains
     procedure          :: reset
     procedure          :: insert
@@ -173,7 +173,7 @@ contains
     subroutine ne_mnomal_iarr( self, pvec, rndiarr )
         class(ran_tabu), intent(inout) :: self
         real,            intent(in)    :: pvec(self%NP) !< multinomal vector
-        integer,         intent(out)   :: rndiarr(:) !< random integer array
+        integer,         intent(out)   :: rndiarr(:)    !< random integer array
         integer        :: i, szrndiarr, irnd, cnt
         type(ran_tabu) :: rt4shuffle
         szrndiarr = size(rndiarr)
@@ -241,7 +241,7 @@ contains
     !>  \brief  creates a balanced randomised partitioning over nstates states
     subroutine balanced( self, nstates, iarr )
         class(ran_tabu), intent(inout) :: self
-        integer,         intent(in)    :: nstates !< num states
+        integer,         intent(in)    :: nstates       !< num states
         integer,         intent(inout) :: iarr(self%NP) !< integer array for partitioning
         integer :: i, s
         i = 0

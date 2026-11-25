@@ -39,7 +39,7 @@ contains
         type(flex_selection),   intent(in)    :: sel
         type(flex_latent),      intent(inout) :: latent  !< z, contrast, precision, residual energies, comp_rho (and zhalf when l_zhalf) written
         !> keep the even/odd half solutions in latent%zhalf (the latent deconvolution calibrates its noise on them)
-        logical,                intent(in)    :: l_zhalf
+        logical,                 intent(in)    :: l_zhalf
         class(flex_pca_rounds),  intent(inout) :: rounds
         class(parameters),       intent(inout) :: params
         type(builder),           intent(inout) :: build
@@ -50,32 +50,32 @@ contains
         logical, optional,      intent(in)    :: from_parts
         type(fplane_type), allocatable :: fpls(:)
         type(fplane_type), allocatable :: basis_fpls(:,:), mean_fpl(:), data_fpl(:)
-        type(ori), allocatable :: orientations(:)
-        real(dp), allocatable :: prior(:), rho(:), Gcache(:,:,:), bcache(:,:), ccache(:,:)
-        real(dp), allocatable :: zhalf(:,:,:), Ghf(:,:,:,:), bhf(:,:,:), chf(:,:,:)
-        real(dp), allocatable :: myhf(:,:), emmhf(:,:)   ! per-half <Tmu,y>, <Tmu,Tmu> for the half-solve contrast
-        real(dp) :: ah, aah
-        real(dp), allocatable :: Gpart(:,:,:), bpart(:,:), cpart(:,:)
-        integer,  allocatable :: prows(:)
-        type(string) :: part_fname
-        integer :: ipart, pn_part
-        real(dp), parameter :: RHO_FLOOR = 1.d-3
-        real(dp) :: rho_max, rrel
-        logical :: l_relprior, l_stats_only, l_from_parts, l_cache_stats, l_pcache
-        integer :: ihf
-        integer :: batchlims(2), batchsz, ibatch, i, q, r, ithr, nthr, ia, row
-        integer, allocatable :: nzeroG_thr(:), nzeroR_thr(:), nzeroZ_thr(:)   ! dead-basis counters
-        real(dp) :: a, a_best, a_keep, a_num, a_den, e_yy, e_mm, best_res, res, aa, sig2
-        real(dp), allocatable :: Ainv_th(:,:,:)     ! posterior covariance, for the tr(G A^-1) term
-        integer  :: icm
-        integer(timer_int_kind) :: t_phase
-        type(ptcl_read_session) :: reads
-        real(dp), allocatable :: Gth(:,:,:), Ath(:,:,:), zth(:,:), zbest(:,:), cth(:,:), bth(:,:), myth(:)
-        real(dp), allocatable :: Gtilth(:,:,:)   ! per-thread noise-whitened projected Gram
-        real(dp), allocatable :: gwork(:,:,:), gvec(:,:,:), gev(:,:), gspec_thr(:,:), gspec(:)
-        integer,  allocatable :: gcnt_thr(:)
-        integer :: nrot_t, gcnt
-        real(dp) :: gsum
+        type(ori),         allocatable :: orientations(:)
+        real(dp),          allocatable :: prior(:), rho(:), Gcache(:,:,:), bcache(:,:), ccache(:,:)
+        real(dp),          allocatable :: zhalf(:,:,:), Ghf(:,:,:,:), bhf(:,:,:), chf(:,:,:)
+        real(dp),          allocatable :: myhf(:,:), emmhf(:,:)                       ! per-half <Tmu,y>, <Tmu,Tmu> for the half-solve contrast
+        real(dp)                       :: ah, aah
+        real(dp),          allocatable :: Gpart(:,:,:), bpart(:,:), cpart(:,:)
+        integer,           allocatable :: prows(:)
+        type(string)                   :: part_fname
+        integer                        :: ipart, pn_part
+        real(dp),          parameter   :: RHO_FLOOR = 1.d-3
+        real(dp)                       :: rho_max, rrel
+        logical                        :: l_relprior, l_stats_only, l_from_parts, l_cache_stats, l_pcache
+        integer                        :: ihf
+        integer                        :: batchlims(2), batchsz, ibatch, i, q, r, ithr, nthr, ia, row
+        integer,           allocatable :: nzeroG_thr(:), nzeroR_thr(:), nzeroZ_thr(:) ! dead-basis counters
+        real(dp)                       :: a, a_best, a_keep, a_num, a_den, e_yy, e_mm, best_res, res, aa, sig2
+        real(dp),          allocatable :: Ainv_th(:,:,:)                              ! posterior covariance, for the tr(G A^-1) term
+        integer                        :: icm
+        integer(timer_int_kind)        :: t_phase
+        type(ptcl_read_session)        :: reads
+        real(dp),          allocatable :: Gth(:,:,:), Ath(:,:,:), zth(:,:), zbest(:,:), cth(:,:), bth(:,:), myth(:)
+        real(dp),          allocatable :: Gtilth(:,:,:)                               ! per-thread noise-whitened projected Gram
+        real(dp),          allocatable :: gwork(:,:,:), gvec(:,:,:), gev(:,:), gspec_thr(:,:), gspec(:)
+        integer,           allocatable :: gcnt_thr(:)
+        integer                        :: nrot_t, gcnt
+        real(dp)                       :: gsum
         if( allocated(latent%z) ) deallocate(latent%z)
         if( allocated(latent%contrast) ) deallocate(latent%contrast)
         if( allocated(latent%precision) ) deallocate(latent%precision)
@@ -442,7 +442,7 @@ contains
         real(dp),      intent(in) :: contrast(:), resid_energy(:), resid_mean_energy(:)
         real(dp),      intent(in) :: Gcache(:,:,:), bcache(:,:), ccache(:,:), zhalf(:,:,:)
         type(string) :: tmp_fname
-        integer :: funit, io_stat, header(4)
+        integer      :: funit, io_stat, header(4)
         header = [FLEX_PCA_PART_MAGIC, EMBED_STATS_VERSION, nptcls, ncomp]
         tmp_fname = fname//'.tmp'
         call fopen(funit, file=tmp_fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
@@ -472,15 +472,15 @@ contains
     !! divided by nparts.
     subroutine reduce_embed_zhalf_parts( params, rounds, gpinds, contrast, resid_energy, &
         &resid_mean_energy, zhalf, nptcls, ncomp )
-        class(parameters), intent(in)    :: params
-        class(flex_pca_rounds), intent(in) :: rounds
-        integer,           intent(in)    :: gpinds(:), nptcls, ncomp
-        real(dp),          intent(inout) :: contrast(:), resid_energy(:), resid_mean_energy(:)
-        real(dp),          intent(inout) :: zhalf(:,:,:)
-        integer,  allocatable :: ppinds(:)
-        real(dp), allocatable :: pc(:), pre(:), prme(:), pzh(:,:,:)
-        type(string) :: fname
-        integer :: ipart, funit, io_stat, header(4), pn, i, hit, nfilled
+        class(parameters),      intent(in)    :: params
+        class(flex_pca_rounds), intent(in)    :: rounds
+        integer,                intent(in)    :: gpinds(:), nptcls, ncomp
+        real(dp),               intent(inout) :: contrast(:), resid_energy(:), resid_mean_energy(:)
+        real(dp),               intent(inout) :: zhalf(:,:,:)
+        integer,  allocatable   :: ppinds(:)
+        real(dp), allocatable   :: pc(:), pre(:), prme(:), pzh(:,:,:)
+        type(string)            :: fname
+        integer                 :: ipart, funit, io_stat, header(4), pn, i, hit, nfilled
         integer(timer_int_kind) :: t_red
         t_red   = tic()
         nfilled = 0
@@ -527,16 +527,16 @@ contains
     !> Pass 2: one part's Gram blocks and its global row indices, so the caller can re-solve just
     !! those particles and free the buffer before reading the next. Deletes the part file.
     subroutine read_embed_stats_part( params, rounds, ipart, gpinds, rows, Gpart, bpart, cpart, pn, nptcls, ncomp )
-        class(parameters),     intent(in)  :: params
-        class(flex_pca_rounds), intent(in) :: rounds
-        integer,               intent(in)  :: ipart, gpinds(:), nptcls, ncomp
-        integer,  allocatable, intent(out) :: rows(:)
-        real(dp), allocatable, intent(out) :: Gpart(:,:,:), bpart(:,:), cpart(:,:)
-        integer,               intent(out) :: pn
+        class(parameters),      intent(in)               :: params
+        class(flex_pca_rounds), intent(in)               :: rounds
+        integer,                intent(in)               :: ipart, gpinds(:), nptcls, ncomp
+        integer,                allocatable, intent(out) :: rows(:)
+        real(dp),               allocatable, intent(out) :: Gpart(:,:,:), bpart(:,:), cpart(:,:)
+        integer,                intent(out)              :: pn
         integer,  allocatable :: ppinds(:)
         real(dp), allocatable :: skip3(:), pzh(:,:,:)
-        type(string) :: fname
-        integer :: funit, io_stat, header(4), i, hit
+        type(string)          :: fname
+        integer               :: funit, io_stat, header(4), i, hit
         fname = rounds%part_fname('embedstats', ipart, params%numlen)
         if( .not. file_exists(fname) ) THROW_HARD('missing embed-stats part: '//fname%to_char())
         call fopen(funit, file=fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)

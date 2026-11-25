@@ -52,7 +52,7 @@ contains
 
     subroutine exec_stream_p07_solve3D_multistate( self, cline )
         class(commander_stream_p07_solve3D_multistate), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline
+        class(cmdline),                                 intent(inout) :: cline
         type(stream_stage_solve3D) :: stage
         call install_sigterm_handler()
         call set_solve3D_cline(cline)

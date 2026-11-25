@@ -24,13 +24,13 @@ public :: model_gate_states
 public :: run_all_cavg_quality_lattice_tests
 
 ! the six lattice features, in the order of the nano bank
-integer, parameter :: LAT_NFEATS = 6
-integer, parameter :: LAT_LATTICE_PEAK = 1, LAT_SPOT_COUNT = 2, LAT_SPOT_ARC = 3, LAT_SPOT_DIAM = 4, LAT_SPOT_SNR = 5
-integer, parameter :: LAT_BAND_PRESENCE = 6
-integer,  parameter :: NLOC          = 64        !< local maxima kept per class, strongest first (spot_count)
-integer,  parameter :: SPOT_HALFWIN  = 7         !< the 15 x 15 window about the strongest spot
-integer,  parameter :: NWIN          = (2 * SPOT_HALFWIN + 1)**2
-real,     parameter :: BAND_LOW_RES  = 3.        !< the band runs from this resolution (A) to Nyquist
+integer,  parameter :: LAT_NFEATS        = 6
+integer,  parameter :: LAT_LATTICE_PEAK  = 1, LAT_SPOT_COUNT = 2, LAT_SPOT_ARC = 3, LAT_SPOT_DIAM = 4, LAT_SPOT_SNR = 5
+integer,  parameter :: LAT_BAND_PRESENCE = 6
+integer,  parameter :: NLOC              = 64    !< local maxima kept per class, strongest first (spot_count)
+integer,  parameter :: SPOT_HALFWIN      = 7     !< the 15 x 15 window about the strongest spot
+integer,  parameter :: NWIN              = (2 * SPOT_HALFWIN + 1)**2
+real,     parameter :: BAND_LOW_RES      = 3.    !< the band runs from this resolution (A) to Nyquist
 !> the lattice grade: a smoothed peak at least this far (log10) above its ring mean, 4.5 times the ring. The nano
 !! preset's threshold on lattice_peak and the bar a local maximum must clear to count in spot_count. Set for recall:
 !! on three labeled platinum trajectories 0.65 keeps 98-99% of the maintainer's selected classes and lets 27-56% of
@@ -52,14 +52,14 @@ real,     parameter :: LAT_PEAK_MIN_RAW = 0.52
 !! LAT_PEAK_MIN_RAW, every K keeps the same recall (0.995, 0.995, 0.985); a gate set for recall breaks that tie
 !! toward the permissive end, so 3 stays (ruling 9; 1.5 removed 2 of 13 classes of a clean simulated trajectory)
 real,     parameter :: K_MODEL       = 3.0
-integer,  parameter :: ND   = 105                !< sphere diameters 8 to 60 A, step 0.5
-integer,  parameter :: NOFF = 9                  !< sub-pixel centre offsets -1 to 1 px, step 0.25
-real(dp), parameter :: D0 = 8._dp, DSTEP = 0.5_dp, OFF0 = -1._dp, OFFSTEP = 0.25_dp
+integer,  parameter :: ND            = 105       !< sphere diameters 8 to 60 A, step 0.5
+integer,  parameter :: NOFF          = 9         !< sub-pixel centre offsets -1 to 1 px, step 0.25
+real(dp), parameter :: D0            = 8._dp, DSTEP = 0.5_dp, OFF0 = -1._dp, OFFSTEP = 0.25_dp
 
 type :: cavg_quality_lattice
     private
-    integer :: box = 0, c = 0, shmax = 0
-    real    :: smpd = 0.
+    integer               :: box    = 0, c = 0, shmax = 0
+    real                  :: smpd   = 0.
     integer,  allocatable :: sh(:,:)          !< (-c:c-1,-c:c-1) shell of (h,k)
     logical,  allocatable :: band(:,:), bandhalf(:,:)
     integer,  allocatable :: shell_count(:)   !< (0:shmax)
@@ -67,12 +67,12 @@ type :: cavg_quality_lattice
     logical,  allocatable :: disc(:,:), annulus(:,:)
     real(dp), allocatable :: mc(:,:)          !< (NWIN, ND*NOFF*NOFF) centred sphere models
     real(dp), allocatable :: mbar(:), smm(:)
-    logical :: exists = .false.
+    logical               :: exists = .false.
 contains
-    procedure :: new
-    procedure :: extract
+    procedure          :: new
+    procedure          :: extract
     procedure, private :: measure
-    procedure :: kill
+    procedure          :: kill
 end type cavg_quality_lattice
 
 interface
@@ -90,8 +90,8 @@ contains
         real,                        intent(in)    :: smpd
         logical, allocatable :: gkeep(:)
         logical, allocatable :: half(:,:)
-        real(dp) :: rmsk, q, dq, x, dx, dy, mdl(NWIN)
-        integer  :: h, k, i, j, s, id, jy, lx, im, e, iy, ix
+        real(dp)             :: rmsk, q, dq, x, dx, dy, mdl(NWIN)
+        integer              :: h, k, i, j, s, id, jy, lx, im, e, iy, ix
         call self%kill
         if( mod(box, 2) /= 0 ) THROW_HARD('even box required; cavg_quality_lattice%new')
         self%box  = box
@@ -173,9 +173,9 @@ contains
         type(image), allocatable :: fimgs(:)
         real(dp),    allocatable :: p(:,:), ps(:,:), r(:,:), mu(:), x(:,:)
         real,        allocatable :: rbuf(:,:,:), fbuf(:,:,:), locmax(:,:)
-        real    :: vals(5), locs(NLOC)
-        integer :: n, nthr, ithr, i, ldim(3)
-        logical :: invalid
+        real                     :: vals(5), locs(NLOC)
+        integer                  :: n, nthr, ithr, i, ldim(3)
+        logical                  :: invalid
         n = size(imgs)
         if( .not. self%exists ) THROW_HARD('bank not made; cavg_quality_lattice%extract')
         if( size(valid) /= n .or. size(blank) /= n ) THROW_HARD('mask sizes; cavg_quality_lattice%extract')
@@ -237,11 +237,11 @@ contains
         logical,                     intent(out)   :: invalid
         real,                        intent(out)   :: vals(5), locs(NLOC)
         real,    pointer :: rmat(:,:,:)
-        complex  :: cval
-        real(dp) :: rmax, mdisc, mann, v, ymean, a, bgr, best, res, yy
-        real(dp) :: y(NWIN), w(NWIN), yc(NWIN), u(2), cx, cy, sw, vr, vt, along, across, offx, offy
-        integer  :: h, k, dh, dk, nloc, g1h, g1k, e, iy, ix, ibest, im, nd_disc, nd_ann
-        logical  :: found
+        complex          :: cval
+        real(dp)         :: rmax, mdisc, mann, v, ymean, a, bgr, best, res, yy
+        real(dp)         :: y(NWIN), w(NWIN), yc(NWIN), u(2), cx, cy, sw, vr, vt, along, across, offx, offy
+        integer          :: h, k, dh, dk, nloc, g1h, g1k, e, iy, ix, ibest, im, nd_disc, nd_ann
+        logical          :: found
         vals    = 0.
         locs    = 0.
         invalid = .not. all(ieee_is_finite(frame))

@@ -32,7 +32,7 @@ integer, parameter :: CARTFT_NO_RELIABLE_UPDATE  = LM_NO_RELIABLE_UPDATE  !< uno
 integer, parameter :: CARTFT_BOUND_REJECTED      = LM_BOUND_REJECTED      !< every proposal left the step or cumulative bound; seed kept
 integer, parameter :: CARTFT_INVALID_NUMERICS    = LM_INVALID_NUMERICS    !< non-finite objective or step; seed kept
 integer, parameter :: CARTFT_ITERATION_LIMIT     = LM_ITERATION_LIMIT     !< iteration cap reached without a decision
-integer, parameter :: CARTFT_STAGE_SHIFT = 1, CARTFT_STAGE_JOINT = 2
+integer, parameter :: CARTFT_STAGE_SHIFT         = 1, CARTFT_STAGE_JOINT = 2
 
 real(dp), parameter :: SHIFT_RESIDUAL_FLOOR = real(epsilon(1.), dp)**2
 real(dp), parameter :: NEGLIGIBLE_STEP      = 1.e-8_dp !< radians or cropped pixels: an accepted step this small ends a solve
@@ -47,17 +47,17 @@ character(len=*), parameter :: RATIO_LABELS(NRATIO_BINS) = [character(len=9) :: 
 
 !> Record of one LM stage; objectives include the configured prior penalty.
 type :: cartft_stage
-    integer  :: status         = CARTFT_NOT_ATTEMPTED
-    integer  :: niter          = 0
-    integer  :: nattempted     = 0     !< trial poses proposed, bound-rejected ones included
-    integer  :: ntrials        = 0     !< trial poses evaluated
-    integer  :: naccepted      = 0     !< trial poses accepted
-    integer  :: nbound_hits    = 0     !< proposals capped or rejected by a bound
-    integer  :: nratio(NRATIO_BINS) = 0 !< accepted steps per bin of actual over predicted reduction
-    real(dp) :: max_rotation_step = 0._dp
-    real(dp) :: max_shift_step    = 0._dp
-    real(dp) :: objective_before  = -1._dp !< set by a transaction
-    real(dp) :: objective_after   = -1._dp !< set by a transaction
+    integer  :: status              = CARTFT_NOT_ATTEMPTED
+    integer  :: niter               = 0
+    integer  :: nattempted          = 0      !< trial poses proposed, bound-rejected ones included
+    integer  :: ntrials             = 0      !< trial poses evaluated
+    integer  :: naccepted           = 0      !< trial poses accepted
+    integer  :: nbound_hits         = 0      !< proposals capped or rejected by a bound
+    integer  :: nratio(NRATIO_BINS) = 0      !< accepted steps per bin of actual over predicted reduction
+    real(dp) :: max_rotation_step   = 0._dp
+    real(dp) :: max_shift_step      = 0._dp
+    real(dp) :: objective_before    = -1._dp !< set by a transaction
+    real(dp) :: objective_after     = -1._dp !< set by a transaction
 end type cartft_stage
 
 type :: cartft_pose_opt
@@ -66,22 +66,22 @@ type :: cartft_pose_opt
     integer  :: box      = 0               !< native box of the project shifts
     integer  :: box_crop = 0               !< box of the calculator
     ! policy
-    logical  :: refine_shifts         = .true. !< false when trs = 0: shifts frozen
-    real(dp) :: shift_prior_weight    = 0._dp !< zero disables the Cartesian shift prior
-    real(dp) :: rotation_prior_weight = 0._dp !< fixed-width Matrix-Fisher prior
-    integer  :: maxits   = DEFAULT_MAXITS  !< iteration cap of each stage
-    real(dp) :: rotation_scale     = 0._dp !< radians per joint proposal (scaling and cap)
-    real(dp) :: max_total_rotation = 0._dp !< radians from the seed (athres_cont)
-    real(dp) :: shift_step_bound   = 0._dp !< cropped pixels per proposal
-    real(dp) :: max_total_shift    = 0._dp !< cropped pixels from the seed (trs)
+    logical  :: refine_shifts         = .true.         !< false when trs = 0: shifts frozen
+    real(dp) :: shift_prior_weight    = 0._dp          !< zero disables the Cartesian shift prior
+    real(dp) :: rotation_prior_weight = 0._dp          !< fixed-width Matrix-Fisher prior
+    integer  :: maxits                = DEFAULT_MAXITS !< iteration cap of each stage
+    real(dp) :: rotation_scale        = 0._dp          !< radians per joint proposal (scaling and cap)
+    real(dp) :: max_total_rotation    = 0._dp          !< radians from the seed (athres_cont)
+    real(dp) :: shift_step_bound      = 0._dp          !< cropped pixels per proposal
+    real(dp) :: max_total_shift       = 0._dp          !< cropped pixels from the seed (trs)
     ! record of the last solve
-    integer  :: status = CARTFT_NOT_ATTEMPTED
-    real(dp) :: objective_before = -1._dp, objective_after = -1._dp
-    real(dp) :: cumulative_rotation = 0._dp, cumulative_shift = 0._dp
-    integer  :: npasses = 0                !< calculator evaluations since the last solve began
-    type(cartft_stage) :: stages(2)
-    real(dp), allocatable :: shell_residual(:) !< whitened |r|^2 per shell at the returned pose (euclid)
-    logical  :: exists = .false.
+    integer               :: status              = CARTFT_NOT_ATTEMPTED
+    real(dp)              :: objective_before    = -1._dp, objective_after = -1._dp
+    real(dp)              :: cumulative_rotation = 0._dp, cumulative_shift = 0._dp
+    integer               :: npasses             = 0 !< calculator evaluations since the last solve began
+    type(cartft_stage)    :: stages(2)
+    real(dp), allocatable :: shell_residual(:)       !< whitened |r|^2 per shell at the returned pose (euclid)
+    logical               :: exists              = .false.
 contains
     ! lifecycle
     procedure          :: new
@@ -109,10 +109,10 @@ end type cartft_pose_opt
 type :: cartft_pose_work
     private
     integer(int64) :: nstatus(CARTFT_INVALID_PREPARATION:CARTFT_ITERATION_LIMIT) = 0_int64
-    integer(int64) :: nsolved = 0_int64, npasses = 0_int64, npix_evals = 0_int64
-    integer(int64) :: niter = 0_int64, ntrials = 0_int64, naccepted = 0_int64, nbound_hits = 0_int64
-    integer(int64) :: ncapped = 0_int64                  !< solves whose joint stage used every iteration
-    integer(int64) :: nratio(NRATIO_BINS) = 0_int64
+    integer(int64) :: nsolved                                                    = 0_int64, npasses = 0_int64, npix_evals = 0_int64
+    integer(int64) :: niter                                                      = 0_int64, ntrials = 0_int64, naccepted = 0_int64, nbound_hits = 0_int64
+    integer(int64) :: ncapped                                                    = 0_int64 !< solves whose joint stage used every iteration
+    integer(int64) :: nratio(NRATIO_BINS)                                        = 0_int64
 contains
     procedure :: add_solve
     procedure :: add
@@ -122,19 +122,19 @@ end type cartft_pose_work
 !> refine_joint's solve for lm_solve: the current and trial pose, the anchor of the cumulative guard,
 !! the priors, and the stage statistics the engine does not keep (calc is valid during the solve only)
 type, extends(lm_problem) :: cartft_pose_problem
-    class(cartft_calc), pointer :: calc => null()
-    integer  :: state = 0, iptcl = 0
-    logical  :: iseven = .true.
-    real(dp) :: rotmat(3,3) = 0._dp, shift(2) = 0._dp, trial_rotmat(3,3) = 0._dp, trial_shift(2) = 0._dp
-    logical  :: cumulative_guard = .false.
-    real(dp) :: anchor_rotmat(3,3) = 0._dp, anchor_shift(2) = 0._dp
-    real(dp) :: shift_prior_weight = 0._dp, rotation_prior_weight = 0._dp
-    real(dp) :: rotation_scale = 0._dp, shift_step_bound = 0._dp
-    real(dp) :: max_total_rotation = 0._dp, max_total_shift = 0._dp
-    real(dp), allocatable :: residual(:), trial_residual(:) !< whitened |r|^2 per shell (with residual_out)
-    integer  :: npasses = 0
-    integer  :: nratio(NRATIO_BINS) = 0
-    real(dp) :: max_rotation_step = 0._dp, max_shift_step = 0._dp
+    class(cartft_calc), pointer     :: calc                => null()
+    integer                         :: state               = 0, iptcl = 0
+    logical                         :: iseven              = .true.
+    real(dp)                        :: rotmat(3,3)         = 0._dp, shift(2) = 0._dp, trial_rotmat(3,3) = 0._dp, trial_shift(2) = 0._dp
+    logical                         :: cumulative_guard    = .false.
+    real(dp)                        :: anchor_rotmat(3,3)  = 0._dp, anchor_shift(2) = 0._dp
+    real(dp)                        :: shift_prior_weight  = 0._dp, rotation_prior_weight = 0._dp
+    real(dp)                        :: rotation_scale      = 0._dp, shift_step_bound = 0._dp
+    real(dp)                        :: max_total_rotation  = 0._dp, max_total_shift = 0._dp
+    real(dp),           allocatable :: residual(:), trial_residual(:) !< whitened |r|^2 per shell (with residual_out)
+    integer                         :: npasses             = 0
+    integer                         :: nratio(NRATIO_BINS) = 0
+    real(dp)                        :: max_rotation_step   = 0._dp, max_shift_step = 0._dp
 contains
     procedure :: eval            => pose_problem_eval
     procedure :: limit_step      => pose_problem_limit_step
@@ -147,14 +147,14 @@ end type cartft_pose_problem
 
 !> refine_shift's solve for lm_solve: the shift at a fixed rotation, bounded from its start
 type, extends(lm_problem) :: cartft_shift_problem
-    class(cartft_calc), pointer :: calc => null()
-    integer  :: state = 0, iptcl = 0
-    logical  :: iseven = .true.
-    real(dp) :: rotmat(3,3) = 0._dp, shift(2) = 0._dp, trial_shift(2) = 0._dp, anchor_shift(2) = 0._dp
-    real(dp) :: shift_step_bound = 0._dp, max_total_shift = 0._dp
-    integer  :: npasses = 0
-    integer  :: nratio(NRATIO_BINS) = 0
-    real(dp) :: max_shift_step = 0._dp
+    class(cartft_calc), pointer :: calc                => null()
+    integer                     :: state               = 0, iptcl = 0
+    logical                     :: iseven              = .true.
+    real(dp)                    :: rotmat(3,3)         = 0._dp, shift(2) = 0._dp, trial_shift(2) = 0._dp, anchor_shift(2) = 0._dp
+    real(dp)                    :: shift_step_bound    = 0._dp, max_total_shift = 0._dp
+    integer                     :: npasses             = 0
+    integer                     :: nratio(NRATIO_BINS) = 0
+    real(dp)                    :: max_shift_step      = 0._dp
 contains
     procedure :: eval            => shift_problem_eval
     procedure :: limit_step      => shift_problem_limit_step
@@ -269,11 +269,11 @@ contains
     !> Geometry (box of the project shifts, box_crop of the calculator) and bounds (trs the total
     !! shift in native pixels, 0 freezes shifts; rotation_bound the total rotation in degrees).
     subroutine new( self, box, box_crop, trs, rotation_bound, maxits, rotation_scale, shift_step_bound )
-        class(cartft_pose_opt), intent(inout) :: self
-        integer,                intent(in)    :: box, box_crop
-        real,                   intent(in)    :: trs, rotation_bound
-        integer,  optional,     intent(in)    :: maxits
-        real(dp), optional,     intent(in)    :: rotation_scale, shift_step_bound
+        class(cartft_pose_opt), intent(inout)            :: self
+        integer,                intent(in)               :: box, box_crop
+        real,                   intent(in)               :: trs, rotation_bound
+        integer,                optional,     intent(in) :: maxits
+        real(dp),               optional,     intent(in) :: rotation_scale, shift_step_bound
         real(dp) :: crop_scale
         call self%kill
         if( box < 2 .or. box_crop < 2 .or. mod(box,2) /= 0 .or. mod(box_crop,2) /= 0 ) &
@@ -355,7 +355,7 @@ contains
     !! Gaussian negative-log penalty; SIMPLE crop/power scaling is derived in the plan Numerical contract.
     subroutine set_shift_prior( self, variance, power )
         class(cartft_pose_opt), intent(inout) :: self
-        real(dp),              intent(in)    :: variance, power
+        real(dp),               intent(in)    :: variance, power
         real(dp) :: crop_scale, weight
         if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
         if( .not. positive_finite(variance) .or. .not. positive_finite(power) ) &
@@ -370,7 +370,7 @@ contains
     !! Isotropic Matrix-Fisher model: Lee (2018), doi:10.1109/TAC.2018.2797162; local scaling in the plan.
     subroutine set_rotation_prior( self, sigma_degrees, power )
         class(cartft_pose_opt), intent(inout) :: self
-        real(dp),              intent(in)    :: sigma_degrees, power
+        real(dp),               intent(in)    :: sigma_degrees, power
         real(dp) :: sigma, weight
         if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
         if( .not. positive_finite(sigma_degrees) .or. .not. positive_finite(power) ) &
@@ -399,11 +399,11 @@ contains
         integer,                intent(in)    :: state, iptcl
         logical,                intent(in)    :: iseven
         real(dp),               intent(inout) :: rotmat(3,3), shift(2)
-        real(dp) :: staged_rotmat(3,3), staged_shift(2), gradient(5), hessian(5,5)
-        real(dp) :: joint_objective_after, sine_half, prior_penalty
-        real(dp) :: prior_gradient(5), prior_hessian(5,5)
+        real(dp)              :: staged_rotmat(3,3), staged_shift(2), gradient(5), hessian(5,5)
+        real(dp)              :: joint_objective_after, sine_half, prior_penalty
+        real(dp)              :: prior_gradient(5), prior_hessian(5,5)
         real(dp), allocatable :: staged_residual(:), joint_residual(:)
-        integer  :: kfromto(2)
+        integer               :: kfromto(2)
         if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
         ! every early exit leaves rotmat and shift at the seed (rollback)
         call self%reset_record
@@ -489,16 +489,16 @@ contains
     !! shift_step_bound and trials within trs of the input shift. shift is updated through accepted steps
     !! only. Overwrites the CARTFT_STAGE_SHIFT record; an invalid particle slot gives CARTFT_INVALID_NUMERICS.
     subroutine refine_shift( self, calc, state, iseven, iptcl, rotmat, shift )
-        class(cartft_pose_opt),     intent(inout) :: self
-        class(cartft_calc), target, intent(in)    :: calc
-        integer,                    intent(in)    :: state, iptcl
-        logical,                    intent(in)    :: iseven
-        real(dp),                   intent(in)    :: rotmat(3,3)
-        real(dp),                   intent(inout) :: shift(2)
+        class(cartft_pose_opt),     intent(inout)      :: self
+        class(cartft_calc),         target, intent(in) :: calc
+        integer,                    intent(in)         :: state, iptcl
+        logical,                    intent(in)         :: iseven
+        real(dp),                   intent(in)         :: rotmat(3,3)
+        real(dp),                   intent(inout)      :: shift(2)
         type(cartft_shift_problem) :: problem
         type(lm_options)           :: options
         type(lm_outcome)           :: outcome
-        real(dp) :: objective, gradient(2), hessian(2,2)
+        real(dp)                   :: objective, gradient(2), hessian(2,2)
         if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
         self%stages(CARTFT_STAGE_SHIFT) = cartft_stage(status=CARTFT_ITERATION_LIMIT)
         associate( st => self%stages(CARTFT_STAGE_SHIFT) )
@@ -552,22 +552,22 @@ contains
     !! active parameter, one anchor without the other, a non-finite anchor or a partial seed.
     subroutine refine_joint( self, calc, state, iseven, iptcl, rotmat, shift, active, anchor_rotmat, anchor_shift, &
         &seed_objective, seed_gradient, seed_hessian, objective_out, seed_residual, residual_out )
-        class(cartft_pose_opt),     intent(inout) :: self
-        class(cartft_calc), target, intent(in)    :: calc
-        integer,                    intent(in)    :: state, iptcl
-        logical,                    intent(in)    :: iseven
-        real(dp),                   intent(inout) :: rotmat(3,3), shift(2)
-        logical,  optional,         intent(in)    :: active(5)
-        real(dp), optional,         intent(in)    :: anchor_rotmat(3,3), anchor_shift(2)
-        real(dp), optional,         intent(in)    :: seed_objective, seed_gradient(5), seed_hessian(5,5)
-        real(dp), optional,         intent(out)   :: objective_out
-        real(dp), optional,         intent(in)    :: seed_residual(:)
-        real(dp), optional,         intent(out)   :: residual_out(:)
+        class(cartft_pose_opt),     intent(inout)                 :: self
+        class(cartft_calc),         target, intent(in)            :: calc
+        integer,                    intent(in)                    :: state, iptcl
+        logical,                    intent(in)                    :: iseven
+        real(dp),                   intent(inout)                 :: rotmat(3,3), shift(2)
+        logical,                    optional,         intent(in)  :: active(5)
+        real(dp),                   optional,         intent(in)  :: anchor_rotmat(3,3), anchor_shift(2)
+        real(dp),                   optional,         intent(in)  :: seed_objective, seed_gradient(5), seed_hessian(5,5)
+        real(dp),                   optional,         intent(out) :: objective_out
+        real(dp),                   optional,         intent(in)  :: seed_residual(:)
+        real(dp),                   optional,         intent(out) :: residual_out(:)
         type(cartft_pose_problem) :: problem
         type(lm_options)          :: options
         type(lm_outcome)          :: outcome
-        real(dp) :: objective, gradient(5), hessian(5,5)
-        logical  :: l_active(5)
+        real(dp)                  :: objective, gradient(5), hessian(5,5)
+        logical                   :: l_active(5)
         if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
         l_active = .true.
         if( present(active) ) l_active = active
@@ -695,8 +695,8 @@ contains
     !! from the evaluation that chose it (calc%sigma_from_shell_residual turns it into the sigma2
     !! contribution); unallocated when the transaction evaluated nothing.
     subroutine get_shell_residual( self, shell_residual )
-        class(cartft_pose_opt), intent(in)  :: self
-        real(dp), allocatable,  intent(out) :: shell_residual(:)
+        class(cartft_pose_opt), intent(in)                :: self
+        real(dp),               allocatable,  intent(out) :: shell_residual(:)
         if( allocated(self%shell_residual) ) shell_residual = self%shell_residual
     end subroutine get_shell_residual
 
@@ -763,7 +763,7 @@ contains
         character(len=*),        intent(in) :: label
         real(dp),                intent(in) :: ts_search
         character(len=40) :: key
-        integer :: ibin
+        integer           :: ibin
         write(fnr,'(a)') '*** CONTINUOUS POSE WORK ***'
         call put_count('solves',              sum(self%nstatus))
         call put_count('accepted',            self%nstatus(CARTFT_ACCEPTED))

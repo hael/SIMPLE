@@ -18,12 +18,12 @@ integer, parameter :: MAX_HISTOGRAM_BINS = 512 ! bins a histogram holds
 
 type, extends( gui_metadata_base ) :: gui_metadata_histogram
   private
-  character(len=SHORTSTRLEN) :: name     = ''   ! display name for the histogram
+  character(len=SHORTSTRLEN) :: name                       = '' ! display name for the histogram
   real                       :: labels(MAX_HISTOGRAM_BINS) = 0. ! bin boundary / centre values
   integer                    :: data(MAX_HISTOGRAM_BINS)   = 0  ! bin counts
-  integer                    :: n_labels = 0    ! number of populated bins
+  integer                    :: n_labels                   = 0  ! number of populated bins
 contains
-  procedure :: kill => kill_override
+  procedure :: kill    => kill_override
   procedure :: set
   procedure :: get
   procedure :: jsonise => jsonise_override
@@ -36,10 +36,10 @@ contains
   ! Set the histogram name, labels, and data arrays; arrays must be the same
   ! length and must not exceed MAX_HISTOGRAM_BINS elements.
   subroutine set( self, name, labels, data )
-    class(gui_metadata_histogram),              intent(inout) :: self
-    type(string),                               intent(in)    :: name
-    real,                          allocatable, intent(in)    :: labels(:)
-    integer,                       allocatable, intent(in)    :: data(:)
+    class(gui_metadata_histogram),              intent(inout)           :: self
+    type(string),                               intent(in)              :: name
+    real,                                       allocatable, intent(in) :: labels(:)
+    integer,                                    allocatable, intent(in) :: data(:)
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( size(labels) /= size(data) ) THROW_HARD('labels and data differ in size')
     if( size(labels) > size(self%labels) ) THROW_HARD('labels exceeds maximum histogram size')
@@ -54,10 +54,10 @@ contains
 
   ! Return the histogram name, labels, and data; result is .true. if assigned.
   function get( self, name, labels, data ) result( l_assigned )
-    class(gui_metadata_histogram),              intent(in)  :: self
-    type(string),                               intent(out) :: name
-    real,                          allocatable, intent(out) :: labels(:)
-    integer,                       allocatable, intent(out) :: data(:)
+    class(gui_metadata_histogram),              intent(in)               :: self
+    type(string),                               intent(out)              :: name
+    real,                                       allocatable, intent(out) :: labels(:)
+    integer,                                    allocatable, intent(out) :: data(:)
     logical                                                 :: l_assigned
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned = self%l_assigned

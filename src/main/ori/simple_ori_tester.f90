@@ -85,7 +85,7 @@ contains
 
     subroutine test_ctor_and_flags()
         type(ori) :: o1, o2
-        logical :: ex, ispt
+        logical   :: ex, ispt
         write(*,'(A)') 'test_ctor_and_flags'
         call o1%new_ori(.true.)
         ex   = o1%exists()
@@ -103,7 +103,7 @@ contains
 
     subroutine test_euler_basic_set_get()
         type(ori) :: o
-        real :: e(3)
+        real      :: e(3)
         write(*,'(A)') 'test_euler_basic_set_get'
         call o%new_ori(.false.)
         call o%set_euler([1.0, 2.0, 3.0])
@@ -124,8 +124,8 @@ contains
 
     subroutine test_euler_matrix_roundtrip()
         type(ori) :: o
-        real :: e_in(3), e_out(3), R(3,3)
-        integer :: i
+        real      :: e_in(3), e_out(3), R(3,3)
+        integer   :: i
         write(*,'(A)') 'test_euler_matrix_roundtrip'
         e_in = [20.0, 40.0, 60.0]
         call o%new_ori(.false.)
@@ -145,8 +145,8 @@ contains
         real, parameter :: PHIS(5)   = [-170., -60., 0., 33., 145.]
         real, parameter :: THETAS(5) = [0., 20., 90., 135., 180.]
         real, parameter :: PSIS(3)   = [-120., 0., 75.]
-        real    :: e(3), e2(3), a(3), a2(3), dev, dang
-        integer :: i, j, k
+        real            :: e(3), e2(3), a(3), a2(3), dev, dang
+        integer         :: i, j, k
         write(*,'(A)') 'test_genfire_conversion'
         do i = 1, size(TILTS)
             e = genfire2euler([TILTS(i), 0., 0.])
@@ -178,7 +178,7 @@ contains
 
     subroutine test_normal_and_mat_consistency()
         type(ori) :: o
-        real :: e(3), n1(3), n2(3), R(3,3), z(3)
+        real      :: e(3), n1(3), n2(3), R(3,3), z(3)
         write(*,'(A)') 'test_normal_and_mat_consistency'
         call o%new_ori(.false.)
         e = [10.0, 50.0, 30.0]
@@ -196,7 +196,7 @@ contains
 
     subroutine test_2Dshift_set_get_and_rounding()
         type(ori) :: o
-        real :: v(2), off(2)
+        real      :: v(2), off(2)
         write(*,'(A)') 'test_2Dshift_set_get_and_rounding'
         call o%new_ori(.true.)
         call o%set_shift([1.2, -3.4])
@@ -251,7 +251,7 @@ contains
     !---------------- isthere / ischar ----------------
 
     subroutine test_isthere_and_ischar()
-        type(ori) :: o
+        type(ori)    :: o
         type(string) :: s
         write(*,'(A)') 'test_isthere_and_ischar'
         call o%new_ori(.true.)
@@ -273,8 +273,8 @@ contains
     !---------------- copy: ptcl -> ptcl ----------------
 
     subroutine test_copy_ptcl_to_ptcl()
-        type(ori)   :: a, b, c, d
-        type(string):: tag
+        type(ori)    :: a, b, c, d
+        type(string) :: tag
         write(*,'(A)') 'test_copy_ptcl_to_ptcl 1'
         call a%new_ori(.true.)
         call a%set_state(3)
@@ -324,7 +324,7 @@ contains
 
     subroutine test_copy_ptcl_to_nonptcl()
         type(ori) :: a, b
-        real :: e(3), sh(2)
+        real      :: e(3), sh(2)
         write(*,'(A)') 'test_copy_ptcl_to_nonptcl'
         call a%new_ori(.true.)
         call a%set_state(2)
@@ -349,7 +349,7 @@ contains
 
     subroutine test_copy_nonptcl_to_ptcl()
         type(ori) :: a, b
-        real :: e(3), sh(2)
+        real      :: e(3), sh(2)
         write(*,'(A)') 'test_copy_nonptcl_to_ptcl'
 
         call a%new_ori(.false.)
@@ -381,7 +381,7 @@ contains
 
     subroutine test_delete_2Dclustering()
         type(ori) :: o
-        real :: sh(2)
+        real      :: sh(2)
         write(*,'(A)') 'test_delete_2Dclustering'
 
         call o%new_ori(.true.)
@@ -406,7 +406,7 @@ contains
 
     subroutine test_delete_3Dalignment()
         type(ori) :: o
-        real :: sh(2)
+        real      :: sh(2)
         write(*,'(A)') 'test_delete_3Dalignment'
 
         call o%new_ori(.true.)
@@ -433,7 +433,7 @@ contains
 
     subroutine test_transfer_2Dparams()
         type(ori) :: src, dst
-        real :: sh(2)
+        real      :: sh(2)
         write(*,'(A)') 'test_transfer_2Dparams'
 
         call src%new_ori(.true.)
@@ -471,7 +471,7 @@ contains
 
     subroutine test_transfer_3Dparams()
         type(ori) :: src, dst
-        real :: sh(2)
+        real      :: sh(2)
         write(*,'(A)') 'test_transfer_3Dparams'
         call src%new_ori(.true.)
         call dst%new_ori(.true.)
@@ -502,7 +502,7 @@ contains
 
     subroutine test_mirror3d_involution()
         type(ori) :: o
-        real :: e0(3), e2(3)
+        real      :: e0(3), e2(3)
         write(*,'(A)') 'test_mirror3d_involution'
         e0 = [10.0, 40.0, 70.0]
         call o%new_ori(.false.)
@@ -519,7 +519,7 @@ contains
 
     subroutine test_mirror2d_involution()
         type(ori) :: o
-        real :: e0(3), e2(3)
+        real      :: e0(3), e2(3)
         write(*,'(A)') 'test_mirror2d_involution'
         e0 = [50.0, 60.0, 120.0]
         call o%new_ori(.false.)
@@ -536,7 +536,7 @@ contains
 
     subroutine test_transp_involution()
         type(ori) :: o
-        real :: e0(3), e2(3)
+        real      :: e0(3), e2(3)
         write(*,'(A)') 'test_transp_involution'
         e0 = [33.0, 77.0, 123.0]
         call o%new_ori(.false.)
@@ -553,7 +553,7 @@ contains
 
     subroutine test_geodesic_metrics()
         type(ori) :: a, b
-        real :: d_frob, d_trace, e1(3), e2(3)
+        real      :: d_frob, d_trace, e1(3), e2(3)
         write(*,'(A)') 'test_geodesic_metrics'
         call a%new_ori(.false.)
         call b%new_ori(.false.)
@@ -581,9 +581,9 @@ contains
     !! rotations, a sample in which that round-off occurs.
     subroutine test_geodesic_trace_self_distance()
         integer, parameter :: NROT = 1000
-        type(ori) :: a
-        real    :: e(3), r(3), d, dmax
-        integer :: i
+        type(ori)          :: a
+        real               :: e(3), r(3), d, dmax
+        integer            :: i
         call a%new_ori(.false.)
         call set_fixed_seed(20260926)
         dmax = 0.
@@ -759,8 +759,8 @@ contains
 
     subroutine test_euler_compose_vs_compeuler()
         type(ori) :: o1, o2, o_out
-        real :: e1(3), e2(3), e_comp(3), e_out(3)
-        integer :: i
+        real      :: e1(3), e2(3), e_comp(3), e_out(3)
+        integer   :: i
         write(*,'(A)') 'test_euler_compose_vs_compeuler'
         e1 = [10.0, 20.0, 30.0]
         e2 = [5.0,  15.0, 25.0]
@@ -782,7 +782,7 @@ contains
     subroutine test_ori2str_and_str2ori_roundtrip()
         type(ori)    :: o1, o2
         type(string) :: s
-        real :: e1(3), e2(3), sh1(2), sh2(2)
+        real         :: e1(3), e2(3), sh1(2), sh2(2)
         write(*,'(A)') 'test_ori2str_and_str2ori_roundtrip'
         call o1%new_ori(.true.)
         call o1%set_state(2)
@@ -814,8 +814,8 @@ contains
 
     subroutine test_ori_from_rotmat()
         type(ori) :: o
-        real :: e_in(3), e_out(3), R_in(3,3), R_out(3,3)
-        integer :: i, j
+        real      :: e_in(3), e_out(3), R_in(3,3), R_out(3,3)
+        integer   :: i, j
         write(*,'(A)') 'test_ori_from_rotmat'
         e_in = [20.0, 40.0, 60.0]
         R_in = euler2m(e_in)
@@ -842,7 +842,7 @@ contains
 
     subroutine test_reject()
         type(ori) :: op, on
-        real :: e(3), sh(2)
+        real      :: e(3), sh(2)
         write(*,'(A)') 'test_reject'
         ! particle: pparms slots
         call op%new_ori(.true.)
@@ -943,7 +943,7 @@ contains
     !---------------- get_keys ----------------
 
     subroutine test_get_keys()
-        type(ori) :: on, op
+        type(ori)                 :: on, op
         type(string), allocatable :: keys(:)
         write(*,'(A)') 'test_get_keys'
         call on%new_ori(.false.)
@@ -1060,12 +1060,12 @@ contains
     !---------------- ori2json ----------------
 
     subroutine test_ori2json()
-        type(ori)                 :: o
-        type(json_core)           :: json
-        type(json_value), pointer :: json_ori
-        real(dp)                  :: dval
+        type(ori)                             :: o
+        type(json_core)                       :: json
+        type(json_value),         pointer     :: json_ori
+        real(dp)                              :: dval
         character(kind=CK,len=:), allocatable :: cval
-        logical :: found
+        logical                               :: found
         write(*,'(A)') 'test_ori2json'
         call o%new_ori(.false.)
         call o%set('kv',  300.0)

@@ -4,10 +4,10 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('nano2d', '2D Analysis', 30)
-type(ui_program), target :: analysis2D_nano
-type(ui_program), target :: center2D_nano
-type(ui_program), target :: refine2D_nano
-type(ui_program), target :: estimate_diam
+type(ui_program),          target    :: analysis2D_nano
+type(ui_program),          target    :: center2D_nano
+type(ui_program),          target    :: refine2D_nano
+type(ui_program),          target    :: estimate_diam
 
 contains
 

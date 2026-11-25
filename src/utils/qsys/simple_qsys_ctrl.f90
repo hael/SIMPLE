@@ -53,28 +53,28 @@ type qsys_ctrl
     integer,          allocatable :: jobs_last_check(:)            !< per-partition latest liveness check
     integer,          allocatable :: jobs_nmisses(:)               !< per-partition liveness checks in a row that found the job gone
     ! --- scheduler state ---
-    class(qsys_base), pointer     :: myqsys     => null()          !< polymorphic scheduler backend (not owned)
-    integer,          pointer     :: parts(:,:) => null()          !< fromp/top particle ranges for all partitions (not owned)
-    integer                       :: fromto_part(2)         = 0    !< [first, last] partition index managed by this instance
-    integer                       :: nparts_tot             = 0    !< total number of partitions across all instances
-    integer                       :: ncomputing_units       = 0    !< total computing slots available to this instance
-    integer                       :: ncomputing_units_avail = 0    !< slots currently free for new submissions
-    integer                       :: nthr_worker            = 1    !< thread slots required per job (persistent worker backend only)
-    integer                       :: numlen                 = 0    !< zero-padding width for partition index in file names
+    class(qsys_base), pointer     :: myqsys                 => null() !< polymorphic scheduler backend (not owned)
+    integer,          pointer     :: parts(:,:)             => null() !< fromp/top particle ranges for all partitions (not owned)
+    integer                       :: fromto_part(2)         = 0       !< [first, last] partition index managed by this instance
+    integer                       :: nparts_tot             = 0       !< total number of partitions across all instances
+    integer                       :: ncomputing_units       = 0       !< total computing slots available to this instance
+    integer                       :: ncomputing_units_avail = 0       !< slots currently free for new submissions
+    integer                       :: nthr_worker            = 1       !< thread slots required per job (persistent worker backend only)
+    integer                       :: numlen                 = 0       !< zero-padding width for partition index in file names
     ! --- job tracking ---
     logical,          allocatable :: jobs_done(:)                  !< .true. once a partition job has finished
     logical,          allocatable :: jobs_submitted(:)             !< .true. once a partition job has been submitted
     logical,          allocatable :: jobs_failed(:)                !< .true. once a partition job exited non-zero or vanished (batch)
     ! --- streaming state ---
-    class(cmdline),   allocatable :: stream_cline_stack(:)         !< pending command lines waiting for a free slot
-    class(cmdline),   allocatable :: stream_cline_submitted(:)     !< command lines currently running in each slot
-    class(cmdline),   allocatable :: stream_cline_done_stack(:)    !< command lines that completed successfully
-    class(cmdline),   allocatable :: stream_cline_fail_stack(:)    !< command lines that exited with an error
-    integer                       :: n_stream_updates       = 0    !< number of times update_queue has been called
-    integer                       :: cline_stacksz          = 0    !< current number of entries in stream_cline_stack
-    logical                       :: stream          = .false.     !< .true. when running in streaming (continuous) mode
-    logical                       :: existence       = .false.     !< .true. after new(); .false. after kill()
-    logical                       :: worker_priority = .false.     !< .true. for high priority workers (persistent worker backend only)
+    class(cmdline),   allocatable :: stream_cline_stack(:)            !< pending command lines waiting for a free slot
+    class(cmdline),   allocatable :: stream_cline_submitted(:)        !< command lines currently running in each slot
+    class(cmdline),   allocatable :: stream_cline_done_stack(:)       !< command lines that completed successfully
+    class(cmdline),   allocatable :: stream_cline_fail_stack(:)       !< command lines that exited with an error
+    integer                       :: n_stream_updates       = 0       !< number of times update_queue has been called
+    integer                       :: cline_stacksz          = 0       !< current number of entries in stream_cline_stack
+    logical                       :: stream                 = .false. !< .true. when running in streaming (continuous) mode
+    logical                       :: existence              = .false. !< .true. after new(); .false. after kill()
+    logical                       :: worker_priority        = .false. !< .true. for high priority workers (persistent worker backend only)
     procedure(worker_warmup_callback), pointer, nopass :: warmup_callback => null() !< optional callback used to relaunch workers on warm-up requests
     contains
     ! CONSTRUCTORS
@@ -131,12 +131,12 @@ contains
 
     !> Functional constructor: allocates and initialises in one call.
     function constructor( exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream ) result( self )
-        class(string),            intent(in) :: exec_binary      !< executable launched by generated scripts
-        class(qsys_base), target, intent(in) :: qsys_obj         !< scheduler backend (not owned)
-        integer,          target, intent(in) :: parts(:,:)       !< fromp/top particle ranges (not owned)
-        integer,                  intent(in) :: fromto_part(2)   !< [first, last] partition index for this instance
-        integer,                  intent(in) :: ncomputing_units !< total computing slots (<= partitions controlled)
-        logical,                  intent(in) :: stream           !< .true. for streaming / continuous mode
+        class(string),            intent(in)         :: exec_binary      !< executable launched by generated scripts
+        class(qsys_base),         target, intent(in) :: qsys_obj         !< scheduler backend (not owned)
+        integer,                  target, intent(in) :: parts(:,:)       !< fromp/top particle ranges (not owned)
+        integer,                  intent(in)         :: fromto_part(2)   !< [first, last] partition index for this instance
+        integer,                  intent(in)         :: ncomputing_units !< total computing slots (<= partitions controlled)
+        logical,                  intent(in)         :: stream           !< .true. for streaming / continuous mode
         type(qsys_ctrl) :: self
         call self%new(exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream)
     end function constructor
@@ -144,16 +144,16 @@ contains
     !> Initialise (or reinitialise) the controller: wire scheduler pointers, allocate
     !! tracking arrays, and pre-compute script and sentinel file names.
     subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream, numlen, nthr_worker, worker_priority, warmup_callback )
-        class(qsys_ctrl),         intent(inout) :: self             !< this instance
-        class(string),            intent(in)    :: exec_binary      !< executable launched by generated scripts
-        class(qsys_base), target, intent(in)    :: qsys_obj         !< scheduler backend (not owned)
-        integer,          target, intent(in)    :: parts(:,:)       !< fromp/top particle ranges (not owned)
-        integer,                  intent(in)    :: fromto_part(2)   !< [first, last] partition index for this instance
-        integer,                  intent(in)    :: ncomputing_units !< total computing slots (<= partitions controlled)
-        logical,                  intent(in)    :: stream           !< .true. for streaming / continuous mode
-        integer, optional,        intent(in)    :: numlen           !< explicit zero-padding width; derived from nparts_tot when absent
-        integer, optional,        intent(in)    :: nthr_worker      !< thread slots per job for persistent worker backend (default 1)
-        logical, optional,        intent(in)    :: worker_priority  !< .true. for high priority workers (default .false.)
+        class(qsys_ctrl),         intent(inout)               :: self             !< this instance
+        class(string),            intent(in)                  :: exec_binary      !< executable launched by generated scripts
+        class(qsys_base),         target, intent(in)          :: qsys_obj         !< scheduler backend (not owned)
+        integer,                  target, intent(in)          :: parts(:,:)       !< fromp/top particle ranges (not owned)
+        integer,                  intent(in)                  :: fromto_part(2)   !< [first, last] partition index for this instance
+        integer,                  intent(in)                  :: ncomputing_units !< total computing slots (<= partitions controlled)
+        logical,                  intent(in)                  :: stream           !< .true. for streaming / continuous mode
+        integer,                  optional,        intent(in) :: numlen           !< explicit zero-padding width; derived from nparts_tot when absent
+        integer,                  optional,        intent(in) :: nthr_worker      !< thread slots per job for persistent worker backend (default 1)
+        logical,                  optional,        intent(in) :: worker_priority  !< .true. for high priority workers (default .false.)
         procedure(worker_warmup_callback), optional :: warmup_callback !< callback invoked when server requests worker warm-up
         integer :: ipart
         call self%kill
@@ -213,9 +213,9 @@ contains
 
     !> Return copies of the jobs_done and jobs_submitted status arrays.
     subroutine get_jobs_status( self, jobs_done, jobs_submitted )
-        class(qsys_ctrl),     intent(in)    :: self
-        logical, allocatable, intent(inout) :: jobs_done(:)     !< copy of completion flags on return
-        logical, allocatable, intent(inout) :: jobs_submitted(:) !< copy of submission flags on return
+        class(qsys_ctrl),     intent(in)                 :: self
+        logical,              allocatable, intent(inout) :: jobs_done(:)      !< copy of completion flags on return
+        logical,              allocatable, intent(inout) :: jobs_submitted(:) !< copy of submission flags on return
         if( allocated(jobs_done) )      deallocate(jobs_done)
         if( allocated(jobs_submitted) ) deallocate(jobs_submitted)
         allocate(jobs_done(size(self%jobs_done)),           source=self%jobs_done)
@@ -270,11 +270,11 @@ contains
     ! SCRIPT GENERATORS
 
     subroutine augment_partition_job_descr( self, job_descr, ipart, outfile_body, part_params )
-        class(qsys_ctrl),           intent(in)    :: self
-        class(chash),               intent(inout) :: job_descr
-        integer,                    intent(in)    :: ipart
-        type(string),               intent(in)    :: outfile_body
-        class(chash),     optional, intent(in)    :: part_params(:)
+        class(qsys_ctrl),           intent(in)           :: self
+        class(chash),               intent(inout)        :: job_descr
+        integer,                    intent(in)           :: ipart
+        type(string),               intent(in)           :: outfile_body
+        class(chash),               optional, intent(in) :: part_params(:)
         type(string) :: key, val
         integer      :: iadd
         call job_descr%set('fromp',  int2str(self%parts(ipart,1)))
@@ -294,10 +294,10 @@ contains
     end subroutine augment_partition_job_descr
 
     subroutine clear_partition_job_descr( self, job_descr, outfile_body, part_params )
-        class(qsys_ctrl),           intent(in)    :: self
-        class(chash),               intent(inout) :: job_descr
-        type(string),               intent(inout) :: outfile_body
-        class(chash),     optional, intent(in)    :: part_params(:)
+        class(qsys_ctrl),           intent(in)           :: self
+        class(chash),               intent(inout)        :: job_descr
+        type(string),               intent(inout)        :: outfile_body
+        class(chash),               optional, intent(in) :: part_params(:)
         type(string) :: key
         integer      :: ipart, iadd
         call job_descr%delete('fromp')
@@ -323,13 +323,13 @@ contains
     !! command string per partition.  Resets
     !! ncomputing_units_avail when not in streaming mode.
     subroutine prep_part_jobs( self, job_descr, ext, q_descr, outfile_body, part_params, extra_params )
-        class(qsys_ctrl),           intent(inout) :: self
-        class(chash),               intent(inout) :: job_descr         !< base job description (modified in-place, restored on return)
-        class(string),              intent(in)    :: ext               !< output file extension written into outfile keys
-        class(chash),               intent(inout) :: q_descr           !< queue-system metadata
-        class(string),    optional, intent(in)    :: outfile_body      !< base name for per-partition output files
-        class(chash),     optional, intent(in)    :: part_params(:)    !< per-partition extra key/value pairs
-        type(parameters), optional, intent(in)    :: extra_params      !< extra parameters passed to memory estimator
+        class(qsys_ctrl),           intent(inout)        :: self
+        class(chash),               intent(inout)        :: job_descr      !< base job description (modified in-place, restored on return)
+        class(string),              intent(in)           :: ext            !< output file extension written into outfile keys
+        class(chash),               intent(inout)        :: q_descr        !< queue-system metadata
+        class(string),              optional, intent(in) :: outfile_body   !< base name for per-partition output files
+        class(chash),               optional, intent(in) :: part_params(:) !< per-partition extra key/value pairs
+        type(parameters),           optional, intent(in) :: extra_params   !< extra parameters passed to memory estimator
         type(string) :: outfile_body_local
         integer      :: ipart
         if( job_descr%isthere('prg') ) self%phase_label = job_descr%get('prg')
@@ -353,12 +353,12 @@ contains
     !! backend.  This mirrors prep_part_jobs() argument augmentation, but keeps
     !! the work in memory instead of writing distr_simple_script_* files.
     subroutine stage_coarray_jobs( self, job_descr, q_descr, outfile_body, part_params, extra_params )
-        class(qsys_ctrl),           intent(inout) :: self
-        class(chash),               intent(inout) :: job_descr
-        class(chash),               intent(inout) :: q_descr
-        class(string),    optional, intent(in)    :: outfile_body
-        class(chash),     optional, intent(in)    :: part_params(:)
-        type(parameters), optional, intent(in)    :: extra_params
+        class(qsys_ctrl),           intent(inout)        :: self
+        class(chash),               intent(inout)        :: job_descr
+        class(chash),               intent(inout)        :: q_descr
+        class(string),              optional, intent(in) :: outfile_body
+        class(chash),               optional, intent(in) :: part_params(:)
+        type(parameters),           optional, intent(in) :: extra_params
         type(string) :: outfile_body_local, job_str
         integer      :: ipart
         if( present(outfile_body) ) outfile_body_local = outfile_body
@@ -379,14 +379,14 @@ contains
     !! selects the element indexed by SLURM_ARRAY_TASK_ID at runtime.
     !! Only supported by SLURM and LSF — aborts for other backends.
     subroutine generate_array_script( self, job_descr, ext, q_descr, outfile_body, part_params )
-        class(qsys_ctrl),           intent(inout) :: self
-        class(chash),               intent(inout) :: job_descr         !< base job description (modified in-place, restored on return)
-        class(string),              intent(in)    :: ext               !< output file extension
-        class(chash),               intent(in)    :: q_descr           !< queue-system metadata
-        class(string),    optional, intent(in)    :: outfile_body      !< base name for per-partition output files
-        class(chash),     optional, intent(in)    :: part_params(:)    !< per-partition extra key/value pairs
-        type(string) :: outfile_body_local, job_str
-        integer :: ipart, ios, funit
+        class(qsys_ctrl),           intent(inout)        :: self
+        class(chash),               intent(inout)        :: job_descr      !< base job description (modified in-place, restored on return)
+        class(string),              intent(in)           :: ext            !< output file extension
+        class(chash),               intent(in)           :: q_descr        !< queue-system metadata
+        class(string),              optional, intent(in) :: outfile_body   !< base name for per-partition output files
+        class(chash),               optional, intent(in) :: part_params(:) !< per-partition extra key/value pairs
+        type(string)       :: outfile_body_local, job_str
+        integer            :: ipart, ios, funit
         character(len=512) :: io_msg
         select type( pmyqsys => self%myqsys )
             class is(qsys_slurm)
@@ -453,8 +453,8 @@ contains
         integer,          intent(in)    :: ipart     !< partition index
         class(chash),     intent(in)    :: q_descr   !< queue-system metadata
         character(len=512) :: io_msg
-        type(string) :: job_str
-        integer      :: ios, funit
+        type(string)       :: job_str
+        integer            :: ios, funit
         call fopen(funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileiochk('simple_qsys_ctrl :: generate_script_part; Error when opening file for writing: '&
                 //self%script_names(ipart)%to_char()//' ; '//trim(io_msg),ios )
@@ -499,16 +499,16 @@ contains
     !! appended to SIMPLE_SUBPROC_OUT.  When exit_code_fname is present the exit
     !! status is written to that file after the executable finishes.
     subroutine generate_script_job( self, job_descr, q_descr, exec_bin, script_name, outfile, exit_code_fname )
-        class(qsys_ctrl),        intent(in) :: self
-        class(chash),            intent(in) :: job_descr        !< job key/value parameters
-        class(chash),            intent(in) :: q_descr          !< queue-system metadata
-        class(string),           intent(in) :: exec_bin         !< executable to invoke
-        class(string),           intent(in) :: script_name      !< path of the script to write
-        class(string), optional, intent(in) :: outfile          !< redirect stdout/stderr here when present
-        class(string), optional, intent(in) :: exit_code_fname  !< write $? to this file when present
+        class(qsys_ctrl),        intent(in)           :: self
+        class(chash),            intent(in)           :: job_descr       !< job key/value parameters
+        class(chash),            intent(in)           :: q_descr         !< queue-system metadata
+        class(string),           intent(in)           :: exec_bin        !< executable to invoke
+        class(string),           intent(in)           :: script_name     !< path of the script to write
+        class(string),           optional, intent(in) :: outfile         !< redirect stdout/stderr here when present
+        class(string),           optional, intent(in) :: exit_code_fname !< write $? to this file when present
         character(len=512) :: io_msg
-        type(string) :: job_str
-        integer      :: ios, funit
+        type(string)       :: job_str
+        integer            :: ios, funit
         call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileiochk('simple_qsys_ctrl :: generate_script_job; Error when opening file: '//&
             &script_name%to_char()//' ; '//trim(io_msg),ios )
@@ -572,17 +572,17 @@ contains
     !! that fails ends the script, and the status of the failed or last job is
     !! written there.
     subroutine generate_script_jobs( self, jobs_descr, q_descr, exec_bin, script_name, outfile, exec_bins, exit_code_fname )
-        class(qsys_ctrl),          intent(in) :: self
-        type(chash),  allocatable, intent(in) :: jobs_descr(:)  !< one job description per sequential task
-        class(chash),              intent(in) :: q_descr         !< queue-system metadata
-        class(string),             intent(in) :: exec_bin        !< default executable
-        class(string),             intent(in) :: script_name     !< path of the script to write
-        class(string),             intent(in) :: outfile         !< shared stdout/stderr log path
-        class(string), optional,   intent(in) :: exec_bins(:)    !< per-job executable overrides
-        class(string), optional,   intent(in) :: exit_code_fname !< write the status of the failed or last job here
-        type(string) :: execution_binary, job_str
+        class(qsys_ctrl),          intent(in)              :: self
+        type(chash),               allocatable, intent(in) :: jobs_descr(:)   !< one job description per sequential task
+        class(chash),              intent(in)              :: q_descr         !< queue-system metadata
+        class(string),             intent(in)              :: exec_bin        !< default executable
+        class(string),             intent(in)              :: script_name     !< path of the script to write
+        class(string),             intent(in)              :: outfile         !< shared stdout/stderr log path
+        class(string),             optional,   intent(in)  :: exec_bins(:)    !< per-job executable overrides
+        class(string),             optional,   intent(in)  :: exit_code_fname !< write the status of the failed or last job here
+        type(string)       :: execution_binary, job_str
         character(len=512) :: io_msg
-        integer :: ios, funit, i, njobs
+        integer            :: ios, funit, i, njobs
         call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileiochk('simple_qsys_ctrl :: generate_script_jobs; Error when opening file: '//&
             &script_name%to_char()//' ; '//trim(io_msg),ios )
@@ -829,7 +829,7 @@ contains
     !! If the server is not associated the task is silently dropped with a log warning.
     subroutine dispatch_task_to_persistent_worker( self, script_path, nthr )
         class(qsys_ctrl),             intent(inout) :: self
-        type(string),                 intent(in)    :: script_path !< absolute path of the script to enqueue
+        type(string),                 intent(in)    :: script_path  !< absolute path of the script to enqueue
         integer,                      intent(in)    :: nthr         !< thread slots required by this task
         type(qsys_persistent_worker_message_task)   :: task_msg
         if( .not. associated(persistent_worker%server) ) then
@@ -957,7 +957,7 @@ contains
     subroutine schedule_array_jobs( self )
         class(qsys_ctrl), intent(inout) :: self
         integer(timer_int_kind) :: t_phase
-        integer :: ipart
+        integer                 :: ipart
         t_phase = tic()
         do ipart = self%fromto_part(1), self%fromto_part(2)
             call clear_job_status(self, ipart)
@@ -1003,7 +1003,7 @@ contains
     function failed_parts( self ) result( parts )
         class(qsys_ctrl), intent(inout) :: self
         integer, allocatable :: parts(:)
-        integer :: ipart
+        integer              :: ipart
         call self%update_queue
         allocate(parts(0))
         if( .not. allocated(self%jobs_failed) ) return
@@ -1043,7 +1043,7 @@ contains
         class(qsys_ctrl), intent(in) :: self
         real,             intent(in) :: seconds
         character(len=32) :: elapsed
-        integer :: n
+        integer           :: n
         n = 0
         if( allocated(self%jobs_done) ) n = size(self%jobs_done)
         if( n < 1 ) return
@@ -1057,10 +1057,10 @@ contains
     !! free slot from the pending command-line stack.  When path is supplied the working
     !! directory is changed for the duration of the call and restored on return.
     subroutine schedule_streaming( self, q_descr, path )
-        class(qsys_ctrl),        intent(inout) :: self
-        class(chash),            intent(in)    :: q_descr          !< queue-system metadata
-        type(string),  optional, intent(in)    :: path             !< working directory override
-        type(chash) :: job_descr
+        class(qsys_ctrl),        intent(inout)        :: self
+        class(chash),            intent(in)           :: q_descr   !< queue-system metadata
+        type(string),            optional, intent(in) :: path      !< working directory override
+        type(chash)  :: job_descr
         type(string) :: cwd, cwd_old
         integer      :: ipart
         ! Optionally change to the requested working directory.
@@ -1151,7 +1151,7 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         class(cmdline),   intent(in)    :: cline !< command line to enqueue
         class(cmdline), allocatable :: tmp_stack(:)
-        integer :: i
+        integer                     :: i
         if( .not. allocated(self%stream_cline_stack) ) then
             ! First entry: allocate a single-element stack.
             allocate(self%stream_cline_stack(1), source=cline)
@@ -1173,11 +1173,11 @@ contains
     !> Append cline to an arbitrary allocatable cmdline stack (used for done/fail stacks).
     !! No-op when cline has no 'prg' key set.
     subroutine add_to_stream_stack( self, cline, stack )
-        class(qsys_ctrl),            intent(inout) :: self
-        class(cmdline),              intent(in)    :: cline   !< command line to append
-        class(cmdline), allocatable, intent(inout) :: stack(:) !< target stack
+        class(qsys_ctrl),            intent(inout)              :: self
+        class(cmdline),              intent(in)                 :: cline    !< command line to append
+        class(cmdline),              allocatable, intent(inout) :: stack(:) !< target stack
         class(cmdline), allocatable :: tmp_stack(:)
-        integer :: stacksz, i
+        integer                     :: stacksz, i
         if( .not. cline%defined('prg') ) return  ! guard: only track jobs that have a program
         if( .not. allocated(stack) ) then
             allocate(stack(1), source=cline)
@@ -1197,17 +1197,17 @@ contains
 
     !> Transfer the completed-job stack to clines and clear it; no-op when empty.
     subroutine get_stream_done_stack( self, clines )
-        class(qsys_ctrl),            intent(inout) :: self
-        class(cmdline), allocatable, intent(out)   :: clines(:) !< receives ownership of the done stack
+        class(qsys_ctrl),            intent(inout)            :: self
+        class(cmdline),              allocatable, intent(out) :: clines(:) !< receives ownership of the done stack
         if( .not. allocated(self%stream_cline_done_stack) ) return
         call move_alloc(self%stream_cline_done_stack, clines)
     end subroutine get_stream_done_stack
 
     !> Transfer the failed-job stack to clines, set n = size; no-op when empty.
     subroutine get_stream_fail_stack( self, clines, n )
-        class(qsys_ctrl),            intent(inout) :: self
-        class(cmdline), allocatable, intent(out)   :: clines(:) !< receives ownership of the fail stack
-        integer,                     intent(out)   :: n         !< number of failed jobs transferred
+        class(qsys_ctrl),            intent(inout)            :: self
+        class(cmdline),              allocatable, intent(out) :: clines(:) !< receives ownership of the fail stack
+        integer,                     intent(out)              :: n         !< number of failed jobs transferred
         n = 0
         if( .not. allocated(self%stream_cline_fail_stack) ) return
         call move_alloc(self%stream_cline_fail_stack, clines)

@@ -46,18 +46,18 @@ contains
     !! The union means then republish every record unchanged with both means over the union. The frozen
     !! store spans a row block (5000 rows), the union adds 1000 rows.
     subroutine test_addon_copy_on_write()
-        integer, parameter :: NFRZ = 5000, NUNI = 6000, BOXT = 16, NSH = BOXT/2
-        character(len=*), parameter :: frozen = 'cow_frozen_sigma2.bin', committed = 'cow_sigma2_state.bin'
-        type(sigma2_state_header) :: header, back
-        real(real32), allocatable :: records(:,:), loaded(:,:), fglobal(:,:), global(:,:)
-        logical, allocatable :: copy_rows(:), seed_rows(:), active(:)
-        integer, allocatable :: eo(:)
-        real(real64) :: expect(NSH,2)
-        integer(int64) :: n2(2)
-        type(string) :: candidate
-        character(len=256) :: message
-        integer :: status, i, h
-        logical :: l_ok
+        integer,          parameter   :: NFRZ   = 5000, NUNI = 6000, BOXT = 16, NSH = BOXT/2
+        character(len=*), parameter   :: frozen = 'cow_frozen_sigma2.bin', committed = 'cow_sigma2_state.bin'
+        type(sigma2_state_header)     :: header, back
+        real(real32),     allocatable :: records(:,:), loaded(:,:), fglobal(:,:), global(:,:)
+        logical,          allocatable :: copy_rows(:), seed_rows(:), active(:)
+        integer,          allocatable :: eo(:)
+        real(real64)                  :: expect(NSH,2)
+        integer(int64)                :: n2(2)
+        type(string)                  :: candidate
+        character(len=256)            :: message
+        integer                       :: status, i, h
+        logical                       :: l_ok
         write(*,'(A)') 'test_addon_copy_on_write'
         call del_file(frozen)
         call del_file(frozen//'.next')
@@ -162,15 +162,15 @@ contains
     !! publication replaces the store and leaves the ranges for the caller. 9000 rows span blocks.
     subroutine test_global_transaction(nptcls)
         integer,          intent(in) :: nptcls
-        character(len=*), parameter  :: prefix = 'global'
-        type(sigma2_state_header) :: header
-        type(string) :: ranges(2), refs(2)
-        real(real32), allocatable :: spectra(:,:), loaded(:,:)
-        logical, allocatable :: scheduled(:), active(:)
-        integer, allocatable :: eo(:), stack_ids(:), stack_indices(:)
-        character(len=128) :: candidate, committed, message
-        integer(int64) :: digest, prefix_digest
-        integer :: i, status, midpoint
+        character(len=*), parameter   :: prefix = 'global'
+        type(sigma2_state_header)     :: header
+        type(string)                  :: ranges(2), refs(2)
+        real(real32),     allocatable :: spectra(:,:), loaded(:,:)
+        logical,          allocatable :: scheduled(:), active(:)
+        integer,          allocatable :: eo(:), stack_ids(:), stack_indices(:)
+        character(len=128)            :: candidate, committed, message
+        integer(int64)                :: digest, prefix_digest
+        integer                       :: i, status, midpoint
         write(*,'(A)') 'test_global_transaction'
         committed = trim(prefix)//'_sigma2_state.bin'
         candidate = trim(prefix)//'_sigma2_state.next'
@@ -232,16 +232,16 @@ contains
     !> A row outside the schedule is taken from the committed store, and the global spectra still equal a
     !! full reduction of the candidate's records
     subroutine test_unscheduled_rows_from_committed()
-        integer,          parameter :: NP = 6
-        integer(int64),   parameter :: DIGEST = 551_int64
-        character(len=*), parameter :: COMMITTED = 'partial_sigma2_state.bin'
-        character(len=*), parameter :: RANGE = 'partial_sigma2_range.bin'
-        type(sigma2_state_header) :: header
-        real(real32), allocatable :: loaded(:,:)
-        real(real32) :: old(3,NP), new(3,NP)
-        logical :: scheduled(NP), active(NP)
-        integer :: eo(NP), i, status
-        character(len=128) :: candidate, message
+        integer,          parameter   :: NP        = 6
+        integer(int64),   parameter   :: DIGEST    = 551_int64
+        character(len=*), parameter   :: COMMITTED = 'partial_sigma2_state.bin'
+        character(len=*), parameter   :: RANGE     = 'partial_sigma2_range.bin'
+        type(sigma2_state_header)     :: header
+        real(real32),     allocatable :: loaded(:,:)
+        real(real32)                  :: old(3,NP), new(3,NP)
+        logical                       :: scheduled(NP), active(NP)
+        integer                       :: eo(NP), i, status
+        character(len=128)            :: candidate, message
         write(*,'(A)') 'test_unscheduled_rows_from_committed'
         candidate = 'partial_sigma2_state.next'
         call cleanup(candidate, COMMITTED, RANGE, RANGE)
@@ -274,13 +274,13 @@ contains
     !! and validation: the stack grouping policy, two groups, the STAR-seed provenance (3) and the
     !! direct range mode (2). Each is patched into a valid committed store.
     subroutine test_retired_header_words()
-        integer, parameter :: W_NGROUPS=8, W_GROUPING=9, W_PROVENANCE=11, W_RANGE_IO=13
+        integer,          parameter :: W_NGROUPS = 8, W_GROUPING=9, W_PROVENANCE=11, W_RANGE_IO=13
         character(len=*), parameter :: COMMITTED = 'retired_sigma2_state.bin'
-        type(sigma2_state_header) :: header
-        type(string) :: candidate
-        real(real32) :: spectra(3,4), globals(3,2)
-        character(len=128) :: message
-        integer :: status
+        type(sigma2_state_header)   :: header
+        type(string)                :: candidate
+        real(real32)                :: spectra(3,4), globals(3,2)
+        character(len=128)          :: message
+        integer                     :: status
         write(*,'(A)') 'test_retired_header_words'
         candidate = trim(COMMITTED)//'.next'
         call write_valid_store
@@ -333,18 +333,18 @@ contains
         use simple_sp_project,       only: sp_project
         use simple_ptcl_layout,      only: ptcl_layout_digest
         use simple_sigma2_bootstrap, only: sigma2_estimate_available
-        integer, parameter :: NP = 6, BOXT = 8
-        real,    parameter :: SMPDT = 1.5
-        character(len=*), parameter :: PROJ = 'tmp_sigma2_state_tester_proj.simple'
-        character(len=*), parameter :: COMM = 'tmp_sigma2_state_tester.bin'
+        integer,          parameter :: NP        = 6, BOXT = 8
+        real,             parameter :: SMPDT     = 1.5
+        character(len=*), parameter :: PROJ      = 'tmp_sigma2_state_tester_proj.simple'
+        character(len=*), parameter :: COMM      = 'tmp_sigma2_state_tester.bin'
         character(len=*), parameter :: COPY_DIR  = 'tmp_sigma2_state_tester_copy'
         character(len=*), parameter :: COPY_PROJ = COPY_DIR//'/test.simple'
-        type(sp_project) :: project
-        type(sigma2_state_header) :: header
-        real(real32) :: spectra(BOXT/2, NP)
-        logical :: active(NP)
-        integer :: eo(NP), i, status
-        integer(int64) :: digest
+        type(sp_project)            :: project
+        type(sigma2_state_header)   :: header
+        real(real32)                :: spectra(BOXT/2, NP)
+        logical                     :: active(NP)
+        integer                     :: eo(NP), i, status
+        integer(int64)              :: digest
         write(*,'(A)') 'test_estimate_available_on_disk'
         call cleanup(COMM, trim(COMM)//'.next', PROJ, PROJ)
         ! as a project read from its file: named after the file, in the file's directory
@@ -391,20 +391,20 @@ contains
     end subroutine test_estimate_available_on_disk
 
     subroutine test_particle_io_layout()
-        type(sigma2_state_header) :: header
-        real(real32), allocatable :: loaded(:,:), globals(:,:)
-        real(real32) :: spectra(3,4)
-        logical :: active(4)
-        integer :: eo(4), status, funit
-        integer(int64) :: range_words(16), state_words(32)
-        integer :: first_row, last_row, kfrom, kto
-        integer(int64), parameter :: DIGEST = 661_int64
-        integer(int64), parameter :: RANGE_HEADER_BYTES = 256_int64
-        integer(int64) :: generation, layout_digest, expected_bytes, actual_bytes
-        character(len=128) :: message
-        character(len=*), parameter :: CANDIDATE = 'layout_sigma2_state.next'
-        character(len=*), parameter :: COMMITTED = 'layout_sigma2_state.bin'
-        character(len=*), parameter :: RANGE = 'layout_sigma2_range.bin'
+        type(sigma2_state_header)     :: header
+        real(real32),     allocatable :: loaded(:,:), globals(:,:)
+        real(real32)                  :: spectra(3,4)
+        logical                       :: active(4)
+        integer                       :: eo(4), status, funit
+        integer(int64)                :: range_words(16), state_words(32)
+        integer                       :: first_row, last_row, kfrom, kto
+        integer(int64),   parameter   :: DIGEST             = 661_int64
+        integer(int64),   parameter   :: RANGE_HEADER_BYTES = 256_int64
+        integer(int64)                :: generation, layout_digest, expected_bytes, actual_bytes
+        character(len=128)            :: message
+        character(len=*), parameter   :: CANDIDATE          = 'layout_sigma2_state.next'
+        character(len=*), parameter   :: COMMITTED          = 'layout_sigma2_state.bin'
+        character(len=*), parameter   :: RANGE              = 'layout_sigma2_range.bin'
         write(*,'(A)') 'test_particle_io_layout'
         call cleanup(CANDIDATE, COMMITTED, RANGE, RANGE)
         spectra(:,1) = [1.0,2.0,3.0]
@@ -510,16 +510,16 @@ contains
     !> An uncovered row, a doubly covered row and a range of another transaction are refused before
     !! anything is published, the committed file untouched; a truncated candidate is refused
     subroutine test_recovery_guards()
-        type(sigma2_state_header) :: header, committed_header
-        type(string) :: ranges(2)
-        real(real32) :: spectra(3,4)
-        logical :: scheduled(4), active(4)
-        integer :: eo(4), status, funit
-        integer(int8), allocatable :: committed_bytes(:)
-        integer(int64), parameter :: DIGEST = 771_int64
-        character(len=128) :: message
-        character(len=*), parameter :: CANDIDATE='guard_sigma2_state.next'
-        character(len=*), parameter :: COMMITTED='guard_sigma2_state.bin'
+        type(sigma2_state_header)     :: header, committed_header
+        type(string)                  :: ranges(2)
+        real(real32)                  :: spectra(3,4)
+        logical                       :: scheduled(4), active(4)
+        integer                       :: eo(4), status, funit
+        integer(int8),    allocatable :: committed_bytes(:)
+        integer(int64),   parameter   :: DIGEST    = 771_int64
+        character(len=128)            :: message
+        character(len=*), parameter   :: CANDIDATE = 'guard_sigma2_state.next'
+        character(len=*), parameter   :: COMMITTED = 'guard_sigma2_state.bin'
         write(*,'(A)') 'test_recovery_guards'
         ranges(1) = 'guard_range_1.bin'
         ranges(2) = 'guard_range_2.bin'
@@ -581,16 +581,16 @@ contains
     !> A publication that fails (the assembled candidate's header damaged before it is published) leaves the
     !! committed store and the range files in place, and the commit reruns from the same ranges
     subroutine test_failed_publication()
-        integer(int64),   parameter :: DIGEST = 881_int64
-        character(len=*), parameter :: CANDIDATE = 'failpub_sigma2_state.next'
-        character(len=*), parameter :: COMMITTED = 'failpub_sigma2_state.bin'
-        character(len=*), parameter :: RANGE     = 'failpub_sigma2_range.bin'
-        type(sigma2_state_header) :: header
-        real(real32) :: spectra(3,4)
-        logical :: scheduled(4), active(4)
-        integer :: eo(4), status
-        integer(int8), allocatable :: committed_bytes(:)
-        character(len=128) :: message
+        integer(int64),   parameter   :: DIGEST    = 881_int64
+        character(len=*), parameter   :: CANDIDATE = 'failpub_sigma2_state.next'
+        character(len=*), parameter   :: COMMITTED = 'failpub_sigma2_state.bin'
+        character(len=*), parameter   :: RANGE     = 'failpub_sigma2_range.bin'
+        type(sigma2_state_header)     :: header
+        real(real32)                  :: spectra(3,4)
+        logical                       :: scheduled(4), active(4)
+        integer                       :: eo(4), status
+        integer(int8),    allocatable :: committed_bytes(:)
+        character(len=128)            :: message
         write(*,'(A)') 'test_failed_publication'
         call cleanup(CANDIDATE, COMMITTED, RANGE, RANGE)
         spectra = 1.0_real32
@@ -621,14 +621,14 @@ contains
     end subroutine test_failed_publication
 
     subroutine test_update_preparation()
-        type(sigma2_state_header) :: header
-        type(string) :: candidate_path, range_path
-        real(real32) :: spectra(3,4)
-        logical :: active(4)
-        integer :: eo(4), status, funit
-        integer(int64), parameter :: DIGEST = 991_int64
-        integer(int64) :: next_gen
-        character(len=128) :: message
+        type(sigma2_state_header)   :: header
+        type(string)                :: candidate_path, range_path
+        real(real32)                :: spectra(3,4)
+        logical                     :: active(4)
+        integer                     :: eo(4), status, funit
+        integer(int64),   parameter :: DIGEST    = 991_int64
+        integer(int64)              :: next_gen
+        character(len=128)          :: message
         character(len=*), parameter :: COMMITTED = 'sigma2_state.bin'
         write(*,'(A)') 'test_update_preparation'
         candidate_path = sigma2_state_candidate_path(COMMITTED, 1_int64)
@@ -675,16 +675,16 @@ contains
     !> Two committed stores concatenated in blocks into one candidate: the rows follow one another and the
     !! global spectra equal a full reduction of the result
     subroutine test_concatenation()
-        integer,          parameter :: NA = 5000, NB = 3
-        character(len=*), parameter :: STORE_A = 'concat_a_sigma2_state.bin'
-        character(len=*), parameter :: STORE_B = 'concat_b_sigma2_state.bin'
-        character(len=*), parameter :: CANDIDATE = 'concat_sigma2_state.next'
-        type(sigma2_state_header) :: header
-        real(real32), allocatable :: loaded(:,:)
-        real(real32) :: rows_a(3,NA), rows_b(3,NB)
-        logical :: active(NA+NB)
-        integer :: eo(NA+NB), i, status
-        character(len=128) :: message
+        integer,          parameter   :: NA        = 5000, NB = 3
+        character(len=*), parameter   :: STORE_A   = 'concat_a_sigma2_state.bin'
+        character(len=*), parameter   :: STORE_B   = 'concat_b_sigma2_state.bin'
+        character(len=*), parameter   :: CANDIDATE = 'concat_sigma2_state.next'
+        type(sigma2_state_header)     :: header
+        real(real32),     allocatable :: loaded(:,:)
+        real(real32)                  :: rows_a(3,NA), rows_b(3,NB)
+        logical                       :: active(NA+NB)
+        integer                       :: eo(NA+NB), i, status
+        character(len=128)            :: message
         write(*,'(A)') 'test_concatenation'
         call cleanup(STORE_A, STORE_B, CANDIDATE, CANDIDATE)
         do i = 1, NA
@@ -721,16 +721,16 @@ contains
     !! instead of aborting; the global spectra are the means of the valid records, as a full reduction
     !! forms them
     subroutine test_invalid_record_skip()
-        type(sigma2_state_header) :: header
-        type(string) :: range_path
-        real(real32), allocatable :: stored(:,:)
-        real(real32) :: spectra(3,4), expected_even(3), expected_odd(3)
-        logical :: active(4)
-        integer :: eo(4), status
-        integer(int64), parameter :: DIGEST = 1231_int64
-        character(len=128) :: message
-        character(len=*), parameter :: COMMITTED = 'skip_sigma2_state.bin'
-        character(len=*), parameter :: CANDIDATE = 'skip_sigma2_state.next'
+        type(sigma2_state_header)     :: header
+        type(string)                  :: range_path
+        real(real32),     allocatable :: stored(:,:)
+        real(real32)                  :: spectra(3,4), expected_even(3), expected_odd(3)
+        logical                       :: active(4)
+        integer                       :: eo(4), status
+        integer(int64),   parameter   :: DIGEST    = 1231_int64
+        character(len=128)            :: message
+        character(len=*), parameter   :: COMMITTED = 'skip_sigma2_state.bin'
+        character(len=*), parameter   :: CANDIDATE = 'skip_sigma2_state.next'
         write(*,'(A)') 'test_invalid_record_skip'
         range_path = sigma2_state_range_path(COMMITTED, 2_int64, 1, 1)
         call cleanup(COMMITTED, CANDIDATE, range_path%to_char(), range_path%to_char())
@@ -772,7 +772,7 @@ contains
         logical,                   intent(in)    :: active(:)
         integer,                   intent(in)    :: eo(:)
         character(len=128) :: message
-        integer :: status
+        integer            :: status
         call del_file(path)
         call sigma2_state_create_candidate(trim(path)//'.next', header, status, message)
         call require_ok(status, message)
@@ -792,8 +792,8 @@ contains
         logical,          intent(in) :: active(:)
         integer,          intent(in) :: eo(:)
         real(real32), allocatable :: streamed(:,:), reduced(:,:)
-        character(len=128) :: message
-        integer :: status
+        character(len=128)        :: message
+        integer                   :: status
         call sigma2_state_read_global(candidate, streamed, status, message)
         call require_ok(status, message)
         call reduce_store(candidate, active, eo, status, message)
@@ -816,8 +816,8 @@ contains
         type(sigma2_state_header) :: header
         real(real32), allocatable :: spectra(:,:), global(:,:)
         real(real64), allocatable :: sums(:,:)
-        integer(int64) :: counts(2)
-        integer :: i, half, nshell
+        integer(int64)            :: counts(2)
+        integer                   :: i, half, nshell
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
         if( size(active) /= header%nptcls .or. size(eo) /= header%nptcls )then
@@ -852,8 +852,8 @@ contains
         character(len=*), intent(in) :: path
         integer(int64),   intent(in) :: expected
         type(sigma2_state_header) :: header
-        character(len=128) :: message
-        integer :: status
+        character(len=128)        :: message
+        integer                   :: status
         call sigma2_state_read_header(path, header, status, message)
         call require_ok(status, message)
         call require(header%generation == expected, 'candidate transaction preserves committed generation until publication')
@@ -869,10 +869,10 @@ contains
     end subroutine assert_file_unchanged
 
     subroutine read_file_bytes(path, bytes)
-        character(len=*), intent(in) :: path
-        integer(int8), allocatable, intent(out) :: bytes(:)
+        character(len=*), intent(in)               :: path
+        integer(int8),    allocatable, intent(out) :: bytes(:)
         integer(int64) :: file_bytes
-        integer :: funit, io_stat
+        integer        :: funit, io_stat
         inquire(file=path, size=file_bytes, iostat=io_stat)
         call require(io_stat == 0 .and. file_bytes > 0_int64, 'committed file can be sized')
         allocate(bytes(file_bytes))

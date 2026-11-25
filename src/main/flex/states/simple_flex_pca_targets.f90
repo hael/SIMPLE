@@ -24,20 +24,20 @@ contains
         real(dp), intent(in)  :: z(nptcls,ncomp), wcomp(ncomp), rho(ncomp)
         real(dp), intent(out) :: centroids(ncomp,nstates)
         logical,  intent(out) :: ok
-        integer,  parameter :: NNODE_MAX = 20000   ! graph nodes; kd-tree kNN keeps this affordable
-        integer,  parameter :: KNN       = 24      ! neighbours per node in the affinity graph
-        integer,  parameter :: NDIFF     = 2       ! non-trivial diffusion coordinates retained
-        integer,  parameter :: NPOW      = 300     ! orthogonal-iteration sweeps
-        real(dp), parameter :: RHO_FLOOR = 0.1d0
-        type(kd_tree)   :: tree
-        type(knn_table) :: knntab
+        integer,  parameter   :: NNODE_MAX = 20000 ! graph nodes; kd-tree kNN keeps this affordable
+        integer,  parameter   :: KNN       = 24    ! neighbours per node in the affinity graph
+        integer,  parameter   :: NDIFF     = 2     ! non-trivial diffusion coordinates retained
+        integer,  parameter   :: NPOW      = 300   ! orthogonal-iteration sweeps
+        real(dp), parameter   :: RHO_FLOOR = 0.1d0
+        type(kd_tree)         :: tree
+        type(knn_table)       :: knntab
         real,     allocatable :: feats(:,:)
         integer,  allocatable :: nodes(:), er(:), ec(:), sel(:), cell(:), ccnt(:)
         real(dp), allocatable :: ev(:), sig(:), qdeg(:), ddeg(:), V(:,:), W(:,:), lam(:)
         real(dp), allocatable :: psi(:,:), rw(:), zbar(:), sdv(:)
-        type(kcenter) :: kc
-        real(dp) :: d2, s, nrm, wk1
-        integer  :: nnode, i, j, q, e, nedge, it, m, c, ni
+        type(kcenter)         :: kc
+        real(dp)              :: d2, s, nrm, wk1
+        integer               :: nnode, i, j, q, e, nedge, it, m, c, ni
         ok = .false.
         if( nstates < 2 .or. nptcls < 100 ) return
         nnode = min(nptcls, NNODE_MAX)
@@ -181,7 +181,7 @@ contains
         integer,  intent(in)  :: nptcls, ncomp, nstates
         real(dp), intent(in)  :: z(nptcls,ncomp), wcomp(ncomp)
         real(dp), intent(out) :: centroids(ncomp,nstates)
-        integer, parameter :: MAXIT = 50
+        integer, parameter   :: MAXIT = 50
         type(kmeans)         :: km
         integer, allocatable :: labels(:)
         allocate(labels(nptcls))
@@ -200,8 +200,8 @@ contains
         real(dp), allocatable :: zbar(:), pa(:), pb(:), dirv(:), proj(:)
         real,     allocatable :: sproj(:)
         integer,  allocatable :: cnt(:)
-        real(dp) :: d2, dmax, dnorm, lo, hi, t
-        integer  :: i, q, s, ia, ib, islot
+        real(dp)              :: d2, dmax, dnorm, lo, hi, t
+        integer               :: i, q, s, ia, ib, islot
         allocate(zbar(ncomp), pa(ncomp), pb(ncomp), dirv(ncomp), proj(nptcls), &
             &sproj(nptcls), cnt(nstates))
         do q = 1, ncomp
@@ -290,12 +290,12 @@ contains
         ! coordinate ALONG the path. A full-rank Mahalanobis kernel also measures the off-path directions, so
         ! an on-path but noisy particle falls outside every support -- that is what strands the dataset.
         real(dp), intent(out) :: proj_out(nptcls), tproj_out(nstates)
-        real(dp), parameter :: RHO_PATH_FLOOR = 0.1d0
+        real(dp), parameter   :: RHO_PATH_FLOOR = 0.1d0
         real(dp), allocatable :: zbar(:), u(:), cov(:,:), evals(:), evecs(:,:), proj(:), rw(:), zc(:,:), pedge(:)
         real,     allocatable :: sproj(:)
         integer,  allocatable :: cnt(:)
-        real(dp) :: rmax, d
-        integer  :: i, q, s, ilo, islot, slo, shi, nrot
+        real(dp)              :: rmax, d
+        integer               :: i, q, s, ilo, islot, slo, shi, nrot
         allocate(zbar(ncomp), u(ncomp), cov(ncomp,ncomp), evals(ncomp), evecs(ncomp,ncomp), proj(nptcls), &
             &sproj(nptcls), cnt(nstates), rw(ncomp), zc(nptcls,ncomp), pedge(max(1,nstates-1)))
         do q = 1, ncomp
@@ -414,10 +414,10 @@ contains
         integer,  intent(in)  :: nptcls, ncomp
         real(dp), intent(in)  :: z(nptcls,ncomp), precision(ncomp,ncomp,nptcls)
         real(dp), intent(out) :: rho(ncomp)
-        integer, parameter :: NSAMPLE = 2000
+        integer,  parameter   :: NSAMPLE = 2000
         real(dp), allocatable :: cfull(:,:), pvar(:)
-        real(dp) :: zbar, spread, ratio
-        integer  :: i, q, errflg, stride, nused
+        real(dp)              :: zbar, spread, ratio
+        integer               :: i, q, errflg, stride, nused
         allocate(cfull(ncomp,ncomp), pvar(ncomp), source=0.d0)
         stride = max(1, nptcls/NSAMPLE)
         nused  = 0

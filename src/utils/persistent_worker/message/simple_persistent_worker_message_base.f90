@@ -15,7 +15,7 @@ module simple_persistent_worker_message_base
     contains
         procedure :: new         => new_qsys_persistent_worker_message_base  !< default constructor
         procedure :: kill        => kill_qsys_persistent_worker_message_base !< default destructor
-        procedure :: serialise   !< serialise to raw byte buffer (must override in subtypes)
+        procedure :: serialise                                               !< serialise to raw byte buffer (must override in subtypes)
     end type qsys_persistent_worker_message_base
 
 contains
@@ -37,8 +37,8 @@ contains
     !> Copy the raw memory image of self into buffer (sizeof(self) bytes) via TRANSFER.
     !> Subtypes override this with their own copy; do not send extended types through it.
     subroutine serialise( self, buffer )
-        class(qsys_persistent_worker_message_base), intent(in)    :: self
-        character(len=:), allocatable,   intent(inout) :: buffer
+        class(qsys_persistent_worker_message_base), intent(in)                   :: self
+        character(len=:),                           allocatable,   intent(inout) :: buffer
         if( allocated(buffer) ) deallocate(buffer)
         allocate(character(len=sizeof(self)) :: buffer)
         buffer = transfer(self, buffer)

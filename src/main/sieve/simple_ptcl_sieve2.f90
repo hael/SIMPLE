@@ -22,56 +22,56 @@ private
 !> the workflow's numbers; nmics, ncls, nparts, mskdiam and retrain_rounds are the command line's, the others its
 !! constants
 type :: sieve2_settings
-    integer :: nmics          = SIEVE2_NMICS
-    integer :: seed_nptcls    = SIEVE2_SEED_NPTCLS
-    integer :: ncls           = SIEVE2_NCLS
-    integer :: batch_nptcls   = SIEVE2_BATCH_NPTCLS
-    integer :: round_nbatches = SIEVE2_ROUND_NBATCHES
-    integer :: train_nptcls   = SIEVE2_TRAIN_NPTCLS
-    real(dp) :: junk_thres    = SIEVE2_JUNK_THRES
-    integer :: nparts         = 0                     !< the children's parts; 0 runs them in shared memory
-    real    :: mskdiam        = 0.                    !< the mask diameter (A, mskdiam); 0: the seed's solve2D estimates it
+    integer              :: nmics          = SIEVE2_NMICS
+    integer              :: seed_nptcls    = SIEVE2_SEED_NPTCLS
+    integer              :: ncls           = SIEVE2_NCLS
+    integer              :: batch_nptcls   = SIEVE2_BATCH_NPTCLS
+    integer              :: round_nbatches = SIEVE2_ROUND_NBATCHES
+    integer              :: train_nptcls   = SIEVE2_TRAIN_NPTCLS
+    real(dp)             :: junk_thres     = SIEVE2_JUNK_THRES
+    integer              :: nparts         = 0        !< the children's parts; 0 runs them in shared memory
+    real                 :: mskdiam        = 0.       !< the mask diameter (A, mskdiam); 0: the seed's solve2D estimates it
     integer, allocatable :: retrain_rounds(:)         !< greedy rounds after which the student is trained again (retrain)
 end type sieve2_settings
 
 type :: ptcl_sieve2
     private
     type(sieve2_settings)         :: s
-    type(sp_project), allocatable :: proj        !< the work project: the input's rows, owned here
-    type(string)                  :: edir        !< the execution directory
-    type(string)                  :: projfile    !< the work project's file
-    type(string)                  :: copy_name   !< its name, the name of every step's copy
-    type(string)                  :: weights     !< the class-average CNN's weights
+    type(sp_project), allocatable :: proj                        !< the work project: the input's rows, owned here
+    type(string)                  :: edir                        !< the execution directory
+    type(string)                  :: projfile                    !< the work project's file
+    type(string)                  :: copy_name                   !< its name, the name of every step's copy
+    type(string)                  :: weights                     !< the class-average CNN's weights
     type(string)                  :: cavgs, frcs, sigma2, model  !< the current artifacts, absolute
-    type(string)                  :: carried     !< the carried class sums at the full box, from round 1 on
+    type(string)                  :: carried                     !< the carried class sums at the full box, from round 1 on
     real                          :: mskdiam  = 0.
     integer                       :: nthr     = 1
     integer                       :: nptcls   = 0
     integer                       :: nbatches = 0
     integer                       :: nrounds  = 0
-    integer                       :: n_new    = 0 !< particles ingested since the last greedy round
+    integer                       :: n_new    = 0                !< particles ingested since the last greedy round
     integer(timer_int_kind)       :: t_run    = 0
-    logical, allocatable          :: sel(:)       !< selected in the input
-    logical, allocatable          :: ingested(:)  !< classified by the seed or a batch
-    integer, allocatable          :: ptcl_batch(:) !< 0 the seed, b > 0 batch b, -1 not selected
-    logical, allocatable          :: bad(:)       !< the classes the last labelling found junk
-    logical, allocatable          :: pending(:)   !< batch particles whose sigma2 records are not seeded yet
-    logical                       :: exists = .false.
+    logical,          allocatable :: sel(:)                      !< selected in the input
+    logical,          allocatable :: ingested(:)                 !< classified by the seed or a batch
+    integer,          allocatable :: ptcl_batch(:)               !< 0 the seed, b > 0 batch b, -1 not selected
+    logical,          allocatable :: bad(:)                      !< the classes the last labelling found junk
+    logical,          allocatable :: pending(:)                  !< batch particles whose sigma2 records are not seeded yet
+    logical                       :: exists   = .false.
   contains
-    procedure          :: new
-    procedure          :: run
-    procedure          :: kill
-    procedure, private :: run_seed
-    procedure, private :: label_classes
-    procedure, private :: train_student
-    procedure, private :: predict_batch
-    procedure, private :: greedy_round
-    procedure, private :: write_result
-    procedure, private :: seed_sigma2
-    procedure, private :: enter_step
-    procedure, private :: write_copy
-    procedure, private :: adopt_artifacts
-    procedure, private :: report_step
+    procedure                  :: new
+    procedure                  :: run
+    procedure                  :: kill
+    procedure, private         :: run_seed
+    procedure, private         :: label_classes
+    procedure, private         :: train_student
+    procedure, private         :: predict_batch
+    procedure, private         :: greedy_round
+    procedure, private         :: write_result
+    procedure, private         :: seed_sigma2
+    procedure, private         :: enter_step
+    procedure, private         :: write_copy
+    procedure, private         :: adopt_artifacts
+    procedure, private         :: report_step
     procedure, private, nopass :: plan_batches
     procedure, private, nopass :: retrains_after
     procedure, private, nopass :: class_labels
@@ -98,9 +98,9 @@ contains
         class(ptcl_sieve2),    intent(inout) :: self
         class(parameters),     intent(in)    :: params
         type(sieve2_settings), intent(in)    :: settings
-        integer, allocatable :: stk_nsel(:), stk_batch(:)
+        integer,          allocatable :: stk_nsel(:), stk_batch(:)
         character(len=:), allocatable :: rounds_str
-        integer :: istk, iptcl, nstks, nmics, nrounds_plan, i
+        integer                       :: istk, iptcl, nstks, nmics, nrounds_plan, i
         call self%kill
         if( settings%nmics < 1 .or. settings%ncls < 2 .or. settings%batch_nptcls < 1 ) THROW_HARD('invalid settings; ptcl_sieve2%new')
         if( settings%round_nbatches < 1 .or. settings%train_nptcls < 1 ) THROW_HARD('invalid settings; ptcl_sieve2%new')
@@ -242,7 +242,7 @@ contains
         type(sp_project)        :: res
         integer(timer_int_kind) :: t0
         integer, allocatable    :: pinds(:)
-        integer :: i
+        integer                 :: i
         t0 = tic()
         ! the halves made here, by micrograph group over every selected particle: the seed's solve2D would label only
         ! its own, and the stacks it does not hold would all fall into the lighter half
@@ -289,13 +289,13 @@ contains
         use simple_fileio,           only: fopen, fclose, fileiochk
         class(ptcl_sieve2), intent(inout) :: self
         character(len=*),   intent(in)    :: tag
-        real(dp), allocatable :: pclass(:,:)
-        logical,  allocatable :: empty(:)
-        integer,  allocatable :: pops(:)
+        real(dp), allocatable   :: pclass(:,:)
+        logical,  allocatable   :: empty(:)
+        integer,  allocatable   :: pops(:)
         type(string)            :: stk, fname
         integer(timer_int_kind) :: t0
-        real    :: smpd, smpd_net
-        integer :: ncls, icls, iptcl, funit, ios
+        real                    :: smpd, smpd_net
+        integer                 :: ncls, icls, iptcl, funit, ios
         t0 = tic()
         call self%proj%get_cavgs_stk(stk, ncls, smpd)
         call cavg_cnn_class_probs(self%weights, self%cavgs, ncls, smpd, pclass, empty, smpd_net)
@@ -338,7 +338,7 @@ contains
         integer, allocatable                :: pinds(:)
         logical, allocatable                :: train(:)
         integer(timer_int_kind)             :: t0
-        integer :: i, n, ntrain
+        integer                             :: i, n, ntrain
         t0 = tic()
         pinds  = pack([(i, i = 1,self%nptcls)], self%ingested)
         n      = size(pinds)
@@ -381,11 +381,11 @@ contains
         class(ptcl_sieve2), intent(inout) :: self
         integer,            intent(in)    :: ib
         type(commander_predict_classes) :: xpredict
-        type(cmdline)        :: cl
-        type(sp_project)     :: res
-        logical, allocatable :: mask(:)
-        integer(timer_int_kind) :: t0
-        integer :: iptcl
+        type(cmdline)                   :: cl
+        type(sp_project)                :: res
+        logical, allocatable            :: mask(:)
+        integer(timer_int_kind)         :: t0
+        integer                         :: iptcl
         t0   = tic()
         mask = self%ptcl_batch == ib
         write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> PARTICLE_SIEVING_2: BATCH ', ib, ' OF ', self%nbatches, ', ', &
@@ -430,10 +430,10 @@ contains
         type(commander_refine2D) :: xrefine2D
         type(cmdline)            :: cl
         type(sp_project)         :: res
-        integer(timer_int_kind) :: t0
-        real    :: frac
-        integer :: n_active
-        logical :: l_carried
+        integer(timer_int_kind)  :: t0
+        real                     :: frac
+        integer                  :: n_active
+        logical                  :: l_carried
         t0 = tic()
         self%nrounds = self%nrounds + 1
         n_active  = count(self%ingested)
@@ -488,8 +488,8 @@ contains
         use simple_syslib,      only: simple_rename, del_file, file_exists
         class(ptcl_sieve2), intent(inout) :: self
         integer, allocatable :: states(:), classes(:)
-        type(string) :: tmp
-        integer :: iptcl, icls, nunclassified
+        type(string)         :: tmp
+        integer              :: iptcl, icls, nunclassified
         call self%check_none_pending(self%sel, self%ingested)
         allocate(classes(self%nptcls))
         do iptcl = 1,self%nptcls
@@ -595,7 +595,7 @@ contains
         class(ptcl_sieve2), intent(inout) :: self
         logical,            intent(in)    :: mask(:)
         type(string) :: base
-        integer :: iptcl, state
+        integer      :: iptcl, state
         do iptcl = 1,self%nptcls
             state = merge(1, 0, mask(iptcl))
             call self%proj%os_ptcl2D%set_state(iptcl, state)
@@ -616,9 +616,9 @@ contains
         class(ptcl_sieve2), intent(inout) :: self
         class(sp_project),  intent(inout) :: res
         type(string) :: path
-        real    :: smpd
-        integer :: ncls
-        logical :: found
+        real         :: smpd
+        integer      :: ncls
+        logical      :: found
         call res%get_cavgs_stk(path, ncls, smpd)
         if( ncls /= self%s%ncls ) THROW_HARD('the class averages hold another class count; ptcl_sieve2')
         self%cavgs = simple_abspath(path)
@@ -635,12 +635,12 @@ contains
         use simple_defs_sieve2, only: SIEVE2_REPORT
         use simple_fileio,      only: fopen, fclose, fileiochk, filepath
         use simple_syslib,      only: file_exists
-        class(ptcl_sieve2), intent(inout) :: self
-        character(len=*),   intent(in)    :: step
-        real(timer_int_kind), intent(in)  :: wall
+        class(ptcl_sieve2),   intent(inout) :: self
+        character(len=*),     intent(in)    :: step
+        real(timer_int_kind), intent(in)    :: wall
         type(string) :: fname
-        integer :: funit, ios, iptcl, icls, naccepted, njunk
-        logical :: l_new
+        integer      :: funit, ios, iptcl, icls, naccepted, njunk
+        logical      :: l_new
         naccepted = 0
         njunk     = 0
         if( allocated(self%bad) )then
@@ -667,9 +667,9 @@ contains
     !! fewer than seed_nptcls particles; then batches of whole stacks in project order, each closed once it holds
     !! batch_nptcls selected particles, the tail the last; -1 for a stack without selected particles
     subroutine plan_batches( stk_nsel, nmics, seed_nptcls, batch_nptcls, stk_batch, nbatches )
-        integer,              intent(in)  :: stk_nsel(:), nmics, seed_nptcls, batch_nptcls
-        integer, allocatable, intent(out) :: stk_batch(:)
-        integer,              intent(out) :: nbatches
+        integer,              intent(in)               :: stk_nsel(:), nmics, seed_nptcls, batch_nptcls
+        integer,              allocatable, intent(out) :: stk_batch(:)
+        integer,              intent(out)              :: nbatches
         integer :: istk, nseed, nseed_ptcls, cnt
         allocate(stk_batch(size(stk_nsel)), source=-1)
         nseed       = 0
@@ -693,19 +693,19 @@ contains
 
     !> whether the student is trained again after greedy round iround: it is one of rounds (none when unallocated)
     logical function retrains_after( rounds, iround )
-        integer, allocatable, intent(in) :: rounds(:)
-        integer,              intent(in) :: iround
+        integer,              allocatable, intent(in) :: rounds(:)
+        integer,              intent(in)              :: iround
         retrains_after = .false.
         if( allocated(rounds) ) retrains_after = any(rounds == iround)
     end function retrains_after
 
     !> a class is junk when it is populated, not empty and the CNN's p_junk exceeds thres
     subroutine class_labels( pjunk, empty, pops, thres, bad )
-        real(dp),             intent(in)  :: pjunk(:)
-        logical,              intent(in)  :: empty(:)
-        integer,              intent(in)  :: pops(:)
-        real(dp),             intent(in)  :: thres
-        logical, allocatable, intent(out) :: bad(:)
+        real(dp),             intent(in)               :: pjunk(:)
+        logical,              intent(in)               :: empty(:)
+        integer,              intent(in)               :: pops(:)
+        real(dp),             intent(in)               :: thres
+        logical,              allocatable, intent(out) :: bad(:)
         if( size(empty) /= size(pjunk) .or. size(pops) /= size(pjunk) ) THROW_HARD('sizes differ; ptcl_sieve2 class_labels')
         allocate(bad(size(pjunk)))
         bad = pops > 0 .and. .not. empty .and. pjunk > thres
@@ -720,9 +720,9 @@ contains
 
     !> state 1 for a selected, ingested particle whose class is not junk, 0 otherwise (a particle without a class too)
     subroutine final_states( sel, ingested, classes, bad, states )
-        logical,              intent(in)  :: sel(:), ingested(:), bad(:)
-        integer,              intent(in)  :: classes(:)
-        integer, allocatable, intent(out) :: states(:)
+        logical,              intent(in)               :: sel(:), ingested(:), bad(:)
+        integer,              intent(in)               :: classes(:)
+        integer,              allocatable, intent(out) :: states(:)
         integer :: iptcl, icls
         allocate(states(size(sel)), source=0)
         do iptcl = 1,size(sel)

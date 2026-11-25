@@ -18,12 +18,12 @@ end interface calc_cartesian_corrmat
 contains
     
     subroutine calc_cartesian_corrmat_1( imgs, corrmat, msk, lp )
-        type(image),       intent(inout) :: imgs(:)
-        real, allocatable, intent(out)   :: corrmat(:,:)
-        real, optional,    intent(in)    :: msk, lp
+        type(image),       intent(inout)            :: imgs(:)
+        real,              allocatable, intent(out) :: corrmat(:,:)
+        real,              optional,    intent(in)  :: msk, lp
         integer, allocatable :: pairs(:,:)
-        real    :: rmsk
-        integer :: iptcl, jptcl, ipair, cnt, nptcls, ntot
+        real                 :: rmsk
+        integer              :: iptcl, jptcl, ipair, cnt, nptcls, ntot
         nptcls = size(imgs)
         rmsk   = 0.9 * real(imgs(1)%get_box()) / 2.0
         if( present(msk) ) rmsk = msk
@@ -71,9 +71,9 @@ contains
     end subroutine calc_cartesian_corrmat_1
 
     subroutine calc_cartesian_corrmat_2( imgs_sel, imgs_orig, corrmat, msk, lp )
-        type(image),       intent(inout) :: imgs_sel(:), imgs_orig(:)
-        real, allocatable, intent(out)   :: corrmat(:,:)
-        real, optional,    intent(in)    :: msk, lp
+        type(image),       intent(inout)            :: imgs_sel(:), imgs_orig(:)
+        real,              allocatable, intent(out) :: corrmat(:,:)
+        real,              optional,    intent(in)  :: msk, lp
         real    :: rmsk
         integer :: iptcl, isel, norig, nsel
         logical :: err
@@ -131,15 +131,15 @@ contains
         class(parameters), intent(in)    :: params
         real,              intent(in)    :: hp, lp, trs
         class(image),      intent(inout) :: imgs(:)
-        integer,      parameter     :: MAXITS_SH = 60
-        real,         allocatable   :: inpl_corrs(:)
-        type(pftc_shsrch_grad), allocatable ::  grad_shsrch_obj(:)
-        type(builder)               :: build
-        real,         allocatable   :: ccmat(:,:)
-        complex,      allocatable   :: pft(:,:)
-        integer :: ldim(3), box, kfromto(2), ithr, i, j, loc, nrots, irot, irot_seed, nimgs
-        real    :: smpd, lims(2,2), lims_init(2,2), joint_lims(3,2), cxy(3)
-        real(dp) :: rotind_frac
+        integer,                parameter   :: MAXITS_SH = 60
+        real,                   allocatable :: inpl_corrs(:)
+        type(pftc_shsrch_grad), allocatable :: grad_shsrch_obj(:)
+        type(builder)                       :: build
+        real,                   allocatable :: ccmat(:,:)
+        complex,                allocatable :: pft(:,:)
+        integer                             :: ldim(3), box, kfromto(2), ithr, i, j, loc, nrots, irot, irot_seed, nimgs
+        real                                :: smpd, lims(2,2), lims_init(2,2), joint_lims(3,2), cxy(3)
+        real(dp)                            :: rotind_frac
         nimgs      = size(imgs)
         ldim       = imgs(1)%get_ldim()
         box        = ldim(1)

@@ -122,9 +122,9 @@ contains
     subroutine test_missing_project_scheduler()
         class(parameters), allocatable :: params
         class(sp_project), allocatable :: project
-        type(qsys_env) :: qenv
-        type(string) :: projfile, local_simple_path, env_qsys
-        integer :: iostat
+        type(qsys_env)                 :: qenv
+        type(string)                   :: projfile, local_simple_path, env_qsys
+        integer                        :: iostat
         write(*,'(A)') 'test_missing_project_scheduler'
         local_simple_path = simple_getenv('SIMPLE_PATH', iostat)
         call assert_int(0, iostat, 'SIMPLE_PATH is set in the test environment')

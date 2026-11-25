@@ -6,7 +6,7 @@ use simple_rnd,    only: gasdev, ran3
 implicit none
 
 integer, parameter :: PFTSZ = 12, KFROMTO(2) = [2, 9], NK = 8, BOX = 32, NCLASS = 6, WIDTH = 2
-real,    parameter :: SMPD = 1.0, MSKDIAM = 24., LP = 4.
+real,    parameter :: SMPD  = 1.0, MSKDIAM = 24., LP = 4.
 
 contains
 
@@ -19,11 +19,11 @@ contains
 
     !> a core of the tiny geometry with random positive shell weights and random templates
     subroutine make_core( core, seed, lse )
-        type(polar_student), intent(inout) :: core
-        integer(int64),      intent(in)    :: seed
-        logical, optional,   intent(in)    :: lse
+        type(polar_student), intent(inout)          :: core
+        integer(int64),      intent(in)             :: seed
+        logical,             optional,   intent(in) :: lse
         real(sp), allocatable :: wk(:,:), xtmpl(:,:,:,:)
-        integer :: k, i
+        integer               :: k, i
         allocate(wk(KFROMTO(1):KFROMTO(2),2))
         do k = KFROMTO(1),KFROMTO(2)
             wk(k,1) = 0.5 + ran3()
@@ -58,8 +58,8 @@ contains
     !! smallest loss, invalid entries get none, and a zero temperature gives the mode alone
     subroutine test_targets()
         integer, parameter :: N = 10
-        real(sp) :: dists(N), t(N)
-        integer  :: i
+        real(sp)           :: dists(N), t(N)
+        integer            :: i
         write(*,'(A)') 'test_targets'
         do i = 1,N
             dists(i) = real(i - 1)
@@ -79,11 +79,11 @@ contains
     !> A weights name resolves in the header's directory; a name with a directory, or none, is refused; a network
     !! of another seed, width or weight count than the header's is refused
     subroutine test_weights_helpers()
-        type(polar_student) :: core
-        type(hhcnn)         :: net
-        type(string)        :: cwd_saved, fixture_root, wfile
+        type(polar_student)           :: core
+        type(hhcnn)                   :: net
+        type(string)                  :: cwd_saved, fixture_root, wfile
         character(len=:), allocatable :: msg
-        integer :: nfail0
+        integer                       :: nfail0
         write(*,'(A)') 'test_weights_helpers'
         nfail0 = tests_failed
         call enter_fixture('polar_student_weights', cwd_saved, fixture_root)
@@ -117,9 +117,9 @@ contains
         type(polar_student)        :: core, back, core_max
         type(polar_student_header) :: hdr, hdr_max
         type(string)               :: cwd_saved, fixture_root
-        real(sp), allocatable :: x(:,:,:)
-        real(sp) :: ctf2(NK), p0(NCLASS), p1(NCLASS), t, cf, hs, hr
-        integer  :: nfail0
+        real(sp), allocatable      :: x(:,:,:)
+        real(sp)                   :: ctf2(NK), p0(NCLASS), p1(NCLASS), t, cf, hs, hr
+        integer                    :: nfail0
         write(*,'(A)') 'test_header_roundtrip'
         nfail0 = tests_failed
         call enter_fixture('polar_student_header', cwd_saved, fixture_root)

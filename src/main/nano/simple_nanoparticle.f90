@@ -128,13 +128,13 @@ type :: atom_stats
     real    :: exz_strain        = 0. ! -"-                                                         EXZ_STRAIN
     real    :: radial_strain     = 0. ! -"-                                                         RADIAL_STRAIN
     ! Auxiliary (non-output)
-    real    :: aniso(3,3)        = 0. ! ADP Matrix for ANISOU PDB file                              N/A
+    real    :: aniso(3,3)        = 0.      ! ADP Matrix for ANISOU PDB file                              N/A
     logical :: tossADP           = .false. ! true if atom inadequate for ADP calculations           N/A
     ! the weak atoms of the residual recovery
-    real    :: aper_int          = 0. ! aperture intensity, the cross-check of the fitted intensity
-    real    :: det_z             = 0. ! detection z of a weak atom
-    integer :: det_stage         = 0  ! 0 strong (level 1), 1 weak of residual stage A, 2 weak of stage B
-    integer :: det_level         = 0  ! residual level that accepted the atom
+    real    :: aper_int          = 0.      ! aperture intensity, the cross-check of the fitted intensity
+    real    :: det_z             = 0.      ! detection z of a weak atom
+    integer :: det_stage         = 0       ! 0 strong (level 1), 1 weak of residual stage A, 2 weak of stage B
+    integer :: det_level         = 0       ! residual level that accepted the atom
     logical :: gate_used         = .false. ! accepted through the neighbour gate
     ! the atomic density model (atomic_density_model.md), written to _ATMS.pdb and _atoms.csv
     real    :: int_fit           = 0. ! integrated intensity I
@@ -148,18 +148,18 @@ end type atom_stats
 type :: nanoparticle
     private
     type(image)           :: img, img_raw
-    type(image_bin)       :: img_bin, img_cc         ! binary and connected component images
-    integer               :: ldim(3)            = 0  ! logical dimension of image
-    integer               :: n_cc               = 0  ! number of atoms (connected components)                NATOMS
-    integer               :: n_aniso            = 0  ! number of atoms with aniso calculations               NANISO
-    integer               :: n4stats            = 0  ! number of atoms in subset used for stats calc
-    real                  :: smpd               = 0. ! sampling distance
-    real                  :: NPcen(3)           = 0. ! coordinates of the center of mass of the nanoparticle
-    real                  :: NPdiam             = 0. ! diameter of the nanoparticle                          DIAM
-    real                  :: theoretical_radius = 0. ! theoretical atom radius in A
-    real                  :: d_nn               = 0. ! median nearest-neighbour distance in A
-    real                  :: int_scale          = 0. ! intensity scale S of the density model, the occupancy unit
-    real                  :: int_noise          = 0. ! measurement spread of an intensity at fixed width (s_int)
+    type(image_bin)       :: img_bin, img_cc              ! binary and connected component images
+    integer               :: ldim(3)            = 0       ! logical dimension of image
+    integer               :: n_cc               = 0       ! number of atoms (connected components)                NATOMS
+    integer               :: n_aniso            = 0       ! number of atoms with aniso calculations               NANISO
+    integer               :: n4stats            = 0       ! number of atoms in subset used for stats calc
+    real                  :: smpd               = 0.      ! sampling distance
+    real                  :: NPcen(3)           = 0.      ! coordinates of the center of mass of the nanoparticle
+    real                  :: NPdiam             = 0.      ! diameter of the nanoparticle                          DIAM
+    real                  :: theoretical_radius = 0.      ! theoretical atom radius in A
+    real                  :: d_nn               = 0.      ! median nearest-neighbour distance in A
+    real                  :: int_scale          = 0.      ! intensity scale S of the density model, the occupancy unit
+    real                  :: int_noise          = 0.      ! measurement spread of an intensity at fixed width (s_int)
     logical               :: l_noise_resid      = .false. ! the model's noise is the residual between the atoms
     ! the pruning policy of discard_atoms, kept for the weak atoms: centre of mass (voxels), the radius beyond which
     ! atoms are subject to deletion (A) and the contact-score threshold
@@ -169,8 +169,8 @@ type :: nanoparticle
     integer               :: cscore_ceil        = 0       ! contact-score ceiling discard_atoms derived from the data
     logical               :: l_species_free     = .false. ! no element given: atoms written as X1, no lattice analyses
     integer               :: min_nbrs           = 3       ! gated weak atoms need this many found neighbours, 0 = no gate
-    real                  :: msk_rad            = 0. ! radius of the soft spherical mask in voxels
-    type(string)          :: transfer_tab            ! a transfer table to use instead of measuring it (_transfer.tsv)
+    real                  :: msk_rad            = 0.      ! radius of the soft spherical mask in voxels
+    type(string)          :: transfer_tab                 ! a transfer table to use instead of measuring it (_transfer.tsv)
     ! GLOBAL NP STATS
     type(stats_struct)    :: map_stats
     ! -- the rest
@@ -210,11 +210,11 @@ type :: nanoparticle
     type(stats_struct)    :: u_med_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: u_min_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: azimuth_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: polar_stats_cns(CNMIN:CNMAX)  
-    type(stats_struct)    :: doi_stats_cns(CNMIN:CNMAX) 
-    type(stats_struct)    :: doi_min_stats_cns(CNMIN:CNMAX) 
+    type(stats_struct)    :: polar_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: doi_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: doi_min_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: isocorr_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: anisocorr_stats_cns(CNMIN:CNMAX) 
+    type(stats_struct)    :: anisocorr_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
     ! PER-ATOM STATISTICS
     type(atom_stats), allocatable :: atominfo(:)
@@ -247,7 +247,7 @@ type :: nanoparticle
     procedure, private :: center_on_atom
     procedure          :: update_ncc
     ! atomic position determination
-    procedure          :: conv_denoise 
+    procedure          :: conv_denoise
     procedure          :: identify_lattice_params
     procedure          :: identify_atomic_pos
     procedure, private :: binarize_and_find_centers
@@ -287,15 +287,15 @@ end type nanoparticle
 contains
 
     subroutine new( self, params, fname, msk )
-        class(nanoparticle), intent(inout) :: self
-        class(parameters),   intent(in)    :: params
-        class(string),       intent(in)    :: fname
-        real, optional,      intent(in)    :: msk
+        class(nanoparticle), intent(inout)             :: self
+        class(parameters),   intent(in)                :: params
+        class(string),       intent(in)                :: fname
+        real,                optional,      intent(in) :: msk
         type(image_msk)  :: mskvol
         character(len=2) :: el_ucase
-        integer :: nptcls
-        integer :: Z ! atomic number
-        real    :: msk_in_pix, diam
+        integer          :: nptcls
+        integer          :: Z ! atomic number
+        real             :: msk_in_pix, diam
         call self%kill
         self%npname    = fname
         self%fbody     = get_fbody(basename(fname), fname2ext(fname))
@@ -449,13 +449,13 @@ contains
     end subroutine set_coords4stats
 
     subroutine pack_instance4stats( self, strain_array )
-        class(nanoparticle), intent(inout) :: self
-        real, allocatable,   intent(inout) :: strain_array(:,:)
+        class(nanoparticle), intent(inout)                :: self
+        real,                allocatable,   intent(inout) :: strain_array(:,:)
         real,                allocatable   :: centers_A(:,:), strain_array_new(:,:)
         logical,             allocatable   :: mask(:)
         integer,             allocatable   :: imat_cc(:,:,:), imat_cc_new(:,:,:), imat_bin_new(:,:,:)
         type(atom_stats),    allocatable   :: atominfo_new(:)
-        integer :: n_cc_orig, cc, cnt, nx, ny, nz
+        integer                            :: n_cc_orig, cc, cnt, nx, ny, nz
         if( .not. allocated(self%coords4stats) ) return
         centers_A = self%atominfo2centers_A()
         n_cc_orig = size(centers_A, dim=2)
@@ -500,11 +500,11 @@ contains
     ! utils
 
     function atominfo2centers( self, mask ) result( centers )
-        class(nanoparticle), intent(in) :: self
-        logical, optional,   intent(in) :: mask(size(self%atominfo))
+        class(nanoparticle), intent(in)             :: self
+        logical,             optional,   intent(in) :: mask(size(self%atominfo))
         real, allocatable :: centers(:,:)
-        logical :: mask_present
-        integer :: sz, i, cnt
+        logical           :: mask_present
+        integer           :: sz, i, cnt
         sz           = size(self%atominfo)
         mask_present = .false.
         if( present(mask) ) mask_present = .true.
@@ -527,11 +527,11 @@ contains
     end function atominfo2centers
 
     function atominfo2centers_A( self, mask ) result( centers_A )
-        class(nanoparticle), intent(in) :: self
-        logical, optional,   intent(in) :: mask(size(self%atominfo))
+        class(nanoparticle), intent(in)             :: self
+        logical,             optional,   intent(in) :: mask(size(self%atominfo))
         real, allocatable :: centers_A(:,:)
-        logical :: mask_present
-        integer :: sz, i, cnt
+        logical           :: mask_present
+        integer           :: sz, i, cnt
         sz           = size(self%atominfo)
         mask_present = .false.
         if( present(mask) ) mask_present = .true.
@@ -582,8 +582,8 @@ contains
     end subroutine center_on_atom
 
     subroutine update_ncc( self, img_cc )
-        class(nanoparticle),      intent(inout) :: self
-        type(image_bin), optional, intent(inout) :: img_cc
+        class(nanoparticle),      intent(inout)           :: self
+        type(image_bin),          optional, intent(inout) :: img_cc
         if( present(img_cc) )then
             call img_cc%get_nccs(self%n_cc)
         else
@@ -595,7 +595,7 @@ contains
 
     subroutine conv_denoise( self, fname )
         class(nanoparticle), intent(inout) :: self
-        class(string),       intent(in)    :: fname 
+        class(string),       intent(in)    :: fname
         call phasecorr_one_atom(self%img, B_REF_PSEUDO)
         call self%img%write(fname)
     end subroutine conv_denoise
@@ -640,11 +640,11 @@ contains
     ! 5. discard atoms with low correlation and split atoms with high correlation but large volumes (i.e. likely to be two merged atoms)
 
     subroutine identify_atomic_pos( self, a, l_atom_thres, split_fname, l_print )
-        class(nanoparticle),     intent(inout) :: self
-        real,                    intent(inout) :: a(3)                ! lattice parameters
-        logical,                 intent(in)    :: l_atom_thres        ! do atomic thresholding or not
-        class(string), optional, intent(in)    :: split_fname
-        logical,       optional, intent(in)    :: l_print
+        class(nanoparticle),     intent(inout)        :: self
+        real,                    intent(inout)        :: a(3)         ! lattice parameters
+        logical,                 intent(in)           :: l_atom_thres ! do atomic thresholding or not
+        class(string),           optional, intent(in) :: split_fname
+        logical,                 optional, intent(in) :: l_print
         type(image)  :: simatms, img_cos
         type(string) :: errmsg
         logical      :: ll_print
@@ -699,22 +699,22 @@ contains
     ! obtained with that threshold reaches the maximum value.
     subroutine binarize_and_find_centers( self, l_print )
         use simple_bench_io, only: open_bench_report
-        class(nanoparticle), intent(inout) :: self
-        logical, optional,   intent(in)    :: l_print
-        type(image_bin)      :: img_bin_t
-        type(image_bin)      :: img_ccs_t
-        type(atoms)          :: atom
-        type(image)          :: simulated_distrib
-        integer, allocatable :: imat_t(:,:,:)
-        real,    allocatable :: coords(:,:)
-        real,    allocatable :: rmat(:,:,:)
-        logical, parameter   :: L_BENCH = .false.
-        logical :: ll_print
-        real    :: ts(NBIN_THRESH)
-        integer :: fnr, low, high, mid
-        real    :: corr, max_corr, thresh_opt
+        class(nanoparticle), intent(inout)          :: self
+        logical,             optional,   intent(in) :: l_print
+        type(image_bin)         :: img_bin_t
+        type(image_bin)         :: img_ccs_t
+        type(atoms)             :: atom
+        type(image)             :: simulated_distrib
+        integer, allocatable    :: imat_t(:,:,:)
+        real,    allocatable    :: coords(:,:)
+        real,    allocatable    :: rmat(:,:,:)
+        logical, parameter      :: L_BENCH = .false.
+        logical                 :: ll_print
+        real                    :: ts(NBIN_THRESH)
+        integer                 :: fnr, low, high, mid
+        real                    :: corr, max_corr, thresh_opt
         real(timer_int_kind)    :: rt_find_ccs, rt_find_centers, rt_gen_sim, rt_real_corr, rt_tot
-        integer(timer_int_kind) ::  t_find_ccs,  t_find_centers,  t_gen_sim,  t_real_corr,  t_tot
+        integer(timer_int_kind) :: t_find_ccs,  t_find_centers,  t_gen_sim,  t_real_corr,  t_tot
         ll_print = .true.
         if( present(l_print) ) ll_print = l_print
         if( ll_print ) write(logfhandle,'(A)') '>>> BINARIZATION'
@@ -842,13 +842,13 @@ contains
     end subroutine binarize_and_find_centers
 
     subroutine find_centers( self, img_cc, coords, imat )
-        class(nanoparticle),            intent(inout) :: self
-        type(image_bin),       optional, intent(inout) :: img_cc
-        integer,              optional, intent(in)    :: imat(:,:,:)
-        real,    allocatable, optional, intent(out)   :: coords(:,:)
+        class(nanoparticle),            intent(inout)                      :: self
+        type(image_bin),                optional, intent(inout)            :: img_cc
+        integer,                        optional, intent(in)               :: imat(:,:,:)
+        real,                           allocatable, optional, intent(out) :: coords(:,:)
         integer, allocatable :: imat_cc_in(:,:,:)
-        integer  :: i, ii, jj, kk
-        real(dp) :: m(3,self%n_cc), sum_mass(self%n_cc), val
+        integer              :: i, ii, jj, kk
+        real(dp)             :: m(3,self%n_cc), sum_mass(self%n_cc), val
         ! global variables allocation
         if( allocated(self%atominfo) ) deallocate(self%atominfo)
         allocate( self%atominfo(self%n_cc) )
@@ -893,7 +893,7 @@ contains
     subroutine discard_small_ccs( self )
         class(nanoparticle), intent(inout) :: self
         integer, allocatable :: imat_bin(:,:,:), first(:), vox(:,:)
-        integer :: cc, iv
+        integer              :: cc, iv
         call self%img_cc%get_cc_voxels(self%n_cc, first, vox)
         call self%img_bin%get_imat(imat_bin)
         do cc = 1, self%n_cc
@@ -911,18 +911,18 @@ contains
     end subroutine discard_small_ccs
 
     subroutine split_atoms( self, fname )
-        class(nanoparticle),     intent(inout) :: self
-        class(string), optional, intent(in)    :: fname
+        class(nanoparticle),     intent(inout)        :: self
+        class(string),           optional, intent(in) :: fname
         type(image_bin)       :: img_split_ccs
-        real,    allocatable :: x(:)
-        real,    pointer     :: rmat_pc(:,:,:)
-        integer, allocatable :: imat_cc(:,:,:), imat_bin(:,:,:), imat_split_ccs(:,:,:), first(:), vox(:,:)
-        logical, allocatable :: claimed(:) ! voxels of the component being split within split_excl of a centre
-        integer, parameter   :: RANK_THRESH = 4
-        integer :: icc, cnt, cnt_split, iv
-        integer :: rank, m(1)
-        real    :: new_centers(3,3*self%n_cc) ! will pack it afterwards if it has too many elements
-        real    :: pc, radius, split_excl
+        real,    allocatable  :: x(:)
+        real,    pointer      :: rmat_pc(:,:,:)
+        integer, allocatable  :: imat_cc(:,:,:), imat_bin(:,:,:), imat_split_ccs(:,:,:), first(:), vox(:,:)
+        logical, allocatable  :: claimed(:)                 ! voxels of the component being split within split_excl of a centre
+        integer, parameter    :: RANK_THRESH = 4
+        integer               :: icc, cnt, cnt_split, iv
+        integer               :: rank, m(1)
+        real                  :: new_centers(3,3*self%n_cc) ! will pack it afterwards if it has too many elements
+        real                  :: pc, radius, split_excl
         write(logfhandle, '(A)') '>>> SPLITTING CONNECTED ATOMS'
         ! squared exclusion radius as the distance tests below use it: voxels**2 * smpd
         split_excl = (SPLIT_EXCL_NN_FRAC * self%d_nn)**2 / self%smpd
@@ -1084,10 +1084,10 @@ contains
         class(nanoparticle), intent(inout) :: self
         class(image),        intent(in)    :: simatms
         logical,             intent(in)    :: l_print
-        real, allocatable :: centers(:,:)           ! coordinates of the atoms in PIXELS
-        real, allocatable :: pixels1(:), pixels2(:) ! pixels extracted around the center
-        real    :: maxrad
-        integer :: ijk(3), npix_in, npix_out1, npix_out2, i, winsz
+        real, allocatable  :: centers(:,:)           ! coordinates of the atoms in PIXELS
+        real, allocatable  :: pixels1(:), pixels2(:) ! pixels extracted around the center
+        real               :: maxrad
+        integer            :: ijk(3), npix_in, npix_out1, npix_out2, i, winsz
         type(stats_struct) :: corr_stats
         maxrad  = (self%theoretical_radius * 1.5) / self%smpd ! in pixels
         winsz   = ceiling(maxrad)
@@ -1113,17 +1113,17 @@ contains
     end subroutine validate_atoms
 
     subroutine discard_atoms( self, l_print )
-        class(nanoparticle), intent(inout) :: self
-        logical, optional,   intent(in)    :: l_print
+        class(nanoparticle), intent(inout)          :: self
+        logical,             optional,   intent(in) :: l_print
         integer, allocatable :: imat_bin(:,:,:), cscores(:), first(:), vox(:,:)
         real,    allocatable :: centers_A(:,:), cendists(:), cendists_sorted(:)
         logical, allocatable :: atom_del_mask(:)
         integer              :: cscore_thres
         type(stats_struct)   :: cscore_stats
         real,    allocatable :: inner(:)
-        real    :: percen, cendist_thres, inner_thres, med_inner
-        integer :: cc, cn, n_discard, cnt_discard, it_contact_score, ninner
-        logical :: ll_print
+        real                 :: percen, cendist_thres, inner_thres, med_inner
+        integer              :: cc, cn, n_discard, cnt_discard, it_contact_score, ninner
+        logical              :: ll_print
         ll_print = .true.
         if( present(l_print) ) ll_print = l_print
         if( ll_print ) write(logfhandle, '(A)') '>>> DISCARDING ATOMS'
@@ -1219,7 +1219,7 @@ contains
         subroutine remove_small_and_lowly_contacted( cthresh )
             integer, intent(in) :: cthresh
             real, allocatable   :: radii(:)
-            real :: radius_thres
+            real                :: radius_thres
             ! calculate atomic radii
             allocate(radii(self%n_cc), source=0.)
             do cc = 1, self%n_cc
@@ -1284,18 +1284,18 @@ contains
 
     ! contact scores of discard_atoms, the neighbour cutoff from d_NN
     subroutine contact_scores( self, centers_A, cscores )
-        class(nanoparticle), intent(in)    :: self
-        real, allocatable,   intent(in)    :: centers_A(:,:)
-        integer,             intent(inout) :: cscores(:)
+        class(nanoparticle), intent(in)                :: self
+        real,                allocatable,   intent(in) :: centers_A(:,:)
+        integer,             intent(inout)             :: cscores(:)
         call calc_contact_scores(centers_A, cscores, self%d_nn)
     end subroutine contact_scores
 
     ! voxels that can hold only noise once the atoms are excluded: inside the box's inscribed sphere and inside any
     ! mask the map already carries (its nearest exact zero), both less two soft-edge widths
     subroutine empty_zone( self, nmap, zone )
-        class(nanoparticle),  intent(in)  :: self
-        real,                 intent(in)  :: nmap(:,:,:)
-        logical, allocatable, intent(out) :: zone(:,:,:)
+        class(nanoparticle),  intent(in)               :: self
+        real,                 intent(in)               :: nmap(:,:,:)
+        logical,              allocatable, intent(out) :: zone(:,:,:)
         real    :: cen(3), rlim, r2
         integer :: ii, jj, kk
         logical :: l_zero
@@ -1330,38 +1330,38 @@ contains
         use simple_nano_density, only: nano_density, render_atoms, gauss_filter3D
         use simple_nano_species, only: calibrate_threshold, expected_false_count, local_maxima
         class(nanoparticle), intent(inout) :: self
-        integer, parameter :: NREGION_MIN      = 20000 ! smallest noise region, voxels
-        real,    parameter :: REGION_NN_FRAC   = 1.5   ! noise region: farther than this from every atom, in d_NN
-        real,    parameter :: ENVELOPE_NN_FRAC = 1.    ! envelope: within this of an atom, in d_NN
-        real,    parameter :: NOISELESS_FRAC   = 1.e-3 ! a region spread below this of the envelope's is no noise
-        real,    parameter :: TARGET_FALSE     = 0.2   ! expected noise maxima above k_A in the stage A search volume
-        real,    parameter :: CAL_LEVELS(3)    = [2.5, 3.0, 3.5]
-        real,    parameter :: NMS_NN_FRAC      = 0.35  ! non-maximum suppression and centroid radius, in d_NN
-        real,    parameter :: EXCL_A_NN_FRAC   = 0.7   ! stage A (and ungated stage B): no atom closer, in d_NN
-        real,    parameter :: EXCL_B_NN_FRAC   = 0.85  ! gate: no atom closer, in d_NN
-        real,    parameter :: GATE_NN_FRAC     = 1.15  ! gate: at least min_nbrs found atoms within, in d_NN
-        integer, parameter :: MAX_LEVELS       = 8
-        real,    parameter :: BANDS(2,3)       = reshape([5., 3.3, 2.5, 2.0, 2.0, 1.6], [2,3]) ! correlation bands, A
+        integer,             parameter   :: NREGION_MIN      = 20000                                         ! smallest noise region, voxels
+        real,                parameter   :: REGION_NN_FRAC   = 1.5                                           ! noise region: farther than this from every atom, in d_NN
+        real,                parameter   :: ENVELOPE_NN_FRAC = 1.                                            ! envelope: within this of an atom, in d_NN
+        real,                parameter   :: NOISELESS_FRAC   = 1.e-3                                         ! a region spread below this of the envelope's is no noise
+        real,                parameter   :: TARGET_FALSE     = 0.2                                           ! expected noise maxima above k_A in the stage A search volume
+        real,                parameter   :: CAL_LEVELS(3)    = [2.5, 3.0, 3.5]
+        real,                parameter   :: NMS_NN_FRAC      = 0.35                                          ! non-maximum suppression and centroid radius, in d_NN
+        real,                parameter   :: EXCL_A_NN_FRAC   = 0.7                                           ! stage A (and ungated stage B): no atom closer, in d_NN
+        real,                parameter   :: EXCL_B_NN_FRAC   = 0.85                                          ! gate: no atom closer, in d_NN
+        real,                parameter   :: GATE_NN_FRAC     = 1.15                                          ! gate: at least min_nbrs found atoms within, in d_NN
+        integer,             parameter   :: MAX_LEVELS       = 8
+        real,                parameter   :: BANDS(2,3)       = reshape([5., 3.3, 2.5, 2.0, 2.0, 1.6], [2,3]) ! correlation bands, A
         class(nano_density), allocatable :: dens
-        type(image)          :: img_tmp, img_band
-        type(atom_stats)     :: blank
-        real,    allocatable :: map(:,:,:), arr(:,:,:), resid(:,:,:), cmap(:,:,:), zmap(:,:,:), xyz(:,:), ints(:), bfacs(:)
-        real,    allocatable :: vi(:), vb(:), tau_i(:), wpos(:,:), wdetz(:), aper(:)
-        real,    allocatable :: mband(:,:,:,:)
-        logical, allocatable :: zone(:,:,:), region(:,:,:), envelope(:,:,:), cal(:,:,:), sphere(:,:,:), smask(:,:,:)
-        logical, allocatable :: wgate(:)
-        integer, allocatable :: cn(:), bin_lo(:), wstage(:), wlevel(:)
-        real,    allocatable :: t_meas(:), t_sm(:), pow_t(:), t_rep(:)
-        real,    allocatable :: round_fields(:,:), round_curves(:,:)
-        logical, allocatable :: t_rel(:)
-        real    :: dv, sig_n, s_int, f_corr, ln_s, beta, ln_bp, gamma, tau_b, resid_ratio, sig_ref, ds_t, t_change
-        real    :: gauge_scale, gauge_bfac
-        real    :: z_mu, z_sd, k_a, k_b, c_search_a, c_region, efalse_a, efalse_b, corrs(3,4)
-        integer :: n, n1, i, nsearch_a, nsearch_b, nadded(2,MAX_LEVELS), npruned, stage, level, nnew
-        integer :: npeaks, nwells, n_held, n_gauge, round_kept
-        logical :: l_region, l_resid, l_prof, l_measure, l_calibrated, l_rounds_capped
-        integer(timer_int_kind) :: t_stage
-        real(timer_int_kind)    :: rt_prov, rt_rec, rt_full, rt_prod
+        type(image)                      :: img_tmp, img_band
+        type(atom_stats)                 :: blank
+        real,                allocatable :: map(:,:,:), arr(:,:,:), resid(:,:,:), cmap(:,:,:), zmap(:,:,:), xyz(:,:), ints(:), bfacs(:)
+        real,                allocatable :: vi(:), vb(:), tau_i(:), wpos(:,:), wdetz(:), aper(:)
+        real,                allocatable :: mband(:,:,:,:)
+        logical,             allocatable :: zone(:,:,:), region(:,:,:), envelope(:,:,:), cal(:,:,:), sphere(:,:,:), smask(:,:,:)
+        logical,             allocatable :: wgate(:)
+        integer,             allocatable :: cn(:), bin_lo(:), wstage(:), wlevel(:)
+        real,                allocatable :: t_meas(:), t_sm(:), pow_t(:), t_rep(:)
+        real,                allocatable :: round_fields(:,:), round_curves(:,:)
+        logical,             allocatable :: t_rel(:)
+        real                             :: dv, sig_n, s_int, f_corr, ln_s, beta, ln_bp, gamma, tau_b, resid_ratio, sig_ref, ds_t, t_change
+        real                             :: gauge_scale, gauge_bfac
+        real                             :: z_mu, z_sd, k_a, k_b, c_search_a, c_region, efalse_a, efalse_b, corrs(3,4)
+        integer                          :: n, n1, i, nsearch_a, nsearch_b, nadded(2,MAX_LEVELS), npruned, stage, level, nnew
+        integer                          :: npeaks, nwells, n_held, n_gauge, round_kept
+        logical                          :: l_region, l_resid, l_prof, l_measure, l_calibrated, l_rounds_capped
+        integer(timer_int_kind)          :: t_stage
+        real(timer_int_kind)             :: rt_prov, rt_rec, rt_full, rt_prod
         write(logfhandle,'(A)') '>>> ATOMIC DENSITY MODEL'
         t_stage = tic()
         n1      = self%n_cc
@@ -1534,7 +1534,7 @@ contains
         ! ENVELOPE_NN_FRAC d_NN of an atom) and the calibration voxels, on the current atoms
         subroutine build_masks
             real, allocatable :: pos(:,:), d1(:), d2(:), d3(:), d4(:)
-            integer :: j
+            integer           :: j
             call dens%get_atoms(pos, d1, d2, d3, d4)
             region = zone
             if( allocated(envelope) ) deallocate(envelope)
@@ -1578,8 +1578,8 @@ contains
         subroutine calibrate
             real,    allocatable :: vals(:)
             integer, allocatable :: ijk(:,:)
-            real    :: counts(size(CAL_LEVELS)), ratio
-            integer :: l
+            real                 :: counts(size(CAL_LEVELS)), ratio
+            integer              :: l
             l_calibrated = .false.
             k_a = 0.
             k_b = 0.
@@ -1611,7 +1611,7 @@ contains
         ! stage B searches within GATE_NN_FRAC d_NN of the atoms when gated, else the whole search volume
         subroutine stage_b_mask
             real, allocatable :: pos(:,:), d1(:), d2(:), d3(:), d4(:)
-            integer :: j
+            integer           :: j
             if( self%min_nbrs > 0 )then
                 call dens%get_atoms(pos, d1, d2, d3, d4)
                 if( allocated(smask) ) deallocate(smask)
@@ -1633,9 +1633,9 @@ contains
             integer, intent(out) :: nnew
             real,    allocatable :: vals(:), considered(:,:), dists(:), pos(:,:), newpos(:,:), d1(:), d2(:), d3(:), d4(:)
             integer, allocatable :: ijk(:,:)
-            real    :: thres, p(3)
-            integer :: ic, nc, nbefore
-            logical :: l_gated, l_ok
+            real                 :: thres, p(3)
+            integer              :: ic, nc, nbefore
+            logical              :: l_gated, l_ok
             call build_masks
             call set_noise
             call compute_zmap
@@ -1717,8 +1717,8 @@ contains
         subroutine prune_weak
             real,    allocatable :: pos(:,:), d1(:), d2(:), d3(:), d4(:)
             logical, allocatable :: keep(:)
-            real    :: rmax_c
-            integer :: j, l, ncont, nw
+            real                 :: rmax_c
+            integer              :: j, l, ncont, nw
             call dens%get_atoms(pos, d1, d2, d3, d4)
             nw = size(pos,2) - n1
             if( nw < 1 ) return
@@ -1749,7 +1749,7 @@ contains
         subroutine count_extrema
             real,    allocatable :: vals(:), nz(:,:,:)
             integer, allocatable :: ijk(:,:)
-            integer :: funit, ios, l
+            integer              :: funit, ios, l
             call fopen(funit, file=self%fbody//'_resid_extrema.csv', iostat=ios, status='replace')
             call fileiochk('simple_nanoparticle :: fit_density_model; ERROR when opening the _resid_extrema.csv file', ios)
             write(funit,'(A)') 'KIND,X,Y,Z,Z_SCORE'
@@ -1773,8 +1773,8 @@ contains
         subroutine weak_valid_corr
             type(image)       :: simimg
             real, allocatable :: pix1(:), pix2(:)
-            real    :: maxrad
-            integer :: j, winsz, npix_in, nout1, nout2, ijk(3)
+            real              :: maxrad
+            integer           :: j, winsz, npix_in, nout1, nout2, ijk(3)
             if( n == n1 ) return
             call simimg%new(self%ldim, self%smpd)
             call simimg%set_rmat(arr, .false.)
@@ -1860,7 +1860,7 @@ contains
 
         ! one row per atom in the order of _ATMS.pdb, which keeps the detection positions; here the fitted ones, in A
         subroutine write_atoms_csv
-            integer :: funit, ios, j
+            integer          :: funit, ios, j
             character(len=6) :: label
             call fopen(funit, file=self%fbody//'_atoms.csv', iostat=ios, status='replace')
             call fileiochk('simple_nanoparticle :: fit_density_model; ERROR when opening the _atoms.csv file', ios)
@@ -1883,9 +1883,9 @@ contains
 
         ! the particle's parameters, key = value
         subroutine write_model_txt
-            character(len=*), parameter :: SETS(3) = ['equal', 'sim  ', 'fit  ']
+            character(len=*), parameter :: SETS(3)      = ['equal', 'sim  ', 'fit  ']
             character(len=*), parameter :: BAND_TAGS(3) = ['5.0-3.3', '2.5-2.0', '2.0-1.6']
-            integer :: funit, ios, k, l
+            integer                     :: funit, ios, k, l
             call fopen(funit, file=self%fbody//'_model.txt', iostat=ios, status='replace')
             call fileiochk('simple_nanoparticle :: fit_density_model; ERROR when opening the _model.txt file', ios)
             call kv(funit, 'S', self%int_scale)
@@ -1985,11 +1985,11 @@ contains
 
         ! the smoothed transfer of a _transfer.tsv (columns s_lo, s_hi, ..., T_smoothed), its shell width
         subroutine read_transfer_tab( ds, t )
-            real,              intent(out) :: ds
-            real, allocatable, intent(out) :: t(:)
+            real,              intent(out)              :: ds
+            real,              allocatable, intent(out) :: t(:)
             character(len=512) :: line
-            real    :: vals(6), tbuf(10000)
-            integer :: funit, ios, m
+            real               :: vals(6), tbuf(10000)
+            integer            :: funit, ios, m
             call fopen(funit, file=self%transfer_tab, status='old', action='read', iostat=ios)
             call fileiochk('simple_nanoparticle :: fit_density_model; ERROR when opening transfer_tab', ios)
             read(funit,'(A)', iostat=ios) line
@@ -2021,18 +2021,18 @@ contains
     end subroutine fit_density_model
 
     subroutine fillin_atominfo( self, a0, imat )
-        class(nanoparticle),        intent(inout) :: self
-        real,             optional, intent(in)    :: a0(3) ! lattice parameters
-        integer,          optional, intent(in)    :: imat(:,:,:)
-        type(image)          :: simatms, fit_isotropic, fit_anisotropic
-        logical, allocatable :: mask(:,:,:)
-        real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:)
-        real,    pointer     :: rmat_raw(:,:,:)
-        integer, allocatable :: imat_cc(:,:,:), first(:), vox(:,:)
-        logical, allocatable :: cc_mask(:)
-        real                 :: tmp_diam, a(3)
-        integer              :: i, cc, cn, max_size
-        character(len=*), parameter :: fn_fit_isotropic="fit_isotropic.mrc", fn_fit_anisotropic="fit_anisotropic.mrc"
+        class(nanoparticle),        intent(inout)        :: self
+        real,                       optional, intent(in) :: a0(3) ! lattice parameters
+        integer,                    optional, intent(in) :: imat(:,:,:)
+        type(image)                   :: simatms, fit_isotropic, fit_anisotropic
+        logical,          allocatable :: mask(:,:,:)
+        real,             allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:)
+        real,             pointer     :: rmat_raw(:,:,:)
+        integer,          allocatable :: imat_cc(:,:,:), first(:), vox(:,:)
+        logical,          allocatable :: cc_mask(:)
+        real                          :: tmp_diam, a(3)
+        integer                       :: i, cc, cn, max_size
+        character(len=*), parameter   :: fn_fit_isotropic="fit_isotropic.mrc", fn_fit_anisotropic="fit_anisotropic.mrc"
         if( self%l_species_free ) THROW_HARD('fillin_atominfo needs an element')
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         write(logfhandle, '(A)') '---Dev Note: ADP and Max Neighboring Displacements Under Testing---'
@@ -2213,11 +2213,11 @@ contains
             subroutine write_cn_atoms( cn_std )
                 integer, intent(in)  :: cn_std
                 type(image_bin)       :: img_atom
-                type(image)          :: simatms
-                type(atoms)          :: atoms_obj
-                integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
-                logical :: cn_mask(self%n_cc)
-                integer :: i
+                type(image)           :: simatms
+                type(atoms)           :: atoms_obj
+                integer, allocatable  :: imat(:,:,:), imat_atom(:,:,:)
+                logical               :: cn_mask(self%n_cc)
+                integer               :: i
                 ! make cn mask
                 cn_mask = self%atominfo(:)%cn_std == cn_std
                 call self%simulate_atoms(simatms, mask=cn_mask, atoms_obj=atoms_obj)
@@ -2244,9 +2244,9 @@ contains
             ! as a CSV file for visualization in Python/Matlab. Output positions are the voxel
             ! positions with respect to the CC center.
             subroutine write_2D_slice()
-                integer :: cc, cc_largest, max_size, center(3), i, j, funit
-                character(len=*), parameter :: fn_slice='cc_2D_slice.csv'
-                character(len=*), parameter :: header='X'//CSV_DELIM//'Y'//CSV_DELIM//'INTENSITY'
+                integer                     :: cc, cc_largest, max_size, center(3), i, j, funit
+                character(len=*), parameter :: fn_slice = 'cc_2D_slice.csv'
+                character(len=*), parameter :: header   = 'X'//CSV_DELIM//'Y'//CSV_DELIM//'INTENSITY'
                 ! Find largest CC for best visualization
                 max_size   = 0
                 cc_largest = 0
@@ -2295,7 +2295,7 @@ contains
         integer,             intent(in)    :: pos(:,:)
         real,                intent(out)   :: longest_dist
         logical, allocatable :: mask_dist(:) ! for min and max dist calculation
-        integer :: location(1)               ! location of vxls of the atom farthest from its center
+        integer              :: location(1)  ! location of vxls of the atom farthest from its center
         allocate(mask_dist(size(pos, dim=2)), source = .true.)
         if( size(pos,2) == 1 ) then ! if the connected component has size 1 (just 1 vxl)
             longest_dist  = self%smpd
@@ -2361,11 +2361,11 @@ contains
     ! about the cc center. The best fit solution is output into the 3D map fit, and
     ! the correlation between fit and rmat is stored in atominfo.
     subroutine calc_isotropic_disp( self, cc, a, rmat, fit )
-        class(nanoparticle), intent(inout) :: self
-        class(image), intent(inout)        :: fit
-        integer, intent(in)                :: cc
-        real, intent(in)                   :: a(3) ! lattice params
-        real, pointer, intent(in)          :: rmat(:,:,:)
+        class(nanoparticle), intent(inout)       :: self
+        class(image),        intent(inout)       :: fit
+        integer,             intent(in)          :: cc
+        real,                intent(in)          :: a(3) ! lattice params
+        real,                pointer, intent(in) :: rmat(:,:,:)
         real    :: output_rad, fit_rad, center(3), maxrad, r, var, amp, int, max_int_out
         real    :: XTWX(2,2), XTWX_inv(2,2), XTWY(2,1), B(2,1)
         integer :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, errflg
@@ -2451,18 +2451,18 @@ contains
     ! along the 3 principal axes and the angular orientation of the major axis are also
     ! calculated.
     subroutine calc_anisotropic_disp( self, cc, a, rmat, fit )
-        class(nanoparticle), intent(inout) :: self
-        class(image),        intent(inout) :: fit
-        integer,             intent(in)    :: cc
-        real,                intent(in)    :: a(3) ! Lattice params
-        real, pointer,       intent(in)    :: rmat(:,:,:)
+        class(nanoparticle), intent(inout)             :: self
+        class(image),        intent(inout)             :: fit
+        integer,             intent(in)                :: cc
+        real,                intent(in)                :: a(3) ! Lattice params
+        real,                pointer,       intent(in) :: rmat(:,:,:)
         real(kind=8), allocatable :: X(:,:), XTW(:,:), Y(:,:)
-        real(kind=8) :: XTWX(7,7), XTWX_inv(7,7), XTWY(7,1), B(7,1), cov(3,3), cov_inv(3,3)
-        real(kind=8) :: eigenvals(3), eigenvecs(3,3)
-        real(kind=8) :: majvector(3), rvec(3,1), beta(1,1), r(3)
-        real         :: center(3), output_rad, fit_rad, maxrad, int, amp, max_int_out, corr
-        integer      :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, nvoxels, n, errflg, nrot
-        logical      :: fit_mask(self%ldim(1), self%ldim(2), self%ldim(3))
+        real(kind=8)              :: XTWX(7,7), XTWX_inv(7,7), XTWY(7,1), B(7,1), cov(3,3), cov_inv(3,3)
+        real(kind=8)              :: eigenvals(3), eigenvecs(3,3)
+        real(kind=8)              :: majvector(3), rvec(3,1), beta(1,1), r(3)
+        real                      :: center(3), output_rad, fit_rad, maxrad, int, amp, max_int_out, corr
+        integer                   :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, nvoxels, n, errflg, nrot
+        logical                   :: fit_mask(self%ldim(1), self%ldim(2), self%ldim(3))
 
         if( self%binary_lattice() )then
             ! half the bond of the binary crystal, in the same proportions as the fcc radii below
@@ -2610,12 +2610,12 @@ contains
     ! visualization and output
 
     subroutine simulate_atoms( self, simatms, betas, mask, atoms_obj, l_pseudo )
-        class(nanoparticle),           intent(inout) :: self
-        class(image),                  intent(out)   :: simatms
-        real,        optional,         intent(in)    :: betas(self%n_cc) ! in pdb file b-factor
-        logical,     optional,         intent(in)    :: mask(self%n_cc)
-        type(atoms), optional, target, intent(inout) :: atoms_obj
-        logical,     optional,         intent(in)    :: l_pseudo         ! detection: pseudo-atoms at the template width
+        class(nanoparticle),           intent(inout)                   :: self
+        class(image),                  intent(out)                     :: simatms
+        real,                          optional,         intent(in)    :: betas(self%n_cc) ! in pdb file b-factor
+        logical,                       optional,         intent(in)    :: mask(self%n_cc)
+        type(atoms),                   optional, target, intent(inout) :: atoms_obj
+        logical,                       optional,         intent(in)    :: l_pseudo         ! detection: pseudo-atoms at the template width
         type(atoms), target  :: atms_here
         type(atoms), pointer :: atms_ptr => null()
         logical              :: betas_present, mask_present, atoms_obj_present, l_pseudo_here
@@ -2680,9 +2680,9 @@ contains
     end subroutine simulate_atoms
 
     subroutine write_centers_1( self, fname, coords )
-        class(nanoparticle),     intent(inout) :: self
-        class(string), optional, intent(in)    :: fname
-        real,          optional, intent(in)    :: coords(:,:)
+        class(nanoparticle),     intent(inout)        :: self
+        class(string),           optional, intent(in) :: fname
+        real,                    optional, intent(in) :: coords(:,:)
         type(atoms) :: centers_pdb
         integer     :: cc
         if( present(coords) )then
@@ -2786,7 +2786,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         type(image_bin)      :: img_atom
         integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
-        integer :: i
+        integer              :: i
         call img_atom%copy_bimg(self%img_cc)
         allocate(imat_atom(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
         call img_atom%get_imat(imat)
@@ -2842,9 +2842,9 @@ contains
     end subroutine write_csv_files
 
     subroutine write_atominfo( self, cc, funit, omit )
-        class(nanoparticle), intent(in) :: self
-        integer,             intent(in) :: cc, funit
-        logical, optional,   intent(in) :: omit
+        class(nanoparticle), intent(in)             :: self
+        integer,             intent(in)             :: cc, funit
+        logical,             optional,   intent(in) :: omit
         logical :: omit_here
         if( self%atominfo(cc)%size < NVOX_THRESH ) return
         omit_here = .false.

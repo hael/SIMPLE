@@ -19,7 +19,7 @@ contains
     subroutine test_compatibility()
         type(trail_chain_manifest) :: man
         integer(kind=8), parameter :: sizes(4) = [10_8,20_8,30_8,40_8], weights(2) = [2_8,3_8]
-        character(len=256) :: message
+        character(len=256)         :: message
         write(*,'(A)') 'test_compatibility'
         call man%new(16, 2., 100, 3, 2, 1, sizes, 80., 80, weights)
         call assert_true(man%compatible(100,3,2,16,2.,sizes,weights,message), 'chain: identical identity is reusable')
@@ -37,9 +37,9 @@ contains
 
     subroutine test_gridding_manifest()
         type(trail_chain_manifest) :: man, back
-        type(string)    :: fname
-        integer(kind=8) :: sizes(4)
-        integer         :: status, funit
+        type(string)               :: fname
+        integer(kind=8)            :: sizes(4)
+        integer                    :: status, funit
         write(*,'(A)') 'test_gridding_manifest'
         fname = 'trail_chain_manifest_test.txt'
         sizes = [1024_8, 2048_8, 1025_8, 2049_8]
@@ -81,19 +81,19 @@ contains
     ! of each half; the chain identity (provenance) carries a version, so a chain of an older version
     ! is not compatible and the master re-seeds it
     subroutine test_pcg_chain_header()
-        integer,          parameter :: BOX  = 16
-        real,             parameter :: SMPD = 2.0
+        integer,          parameter :: BOX       = 16
+        real,             parameter :: SMPD      = 2.0
         integer,          parameter :: MREP_HALF = 37
-        character(len=*), parameter :: PROV_OLD = 'pcgtrail-v2|pgrp=c1|objfun=euclid'
-        character(len=*), parameter :: PROV_NEW = 'pcgtrail-v3|pgrp=c1|objfun=euclid'
-        type(reconstructor_pcg) :: op
-        type(oris)              :: os
-        type(string)            :: fname
-        character(len=256)      :: prov
-        real(dp)       :: mass
-        integer(int64) :: wset_id(2)
-        real    :: smpd_file
-        integer :: state, eo, part, nparts, nptcls, box_file, status
+        character(len=*), parameter :: PROV_OLD  = 'pcgtrail-v2|pgrp=c1|objfun=euclid'
+        character(len=*), parameter :: PROV_NEW  = 'pcgtrail-v3|pgrp=c1|objfun=euclid'
+        type(reconstructor_pcg)     :: op
+        type(oris)                  :: os
+        type(string)                :: fname
+        character(len=256)          :: prov
+        real(dp)                    :: mass
+        integer(int64)              :: wset_id(2)
+        real                        :: smpd_file
+        integer                     :: state, eo, part, nparts, nptcls, box_file, status
         write(*,'(A)') 'test_pcg_chain_header'
         fname = 'pcg_trail_chain_test.bin'
         call os%new(1, .false.)

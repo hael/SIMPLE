@@ -14,11 +14,11 @@ contains
     !! wrapped Nyquist mate at the lower h bound), the rows a persisted accumulator carries
     subroutine compare_raw( op, other, b_relerr, d_relerr )
         class(reconstructor_pcg), intent(in)  :: op, other
-        real,                    intent(out) :: b_relerr, d_relerr
+        real,                     intent(out) :: b_relerr, d_relerr
         complex, allocatable :: b(:,:,:), b_other(:,:,:)
         real,    allocatable :: d(:,:,:), d_other(:,:,:)
-        real(dp) :: bnum, bden, dnum, dden
-        integer  :: hlo
+        real(dp)             :: bnum, bden, dnum, dden
+        integer              :: hlo
         call op%get_raw_accum(b, d)
         call other%get_raw_accum(b_other, d_other)
         if( any(lbound(b) /= lbound(b_other)) .or. any(ubound(b) /= ubound(b_other)) )then

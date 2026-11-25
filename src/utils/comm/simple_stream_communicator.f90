@@ -56,10 +56,10 @@ contains
     ! LIFECYCLE
 
     subroutine create(self, jobid, url, name)
-        class(stream_http_communicator), intent(inout) :: self
-        character(*),                    intent(in)    :: url
-        character(*), optional,          intent(in)    :: name
-        integer,                         intent(in)    :: jobid
+        class(stream_http_communicator), intent(inout)                 :: self
+        character(*),                    intent(in)                    :: url
+        character(*),                    optional,          intent(in) :: name
+        integer,                         intent(in)                    :: jobid
         character(len=STDLEN)                          :: l_name
         ! initialize dynamicstrings
         self%url       = ""
@@ -111,7 +111,7 @@ contains
     subroutine send_heartbeat(self)
         class(stream_http_communicator), intent(inout) :: self
         type(json_value),                pointer       :: heartbeat_json
-        character(kind=CK,len=:), allocatable          :: heartbeat_json_str
+        character(kind=CK,len=:),        allocatable   :: heartbeat_json_str
         if(self%active) then
             call self%json%create_object(heartbeat_json,'')
             call self%json%add(heartbeat_json, "jobid",     self%id)
@@ -220,12 +220,12 @@ contains
     end subroutine join_background_heartbeat
 
     subroutine curl_request(self, data)
-        class(stream_http_communicator), intent(inout) :: self
-        character(*), optional,          intent(in)    :: data
+        class(stream_http_communicator), intent(inout)                 :: self
+        character(*),                    optional,          intent(in) :: data
         type(json_value), pointer :: response_json => null()
-        type(string) :: cmd, buf
-        integer      :: file_unit, stat
-        logical      :: found, terminate, valid_json
+        type(string)              :: cmd, buf
+        integer                   :: file_unit, stat
+        logical                   :: found, terminate, valid_json
         if(present(data)) then
             cmd = 'curl --header "Content-Type: application/json" --silent --request GET --data ' // "'" // data // "'" // ' -o ' // self%tmp_recv%to_char() // ' ' // self%url%to_char()
         else
@@ -397,8 +397,8 @@ contains
     end subroutine add_to_json_char
 
     subroutine add_to_json_jval( self, jval )
-        class(stream_http_communicator), intent(inout) :: self
-        type(json_value), pointer,       intent(in)    :: jval
+        class(stream_http_communicator), intent(inout)             :: self
+        type(json_value),                pointer,       intent(in) :: jval
         call self%json%add(self%job_json, jval)
     end subroutine add_to_json_jval
 
@@ -434,10 +434,10 @@ contains
     end subroutine get_json_arg_dp
 
     subroutine get_json_arg_char( self, key, str, found )
-        class(stream_http_communicator),       intent(inout) :: self
-        character(len=*),                      intent(in)    :: key
-        character(kind=CK,len=:), allocatable, intent(inout) :: str
-        logical,                               intent(out)   :: found
+        class(stream_http_communicator),       intent(inout)              :: self
+        character(len=*),                      intent(in)                 :: key
+        character(kind=CK,len=:),              allocatable, intent(inout) :: str
+        logical,                               intent(out)                :: found
         call self%json%get(self%update_arguments, trim(key), str, found)
     end subroutine get_json_arg_char
 
@@ -450,10 +450,10 @@ contains
     end subroutine get_json_arg_logical
 
     subroutine get_json_arg_int_arr( self, key, iarr, found )
-        class(stream_http_communicator), intent(inout) :: self
-        character(len=*),                intent(in)    :: key
-        integer, allocatable,            intent(inout) :: iarr(:)
-        logical,                         intent(out)   :: found
+        class(stream_http_communicator), intent(inout)                         :: self
+        character(len=*),                intent(in)                            :: key
+        integer,                         allocatable,            intent(inout) :: iarr(:)
+        logical,                         intent(out)                           :: found
         if( allocated(iarr) ) deallocate(iarr)
         call self%json%get(self%update_arguments, trim(key), iarr, found)
     end subroutine get_json_arg_int_arr

@@ -14,13 +14,13 @@ integer, parameter :: MAX_OPTICS_SHIFTS = 100 ! beam-shift entries a group holds
 
 type, extends( gui_metadata_base ) :: gui_metadata_optics_group
   private
-  integer :: i        = 1   ! index of this optics group within the current batch
-  integer :: i_max    = 1   ! total optics groups in the current batch
-  integer :: n_shifts = 0   ! number of populated beam-shift entries
+  integer :: i                          = 1  ! index of this optics group within the current batch
+  integer :: i_max                      = 1  ! total optics groups in the current batch
+  integer :: n_shifts                   = 0  ! number of populated beam-shift entries
   real    :: xshifts(MAX_OPTICS_SHIFTS) = 0. ! beam-shift x components (Angstroms)
   real    :: yshifts(MAX_OPTICS_SHIFTS) = 0. ! beam-shift y components (Angstroms)
 contains
-  procedure :: kill => kill_override
+  procedure :: kill    => kill_override
   procedure :: set
   procedure :: get
   procedure :: get_i
@@ -35,9 +35,9 @@ contains
   ! Set all optics-group fields; n_shifts must not exceed MAX_OPTICS_SHIFTS or
   ! the size of the supplied shift arrays.
   subroutine set( self, i, i_max, xshifts, yshifts, n_shifts )
-    class(gui_metadata_optics_group), intent(inout) :: self
-    integer,                          intent(in)    :: i, i_max, n_shifts
-    real,                allocatable, intent(in)    :: xshifts(:), yshifts(:)
+    class(gui_metadata_optics_group), intent(inout)           :: self
+    integer,                          intent(in)              :: i, i_max, n_shifts
+    real,                             allocatable, intent(in) :: xshifts(:), yshifts(:)
     if( .not.self%l_initialized   ) THROW_HARD('gui metadata object is uninitialised')
     if( n_shifts < 0              ) THROW_HARD('n_shifts must be non-negative')
     if( n_shifts > MAX_OPTICS_SHIFTS ) THROW_HARD('n_shifts exceeds MAX_OPTICS_SHIFTS')
@@ -55,9 +55,9 @@ contains
 
   ! Return all fields; result is .true. if the object has been assigned.
   function get( self, i, i_max, xshifts, yshifts, n_shifts ) result( l_assigned )
-    class(gui_metadata_optics_group), intent(in)  :: self
-    integer,                          intent(out) :: i, i_max, n_shifts
-    real,                allocatable, intent(out) :: xshifts(:), yshifts(:)
+    class(gui_metadata_optics_group), intent(in)               :: self
+    integer,                          intent(out)              :: i, i_max, n_shifts
+    real,                             allocatable, intent(out) :: xshifts(:), yshifts(:)
     logical                                       :: l_assigned
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned = self%l_assigned

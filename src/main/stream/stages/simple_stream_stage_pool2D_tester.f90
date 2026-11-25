@@ -49,9 +49,9 @@ contains
 
     subroutine test_init_params()
         class(stream_stage_pool2D), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root, val
-        integer                   :: nfail0
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root, val
+        integer                                 :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_init_params'
         nfail0 = tests_failed
@@ -84,9 +84,9 @@ contains
     !! and the stage's project and the snapshots stay
     subroutine test_restart_cleans()
         class(stream_stage_pool2D), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_restart_cleans'
         nfail0 = tests_failed
@@ -120,9 +120,9 @@ contains
     !> exports for 3D continue after the highest one in the completed folder
     subroutine test_export_numbering()
         class(stream_stage_pool2D), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_export_numbering'
         nfail0 = tests_failed
@@ -146,9 +146,9 @@ contains
     !! and image indices, a 3D copy of the 2D particles, and the classes
     subroutine test_publication_holds_classified_stacks()
         integer, parameter :: NPTCLS_STK = 3
-        type(sp_project) :: pool, pub
-        type(string)     :: stk, mic
-        integer          :: istk, iptcl, nstks
+        type(sp_project)   :: pool, pub
+        type(string)       :: stk, mic
+        integer            :: istk, iptcl, nstks
         write(*,'(A)') 'test_publication_holds_classified_stacks'
         ! three stacks of three particles (with nptcls_stk and indstk, as release 4 requires): stack 1
         ! classified, stack 2 just imported (never updated), stack 3 with one particle classified
@@ -226,12 +226,12 @@ contains
     !! class averages, halves and FRCs concatenated in set order, refused when a half is missing or
     !! the boxes differ
     subroutine test_sieve_publication()
-        integer, parameter :: BOX = 8
+        integer, parameter :: BOX  = 8
         real,    parameter :: SMPD = 2.0
-        type(sp_project) :: sets(3), pub
-        type(class_frcs) :: frcs_chk
-        type(string)     :: cwd_saved, root, stks(3), frcs(3), stk_wide, frcs_wide
-        integer          :: nfail0, nstks, ncls, ldim(3), n
+        type(sp_project)   :: sets(3), pub
+        type(class_frcs)   :: frcs_chk
+        type(string)       :: cwd_saved, root, stks(3), frcs(3), stk_wide, frcs_wide
+        integer            :: nfail0, nstks, ncls, ldim(3), n
         write(*,'(A)') 'test_sieve_publication'
         nfail0 = tests_failed
         call enter_fixture('p2_sieve_publication', cwd_saved, root)
@@ -318,7 +318,7 @@ contains
             type(string),     intent(inout) :: stk, frcs
             type(image)      :: img
             type(class_frcs) :: clsfrcs
-            integer :: i
+            integer          :: i
             stk  = fbody//'.mrc'
             frcs = fbody//'_frcs.bin'
             call img%new([box, box, 1], SMPD)
@@ -339,10 +339,10 @@ contains
     !! their name (10 after 2), with the final set last, whatever order the folder lists them in
     subroutine test_sets_taken_in_order()
         class(stream_stage_pool2D), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root, cwd, set_any, names(4)
-        type(rec_iterator)        :: it
-        type(chunk_rec)           :: crec
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root, cwd, set_any, names(4)
+        type(rec_iterator)                      :: it
+        type(chunk_rec)                         :: crec
         character(len=*), parameter :: EXPECTED(4) = [character(len=24) :: '00002.simple', '00003.simple',&
             &'00010.simple', 'sieve_final_c3_f3.simple']
         integer                   :: nfail0, i
@@ -381,9 +381,9 @@ contains
     !! the sieve's mask diameter
     subroutine test_attach_and_watch()
         class(stream_stage_pool2D), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root, set1
-        integer                   :: nfail0
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root, set1
+        integer                                 :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_attach_and_watch'
         nfail0 = tests_failed
@@ -414,9 +414,9 @@ contains
     !! counts the selected particles and the micrographs (the rows: simple_stream_pool2D_tester)
     subroutine test_transfer_sets()
         class(stream_stage_pool2D), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root, set_file
-        integer                   :: nfail0, nimported
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root, set_file
+        integer                                 :: nfail0, nimported
         allocate(stage)
         write(*,'(A)') 'test_transfer_sets'
         nfail0 = tests_failed
@@ -453,9 +453,9 @@ contains
     !> stepwise=yes takes only enough sets to reach the threshold; the rest come with the next import
     subroutine test_transfer_stepwise()
         class(stream_stage_pool2D), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root, set_file
-        integer                   :: nfail0, nimported
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root, set_file
+        integer                                 :: nfail0, nimported
         allocate(stage)
         write(*,'(A)') 'test_transfer_stepwise'
         nfail0 = tests_failed
@@ -496,9 +496,9 @@ contains
 
     subroutine test_sieve_final_set()
         class(stream_stage_pool2D), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root, set_file
-        integer                   :: nfail0, nimported, nmics0
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root, set_file
+        integer                                 :: nfail0, nimported, nmics0
         allocate(stage)
         write(*,'(A)') 'test_sieve_final_set'
         nfail0 = tests_failed
@@ -606,12 +606,12 @@ contains
     !! the same value again changes nothing; a snapshot request waits for the pool
     subroutine test_gui_mskdiam_update()
         class(stream_stage_pool2D), allocatable        :: stage
-        type(cmdline)                    :: cline
-        type(stream_pipe)                :: writer
-        type(gui_metadata_stream_update) :: update
-        type(string)                     :: cwd_saved, root
-        integer(c_int)                   :: fds(2)
-        integer                          :: nfail0
+        type(cmdline)                                  :: cline
+        type(stream_pipe)                              :: writer
+        type(gui_metadata_stream_update)               :: update
+        type(string)                                   :: cwd_saved, root
+        integer(c_int)                                 :: fds(2)
+        integer                                        :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_gui_mskdiam_update'
         nfail0 = tests_failed
@@ -653,9 +653,9 @@ contains
     !! command line
     subroutine test_given_mskdiam_kept()
         class(stream_stage_pool2D), allocatable :: stage
-        type(cmdline) :: cline
-        type(string)  :: cwd_saved, root
-        integer       :: nfail0
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_given_mskdiam_kept'
         nfail0 = tests_failed
@@ -684,15 +684,15 @@ contains
     !> one status message per call, with the stage name, the particles imported and the mask
     subroutine test_send_status()
         class(stream_stage_pool2D), allocatable        :: stage
-        type(cmdline)                    :: cline
-        type(stream_pipe)                :: reader
-        type(gui_metadata_stream_pool2D) :: status
-        character(len=:), allocatable    :: buffer
-        type(string)                     :: cwd_saved, root, stage_name
-        integer(c_int)                   :: fds(2)
-        integer                          :: nfail0, meta_type, iter, nimported, naccepted, nrejected, tlast, mskdiam
-        real                             :: mskscale, res
-        logical                          :: l_assigned, l_user_input
+        type(cmdline)                                  :: cline
+        type(stream_pipe)                              :: reader
+        type(gui_metadata_stream_pool2D)               :: status
+        character(len=:),           allocatable        :: buffer
+        type(string)                                   :: cwd_saved, root, stage_name
+        integer(c_int)                                 :: fds(2)
+        integer                                        :: nfail0, meta_type, iter, nimported, naccepted, nrejected, tlast, mskdiam
+        real                                           :: mskscale, res
+        logical                                        :: l_assigned, l_user_input
         allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
@@ -731,14 +731,14 @@ contains
     !! file and no tiles
     subroutine test_send_snapshot()
         class(stream_stage_pool2D), allocatable                 :: stage
-        type(cmdline)                             :: cline
-        type(stream_pipe)                         :: reader
-        type(gui_metadata_stream_snapshot) :: snapshot
-        character(len=:), allocatable             :: buffer
-        type(string)                              :: cwd_saved, root, fname
-        integer(c_int)                            :: fds(2)
-        integer                                   :: nfail0, meta_type, id, nptcls, stime, ncavgs
-        logical                                   :: l_assigned
+        type(cmdline)                                           :: cline
+        type(stream_pipe)                                       :: reader
+        type(gui_metadata_stream_snapshot)                      :: snapshot
+        character(len=:),           allocatable                 :: buffer
+        type(string)                                            :: cwd_saved, root, fname
+        integer(c_int)                                          :: fds(2)
+        integer                                                 :: nfail0, meta_type, id, nptcls, stime, ncavgs
+        logical                                                 :: l_assigned
         allocate(stage)
         write(*,'(A)') 'test_send_snapshot'
         nfail0 = tests_failed
@@ -805,9 +805,9 @@ contains
     !> the public loop waits for the sieve's folder, then attaches; no pool until a set arrives
     subroutine test_iterate_waits()
         class(stream_stage_pool2D), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_iterate_waits'
         nfail0 = tests_failed
@@ -828,9 +828,9 @@ contains
 
     subroutine test_finished()
         class(stream_stage_pool2D), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0
+        type(cmdline)                           :: cline
+        type(string)                            :: cwd_saved, root
+        integer                                 :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
@@ -867,7 +867,7 @@ contains
     ! second
     subroutine make_test_stage( stage, cline )
         class(stream_stage_pool2D), intent(inout) :: stage
-        type(cmdline),             intent(inout) :: cline
+        type(cmdline),              intent(inout) :: cline
         call stage%init_params(cline)
         call stage%init_gui(-1, -1)
         stage%settle_s = -1
@@ -886,9 +886,9 @@ contains
     ! averages' entry with the sieve's mask diameter (and sieve_final=yes when @p l_final); returns
     ! its absolute path
     function write_sieved_set( id, nptcls_mic, nrejected, l_final ) result( fname )
-        integer,           intent(in) :: id, nptcls_mic(:)
-        integer, optional, intent(in) :: nrejected
-        logical, optional, intent(in) :: l_final
+        integer,           intent(in)           :: id, nptcls_mic(:)
+        integer,           optional, intent(in) :: nrejected
+        logical,           optional, intent(in) :: l_final
         type(string)     :: fname
         type(sp_project) :: proj
         type(string)     :: cwd
@@ -939,7 +939,7 @@ contains
         character(len=*), intent(in)    :: dir
         type(sp_project), intent(inout) :: proj
         type(sp_project) :: mapproj
-        integer :: imic
+        integer          :: imic
         call mapproj%os_mic%new(proj%os_mic%get_noris(), is_ptcl=.false.)
         do imic = 1,proj%os_mic%get_noris()
             call mapproj%os_mic%set(imic, 'importind', imic)

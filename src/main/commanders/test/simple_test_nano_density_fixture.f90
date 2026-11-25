@@ -14,16 +14,16 @@ contains
     ! their power |F|**2 as weights (t_ref); have marks the shells holding at least 1% of the peak power
     subroutine rendered_transfer( xyz, ints, bfacs, nbox, smpd_r, amp, bh, ds, nsh, t_ref, have )
         use simple_image, only: image
-        real,                 intent(in)  :: xyz(:,:), ints(:), bfacs(:), smpd_r, amp, bh, ds
-        integer,              intent(in)  :: nbox, nsh
-        real,    allocatable, intent(out) :: t_ref(:)
-        logical, allocatable, intent(out) :: have(:)
-        type(image) :: img
+        real,                 intent(in)               :: xyz(:,:), ints(:), bfacs(:), smpd_r, amp, bh, ds
+        integer,              intent(in)               :: nbox, nsh
+        real,                 allocatable, intent(out) :: t_ref(:)
+        logical,              allocatable, intent(out) :: have(:)
+        type(image)           :: img
         real,     allocatable :: arr(:,:,:)
         complex,  allocatable :: c(:,:,:)
         real(dp), allocatable :: pw(:), pwt(:)
-        integer :: cs(3), i, j, l, h, k, m, ish
-        real    :: sf, w
+        integer               :: cs(3), i, j, l, h, k, m, ish
+        real                  :: sf, w
         allocate(arr(nbox,nbox,nbox))
         call render_atoms(arr, smpd_r, xyz, ints, bfacs, 0., 0.)
         call img%new([nbox,nbox,nbox], smpd_r, wthreads=.false.)

@@ -9,17 +9,17 @@ contains
 
     !>  \brief  generates an array of projection images of volume vol in orientations o
     function reproject( vol, o, top ) result( imgs )
-        class(image),      intent(inout) :: vol     !< volume to project
-        class(oris),       intent(inout) :: o       !< orientations
-        integer, optional, intent(in)    :: top     !< stop index
+        class(image),      intent(inout)        :: vol !< volume to project
+        class(oris),       intent(inout)        :: o   !< orientations
+        integer,           optional, intent(in) :: top !< stop index
         type(image),       allocatable :: imgs(:)   !< resulting images
         type(image),       allocatable :: imgs_pad(:)
-        type(ori)        :: o2
-        type(projector)  :: vol_pad
-        logical, allocatable :: use_proj(:)
-        logical          :: has_state
-        integer          :: n, i, ithr, ldim(3), boxpd, ldim_pd(3), box
-        real             :: smpd
+        type(ori)                      :: o2
+        type(projector)                :: vol_pad
+        logical,           allocatable :: use_proj(:)
+        logical                        :: has_state
+        integer                        :: n, i, ithr, ldim(3), boxpd, ldim_pd(3), box
+        real                           :: smpd
         ldim    = vol%get_ldim()
         box     = ldim(1)
         smpd    = vol%get_smpd()
@@ -80,9 +80,9 @@ contains
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
     function rotvol( vol, o, shvec ) result( rovol )
-        class(image),   intent(inout) :: vol      !< volume to project
-        class(ori),     intent(inout) :: o        !< orientation
-        real, optional, intent(in)    :: shvec(3) !< 3D shift vector
+        class(image),   intent(inout)        :: vol      !< volume to project
+        class(ori),     intent(inout)        :: o        !< orientation
+        real,           optional, intent(in) :: shvec(3) !< 3D shift vector
         type(projector)  :: vol_pad
         type(image)      :: rovol_pad, rovol
         integer          :: ldim(3), ldim_pd(3), boxpd
@@ -105,10 +105,10 @@ contains
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
     subroutine rotvol_slim( vol_pad, rovol_pad, rovol, o, shvec )
-        class(projector), intent(inout) :: vol_pad
-        class(image),     intent(inout) :: rovol_pad, rovol
-        class(ori),       intent(inout) :: o
-        real, optional,   intent(in)    :: shvec(3)
+        class(projector), intent(inout)          :: vol_pad
+        class(image),     intent(inout)          :: rovol_pad, rovol
+        class(ori),       intent(inout)          :: o
+        real,             optional,   intent(in) :: shvec(3)
         integer :: h,k,l,nyq,lims(3,2),logi(3),phys(3),lim_sq
         real    :: loc(3), rmat(3,3)
         logical :: l_shvec_present

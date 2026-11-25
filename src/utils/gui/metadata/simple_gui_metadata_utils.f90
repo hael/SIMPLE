@@ -41,7 +41,7 @@ contains
     type(gui_metadata_stream_initial_analysis)   :: meta_initial_analysis
     type(gui_metadata_stream_particle_sieving)   :: meta_particle_sieving
     type(gui_metadata_stream_pool2D)             :: meta_pool2D
-    type(gui_metadata_stream_snapshot)    :: meta_pool2D_snapshot
+    type(gui_metadata_stream_snapshot)           :: meta_pool2D_snapshot
     type(gui_metadata_stream_solve3D_multistate) :: meta_solve3D_multistate
     type(gui_metadata_vol3D)                     :: meta_vol3D
     integer                                      :: max_size

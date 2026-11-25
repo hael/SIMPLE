@@ -11,33 +11,33 @@ private
 public :: dose_series_manifest
 
 character(len=*), parameter :: VERSION_LINE = '# SIMPLE dose series 1'
-integer, parameter :: LINE_CHUNK = 1024, MAX_LINE = 65536, MAX_PATH = 4095
-real(dp), parameter :: SMPD_ATOL = 1.e-4_dp, VALUE_RTOL = 1.e-5_dp, KV_ATOL = 1.e-3_dp
-real(dp), parameter :: ANGLE_ATOL = 1.e-3_dp
+integer,          parameter :: LINE_CHUNK   = 1024, MAX_LINE = 65536, MAX_PATH = 4095
+real(dp),         parameter :: SMPD_ATOL    = 1.e-4_dp, VALUE_RTOL = 1.e-5_dp, KV_ATOL = 1.e-3_dp
+real(dp),         parameter :: ANGLE_ATOL   = 1.e-3_dp
 
 type :: dose_window
     type(string) :: even, odd
-    integer :: first = 0, last = 0
-    real(dp) :: lo = 0._dp, hi = 0._dp
+    integer      :: first = 0, last = 0
+    real(dp)     :: lo    = 0._dp, hi = 0._dp
 end type dose_window
 
 type :: dose_series_manifest
     private
     type(dose_window), allocatable :: windows(:)
-    type(string) :: digest
-    integer :: box = 0, state = 1, nptcls = 0, neven = 0, nodd = 0
-    real(dp) :: smpd = 0._dp, kv = 0._dp, dose_per_fraction = 0._dp
-    logical :: paths_resolved = .false.
+    type(string)                   :: digest
+    integer                        :: box            = 0, state = 1, nptcls = 0, neven = 0, nodd = 0
+    real(dp)                       :: smpd           = 0._dp, kv = 0._dp, dose_per_fraction = 0._dp
+    logical                        :: paths_resolved = .false.
   contains
-    procedure :: new
-    procedure :: add_window
-    procedure :: read
-    procedure :: write
-    procedure :: select_windows
-    procedure :: get_geometry
-    procedure :: get_nwindows
-    procedure :: get_window
-    procedure :: kill
+    procedure          :: new
+    procedure          :: add_window
+    procedure          :: read
+    procedure          :: write
+    procedure          :: select_windows
+    procedure          :: get_geometry
+    procedure          :: get_nwindows
+    procedure          :: get_window
+    procedure          :: kill
     procedure, private :: validate
     procedure, private :: validate_files
 end type dose_series_manifest
@@ -47,9 +47,9 @@ contains
     !> Initialize metadata; validation is deferred until publication so raw outputs can survive a bad dose.
     subroutine new(self, box, smpd, kv, dpf, nptcls, neven, nodd, digest)
         class(dose_series_manifest), intent(inout) :: self
-        integer, intent(in) :: box, nptcls, neven, nodd
-        real(dp), intent(in) :: smpd, kv, dpf
-        class(string), intent(in) :: digest
+        integer,                     intent(in)    :: box, nptcls, neven, nodd
+        real(dp),                    intent(in)    :: smpd, kv, dpf
+        class(string),               intent(in)    :: digest
         call self%kill
         self%box = box
         self%smpd = smpd
@@ -64,11 +64,11 @@ contains
     !> Append one actual interval, retaining a possible final overlap for the consumer to select.
     subroutine add_window(self, a, b, dlo, dhi, even, odd)
         class(dose_series_manifest), intent(inout) :: self
-        integer, intent(in) :: a, b
-        real(dp), intent(in) :: dlo, dhi
-        class(string), intent(in) :: even, odd
+        integer,                     intent(in)    :: a, b
+        real(dp),                    intent(in)    :: dlo, dhi
+        class(string),               intent(in)    :: even, odd
         type(dose_window), allocatable :: grown(:)
-        integer :: n
+        integer                        :: n
         n = self%get_nwindows()
         allocate(grown(n+1))
         if( n > 0 ) grown(:n) = self%windows
@@ -84,13 +84,13 @@ contains
     !> Read and validate metadata and the actual MRC headers without terminating the caller.
     logical function read(self, fname, message) result(ok)
         class(dose_series_manifest), intent(inout) :: self
-        class(string), intent(in) :: fname
-        type(string), intent(out) :: message
-        type(string) :: directory, line, tokens(6), even, odd
+        class(string),               intent(in)    :: fname
+        type(string),                intent(out)   :: message
+        type(string)                  :: directory, line, tokens(6), even, odd
         character(len=:), allocatable :: txt, key, val
-        logical :: seen(10), first, parsed
-        integer :: unit, ios, ntok, slot, a, b
-        real(dp) :: dlo, dhi
+        logical                       :: seen(10), first, parsed
+        integer                       :: unit, ios, ntok, slot, a, b
+        real(dp)                      :: dlo, dhi
         call self%kill
         ok = .false.
         message = 'Cannot open dose series manifest: '//fname%to_char()
@@ -206,11 +206,11 @@ contains
 
     !> Atomically publish all rows only after the complete metadata and referenced pair set validate.
     logical function write(self, fname, message) result(ok)
-        class(dose_series_manifest), intent(in) :: self
-        class(string), intent(in) :: fname
-        type(string), intent(out) :: message
+        class(dose_series_manifest), intent(in)  :: self
+        class(string),               intent(in)  :: fname
+        type(string),                intent(out) :: message
         type(string) :: directory, tmp, even, odd
-        integer :: unit, ios, close_status, i
+        integer      :: unit, ios, close_status, i
         ok = self%validate(message)
         if( .not. ok ) return
         directory = parent_directory(fname)
@@ -264,9 +264,9 @@ contains
     !> Select disjoint windows, keeping the full-width last interval when it overlaps its predecessor.
     logical function select_windows(self, message) result(ok)
         class(dose_series_manifest), intent(inout) :: self
-        type(string), intent(out) :: message
+        type(string),                intent(out)   :: message
         type(dose_window), allocatable :: selected(:)
-        integer :: n, drop
+        integer                        :: n, drop
         ok = self%validate(message)
         if( .not. ok ) return
         n = self%get_nwindows()
@@ -283,9 +283,9 @@ contains
 
     !> Return the native geometry and physical voltage recorded by the producer.
     subroutine get_geometry(self, box, smpd, kv)
-        class(dose_series_manifest), intent(in) :: self
-        integer, intent(out) :: box
-        real(dp), intent(out) :: smpd, kv
+        class(dose_series_manifest), intent(in)  :: self
+        integer,                     intent(out) :: box
+        real(dp),                    intent(out) :: smpd, kv
         box = self%box
         smpd = self%smpd
         kv = self%kv
@@ -300,11 +300,11 @@ contains
 
     !> Return a window; callers iterate from one through get_nwindows.
     subroutine get_window(self, i, a, b, dlo, dhi, even, odd)
-        class(dose_series_manifest), intent(in) :: self
-        integer, intent(in) :: i
-        integer, intent(out) :: a, b
-        real(dp), intent(out) :: dlo, dhi
-        type(string), intent(out) :: even, odd
+        class(dose_series_manifest), intent(in)  :: self
+        integer,                     intent(in)  :: i
+        integer,                     intent(out) :: a, b
+        real(dp),                    intent(out) :: dlo, dhi
+        type(string),                intent(out) :: even, odd
         a = self%windows(i)%first
         b = self%windows(i)%last
         dlo = self%windows(i)%lo
@@ -331,11 +331,11 @@ contains
 
     !> Check numeric metadata, interval doses and the disjoint subset without changing any rows.
     logical function validate(self, message) result(ok)
-        class(dose_series_manifest), intent(in) :: self
-        type(string), intent(out) :: message
+        class(dose_series_manifest), intent(in)  :: self
+        type(string),                intent(out) :: message
         character(len=:), allocatable :: hash
-        real(dp) :: lo, hi
-        integer :: i, n, drop, previous
+        real(dp)                      :: lo, hi
+        integer                       :: i, n, drop, previous
         ok = .false.
         message = 'Dose series needs a positive even box and state 1'
         if( self%box < 2 .or. mod(self%box,2) /= 0 .or. self%state /= 1 ) return
@@ -403,11 +403,11 @@ contains
 
     !> Verify distinct canonical MRC paths against the manifest and a common coordinate system.
     logical function validate_files(self, directory, message) result(ok)
-        class(dose_series_manifest), intent(in) :: self
-        class(string), intent(in) :: directory
-        type(string), intent(out) :: message
+        class(dose_series_manifest), intent(in)  :: self
+        class(string),               intent(in)  :: directory
+        type(string),                intent(out) :: message
         type(string), allocatable :: paths(:)
-        integer :: i, j, coords(6), reference(6)
+        integer                   :: i, j, coords(6), reference(6)
         ok = .false.
         allocate(paths(2*self%get_nwindows()))
         reference = 0
@@ -436,17 +436,17 @@ contains
 
     !> Read header bytes with recoverable I/O errors before using the common MRC decoder.
     logical function check_header(fname, box, smpd, coords, message) result(ok)
-        class(string), intent(in) :: fname
-        integer, intent(in) :: box
-        real(dp), intent(in) :: smpd
-        integer, intent(out) :: coords(6)
-        type(string), intent(out) :: message
+        class(string), intent(in)  :: fname
+        integer,       intent(in)  :: box
+        real(dp),      intent(in)  :: smpd
+        integer,       intent(out) :: coords(6)
+        type(string),  intent(out) :: message
         type(MrcImgHead) :: header
-        integer(int8) :: bytes(MRCHEADSZ)
-        integer :: unit, ios, bpp
-        integer(int64) :: length, available
-        real(dp) :: sampling(3), angles(3)
-        real :: origins(3)
+        integer(int8)    :: bytes(MRCHEADSZ)
+        integer          :: unit, ios, bpp
+        integer(int64)   :: length, available
+        real(dp)         :: sampling(3), angles(3)
+        real             :: origins(3)
         ok = .false.
         coords = 0
         message = 'Cannot read MRC header: '//fname%to_char()
@@ -521,12 +521,12 @@ contains
     !> Reject explicitly masked/regularized producer provenance while allowing external maps without a sidecar.
     logical function check_support(fname, message) result(ok)
         use simple_halfmap_diagnostics, only: support_provenance_fname
-        class(string), intent(in) :: fname
-        type(string), intent(out) :: message
-        type(string) :: sidecar, line
+        class(string), intent(in)  :: fname
+        type(string),  intent(out) :: message
+        type(string)                  :: sidecar, line
         character(len=:), allocatable :: txt
-        logical :: support, kind
-        integer :: unit, ios
+        logical                       :: support, kind
+        integer                       :: unit, ios
         ok = .true.
         sidecar = support_provenance_fname(fname)
         if( .not. file_exists(sidecar) ) return
@@ -572,9 +572,9 @@ contains
     !> Resolve existing paths canonically so aliases cannot reuse one file as several independent halves.
     function resolve_path(directory, path) result(resolved)
         class(string), intent(in) :: directory, path
-        type(string) :: resolved
+        type(string)                  :: resolved
         character(len=:), allocatable :: text
-        integer :: status
+        integer                       :: status
         text = path%to_char()
         resolved = path
         if( len(text) == 0 ) return
@@ -586,7 +586,7 @@ contains
     !> Make paths beneath the manifest directory portable; preserve external absolute paths.
     function portable_path(directory, path) result(portable)
         class(string), intent(in) :: directory, path
-        type(string) :: portable, absolute
+        type(string)                  :: portable, absolute
         character(len=:), allocatable :: root, text
         absolute = resolve_path(directory, path)
         root = directory%to_char()
@@ -598,9 +598,9 @@ contains
     !> Obtain an absolute directory with a trailing separator before the consumer changes directory.
     function parent_directory(fname) result(directory)
         class(string), intent(in) :: fname
-        type(string) :: directory, absolute
+        type(string)                  :: directory, absolute
         character(len=:), allocatable :: text
-        integer :: pos, status
+        integer                       :: pos, status
         absolute = simple_abspath(fname, status=status, check_exists=.false.)
         text = absolute%to_char()
         pos = index(text,'/',back=.true.)
@@ -618,12 +618,12 @@ contains
 
     !> Read a complete logical line in chunks; exceeding the explicit format bound is an error.
     subroutine read_line(unit, line, ios)
-        integer, intent(in) :: unit
+        integer,      intent(in)  :: unit
         type(string), intent(out) :: line
-        integer, intent(out) :: ios
-        character(len=LINE_CHUNK) :: chunk
+        integer,      intent(out) :: ios
+        character(len=LINE_CHUNK)     :: chunk
         character(len=:), allocatable :: text
-        integer :: got
+        integer                       :: got
         text = ''
         do
             read(unit,'(A)',advance='no',size=got,iostat=ios) chunk
@@ -643,9 +643,9 @@ contains
 
     !> Split all whitespace tokens, reporting excess columns instead of discarding them.
     subroutine split_tokens(text, tokens, n)
-        character(len=*), intent(in) :: text
-        type(string), intent(out) :: tokens(:)
-        integer, intent(out) :: n
+        character(len=*), intent(in)  :: text
+        type(string),     intent(out) :: tokens(:)
+        integer,          intent(out) :: n
         integer :: i, first, length
         n = 0
         i = 1
@@ -686,8 +686,8 @@ contains
 
     !> Parse exactly one integer token, rejecting list-directed separators and repetitions.
     logical function parse_int(text,value) result(ok)
-        character(len=*), intent(in) :: text
-        integer, intent(out) :: value
+        character(len=*), intent(in)  :: text
+        integer,          intent(out) :: value
         integer :: ios
         ok = .false.
         if( scan(text,',/*') /= 0 ) return
@@ -697,8 +697,8 @@ contains
 
     !> Parse exactly one finite real token, rejecting list-directed separators and repetitions.
     logical function parse_real(text,value) result(ok)
-        character(len=*), intent(in) :: text
-        real(dp), intent(out) :: value
+        character(len=*), intent(in)  :: text
+        real(dp),         intent(out) :: value
         integer :: ios
         ok = .false.
         if( scan(text,',/*') /= 0 ) return

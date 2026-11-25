@@ -11,7 +11,7 @@ public :: run_all_ansi_ctrls_tests
 contains
 
     subroutine run_all_ansi_ctrls_tests
-        character(len=1), parameter :: ESC = achar(27)
+        character(len=1), parameter   :: ESC = achar(27)
         character(len=:), allocatable :: formatted
 
         call assert_char('30', C_BLACK,   'ANSI black foreground code')

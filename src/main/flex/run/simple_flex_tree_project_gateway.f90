@@ -15,10 +15,10 @@ contains
 
     ! Read a frozen node project; selection retains the original row namespace.
     subroutine load_node( node, project, selected, states )
-        type(flex_tree_node), intent(in)    :: node
-        type(sp_project),    intent(inout) :: project
-        logical, allocatable, intent(out)  :: selected(:)
-        integer, allocatable, intent(out)  :: states(:)
+        type(flex_tree_node), intent(in)               :: node
+        type(sp_project),     intent(inout)            :: project
+        logical,              allocatable, intent(out) :: selected(:)
+        integer,              allocatable, intent(out) :: states(:)
         integer :: i, label, n, populations(MAXS)
         call project%read(node%project_file)
         n = project%os_ptcl3D%get_noris()
@@ -79,16 +79,16 @@ contains
     subroutine prepare_tree_flex( node, destination, mean, ready, l_write )
         use simple_flex_pca_stages, only: flex_pca_half_of, FLEX_FIT_A, FLEX_FIT_B
         use simple_syslib,          only: file_exists, simple_abspath
-        type(flex_tree_node), intent(in)  :: node
-        type(string),        intent(in)  :: destination
-        type(string),        intent(out) :: mean
-        logical,             intent(out) :: ready
-        logical, optional,   intent(in)  :: l_write
+        type(flex_tree_node), intent(in)           :: node
+        type(string),         intent(in)           :: destination
+        type(string),         intent(out)          :: mean
+        logical,              intent(out)          :: ready
+        logical,              optional, intent(in) :: l_write
         type(sp_project), allocatable :: project
-        logical, allocatable :: selected(:)
-        integer, allocatable :: states(:)
-        integer :: i, counts(2), box
-        real :: smpd
+        logical,          allocatable :: selected(:)
+        integer,          allocatable :: states(:)
+        integer                       :: i, counts(2), box
+        real                          :: smpd
         allocate(project)
         call load_node(node, project, selected, states)
         counts = 0
@@ -118,15 +118,15 @@ contains
     ! Compact occupied labels for refine3D, returning corresponding map references in that order.
     subroutine prepare_tree_refine( node, destination, volumes, l_write )
         use simple_syslib, only: file_exists
-        type(flex_tree_node), intent(in) :: node
-        type(string),        intent(in) :: destination
-        type(string), allocatable, intent(out) :: volumes(:)
-        logical, optional,   intent(in) :: l_write
+        type(flex_tree_node), intent(in)               :: node
+        type(string),         intent(in)               :: destination
+        type(string),         allocatable, intent(out) :: volumes(:)
+        logical,              optional, intent(in)     :: l_write
         type(sp_project), allocatable :: project
-        logical, allocatable :: selected(:)
-        integer, allocatable :: states(:), boxes(:)
-        real, allocatable :: smpds(:)
-        integer :: i
+        logical,          allocatable :: selected(:)
+        integer,          allocatable :: states(:), boxes(:)
+        real,             allocatable :: smpds(:)
+        integer                       :: i
         allocate(project)
         call load_node(node, project, selected, states)
         allocate(volumes(size(states)), boxes(size(states)), smpds(size(states)))
@@ -151,12 +151,12 @@ contains
     subroutine collect_tree_fit( node, mean, directory )
         use simple_syslib, only: file_exists
         type(flex_tree_node), intent(inout) :: node
-        type(string),        intent(in)    :: mean, directory
+        type(string),         intent(in)    :: mean, directory
         type(sp_project), allocatable :: project
-        type(flex_tree_model) :: model
-        type(string) :: kind, path
-        integer :: i
-        logical :: found
+        type(flex_tree_model)         :: model
+        type(string)                  :: kind, path
+        integer                       :: i
+        logical                       :: found
         allocate(project)
         call project%read_segment('out', node%project_file)
         model%name = 'initial'
@@ -187,16 +187,16 @@ contains
         use simple_fileio,           only: get_fpath
         use simple_refine3D_fnames, only: refine3D_state_halfvol_fname
         use simple_variance_mask,    only: write_variance_mask
-        type(string),      intent(in)  :: project_file, fname
-        real,              intent(in)  :: mskdiam
-        integer,           intent(out) :: nmaps
-        logical, optional, intent(in)  :: rows(:)
+        type(string),      intent(in)           :: project_file, fname
+        real,              intent(in)           :: mskdiam
+        integer,           intent(out)          :: nmaps
+        logical,           optional, intent(in) :: rows(:)
         type(sp_project), allocatable :: project
         type(string),     allocatable :: evens(:), odds(:)
         integer,          allocatable :: labels(:)
         real(dp),         allocatable :: w(:)
-        type(string) :: directory, even, odd
-        integer :: i, state
+        type(string)                  :: directory, even, odd
+        integer                       :: i, state
         allocate(project)
         call project%read_segment('ptcl3D', project_file)
         labels = [(project%os_ptcl3D%get_state(i), i=1,project%os_ptcl3D%get_noris())]
@@ -219,9 +219,9 @@ contains
 
     function tree_node_rows( node ) result( rows )
         type(flex_tree_node), intent(in) :: node
-        logical, allocatable :: rows(:)
+        logical,          allocatable :: rows(:)
         type(sp_project), allocatable :: project
-        integer, allocatable :: states(:)
+        integer,          allocatable :: states(:)
         allocate(project)
         call load_node(node, project, rows, states)
         call project%kill
@@ -234,11 +234,11 @@ contains
         type(string), intent(in)  :: fit_dir, fit_project, destination
         integer,      intent(out) :: ngroups
         type(sp_project), allocatable :: project
-        real,    allocatable :: z(:,:), dirs(:,:)
-        integer, allocatable :: pinds(:), labels(:), child(:), groups(:)
-        character(len=8192)  :: line
-        real    :: e(3), u(2)
-        integer :: funit, ios, n, q, k, j, g, i, ieo, ilab
+        real,             allocatable :: z(:,:), dirs(:,:)
+        integer,          allocatable :: pinds(:), labels(:), child(:), groups(:)
+        character(len=8192)           :: line
+        real                          :: e(3), u(2)
+        integer                       :: funit, ios, n, q, k, j, g, i, ieo, ilab
         call fopen(funit, string(fit_dir%to_char()//'/flex_pca_coordinates.txt'), status='old', action='read', iostat=ios)
         call fileiochk('write_tree_groups: cannot read the fit''s flex_pca_coordinates.txt', ios)
         n = 0
@@ -295,13 +295,13 @@ contains
     ! Each occupied positive state becomes one child; empty labels never create children.
     subroutine split_tree_states( node, decision, children )
         use simple_string_utils, only: int2str
-        type(flex_tree_node),     intent(inout) :: node
-        type(flex_tree_decision), intent(out)   :: decision
-        type(flex_tree_node), allocatable, intent(out) :: children(:)
+        type(flex_tree_node),     intent(inout)            :: node
+        type(flex_tree_decision), intent(out)              :: decision
+        type(flex_tree_node),     allocatable, intent(out) :: children(:)
         type(sp_project), allocatable :: project
-        logical, allocatable :: selected(:)
-        integer, allocatable :: states(:)
-        integer :: i, nstates
+        logical,          allocatable :: selected(:)
+        integer,          allocatable :: states(:)
+        integer                       :: i, nstates
         allocate(project)
         call load_node(node, project, selected, states)
         nstates = size(states)
@@ -338,8 +338,8 @@ contains
         integer,              intent(in)    :: state
         type(flex_tree_node), intent(inout) :: node
         type(string) :: directory, name, even, odd
-        real :: smpd
-        integer :: box
+        real         :: smpd
+        integer      :: box
         call project%get_vol('vol', state, node%map_file, smpd, box)
         if( .not. file_exists(node%map_file) ) THROW_HARD('Refined state map is missing')
         if( project%isthere_in_osout('fsc', state) ) call project%get_fsc(state, node%fsc_file, box)

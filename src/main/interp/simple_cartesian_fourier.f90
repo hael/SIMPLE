@@ -18,7 +18,7 @@ contains
         real,    intent(in) :: native(:,:,:)
         integer, intent(in) :: padded_box
         real, allocatable :: padded(:,:,:)
-        integer :: native_box, offset
+        integer           :: native_box, offset
         native_box = size(native,1)
         if( size(native,2) /= native_box .or. size(native,3) /= native_box ) &
             &error stop 'center_embed_real3d requires a cubic input array'
@@ -35,7 +35,7 @@ contains
         real,    intent(in) :: padded(:,:,:)
         integer, intent(in) :: native_box
         real, allocatable :: native(:,:,:)
-        integer :: padded_box, offset
+        integer           :: padded_box, offset
         padded_box = size(padded,1)
         if( size(padded,2) /= padded_box .or. size(padded,3) /= padded_box ) &
             &error stop 'center_crop_real3d requires a cubic input array'
@@ -213,8 +213,8 @@ contains
     !> Real-space response along one axis of a box of n of the quadratic B-spline stencil at
     !! on-grid samples, weights 1/8, 3/4, 1/8: 3/4 + cos(2 pi (x-c)/n)/4, centre c = n/2+1.
     subroutine bspline3_stencil_envelope_1d( n, env1d )
-        integer,           intent(in)  :: n
-        real, allocatable, intent(out) :: env1d(:)
+        integer,           intent(in)               :: n
+        real,              allocatable, intent(out) :: env1d(:)
         integer :: x
         allocate(env1d(n))
         do x = 1, n

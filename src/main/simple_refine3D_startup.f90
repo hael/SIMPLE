@@ -11,11 +11,11 @@ integer, parameter :: STARTUP_SEED_CHAIN  = 2
 
 type :: refine3D_startup
     private
-    integer :: mode = STARTUP_ORDINARY
-    real    :: requested_fraction = 1.
+    integer :: mode                 = STARTUP_ORDINARY
+    real    :: requested_fraction   = 1.
     logical :: requested_fractional = .false.
-    logical :: requested_trailing = .false.
-    logical :: full_update_active = .false.
+    logical :: requested_trailing   = .false.
+    logical :: full_update_active   = .false.
   contains
     procedure :: new
     procedure :: kill
@@ -36,7 +36,7 @@ contains
 
     subroutine new( self, mode )
         class(refine3D_startup), intent(inout) :: self
-        integer,                intent(in)     :: mode
+        integer,                 intent(in)    :: mode
         call self%kill
         self%mode = mode
     end subroutine new

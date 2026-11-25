@@ -33,8 +33,8 @@ public :: run_all_sigma2_bootstrap_tests
 
 character(len=*), parameter :: PROJ_FNAME  = 'tmp_sigma2_bootstrap_tester.simple'
 character(len=*), parameter :: SIGMA_FNAME = 'tmp_sigma2_bootstrap_tester_sigma2.bin'
-integer,          parameter :: NPTCLS = 12, BOX = 8, KTO = 4 ! shells 1..fdim(BOX)-1
-real,             parameter :: SMPD   = 1.3
+integer,          parameter :: NPTCLS      = 12, BOX = 8, KTO = 4 ! shells 1..fdim(BOX)-1
+real,             parameter :: SMPD        = 1.3
 
 contains
 
@@ -49,18 +49,18 @@ contains
     !> the bootstrap in per-half sums against the row-wise assembly it replaces, and the global spectra
     !! summed while writing against the means of the valid records
     subroutine test_pspec_sums()
-        integer, parameter :: NP = 24, NSH = 6, NPART = 2, BLOCKROWS = 7, NPREFIX = 10
-        integer, parameter :: SAMPLED(10) = [1, 2, 3, 4, 7, 8, 10, 13, 14, 20]
+        integer,      parameter   :: NP          = 24, NSH = 6, NPART = 2, BLOCKROWS = 7, NPREFIX = 10
+        integer,      parameter   :: SAMPLED(10) = [1, 2, 3, 4, 7, 8, 10, 13, 14, 20]
         real(real64), allocatable :: part_sums(:,:)
         real(real32), allocatable :: block(:,:)
-        real(real64) :: rows(NSH,NP), row_sums(NSH,2), sums(NSH,2), expected(NSH,2), seeds(NSH,2), gsums(NSH,2)
-        real(real64) :: valid_sum(NSH)
-        real(real32) :: records(NSH,NP), means(NSH,2), valid_means(NSH,2)
-        real    :: pspec_ave(NSH)
-        logical :: active(NP)
-        integer :: eo(NP), nactive(2), i, k, ipart, fromp, top, first_row, half, status, part_nimgs, nimgs, nvalid
-        integer(int64) :: counts(2), ninvalid
-        character(len=STDLEN) :: msg
+        real(real64)              :: rows(NSH,NP), row_sums(NSH,2), sums(NSH,2), expected(NSH,2), seeds(NSH,2), gsums(NSH,2)
+        real(real64)              :: valid_sum(NSH)
+        real(real32)              :: records(NSH,NP), means(NSH,2), valid_means(NSH,2)
+        real                      :: pspec_ave(NSH)
+        logical                   :: active(NP)
+        integer                   :: eo(NP), nactive(2), i, k, ipart, fromp, top, first_row, half, status, part_nimgs, nimgs, nvalid
+        integer(int64)            :: counts(2), ninvalid
+        character(len=STDLEN)     :: msg
         write(*,'(A)') 'test_pspec_sums'
         do i = 1, NP
             eo(i)     = mod(i,2)
@@ -169,12 +169,12 @@ contains
     subroutine check_refused_sums( fname, nsh )
         character(len=*), intent(in) :: fname
         integer,          intent(in) :: nsh
-        integer, parameter :: NSHELL_POS = 25  !< after the magic (16 bytes), fromp and top
-        integer, parameter :: NIMGS_POS  = 29  !< after nshell
+        integer,      parameter   :: NSHELL_POS = 25 !< after the magic (16 bytes), fromp and top
+        integer,      parameter   :: NIMGS_POS  = 29 !< after nshell
         real(real64), allocatable :: sums(:,:)
-        integer(int64) :: fsize
-        integer :: funit, fromp, top, nimgs, nimgs_on_disk, status
-        character(len=STDLEN) :: msg
+        integer(int64)            :: fsize
+        integer                   :: funit, fromp, top, nimgs, nimgs_on_disk, status
+        character(len=STDLEN)     :: msg
         call read_pspec_part_sums(fname, nsh+1, fromp, top, nimgs, sums, status, msg)
         call assert_true(status /= 0 .and. .not. allocated(sums), 'sums over another number of shells are refused')
         open(newunit=funit, file=fname, access='stream', form='unformatted', status='old', action='readwrite')
@@ -321,11 +321,11 @@ contains
         type(sp_project), intent(inout) :: spproj
         logical,          intent(in)    :: l_other_layout
         type(sigma2_state_header) :: header
-        type(string)   :: candidate
-        real(real32)   :: spectra(KTO,NPTCLS), globals(KTO,2)
-        integer(int64) :: digest
-        integer        :: status
-        character(len=STDLEN) :: msg
+        type(string)              :: candidate
+        real(real32)              :: spectra(KTO,NPTCLS), globals(KTO,2)
+        integer(int64)            :: digest
+        integer                   :: status
+        character(len=STDLEN)     :: msg
         digest  = ptcl_layout_digest(spproj, spproj%os_ptcl3D)
         if( l_other_layout ) digest = digest + 1_int64
         candidate = SIGMA_FNAME//'.next'
@@ -384,7 +384,7 @@ contains
     subroutine test_new_exec_dir( spproj )
         type(sp_project), intent(inout) :: spproj
         character(len=*), parameter :: EXEC_DIR = 'tmp_sigma2_bootstrap_tester_exec'
-        type(string) :: prev_dir
+        type(string)                :: prev_dir
         call make_project(spproj)
         call write_store(spproj, .false.)
         call simple_getcwd(prev_dir)

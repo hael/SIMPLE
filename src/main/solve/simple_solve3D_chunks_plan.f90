@@ -15,7 +15,7 @@ private
 #include "simple_local_flags.inc"
 
 character(len=*), parameter :: CHUNKS_REPORT_FNAME    = 'solve3D_chunks_report.txt'
-integer,          parameter :: MAX_STATE_ARTIFACTS    = 20  !< states whose map and FSC entries the source preparation drops
+integer,          parameter :: MAX_STATE_ARTIFACTS    = 20   !< states whose map and FSC entries the source preparation drops
 integer,          parameter :: VERDICT_LEN            = 12
 integer,          parameter :: NSAMPLE_TOTAL_CHUNK    = 5000 !< particles solve3D_chunks samples per iteration, all states together
 integer,          parameter :: NPTCLS_CHUNK_MIN       = 2 * NSAMPLE_TOTAL_CHUNK
@@ -23,29 +23,29 @@ integer,          parameter :: NPTCLS_CHUNK_MAX       = 6 * NSAMPLE_TOTAL_CHUNK
 
 !> one executed step: the base run (kind 'base') or an add-on (kind 'addon')
 type :: chunks_step
-    character(len=5)      :: kind       = 'base'
-    integer               :: ipart      = 0     !< chunk index: 0 for the base
-    integer               :: nfrozen    = 0     !< selected particles of the adopted results the step started from (0 for the base)
-    integer               :: nadded     = 0     !< selected particles the step searches
-    integer               :: last_stage = 0     !< the stage the step ran last (from its manifest)
-    integer               :: box_crop   = 0
-    real                  :: lp         = 0.    !< that stage's low-pass limit (A)
-    real                  :: seconds    = 0.    !< wall time of the step
-    logical               :: l_regressed = .false. !< the add-on report holds a REGRESSED state
-    character(len=STDLEN) :: projfile   = ''
-    real,              allocatable :: res0143(:), res05(:)   !< per state, A (0: not available)
-    real,              allocatable :: corr(:), res_cohort(:) !< per state, add-on steps (0: not compared)
-    integer,           allocatable :: dshell(:)
+    character(len=5)                        :: kind        = 'base'
+    integer                                 :: ipart       = 0        !< chunk index: 0 for the base
+    integer                                 :: nfrozen     = 0        !< selected particles of the adopted results the step started from (0 for the base)
+    integer                                 :: nadded      = 0        !< selected particles the step searches
+    integer                                 :: last_stage  = 0        !< the stage the step ran last (from its manifest)
+    integer                                 :: box_crop    = 0
+    real                                    :: lp          = 0.       !< that stage's low-pass limit (A)
+    real                                    :: seconds     = 0.       !< wall time of the step
+    logical                                 :: l_regressed = .false.  !< the add-on report holds a REGRESSED state
+    character(len=STDLEN)                   :: projfile    = ''
+    real,                       allocatable :: res0143(:), res05(:)   !< per state, A (0: not available)
+    real,                       allocatable :: corr(:), res_cohort(:) !< per state, add-on steps (0: not compared)
+    integer,                    allocatable :: dshell(:)
     character(len=VERDICT_LEN), allocatable :: verdict(:)
 end type chunks_step
 
 !> the steps run so far, written as text after every step
 type :: chunks_report
     private
-    character(len=:), allocatable :: command, source
-    integer,          allocatable :: part_sizes(:)
-    integer :: nselected = 0, nstates = 0, nsample = 0, ninside = 0
-    integer :: nsteps = 0
+    character(len=:),  allocatable :: command, source
+    integer,           allocatable :: part_sizes(:)
+    integer                        :: nselected = 0, nstates = 0, nsample = 0, ninside = 0
+    integer                        :: nsteps    = 0
     type(chunks_step), allocatable :: steps(:)
   contains
     procedure :: new_chunks
@@ -85,13 +85,13 @@ contains
     !! stream forms its runs. Cut k goes to the stack boundary nearest its balanced target; when no boundary
     !! keeps the runs within the limits it goes inside a stack (ninside counts those). Unselected rows get -1.
     subroutine partition_selected_balanced( selected, stkind, part, nchunks, ninside, status, msg )
-        logical,              intent(in)  :: selected(:)
-        integer,              intent(in)  :: stkind(:)
-        integer, allocatable, intent(out) :: part(:)
-        integer,              intent(out) :: nchunks, ninside, status
-        character(len=*),     intent(out) :: msg
+        logical,              intent(in)               :: selected(:)
+        integer,              intent(in)               :: stkind(:)
+        integer,              allocatable, intent(out) :: part(:)
+        integer,              intent(out)              :: nchunks, ninside, status
+        character(len=*),     intent(out)              :: msg
         integer, allocatable :: sel_stk(:), cuts(:)
-        integer :: nsel, nruns, q, r, k, i, rank, irun, target, lo, hi, a, b, cut
+        integer              :: nsel, nruns, q, r, k, i, rank, irun, target, lo, hi, a, b, cut
         allocate(part(size(selected)), source=-1)
         nchunks = 0
         ninside = 0
@@ -206,7 +206,7 @@ contains
     !> Initialize the report for the automatic active-balanced workflow; ninside counts the run cuts
     !! that fell inside a stack.
     subroutine new_chunks( self, command, source, part_sizes, nstates, nsample, ninside )
-        class(chunks_report), intent(inout) :: self
+        class(chunks_report),    intent(inout) :: self
         character(len=*),        intent(in)    :: command, source
         integer,                 intent(in)    :: part_sizes(:), nstates, nsample, ninside
         call self%kill
@@ -240,11 +240,11 @@ contains
     !> The text report, rewritten whole: what was run, a table of the steps, then
     !! the per-state resolutions and verdicts of each step.
     subroutine write( self, fname )
-        class(chunks_report), intent(in) :: self
+        class(chunks_report),    intent(in) :: self
         class(string),           intent(in) :: fname
         character(len=STDLEN) :: line
         character(len=16)     :: sec1000, kindres
-        integer :: funit, io_stat, i, s
+        integer               :: funit, io_stat, i, s
         call fopen(funit, file=fname, status='replace', action='write', iostat=io_stat)
         if( io_stat /= 0 )then
             THROW_WARN('could not write the solve3D_chunks report: '//fname%to_char())

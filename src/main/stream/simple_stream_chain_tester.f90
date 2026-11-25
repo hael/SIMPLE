@@ -67,23 +67,23 @@ public :: run_all_stream_chain_sieve_tests, run_all_stream_chain_movie_tests
 ! the particles
 integer, parameter :: BOX        = 64    ! sieve working and movie projection box (px)
 integer, parameter :: BOX_DIRECT = 108   ! direct fixture's native particle box (px)
-real,    parameter :: SMPD      = 2.0   ! A
-real,    parameter :: MSKDIAM   = 100.  ! A
-real,    parameter :: KV        = 300.
-real,    parameter :: CS        = 2.7
-real,    parameter :: FRACA     = 0.1
-real,    parameter :: DEFOCUS   = 1.5   ! microns
+real,    parameter :: SMPD       = 2.0   ! A
+real,    parameter :: MSKDIAM    = 100.  ! A
+real,    parameter :: KV         = 300.
+real,    parameter :: CS         = 2.7
+real,    parameter :: FRACA      = 0.1
+real,    parameter :: DEFOCUS    = 1.5   ! microns
 ! the driver
 integer, parameter :: PASS_WAIT_S   = 5         ! between passes
 integer, parameter :: TIME_LIMIT_S  = 3 * 3600  ! a test that has not finished by then fails
 ! the stages' work, small enough for a test
-integer, parameter :: NCLS2D        = 10
-integer, parameter :: NPTCLS_COARSE = 300
-integer, parameter :: NPTCLS_FINE   = 600
-integer, parameter :: NSTATES3D     = 2
-integer, parameter :: NTHR_JOBS     = 4
-integer, parameter :: MIN_PTCLS_3D  = 5 * NSTATES3D
-real,    parameter :: SIM_SNR       = 0.5
+integer, parameter :: NCLS2D         = 10
+integer, parameter :: NPTCLS_COARSE  = 300
+integer, parameter :: NPTCLS_FINE    = 600
+integer, parameter :: NSTATES3D      = 2
+integer, parameter :: NTHR_JOBS      = 4
+integer, parameter :: MIN_PTCLS_3D   = 5 * NSTATES3D
+real,    parameter :: SIM_SNR        = 0.5
 real,    parameter :: TRUTH_CORR_MIN = 0.10
 
 contains
@@ -102,15 +102,15 @@ contains
     !! pool 2D and multistate 3D: the sieve accepts particles and hands on its final set, the pool
     !! runs to its final iteration and publishes, and 3D completes its first run
     subroutine test_sieve_to_solve3D()
-        integer, parameter :: NMICS = 40, NPTCLS_MIC = 30, NMICS_SET = 5, NPOSES_STATE = 12
+        integer,                     parameter   :: NMICS = 40, NPTCLS_MIC = 30, NMICS_SET = 5, NPOSES_STATE = 12
         class(stream_stage_sieve),   allocatable :: sieve
         class(stream_stage_pool2D),  allocatable :: pool
         class(stream_stage_solve3D), allocatable :: s3D
-        class(cmdline), allocatable:: cline
-        type(string)  :: cwd_saved, root, dir_refpick, dir_sieve, dir_pool, dir_3D
-        type(string)  :: truth1, truth2, oritab, all_stk, stk1, stk2
-        integer       :: nfail0, t0
-        logical       :: l_done, l_cannot_start_3D
+        class(cmdline),              allocatable :: cline
+        type(string)                             :: cwd_saved, root, dir_refpick, dir_sieve, dir_pool, dir_3D
+        type(string)                             :: truth1, truth2, oritab, all_stk, stk1, stk2
+        integer                                  :: nfail0, t0
+        logical                                  :: l_done, l_cannot_start_3D
         allocate(cline)
         write(*,'(A)') 'test_sieve_to_solve3D'
         nfail0 = tests_failed
@@ -200,15 +200,15 @@ contains
     !> simulated movies through preprocessing, optics assignment, reference picking (with picking
     !! references reprojected from both truths), particle sieving, pool 2D and multistate 3D
     subroutine test_movies_to_solve3D()
-        integer, parameter :: NMOVIES = 40, NPTCLS_MIC = 24, MIC_BOX = 512, NFRAMES = 8, NREFS = 20
-        class(stream_stage_preprocess), allocatable :: pre
-        class(stream_stage_optics),     allocatable :: optics
+        integer,                              parameter   :: NMOVIES = 40, NPTCLS_MIC = 24, MIC_BOX = 512, NFRAMES = 8, NREFS = 20
+        class(stream_stage_preprocess),       allocatable :: pre
+        class(stream_stage_optics),           allocatable :: optics
         class(stream_stage_initial_analysis), allocatable :: initial
-        class(stream_stage_refpick),    allocatable :: refpick
-        class(stream_stage_sieve),      allocatable :: sieve
-        class(stream_stage_pool2D),     allocatable :: pool
-        class(stream_stage_solve3D),    allocatable :: s3D
-        class(cmdline), allocatable:: cline
+        class(stream_stage_refpick),          allocatable :: refpick
+        class(stream_stage_sieve),            allocatable :: sieve
+        class(stream_stage_pool2D),           allocatable :: pool
+        class(stream_stage_solve3D),          allocatable :: s3D
+        class(cmdline),                       allocatable :: cline
         type(string)  :: cwd_saved, root, dir_movies, dir_pre, dir_optics, dir_initial_input, dir_initial, &
             &dir_refpick, dir_sieve, dir_pool, dir_3D
         type(string)  :: truth1, truth2, truth1_cmp, truth2_cmp, pickrefs, pickrefs1, pickrefs2, &
@@ -476,9 +476,9 @@ contains
     end subroutine refpick_cline
 
     subroutine sieve_cline( cline, dir_refpick, dir_optics )
-        type(cmdline),           intent(inout) :: cline
-        class(string),           intent(in)    :: dir_refpick
-        class(string), optional, intent(in)    :: dir_optics
+        type(cmdline),           intent(inout)        :: cline
+        class(string),           intent(in)           :: dir_refpick
+        class(string),           optional, intent(in) :: dir_optics
         call base_cline(cline, 'stream_chain_sieve', 'particle_sieving.simple')
         call cline%set('dir_target',     dir_refpick)
         if( present(dir_optics) ) call cline%set('optics_dir', dir_optics)
@@ -500,9 +500,9 @@ contains
     end subroutine sieve_cline
 
     subroutine pool_cline( cline, dir_sieve, dir_optics )
-        type(cmdline),           intent(inout) :: cline
-        class(string),           intent(in)    :: dir_sieve
-        class(string), optional, intent(in)    :: dir_optics
+        type(cmdline),           intent(inout)        :: cline
+        class(string),           intent(in)           :: dir_sieve
+        class(string),           optional, intent(in) :: dir_optics
         call base_cline(cline, 'stream_chain_pool2D', 'classification_2D.simple')
         call cline%set('dir_target', dir_sieve)
         if( present(dir_optics) ) call cline%set('optics_dir', dir_optics)
@@ -531,14 +531,14 @@ contains
     !! accept the better of the two one-to-one assignments and require the map matched to each
     !! planted truth to clear a small signal floor.
     subroutine assert_multistate_truth( projfile, truth1, truth2, tag )
-        class(string), intent(in) :: projfile, truth1, truth2
+        class(string),    intent(in) :: projfile, truth1, truth2
         character(len=*), intent(in) :: tag
         class(sp_project), allocatable :: result
-        type(string) :: map, docked, stem, truths(2)
-        real :: corr(2,2), corr_direct, corr_mirrored, eulers(3), shifts(3), smpd
-        real :: direct_score, swapped_score, matched_by_truth(2)
-        integer :: state, itruth, box
-        logical :: mirrored, has_map(2)
+        type(string)                   :: map, docked, stem, truths(2)
+        real                           :: corr(2,2), corr_direct, corr_mirrored, eulers(3), shifts(3), smpd
+        real                           :: direct_score, swapped_score, matched_by_truth(2)
+        integer                        :: state, itruth, box
+        logical                        :: mirrored, has_map(2)
         allocate(result)
         corr    = -1.
         has_map = .false.
@@ -597,11 +597,11 @@ contains
     subroutine write_truth_volume( fname, state, box )
         class(string), intent(in) :: fname
         integer,       intent(in) :: state, box
-        integer, parameter :: NBLOBS = 9
-        type(image)       :: vol
-        real, allocatable :: rmat(:,:,:)
-        integer :: i, j, k, iblob
-        real    :: x(3), c, cen(3,NBLOBS), sig(NBLOBS), weight(NBLOBS)
+        integer, parameter   :: NBLOBS = 9
+        type(image)          :: vol
+        real,    allocatable :: rmat(:,:,:)
+        integer              :: i, j, k, iblob
+        real                 :: x(3), c, cen(3,NBLOBS), sig(NBLOBS), weight(NBLOBS)
         if( state == 1 )then
             cen = reshape([0.,0.,0.,  7.,0.,0.,  -7.,0.,0.,  0.,7.,0.,  0.,-7.,0.,  0.,0.,7.,  0.,0.,-7.,&
                 &12.,8.,-5.,  -11.,9.,6.], [3,NBLOBS])
@@ -636,9 +636,9 @@ contains
     function simulate_particle_stack( vol, oritab, outstk, nptcls ) result( stk )
         class(string), intent(in) :: vol, oritab, outstk
         integer,       intent(in) :: nptcls
-        type(string) :: stk
+        type(string)                       :: stk
         type(commander_simulate_particles) :: xsim
-        class(cmdline), allocatable:: cline
+        class(cmdline), allocatable        :: cline
         allocate(cline)
         call cline%set('prg',      'simulate_particles')
         call cline%set('mkdir',    'no')
@@ -717,11 +717,11 @@ contains
     subroutine write_picking_sets( all_stk, dir_refpick, nmics, nptcls_mic, nmics_set, box )
         class(string), intent(in) :: all_stk, dir_refpick
         integer,       intent(in) :: nmics, nptcls_mic, nmics_set, box
-        type(image)      :: img
-        class(sp_project), allocatable:: set
-        type(ctfparams)  :: ctfvars
-        type(string)     :: stk, fname
-        integer :: imic, iset, j, jmic, nsets
+        type(image)                    :: img
+        class(sp_project), allocatable :: set
+        type(ctfparams)                :: ctfvars
+        type(string)                   :: stk, fname
+        integer                        :: imic, iset, j, jmic, nsets
         allocate(set)
         ctfvars%ctfflag = CTFFLAG_YES
         ctfvars%smpd    = SMPD
@@ -784,9 +784,9 @@ contains
     function reproject_truth( vol, stk, n ) result( stk_abs )
         class(string), intent(in) :: vol, stk
         integer,       intent(in) :: n
-        type(string) :: stk_abs
-        type(commander_reproject) :: xreproject
-        class(cmdline), allocatable:: cline
+        type(string)                :: stk_abs
+        type(commander_reproject)   :: xreproject
+        class(cmdline), allocatable :: cline
         allocate(cline)
         call cline%set('prg',     'reproject')
         call cline%set('mkdir',   'no')
@@ -807,11 +807,11 @@ contains
     subroutine simulate_movies( ptcl_stk, dir_movies, nmovies, mic_box, nframes )
         class(string), intent(in) :: ptcl_stk, dir_movies
         integer,       intent(in) :: nmovies, mic_box, nframes
-        character(len=*), parameter :: MOVIE_FILE = 'simulate_movie.mrc'
+        character(len=*), parameter    :: MOVIE_FILE = 'simulate_movie.mrc'
         type(commander_simulate_movie) :: xsim
-        class(cmdline), allocatable:: cline
-        type(string)  :: simdir
-        integer       :: i
+        class(cmdline),   allocatable  :: cline
+        type(string)                   :: simdir
+        integer                        :: i
         allocate(cline)
         simdir = stage_dir(string(CWD_GLOB), 'simulate_movies')
         call enter(simdir)

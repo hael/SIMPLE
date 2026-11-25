@@ -85,8 +85,8 @@ contains
 
   ! Copy base-type fields into buffer as a raw binary transfer.
   subroutine serialise( self, buffer )
-    class(gui_metadata_base),              intent(in)    :: self
-    character(len=:),         allocatable, intent(inout) :: buffer
+    class(gui_metadata_base),              intent(in)                 :: self
+    character(len=:),                      allocatable, intent(inout) :: buffer
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( allocated(buffer) ) deallocate(buffer)
     allocate(character(len=sizeof(self)) :: buffer)

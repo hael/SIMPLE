@@ -49,12 +49,12 @@ contains
 
      !> \brief  writes the header instructions
     subroutine write_lsf_header( self, q_descr, fhandle )
-        class(qsys_lsf),   intent(in) :: self
-        class(chash),      intent(in) :: q_descr
-        integer, optional, intent(in) :: fhandle
+        class(qsys_lsf),   intent(in)           :: self
+        class(chash),      intent(in)           :: q_descr
+        integer,           optional, intent(in) :: fhandle
         type(string) :: key, bsub_cmd, bsub_val, tmpstr
-        integer :: i, which
-        logical :: write2file
+        integer      :: i, which
+        logical      :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
         if( write2file )then
@@ -102,10 +102,10 @@ contains
     end subroutine write_lsf_header
 
     subroutine write_lsf_array_header( self, q_descr, parts_fromto, fhandle, nactive )
-        class(qsys_lsf),   intent(in) :: self
-        class(chash),      intent(in) :: q_descr
-        integer,           intent(in) :: parts_fromto(2)
-        integer, optional, intent(in) :: fhandle, nactive
+        class(qsys_lsf),   intent(in)           :: self
+        class(chash),      intent(in)           :: q_descr
+        integer,           intent(in)           :: parts_fromto(2)
+        integer,           optional, intent(in) :: fhandle, nactive
     end subroutine write_lsf_array_header
 
     !> destructor

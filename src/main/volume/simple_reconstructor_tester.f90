@@ -32,21 +32,21 @@ contains
     !! the same bit for bit; a zero re-shift is the identity; and inserting the re-shifted plane equals inserting
     !! the plane generated at s2
     subroutine test_fplane_shift()
-        real, parameter :: S1(2) = [0.7, -1.3], S2(2) = [2.1, 0.4]
-        type(parameters), target :: params
-        type(sp_project)         :: project
-        type(reconstructor)      :: ra, rb
-        type(ori)                :: o
-        type(sym)                :: c1sym
-        type(ctfparams)          :: ctfparms
+        real,             parameter :: S1(2) = [0.7, -1.3], S2(2) = [2.1, 0.4]
+        type(parameters), target    :: params
+        type(sp_project)            :: project
+        type(reconstructor)         :: ra, rb
+        type(ori)                   :: o
+        type(sym)                   :: c1sym
+        type(ctfparams)             :: ctfparms
         ! on the heap: gfortran 15.2.0 at -O3 falsely warns that stack planes are used uninitialized
         type(fplane_type), allocatable :: fpl1, fpl2, fpl12, fpl0
-        type(fplane_grid)        :: grid
-        type(image)              :: obs, obs_pad
-        complex, allocatable     :: ca(:,:,:), cb(:,:,:)
-        real,    allocatable     :: img(:,:,:), da(:,:,:), db(:,:,:)
-        real    :: r, cerr, derr
-        integer :: j, k
+        type(fplane_grid)              :: grid
+        type(image)                    :: obs, obs_pad
+        complex,           allocatable :: ca(:,:,:), cb(:,:,:)
+        real,              allocatable :: img(:,:,:), da(:,:,:), db(:,:,:)
+        real                           :: r, cerr, derr
+        integer                        :: j, k
         params%box        = BOX
         params%box_crop   = BOX
         params%box_croppd = OSMPL_PAD_FAC * BOX
@@ -112,8 +112,8 @@ contains
     !! single particle to the 1e9 of the Euclidean weights; an unsampled shell (tau2 = 0) is shrunk the same;
     !! a shell of SSNR 1 at tau 1 is shrunk by half
     subroutine test_wiener_ridge_scale_free()
-        real    :: rho(5), tau2, ridge, shrink
-        integer :: i
+        real              :: rho(5), tau2, ridge, shrink
+        integer           :: i
         character(len=96) :: msg
         rho = [1., 1.e2, 1.e4, 1.e7, 1.e9]
         do i = 1, size(rho)
@@ -132,21 +132,21 @@ contains
     end subroutine test_wiener_ridge_scale_free
 
     subroutine test_weighted_insertion_linearity()
-        real, parameter :: WEIGHTS(3) = [0.37, 0.05, 0.81]
-        type(parameters), target :: params
-        type(sp_project)         :: project
-        type(reconstructor)      :: rw, rs, rone, rplain
-        type(oris)               :: poses
-        type(ori)                :: o
-        type(sym)                :: c1sym
-        type(ctfparams)          :: ctfparms
-        type(fplane_type)        :: fplane
-        type(fplane_grid)        :: grid
-        type(image)              :: obs, obs_pad
-        complex, allocatable     :: cw(:,:,:), cs(:,:,:), cone(:,:,:), cplain(:,:,:)
-        real,    allocatable     :: img(:,:,:), dw(:,:,:), ds(:,:,:), done(:,:,:), dplain(:,:,:)
-        real    :: r, cerr, derr
-        integer :: i, j, k, iw
+        real,             parameter   :: WEIGHTS(3) = [0.37, 0.05, 0.81]
+        type(parameters), target      :: params
+        type(sp_project)              :: project
+        type(reconstructor)           :: rw, rs, rone, rplain
+        type(oris)                    :: poses
+        type(ori)                     :: o
+        type(sym)                     :: c1sym
+        type(ctfparams)               :: ctfparms
+        type(fplane_type)             :: fplane
+        type(fplane_grid)             :: grid
+        type(image)                   :: obs, obs_pad
+        complex,          allocatable :: cw(:,:,:), cs(:,:,:), cone(:,:,:), cplain(:,:,:)
+        real,             allocatable :: img(:,:,:), dw(:,:,:), ds(:,:,:), done(:,:,:), dplain(:,:,:)
+        real                          :: r, cerr, derr
+        integer                       :: i, j, k, iw
         write(*,'(A)') 'test_weighted_insertion_linearity'
         params%box        = BOX
         params%box_crop   = BOX

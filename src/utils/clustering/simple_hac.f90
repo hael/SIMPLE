@@ -33,13 +33,13 @@ type hac
     real(dp), allocatable :: cmass(:)             !< summed weight of the cluster named by an entry
     integer,  allocatable :: hpairs(:,:)          !< (2,N-1) clusters joined at each merge, smaller name first
     real(dp), allocatable :: heights(:)           !< (N-1) linkage distance of each merge
-    logical               :: exists = .false.     !< to indicate existence
+    logical               :: exists     = .false. !< to indicate existence
   contains
-    procedure :: new
-    procedure :: cluster
-    procedure :: get_nclust
-    procedure :: get_history
-    procedure :: kill
+    procedure          :: new
+    procedure          :: cluster
+    procedure          :: get_nclust
+    procedure          :: get_history
+    procedure          :: kill
     procedure, private :: merge_clusters
     procedure, private :: label_clusters
     procedure, private :: find_medoids
@@ -53,15 +53,15 @@ contains
     !!          ends the merging; weights and min_weight (both or neither, count stop only) keep merging
     !!          past nclust until every unmasked cluster weighs at least min_weight
     subroutine new( self, N, D, linkage, nclust, thres, mask, weights, min_weight )
-        class(hac),         intent(inout) :: self
-        integer,            intent(in)    :: N       ! # data entries
-        real(dp),           intent(in)    :: D(N,N)  ! distance matrix
-        character(len=*),   intent(in)    :: linkage ! 'average' | 'complete'
-        integer,  optional, intent(in)    :: nclust  ! # clusters to form
-        real(dp), optional, intent(in)    :: thres   ! largest linkage distance that merges
-        logical,  optional, intent(in)    :: mask(N) ! .false. entries stay singletons
-        real(dp), optional, intent(in)    :: weights(N)  ! weight of every entry
-        real(dp), optional, intent(in)    :: min_weight  ! minimum cluster weight
+        class(hac),         intent(inout)        :: self
+        integer,            intent(in)           :: N          ! # data entries
+        real(dp),           intent(in)           :: D(N,N)     ! distance matrix
+        character(len=*),   intent(in)           :: linkage    ! 'average' | 'complete'
+        integer,            optional, intent(in) :: nclust     ! # clusters to form
+        real(dp),           optional, intent(in) :: thres      ! largest linkage distance that merges
+        logical,            optional, intent(in) :: mask(N)    ! .false. entries stay singletons
+        real(dp),           optional, intent(in) :: weights(N) ! weight of every entry
+        real(dp),           optional, intent(in) :: min_weight ! minimum cluster weight
         call self%kill
         if( N < 1 ) THROW_HARD('N must be >= 1; new')
         if( present(nclust) .eqv. present(thres) ) THROW_HARD('give exactly one of nclust and thres; new')
@@ -102,9 +102,9 @@ contains
 
     !>  \brief  merges the closest clusters until the stop rule holds, then labels them and finds their medoids
     subroutine cluster( self, medoids, labels )
-        class(hac),           intent(inout) :: self
-        integer, allocatable, intent(inout) :: medoids(:) !< medoid of every cluster
-        integer, allocatable, intent(inout) :: labels(:)  !< cluster labels, 1 the most populated
+        class(hac),           intent(inout)              :: self
+        integer,              allocatable, intent(inout) :: medoids(:) !< medoid of every cluster
+        integer,              allocatable, intent(inout) :: labels(:)  !< cluster labels, 1 the most populated
         if( .not. self%exists ) THROW_HARD('object does not exist; cluster')
         if( allocated(medoids) ) deallocate(medoids)
         if( allocated(labels)  ) deallocate(labels)
@@ -122,9 +122,9 @@ contains
     subroutine merge_clusters( self )
         class(hac), intent(inout) :: self
         logical, allocatable :: l_light(:)
-        real(dp) :: dmin
-        integer  :: nactive, i, j, k, imin, jmin
-        logical  :: l_floor
+        real(dp)             :: dmin
+        integer              :: nactive, i, j, k, imin, jmin
+        logical              :: l_floor
         self%dlink  = self%D
         self%rep    = [(i, i=1,self%N)]
         self%csize  = 1
@@ -194,10 +194,10 @@ contains
 
     !>  \brief  labels the active clusters by decreasing population, ties by representative
     subroutine label_clusters( self, labels )
-        class(hac),           intent(in)    :: self
-        integer, allocatable, intent(inout) :: labels(:)
+        class(hac),           intent(in)                 :: self
+        integer,              allocatable, intent(inout) :: labels(:)
         integer, allocatable :: reps(:)
-        integer :: i, j, ic, tmp
+        integer              :: i, j, ic, tmp
         reps = pack([(i, i=1,self%N)], mask=self%active)
         ! insertion sort, stable on the representative order of pack
         do i = 2, self%nclust_out
@@ -219,12 +219,12 @@ contains
 
     !>  \brief  the member of every cluster with the smallest summed distance to the others, first on a tie
     subroutine find_medoids( self, labels, medoids )
-        class(hac),           intent(in)    :: self
-        integer,              intent(in)    :: labels(:)
-        integer, allocatable, intent(inout) :: medoids(:)
+        class(hac),           intent(in)                 :: self
+        integer,              intent(in)                 :: labels(:)
+        integer,              allocatable, intent(inout) :: medoids(:)
         integer,  allocatable :: members(:)
         real(dp), allocatable :: dsums(:)
-        integer :: i, ic, loc(1)
+        integer               :: i, ic, loc(1)
         allocate(medoids(self%nclust_out), source=0)
         do ic = 1, self%nclust_out
             members = pack([(i, i=1,self%N)], mask=labels == ic)
@@ -249,9 +249,9 @@ contains
     !>  \brief  the merges of the last cluster call in order: pairs(:,m) are the two clusters joined (named
     !!          by their smallest member index, smaller first) and heights(m) their linkage distance
     subroutine get_history( self, pairs, heights )
-        class(hac),            intent(in)    :: self
-        integer,  allocatable, intent(inout) :: pairs(:,:)
-        real(dp), allocatable, intent(inout) :: heights(:)
+        class(hac),            intent(in)                 :: self
+        integer,               allocatable, intent(inout) :: pairs(:,:)
+        real(dp),              allocatable, intent(inout) :: heights(:)
         if( allocated(pairs)   ) deallocate(pairs)
         if( allocated(heights) ) deallocate(heights)
         allocate(pairs(2,self%nmerge), heights(self%nmerge))

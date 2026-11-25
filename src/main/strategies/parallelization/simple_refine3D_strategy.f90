@@ -50,26 +50,26 @@ contains
 end type refine3D_strategy
 
 type :: refine3D_bench_state
-    integer(timer_int_kind) :: t_init      = 0
-    integer(timer_int_kind) :: t_model     = 0
-    integer(timer_int_kind) :: t_sigma     = 0
-    integer(timer_int_kind) :: t_sigma_prep = 0
-    integer(timer_int_kind) :: t_prob      = 0
-    integer(timer_int_kind) :: t_sched     = 0
-    integer(timer_int_kind) :: t_assemble  = 0
-    integer(timer_int_kind) :: t_tot       = 0
-    real(timer_int_kind)    :: rt_init     = 0.
-    real(timer_int_kind)    :: rt_model    = 0.
-    real(timer_int_kind)    :: rt_sigma    = 0.
+    integer(timer_int_kind) :: t_init        = 0
+    integer(timer_int_kind) :: t_model       = 0
+    integer(timer_int_kind) :: t_sigma       = 0
+    integer(timer_int_kind) :: t_sigma_prep  = 0
+    integer(timer_int_kind) :: t_prob        = 0
+    integer(timer_int_kind) :: t_sched       = 0
+    integer(timer_int_kind) :: t_assemble    = 0
+    integer(timer_int_kind) :: t_tot         = 0
+    real(timer_int_kind)    :: rt_init       = 0.
+    real(timer_int_kind)    :: rt_model      = 0.
+    real(timer_int_kind)    :: rt_sigma      = 0.
     real(timer_int_kind)    :: rt_sigma_prep = 0.
-    real(timer_int_kind)    :: rt_prob     = 0.
-    real(timer_int_kind)    :: rt_sched    = 0.
-    real(timer_int_kind)    :: rt_assemble = 0.
-    real(timer_int_kind)    :: rt_tot      = 0.
+    real(timer_int_kind)    :: rt_prob       = 0.
+    real(timer_int_kind)    :: rt_sched      = 0.
+    real(timer_int_kind)    :: rt_assemble   = 0.
+    real(timer_int_kind)    :: rt_tot        = 0.
     ! the canonical sigma2 store this iteration updated, and the rows its update replaced
-    integer                 :: sigma2_nptcls  = 0
-    integer                 :: sigma2_nshells = 0
-    integer(int64)          :: sigma2_nbytes  = 0_int64
+    integer                 :: sigma2_nptcls        = 0
+    integer                 :: sigma2_nshells       = 0
+    integer(int64)          :: sigma2_nbytes        = 0_int64
     integer                 :: sigma2_nrows_updated = 0
     ! mean % of the search space scanned, as the convergence check reports it; negative without a check
     real                    :: frac_srch = -1.
@@ -80,12 +80,12 @@ end type refine3D_bench_state
 ! ======================================================================
 
 type, extends(refine3D_strategy) :: refine3D_inmem_strategy
-    type(refine3D_bench_state), private :: bench
-    type(convergence) :: conv
-    type(parameters), allocatable :: params_followup !< the parameters of the continuous followup pass (pose_cont=yes)
-    real, private :: requested_trs = 0.
-    logical, private :: requested_doshift = .false.
-    logical :: l_sigma
+    type(refine3D_bench_state), private     :: bench
+    type(convergence)                       :: conv
+    type(parameters),           allocatable :: params_followup !< the parameters of the continuous followup pass (pose_cont=yes)
+    real,                       private     :: requested_trs     = 0.
+    logical,                    private     :: requested_doshift = .false.
+    logical                                 :: l_sigma
 contains
     procedure :: initialize         => inmem_initialize
     procedure :: execute_iteration  => inmem_execute_iteration
@@ -101,16 +101,16 @@ end type refine3D_inmem_strategy
 
 type, extends(refine3D_strategy) :: refine3D_distr_strategy
     type(refine3D_bench_state), private :: bench
-    type(qsys_env) :: qenv
-    type(chash)    :: job_descr
-    integer        :: nthr_master
-    logical        :: l_multistates
-    logical        :: l_combine_eo
+    type(qsys_env)                      :: qenv
+    type(chash)                         :: job_descr
+    integer                             :: nthr_master
+    logical                             :: l_multistates
+    logical                             :: l_combine_eo
     ! Prototypes / persistent command lines
-    type(cmdline) :: cline_rec3D
-    type(cmdline) :: cline_commit_sigma2
-    type(cmdline) :: cline_volassemble
-    type(cmdline) :: cline_postprocess
+    type(cmdline)     :: cline_rec3D
+    type(cmdline)     :: cline_commit_sigma2
+    type(cmdline)     :: cline_volassemble
+    type(cmdline)     :: cline_postprocess
     type(convergence) :: conv
     ! the master's general toolbox, made on its builder at the first iteration's reprojection model
     logical :: l_master_tbox = .false.
@@ -182,7 +182,7 @@ contains
         class(parameters), intent(inout) :: params
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: state
-        class(string),     intent(in)   :: volume
+        class(string),     intent(in)    :: volume
         type(string) :: even, odd
         even = add2fbody(volume, MRC_EXT, '_even')
         odd  = add2fbody(volume, MRC_EXT, '_odd')
@@ -204,11 +204,11 @@ contains
         use simple_state_weight_set,       only: state_weight_set
         use simple_sp_project,             only: sp_project
         use simple_error,                  only: simple_exception
-        class(sp_project), intent(in)          :: project
-        integer, intent(in)                    :: state
-        logical, intent(in)                    :: use_flex
-        logical, allocatable, intent(out)      :: selected(:)
-        class(state_weight_set), intent(inout) :: weights
+        class(sp_project),       intent(in)               :: project
+        integer,                 intent(in)               :: state
+        logical,                 intent(in)               :: use_flex
+        logical,                 allocatable, intent(out) :: selected(:)
+        class(state_weight_set), intent(inout)            :: weights
         real(real32), allocatable :: column(:)
         integer                   :: i
         allocate(selected(project%os_ptcl3D%get_noris()))
@@ -234,7 +234,7 @@ contains
         use simple_sigma2_files,        only: canonical_sigma2_consumable
         use simple_refine3D_provenance, only: reuse_provenance_matches, provenance_file, provenance_pending_file
         class(parameters), intent(in)    :: params
-        class(string), intent(in)        :: source_sigma_state
+        class(string),     intent(in)    :: source_sigma_state
         class(sp_project), intent(inout) :: project
         type(string)          :: state_path, staged_path, source_record, staged_record
         class(oris), pointer  :: os
@@ -288,19 +288,19 @@ contains
         use simple_imghead,             only: find_ldim_nptcls, find_img_smpd
         use simple_halfmap_diagnostics, only: copy_support_provenance, remove_support_provenance, write_base_halfmap_fsc
         use simple_refine3D_provenance, only: provenance_file, provenance_pending_file, local_import_marker, refine3D_provenance
-        class(parameters), intent(in)          :: params
-        class(sp_project), intent(inout)       :: project
-        class(refine3D_provenance), intent(in) :: reference
-        class(string), intent(in)              :: source_fsc_fname
-        logical, intent(in)                    :: support_verified
-        type(string), intent(out)              :: staged_vol
-        logical, intent(out)                   :: reused_derivatives
+        class(parameters),          intent(in)    :: params
+        class(sp_project),          intent(inout) :: project
+        class(refine3D_provenance), intent(in)    :: reference
+        class(string),              intent(in)    :: source_fsc_fname
+        logical,                    intent(in)    :: support_verified
+        type(string),               intent(out)   :: staged_vol
+        logical,                    intent(out)   :: reused_derivatives
         character(len=6), parameter :: PRIOR_FREE_SUFFIXES(2) = ['_unfil', '_base ']
-        type(string)          :: source_vol, source_even, source_odd, staged_even, staged_odd
-        type(string)          :: staged_fsc, stale, bases(3)
-        real                  :: source_smpd, align_lp
-        character(len=STDLEN) :: message
-        integer               :: fsc_box, fsc_bytes, n, dims(3), i
+        type(string)                :: source_vol, source_even, source_odd, staged_even, staged_odd
+        type(string)                :: staged_fsc, stale, bases(3)
+        real                        :: source_smpd, align_lp
+        character(len=STDLEN)       :: message
+        integer                     :: fsc_box, fsc_bytes, n, dims(3), i
         source_vol = reference%get_anchor()
         source_even = add2fbody(source_vol, MRC_EXT, '_even')
         source_odd  = add2fbody(source_vol, MRC_EXT, '_odd')
@@ -400,11 +400,11 @@ contains
         use simple_defs_fname,          only: MRC_EXT, NUFILT_SUFFIX, NULOCRES_SUFFIX, AUTOMASK_FBODY, NU_ENVMASK_FBODY
         use simple_fileio,              only: add2fbody, get_fpath, simple_copy_file
         use simple_syslib,              only: file_exists, del_file, simple_abspath
-        class(parameters), intent(in)          :: params
-        class(refine3D_provenance), intent(in) :: reference
-        class(string), intent(in)              :: staged
-        real,             intent(out)          :: align_lp
-        character(len=*), intent(out)          :: message
+        class(parameters),          intent(in)  :: params
+        class(refine3D_provenance), intent(in)  :: reference
+        class(string),              intent(in)  :: staged
+        real,                       intent(out) :: align_lp
+        character(len=*),           intent(out) :: message
         type(string) :: volume, sources(6), destinations(6), bases(3), targets(3), name, dir
         integer      :: producer_state, i, n
         logical      :: valid
@@ -470,10 +470,10 @@ contains
         use, intrinsic :: iso_fortran_env, only: int64
         class(parameters), intent(in)            :: params
         class(sp_project), target, intent(inout) :: project
-        type(string), intent(in)                 :: source_vol
-        integer, intent(in)                      :: box_crop
-        real, intent(in)                         :: smpd_crop
-        class(oris), pointer                 :: os
+        type(string),      intent(in)            :: source_vol
+        integer,           intent(in)            :: box_crop
+        real,              intent(in)            :: smpd_crop
+        class(oris),             pointer     :: os
         class(state_weight_set), allocatable :: weights
         type(trail_chain_manifest)           :: manifest
         type(string)                         :: source_dir, src_manifest, dst_manifest, source_file
@@ -641,13 +641,13 @@ contains
     !> write: the NU matching low-pass handoff goes to the project file as well{.true.}
     subroutine assemble_refine3D_pcg( cline, params, build, write )
         use simple_volassemble_strategy, only: filter_pcg_nonuniform_maps
-        type(cmdline),     intent(inout) :: cline
-        type(parameters),  intent(inout) :: params
-        type(builder),     intent(inout) :: build
-        logical, optional, intent(in)    :: write
+        type(cmdline),     intent(inout)        :: cline
+        type(parameters),  intent(inout)        :: params
+        type(builder),     intent(inout)        :: build
+        logical,           optional, intent(in) :: write
         type(pcg_assemble_bench) :: bench
         integer(timer_int_kind)  :: t_tot, t_handoff
-        real             :: nu_align_lps(params%nstates)
+        real                     :: nu_align_lps(params%nstates)
         if( L_BENCH_GLOB ) t_tot = tic()
         ! the PCG master runs the same assembly-owned NU competition as the
         ! gridding volassemble and hands off the matching low-pass
@@ -677,9 +677,9 @@ contains
         use simple_fsc, only: plot_fsc, plot_phrand_fsc
         type(parameters), intent(in) :: params
         integer,          intent(in) :: state, iter
-        type(string) :: fsc_file, fsc_templ, fname_u, fname_t, fname_n
+        type(string)      :: fsc_file, fsc_templ, fname_u, fname_t, fname_n
         real, allocatable :: res(:), fsc(:), fsc_u(:), fsc_t(:), fsc_n(:)
-        logical :: have_u, have_t, have_n
+        logical           :: have_u, have_t, have_n
         fsc_file = refine3D_fsc_fname(state)
         if( .not. file_exists(fsc_file) ) return
         res = get_resarr(params%box_crop, params%smpd_crop)
@@ -715,11 +715,11 @@ contains
     subroutine refresh_resolution_fields_from_fsc( params, build )
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
-        type(string) :: fsc_file
+        type(string)         :: fsc_file
         real,    allocatable :: fsc(:), res(:), res0143s(:), res05s(:)
         logical, allocatable :: has_fsc(:)
-        real    :: fsc05, fsc0143
-        integer :: state, iptcl, istate
+        real                 :: fsc05, fsc0143
+        integer              :: state, iptcl, istate
         allocate(res0143s(params%nstates), source=0.)
         allocate(res05s(params%nstates),   source=0.)
         allocate(has_fsc(params%nstates), source=.false.)
@@ -762,16 +762,16 @@ contains
 
     !> l_memory: the builder's project holds what volume assembly wrote (its own), read instead of the file
     subroutine refresh_matching_lp_from_project( params, build, cline, l_memory )
-        type(parameters),  intent(inout) :: params
-        type(builder),     intent(inout) :: build
-        type(cmdline),     intent(inout) :: cline
-        logical, optional, intent(in)    :: l_memory
+        type(parameters),  intent(inout)        :: params
+        type(builder),     intent(inout)        :: build
+        type(cmdline),     intent(inout)        :: cline
+        logical,           optional, intent(in) :: l_memory
         type(sp_project) :: lp_project
         type(binoris)    :: bos
         type(oris)       :: os_rec
-        real    :: project_lp, promoted_lp
-        integer :: project_find, lpstop_find
-        logical :: l_has_lp, l_log_promotion, l_mem
+        real             :: project_lp, promoted_lp
+        integer          :: project_find, lpstop_find
+        logical          :: l_has_lp, l_log_promotion, l_mem
         if( .not. params%l_nonuniform ) return
         if( .not. file_exists(params%projfile) ) return
         project_lp = 0.
@@ -919,7 +919,7 @@ contains
     subroutine remove_partial_rec_files( params )
         type(parameters), intent(in) :: params
         type(string) :: fname
-        integer :: state, ipart, numlen_part
+        integer      :: state, ipart, numlen_part
         numlen_part = max(1, params%numlen)
         do state = 1,max(1, params%nstates)
             do ipart = 1,max(1, params%nparts)
@@ -1093,7 +1093,7 @@ contains
         type(parameters),             intent(in) :: params
         type(refine3D_bench_state),   intent(in) :: bench
         character(len=*),             intent(in) :: execution_mode
-        integer :: fnr
+        integer              :: fnr
         real(timer_int_kind) :: rt_accounted
         if( .not. L_BENCH_GLOB ) return
         rt_accounted = 0.
@@ -1135,7 +1135,7 @@ contains
         type(convergence),  intent(inout) :: conv
         type(prob_readout), intent(in)    :: rec
         real, allocatable :: share(:)
-        integer :: s
+        integer           :: s
         if( rec%states%nstates < 2 .or. rec%states%nrows < PROB_NEFF_MIN_ROWS ) return
         allocate(share(rec%states%nstates))
         do s = 1, rec%states%nstates
@@ -1149,7 +1149,7 @@ contains
         type(parameters), intent(in) :: params
         type(builder),    intent(in) :: build
         type(string) :: fname
-        integer :: fnr, iptcl
+        integer      :: fnr, iptcl
         if( params%print_states /= 'yes' ) return
         fname = 'states_iter'//int2str_pad(params%which_iter, 3)//'.txt'
         call fopen(fnr, file=fname, status='replace', action='write')
@@ -1495,11 +1495,11 @@ contains
     !! sample size, at least 1
     subroutine get_state_pops( params, build, state_pops )
         use simple_state_weight_set, only: state_weight_set
-        class(parameters),    intent(in)    :: params
-        class(builder),       intent(inout) :: build
-        integer, allocatable, intent(inout) :: state_pops(:)
+        class(parameters),    intent(in)                 :: params
+        class(builder),       intent(inout)              :: build
+        integer,              allocatable, intent(inout) :: state_pops(:)
         type(state_weight_set) :: wset
-        integer :: state
+        integer                :: state
         if( allocated(state_pops) ) deallocate(state_pops)
         allocate(state_pops(params%nstates), source=0)
         if( params%l_m_estimator_flex )then
@@ -1537,11 +1537,11 @@ contains
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         type(commander_rec3D)      :: xrec3D
-        type(cmdline) :: cline_tmp
-        type(string)  :: prev_refine_path, fname_vol, vol, fsc_file, chain_files(2)
-        real    :: smpd
-        integer :: state, box
-        logical :: fall_over, vol_defined
+        type(cmdline)              :: cline_tmp
+        type(string)               :: prev_refine_path, fname_vol, vol, fsc_file, chain_files(2)
+        real                       :: smpd
+        integer                    :: state, box
+        logical                    :: fall_over, vol_defined
         ! deal with #threads for the master process
         call set_master_num_threads(self%nthr_master, string('REFINE3D'))
         ! Local options / flags
@@ -1758,19 +1758,19 @@ contains
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         logical,                        intent(out)   :: converged
-        type(cmdline) :: cline_volassemble
-        type(string)  :: str
+        type(cmdline)           :: cline_volassemble
+        type(string)            :: str
         integer(timer_int_kind) :: t_recphase
-        type(string)  :: vol, vol_iter, fsc_file
-        type(string)  :: fname_vol, volpproc, vollp
-        integer, allocatable :: state_pops(:), pinds_smpl(:)
-        logical, allocatable :: l_no_new_map(:)
-        type(chash) :: job_descr_pass
-        type(prob_insert_cone) :: insert_cone
-        type(prob_readout)     :: readout
-        real    :: lp_cone
-        integer :: state, iter, nptcls_smpl, nthr_here, nthr_glob_here, nthr_commit
-        logical :: l_followup, l_force_full_first
+        type(string)            :: vol, vol_iter, fsc_file
+        type(string)            :: fname_vol, volpproc, vollp
+        integer, allocatable    :: state_pops(:), pinds_smpl(:)
+        logical, allocatable    :: l_no_new_map(:)
+        type(chash)             :: job_descr_pass
+        type(prob_insert_cone)  :: insert_cone
+        type(prob_readout)      :: readout
+        real                    :: lp_cone
+        integer                 :: state, iter, nptcls_smpl, nthr_here, nthr_glob_here, nthr_commit
+        logical                 :: l_followup, l_force_full_first
         if( L_BENCH_GLOB )then
             call reset_refine3D_bench(self%bench)
             self%bench%t_init = tic()
@@ -2133,9 +2133,9 @@ contains
         class(parameters),       intent(in) :: params
         integer(timer_int_kind), intent(in) :: t_start
         integer,                 intent(in) :: nthr
-        real           :: secs
-        integer(int64) :: peak_rss
-        real(real64)   :: peak_gib
+        real              :: secs
+        integer(int64)    :: peak_rss
+        real(real64)      :: peak_gib
         character(len=32) :: elapsed, rss
         secs     = real(toc(t_start))
         peak_rss = get_peak_rss_bytes()

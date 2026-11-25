@@ -37,7 +37,7 @@ contains
     subroutine init_params(p,cline,nspace,nstates,nteam)
         class(parameters), intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
-        integer, intent(in) :: nspace,nstates,nteam
+        integer,           intent(in)    :: nspace,nstates,nteam
         call cline%set('box',32)
         call cline%set('smpd',1.)
         call cline%set('mskdiam',24.)
@@ -55,7 +55,7 @@ contains
     !> Angular functions have the real-image Hermitian half-turn relation.
     complex(sp) function angular_field(theta,k,bank,idir,half) result(value)
         real(dp), intent(in) :: theta
-        integer, intent(in) :: k,bank,idir,half
+        integer,  intent(in) :: k,bank,idir,half
         real(dp) :: amplitude,phase
         amplitude = (0.8_dp+0.11_dp*bank+0.03_dp*idir+0.07_dp*half)*exp(-0.08_dp*k) &
             *(1._dp+0.15_dp*cos(2*theta)+0.09_dp*sin(2*theta))
@@ -65,20 +65,20 @@ contains
 
     subroutine check_memo_banks(pgrp,nstates,nmodels,nteam)
         character(len=*), intent(in) :: pgrp
-        integer, intent(in) :: nstates,nmodels,nteam
-        integer, parameter :: NSPACE=12, KS(2)=[2,6], NP=12, NR=2*NP
-        class(parameters), allocatable, target :: p
-        class(cmdline), allocatable :: cline
-        class(polarft_calc), allocatable :: calc
-        class(oris), allocatable :: dirs
-        class(sym), allocatable :: group
-        complex(sp), allocatable :: refs(:,:,:,:),particles(:,:,:)
-        real(sp), allocatable :: ctfs(:,:,:), expected(:,:,:,:,:), actual(:,:,:,:,:), serial(:,:,:,:,:)
-        real(sp), allocatable, target :: sigma2(:,:)
-        real(sp) :: shifts(2,2),psi,factor
-        real(dp) :: theta,expected_euclid(NR),cc(NR)
-        integer :: nrefs,bank,local,source,half,ir,k,ref,pdim(3),pass,s,obj
-        logical :: mate
+        integer,          intent(in) :: nstates,nmodels,nteam
+        integer,             parameter           :: NSPACE=12, KS(2)=[2,6], NP=12, NR=2*NP
+        class(parameters),   allocatable, target :: p
+        class(cmdline),      allocatable         :: cline
+        class(polarft_calc), allocatable         :: calc
+        class(oris),         allocatable         :: dirs
+        class(sym),          allocatable         :: group
+        complex(sp),         allocatable         :: refs(:,:,:,:),particles(:,:,:)
+        real(sp),            allocatable         :: ctfs(:,:,:), expected(:,:,:,:,:), actual(:,:,:,:,:), serial(:,:,:,:,:)
+        real(sp),            allocatable, target :: sigma2(:,:)
+        real(sp)                                 :: shifts(2,2),psi,factor
+        real(dp)                                 :: theta,expected_euclid(NR),cc(NR)
+        integer                                  :: nrefs,bank,local,source,half,ir,k,ref,pdim(3),pass,s,obj
+        logical                                  :: mate
         allocate(p,cline,calc,dirs,group)
         call init_params(p,cline,NSPACE,nstates,nteam)
         call group%new(pgrp)
@@ -192,14 +192,14 @@ contains
     !! FFT sums). Run on the references as the last scoring pass left them (scaled by factor)
     subroutine check_bank_particle_frame(calc,refs,particles,ctfs,sigma2,factor)
         class(polarft_calc), intent(inout) :: calc
-        complex(sp), intent(in) :: refs(:,:,:,:),particles(:,:,:)
-        real(sp), intent(in) :: ctfs(:,:,:),sigma2(:,:),factor
-        integer, parameter :: NP=12, NR=2*NP, NREFS_CHECK=3, IREFS(NREFS_CHECK)=[1,7,13]
-        real(sp), parameter :: TOL=5.e-5
+        complex(sp),         intent(in)    :: refs(:,:,:,:),particles(:,:,:)
+        real(sp),            intent(in)    :: ctfs(:,:,:),sigma2(:,:),factor
+        integer,     parameter   :: NP  = 12, NR=2*NP, NREFS_CHECK=3, IREFS(NREFS_CHECK)=[1,7,13]
+        real(sp),    parameter   :: TOL = 5.e-5
         complex(sp), allocatable :: bank(:,:)
-        real(sp) :: us(2,2),u(2),row(NR),rowref(NR),sref(2),mat(2,2),worst_oracle,worst_frame,dang
-        real(dp) :: oracle(NR)
-        integer :: half,iref,ius,r,kfromto(2)
+        real(sp)                 :: us(2,2),u(2),row(NR),rowref(NR),sref(2),mat(2,2),worst_oracle,worst_frame,dang
+        real(dp)                 :: oracle(NR)
+        integer                  :: half,iref,ius,r,kfromto(2)
         calc%p_ptr%cc_objfun = OBJFUN_EUCLID
         kfromto = calc%get_kfromto()
         allocate(bank(NP+1,kfromto(2)-kfromto(1)+1))
@@ -235,12 +235,12 @@ contains
     !> The loss of the particle shifted by shift in its own frame (its samples multiplied by exp(-i phase) at their own
     !! angles) against the unshifted reference at every rotation, as brute_scores sums it
     subroutine brute_particle_frame(ref,particle,ctf,sigma2,shift,expected_euclid)
-        complex(sp), intent(in) :: ref(:,2:),particle(:,2:)
-        real(sp), intent(in) :: ctf(:,2:),sigma2(2:),shift(2)
-        real(dp), intent(out) :: expected_euclid(:)
+        complex(sp), intent(in)  :: ref(:,2:),particle(:,2:)
+        real(sp),    intent(in)  :: ctf(:,2:),sigma2(2:),shift(2)
+        real(dp),    intent(out) :: expected_euclid(:)
         complex(dp) :: r,p
-        real(dp) :: theta,phase,weight,loss,pnorm
-        integer :: np,nr,rot,ir,j,k
+        real(dp)    :: theta,phase,weight,loss,pnorm
+        integer     :: np,nr,rot,ir,j,k
         np = size(ref,1)
         nr = 2*np
         do rot = 0,nr-1
@@ -268,12 +268,12 @@ contains
 
     !> Direct angular sums, without FFTs or memoised reference terms.
     subroutine brute_scores(ref,particle,ctf,sigma2,shift,expected_euclid,cc)
-        complex(sp), intent(in) :: ref(:,2:),particle(:,2:)
-        real(sp), intent(in) :: ctf(:,2:),sigma2(2:),shift(2)
-        real(dp), intent(out) :: expected_euclid(:),cc(:)
+        complex(sp), intent(in)  :: ref(:,2:),particle(:,2:)
+        real(sp),    intent(in)  :: ctf(:,2:),sigma2(2:),shift(2)
+        real(dp),    intent(out) :: expected_euclid(:),cc(:)
         complex(dp) :: r,p
-        real(dp) :: theta,phase,weight,loss,pnorm,cross,rpow,ppow
-        integer :: np,nr,rot,ir,j,k
+        real(dp)    :: theta,phase,weight,loss,pnorm,cross,rpow,ppow
+        integer     :: np,nr,rot,ir,j,k
         np = size(ref,1)
         nr = 2*np
         do rot = 0,nr-1
@@ -306,7 +306,7 @@ contains
     !> Finite angular harmonics, including the even/odd half-ring Nyquist mode.
     complex(dp) function finite_field(theta,np) result(value)
         real(dp), intent(in) :: theta
-        integer, intent(in) :: np
+        integer,  intent(in) :: np
         value = cmplx(1._dp+0.15_dp*cos(2*theta)+0.09_dp*sin(2*theta), &
             0.22_dp*sin(theta)+0.13_dp*cos(3*theta),dp)
         if( mod(np,2) == 0 )then
@@ -319,15 +319,15 @@ contains
     !> General-angle resampling agrees with closed forms without changing the source directions.
     subroutine check_frame_angles(np,nteam)
         integer, intent(in) :: np,nteam
-        integer, parameter :: NSPACE=12, KS(2)=[2,6]
-        integer, parameter :: PARTNERS(6)=[12,10,8,11,7,9]
-        real, parameter :: ANGLES(6)=[0.,180.,17.3,73.7429,273.5132,359.95]
-        class(parameters), allocatable, target :: p
-        class(cmdline), allocatable :: cline
-        class(polarft_calc), allocatable :: calc
-        complex(sp), allocatable :: refs(:,:,:),expected(:,:,:),serial(:,:,:)
-        real(dp) :: theta,scale
-        integer :: pass,i,k,ir
+        integer,             parameter           :: NSPACE      = 12, KS(2)=[2,6]
+        integer,             parameter           :: PARTNERS(6) = [12,10,8,11,7,9]
+        real,                parameter           :: ANGLES(6)   = [0.,180.,17.3,73.7429,273.5132,359.95]
+        class(parameters),   allocatable, target :: p
+        class(cmdline),      allocatable         :: cline
+        class(polarft_calc), allocatable         :: calc
+        complex(sp),         allocatable         :: refs(:,:,:),expected(:,:,:),serial(:,:,:)
+        real(dp)                                 :: theta,scale
+        integer                                  :: pass,i,k,ir
         allocate(p,cline,calc)
         call init_params(p,cline,NSPACE,1,nteam)
         p%pftsz=np
@@ -363,22 +363,22 @@ contains
     subroutine check_projections(pgrp,nteam)
         use simple_projector, only: projector
         character(len=*), intent(in) :: pgrp
-        integer, intent(in) :: nteam
-        integer, parameter :: BOX=32, NSPACE=12, NSTATES=3, KS(2)=[2,7]
-        class(parameters), allocatable, target :: p
-        class(cmdline), allocatable :: cline
-        class(polarft_calc), allocatable :: calc
-        class(projector), allocatable :: padded
-        class(image), allocatable :: volume
-        class(oris), allocatable :: dirs
-        class(sym), allocatable :: group
-        complex(sp), allocatable :: direct(:,:,:,:),serial(:,:,:,:),section(:,:),poison(:,:),base_exp(:,:,:)
-        real(dp), allocatable :: centres(:,:),widths(:),amplitudes(:)
-        real, pointer :: vox(:,:,:)
-        real :: base(3,3),mat(3,3),scale
-        real(dp) :: xyz(3),q(3),theta,phase,a,gap,interp,refnorm
-        complex(dp) :: exact
-        integer :: nsym,ig,ib,n,i,j,k,ir,ref,state,half,pass,pdim(3)
+        integer,          intent(in) :: nteam
+        integer,             parameter           :: BOX=32, NSPACE=12, NSTATES=3, KS(2)=[2,7]
+        class(parameters),   allocatable, target :: p
+        class(cmdline),      allocatable         :: cline
+        class(polarft_calc), allocatable         :: calc
+        class(projector),    allocatable         :: padded
+        class(image),        allocatable         :: volume
+        class(oris),         allocatable         :: dirs
+        class(sym),          allocatable         :: group
+        complex(sp),         allocatable         :: direct(:,:,:,:),serial(:,:,:,:),section(:,:),poison(:,:),base_exp(:,:,:)
+        real(dp),            allocatable         :: centres(:,:),widths(:),amplitudes(:)
+        real,                pointer             :: vox(:,:,:)
+        real                                     :: base(3,3),mat(3,3),scale
+        real(dp)                                 :: xyz(3),q(3),theta,phase,a,gap,interp,refnorm
+        complex(dp)                              :: exact
+        integer                                  :: nsym,ig,ib,n,i,j,k,ir,ref,state,half,pass,pdim(3)
         allocate(p,cline,calc,padded,volume,dirs,group)
         call init_params(p,cline,NSPACE,NSTATES,nteam)
         call group%new(pgrp)

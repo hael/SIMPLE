@@ -7,8 +7,8 @@ implicit none
 contains
 
     module subroutine pack_filtmap_lowpass_limits( lowpass_vals, mask )
-        real, allocatable, intent(inout) :: lowpass_vals(:)
-        logical, optional, intent(in)    :: mask(:,:,:)
+        real,    allocatable, intent(inout) :: lowpass_vals(:)
+        logical, optional, intent(in)       :: mask(:,:,:)
         integer :: i, j, k, imask, nvals, ival
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before pack_filtmap_lowpass_limits')
         call require_valid_stats_mask(mask, 'pack_filtmap_lowpass_limits')
@@ -38,12 +38,12 @@ contains
     end subroutine pack_filtmap_lowpass_limits
 
     module subroutine calc_filtmap_lowpass_stats( statvars, mask )
-        type(stats_struct), intent(out) :: statvars
-        logical, optional, intent(in)   :: mask(:,:,:)
+        type(stats_struct), intent(out)          :: statvars
+        logical,            optional, intent(in) :: mask(:,:,:)
         integer, allocatable :: counts(:)
         real,    allocatable :: percentages(:)
-        integer :: icut, nselected, pos1, pos2
-        real(dp) :: lp_dp, nr_dp, sum_dp, sumsq_dp, var_dp
+        integer              :: icut, nselected, pos1, pos2
+        real(dp)             :: lp_dp, nr_dp, sum_dp, sumsq_dp, var_dp
         if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before calc_filtmap_lowpass_stats')
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before calc_filtmap_lowpass_stats')
         allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
@@ -73,8 +73,8 @@ contains
     end subroutine calc_filtmap_lowpass_stats
 
     module subroutine calc_filtmap_lowpass_histogram( counts, percentages, mask )
-        integer, intent(out) :: counts(:)
-        real,    intent(out) :: percentages(:)
+        integer, intent(out)          :: counts(:)
+        real,    intent(out)          :: percentages(:)
         logical, optional, intent(in) :: mask(:,:,:)
         integer :: i, j, k, imask, icut, nselected
         if( .not.allocated(filtmap)                 ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before calc_filtmap_lowpass_histogram')
@@ -126,11 +126,11 @@ contains
         real,    optional, intent(in)  :: min_assigned_pct
         real,    optional, intent(in)  :: min_signal_pct
         integer, optional, intent(out) :: n_signal
-        real :: min_pct
+        real                 :: min_pct
         integer, allocatable :: counts(:)
         real,    allocatable :: percentages(:), label_lps(:)
         logical, allocatable :: visited(:)
-        integer :: ilabel, pick, n_assigned, needed, cum, n_sig
+        integer              :: ilabel, pick, n_assigned, needed, cum, n_sig
         if( .not.allocated(filtmap) )then
             THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before get_nu_filtmap_finest_selected_lp')
         endif
@@ -184,10 +184,10 @@ contains
 
     module subroutine print_filtmap_lowpass_histogram( mask )
         logical, optional, intent(in) :: mask(:,:,:)
-        integer, allocatable :: counts(:)
-        real,    allocatable :: percentages(:)
-        integer :: icut
-        character(len=7) :: cell
+        integer,          allocatable :: counts(:)
+        real,             allocatable :: percentages(:)
+        integer                       :: icut
+        character(len=7)              :: cell
         character(len=:), allocatable :: lps, pcts
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before print_filtmap_lowpass_histogram')
         if( .not.nu_l_report ) return
@@ -210,7 +210,7 @@ contains
     module subroutine print_nu_filtmap_lowpass_stats( mask )
         logical, optional, intent(in) :: mask(:,:,:)
         type(stats_struct) :: statvars
-        integer :: nbase
+        integer            :: nbase
         if( NU_DEV_OUTPUT .and. nu_l_report )then
             nbase = count_active_nu_mask(mask)
             if( nbase == 0 )then
@@ -231,14 +231,14 @@ contains
 
     module subroutine analyze_filtmap_neighbor_continuity( mask )
         logical, optional, intent(in) :: mask(:,:,:)
-        integer :: i, j, k, di, dj, dk, ni, nj, nk
-        integer :: lp_i, lp_j, step_diff, n_penalized_neighbors
-        integer :: n_total_neighbor_pairs, n_transition_pairs, n_voxels_with_penalized_jump, nx, ny, nz, ii
-        integer :: thresh, n_analyzed, n_identical_pairs, n_one_step_pairs, n_penalized_jump_pairs
-        integer :: max_step_diff
+        integer              :: i, j, k, di, dj, dk, ni, nj, nk
+        integer              :: lp_i, lp_j, step_diff, n_penalized_neighbors
+        integer              :: n_total_neighbor_pairs, n_transition_pairs, n_voxels_with_penalized_jump, nx, ny, nz, ii
+        integer              :: thresh, n_analyzed, n_identical_pairs, n_one_step_pairs, n_penalized_jump_pairs
+        integer              :: max_step_diff
         integer, allocatable :: stepdiff_counts(:)
-        real :: coord_i, coord_j, pct, pct_vox, pct_transitions, pct_penalized
-        logical :: l_count_pair
+        real                 :: coord_i, coord_j, pct, pct_vox, pct_transitions, pct_penalized
+        logical              :: l_count_pair
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before analyze_filtmap_neighbor_continuity')
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before analyze_filtmap_neighbor_continuity')
         call require_valid_stats_mask(mask, 'analyze_filtmap_neighbor_continuity')
@@ -372,8 +372,8 @@ contains
     module subroutine get_nu_local_resolution_map( resmap )
         class(image), intent(inout) :: resmap
         real(kind=c_float), pointer :: rmat(:,:,:)
-        real    :: lp_angstrom
-        integer :: i, j, k, imask, ilabel
+        real                        :: lp_angstrom
+        integer                     :: i, j, k, imask, ilabel
         if( .not.allocated(filtmap) ) &
             &THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before get_nu_local_resolution_map')
         if( .not.allocated(cutoff_finds) ) &
@@ -398,12 +398,12 @@ contains
     end subroutine get_nu_local_resolution_map
 
     module subroutine write_nu_local_resolution_map( fname, mask )
-        class(string),     intent(in) :: fname
-        logical, optional, intent(in) :: mask(:,:,:)
+        class(string),     intent(in)           :: fname
+        logical,           optional, intent(in) :: mask(:,:,:)
         real(kind=c_float),   pointer :: rmat(:,:,:)
-        type(image) :: resmap
-        real        :: lp_angstrom
-        integer     :: i, j, k, ilabel, n_written
+        type(image)                   :: resmap
+        real                          :: lp_angstrom
+        integer                       :: i, j, k, ilabel, n_written
         if( present(mask) )then
             if( .not.allocated(filtmap) ) &
                 &THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before write_nu_local_resolution_map')
@@ -443,8 +443,8 @@ contains
     end subroutine write_nu_local_resolution_map
 
     subroutine require_valid_stats_mask( mask, caller )
-        logical, optional, intent(in) :: mask(:,:,:)
-        character(len=*), intent(in) :: caller
+        logical,          optional, intent(in) :: mask(:,:,:)
+        character(len=*), intent(in)           :: caller
         if( present(mask) )then
             if( .not.allocated(filtmap) ) THROW_HARD('filtmap not allocated; '//caller)
             if( any(shape(mask) /= shape(filtmap)) ) THROW_HARD('mask shape mismatch in '//caller)
@@ -457,7 +457,7 @@ contains
 
     logical function active_nu_mask_at( mask, i, j, k )
         logical, optional, intent(in) :: mask(:,:,:)
-        integer, intent(in) :: i, j, k
+        integer, intent(in)           :: i, j, k
         if( present(mask) )then
             active_nu_mask_at = mask(i,j,k)
             if( allocated(nu_lmask) ) active_nu_mask_at = active_nu_mask_at .and. nu_lmask(i,j,k)

@@ -25,20 +25,20 @@ contains
     !! (flex_pca_umap.txt), opt-in through umap=yes. Dead axes (near-zero latent variance) are
     !! excluded, since whitening explodes them into pure noise.
     subroutine deliver_latent_readouts( readout, sel, model, latent, l_umap, tag, labels )
-        type(flex_selection),       intent(in)    :: sel
-        type(flex_fit_model),       intent(in)    :: model
-        type(flex_latent),          intent(in)    :: latent
-        type(flex_latent_readout),  intent(inout) :: readout
-        logical,                    intent(in)    :: l_umap
-        character(len=*), optional, intent(in)    :: tag   !< suffix on the output names (e.g. '_deconv')
-        integer,          optional, intent(in)    :: labels(:) !< per-row labels (e.g. the deconvolution's mixture component) for the figure
-        real,    allocatable :: pz1(:), pz2(:)
-        integer, allocatable :: plab(:)
+        type(flex_selection),       intent(in)           :: sel
+        type(flex_fit_model),       intent(in)           :: model
+        type(flex_latent),          intent(in)           :: latent
+        type(flex_latent_readout),  intent(inout)        :: readout
+        logical,                    intent(in)           :: l_umap
+        character(len=*),           optional, intent(in) :: tag       !< suffix on the output names (e.g. '_deconv')
+        integer,                    optional, intent(in) :: labels(:) !< per-row labels (e.g. the deconvolution's mixture component) for the figure
+        real,             allocatable :: pz1(:), pz2(:)
+        integer,          allocatable :: plab(:)
         character(len=:), allocatable :: sfx
-        integer,  allocatable :: hcols(:), uinds(:)
-        real,     allocatable :: Xu(:,:), Yu(:,:)
-        real(dp) :: colvar(model%ncomp), vmax, mu_c
-        integer  :: vumap, nhc, q, i, u, nsub
+        integer,          allocatable :: hcols(:), uinds(:)
+        real,             allocatable :: Xu(:,:), Yu(:,:)
+        real(dp)                      :: colvar(model%ncomp), vmax, mu_c
+        integer                       :: vumap, nhc, q, i, u, nsub
         sfx = ''
         if( present(tag) ) sfx = tag
         vumap = merge(1, 0, l_umap)
@@ -110,8 +110,8 @@ contains
         real,                      intent(in) :: weights(:,:)
         integer, allocatable :: lut(:), lab(:)
         real,    allocatable :: pz1(:), pz2(:)
-        integer :: i, row, nsub, pmax, s, sbest
-        real    :: wbest
+        integer              :: i, row, nsub, pmax, s, sbest
+        real                 :: wbest
         if( .not. allocated(readout%umap_pind) ) return
         if( size(z,2) < 2 ) return
         nsub = size(readout%umap_pind); pmax = max(maxval(pinds), maxval(readout%umap_pind))
@@ -200,7 +200,7 @@ contains
         real(dp), intent(in) :: eigvals(ncomp)
         integer,  intent(in) :: ncomp
         character(len=:), allocatable :: fn
-        integer :: q, u
+        integer                       :: q, u
         fn = 'flex_pca_eigenvalues.txt'
         ! only the eigenvalue table is written here; the eigenvolume MRCs are not
         call del_file(fn)

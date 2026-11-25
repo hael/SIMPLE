@@ -65,16 +65,16 @@ contains
     !! (before dilation, and after dilation before the skirt) as 0/1 images,
     !! so a caller can address the dilation ring by Euclidean geometry.
     subroutine automask3D( self, params, vol, l_tight, pix_thres, vol_masked, lp_override, l_report, core, dilated )
-        class(image_msk),       intent(inout) :: self
-        class(parameters),      intent(in)    :: params
-        class(image),           intent(in)    :: vol
-        logical,                intent(in)    :: l_tight
-        real,         optional, intent(in)    :: pix_thres
-        class(image), optional, intent(inout) :: vol_masked
-        real,         optional, intent(in)    :: lp_override
-        logical,      optional, intent(in)    :: l_report
-        class(image), optional, intent(inout) :: core    !< binary core before dilation
-        class(image), optional, intent(inout) :: dilated !< binary envelope after dilation, before the skirt
+        class(image_msk),       intent(inout)           :: self
+        class(parameters),      intent(in)              :: params
+        class(image),           intent(in)              :: vol
+        logical,                intent(in)              :: l_tight
+        real,                   optional, intent(in)    :: pix_thres
+        class(image),           optional, intent(inout) :: vol_masked
+        real,                   optional, intent(in)    :: lp_override
+        logical,                optional, intent(in)    :: l_report
+        class(image),           optional, intent(inout) :: core    !< binary core before dilation
+        class(image),           optional, intent(inout) :: dilated !< binary envelope after dilation, before the skirt
         logical :: l_rep
         if( vol%is_2d() )THROW_HARD('automask3D is intended for volumes only')
         l_rep = .true.
@@ -207,11 +207,11 @@ contains
     end subroutine envmask3D_from_lmask
 
     subroutine automask3D_binarize( self, params, l_tight, pix_thres, l_report )
-        class(image_msk),  intent(inout) :: self
-        class(parameters), intent(in)    :: params
-        logical,           intent(in)    :: l_tight
-        real, optional,    intent(in)    :: pix_thres
-        logical, optional, intent(in)    :: l_report
+        class(image_msk),  intent(inout)           :: self
+        class(parameters), intent(in)              :: params
+        logical,           intent(in)              :: l_tight
+        real,              optional,    intent(in) :: pix_thres
+        logical,           optional, intent(in)    :: l_report
         integer, allocatable :: cc_sz(:)
         type(image_bin)      :: vol_ccs
         integer              :: i
@@ -247,9 +247,9 @@ contains
         class(ori),       intent(inout) :: e      !< Euler angle
         type(image),      intent(inout) :: img    !< resulting projection image
         real, allocatable :: rmat(:,:,:)
-        real    :: out_coos(3), maxrad, rad(3), thresh
-        real    :: incr_k(3), rvec(3), rvec_k(3)
-        integer :: orig(3), i, j, k, sqmaxrad, vec(3)
+        real              :: out_coos(3), maxrad, rad(3), thresh
+        real              :: incr_k(3), rvec(3), rvec_k(3)
+        integer           :: orig(3), i, j, k, sqmaxrad, vec(3)
         ! init
         thresh   = 0.5
         img      = 0.
@@ -305,9 +305,9 @@ contains
         integer,      intent(out)   :: nin, nout, nmsk
         real,         intent(out)   :: cccen(2)
         type(image_bin)    :: img_bin, cc_img
-        real, allocatable :: ccsizes(:)
-        integer :: loc, ldim(3)
-        real    :: smpd
+        real, allocatable  :: ccsizes(:)
+        integer            :: loc, ldim(3)
+        real               :: smpd
         ldim = img%get_ldim()
         smpd = img%get_smpd()
         call img_bin%new_bimg(ldim, smpd, wthreads=.false.)
@@ -349,29 +349,29 @@ contains
     end function automask2D_settings_from
 
     subroutine automask2D_params( params, imgs, ngrow, winsz, edge, diams, shifts, write2disk, min_diams, verbose )
-        class(parameters),              intent(in)    :: params
-        class(image),                   intent(inout) :: imgs(:)
-        integer,                        intent(in)    :: ngrow, winsz, edge
-        real,              allocatable, intent(inout) :: diams(:), shifts(:,:)
-        logical, optional,              intent(in)    :: write2disk
-        real,    optional, allocatable, intent(inout) :: min_diams(:)
-        logical, optional,              intent(in)    :: verbose
+        class(parameters),              intent(in)                           :: params
+        class(image),                   intent(inout)                        :: imgs(:)
+        integer,                        intent(in)                           :: ngrow, winsz, edge
+        real,                           allocatable, intent(inout)           :: diams(:), shifts(:,:)
+        logical,                        optional,              intent(in)    :: write2disk
+        real,                           optional, allocatable, intent(inout) :: min_diams(:)
+        logical,                        optional,              intent(in)    :: verbose
         call automask2D_set(automask2D_settings_from(params, ngrow, winsz, edge), imgs, diams, shifts,&
             &write2disk=write2disk, min_diams=min_diams, verbose=verbose)
     end subroutine automask2D_params
 
     subroutine automask2D_set( settings, imgs, diams, shifts, write2disk, min_diams, verbose )
-        type(automask2D_settings),      intent(in)    :: settings
-        class(image),                   intent(inout) :: imgs(:)
-        real,              allocatable, intent(inout) :: diams(:), shifts(:,:)
-        logical, optional,              intent(in)    :: write2disk
-        real,    optional, allocatable, intent(inout) :: min_diams(:)
-        logical, optional,              intent(in)    :: verbose
+        type(automask2D_settings),      intent(in)                           :: settings
+        class(image),                   intent(inout)                        :: imgs(:)
+        real,                           allocatable, intent(inout)           :: diams(:), shifts(:,:)
+        logical,                        optional,              intent(in)    :: write2disk
+        real,                           optional, allocatable, intent(inout) :: min_diams(:)
+        logical,                        optional,              intent(in)    :: verbose
         type(image_bin),   allocatable                :: cc_img(:)
         type(image_bin)                               :: cc_min_dist
-        integer :: i, n
-        real    :: mm(2), shift(2)
-        logical :: l_write, l_verbose
+        integer                                       :: i, n
+        real                                          :: mm(2), shift(2)
+        logical                                       :: l_write, l_verbose
         n = size(imgs)
         l_write = .false.
         if( present(write2disk) ) l_write = write2disk
@@ -439,14 +439,14 @@ contains
     end subroutine automask2D_mskdiam
 
     subroutine automask2D_support_pix( params, img, ngrow, winsz, edge, pix, diam, shift )
-        class(parameters), intent(in)    :: params
-        class(image),      intent(in)    :: img
-        integer,           intent(in)    :: ngrow, winsz, edge
-        integer, allocatable, intent(inout) :: pix(:,:)
-        real, optional,    intent(out)   :: diam, shift(2)
-        type(image_bin)    :: bin_mask
+        class(parameters), intent(in)                 :: params
+        class(image),      intent(in)                 :: img
+        integer,           intent(in)                 :: ngrow, winsz, edge
+        integer,           allocatable, intent(inout) :: pix(:,:)
+        real,              optional,    intent(out)   :: diam, shift(2)
+        type(image_bin)      :: bin_mask
         integer, allocatable :: imat(:,:,:)
-        real :: diam_local, shift_local(2)
+        real                 :: diam_local, shift_local(2)
         call automask2D_binary_one(automask2D_settings_from(params, ngrow, winsz, edge), img, bin_mask, diam_local,&
             &shift_local, l_fallback_spherical=.false.)
         call bin_mask%get_imat(imat)
@@ -458,16 +458,16 @@ contains
     end subroutine automask2D_support_pix
 
     subroutine automask2D_binary_one( settings, img, bin_mask, diam, shift, l_fallback_spherical )
-        type(automask2D_settings), intent(in)    :: settings
-        class(image),      intent(in)    :: img
-        type(image_bin),   intent(inout) :: bin_mask
-        real,              intent(out)   :: diam, shift(2)
-        logical, optional, intent(in)    :: l_fallback_spherical
+        type(automask2D_settings), intent(in)           :: settings
+        class(image),              intent(in)           :: img
+        type(image_bin),           intent(inout)        :: bin_mask
+        real,                      intent(out)          :: diam, shift(2)
+        logical,                   optional, intent(in) :: l_fallback_spherical
         type(image_bin)    :: img_bin
         real, allocatable  :: ccsizes(:)
-        integer :: loc, ldim(3), ngrow, winsz, edge
-        real    :: smpd, xyz(3), mskrad
-        logical :: l_spherical_fallback
+        integer            :: loc, ldim(3), ngrow, winsz, edge
+        real               :: smpd, xyz(3), mskrad
+        logical            :: l_spherical_fallback
         ngrow = settings%ngrow
         winsz = settings%winsz
         edge  = settings%edge
@@ -546,7 +546,7 @@ contains
     end function automask2D_mskrad
 
     subroutine binary_imat_to_pix( imat, pix )
-        integer, intent(in) :: imat(:,:,:)
+        integer, intent(in)                 :: imat(:,:,:)
         integer, allocatable, intent(inout) :: pix(:,:)
         integer :: i, j, ipix, npix
         if( size(imat,3) /= 1 ) THROW_HARD('2D binary mask expected; binary_imat_to_pix')

@@ -16,7 +16,7 @@ contains
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: nthr_team
         integer(c_int),      intent(in)    :: plan_flags
-        integer :: ithr, n1, npairs
+        integer        :: ithr, n1, npairs
         integer(int64) :: plan_start, plan_end, clock_rate
         call self%kill_block_work
         n1     = self%pftsz + 1
@@ -68,14 +68,14 @@ contains
     !! place) differ from the per-pair kernels' in the last bits only. Thread-safe: the calling thread's work.
     !! objfun=euclid only.
     module subroutine score_block_posterior( self, nb, iptcls, nr, irefs, temps, dists, irots, banks, l_bank )
-        class(polarft_calc),   intent(inout) :: self
-        integer,               intent(in)    :: nb, nr
-        integer,               intent(in)    :: iptcls(nb), irefs(nr)
-        real(sp),              intent(in)    :: temps(nb)
-        real(sp),              intent(out)   :: dists(nr,nb)
-        integer,               intent(out)   :: irots(nr,nb)
-        complex(sp), optional, intent(in)    :: banks(:,:,:)
-        logical,     optional, intent(in)    :: l_bank(nb)
+        class(polarft_calc),   intent(inout)        :: self
+        integer,               intent(in)           :: nb, nr
+        integer,               intent(in)           :: iptcls(nb), irefs(nr)
+        real(sp),              intent(in)           :: temps(nb)
+        real(sp),              intent(out)          :: dists(nr,nb)
+        integer,               intent(out)          :: irots(nr,nb)
+        complex(sp),           optional, intent(in) :: banks(:,:,:)
+        logical,               optional, intent(in) :: l_bank(nb)
         real(dp) :: u
         real(sp) :: wk
         integer  :: ithr, i, i1, ih, ieo, b, j, k, kk, k0, n1, n2k, r0, nt, ir, iref0, icol

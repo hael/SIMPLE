@@ -39,9 +39,9 @@ contains
     !! batch_nptcls in project order, the tail is the last batch; a stack without selected particles is in none
     subroutine test_plan_batches()
         class(ptcl_sieve2), allocatable :: sieve
-        integer, allocatable :: stk_batch(:)
-        integer, parameter   :: NSEL(9) = [5, 0, 3, 4, 6, 2, 7, 0, 1]
-        integer :: nbatches, b
+        integer,            allocatable :: stk_batch(:)
+        integer,            parameter   :: NSEL(9) = [5, 0, 3, 4, 6, 2, 7, 0, 1]
+        integer                         :: nbatches, b
         write(*,'(A)') 'test_plan_batches'
         allocate(sieve)
         call sieve%plan_batches(NSEL, 2, huge(1), 6, stk_batch, nbatches)
@@ -58,8 +58,8 @@ contains
     !> no more stacks than the seed takes: no batch
     subroutine test_plan_without_batches()
         class(ptcl_sieve2), allocatable :: sieve
-        integer, allocatable :: stk_batch(:)
-        integer :: nbatches
+        integer,            allocatable :: stk_batch(:)
+        integer                         :: nbatches
         write(*,'(A)') 'test_plan_without_batches'
         allocate(sieve)
         call sieve%plan_batches([4, 0, 2], 2, huge(1), 10, stk_batch, nbatches)
@@ -75,9 +75,9 @@ contains
     !! cap is its last), or at nmics stacks; what follows goes to the batches
     subroutine test_plan_seed_cap()
         class(ptcl_sieve2), allocatable :: sieve
-        integer, allocatable :: stk_batch(:)
-        integer, parameter   :: NSEL(6) = [5, 0, 3, 4, 6, 2]
-        integer :: nbatches
+        integer,            allocatable :: stk_batch(:)
+        integer,            parameter   :: NSEL(6) = [5, 0, 3, 4, 6, 2]
+        integer                         :: nbatches
         write(*,'(A)') 'test_plan_seed_cap'
         allocate(sieve)
         ! the cap first: 5 + 3 reaches 7, so the third stack is the seed's last although nmics allows ten
@@ -101,7 +101,7 @@ contains
     !> the student is trained again after exactly the listed rounds; without a list after none
     subroutine test_retrains_after()
         class(ptcl_sieve2), allocatable :: sieve
-        integer, allocatable :: rounds(:)
+        integer,            allocatable :: rounds(:)
         write(*,'(A)') 'test_retrains_after'
         allocate(sieve)
         call assert_false(sieve%retrains_after(rounds, 1), 'no list: no retraining')
@@ -115,10 +115,10 @@ contains
     !! 0 every populated class that is not empty
     subroutine test_class_labels()
         class(ptcl_sieve2), allocatable :: sieve
-        logical, allocatable :: bad(:)
-        real(dp), parameter :: PJUNK(6) = [0.95d0, 0.5d0, 0.91d0, 0.9d0, 0.99d0, 0.2d0]
-        logical,  parameter :: EMPTY(6) = [.false., .false., .false., .false., .true., .false.]
-        integer,  parameter :: POPS(6)  = [3, 4, 0, 2, 0, 5]
+        logical,            allocatable :: bad(:)
+        real(dp),           parameter   :: PJUNK(6) = [0.95d0, 0.5d0, 0.91d0, 0.9d0, 0.99d0, 0.2d0]
+        logical,            parameter   :: EMPTY(6) = [.false., .false., .false., .false., .true., .false.]
+        integer,            parameter   :: POPS(6)  = [3, 4, 0, 2, 0, 5]
         write(*,'(A)') 'test_class_labels'
         allocate(sieve)
         call sieve%class_labels(PJUNK, EMPTY, POPS, 0.9d0, bad)
@@ -146,11 +146,11 @@ contains
     !> accepted: selected, ingested and of a class that is not junk; a particle without a class is rejected
     subroutine test_final_states()
         class(ptcl_sieve2), allocatable :: sieve
-        integer, allocatable :: states(:)
-        logical, parameter :: SEL(6)      = [.true., .true., .true., .false., .true., .true.]
-        logical, parameter :: INGESTED(6) = [.true., .true., .true., .true.,  .true., .true.]
-        integer, parameter :: CLASSES(6)  = [1, 2, 3, 1, 0, 4]
-        logical, parameter :: BAD(3)      = [.false., .true., .false.]
+        integer,            allocatable :: states(:)
+        logical,            parameter   :: SEL(6)      = [.true., .true., .true., .false., .true., .true.]
+        logical,            parameter   :: INGESTED(6) = [.true., .true., .true., .true.,  .true., .true.]
+        integer,            parameter   :: CLASSES(6)  = [1, 2, 3, 1, 0, 4]
+        logical,            parameter   :: BAD(3)      = [.false., .true., .false.]
         write(*,'(A)') 'test_final_states'
         allocate(sieve)
         call sieve%final_states(SEL, INGESTED, CLASSES, BAD, states)

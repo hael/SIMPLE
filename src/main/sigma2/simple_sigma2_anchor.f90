@@ -10,8 +10,8 @@ private
 public :: prepare_sigma2_anchor, read_sigma2_anchor, sigma2_anchor_band_stats, blend_sigma2, sigma2_flat_ceiling
 public :: sigma2_stage_weight
 
-character(len=16), parameter :: MAGIC = 'SIMPLE_S2ANC001'
-integer(int64), parameter :: HEADER_BYTES = 56_int64
+character(len=16), parameter :: MAGIC        = 'SIMPLE_S2ANC001'
+integer(int64),    parameter :: HEADER_BYTES = 56_int64
 
 contains
 
@@ -66,14 +66,14 @@ contains
 
     !> Unweighted shell means of log(measured/anchor), the low-pass edge and counts above the anchor.
     subroutine sigma2_anchor_band_stats( committed, band, mean_log, edge_log, nabove, status, message )
-        character(len=*), intent(in) :: committed
-        integer, intent(in) :: band(2)
-        real(real64), intent(out) :: mean_log(2), edge_log(2)
-        integer, intent(out) :: nabove(2), status
+        character(len=*), intent(in)  :: committed
+        integer,          intent(in)  :: band(2)
+        real(real64),     intent(out) :: mean_log(2), edge_log(2)
+        integer,          intent(out) :: nabove(2), status
         character(len=*), intent(out) :: message
         real(real32), allocatable :: measured(:,:), anchor(:,:)
         real(real64), allocatable :: log_ratio(:)
-        integer :: half
+        integer                   :: half
         mean_log = 0.d0; edge_log = 0.d0; nabove = 0
         call read_sigma2_anchor(committed, anchor, status, message)
         if( status /= 0 ) return
@@ -100,15 +100,15 @@ contains
     !> The owner saves a bootstrap once; later stages and restarts verify the same companion.
     !! from_current (a refinement controller's start): smooth the committed spectra of any provenance, replacing a companion.
     subroutine prepare_sigma2_anchor( committed, status, message, from_current )
-        character(len=*),  intent(in)  :: committed
-        integer,           intent(out) :: status
-        character(len=*),  intent(out) :: message
-        logical, optional, intent(in)  :: from_current
-        type(sigma2_state_header) :: header
-        real(real32), allocatable :: spectra(:,:), smoothed(:,:)
+        character(len=*),  intent(in)           :: committed
+        integer,           intent(out)          :: status
+        character(len=*),  intent(out)          :: message
+        logical,           optional, intent(in) :: from_current
+        type(sigma2_state_header)     :: header
+        real(real32),     allocatable :: spectra(:,:), smoothed(:,:)
         character(len=:), allocatable :: fname, candidate
-        integer :: unit, half
-        logical :: exists, l_current
+        integer                       :: unit, half
+        logical                       :: exists, l_current
         l_current = .false.
         if( present(from_current) ) l_current = from_current
         call sigma2_state_read_header(committed, header, status, message)
@@ -162,16 +162,16 @@ contains
 
     !> Read-only consumer: check provenance metadata and length before allocating the native-grid curves.
     subroutine read_sigma2_anchor( committed, spectra, status, message )
-        character(len=*), intent(in) :: committed
-        real(real32), allocatable, intent(out) :: spectra(:,:)
-        integer, intent(out) :: status
-        character(len=*), intent(out) :: message
+        character(len=*), intent(in)               :: committed
+        real(real32),     allocatable, intent(out) :: spectra(:,:)
+        integer,          intent(out)              :: status
+        character(len=*), intent(out)              :: message
         type(sigma2_state_header) :: header
-        character(len=16) :: file_magic
-        integer(int32) :: kfrom, kto, box, nptcls
-        integer(int64) :: digest, generation, nbytes
-        real(real64) :: smpd
-        integer :: unit
+        character(len=16)         :: file_magic
+        integer(int32)            :: kfrom, kto, box, nptcls
+        integer(int64)            :: digest, generation, nbytes
+        real(real64)              :: smpd
+        integer                   :: unit
         call sigma2_state_read_header(committed, header, status, message)
         if( status /= 0 ) return
         open(newunit=unit, file=trim(committed)//'.anchor', access='stream', form='unformatted', &
@@ -220,13 +220,13 @@ contains
 
     !> Quadratic least squares on seven consecutive shells, evaluated at each shell including the endpoints.
     subroutine smooth_log_spectrum( input, output, status, message )
-        real(real32), intent(in) :: input(:)
-        real(real32), intent(out) :: output(:)
-        integer, intent(out) :: status
+        real(real32),     intent(in)  :: input(:)
+        real(real32),     intent(out) :: output(:)
+        integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         real(real64), parameter :: X(7) = [-3.d0,-2.d0,-1.d0,0.d0,1.d0,2.d0,3.d0]
-        real(real64) :: y(7), z, value
-        integer :: k, first
+        real(real64)            :: y(7), z, value
+        integer                 :: k, first
         status = 1
         message = 'the sigma2 anchor requires at least seven finite positive bootstrap shells'
         if( size(input) < 7 .or. size(output) /= size(input) ) return

@@ -54,21 +54,21 @@ integer, parameter :: NPTCLS   = 3000
 ! independent noise realisations of the same state, view and shift, no CTF, small shift errors. Each
 ! half at SNR 2.5 makes the imported image (their average) SNR 5: 600 images of SNR 5 carry about
 ! the signal of the particle route's 3 000 particles of SNR 1
-integer, parameter :: NCAVGS     = 600  !< the simulated images imported as class averages
-real,    parameter :: CAVG_SNR   = 2.5  !< of each half of an imported image
-real,    parameter :: CAVG_SHERR = 1.0  !< pixels: the largest shift of an image (both halves share it)
-integer, parameter :: NSHUFFLE = 1000
-integer, parameter :: GOLD_STD_3D = 9 ! past the 8 solve3D stages: no gold-standard stage (single state only)
+integer, parameter :: NCAVGS        = 600 !< the simulated images imported as class averages
+real,    parameter :: CAVG_SNR      = 2.5 !< of each half of an imported image
+real,    parameter :: CAVG_SHERR    = 1.0 !< pixels: the largest shift of an image (both halves share it)
+integer, parameter :: NSHUFFLE      = 1000
+integer, parameter :: GOLD_STD_3D   = 9   ! past the 8 solve3D stages: no gold-standard stage (single state only)
 real,    parameter :: POPS(NSTATES) = [0.5, 0.3, 0.2]
-real,    parameter :: SNR      = 1.0
+real,    parameter :: SNR           = 1.0
 ! the hard profile: the tetramer and the tetramer with chain D rotated by 10 degrees
-integer, parameter :: HARD_NSTATES = 2
+integer, parameter :: HARD_NSTATES            = 2
 real,    parameter :: HARD_POPS(HARD_NSTATES) = [0.8, 0.2]
-real,    parameter :: HARD_SNR = 0.5
-real,    parameter :: DOCK_HP  = 40.    !< A, the docking band
-real,    parameter :: DOCK_LP  = 10.
-real,    parameter :: DIFF_FRAC   = 0.1 !< the difference mask: where two truths differ by this fraction of the larger maximum,
-integer, parameter :: DIFF_DILATE = 1   !< dilated by this many pixels
+real,    parameter :: HARD_SNR                = 0.5
+real,    parameter :: DOCK_HP                 = 40. !< A, the docking band
+real,    parameter :: DOCK_LP                 = 10.
+real,    parameter :: DIFF_FRAC               = 0.1 !< the difference mask: where two truths differ by this fraction of the larger maximum,
+integer, parameter :: DIFF_DILATE             = 1   !< dilated by this many pixels
 ! The state labels of the de novo multi-state routes (shc, cavgs) are reported, a robustness profile: a
 ! single run may merge or lose a state (ruling of 2026-10-18), so whether every true state is resolved
 ! is a success, held over 20 seeds by test=profile. The labels of the states and consensus routes are
@@ -142,7 +142,7 @@ real,    parameter :: SHC_RESOLVED_FLOOR = 0.30, CAVGS_RESOLVED_FLOOR = 0.10
 !   zero shifts err by about 2 px: ceiling 0.15.
 ! The maintainer's Mac has not profiled this route yet.
 real,    parameter :: CONSENSUS_LABEL_FLOORS(5) = [0.40, 0.70, -1., 0.30, -1.]
-real,    parameter :: CONSENSUS_MAX_ROT_ERR = 2.5, CONSENSUS_MAX_SH_ERR = 0.15
+real,    parameter :: CONSENSUS_MAX_ROT_ERR     = 2.5, CONSENSUS_MAX_SH_ERR = 0.15
 ! The label-recovery route (labels): one refine3D refine=prob block from the true poses and random
 ! balanced labels, at a fixed band and direction count (the direction count of solve3D's stages 3-4)
 ! and an iteration budget that leaves the annealing tail (PROB_BETA_TAIL iterations) its room after a
@@ -162,21 +162,21 @@ real,    parameter :: CONSENSUS_MAX_ROT_ERR = 2.5, CONSENSUS_MAX_SH_ERR = 0.15
 ! every map); median rotation error 1.763 deg, 0.039, 1.837, from 1.879 (random poses about 90):
 ! ceiling 2.0; median shift error 0.0574 px, 0.0033, 0.0612, from 0.0674 (zero shifts about 2 px):
 ! ceiling 0.10
-integer, parameter :: LABELS_NSPACE      = 1000
-real,    parameter :: LABELS_LP          = 8.   !< A
-integer, parameter :: LABELS_MAXITS      = 10
-real,    parameter :: LABELS_UPDATE_FRAC = 0.9
-real,    parameter :: LABELS_RESOLVED_FLOOR = 0.30
-real,    parameter :: LABELS_LABEL_FLOORS(5) = [0.70, 0.75, -1., 0.30, -1.]
-real,    parameter :: LABELS_MAX_ROT_ERR = 2.0, LABELS_MAX_SH_ERR = 0.10
-character(len=*), parameter :: LABELS_START = 'states_start.txt' !< the drawn labels, as refine3D prints its iterations'
-integer, parameter :: ASSIGNMENT_NPTCLS = 1500
-integer, parameter :: ASSIGNMENT_NSPACE = 2500
-integer, parameter :: ASSIGNMENT_NSPACE_SUB = 500
-integer, parameter :: ASSIGNMENT_MAXITS = 1
-integer, parameter :: ASSIGNMENT_NPARTS = 2
-real,    parameter :: ASSIGNMENT_SNR = 2.0
-real,    parameter :: ASSIGNMENT_LP  = 8.0
+integer,          parameter :: LABELS_NSPACE          = 1000
+real,             parameter :: LABELS_LP              = 8.                 !< A
+integer,          parameter :: LABELS_MAXITS          = 10
+real,             parameter :: LABELS_UPDATE_FRAC     = 0.9
+real,             parameter :: LABELS_RESOLVED_FLOOR  = 0.30
+real,             parameter :: LABELS_LABEL_FLOORS(5) = [0.70, 0.75, -1., 0.30, -1.]
+real,             parameter :: LABELS_MAX_ROT_ERR     = 2.0, LABELS_MAX_SH_ERR = 0.10
+character(len=*), parameter :: LABELS_START           = 'states_start.txt' !< the drawn labels, as refine3D prints its iterations'
+integer,          parameter :: ASSIGNMENT_NPTCLS      = 1500
+integer,          parameter :: ASSIGNMENT_NSPACE      = 2500
+integer,          parameter :: ASSIGNMENT_NSPACE_SUB  = 500
+integer,          parameter :: ASSIGNMENT_MAXITS      = 1
+integer,          parameter :: ASSIGNMENT_NPARTS      = 2
+real,             parameter :: ASSIGNMENT_SNR         = 2.0
+real,             parameter :: ASSIGNMENT_LP          = 8.0
 character(len=*), parameter :: SUITES = 'assignment, labels, cavgs, shc, states, consensus, labels_identical, '//&
     &'cavgs_identical, shc_identical, states_identical, consensus_identical, hard_labels, hard_cavgs, hard_shc, '//&
     &'hard_states, hard_consensus, cavgs_single, cavgs_as_particles'
@@ -197,11 +197,11 @@ module subroutine exec_test_multistate_workflows( self, cline )
     class(commander_test_multistate_workflows), intent(inout) :: self
     class(cmdline),                             intent(inout) :: cline
     class(parameters), allocatable :: params
-    type(test_gate) :: gate
-    type(string)    :: cwd_saved, root, suite_arg
-    character(len=:), allocatable :: suite
-    integer :: nthr, status
-    logical :: all_ok
+    type(test_gate)                :: gate
+    type(string)                   :: cwd_saved, root, suite_arg
+    character(len=:),  allocatable :: suite
+    integer                        :: nthr, status
+    logical                        :: all_ok
     suite_arg = ''
     if( cline%defined('suite') ) suite_arg = cline%get_carg('suite')
     suite = suite_arg%to_char()
@@ -276,18 +276,18 @@ subroutine run_assignment_gate( root, nthr, gate )
     class(string),   intent(in)    :: root
     integer,         intent(in)    :: nthr
     type(test_gate), intent(inout) :: gate
-    character(len=*), parameter :: RUN_DIRS(2) = [character(len=11) :: 'shared', 'distributed']
-    type(state_fixture) :: fix
+    character(len=*),          parameter   :: RUN_DIRS(2) = [character(len=11) :: 'shared', 'distributed']
+    type(state_fixture)                    :: fix
     class(commander_rec3D),    allocatable :: xrec
     class(commander_refine3D), allocatable :: xrefine
     class(sp_project),         allocatable :: baseline, result
     class(cmdline),            allocatable :: cl
-    type(cmdline) :: cl_sigma
-    type(oris)   :: truth
-    type(string) :: dir, here, projfile, vols(NSTATES)
-    integer, allocatable :: shared_states(:), distributed_states(:)
-    integer :: irun, iptcl, s, status
-    logical :: assignments_agree
+    type(cmdline)                          :: cl_sigma
+    type(oris)                             :: truth
+    type(string)                           :: dir, here, projfile, vols(NSTATES)
+    integer,                   allocatable :: shared_states(:), distributed_states(:)
+    integer                                :: irun, iptcl, s, status
+    logical                                :: assignments_agree
     write(logfhandle,'(a)') '>>> TEST_MULTISTATE_ASSIGNMENT: fixed maps and planted poses'
     dir = root//'/assignment'
     call simple_mkdir(dir)
@@ -431,10 +431,10 @@ subroutine run_case( root, tag, route, kind, nthr, gate )
     integer,          intent(in)    :: nthr
     type(test_gate),  intent(inout) :: gate
     type(state_fixture) :: fix
-    type(string) :: dir, projfile, bench
-    integer :: status, nstates_run, nst_fix
-    real    :: pops_fix(8), snr_fix
-    logical :: l_control
+    type(string)        :: dir, projfile, bench
+    integer             :: status, nstates_run, nst_fix
+    real                :: pops_fix(8), snr_fix
+    logical             :: l_control
     write(logfhandle,'(a)') '>>> TEST_MULTISTATE_WORKFLOWS: '//tag
     l_control = kind == 'identical'
     dir = root//'/'//tag
@@ -543,17 +543,17 @@ subroutine run_cavgs_route( fix, projfile, nstates_run, nthr, tag, l_control, ga
     logical,              intent(in)    :: l_control
     type(test_gate),      intent(inout) :: gate
     logical,              intent(in)    :: l_as_particles
-    character(len=*), parameter :: TRUTH_DOC = 'cavgs_truth.txt', HALVES_DOC = 'halves_truth.txt'
+    character(len=*),                    parameter   :: TRUTH_DOC = 'cavgs_truth.txt', HALVES_DOC = 'halves_truth.txt'
     class(commander_simulate_particles), allocatable :: xsim
     class(commander_import_cavgs),       allocatable :: ximport
     class(commander_solve3D_cavgs),      allocatable :: xcavgs
-    class(cmdline),    allocatable :: cl
-    class(sp_project), allocatable :: proj
-    class(cmdline), allocatable:: cline_env
-    type(image)   :: even, odd
-    character(len=256) :: pops
-    character(len=16)  :: buf
-    integer :: k, i
+    class(cmdline),                      allocatable :: cl
+    class(sp_project),                   allocatable :: proj
+    class(cmdline),                      allocatable :: cline_env
+    type(image)                                      :: even, odd
+    character(len=256)                               :: pops
+    character(len=16)                                :: buf
+    integer                                          :: k, i
     ! the even halves draw the views, the states and the shifts, the odd halves reuse them
     allocate(cline_env)
     call set_fixed_seed(fix%seed + 1, propagate=.true.)
@@ -626,8 +626,8 @@ subroutine run_cavgs_route( fix, projfile, nstates_run, nthr, tag, l_control, ga
     !! its image's truth, through particle solve3D
     subroutine solve_halves_as_particles
         class(commander_import_particles), allocatable :: xptcls
-        type(oris)  :: tin, tout
-        type(image) :: img
+        type(oris)                                     :: tin, tout
+        type(image)                                    :: img
         call img%new([fix%box(), fix%box(), 1], fix%smpd())
         do i = 1, NCAVGS
             call img%read(string('cavgs_even.mrc'), i)
@@ -742,8 +742,8 @@ subroutine run_states_route( fix, projfile, nstates_run, nthr )
     integer,              intent(in) :: nstates_run, nthr
     class(commander_rec3D), allocatable :: xrec
     class(cmdline),         allocatable :: cl
-    class(sp_project), allocatable :: proj
-    type(string) :: vol, fsc
+    class(sp_project),      allocatable :: proj
+    type(string)                        :: vol, fsc
     allocate(xrec, cl)
     call cl%set('prg',      'reconstruct3D')
     call cl%set('projfile', projfile)
@@ -812,8 +812,8 @@ subroutine run_labels_route( fix, projfile, nstates_run, nthr )
     class(commander_refine3D), allocatable :: xrefine
     class(cmdline),            allocatable :: cl
     class(sp_project),         allocatable :: proj
-    character(len=*), parameter :: HALVES(2) = ['even', 'odd ']
-    integer :: s, h, funit, iptcl
+    character(len=*),          parameter   :: HALVES(2) = ['even', 'odd ']
+    integer                                :: s, h, funit, iptcl
     ! balanced random labels over every particle (all in state 1 in the fixture's project)
     allocate(proj)
     call proj%read(projfile)
@@ -898,13 +898,13 @@ subroutine report_label_trajectory( fix, tag, gate )
     class(state_fixture), intent(in)    :: fix
     character(len=*),     intent(in)    :: tag
     type(test_gate),      intent(inout) :: gate
-    type(oris)   :: truth, itstats
-    type(string) :: fname
+    type(oris)           :: truth, itstats
+    type(string)         :: fname
     integer, allocatable :: tstates(:), estates(:), map(:)
-    character(len=256) :: line
-    character(len=16)  :: buf
-    integer :: iter, funit, ios, ipind, iupd, nest, e, nrows, nits, k
-    real    :: acc, ari, recall, rd(3)
+    character(len=256)   :: line
+    character(len=16)    :: buf
+    integer              :: iter, funit, ios, ipind, iupd, nest, e, nrows, nits, k
+    real                 :: acc, ari, recall, rd(3)
     call truth%new(fix%nptcls, is_ptcl=.true.)
     call truth%read(fix%truth_doc(), [1, fix%nptcls])
     tstates = nint(truth%get_all('state'))
@@ -975,10 +975,10 @@ subroutine report_label_maps( fix, projfile, tag, nstates_run, gate )
     integer,              intent(in)    :: nstates_run
     type(test_gate),      intent(inout) :: gate
     class(sp_project), allocatable :: proj
-    integer, allocatable :: estates(:)
-    type(string) :: fi, fj
-    real    :: corr, fsc05, fsc0143
-    integer :: i, j
+    integer,           allocatable :: estates(:)
+    type(string)                   :: fi, fj
+    real                           :: corr, fsc05, fsc0143
+    integer                        :: i, j
     allocate(proj)
     call proj%read_segment('ptcl3D', projfile)
     estates = nint(proj%os_ptcl3D%get_all('state'))
@@ -1013,11 +1013,11 @@ subroutine check_path( tag, modes, nspaces, nstates_exp, gate )
     type(test_gate),  intent(inout) :: gate
     character(len=32), allocatable :: bmodes(:)
     integer,           allocatable :: bnspaces(:)
-    character(len=512) :: line
-    character(len=32)  :: mode
-    type(string) :: fname
-    integer :: funit, ios, nspace, nst, nrec, j, k
-    logical :: l_states, l_cap, l_order
+    character(len=512)             :: line
+    character(len=32)              :: mode
+    type(string)                   :: fname
+    integer                        :: funit, ios, nspace, nst, nrec, j, k
+    logical                        :: l_states, l_cap, l_order
     fname = bench_report_fname('REFINE3D_STRATEGY')
     if( .not. file_exists(fname) )then
         call gate%check(tag//'_path_recorded', .false.)
@@ -1084,19 +1084,19 @@ subroutine evaluate( fix, projfile, tag, l_control, gate, gated, images_truth, n
         &collapsed_accuracy, population_errors, match_maps, discrimination, group_errors, group_operators, &
         &compare_to_truth, dock_both_hands, carry_pose, finite_min, offdiag, maps_distinct, state_recalls
     use simple_oris,               only: oris
-    class(state_fixture), intent(in)    :: fix
-    class(string),        intent(in)    :: projfile
-    character(len=*),     intent(in)    :: tag
-    logical,              intent(in)    :: l_control
-    type(test_gate),      intent(inout) :: gate
-    logical, optional,    intent(in)    :: gated !< the poses and shifts held to their ceilings
+    class(state_fixture), intent(in)              :: fix
+    class(string),        intent(in)              :: projfile
+    character(len=*),     intent(in)              :: tag
+    logical,              intent(in)              :: l_control
+    type(test_gate),      intent(inout)           :: gate
+    logical,              optional,    intent(in) :: gated !< the poses and shifts held to their ceilings
     !> imported images judged instead of particles: their truth document and their number (the
     !! states and poses are those of the class-average segment cls3D)
     character(len=*), optional, intent(in) :: images_truth
     integer,          optional, intent(in) :: nimages
-    logical,          optional, intent(in) :: images_are_particles !< the judged images are the particle segment
+    logical,          optional, intent(in) :: images_are_particles    !< the judged images are the particle segment
     real,             optional, intent(in) :: max_rot_err, max_sh_err !< the ceilings when gated (the shc route's by default)
-    logical,          optional, intent(in) :: labels_gated !< the labels and the discrimination held to the states route's floors
+    logical,          optional, intent(in) :: labels_gated            !< the labels and the discrimination held to the states route's floors
     !> a route whose labels start at random (the de novo routes and labels): whether every true state is
     !! resolved is a success, held by test=profile to the fraction resolved_floor of its runs, not a
     !! check of the run
@@ -1108,20 +1108,20 @@ subroutine evaluate( fix, projfile, tag, l_control, gate, gated, images_truth, n
     !! by default
     real,             optional, intent(in) :: label_floors(5)
     class(sp_project), allocatable, target :: proj
-    class(oris), pointer :: os => null()
-    type(string) :: truth_doc
-    type(oris)   :: truth
-    type(image), allocatable :: docked(:), truths(:)
-    type(image)  :: mean
-    type(string) :: fname
-    integer, allocatable :: tstates(:), estates(:), map(:), mapmaps(:), shuffled(:), mapctrl(:)
-    real,    allocatable :: cc(:,:), eul(:,:,:), sh3(:,:,:), margins(:), diffcorr(:,:), ops(:,:,:)
-    real,    allocatable :: roterr(:), sherr(:), rt(:,:,:), rc(:,:,:)
-    logical, allocatable :: mirrored(:,:), has_map(:), l_mapped(:)
-    real    :: ari, acc, med_null, p999, poperr, ccd, ccm, corr, fsc05, fsc0143, shc(2), r(3,3), d(2)
-    integer :: ntrue, nest, k, e, i, n, nmask, ldim(3), nobs
-    logical :: l_gated, l_labels, l_de_novo
-    real    :: rot_ceil, sh_ceil, recall, margin, lf(5)
+    class(oris),       pointer             :: os => null()
+    type(string)                           :: truth_doc
+    type(oris)                             :: truth
+    type(image),       allocatable         :: docked(:), truths(:)
+    type(image)                            :: mean
+    type(string)                           :: fname
+    integer,           allocatable         :: tstates(:), estates(:), map(:), mapmaps(:), shuffled(:), mapctrl(:)
+    real,              allocatable         :: cc(:,:), eul(:,:,:), sh3(:,:,:), margins(:), diffcorr(:,:), ops(:,:,:)
+    real,              allocatable         :: roterr(:), sherr(:), rt(:,:,:), rc(:,:,:)
+    logical,           allocatable         :: mirrored(:,:), has_map(:), l_mapped(:)
+    real                                   :: ari, acc, med_null, p999, poperr, ccd, ccm, corr, fsc05, fsc0143, shc(2), r(3,3), d(2)
+    integer                                :: ntrue, nest, k, e, i, n, nmask, ldim(3), nobs
+    logical                                :: l_gated, l_labels, l_de_novo
+    real                                   :: rot_ceil, sh_ceil, recall, margin, lf(5)
     l_gated = .false.
     if( present(gated) ) l_gated = gated
     l_de_novo = .false.

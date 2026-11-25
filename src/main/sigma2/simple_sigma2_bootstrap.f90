@@ -34,8 +34,8 @@ contains
         character(len=*), intent(in) :: oritype
         integer,          intent(in) :: box
         real,             intent(in) :: smpd
-        type(sp_project) :: spproj
-        class(oris), pointer :: os
+        type(sp_project)      :: spproj
+        class(oris), pointer  :: os
         character(len=STDLEN) :: message
         select case(trim(oritype))
             case('ptcl2D','ptcl3D')
@@ -69,7 +69,7 @@ contains
         character(len=*), intent(in)  :: label
         logical,          intent(out) :: l_bootstrapped
         type(commander_calc_pspec) :: xcalc_pspec
-        type(cmdline) :: cline_pspec
+        type(cmdline)              :: cline_pspec
         l_bootstrapped = .false.
         if( sigma2_estimate_available(projfile, oritype, box, smpd) ) return
         call prepare_pspec_cline(template_cline, projfile, oritype, iter, cline_pspec)

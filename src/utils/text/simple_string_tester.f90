@@ -62,7 +62,7 @@ contains
 
     subroutine test_assign_and_ctor()
         type(string) :: s1, s2
-        integer :: len1
+        integer      :: len1
         write(*,'(A)') 'test_assign_and_ctor'
         ! ctor must preserve whitespace in the buffer
         s1 = string('  hello  ')
@@ -119,7 +119,7 @@ contains
     !---------------- to_char overloads ----------------
 
     subroutine test_to_char()
-        type(string) :: s
+        type(string)              :: s
         character(:), allocatable :: sub
         write(*,'(A)') 'test_to_char'
         s = string('abcdef  ')
@@ -157,10 +157,10 @@ contains
 
     subroutine test_numeric_conversion()
         type(string) :: s
-        integer :: ival, ios
-        real    :: rval
-        real(dp):: dval
-        integer :: ios_r, ios_d
+        integer      :: ival, ios
+        real         :: rval
+        real(dp)     :: dval
+        integer      :: ios_r, ios_d
         write(*,'(A)') 'test_numeric_conversion'
         s = string('123')
         ival = s%to_int(io_stat=ios)
@@ -233,7 +233,7 @@ contains
 
     subroutine test_substr_ind()
         type(string) :: s, sub
-        integer :: pos
+        integer      :: pos
         write(*,'(A)') 'test_substr_ind'
         s   = string('  abcabc  ')
         sub = string('bc')
@@ -319,7 +319,7 @@ contains
 
     subroutine test_readline_writeline()
         type(string) :: s_in, s_out
-        integer :: unit, ios
+        integer      :: unit, ios
         write(*,'(A)') 'test_readline_writeline'
         ! create scratch file
         open(newunit=unit, status='scratch', action='readwrite', iostat=ios)
@@ -338,8 +338,8 @@ contains
     end subroutine test_readline_writeline
 
     subroutine test_readline_multiple_lines()
-        type(string) :: s_in, s_out
-        integer :: unit, ios, i
+        type(string)              :: s_in, s_out
+        integer                   :: unit, ios, i
         character(:), allocatable :: line
         write(*,'(A)') 'test_readline_multiple_lines'
         open(newunit=unit, status='scratch', action='readwrite', iostat=ios)
@@ -377,8 +377,8 @@ contains
     end subroutine test_readline_multiple_lines
 
     subroutine test_readline_empty_line()
-        type(string) :: s_in, s_out
-        integer :: unit, ios
+        type(string)              :: s_in, s_out
+        integer                   :: unit, ios
         character(:), allocatable :: line
         write(*,'(A)') 'test_readline_empty_line'
         open(newunit=unit, status='scratch', action='readwrite', iostat=ios)
@@ -413,8 +413,8 @@ contains
     end subroutine test_readline_empty_line
 
     subroutine test_readline_long_line()
-        type(string) :: s_in, s_out
-        integer :: unit, ios, i, long_len
+        type(string)              :: s_in, s_out
+        integer                   :: unit, ios, i, long_len
         character(:), allocatable :: expected, actual
         write(*,'(A)') 'test_readline_long_line'
         ! pick a length safely below XLONGSTRLEN
@@ -439,8 +439,8 @@ contains
     end subroutine test_readline_long_line
 
     subroutine test_readline_eof_behavior()
-        type(string) :: s_in, s_out
-        integer :: unit, ios
+        type(string)              :: s_in, s_out
+        integer                   :: unit, ios
         character(:), allocatable :: line
         write(*,'(A)') 'test_readline_eof_behavior'
         open(newunit=unit, status='scratch', action='readwrite', iostat=ios)
@@ -464,7 +464,7 @@ contains
 
     subroutine test_writeline_unallocated()
         type(string) :: s
-        integer :: unit, ios
+        integer      :: unit, ios
         write(*,'(A)') 'test_writeline_unallocated'
         ! s is default: unallocated
         call assert_true(.not. s%is_allocated(), 'default string not allocated')

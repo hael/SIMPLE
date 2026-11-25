@@ -162,7 +162,7 @@ contains
   subroutine test_serialise_micrograph()
     character(len=:),             allocatable :: buffer
     type(gui_metadata_micrograph)             :: meta
-    type(gui_metadata_micrograph) :: copy
+    type(gui_metadata_micrograph)             :: copy
     write(*,'(A)') 'test_serialise_micrograph'
     call meta%new(GUI_METADATA_MICROGRAPH_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -245,7 +245,7 @@ contains
   subroutine test_serialise_histogram()
     character(len=:),             allocatable :: buffer
     type(gui_metadata_histogram)              :: meta
-    type(gui_metadata_histogram) :: copy
+    type(gui_metadata_histogram)              :: copy
     real,                         allocatable :: labels(:)
     integer,                      allocatable :: data(:)
     integer                                   :: i
@@ -343,7 +343,7 @@ contains
   subroutine test_serialise_timeplot()
     character(len=:),             allocatable :: buffer
     type(gui_metadata_timeplot)               :: meta
-    type(gui_metadata_timeplot) :: copy
+    type(gui_metadata_timeplot)               :: copy
     real,                         allocatable :: labels(:), data(:), data2(:)
     integer                                   :: i
     write(*,'(A)') 'test_serialise_timeplot'
@@ -439,7 +439,7 @@ contains
   ! Verify that the optics-group serialise buffer is the expected size.
   subroutine test_serialise_optics_group()
     type(gui_metadata_optics_group)          :: meta
-    type(gui_metadata_optics_group) :: copy
+    type(gui_metadata_optics_group)          :: copy
     character(kind=CK, len=:),   allocatable :: buffer
     real,                        allocatable :: xshifts(:), yshifts(:)
     integer                                  :: i
@@ -472,8 +472,8 @@ contains
     type(json_core)                           :: json
     type(json_value),             pointer     :: json_ptr
     type(string)                              :: json_str, json_hash
-    real,                        allocatable :: xshifts(:), yshifts(:)
-    integer                                  :: i
+    real,                         allocatable :: xshifts(:), yshifts(:)
+    integer                                   :: i
     write(*,'(A)') 'test_jsonise_optics_group'
     allocate(xshifts(10), yshifts(10))
     do i=1, 10
@@ -538,7 +538,7 @@ contains
   subroutine test_serialise_cavg2D()
     character(len=:),         allocatable :: buffer
     type(gui_metadata_cavg2D)             :: meta
-    type(gui_metadata_cavg2D) :: copy
+    type(gui_metadata_cavg2D)             :: copy
     write(*,'(A)') 'test_serialise_cavg2D'
     call meta%new(GUI_METADATA_CAVG2D_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -593,7 +593,7 @@ contains
   ! Verify that all vol3D fields round-trip through set/get, including optional
   ! res0143/res05/pop, the FSC curve and the orientation-distribution histogram.
   subroutine test_set_get_vol3D()
-    type(gui_metadata_vol3D)  :: meta
+    type(gui_metadata_vol3D)   :: meta
     type(string)               :: reprojpath, volpath, pprocpath, lppath, pprocmirrpath
     integer                    :: state, box, pop, ix, iy
     real                       :: smpd, res0143, res05
@@ -653,7 +653,7 @@ contains
   subroutine test_serialise_vol3D()
     character(len=:),         allocatable :: buffer
     type(gui_metadata_vol3D)              :: meta
-    type(gui_metadata_vol3D) :: copy
+    type(gui_metadata_vol3D)              :: copy
     write(*,'(A)') 'test_serialise_vol3D'
     call meta%new(GUI_METADATA_VOL3D_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -769,7 +769,7 @@ contains
   subroutine test_serialise_ptcl()
     character(len=:),       allocatable :: buffer
     type(gui_metadata_ptcl)             :: meta
-    type(gui_metadata_ptcl) :: copy
+    type(gui_metadata_ptcl)             :: copy
     write(*,'(A)') 'test_serialise_ptcl'
     call meta%new(GUI_METADATA_PTCL_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -854,7 +854,7 @@ contains
   subroutine test_serialise_stream_preprocess()
     character(len=:),                    allocatable :: buffer
     type(gui_metadata_stream_preprocess)             :: meta
-    type(gui_metadata_stream_preprocess) :: copy
+    type(gui_metadata_stream_preprocess)             :: copy
     write(*,'(A)') 'test_serialise_stream_preprocess'
     call meta%new(GUI_METADATA_STREAM_PREPROCESS_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1053,7 +1053,7 @@ contains
   subroutine test_serialise_stream_update()
     character(len=:),                allocatable :: buffer
     type(gui_metadata_stream_update)             :: meta
-    type(gui_metadata_stream_update) :: copy
+    type(gui_metadata_stream_update)             :: copy
     write(*,'(A)') 'test_serialise_stream_update'
     call meta%new(GUI_METADATA_STREAM_UPDATE_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1108,10 +1108,10 @@ contains
   ! derived fields (micrographs_rejected, particles_per_mic) and that
   ! last_micrograph_imported is populated automatically on first set.
   subroutine test_set_get_stream_initial_picking()
-    type(gui_metadata_stream_picking) :: meta
+    type(gui_metadata_stream_picking)         :: meta
     type(string)                              :: stage
-    integer :: micrographs_imported, micrographs_accepted, micrographs_rejected
-    integer :: particles_extracted, particles_per_mic, last_micrograph_imported, box_size
+    integer                                   :: micrographs_imported, micrographs_accepted, micrographs_rejected
+    integer                                   :: particles_extracted, particles_per_mic, last_micrograph_imported, box_size
     write(*,'(A)') 'test_set_get_stream_initial_picking'
     call meta%new(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1141,8 +1141,8 @@ contains
   ! Verify that the stream initial-picking serialise buffer is the expected size.
   subroutine test_serialise_stream_initial_picking()
     character(len=:),                         allocatable :: buffer
-    type(gui_metadata_stream_picking)             :: meta
-    type(gui_metadata_stream_picking) :: copy
+    type(gui_metadata_stream_picking)                     :: meta
+    type(gui_metadata_stream_picking)                     :: copy
     write(*,'(A)') 'test_serialise_stream_initial_picking'
     call meta%new(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1164,12 +1164,12 @@ contains
   ! jsonise embeds last_micrograph_imported (live Unix timestamp) so only
   ! non-emptiness is checked — a stable hash comparison is not possible.
   subroutine test_jsonise_stream_initial_picking()
-    character(kind=CK, len=:),                allocatable :: buffer
-    type(gui_metadata_stream_picking)             :: meta
-    type(json_core)                                       :: json
-    type(json_value),                          pointer    :: json_ptr
-    type(string)                                          :: json_str, json_hash
-    logical                                               :: found
+    character(kind=CK, len=:),                 allocatable :: buffer
+    type(gui_metadata_stream_picking)                      :: meta
+    type(json_core)                                        :: json
+    type(json_value),                          pointer     :: json_ptr
+    type(string)                                           :: json_str, json_hash
+    logical                                                :: found
     write(*,'(A)') 'test_jsonise_stream_initial_picking'
     call json%initialize(no_whitespace=.true., compact_reals=.true.)
     call meta%new(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
@@ -1201,10 +1201,10 @@ contains
   ! derived fields (micrographs_rejected, particles_per_mic) and that
   ! last_micrograph_imported is populated automatically on first set.
   subroutine test_set_get_stream_reference_picking()
-    type(gui_metadata_stream_picking) :: meta
+    type(gui_metadata_stream_picking)         :: meta
     type(string)                              :: stage
-    integer :: micrographs_imported, micrographs_accepted, micrographs_rejected
-    integer :: particles_extracted, particles_per_mic, last_micrograph_imported, box_size
+    integer                                   :: micrographs_imported, micrographs_accepted, micrographs_rejected
+    integer                                   :: particles_extracted, particles_per_mic, last_micrograph_imported, box_size
     write(*,'(A)') 'test_set_get_stream_reference_picking'
     call meta%new(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1235,7 +1235,7 @@ contains
   subroutine test_serialise_stream_reference_picking()
     character(len=:),                         allocatable :: buffer
     type(gui_metadata_stream_picking)                     :: meta
-    type(gui_metadata_stream_picking) :: copy
+    type(gui_metadata_stream_picking)                     :: copy
     write(*,'(A)') 'test_serialise_stream_reference_picking'
     call meta%new(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1257,12 +1257,12 @@ contains
   ! jsonise embeds last_micrograph_imported (live Unix timestamp) so only
   ! non-emptiness is checked — a stable hash comparison is not possible.
   subroutine test_jsonise_stream_reference_picking()
-    character(kind=CK, len=:),                allocatable :: buffer
-    type(gui_metadata_stream_picking)                     :: meta
-    type(json_core)                                       :: json
-    type(json_value),                          pointer    :: json_ptr
-    type(string)                                          :: json_str, json_hash
-    logical                                               :: found
+    character(kind=CK, len=:),                 allocatable :: buffer
+    type(gui_metadata_stream_picking)                      :: meta
+    type(json_core)                                        :: json
+    type(json_value),                          pointer     :: json_ptr
+    type(string)                                           :: json_str, json_hash
+    logical                                                :: found
     write(*,'(A)') 'test_jsonise_stream_reference_picking'
     call json%initialize(no_whitespace=.true., compact_reals=.true.)
     call meta%new(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
@@ -1294,8 +1294,8 @@ contains
   ! the auto-populated last_particles_imported timestamp.
   subroutine test_set_get_stream_initial_analysis()
     type(gui_metadata_stream_initial_analysis) :: meta
-    type(string)                        :: stage
-    integer :: particles_imported, particles_accepted, last_particles_imported
+    type(string)                               :: stage
+    integer                                    :: particles_imported, particles_accepted, last_particles_imported
     write(*,'(A)') 'test_set_get_stream_initial_analysis'
     call meta%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1316,9 +1316,9 @@ contains
 
   ! Verify that the stream initial analysis serialise buffer is the expected size.
   subroutine test_serialise_stream_initial_analysis()
-    character(len=:),                   allocatable :: buffer
+    character(len=:),                   allocatable        :: buffer
     type(gui_metadata_stream_initial_analysis)             :: meta
-    type(gui_metadata_stream_initial_analysis) :: copy
+    type(gui_metadata_stream_initial_analysis)             :: copy
     write(*,'(A)') 'test_serialise_stream_initial_analysis'
     call meta%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1340,12 +1340,12 @@ contains
   ! jsonise embeds last_particles_imported (live Unix timestamp) so only
   ! non-emptiness is checked — a stable hash comparison is not possible.
   subroutine test_jsonise_stream_initial_analysis()
-    character(kind=CK, len=:),          allocatable :: buffer
+    character(kind=CK, len=:),          allocatable        :: buffer
     type(gui_metadata_stream_initial_analysis)             :: meta
-    type(json_core)                                 :: json
-    type(json_value),                   pointer     :: json_ptr
-    type(string)                                    :: json_str
-    logical                                         :: found
+    type(json_core)                                        :: json
+    type(json_value),                   pointer            :: json_ptr
+    type(string)                                           :: json_str
+    logical                                                :: found
     write(*,'(A)') 'test_jsonise_stream_initial_analysis'
     call json%initialize(no_whitespace=.true., compact_reals=.true.)
     call meta%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE)
@@ -1374,8 +1374,8 @@ contains
   ! with the class selection set beside them.
   subroutine test_set_get_stream_particle_sieving()
     type(gui_metadata_stream_particle_sieving) :: meta
-    type(string) :: stage
-    integer      :: particles_imported, particles_accepted, particles_rejected, last_import_time
+    type(string)                               :: stage
+    integer                                    :: particles_imported, particles_accepted, particles_rejected, last_import_time
     write(*,'(A)') 'test_set_get_stream_particle_sieving'
     call meta%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1402,7 +1402,7 @@ contains
   subroutine test_serialise_stream_particle_sieving()
     character(len=:),                          allocatable :: buffer
     type(gui_metadata_stream_particle_sieving)             :: meta
-    type(gui_metadata_stream_particle_sieving) :: copy
+    type(gui_metadata_stream_particle_sieving)             :: copy
     write(*,'(A)') 'test_serialise_stream_particle_sieving'
     call meta%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1459,11 +1459,11 @@ contains
   ! including iteration, mask geometry, and the user_input flag.
   subroutine test_set_get_stream_pool2D()
     type(gui_metadata_stream_pool2D) :: meta
-    type(string) :: stage
-    integer      :: iteration, particles_imported, particles_accepted, particles_rejected
-    integer      :: last_import_time, mskdiam
-    real         :: mskscale, resolution
-    logical      :: user_input
+    type(string)                     :: stage
+    integer                          :: iteration, particles_imported, particles_accepted, particles_rejected
+    integer                          :: last_import_time, mskdiam
+    real                             :: mskscale, resolution
+    logical                          :: user_input
     write(*,'(A)') 'test_set_get_stream_pool2D'
     call meta%new(GUI_METADATA_STREAM_POOL2D_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1497,7 +1497,7 @@ contains
   subroutine test_serialise_stream_pool2D()
     character(len=:),              allocatable :: buffer
     type(gui_metadata_stream_pool2D)           :: meta
-    type(gui_metadata_stream_pool2D) :: copy
+    type(gui_metadata_stream_pool2D)           :: copy
     write(*,'(A)') 'test_serialise_stream_pool2D'
     call meta%new(GUI_METADATA_STREAM_POOL2D_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1553,7 +1553,7 @@ contains
   ! Verify that all pool-2D snapshot fields round-trip through set/get,
   ! and that snapshot_time is populated automatically on set.
   subroutine test_set_get_stream_pool2D_snapshot()
-    type(gui_metadata_stream_snapshot) :: meta
+    type(gui_metadata_stream_snapshot)        :: meta
     type(string)                              :: fname_out
     integer                                   :: id_out, nptcls_out, time_out
     write(*,'(A)') 'test_set_get_stream_pool2D_snapshot'
@@ -1574,8 +1574,8 @@ contains
   ! Verify that the pool-2D snapshot serialise buffer is the expected size.
   subroutine test_serialise_stream_pool2D_snapshot()
     character(len=:),                         allocatable :: buffer
-    type(gui_metadata_stream_snapshot)             :: meta
-    type(gui_metadata_stream_snapshot) :: copy
+    type(gui_metadata_stream_snapshot)                    :: meta
+    type(gui_metadata_stream_snapshot)                    :: copy
     write(*,'(A)') 'test_serialise_stream_pool2D_snapshot'
     call meta%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1597,7 +1597,7 @@ contains
   ! field is zeroed before hashing to make the output deterministic.
   subroutine test_jsonise_stream_pool2D_snapshot()
     character(kind=CK, len=:),                allocatable :: buffer
-    type(gui_metadata_stream_snapshot)             :: meta
+    type(gui_metadata_stream_snapshot)                    :: meta
     type(json_core)                                       :: json
     type(json_value),                         pointer     :: json_ptr
     type(string)                                          :: json_str, json_hash
@@ -1663,10 +1663,10 @@ contains
   ! auto-populated last_import_time.
   subroutine test_set_get_stream_solve3D_multistate()
     type(gui_metadata_stream_solve3D_multistate) :: meta
-    type(string) :: stage
-    integer      :: solve3D_stage, refine_iteration, nstates, particles_imported, particles_at_last_refine
-    integer      :: last_import_time
-    real         :: resolution
+    type(string)                                 :: stage
+    integer                                      :: solve3D_stage, refine_iteration, nstates, particles_imported, particles_at_last_refine
+    integer                                      :: last_import_time
+    real                                         :: resolution
     write(*,'(A)') 'test_set_get_stream_solve3D_multistate'
     call meta%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
     call meta%set(stage=string('running solve3D'), solve3D_stage=1, refine_iteration=2, nstates=2,&
@@ -1745,10 +1745,10 @@ contains
   ! The compact JSON text of @p meta.
   function json_text( meta ) result( txt )
     class(gui_metadata_base), intent(in) :: meta
-    character(len=:), allocatable :: txt
+    character(len=:),          allocatable :: txt
     character(kind=CK, len=:), allocatable :: str
     type(json_core)                        :: json
-    type(json_value), pointer              :: json_ptr
+    type(json_value),          pointer     :: json_ptr
     call json%initialize(no_whitespace=.true., compact_reals=.true.)
     json_ptr => meta%jsonise()
     call json%print_to_string(json_ptr, str)

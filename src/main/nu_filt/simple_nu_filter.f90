@@ -109,7 +109,7 @@ real,             parameter   :: NU_ORDER_FRAC_STEP           = 0.01
 real,             parameter   :: NU_EVIDENCE_INVALID         = 0.5 * huge(1.)
 ! Static nested support bands of the compact evidence state: entry b is the confidence that reproducible
 ! detail is supported through 20, 12, 8, 5 A, so entries are non-increasing from coarse to fine.
-integer,          parameter   :: NU_EVIDENCE_NBANDS = 4
+integer,          parameter   :: NU_EVIDENCE_NBANDS                          = 4
 real,             parameter   :: NU_EVIDENCE_BAND_LIMITS(NU_EVIDENCE_NBANDS) = [20., 12., 8., 5.]
 ! Evidence bands beyond the static four are appended at NU_EVIDENCE_BAND_RATIO steps while the finest
 ! signal candidate reaches the next boundary, up to NU_EVIDENCE_MAX_NBANDS; the 4 A ladder floor lies
@@ -124,7 +124,7 @@ real,             parameter   :: NU_ALIGN_LP_MIN_ASSIGNED_PCT = 5.0
 ! Diagnostic only: finest label whose cumulative population reaches this % of the signal voxels
 ! (mask minus the background clamp), quoted on the NU HANDOFF line.
 ! The handoff itself is the finest bank member (get_nu_filter_bank_finest_lp).
-real,             parameter   :: NU_ALIGN_LP_MIN_SIGNAL_PCT   = 1.0
+real,             parameter   :: NU_ALIGN_LP_MIN_SIGNAL_PCT    = 1.0
 real,             parameter   :: NU_EVIDENCE_UNCERTAIN_ENTROPY = 0.5
 ! NU-evidence nonuniform postprocessing v2 (nu_evidence_local_sharpening.md,
 ! postprocess_nu commander): classical shrink-then-sharpen, localized by the
@@ -136,7 +136,7 @@ real,             parameter   :: NU_SHARP_BFAC_FINEST_A = 5.0 !< Guinier sharpen
 ! failed null calibration. Provisional; recalibrate against real-data operating points before relaxing.
 real,             parameter   :: NU_EVIDENCE_MIN_NULL_FRAC = 0.01
 real,             parameter   :: NU_EVIDENCE_MAX_NULL_FRAC = 0.90
-character(len=*), parameter   :: NU_EVIDENCE_SOURCE_BASE = 'base_unfil'
+character(len=*), parameter   :: NU_EVIDENCE_SOURCE_BASE   = 'base_unfil'
 ! lag-one evidence source for the PCG trailing bootstrap: the previous
 ! iteration's shipped half pair, the same pair that supplies the bootstrap FSC
 character(len=*), parameter   :: NU_EVIDENCE_SOURCE_PREV = 'previous_shipped'
@@ -162,12 +162,12 @@ type :: nu_envmask_params
 end type nu_envmask_params
 
 type :: nu_order_stats
-    logical :: l_off = .true.
-    logical :: l_peri_signal = .false., l_fine_signal = .false.
-    integer :: n_dense = 0, n_core = 0, n_unobserved = 0
-    real :: fraction = 0., threshold = 0., width = 0., kept_core = 0.
-    real :: removed_peri = -1., kept_fine_peri = -1., core_share = 0.
-    character(len=80) :: reason = ''
+    logical           :: l_off         = .true.
+    logical           :: l_peri_signal = .false., l_fine_signal = .false.
+    integer           :: n_dense       = 0, n_core = 0, n_unobserved = 0
+    real              :: fraction      = 0., threshold = 0., width = 0., kept_core = 0.
+    real              :: removed_peri  = -1., kept_fine_peri = -1., core_share = 0.
+    character(len=80) :: reason        = ''
 end type nu_order_stats
 
 type :: nu_envmask_stats
@@ -189,51 +189,51 @@ type :: nu_envmask_stats
     logical :: l_relative  = .false.
     ! label domain (observed density envelope, or the observed support) and null set
     integer :: n_calib          = 0
-    real    :: pct_calib        = 0.  !< domain as a percentage of the support
-    real    :: pct_signal_calib = 0.  !< signal as a percentage of the domain
-    logical :: l_null_majority  = .true. !< solvent held the majority of the domain (mixture regime validity)
+    real    :: pct_calib        = 0.      !< domain as a percentage of the support
+    real    :: pct_signal_calib = 0.      !< signal as a percentage of the domain
+    logical :: l_null_majority  = .true.  !< solvent held the majority of the domain (mixture regime validity)
     logical :: l_null_shell     = .false. !< null designated by the Euclidean shell rather than estimated from the mixture
-    integer :: n_null           = 0   !< voxels the null statistics were estimated on
-    real    :: pct_null         = 0.  !< null set as a percentage of the domain
-    real    :: core_med         = 0.  !< median margin inside the core (domain minus shell), separation diagnostic
-    real    :: pct_signal_null  = 0.  !< signal as a percentage of the null shell: the dilation ring carrying evidence
-    logical :: l_null_valid     = .true. !< the null is trusted: majority (mixture) or sufficient shell (Euclidean)
+    integer :: n_null           = 0       !< voxels the null statistics were estimated on
+    real    :: pct_null         = 0.      !< null set as a percentage of the domain
+    real    :: core_med         = 0.      !< median margin inside the core (domain minus shell), separation diagnostic
+    real    :: pct_signal_null  = 0.      !< signal as a percentage of the null shell: the dilation ring carrying evidence
+    logical :: l_null_valid     = .true.  !< the null is trusted: majority (mixture) or sufficient shell (Euclidean)
 end type nu_envmask_stats
 
 ! Public scalar metadata for a frozen NU evidence state. The packed arrays stay private in
 ! nu_evidence_state; unpack_nu_evidence_state copies them out, so consumers cannot mutate the state.
 type :: nu_evidence_summary
-    logical :: valid = .false.
-    integer :: ldim(3) = 0
-    integer :: n_support = 0
-    integer :: n_candidates = 0
-    integer :: n_bands = 0
-    real    :: smpd = 0.
-    real    :: mskdiam = 0.
-    real    :: null_fraction = 0.
-    real    :: uncertain_fraction = 0.
-    real    :: observed_fraction = 1. !< fraction of the packed support carrying a non-zero half-map pair
+    logical :: valid                   = .false.
+    integer :: ldim(3)                 = 0
+    integer :: n_support               = 0
+    integer :: n_candidates            = 0
+    integer :: n_bands                 = 0
+    real    :: smpd                    = 0.
+    real    :: mskdiam                 = 0.
+    real    :: null_fraction           = 0.
+    real    :: uncertain_fraction      = 0.
+    real    :: observed_fraction       = 1. !< fraction of the packed support carrying a non-zero half-map pair
     real    :: calibration_temperature = 0.
-    real    :: spatial_beta = 0.
-    real    :: null_cost_mean = 0.
-    real    :: null_bias_median = 0.
-    real    :: null_bias_mad = 0.
-    real    :: null_bias_threshold = 0.
+    real    :: spatial_beta            = 0.
+    real    :: null_cost_mean          = 0.
+    real    :: null_bias_median        = 0.
+    real    :: null_bias_mad           = 0.
+    real    :: null_bias_threshold     = 0.
     ! NU_EVIDENCE_NBANDS static entries plus appended bands, up to NU_EVIDENCE_MAX_NBANDS
-    real, allocatable :: supported_fraction(:)
-    real, allocatable :: band_limits(:)
-    character(len=32) :: source = ''
-    character(len=16) :: identity = ''
+    real, allocatable          :: supported_fraction(:)
+    real, allocatable          :: band_limits(:)
+    character(len=32)          :: source     = ''
+    character(len=16)          :: identity   = ''
     character(len=XLONGSTRLEN) :: provenance = ''
 end type nu_evidence_summary
 
 type :: nu_evidence_state
     private
-    type(nu_evidence_summary) :: summary
+    type(nu_evidence_summary)                :: summary
     integer(kind=NU_LABEL_KIND), allocatable :: selected_label(:)
-    real, allocatable :: selected_cutoff(:)
-    real, allocatable :: uncertainty(:)
-    real, allocatable :: band_support(:,:)
+    real,                        allocatable :: selected_cutoff(:)
+    real,                        allocatable :: uncertainty(:)
+    real,                        allocatable :: band_support(:,:)
 end type nu_evidence_state
 
 interface
@@ -256,8 +256,8 @@ interface
     end subroutine get_nu_filter_timings
 
     module subroutine init_nu_filter( vol_even, vol_odd, fsc_res )
-        class(image), intent(in) :: vol_even, vol_odd
-        real,    optional, intent(in) :: fsc_res
+        class(image), intent(in)           :: vol_even, vol_odd
+        real,         optional, intent(in) :: fsc_res
     end subroutine init_nu_filter
 
     module subroutine set_nu_filter_report( l_report )
@@ -279,8 +279,8 @@ interface
     end subroutine cleanup_nu_filter
 
     module subroutine set_nu_solvent_envelope( envmask, source )
-        class(image),               intent(in) :: envmask
-        character(len=*), optional, intent(in) :: source
+        class(image),               intent(in)           :: envmask
+        character(len=*),           optional, intent(in) :: source
     end subroutine set_nu_solvent_envelope
 
     module subroutine clear_nu_solvent_envelope
@@ -364,12 +364,12 @@ interface
     ! In submodule: simple_nu_filter_bank.f90
     module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
             &evidence_source, fsc_res )
-        class(image),          intent(in) :: vol_even, vol_odd
-        real,                  intent(in) :: mskdiam
-        real,                  intent(in) :: aux_resolutions(:)
-        type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
-        character(len=*), optional, intent(in) :: evidence_source
-        real,        optional, intent(in) :: fsc_res !< pair FSC=0.143 resolution in A; caps the bank
+        class(image),          intent(in)           :: vol_even, vol_odd
+        real,                  intent(in)           :: mskdiam
+        real,                  intent(in)           :: aux_resolutions(:)
+        type(image),           optional, intent(in) :: aux_even(:), aux_odd(:)
+        character(len=*),      optional, intent(in) :: evidence_source
+        real,                  optional, intent(in) :: fsc_res !< pair FSC=0.143 resolution in A; caps the bank
     end subroutine setup_nu_dmats
 
     module subroutine setup_nu_candidate_coords( n_candidates )
@@ -396,8 +396,8 @@ interface
 
     module subroutine log_nu_candidate_selection_counts( candmap, n_base, stage )
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
-        integer,          intent(in) :: n_base
-        character(len=*), intent(in) :: stage
+        integer,                     intent(in) :: n_base
+        character(len=*),            intent(in) :: stage
     end subroutine log_nu_candidate_selection_counts
 
     module subroutine log_nu_candidate_coords
@@ -414,7 +414,7 @@ interface
     end subroutine build_nu_evidence_state
 
     module subroutine calculate_nu_source_fingerprint( vol_even, vol_odd, fingerprint )
-        class(image), intent(in) :: vol_even, vol_odd
+        class(image), intent(in)  :: vol_even, vol_odd
         real(kind=8), intent(out) :: fingerprint(6)
     end subroutine calculate_nu_source_fingerprint
 
@@ -428,9 +428,9 @@ interface
     end subroutine get_nu_evidence_summary
 
     module subroutine unpack_nu_evidence_state( state, selected_label, selected_cutoff, uncertainty, band_support )
-        type(nu_evidence_state), intent(in) :: state
-        integer, allocatable, optional, intent(out) :: selected_label(:)
-        real,    allocatable, optional, intent(out) :: selected_cutoff(:), uncertainty(:), band_support(:,:)
+        type(nu_evidence_state), intent(in)                         :: state
+        integer,                 allocatable, optional, intent(out) :: selected_label(:)
+        real,                    allocatable, optional, intent(out) :: selected_cutoff(:), uncertainty(:), band_support(:,:)
     end subroutine unpack_nu_evidence_state
 
     module subroutine print_nu_evidence_summary( state )
@@ -452,7 +452,7 @@ interface
     ! In submodule: simple_nu_filter_potts.f90
     module subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates )
         integer(kind=NU_LABEL_KIND), intent(inout) :: candmap(:,:,:)
-        integer, intent(in)    :: n_candidates
+        integer,                     intent(in)    :: n_candidates
     end subroutine refine_nu_candidate_map_ordered_labels
 
     module real function estimate_nu_label_smooth_beta( n_candidates )
@@ -460,7 +460,7 @@ interface
     end function estimate_nu_label_smooth_beta
 
     module real function nu_label_smooth_neighborhood_cost( icand, candmap, neigh, nsz )
-        integer, intent(in) :: icand, neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
+        integer,                     intent(in) :: icand, neigh(3,NU_LABEL_SMOOTH_NNEIGH), nsz
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
     end function nu_label_smooth_neighborhood_cost
 
@@ -482,7 +482,7 @@ interface
 
     module real function calc_nu_label_smooth_site_energy( candmap, beta )
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
-        real,    intent(in) :: beta
+        real,                        intent(in) :: beta
     end function calc_nu_label_smooth_site_energy
 
 
@@ -496,18 +496,18 @@ interface
 
     ! In submodule: simple_nu_filter_stats.f90
     module subroutine pack_filtmap_lowpass_limits( lowpass_vals, mask )
-        real, allocatable, intent(inout) :: lowpass_vals(:)
-        logical, optional, intent(in)    :: mask(:,:,:)
+        real,    allocatable, intent(inout) :: lowpass_vals(:)
+        logical, optional, intent(in)       :: mask(:,:,:)
     end subroutine pack_filtmap_lowpass_limits
 
     module subroutine calc_filtmap_lowpass_stats( statvars, mask )
-        type(stats_struct), intent(out) :: statvars
-        logical, optional, intent(in)   :: mask(:,:,:)
+        type(stats_struct), intent(out)          :: statvars
+        logical,            optional, intent(in) :: mask(:,:,:)
     end subroutine calc_filtmap_lowpass_stats
 
     module subroutine calc_filtmap_lowpass_histogram( counts, percentages, mask )
-        integer, intent(out) :: counts(:)
-        real,    intent(out) :: percentages(:)
+        integer, intent(out)          :: counts(:)
+        real,    intent(out)          :: percentages(:)
         logical, optional, intent(in) :: mask(:,:,:)
     end subroutine calc_filtmap_lowpass_histogram
 
@@ -536,8 +536,8 @@ interface
     end subroutine get_nu_local_resolution_map
 
     module subroutine write_nu_local_resolution_map( fname, mask )
-        class(string), intent(in) :: fname
-        logical, optional, intent(in) :: mask(:,:,:)
+        class(string), intent(in)           :: fname
+        logical,       optional, intent(in) :: mask(:,:,:)
     end subroutine write_nu_local_resolution_map
 
     module subroutine accumulate_nu_evidence_raw( dmat_full, icand )
@@ -547,9 +547,9 @@ interface
 
     ! In submodule: simple_nu_filter_envmask.f90
     module subroutine calc_nu_evidence_margin( margin, lp_smooth, l_relative )
-        real, allocatable, intent(inout) :: margin(:)
-        real,    optional, intent(in)    :: lp_smooth
-        logical, optional, intent(in)    :: l_relative
+        real,    allocatable, intent(inout) :: margin(:)
+        real,    optional, intent(in)       :: lp_smooth
+        logical, optional, intent(in)       :: l_relative
     end subroutine calc_nu_evidence_margin
 
     module real function nu_evidence_baseline_floor( base_full ) result( floor_val )
@@ -557,42 +557,42 @@ interface
     end function nu_evidence_baseline_floor
 
     module subroutine calc_nu_evidence_score( margin, nsigma, score, stats )
-        real,                   intent(in)    :: margin(:)
-        real,                   intent(in)    :: nsigma
-        real, allocatable,      intent(inout) :: score(:)
-        type(nu_envmask_stats), intent(inout) :: stats
+        real,                   intent(in)                      :: margin(:)
+        real,                   intent(in)                      :: nsigma
+        real,                   allocatable,      intent(inout) :: score(:)
+        type(nu_envmask_stats), intent(inout)                   :: stats
     end subroutine calc_nu_evidence_score
 
     module subroutine add_nu_evidence_density( vol_dens, weight, score, stats )
-        class(image), target,   intent(in)    :: vol_dens
-        real,                   intent(in)    :: weight
-        real, allocatable,      intent(inout) :: score(:)
-        type(nu_envmask_stats), intent(inout) :: stats
+        class(image),           target,   intent(in)            :: vol_dens
+        real,                   intent(in)                      :: weight
+        real,                   allocatable,      intent(inout) :: score(:)
+        type(nu_envmask_stats), intent(inout)                   :: stats
     end subroutine add_nu_evidence_density
 
     module subroutine segment_nu_evidence( score, p, lmask, stats )
-        real,                    intent(in)    :: score(:)
-        type(nu_envmask_params), intent(in)    :: p
-        logical, allocatable,    intent(inout) :: lmask(:,:,:)
-        type(nu_envmask_stats),  intent(inout) :: stats
+        real,                    intent(in)                    :: score(:)
+        type(nu_envmask_params), intent(in)                    :: p
+        logical,                 allocatable,    intent(inout) :: lmask(:,:,:)
+        type(nu_envmask_stats),  intent(inout)                 :: stats
     end subroutine segment_nu_evidence
 
     module subroutine nu_evidence_envelope( p, lmask, stats, vol_dens )
-        type(nu_envmask_params), intent(in)    :: p
-        logical, allocatable,    intent(inout) :: lmask(:,:,:)
-        type(nu_envmask_stats),  intent(inout) :: stats
-        class(image), optional, target, intent(in) :: vol_dens
+        type(nu_envmask_params), intent(in)                    :: p
+        logical,                 allocatable,    intent(inout) :: lmask(:,:,:)
+        type(nu_envmask_stats),  intent(inout)                 :: stats
+        class(image),            optional, target, intent(in)  :: vol_dens
     end subroutine nu_evidence_envelope
 
     ! In submodule: simple_nu_filter_ordermask.f90
     !> automsk=order on arrays: the order factor M over the box and the ordered fraction of the dense set,
     !! the smallest that keeps NU_ORDER_CORE_KEEP of the core's cross-half signal (factor 1 when off)
     module subroutine select_nu_order_mask( margin, locres, dense, even, odd, res05, factor, st, coarsest_lp )
-        real,                 intent(in)  :: margin(:,:,:), locres(:,:,:), even(:,:,:), odd(:,:,:), res05
-        logical,              intent(in)  :: dense(:,:,:)
-        real,                 intent(out) :: factor(:,:,:)
-        type(nu_order_stats), intent(out) :: st
-        real, optional,       intent(in)  :: coarsest_lp
+        real,                 intent(in)                 :: margin(:,:,:), locres(:,:,:), even(:,:,:), odd(:,:,:), res05
+        logical,              intent(in)                 :: dense(:,:,:)
+        real,                 intent(out)                :: factor(:,:,:)
+        type(nu_order_stats), intent(out)                :: st
+        real,                 optional,       intent(in) :: coarsest_lp
     end subroutine select_nu_order_mask
 
     !> automsk=order on the live NU state: the evidence margin and label resolution of the current
@@ -624,11 +624,11 @@ interface
     end subroutine write_nu_evidence_map
 
     module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname, mask_out, l_valid )
-        real,              intent(in)  :: nsigma, lp_smooth, smpd
-        integer,           intent(in)  :: state
-        class(string),     intent(in)  :: fname
-        class(image), optional, intent(inout) :: mask_out
-        logical,      optional, intent(out)   :: l_valid
+        real,              intent(in)              :: nsigma, lp_smooth, smpd
+        integer,           intent(in)              :: state
+        class(string),     intent(in)              :: fname
+        class(image),      optional, intent(inout) :: mask_out
+        logical,           optional, intent(out)   :: l_valid
     end subroutine write_nu_evidence_envmask
 
     module subroutine print_nu_envmask_stats( stats )

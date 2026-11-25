@@ -5,7 +5,7 @@ use simple_rnd, only: gasdev, ran3
 implicit none
 
 integer, parameter :: PFTSZ = 12, KFROMTO(2) = [2, 9], NK = 8, BOX = 32, NCLS = 20, WIDTH = 2
-real,    parameter :: SMPD = 1.0, MSKDIAM = 24., LP = 4.
+real,    parameter :: SMPD  = 1.0, MSKDIAM = 24., LP = 4.
 
 contains
 
@@ -19,7 +19,7 @@ contains
         type(class_student), intent(inout) :: student
         integer(int64),      intent(in)    :: seed
         real(sp), allocatable :: wk(:,:), xc(:,:,:,:)
-        integer :: k, states(NCLS), i, p, part
+        integer               :: k, states(NCLS), i, p, part
         allocate(wk(KFROMTO(1):KFROMTO(2),2))
         do k = KFROMTO(1),KFROMTO(2)
             wk(k,1) = 0.5 + ran3()
@@ -47,7 +47,7 @@ contains
     subroutine test_cands()
         type(class_student) :: student
         type(class_pred)    :: pred
-        real(sp) :: prob(NCLS)
+        real(sp)            :: prob(NCLS)
         write(*,'(A)') 'test_cands'
         call make_student(student, 20261113_int64)
         prob = 0.0005
@@ -70,9 +70,9 @@ contains
     subroutine test_file_roundtrip()
         type(class_student) :: student, back
         type(string)        :: cwd_saved, fixture_root
-        real(sp) :: x(PFTSZ, NK, 2), ctf2(NK), p0(NCLS), p1(NCLS), e3
-        integer  :: nfail0, k, p, part, ic
-        logical  :: l_angles
+        real(sp)            :: x(PFTSZ, NK, 2), ctf2(NK), p0(NCLS), p1(NCLS), e3
+        integer             :: nfail0, k, p, part, ic
+        logical             :: l_angles
         write(*,'(A)') 'test_file_roundtrip'
         nfail0 = tests_failed
         call enter_fixture('class_student_file', cwd_saved, fixture_root)

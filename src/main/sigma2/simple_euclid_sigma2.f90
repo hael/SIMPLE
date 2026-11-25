@@ -21,17 +21,17 @@ public :: euclid_sigma2, sigma2_commit_iter, sigma2_half
 
 type euclid_sigma2
     private
-    class(parameters),    pointer :: p_ptr => null()
-    real,    allocatable, public  :: sigma2_noise(:,:)      !< the two global spectra (shell, half): column sigma2_half(eo)
-    real,    allocatable          :: sigma2_part(:,:)       !< the residual records of this part (matchers only)
-    real,    allocatable          :: sigma2_scoring(:,:)    !< anchor/measured log blend of scoring-noise annealing
-    integer                       :: fromp
-    integer                       :: top
-    integer                       :: kfromto(2) = 0
-    type(string)                  :: binfname
-    logical                       :: exists     = .false.
-    integer(int64)                :: spectra_gen = 0_int64 !< bumped whenever the spectra change; never reset
-    logical                       :: replaces_range = .false. !< started from the open transaction's range (read_pending_range)
+    class(parameters),    pointer             :: p_ptr          => null()
+    real,                 allocatable, public :: sigma2_noise(:,:)        !< the two global spectra (shell, half): column sigma2_half(eo)
+    real,                 allocatable         :: sigma2_part(:,:)         !< the residual records of this part (matchers only)
+    real,                 allocatable         :: sigma2_scoring(:,:)      !< anchor/measured log blend of scoring-noise annealing
+    integer                                   :: fromp
+    integer                                   :: top
+    integer                                   :: kfromto(2)     = 0
+    type(string)                              :: binfname
+    logical                                   :: exists         = .false.
+    integer(int64)                            :: spectra_gen    = 0_int64 !< bumped whenever the spectra change; never reset
+    logical                                   :: replaces_range = .false. !< started from the open transaction's range (read_pending_range)
     ! the reconstruction-plane grid of the spectra (shell table, resampled inverse spectra), memoised by
     ! prep_fplane_grid for one padded box and lowest shell; dropped whenever the spectra are (re)loaded
     type(fplane_grid), public     :: fplane
@@ -82,11 +82,11 @@ contains
 
     !> Polar pass: the noise table is shared with the polar calculator.
     subroutine new_pftc( self, params, pftc, binfname, box )
-        class(euclid_sigma2), target, intent(inout) :: self
-        class(parameters),    target, intent(in)    :: params
-        class(polarft_calc),          intent(inout) :: pftc
-        class(string),                intent(in)    :: binfname
-        integer,                      intent(in)    :: box
+        class(euclid_sigma2),         target, intent(inout) :: self
+        class(parameters),            target, intent(in)    :: params
+        class(polarft_calc),          intent(inout)         :: pftc
+        class(string),                intent(in)            :: binfname
+        integer,                      intent(in)            :: box
         call self%new_cart(params, binfname, box)
         call pftc%assign_sigma2_noise(self%sigma2_noise, self%spectra_gen)
     end subroutine new_pftc
@@ -94,10 +94,10 @@ contains
     !> The two global spectra of a pass: a Cartesian pass, which constructs no polar calculator,
     !! uses them alone; the polar constructor shares them with the calculator.
     subroutine new_cart( self, params, binfname, box )
-        class(euclid_sigma2), target, intent(inout) :: self
-        class(parameters),    target, intent(in)    :: params
-        class(string),                intent(in)    :: binfname
-        integer,                      intent(in)    :: box
+        class(euclid_sigma2),         target, intent(inout) :: self
+        class(parameters),            target, intent(in)    :: params
+        class(string),                intent(in)            :: binfname
+        integer,                      intent(in)            :: box
 
         call self%kill
         self%p_ptr => params
@@ -131,7 +131,7 @@ contains
     !! into the record array (shells kfromto, rows fromp:top); the reader refuses another shell count
     subroutine read_part( self )
         class(euclid_sigma2), intent(inout) :: self
-        integer :: status
+        integer               :: status
         character(len=STDLEN) :: message
         if( allocated(self%sigma2_part) ) deallocate(self%sigma2_part)
         allocate(self%sigma2_part(self%kfromto(1):self%kfromto(2),self%fromp:self%top))
@@ -144,11 +144,11 @@ contains
     !! the residual of its current pose rather than the committed generation's.
     subroutine read_pending_range( self )
         class(euclid_sigma2), intent(inout) :: self
-        type(string) :: range_path
+        type(string)              :: range_path
         real(real32), allocatable :: spectra(:,:)
-        integer(int64) :: next_gen, generation, layout_digest
-        integer :: first_row, last_row, kfrom, kto, status
-        character(len=STDLEN) :: message
+        integer(int64)            :: next_gen, generation, layout_digest
+        integer                   :: first_row, last_row, kfrom, kto, status
+        character(len=STDLEN)     :: message
         if( .not. allocated(self%sigma2_part) ) THROW_HARD('particle sigma2 storage is not allocated')
         call sigma2_state_next_generation(self%binfname%to_char(), next_gen, status, message)
         if( status /= 0 ) THROW_HARD(trim(message))
@@ -169,8 +169,8 @@ contains
     subroutine read_global( self )
         class(euclid_sigma2), intent(inout) :: self
         real(real32), allocatable :: spectra(:,:)
-        integer               :: status
-        character(len=STDLEN) :: message
+        integer                   :: status
+        character(len=STDLEN)     :: message
         if( .not.associated(self%p_ptr) )then
             THROW_HARD('euclid_sigma2: params pointer is not set')
         endif
@@ -186,9 +186,9 @@ contains
 
     !> Attach the scoring spectra of weight (form_scoring_sigma2) to the polar calculator.
     subroutine anneal_for_scoring( self, pftc, weight )
-        class(euclid_sigma2), target, intent(inout) :: self
-        class(polarft_calc),          intent(inout) :: pftc
-        real,                         intent(in)    :: weight
+        class(euclid_sigma2),         target, intent(inout) :: self
+        class(polarft_calc),          intent(inout)         :: pftc
+        real,                         intent(in)            :: weight
         call self%form_scoring_sigma2(weight)
         self%spectra_gen = self%spectra_gen + 1_int64
         if( allocated(self%sigma2_scoring) )then
@@ -206,8 +206,8 @@ contains
         class(euclid_sigma2), intent(inout) :: self
         real,                 intent(in)    :: weight
         real(real32), allocatable :: spectra(:,:), flat(:,:)
-        integer :: status, band(2)
-        character(len=STDLEN) :: message
+        integer                   :: status, band(2)
+        character(len=STDLEN)     :: message
         if( .not. associated(self%p_ptr) ) THROW_HARD('sigma2 scoring needs an initialized noise model')
         if( .not. ieee_is_finite(weight) ) THROW_HARD('sigma2 scoring weight must be finite')
         if( weight < -1. .or. weight > 1. ) THROW_HARD('sigma2 scoring weight must be in [-1,1]')
@@ -265,12 +265,12 @@ contains
     !! reference at the evaluated rotation (shift_ptcl2ref)
     subroutine calc_sigma2_pftc( self, pftc, iptcl, o, refkind, eulspace )
         use simple_ori_utils, only: euler_about_cell
-        class(euclid_sigma2),  intent(inout) :: self
-        class(polarft_calc),   intent(inout) :: pftc
-        integer,               intent(in)    :: iptcl
-        class(ori),            intent(in)    :: o
-        character(len=*),      intent(in)    :: refkind ! 'proj' or 'class'
-        class(oris), optional, intent(in)    :: eulspace
+        class(euclid_sigma2),  intent(inout)        :: self
+        class(polarft_calc),   intent(inout)        :: pftc
+        integer,               intent(in)           :: iptcl
+        class(ori),            intent(in)           :: o
+        character(len=*),      intent(in)           :: refkind ! 'proj' or 'class'
+        class(oris),           optional, intent(in) :: eulspace
         integer :: iref, irot, kfromto(2)
         real    :: shvec(2), euls(3)
         if( .not.associated(self%p_ptr) )then
@@ -375,9 +375,9 @@ contains
     subroutine write_sigma2( self )
         class(euclid_sigma2), intent(inout) :: self
         type(sigma2_state_header) :: header
-        type(string) :: range_path, staged_path
-        integer :: status
-        character(len=STDLEN) :: message
+        type(string)              :: range_path, staged_path
+        integer                   :: status
+        character(len=STDLEN)     :: message
         ! the range carries the identity of the committed store and the generation the master's
         ! commit will make, so nothing of another transaction can be merged into it
         call sigma2_state_read_header(self%binfname%to_char(), header, status, message)

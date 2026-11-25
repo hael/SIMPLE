@@ -235,11 +235,11 @@ contains
         real,                        allocatable   :: dists(:), mat(:,:), dists_cen(:), vars(:), ref_stats(:), cur_mat(:,:), cur_stats(:)
         integer,                     allocatable   :: cnts(:)
         logical,                     allocatable   :: l_dists(:)
-        type(commander_simulate_nanoparticle) :: xsim_nanoparticle
-        type(parameters)               :: p
-        type(cmdline)                  :: cline_sim_atoms
-        integer :: npdbs, ipdb, Natoms, cnt, i, j, nclus
-        real    :: min_dist, dist, prob, d, moldiam
+        type(commander_simulate_nanoparticle)      :: xsim_nanoparticle
+        type(parameters)                           :: p
+        type(cmdline)                              :: cline_sim_atoms
+        integer                                    :: npdbs, ipdb, Natoms, cnt, i, j, nclus
+        real                                       :: min_dist, dist, prob, d, moldiam
         call p%new(cline)
         call read_filetable(p%fname, pdbfnames)
         npdbs = size(pdbfnames)
@@ -304,10 +304,10 @@ contains
 
         ! compute the distribution of the dists around the reference distance points
         subroutine compute_stats(pos_mat, ref_dists, out_stats, msk)
-            real,    allocatable, intent(in)    :: pos_mat(:,:)
-            real,                 intent(in)    :: ref_dists(:)
-            real,    allocatable, intent(inout) :: out_stats(:)
-            logical, optional,    intent(in)    :: msk(:)
+            real,                 allocatable, intent(in)    :: pos_mat(:,:)
+            real,                 intent(in)                 :: ref_dists(:)
+            real,                 allocatable, intent(inout) :: out_stats(:)
+            logical,              optional,    intent(in)    :: msk(:)
             integer :: Na, Nr, i, j, k
             real    :: eps_g, eps_l
             Na        = size(pos_mat,2)
@@ -341,16 +341,16 @@ contains
         end subroutine compute_stats
 
         subroutine sort_cluster( points_in, cur_clusN, out_points, out_cnts, out_vars, delta )
-            real,                 intent(in)    :: points_in(:)
-            integer,              intent(inout) :: cur_clusN
-            real,    allocatable, intent(inout) :: out_points(:)
-            integer, allocatable, intent(inout) :: out_cnts(:)
-            real,    allocatable, intent(inout) :: out_vars(:)
-            real,                 intent(in)    :: delta
+            real,                 intent(in)                 :: points_in(:)
+            integer,              intent(inout)              :: cur_clusN
+            real,                 allocatable, intent(inout) :: out_points(:)
+            integer,              allocatable, intent(inout) :: out_cnts(:)
+            real,                 allocatable, intent(inout) :: out_vars(:)
+            real,                 intent(in)                 :: delta
             real,    allocatable :: points(:), avg_points(:), vars(:)
             integer, allocatable :: cnts(:)
-            integer :: cur_ind, n_points, i, j
-            real    :: cur_avg
+            integer              :: cur_ind, n_points, i, j
+            real                 :: cur_avg
             n_points = size(points_in)
             allocate(points(n_points), source=points_in)
             allocate(avg_points(n_points),cnts(n_points),vars(n_points))
@@ -410,11 +410,11 @@ contains
         class(commander_detect_atoms), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         character(len=*), parameter :: SPECIES_KEYS(4) = [character(len=16) :: 'element', 'nspecies', 'vol_even', 'vol_odd']
-        type(parameters)   :: params
-        type(nanoparticle) :: nano
-        type(string)       :: errmsg
-        real               :: a(3) ! lattice parameters
-        integer            :: ik
+        type(parameters)            :: params
+        type(nanoparticle)          :: nano
+        type(string)                :: errmsg
+        real                        :: a(3) ! lattice parameters
+        integer                     :: ik
         ! detection is species-free for every project: the element and the species keys belong to the programs that
         ! take them (release 4 keeps no aliases; discover_species is no key any more, detect_atomic_species is the call)
         do ik = 1,size(SPECIES_KEYS)
@@ -451,10 +451,10 @@ contains
         use simple_atomic_species, only: call_atomic_species
         class(commander_detect_atomic_species), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
-        type(parameters) :: params
-        type(string)     :: vol_even, vol_odd, errmsg
+        type(parameters)              :: params
+        type(string)                  :: vol_even, vol_odd, errmsg
         character(len=2), allocatable :: names(:)
-        logical :: l_halves
+        logical                       :: l_halves
         if( .not. cline%defined('pdbfile') ) THROW_HARD('detect_atomic_species needs pdbfile, the _ATMS.pdb of detect_atoms')
         errmsg = cline%get_carg('pdbfile')
         if( .not. file_exists(errmsg) )then
@@ -503,7 +503,7 @@ contains
         type(parameters)    :: params
         type(image)         :: workvol
         type(calpha_finder) :: finder
-        integer :: work_ldim(3), nsections
+        integer             :: work_ldim(3), nsections
 
         if(.not.cline%defined('angstep')) call cline%set('angstep', 45)
         if(.not.cline%defined('npeaks'))  call cline%set('npeaks', 100)
@@ -592,7 +592,7 @@ contains
     end subroutine exec_map_validate
 
     subroutine exec_model_validate( self, cline )
-        class(commander_model_validate), intent(inout) :: self
+        class(commander_model_validate),   intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters) :: params
         type(atoms)      :: molecule
@@ -606,12 +606,12 @@ contains
 
     subroutine exec_model_validate_eo( self, cline )
         use simple_commanders_volops, only: commander_postprocess_pdb
-        class(commander_model_validate_eo), intent(inout) :: self
+        class(commander_model_validate_eo),   intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(commander_postprocess_pdb) :: xpostprocess_pdb
-        type(cmdline)    :: cline_postprocess_pdb1, cline_postprocess_pdb2
-        type(parameters) :: params
-        type(atoms)      :: molecule
+        type(cmdline)                   :: cline_postprocess_pdb1, cline_postprocess_pdb2
+        type(parameters)                :: params
+        type(atoms)                     :: molecule
         call params%new(cline)
         ! postprocess even/odd volume pairs prior to comparison
         call cline_postprocess_pdb1%set('vol1', params%vols(2))
@@ -667,15 +667,15 @@ contains
     end subroutine exec_pdb2mrc
 
     subroutine exec_atoms_rmsd( self, cline )
-        class(commander_atoms_rmsd), intent(inout) :: self
+        class(commander_atoms_rmsd),         intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline !< command line input
         type(string),       allocatable :: pdbfnames(:)
         real,               allocatable :: pdbmat1(:,:), pdbmat2(:,:), dists(:), distmat(:,:), dists_neigh(:)
         integer,            allocatable :: inds(:), pairs(:,:), inds_neigh(:)
         type(stats_struct), allocatable :: dist_stats(:)
-        type(parameters) :: params
-        integer          :: npdbs, i, j, ipdb, npairs, cnt
-        character(len=2) :: el
+        type(parameters)                :: params
+        integer                         :: npdbs, i, j, ipdb, npairs, cnt
+        character(len=2)                :: el
         call cline%set('mkdir', 'no')
         call params%new(cline)
         call read_filetable(params%pdbfiles, pdbfnames)
@@ -728,10 +728,10 @@ contains
         type(common_atoms), allocatable :: atms_common(:)
         real,               allocatable :: betas(:), pdbmat(:,:), beta_core(:)
         logical,            allocatable :: mask_core(:)
-        type(parameters)   :: params
-        integer            :: npdbs, i, ipdb, natoms
-        character(len=2)   :: el
-        type(stats_struct) :: dist_stats
+        type(parameters)                :: params
+        integer                         :: npdbs, i, ipdb, natoms
+        character(len=2)                :: el
+        type(stats_struct)              :: dist_stats
         call params%new(cline)
         call read_filetable(params%pdbfiles, pdbfnames)
         npdbs = size(pdbfnames)

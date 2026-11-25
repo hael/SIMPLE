@@ -61,7 +61,7 @@ integer :: nseed_rnd_calls = 0 ! seed_rnd calls under SIMPLE_SEED since the last
 ! the run seed, cached by the serial code that sets or reads SIMPLE_SEED (seed_rnd at every commander's start,
 ! put_simple_seed, ensure_run_seed, set_run_seed, a serial rnd_run_seed call), so that a keyed draw inside a
 ! parallel region reads no environment and takes no lock
-integer(int64) :: run_seed_cache = 0_int64
+integer(int64) :: run_seed_cache    = 0_int64
 logical        :: l_run_seed_cached = .false.
 
 ! ---- the keyed, stateless generator of the probabilistic alignment (prob_align_batch_pipeline.md, section 4) ----
@@ -75,12 +75,12 @@ logical        :: l_run_seed_cached = .false.
 ! any of them changes every probabilistic trajectory and bumps RND_KEYED_VERSION.
 integer,        parameter :: RND_KEYED_VERSION = 1
 integer,        parameter :: RND_KEY_NLANES    = 9
-integer(int64), parameter :: RND_MASK32   = 4294967295_int64 !< 2^32 - 1
-integer(int64), parameter :: RND_MIX_C1   = 569420461_int64  !< 0x21f0aaad, the mixer's first multiplier (lowbias32)
-integer(int64), parameter :: RND_MIX_C2   = 1935289751_int64 !< 0x735a2d97, its second
-integer(int64), parameter :: RND_LANE_A0  = 1779033703_int64 !< 0x6a09e667, the first lane's initial value (fractional part of sqrt 2)
-integer(int64), parameter :: RND_LANE_B0  = 1359893119_int64 !< 0x510e527f, the second lane's (fractional part of sqrt 11)
-real(dp),       parameter :: RND_TWO53    = 9007199254740992._dp !< 2^53
+integer(int64), parameter :: RND_MASK32        = 4294967295_int64     !< 2^32 - 1
+integer(int64), parameter :: RND_MIX_C1        = 569420461_int64      !< 0x21f0aaad, the mixer's first multiplier (lowbias32)
+integer(int64), parameter :: RND_MIX_C2        = 1935289751_int64     !< 0x735a2d97, its second
+integer(int64), parameter :: RND_LANE_A0       = 1779033703_int64     !< 0x6a09e667, the first lane's initial value (fractional part of sqrt 2)
+integer(int64), parameter :: RND_LANE_B0       = 1359893119_int64     !< 0x510e527f, the second lane's (fractional part of sqrt 11)
+real(dp),       parameter :: RND_TWO53         = 9007199254740992._dp !< 2^53
 ! the families of section 4.3
 integer, parameter :: RND_FAM_SAMPLE = 1 !< the sample (the project owner's draws: particle 0, the sampler's ordinal)
 integer, parameter :: RND_FAM_INPL   = 2 !< the in-plane draw per scored reference (keyed on the reference)
@@ -91,11 +91,11 @@ integer, parameter :: RND_FAM_DIAG   = 6 !< the diagnostics' draws (their own or
 integer, parameter :: RND_FAM_INPLQ  = 7 !< the phase of a particle's in-plane quadrature (the 2D class sums; the 3D insertion, per inserted pose with its reference)
 ! the scope of a logical pass (section 4.2): the program and the pass kind, packed by rnd_scope
 integer, parameter :: RND_PROG_REFINE3D = 1, RND_PROG_REFINE2D = 2
-integer, parameter :: RND_PASS_ALIGN = 1  !< the discrete alignment
-integer, parameter :: RND_PASS_CONT = 2 !< the pose_cont follow-up
-integer, parameter :: RND_PASS_FINAL  = 3 !< the final full-population assignment
-integer, parameter :: RND_PASS_DIAG   = 4 !< a diagnostic evaluation
-integer, parameter :: RND_SCOPE_STRIDE = 16
+integer, parameter :: RND_PASS_ALIGN    = 1 !< the discrete alignment
+integer, parameter :: RND_PASS_CONT     = 2 !< the pose_cont follow-up
+integer, parameter :: RND_PASS_FINAL    = 3 !< the final full-population assignment
+integer, parameter :: RND_PASS_DIAG     = 4 !< a diagnostic evaluation
+integer, parameter :: RND_SCOPE_STRIDE  = 16
 
 !> the key of one draw (section 4.2); a field the family has no use for stays 0
 type :: rnd_key
@@ -192,7 +192,7 @@ contains
     !! Without propagation, only the calling thread's intrinsic state is seeded.
     subroutine seed_rnd_fixed_i4( base, propagate )
         use iso_fortran_env, only: int64
-        integer, intent(in) :: base
+        integer, intent(in)           :: base
         logical, optional, intent(in) :: propagate
         call seed_rnd_fixed_i8(int(base, int64), propagate)
     end subroutine seed_rnd_fixed_i4
@@ -200,8 +200,8 @@ contains
     !> as seed_rnd_fixed_i4, for a 64-bit base (SIMPLE_SEED and the generator take one)
     subroutine seed_rnd_fixed_i8( base, propagate )
         use iso_fortran_env, only: int64
-        integer(int64),    intent(in) :: base
-        logical, optional, intent(in) :: propagate
+        integer(int64),    intent(in)           :: base
+        logical,           optional, intent(in) :: propagate
         if( present(propagate) )then
             if( propagate ) call put_simple_seed(base)
         endif
@@ -218,8 +218,8 @@ contains
         interface
             function c_setenv( name, value, overwrite ) bind(C, name='setenv') result(ierr)
                 import :: c_char, c_int
-                character(kind=c_char), intent(in) :: name(*), value(*)
-                integer(c_int), intent(in), value   :: overwrite
+                character(kind=c_char), intent(in)        :: name(*), value(*)
+                integer(c_int),         intent(in), value :: overwrite
                 integer(c_int)                      :: ierr
             end function c_setenv
         end interface
@@ -233,8 +233,8 @@ contains
     !> the intrinsic generator's state and the reseed count: a routine that must build a parameters object
     !! (which reseeds) puts them back, so its caller's stream is as if it had not
     subroutine get_rnd_state( seed, ncalls )
-        integer, allocatable, intent(out) :: seed(:)
-        integer,              intent(out) :: ncalls
+        integer,              allocatable, intent(out) :: seed(:)
+        integer,              intent(out)              :: ncalls
         integer :: n
         call random_seed(size=n)
         allocate(seed(n))
@@ -253,7 +253,7 @@ contains
         use iso_fortran_env, only: int64
         integer(int64), intent(in) :: base
         integer, allocatable :: seed(:)
-        integer :: i, n
+        integer              :: i, n
         call random_seed(size=n)
         allocate(seed(n))
         do i = 1, n
@@ -391,8 +391,8 @@ contains
         real, intent(in) :: mean
         ! the smallest normal single (tiny(1.0); simple_defs' TINY shadows the intrinsic here)
         real, parameter :: FLT_MIN = scale(1.0, minexponent(1.0) - 1)
-        real    :: a, b, inv_alpha, kreal, log_mean, product, sqrt_mean, u, us, v, vr
-        integer :: k
+        real            :: a, b, inv_alpha, kreal, log_mean, product, sqrt_mean, u, us, v, vr
+        integer         :: k
         if( mean <= 0.0 )then
             poisson_rnd = 0
         else if( mean < 30.0 )then
@@ -434,8 +434,8 @@ contains
         real,     intent(in) :: pvec(:) !< probabilities
         real,    allocatable :: pvec_sorted(:)
         integer, allocatable :: inds(:)
-        integer :: i, n, which
-        real    :: rnd, bound
+        integer              :: i, n, which
+        real                 :: rnd, bound
         n = size(pvec)
         allocate(pvec_sorted(n), source=pvec)
         inds = (/(i,i=1,n)/)
@@ -452,12 +452,12 @@ contains
     ! using the multinomal sampling idea to be more greedy towards the best probabilistic candidates
     function greedy_sampling_alloc( pvec, nsmpl_ub, nsmpl_lb ) result( which )
         use simple_math, only: hpsort
-        real,              intent(in) :: pvec(:) !< probabilities
-        integer,           intent(in) :: nsmpl_ub
-        integer, optional, intent(in) :: nsmpl_lb
+        real,              intent(in)           :: pvec(:) !< probabilities
+        integer,           intent(in)           :: nsmpl_ub
+        integer,           optional, intent(in) :: nsmpl_lb
         real,    allocatable :: pvec_sorted(:)
         integer, allocatable :: sorted_inds(:)
-        integer :: which, n
+        integer              :: which, n
         n = size(pvec)
         allocate(pvec_sorted(n),sorted_inds(n))
         which = greedy_sampling_prealloc(pvec, pvec_sorted, sorted_inds, nsmpl_ub, nsmpl_lb)
@@ -465,11 +465,11 @@ contains
 
     function greedy_sampling_prealloc( pvec, pvec_sorted, sorted_inds, nsmpl_ub, nsmpl_lb_in ) result( which )
         use simple_math, only: hpsort
-        real,              intent(in)    :: pvec(:)        !< probabilities
-        real,              intent(inout) :: pvec_sorted(:) !< sorted probabilities
-        integer,           intent(inout) :: sorted_inds(:)
-        integer,           intent(in)    :: nsmpl_ub
-        integer, optional, intent(in)    :: nsmpl_lb_in
+        real,              intent(in)           :: pvec(:)        !< probabilities
+        real,              intent(inout)        :: pvec_sorted(:) !< sorted probabilities
+        integer,           intent(inout)        :: sorted_inds(:)
+        integer,           intent(in)           :: nsmpl_ub
+        integer,           optional, intent(in) :: nsmpl_lb_in
         integer :: which, i, nsmpl_lb
         real    :: sum_pvec, rnd
         nsmpl_lb = 1
@@ -638,8 +638,8 @@ contains
     function rnd_inds( num ) result(array)
         integer, intent(in)  :: num
         integer, allocatable :: array(:)
-        integer :: i, j, k, m, n, temp
-        real    :: u
+        integer              :: i, j, k, m, n, temp
+        real                 :: u
         array = [(i,i=1,num)]
         n     = 1
         m     = num
@@ -756,7 +756,7 @@ contains
     pure integer(int64) function rnd_keyed_bits( key ) result( word )
         type(rnd_key), intent(in) :: key
         integer(int64) :: lanes(RND_KEY_NLANES), a, b
-        integer :: i
+        integer        :: i
         lanes = rnd_key_lanes(key)
         a = RND_LANE_A0
         b = RND_LANE_B0
@@ -798,7 +798,7 @@ contains
         integer,       intent(inout) :: arr(:)
         integer,       intent(in)    :: nshuffle
         type(rnd_key) :: k
-        integer :: tmp, irnd, i, n
+        integer       :: tmp, irnd, i, n
         n = size(arr)
         if( nshuffle < 0 .or. nshuffle > n )&
         &THROW_HARD('partial shuffle size must be between zero and the array size; rnd_keyed_partial_shuffle')
@@ -887,9 +887,9 @@ contains
 
     !> the key of one draw within a scope
     pure function rnd_draw_key( scope, particle, family, reference, ordinal ) result( key )
-        type(rnd_key),     intent(in) :: scope
-        integer,           intent(in) :: particle, family
-        integer, optional, intent(in) :: reference, ordinal
+        type(rnd_key),     intent(in)           :: scope
+        integer,           intent(in)           :: particle, family
+        integer,           optional, intent(in) :: reference, ordinal
         type(rnd_key) :: key
         key           = scope
         key%particle  = particle

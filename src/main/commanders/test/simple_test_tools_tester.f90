@@ -44,7 +44,7 @@ contains
     !> worst in the sense of the floor; failure rate over all executions, the missing ones failing
     subroutine test_summarize_metric()
         type(metric_dist) :: d
-        real :: nan
+        real              :: nan
         write(*,'(A)') 'test_summarize_metric'
         d = summarize_metric('err', 'max', [0.5, 0.9, 0.7], [1., 1., 1.], [.true., .false., .true.], 4)
         call assert_real(0.7, d%med, 1.e-6, 'the median of the runs')
@@ -71,8 +71,8 @@ contains
 
     !> gate tables as test_gate writes them, aggregated over executions
     subroutine test_gate_tables()
-        character(len=*), parameter :: F1 = 'tmp_test_tools_1.tsv', F2 = 'tmp_test_tools_2.tsv'
-        character(len=*), parameter :: FMISSING = 'tmp_test_tools_missing.tsv'
+        character(len=*),  parameter   :: F1       = 'tmp_test_tools_1.tsv', F2 = 'tmp_test_tools_2.tsv'
+        character(len=*),  parameter   :: FMISSING = 'tmp_test_tools_missing.tsv'
         type(gate_row),    allocatable :: rows(:)
         type(metric_dist), allocatable :: dists(:)
         write(*,'(A)') 'test_gate_tables'
@@ -146,7 +146,7 @@ contains
     subroutine test_manifest_rules()
         character(len=*), parameter :: M1 = 'tmp_test_tools_m1.txt', M2 = 'tmp_test_tools_m2.txt'
         character(len=*), parameter :: M3 = 'tmp_test_tools_m3.txt'
-        character(len=128) :: line
+        character(len=128)          :: line
         write(*,'(A)') 'test_manifest_rules'
         line = 'run_id solve3D_20261016T203315.654_271529'
         call assert_false(manifest_line_kept(line), 'the run identifier is run-specific')
@@ -171,7 +171,7 @@ contains
     subroutine test_masked_bytes()
         character(len=*), parameter :: B1 = 'tmp_test_tools_b1.bin', B2 = 'tmp_test_tools_b2.bin'
         character(len=*), parameter :: B3 = 'tmp_test_tools_b3.bin'
-        character(len=200) :: bytes
+        character(len=200)          :: bytes
         write(*,'(A)') 'test_masked_bytes'
         bytes = repeat('a', 200)
         call write_bytes(B1, bytes)
@@ -189,9 +189,9 @@ contains
 
     !> the declared patterns select the files; a missing file counts as a difference
     subroutine test_run_dir_identity()
-        character(len=*), parameter :: D1 = 'tmp_test_tools_d1', D2 = 'tmp_test_tools_d2'
+        character(len=*), parameter :: D1     = 'tmp_test_tools_d1', D2 = 'tmp_test_tools_d2'
         character(len=*), parameter :: REPORT = 'tmp_test_tools_report.txt'
-        integer :: nsame, ndiff
+        integer                     :: nsame, ndiff
         write(*,'(A)') 'test_run_dir_identity'
         call simple_mkdir(D1)
         call simple_mkdir(D2)
@@ -216,7 +216,7 @@ contains
     !> one row per CTest entry: unique names, a deadline, a reservation, outputs for the one-thread ones
     subroutine test_registry()
         type(test_entry), allocatable :: entries(:)
-        integer :: i
+        integer                       :: i
         write(*,'(A)') 'test_registry'
         entries = get_test_registry()
         call assert_true(size(entries) > 0, 'the registry has entries')

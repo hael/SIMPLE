@@ -31,7 +31,7 @@ module simple_gui_metadata_stream_pool2D
     real                  :: mskscale                = 0.0
     real                  :: resolution              = 0.0
   contains
-    procedure :: kill => kill_override
+    procedure :: kill    => kill_override
     procedure :: set
     procedure :: set_user_input
     procedure :: get
@@ -44,11 +44,11 @@ contains
   ! count changes.
   subroutine set( self, stage, iteration, particles_imported, particles_accepted, particles_rejected, mskdiam, mskscale, resolution )
     class(gui_metadata_stream_pool2D), intent(inout) :: self
-    type(string), intent(in) :: stage
-    integer,      intent(in) :: iteration
-    integer,      intent(in) :: particles_imported, particles_accepted, particles_rejected
-    integer,      intent(in) :: mskdiam
-    real,         intent(in) :: mskscale, resolution
+    type(string),                      intent(in)    :: stage
+    integer,                           intent(in)    :: iteration
+    integer,                           intent(in)    :: particles_imported, particles_accepted, particles_rejected
+    integer,                           intent(in)    :: mskdiam
+    real,                              intent(in)    :: mskscale, resolution
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned         = .true.
     self%stage              = stage%to_char()
@@ -76,13 +76,13 @@ contains
   ! Returns .true. if the object has been assigned.
   function get( self, stage, iteration, particles_imported, particles_accepted, particles_rejected, last_import_time, user_input, mskdiam, mskscale, resolution ) result( l_assigned )
     class(gui_metadata_stream_pool2D), intent(in)  :: self
-    type(string), intent(out) :: stage
-    integer,      intent(out) :: iteration
-    integer,      intent(out) :: particles_imported, particles_accepted, particles_rejected
-    integer,      intent(out) :: last_import_time
-    logical,      intent(out) :: user_input
-    integer,      intent(out) :: mskdiam
-    real,         intent(out) :: mskscale, resolution
+    type(string),                      intent(out) :: stage
+    integer,                           intent(out) :: iteration
+    integer,                           intent(out) :: particles_imported, particles_accepted, particles_rejected
+    integer,                           intent(out) :: last_import_time
+    logical,                           intent(out) :: user_input
+    integer,                           intent(out) :: mskdiam
+    real,                              intent(out) :: mskscale, resolution
     logical                   :: l_assigned
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned         = self%l_assigned

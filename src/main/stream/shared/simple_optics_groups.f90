@@ -51,16 +51,16 @@ contains
     !! ids the micrographs had ('ogid' > 0) are kept as kept_ids says, and @p group_offset is not
     !! used.
     subroutine assign_optics_groups( spproj, tilt_thres, l_beamtilt, group_offset, last_ogid )
-        class(sp_project), intent(inout) :: spproj
-        real,              intent(in)    :: tilt_thres
-        logical,           intent(in)    :: l_beamtilt
-        integer,           intent(in)    :: group_offset
-        integer, optional, intent(inout) :: last_ogid
+        class(sp_project), intent(inout)           :: spproj
+        real,              intent(in)              :: tilt_thres
+        logical,           intent(in)              :: l_beamtilt
+        integer,           intent(in)              :: group_offset
+        integer,           optional, intent(inout) :: last_ogid
         type(ori)            :: template
         real,    allocatable :: tiltgrps(:), tilts_uniq(:), shiftxs(:), shiftys(:), states(:)
         real,    allocatable :: group_cx(:), group_cy(:)
         integer, allocatable :: tiltind(:), labels(:), prev_ogids(:), group_ids(:), group_pops(:), rows(:), allinds(:)
-        integer :: nmics, ntilt, itilt, ngroups, ngroups_tilt, igroup, imic, iref, irow
+        integer              :: nmics, ntilt, itilt, ngroups, ngroups_tilt, igroup, imic, iref, irow
         nmics = spproj%os_mic%get_noris()
         if( nmics == 0 ) return
         allinds = [(imic, imic=1,nmics)]
@@ -166,9 +166,9 @@ contains
         integer, intent(out)   :: nnew
         integer(kind=8), allocatable :: cx(:), cy(:)
         integer,         allocatable :: parent(:), order(:), cell_first(:), cell_last(:), set_label(:)
-        real    :: h
-        integer :: n, i, k, nb, ncells, dx, dy, iroot
-        logical :: l_cells_linked
+        real                         :: h
+        integer                      :: n, i, k, nb, ncells, dx, dy, iroot
+        logical                      :: l_cells_linked
         n    = size(members)
         nnew = 0
         if( n == 0 ) return
@@ -316,7 +316,7 @@ contains
         integer, intent(inout) :: last_ogid
         integer, allocatable :: ids(:), mics(:), pair_group(:), pair_id(:), pair_count(:), pairs(:)
         logical, allocatable :: id_taken(:)
-        integer :: nmics, npairs, i, ip, igroup
+        integer              :: nmics, npairs, i, ip, igroup
         allocate(ids(ngroups), source=0)
         nmics = size(labels)
         if( nmics > 0 ) last_ogid = max(last_ogid, maxval(prev_ogids))

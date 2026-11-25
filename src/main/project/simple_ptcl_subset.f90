@@ -15,20 +15,20 @@ contains
         use simple_sym,          only: sym, is_valid_pointgroup
         use simple_type_defs,    only: class_sample
         use simple_eo_partition, only: eo_partition_status, EO_COMPLETE, repartition_selected_halves
-        class(sp_project), intent(inout) :: project
-        integer, intent(in) :: nkeep, nspace, state
-        character(len=*), intent(in) :: pgrp, score_key
-        logical, allocatable, intent(out) :: selected(:)
-        integer, intent(out) :: status
-        character(len=*), intent(out) :: message
-        logical, optional, intent(in) :: rebalance_eo
-        class(oris), allocatable :: directions, ranked
-        type(sym) :: symmetry
-        type(ori) :: orientation
+        class(sp_project), intent(inout)            :: project
+        integer,           intent(in)               :: nkeep, nspace, state
+        character(len=*),  intent(in)               :: pgrp, score_key
+        logical,           allocatable, intent(out) :: selected(:)
+        integer,           intent(out)              :: status
+        character(len=*),  intent(out)              :: message
+        logical,           optional, intent(in)     :: rebalance_eo
+        class(oris),        allocatable :: directions, ranked
+        type(sym)                       :: symmetry
+        type(ori)                       :: orientation
         type(class_sample), allocatable :: groups(:)
-        integer, allocatable :: bins(:), flags(:)
-        integer :: np, nstks, particle, stack, bin, half, physical_index, nbins
-        real :: euler(3), score
+        integer,            allocatable :: bins(:), flags(:)
+        integer                         :: np, nstks, particle, stack, bin, half, physical_index, nbins
+        real                            :: euler(3), score
         status = 1
         message = ''
         np = project%os_ptcl3D%get_noris()
@@ -124,13 +124,13 @@ contains
         use simple_syslib,    only: file_exists
         use simple_error,     only: simple_exception
         class(sp_project), intent(inout) :: project
-        logical, intent(in) :: selected(:)
-        class(string), intent(in) :: stkout, oritab
-        type(ori) :: orientation
-        type(ctfparams) :: ctfvars
+        logical,           intent(in)    :: selected(:)
+        class(string),     intent(in)    :: stkout, oritab
+        type(ori)            :: orientation
+        type(ctfparams)      :: ctfvars
         integer, allocatable :: rows(:)
-        integer :: particle, stack, np, box, unit
-        real :: smpd
+        integer              :: particle, stack, np, box, unit
+        real                 :: smpd
         if( size(selected) /= project%os_ptcl3D%get_noris() .or. .not.any(selected) )then
             call simple_exception('invalid particle selection mask', __FILENAME__, __LINE__)
         endif

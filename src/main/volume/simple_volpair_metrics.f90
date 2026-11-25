@@ -24,15 +24,15 @@ contains
     !! soft-masked at mskdiam (A); the band runs from hp (A, default the second
     !! Fourier shell) to lp (A; lp <= 0 means Nyquist)
     subroutine compare_volpair( fname1, fname2, mskdiam, lp, corr, fsc, res, ok, hp )
-        class(string),     intent(in)  :: fname1, fname2
-        real,              intent(in)  :: mskdiam, lp
-        real,              intent(out) :: corr
-        real, allocatable, intent(out) :: fsc(:), res(:)
-        logical,           intent(out) :: ok
-        real, optional,    intent(in)  :: hp
+        class(string),     intent(in)               :: fname1, fname2
+        real,              intent(in)               :: mskdiam, lp
+        real,              intent(out)              :: corr
+        real,              allocatable, intent(out) :: fsc(:), res(:)
+        logical,           intent(out)              :: ok
+        real,              optional,    intent(in)  :: hp
         type(image) :: vol1, vol2
-        real    :: smpd1, smpd2
-        integer :: ldim1(3), ldim2(3), nsections
+        real        :: smpd1, smpd2
+        integer     :: ldim1(3), ldim2(3), nsections
         corr = 0.
         ok   = .false.
         if( .not. file_exists(fname1) .or. .not. file_exists(fname2) ) return

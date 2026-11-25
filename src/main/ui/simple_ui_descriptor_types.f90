@@ -17,7 +17,7 @@ contains
     function ui_choices( values ) result( choices )
         character(len=*), intent(in) :: values(:)
         type(ui_choice), allocatable :: choices(:)
-        integer :: i
+        integer                      :: i
         allocate(choices(size(values)))
         do i = 1, size(values)
             choices(i)%value = trim(values(i))

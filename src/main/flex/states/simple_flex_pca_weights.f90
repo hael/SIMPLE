@@ -36,13 +36,13 @@ contains
         real(dp), allocatable :: pk(:,:,:), cfull(:,:), cblk(:,:), edges(:)
         real(dp), allocatable :: ppath(:), tpath(:)   ! per-particle / per-target coordinate along the path
         integer,  allocatable :: occ(:)
-        real(dp) :: h, d2, u2, best, zspread, bmin, chi2med
-        integer  :: ispace
-        integer  :: i, q, r, state, best_state, grow, nfed, occmax, ifloor, nunassigned, nsupp
-        integer  :: nk, errflg
+        real(dp)              :: h, d2, u2, best, zspread, bmin, chi2med
+        integer               :: ispace
+        integer               :: i, q, r, state, best_state, grow, nfed, occmax, ifloor, nunassigned, nsupp
+        integer               :: nk, errflg
         !> state_placement=equal_occ: at axis=0 the reliability-ordered equal-occupancy path replaces diffusion k-center
         logical, optional,    intent(in)    :: equal_occ
-        logical  :: l_relpath, l_diffuse, l_gmm, l_gmm_auto, l_equal_occ
+        logical           :: l_relpath, l_diffuse, l_gmm, l_gmm_auto, l_equal_occ
         character(len=12) :: bwsrc
         nptcls  = size(latent%z,1)
         ncomp   = size(latent%z,2)
@@ -325,8 +325,8 @@ contains
         integer,              intent(in)  :: nbins
         real(dp),             intent(out) :: bins(nbins,states%nstates)
         real, allocatable :: sorted(:)
-        real(dp) :: b_lo, b_hi, t
-        integer :: state, ib, p95, nptcls
+        real(dp)          :: b_lo, b_hi, t
+        integer           :: state, ib, p95, nptcls
         nptcls = size(states%kdist,1)
         p95    = max(1, min(nptcls, nint(0.95*real(nptcls))))
         allocate(sorted(nptcls))
@@ -359,8 +359,8 @@ contains
         real(dp),             intent(in)    :: bins(:,:), errors(:,:)
         integer,              intent(in)    :: min_neff
         real(dp) :: h_used
-        real :: neff_used
-        integer :: state, ibest, nbins, nptcls
+        real     :: neff_used
+        integer  :: state, ibest, nbins, nptcls
         nbins  = size(bins,1)
         nptcls = size(states%kdist,1)
         write(logfhandle,'(A)') '>>> FLEX_PCA selected bandwidths (per state, argmin cross-halfset error):'

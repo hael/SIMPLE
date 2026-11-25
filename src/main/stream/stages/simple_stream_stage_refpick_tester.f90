@@ -15,10 +15,10 @@ use simple_string_utils,                only: int2str, int2str_pad
 use simple_optics_maps,                 only: publish_optics_map
 implicit none
 
-character(len=*), parameter :: TEST_PROJFILE = 'test_refpick.simple'
-character(len=*), parameter :: UPSTREAM      = 'preproc'               ! the preprocessing stage directory (dir_target)
-character(len=*), parameter :: PICKREFS_IN   = 'refs/selected_refs.mrc' ! the input picking references
-real,             parameter :: SMPD          = 1.3
+character(len=*), parameter :: TEST_PROJFILE                  = 'test_refpick.simple'
+character(len=*), parameter :: UPSTREAM                       = 'preproc'                ! the preprocessing stage directory (dir_target)
+character(len=*), parameter :: PICKREFS_IN                    = 'refs/selected_refs.mrc' ! the input picking references
+real,             parameter :: SMPD                           = 1.3
 integer,          parameter :: ALL_ACCEPTED(STREAM_NMOVS_SET) = 1
 
 contains
@@ -43,9 +43,9 @@ contains
 
     subroutine test_init_params()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)              :: cline
-        type(string)               :: cwd_saved, root, cwd
-        integer                    :: nfail0
+        type(cmdline)                            :: cline
+        type(string)                             :: cwd_saved, root, cwd
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_init_params'
         nfail0 = tests_failed
@@ -70,9 +70,9 @@ contains
     !! projects are in the watcher history
     subroutine test_attach_upstream()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)              :: cline
-        type(string)               :: cwd_saved, root, upstream1
-        integer                    :: nfail0
+        type(cmdline)                            :: cline
+        type(string)                             :: cwd_saved, root, upstream1
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_attach_upstream'
         nfail0 = tests_failed
@@ -100,9 +100,9 @@ contains
     !> the stage waits for the input picking references
     subroutine test_pickrefs_available()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)              :: cline
-        type(string)               :: cwd_saved, root
-        integer                    :: nfail0
+        type(cmdline)                            :: cline
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_pickrefs_available'
         nfail0 = tests_failed
@@ -124,10 +124,10 @@ contains
     !! make_pickrefs is that of the first waiting project with an accepted micrograph
     subroutine test_create_set_project()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)              :: cline
-        type(sp_project)           :: set_proj
-        type(string)               :: cwd_saved, root, upstream1, upstream2, job_dir, val
-        integer                    :: nfail0, nselected
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: set_proj
+        type(string)                             :: cwd_saved, root, upstream1, upstream2, job_dir, val
+        integer                                  :: nfail0, nselected
         allocate(stage)
         write(*,'(A)') 'test_create_set_project'
         nfail0 = tests_failed
@@ -167,10 +167,10 @@ contains
     !! empty one stays
     subroutine test_import_finished_sets()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)              :: cline
-        type(sp_project)           :: set_proj, done_proj
-        type(string)               :: cwd_saved, root, job_dir, completed_dir, done(2)
-        integer                    :: nfail0, n_imported
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: set_proj, done_proj
+        type(string)                             :: cwd_saved, root, job_dir, completed_dir, done(2)
+        integer                                  :: nfail0, n_imported
         allocate(stage)
         write(*,'(A)') 'test_import_finished_sets'
         nfail0 = tests_failed
@@ -208,12 +208,12 @@ contains
     !! particle ranges renumbered and each particle pointing at its stack
     subroutine test_write_project()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)              :: cline
-        type(sp_project)           :: set_proj, written
-        type(string)               :: cwd_saved, root, sets(2)
-        integer, parameter         :: STKINDS(9) = [1,1,1,2,2,3,3,3,3]
-        integer                    :: nfail0, n_imported, iptcl
-        logical                    :: l_ok
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: set_proj, written
+        type(string)                             :: cwd_saved, root, sets(2)
+        integer,                     parameter   :: STKINDS(9) = [1,1,1,2,2,3,3,3,3]
+        integer                                  :: nfail0, n_imported, iptcl
+        logical                                  :: l_ok
         allocate(stage)
         write(*,'(A)') 'test_write_project'
         nfail0 = tests_failed
@@ -263,10 +263,10 @@ contains
     !! groups by import index, in the STAR file and in the project
     subroutine test_optics_map_applied()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)              :: cline
-        type(sp_project)           :: set_proj, written
-        type(string)               :: cwd_saved, root, sets(1)
-        integer                    :: nfail0, n_imported
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: set_proj, written
+        type(string)                             :: cwd_saved, root, sets(1)
+        integer                                  :: nfail0, n_imported
         allocate(stage)
         write(*,'(A)') 'test_optics_map_applied'
         nfail0 = tests_failed
@@ -311,10 +311,10 @@ contains
     !> before optics assignment has published a map, every micrograph is in one optics group
     subroutine test_without_optics_map()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)              :: cline
-        type(sp_project)           :: set_proj
-        type(string)               :: cwd_saved, root, sets(1)
-        integer                    :: nfail0, n_imported, imic
+        type(cmdline)                            :: cline
+        type(sp_project)                         :: set_proj
+        type(string)                             :: cwd_saved, root, sets(1)
+        integer                                  :: nfail0, n_imported, imic
         allocate(stage)
         write(*,'(A)') 'test_without_optics_map'
         nfail0 = tests_failed
@@ -343,9 +343,9 @@ contains
     !! picked again, and the numbering continues past it (a job left running keeps its number)
     subroutine test_restart_history()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)              :: cline
-        type(string)               :: cwd_saved, root, upstream1, upstream2, job_dir, done
-        integer                    :: nfail0, nselected
+        type(cmdline)                            :: cline
+        type(string)                             :: cwd_saved, root, upstream1, upstream2, job_dir, done
+        integer                                  :: nfail0, nselected
         allocate(stage)
         write(*,'(A)') 'test_restart_history'
         nfail0 = tests_failed
@@ -375,9 +375,9 @@ contains
     !> a restart with clear=yes discards the completed sets and starts the numbering again
     subroutine test_restart_clear()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)              :: cline
-        type(string)               :: cwd_saved, root, upstream1, job_dir, completed_dir, done
-        integer                    :: nfail0, nselected
+        type(cmdline)                            :: cline
+        type(string)                             :: cwd_saved, root, upstream1, job_dir, completed_dir, done
+        integer                                  :: nfail0, nselected
         allocate(stage)
         write(*,'(A)') 'test_restart_clear'
         nfail0 = tests_failed
@@ -403,14 +403,14 @@ contains
 
     subroutine test_send_status()
         class(stream_stage_refpick), allocatable        :: stage
-        type(cmdline)                     :: cline
-        type(stream_pipe)                 :: reader
-        type(gui_metadata_stream_picking) :: picking
-        character(len=:), allocatable     :: buffer
-        type(string)                      :: cwd_saved, root, stage_name
-        integer(c_int)                    :: fds(2)
-        integer                           :: nfail0, nimported, naccepted, nrejected, nptcls, nppm, tlast, box, meta_type
-        logical                           :: l_assigned
+        type(cmdline)                                   :: cline
+        type(stream_pipe)                               :: reader
+        type(gui_metadata_stream_picking)               :: picking
+        character(len=:),            allocatable        :: buffer
+        type(string)                                    :: cwd_saved, root, stage_name
+        integer(c_int)                                  :: fds(2)
+        integer                                         :: nfail0, nimported, naccepted, nrejected, nptcls, nppm, tlast, box, meta_type
+        logical                                         :: l_assigned
         allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
@@ -450,9 +450,9 @@ contains
     !! nothing meanwhile
     subroutine test_iterate_waits()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)              :: cline
-        type(string)               :: cwd_saved, root, upstream1
-        integer                    :: nfail0
+        type(cmdline)                            :: cline
+        type(string)                             :: cwd_saved, root, upstream1
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_iterate_waits'
         nfail0 = tests_failed
@@ -476,9 +476,9 @@ contains
 
     subroutine test_finished()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)              :: cline
-        type(string)               :: cwd_saved, root
-        integer                    :: nfail0
+        type(cmdline)                            :: cline
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
@@ -517,7 +517,7 @@ contains
     ! in the same second
     subroutine make_test_stage( stage, cline )
         class(stream_stage_refpick), intent(inout) :: stage
-        type(cmdline),              intent(inout) :: cline
+        type(cmdline),               intent(inout) :: cline
         call stage%init_params(cline)
         call stage%init_job_dirs()
         call stage%build_worker_cline(cline)
@@ -532,9 +532,9 @@ contains
     !! check before the marker is written needs a queue and is left to the stream tests)
     subroutine test_idle_marker_follows_upstream()
         class(stream_stage_refpick), allocatable :: stage
-        type(cmdline)             :: cline
-        type(string)              :: cwd_saved, root
-        integer                   :: nfail0
+        type(cmdline)                            :: cline
+        type(string)                             :: cwd_saved, root
+        integer                                  :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_idle_marker_follows_upstream'
         nfail0 = tests_failed
@@ -597,10 +597,10 @@ contains
     ! @p nptcls_mic, the particles tagged (dfx) tag_offset+1, +2, ..., and one output entry;
     ! with @p l_importind the micrographs have import indices 1, 2, ... and CTF constants
     subroutine make_extracted_set( proj, nptcls_mic, tag_offset, l_importind )
-        type(sp_project),  intent(inout) :: proj
-        integer,           intent(in)    :: nptcls_mic(:)
-        real,              intent(in)    :: tag_offset
-        logical, optional, intent(in)    :: l_importind
+        type(sp_project),  intent(inout)        :: proj
+        integer,           intent(in)           :: nptcls_mic(:)
+        real,              intent(in)           :: tag_offset
+        logical,           optional, intent(in) :: l_importind
         integer :: nmics, imic, iptcl, fromp
         nmics = size(nptcls_mic)
         call proj%os_mic%new(nmics, is_ptcl=.false.)
@@ -636,8 +636,8 @@ contains
     subroutine publish_test_optics_map( dir )
         class(string), intent(in) :: dir
         integer, parameter :: OGIDS(3) = [1, 2, 2]
-        type(sp_project) :: proj
-        integer          :: imic, igroup
+        type(sp_project)   :: proj
+        integer            :: imic, igroup
         call proj%os_mic%new(3, is_ptcl=.false.)
         do imic = 1,3
             call proj%os_mic%set(imic, 'importind', imic)

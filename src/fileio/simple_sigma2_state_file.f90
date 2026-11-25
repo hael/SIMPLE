@@ -22,61 +22,61 @@ public :: SIGMA2_STATE_FNAME, SIGMA2_STATE_NEXT_FNAME
 public :: SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL
 public :: SIGMA2_STATE_CANDIDATE, SIGMA2_STATE_COMMITTED
 
-character(len=*), parameter :: SIGMA2_STATE_FNAME      = 'sigma2_state.bin'
-character(len=*), parameter :: SIGMA2_STATE_NEXT_FNAME = 'sigma2_state.next'
-character(len=16), parameter :: STATE_MAGIC = 'SIMPLE_SIGMA2_V2'
-character(len=16), parameter :: RANGE_MAGIC = 'SIMPLE_S2_RANGE2'
+character(len=*),  parameter :: SIGMA2_STATE_FNAME      = 'sigma2_state.bin'
+character(len=*),  parameter :: SIGMA2_STATE_NEXT_FNAME = 'sigma2_state.next'
+character(len=16), parameter :: STATE_MAGIC             = 'SIMPLE_SIGMA2_V2'
+character(len=16), parameter :: RANGE_MAGIC             = 'SIMPLE_S2_RANGE2'
 
 ! version 2 (release 4): no reserved particle-integrity section; version 1 files are refused.
 ! One global spectrum per even/odd half: the grouping word is the global policy (1) with one group,
 ! and the range-mode word is the local mode (1); the retired stack policy (2), STAR-seed
 ! provenance (3) and direct range mode (2) are refused.
-integer(int32), parameter :: SIGMA2_STATE_VERSION = 2_int32
-integer(int32), parameter :: SIGMA2_GROUP_GLOBAL  = 1_int32
-integer(int32), parameter :: SIGMA2_PROV_PSPEC     = 1_int32
-integer(int32), parameter :: SIGMA2_PROV_RESIDUAL  = 2_int32
-integer(int32), parameter :: SIGMA2_RANGE_LOCAL  = 1_int32
+integer(int32), parameter :: SIGMA2_STATE_VERSION   = 2_int32
+integer(int32), parameter :: SIGMA2_GROUP_GLOBAL    = 1_int32
+integer(int32), parameter :: SIGMA2_PROV_PSPEC      = 1_int32
+integer(int32), parameter :: SIGMA2_PROV_RESIDUAL   = 2_int32
+integer(int32), parameter :: SIGMA2_RANGE_LOCAL     = 1_int32
 integer(int32), parameter :: SIGMA2_STATE_CANDIDATE = 1_int32
 integer(int32), parameter :: SIGMA2_STATE_COMMITTED = 2_int32
 
 integer(int64), parameter :: STATE_HEADER_BYTES = 512_int64
 integer(int64), parameter :: RANGE_HEADER_BYTES = 256_int64
-integer, parameter :: STATE_NWORDS = 32
-integer, parameter :: RANGE_NWORDS = 16
-integer(int64), parameter :: FNV_OFFSET = int(z'CBF29CE484222325', int64)
-integer(int64), parameter :: FNV_PRIME  = int(z'00000100000001B3', int64)
+integer,        parameter :: STATE_NWORDS       = 32
+integer,        parameter :: RANGE_NWORDS       = 16
+integer(int64), parameter :: FNV_OFFSET         = int(z'CBF29CE484222325', int64)
+integer(int64), parameter :: FNV_PRIME          = int(z'00000100000001B3', int64)
 
-integer, parameter :: W_VERSION=1, W_HEADER_BYTES=2, W_REAL_BYTES=3, W_KFROM=4, W_KTO=5
-integer, parameter :: W_NPTCLS=6, W_BOX=7, W_NGROUPS=8, W_GROUPING=9, W_GENERATION=10
-integer, parameter :: W_PROVENANCE=11, W_STATE=12, W_RANGE_IO=13, W_LAYOUT_DIGEST=14
-integer, parameter :: W_GLOBAL_OFFSET=15, W_PARTICLE_OFFSET=16, W_FILE_BYTES=17
+integer, parameter :: W_VERSION       = 1, W_HEADER_BYTES=2, W_REAL_BYTES=3, W_KFROM=4, W_KTO=5
+integer, parameter :: W_NPTCLS        = 6, W_BOX=7, W_NGROUPS=8, W_GROUPING=9, W_GENERATION=10
+integer, parameter :: W_PROVENANCE    = 11, W_STATE=12, W_RANGE_IO=13, W_LAYOUT_DIGEST=14
+integer, parameter :: W_GLOBAL_OFFSET = 15, W_PARTICLE_OFFSET=16, W_FILE_BYTES=17
 ! The retired checksum words (18 and 32) stay in the version-two layout: zero in new files,
 ! ignored on read.
 integer, parameter :: W_RETIRED_CHECKSUM=18, W_SMPD_BITS=19, W_RETIRED_HEADER_CHECKSUM=32
 
-integer, parameter :: RW_VERSION=1, RW_HEADER_BYTES=2, RW_REAL_BYTES=3, RW_KFROM=4, RW_KTO=5
-integer, parameter :: RW_FIRST=6, RW_LAST=7, RW_GENERATION=8, RW_LAYOUT_DIGEST=9
-integer, parameter :: RW_DATA_OFFSET=10, RW_FILE_BYTES=11
-integer, parameter :: RW_RETIRED_CHECKSUM=16 !< zero in new range files, ignored on read
+integer, parameter :: RW_VERSION          = 1, RW_HEADER_BYTES=2, RW_REAL_BYTES=3, RW_KFROM=4, RW_KTO=5
+integer, parameter :: RW_FIRST            = 6, RW_LAST=7, RW_GENERATION=8, RW_LAYOUT_DIGEST=9
+integer, parameter :: RW_DATA_OFFSET      = 10, RW_FILE_BYTES=11
+integer, parameter :: RW_RETIRED_CHECKSUM = 16 !< zero in new range files, ignored on read
 
 type :: sigma2_state_header
-    integer(int32) :: version       = SIGMA2_STATE_VERSION
-    integer(int32) :: real_bytes    = 0_int32
-    integer(int32) :: kfrom         = 0_int32
-    integer(int32) :: kto           = -1_int32
-    integer(int32) :: nptcls        = 0_int32
-    integer(int32) :: box           = 0_int32
-    integer(int32) :: ngroups       = 0_int32
-    integer(int32) :: grouping      = 0_int32
-    integer(int32) :: provenance    = 0_int32
-    integer(int32) :: state         = SIGMA2_STATE_CANDIDATE
-    integer(int32) :: range_io      = SIGMA2_RANGE_LOCAL
-    integer(int64) :: generation    = 0_int64
-    integer(int64) :: layout_digest = 0_int64
-    integer(int64) :: global_offset   = 0_int64
+    integer(int32) :: version          = SIGMA2_STATE_VERSION
+    integer(int32) :: real_bytes       = 0_int32
+    integer(int32) :: kfrom            = 0_int32
+    integer(int32) :: kto              = -1_int32
+    integer(int32) :: nptcls           = 0_int32
+    integer(int32) :: box              = 0_int32
+    integer(int32) :: ngroups          = 0_int32
+    integer(int32) :: grouping         = 0_int32
+    integer(int32) :: provenance       = 0_int32
+    integer(int32) :: state            = SIGMA2_STATE_CANDIDATE
+    integer(int32) :: range_io         = SIGMA2_RANGE_LOCAL
+    integer(int64) :: generation       = 0_int64
+    integer(int64) :: layout_digest    = 0_int64
+    integer(int64) :: global_offset    = 0_int64
     integer(int64) :: particle_offset  = 0_int64
     integer(int64) :: file_bytes       = 0_int64
-    real(real64)   :: smpd = 0.0_real64
+    real(real64)   :: smpd             = 0.0_real64
 end type sigma2_state_header
 
 contains
@@ -121,8 +121,8 @@ contains
         integer,                   intent(out) :: status
         character(len=*),          intent(out) :: message
         character(len=16) :: magic
-        integer(int64) :: words(STATE_NWORDS)
-        integer :: funit, io_stat
+        integer(int64)    :: words(STATE_NWORDS)
+        integer           :: funit, io_stat
         header = sigma2_state_header()
         status = 0
         message = ''
@@ -273,7 +273,7 @@ contains
         integer,                   intent(out)   :: status
         character(len=*),          intent(out)   :: message
         integer(int8) :: zero
-        integer :: io_stat
+        integer       :: io_stat
         status  = 0
         message = ''
         funit   = -1
@@ -307,7 +307,7 @@ contains
         integer,                   intent(out) :: status
         character(len=*),          intent(out) :: message
         integer(int64) :: data_pos
-        integer :: nshell
+        integer        :: nshell
         status  = 0
         message = ''
         nshell = int(header%kto-header%kfrom+1)
@@ -358,13 +358,13 @@ contains
     end subroutine write_header_unit
 
     subroutine sigma2_state_write_particles(path, first_row, spectra, status, message)
-        character(len=*), intent(in) :: path
-        integer,          intent(in) :: first_row
-        real(real32),     intent(in) :: spectra(:,:)
+        character(len=*), intent(in)  :: path
+        integer,          intent(in)  :: first_row
+        real(real32),     intent(in)  :: spectra(:,:)
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
-        integer :: funit, io_stat
+        integer                   :: funit, io_stat
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
         if( header%state /= SIGMA2_STATE_CANDIDATE )then
@@ -386,11 +386,11 @@ contains
 
     !> the records of rows first_row:last_row, into an array the reader allocates (shells, rows)
     subroutine sigma2_state_read_particles(path, first_row, last_row, spectra, status, message)
-        character(len=*), intent(in) :: path
-        integer,          intent(in) :: first_row, last_row
-        real(real32), allocatable, intent(out) :: spectra(:,:)
-        integer,          intent(out) :: status
-        character(len=*), intent(out) :: message
+        character(len=*), intent(in)               :: path
+        integer,          intent(in)               :: first_row, last_row
+        real(real32),     allocatable, intent(out) :: spectra(:,:)
+        integer,          intent(out)              :: status
+        character(len=*), intent(out)              :: message
         type(sigma2_state_header) :: header
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
@@ -410,7 +410,7 @@ contains
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
-        integer :: funit
+        integer                   :: funit
         call sigma2_state_open_store(path, header, funit, status, message)
         if( status /= 0 ) return
         call sigma2_state_read_particles_unit(funit, header, first_row, spectra, status, message)
@@ -446,7 +446,7 @@ contains
         integer,                   intent(out) :: status
         character(len=*),          intent(out) :: message
         integer(int64) :: data_pos
-        integer :: nrows, nshell, last_row
+        integer        :: nrows, nshell, last_row
         nshell   = int(header%kto-header%kfrom+1)
         nrows    = size(spectra,2)
         last_row = first_row + nrows - 1
@@ -465,12 +465,12 @@ contains
     end subroutine sigma2_state_read_particles_unit
 
     subroutine sigma2_state_write_global(path, spectra, status, message)
-        character(len=*), intent(in) :: path
-        real(real32),     intent(in) :: spectra(:,:) !< (shells, half): even, odd
+        character(len=*), intent(in)  :: path
+        real(real32),     intent(in)  :: spectra(:,:) !< (shells, half): even, odd
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
-        integer :: funit, io_stat, nshell
+        integer                   :: funit, io_stat, nshell
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
         if( header%state /= SIGMA2_STATE_CANDIDATE )then
@@ -497,12 +497,12 @@ contains
     end subroutine sigma2_state_write_global
 
     subroutine sigma2_state_read_global(path, spectra, status, message)
-        character(len=*), intent(in) :: path
-        real(real32), allocatable, intent(out) :: spectra(:,:) !< (shells, half): even, odd
-        integer,          intent(out) :: status
-        character(len=*), intent(out) :: message
+        character(len=*), intent(in)               :: path
+        real(real32),     allocatable, intent(out) :: spectra(:,:) !< (shells, half): even, odd
+        integer,          intent(out)              :: status
+        character(len=*), intent(out)              :: message
         type(sigma2_state_header) :: header
-        integer :: funit, io_stat, nshell
+        integer                   :: funit, io_stat, nshell
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
         nshell = int(header%kto-header%kfrom+1)
@@ -522,11 +522,11 @@ contains
     end subroutine sigma2_state_read_global
 
     subroutine sigma2_state_validate_file(path, status, message)
-        character(len=*), intent(in) :: path
+        character(len=*), intent(in)  :: path
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
-        integer(int64) :: file_bytes
+        integer(int64)            :: file_bytes
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
         inquire(file=trim(path), size=file_bytes, iostat=status)
@@ -539,12 +539,12 @@ contains
     end subroutine sigma2_state_validate_file
 
     subroutine sigma2_state_publish(candidate_path, committed_path, status, message)
-        character(len=*), intent(in) :: candidate_path, committed_path
+        character(len=*), intent(in)  :: candidate_path, committed_path
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
-        type(string) :: parent
-        integer :: funit, io_stat
+        type(string)              :: parent
+        integer                   :: funit, io_stat
         call sigma2_state_validate_file(candidate_path, status, message)
         if( status /= 0 ) return
         call sigma2_state_read_header(candidate_path, header, status, message)
@@ -581,14 +581,14 @@ contains
 
     subroutine sigma2_state_write_local_range(path, generation, layout_digest, first_row, spectra, &
         &kfrom, kto, status, message)
-        character(len=*), intent(in) :: path
-        integer(int64),   intent(in) :: generation, layout_digest
-        integer,          intent(in) :: first_row, kfrom, kto
-        real(real32),     intent(in) :: spectra(:,:)
+        character(len=*), intent(in)  :: path
+        integer(int64),   intent(in)  :: generation, layout_digest
+        integer,          intent(in)  :: first_row, kfrom, kto
+        real(real32),     intent(in)  :: spectra(:,:)
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         integer(int64) :: words(RANGE_NWORDS), data_offset, file_bytes
-        integer :: funit, io_stat, last_row
+        integer        :: funit, io_stat, last_row
         status = 0
         message = ''
         last_row = first_row + size(spectra,2) - 1
@@ -634,12 +634,12 @@ contains
 
     subroutine sigma2_state_read_local_range(path, generation, layout_digest, first_row, last_row, &
         &kfrom, kto, spectra, status, message)
-        character(len=*), intent(in) :: path
-        integer(int64),   intent(out) :: generation, layout_digest
-        integer,          intent(out) :: first_row, last_row, kfrom, kto
-        real(real32), allocatable, intent(out) :: spectra(:,:)
-        integer,          intent(out) :: status
-        character(len=*), intent(out) :: message
+        character(len=*), intent(in)               :: path
+        integer(int64),   intent(out)              :: generation, layout_digest
+        integer,          intent(out)              :: first_row, last_row, kfrom, kto
+        real(real32),     allocatable, intent(out) :: spectra(:,:)
+        integer,          intent(out)              :: status
+        character(len=*), intent(out)              :: message
         integer :: funit
         call sigma2_state_open_local_range(path, funit, generation, layout_digest, first_row, last_row, &
             &kfrom, kto, status, message)
@@ -660,9 +660,9 @@ contains
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         character(len=16) :: magic
-        integer(int64) :: words(RANGE_NWORDS), actual_bytes
-        integer(int64) :: expected_file_bytes
-        integer :: io_stat, nshell, nrows
+        integer(int64)    :: words(RANGE_NWORDS), actual_bytes
+        integer(int64)    :: expected_file_bytes
+        integer           :: io_stat, nshell, nrows
         status = 0
         message = ''
         funit = -1
@@ -766,8 +766,8 @@ contains
     integer(int64) function sigma2_state_artifact_signature( fname ) result( signature )
         class(string), intent(in) :: fname
         type(sigma2_state_header) :: header
-        character(len=256) :: message
-        integer :: status
+        character(len=256)        :: message
+        integer                   :: status
         signature = 0_int64
         call sigma2_state_validate_file(fname%to_char(), status, message)
         if( status /= 0 ) return
@@ -779,11 +779,11 @@ contains
     !> FNV-1a 64 over the bytes of a file (8-byte words, then the tail), 0 when unreadable
     integer(int64) function sigma2_state_digest_file( fname ) result( digest )
         class(string), intent(in) :: fname
-        integer, parameter :: CHUNK = 65536
+        integer,        parameter   :: CHUNK = 65536
         integer(int64), allocatable :: words(:)
-        integer(int64) :: fsize, pos, nwords, i
-        integer(int8)  :: tail(8)
-        integer :: funit, io_stat, ntail, j
+        integer(int64)              :: fsize, pos, nwords, i
+        integer(int8)               :: tail(8)
+        integer                     :: funit, io_stat, ntail, j
         digest = 0_int64
         if( .not. file_exists(fname) ) return
         inquire(file=fname%to_char(), size=fsize)

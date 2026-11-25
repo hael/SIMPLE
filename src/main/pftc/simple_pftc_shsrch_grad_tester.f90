@@ -5,10 +5,10 @@ implicit none
 contains
 
     module subroutine shsrch_lm_terms( srch, vec, f, grad, curv, irot )
-        class(pftc_shsrch_grad), intent(inout) :: srch
-        real(dp),                intent(inout) :: vec(:)
-        real(dp),                intent(out)   :: f, grad(:), curv(:,:)
-        integer, optional,       intent(in)    :: irot
+        class(pftc_shsrch_grad), intent(inout)              :: srch
+        real(dp),                intent(inout)              :: vec(:)
+        real(dp),                intent(out)                :: f, grad(:), curv(:,:)
+        integer,                 optional,       intent(in) :: irot
         if( srch%search_mode == SHSRCH_SHIFT )then
             if( present(irot) ) srch%cur_inpl_idx = irot
             call srch%b_ptr%pftc%load_ref_aln_8(srch%reference, srch%particle)

@@ -65,9 +65,9 @@ end interface get_fbody
 contains
 
     subroutine fileiochk( message, iostat , die )
-        character(len=*),  intent(in) :: message  !< error message
-        integer,           intent(in) :: iostat   !< error status
-        logical, optional, intent(in) :: die      !< do you want to terminate or not
+        character(len=*),  intent(in)           :: message !< error message
+        integer,           intent(in)           :: iostat  !< error status
+        logical,           optional, intent(in) :: die     !< do you want to terminate or not
         logical :: die_this
         if( iostat == 0 ) return
         die_this=.true.
@@ -84,15 +84,15 @@ contains
 
     subroutine fopen(funit, file, status, action, iostat, access, form, recl, async, pad,&
         &decimal, round, delim, blank, convert, iomsg, position, errmsg)
-        integer,                    intent(inout) :: funit
-        class(string),              intent(in)    :: file
-        integer,          optional, intent(inout) :: iostat
-        integer,          optional, intent(inout) :: recl
+        integer,                    intent(inout)           :: funit
+        class(string),              intent(in)              :: file
+        integer,                    optional, intent(inout) :: iostat
+        integer,                    optional, intent(inout) :: recl
         character(len=*), optional, intent(in)    :: status, access, async, action, &
             &blank, pad, form, decimal, round, delim, convert, iomsg, position, errmsg
-        integer               :: iostat_this,  recl_this
-        character(len=STDLEN) :: iomsg_this
-        character(len=XLONGSTRLEN) :: filename_static
+        integer                           :: iostat_this,  recl_this
+        character(len=STDLEN)             :: iomsg_this
+        character(len=XLONGSTRLEN)        :: filename_static
         character(len=XLONGSTRLEN+STDLEN) :: message_this
         character(len=30)     :: async_this, access_this, action_this, status_this,&
             &blank_this, pad_this, decimal_this, delim_this, form_this, round_this,&
@@ -305,7 +305,7 @@ contains
 
     function nlines( fname ) result( n )
         class(string), intent(in) :: fname !< input filename
-        integer          :: n, funit, ios, io_status
+        integer               :: n, funit, ios, io_status
         character(len=STDLEN) :: line
         if( file_exists(fname) )then
             call fopen(funit, fname, status='unknown', action='read', iostat=io_status)
@@ -358,7 +358,7 @@ contains
     function fname_size( fname ) result( sz )
         class(string), intent(in) :: fname
         integer(kind=8) :: sz
-        integer :: ios
+        integer         :: ios
         sz = -1
         if( .not. file_exists(fname) ) return
         inquire(file=fname%to_char(), size=sz, iostat=ios)
@@ -377,9 +377,9 @@ contains
         integer, intent ( out ) :: nbunits
         integer, allocatable    :: units(:)
         integer, parameter      :: MAX_UNIT_NUMBER = 1000
-        integer :: iunit
-        logical :: lopen
-        integer :: step
+        integer                 :: iunit
+        logical                 :: lopen
+        integer                 :: step
         ! Loop over the steps.
         ! Step #1 : count the number of opened units
         ! Step #2 : store the number of opened units
@@ -405,10 +405,10 @@ contains
 
     function add2fbody_str( fname, suffix, str ) result( newname )
         class(*),      intent(in)  :: fname
-        class(string), intent(in) ::suffix, str
+        class(string), intent(in)  :: suffix, str
         character(len=:), allocatable :: fname_tmp
-        type(string) :: newname
-        integer :: pos
+        type(string)                  :: newname
+        integer                       :: pos
         fname_tmp = cast_str_types(fname) 
         pos = index(fname_tmp, suffix%to_char()) ! position of suffix
         newname = fname_tmp(:pos-1)//str%to_char()//suffix%to_char()
@@ -419,8 +419,8 @@ contains
         class(*),         intent(in)  :: fname
         character(len=*), intent(in)  :: suffix, str
         character(len=:), allocatable :: fname_tmp
-        type(string) :: newname
-        integer :: pos
+        type(string)                  :: newname
+        integer                       :: pos
         fname_tmp = cast_str_types(fname) 
         pos = index(fname_tmp, trim(suffix)) ! position of suffix
         newname = fname_tmp(:pos-1)//trim(str)//trim(suffix)
@@ -432,8 +432,8 @@ contains
         class(string),    intent(in)  :: suffix
         character(len=*), intent(in)  :: str
         character(len=:), allocatable :: fname_tmp
-        type(string) :: newname
-        integer :: pos
+        type(string)                  :: newname
+        integer                       :: pos
         fname_tmp  = cast_str_types(fname)
         pos = index(fname_tmp, suffix%to_char()) ! position of suffix
         newname = fname_tmp(:pos-1)//trim(str)//suffix%to_char()
@@ -452,7 +452,7 @@ contains
 
     function append2basename_char( fname, suffix ) result( newname )
         class(string),    intent(in) :: fname
-        character(len=*), intent(in) :: suffix 
+        character(len=*), intent(in) :: suffix
         type(string) :: bname, newname, ext
         bname   = basename(fname)
         ext     = fname2ext(bname)
@@ -462,11 +462,11 @@ contains
     end function append2basename_char
 
     function rm_from_fbody( fname, suffix, str ) result( newname )
-        class(*),      intent(in)  :: fname 
-        class(string), intent(in)  :: suffix, str 
+        class(*),      intent(in)  :: fname
+        class(string), intent(in)  :: suffix, str
         character(len=:), allocatable :: fname_tmp
-        type(string) :: newname
-        integer :: pos
+        type(string)                  :: newname
+        integer                       :: pos
         fname_tmp = cast_str_types(fname)
         pos       = index(fname_tmp, str%to_char()) ! position of str
         newname   = fname_tmp(:pos-1)//suffix%to_char()
@@ -477,8 +477,8 @@ contains
         class(*),      intent(in)  :: fname
         class(string), intent(in)  :: suffix, old_suffix
         character(len=:), allocatable :: fname_tmp
-        type(string) :: newname
-        integer :: pos
+        type(string)                  :: newname
+        integer                       :: pos
         fname_tmp = cast_str_types(fname)
         pos = index(fname_tmp, old_suffix%to_char()) ! position of old_suffix
         newname = fname_tmp(:pos-1)//suffix%to_char()
@@ -489,8 +489,8 @@ contains
         class(*),         intent(in)  :: fname
         character(len=*), intent(in)  :: suffix, old_suffix
         character(len=:), allocatable :: fname_tmp
-        type(string) :: newname
-        integer :: pos
+        type(string)                  :: newname
+        integer                       :: pos
         fname_tmp = cast_str_types(fname)
         pos = index(fname_tmp, trim(adjustl(old_suffix))) ! position of old_suffix
         newname = fname_tmp(:pos-1)//trim(adjustl(suffix))
@@ -498,13 +498,13 @@ contains
     end function swap_suffix_char
 
     function get_fbody_str( fname, suffix, separator ) result( fbody )
-        class(*),          intent(in) :: fname
-        class(string),     intent(in) :: suffix
-        logical, optional, intent(in) :: separator
+        class(*),          intent(in)           :: fname
+        class(string),     intent(in)           :: suffix
+        logical,           optional, intent(in) :: separator
         character(len=:), allocatable :: fname_tmp
-        type(string) :: fbody
-        integer      :: pos
-        logical      :: l_separator
+        type(string)                  :: fbody
+        integer                       :: pos
+        logical                       :: l_separator
         l_separator = .true.
         if(present(separator))l_separator = separator
         fname_tmp = cast_str_types(fname)
@@ -518,13 +518,13 @@ contains
     end function get_fbody_str
 
     function get_fbody_char( fname, suffix, separator ) result( fbody )
-        class(*),          intent(in) :: fname
-        character(len=*),  intent(in) :: suffix
-        logical, optional, intent(in) :: separator
+        class(*),          intent(in)           :: fname
+        character(len=*),  intent(in)           :: suffix
+        logical,           optional, intent(in) :: separator
         character(len=:), allocatable :: fname_tmp
-        type(string) :: fbody
-        integer      :: pos
-        logical      :: l_separator
+        type(string)                  :: fbody
+        integer                       :: pos
+        logical                       :: l_separator
         l_separator = .true.
         if(present(separator))l_separator = separator
         fname_tmp = cast_str_types(fname)
@@ -557,8 +557,8 @@ contains
     function fname2ext( fname ) result( ext )
         class(string),    intent(in)  :: fname
         character(len=:), allocatable :: fname_tmp
-        type(string) :: ext
-        integer      :: length, pos
+        type(string)                  :: ext
+        integer                       :: length, pos
         length    = fname%strlen_trim()
         fname_tmp = fname%to_char()
         pos = scan(fname_tmp(1:length),'.',back=.true.)
@@ -574,9 +574,9 @@ contains
     !! dots in the directory part are left as they are
     function strip_fext( fname ) result( body )
         class(string), intent(in) :: fname
-        type(string) :: body
+        type(string)                  :: body
         character(len=:), allocatable :: txt
-        integer :: pos
+        integer                       :: pos
         txt = fname%to_char()
         pos = index(txt, '.', back=.true.)
         if( pos > 1 .and. pos > index(txt, '/', back=.true.) + 1 )then
@@ -590,7 +590,7 @@ contains
         class(string),    intent(in)  :: fname
         character(len=:), allocatable :: iter_num_ext, nrstr, fname_tmp
         logical,          allocatable :: lnrs(:)
-        integer :: ind, i
+        integer                       :: ind, i
         fname_tmp = fname%to_char()
         ind = index(fname_tmp, 'iter')
         if(ind == 0)then
@@ -611,8 +611,8 @@ contains
     function basename( fname ) result( new_fname)
         class(string),    intent(in)  :: fname
         character(len=:), allocatable :: fname_tmp
-        type(string) :: new_fname
-        integer      :: length, pos
+        type(string)                  :: new_fname
+        integer                       :: length, pos
         length    = fname%strlen_trim()
         fname_tmp = fname%to_char()
         pos = scan(fname_tmp(1:length),'/\',back=.true.)
@@ -638,8 +638,8 @@ contains
     function stemname( fname ) result( new_fname)
         class(string),    intent(in)  :: fname
         character(len=:), allocatable :: fname_tmp
-        type(string) :: new_fname
-        integer :: length, pos
+        type(string)                  :: new_fname
+        integer                       :: length, pos
         length    = fname%strlen_trim()
         fname_tmp = fname%to_char()
         pos       = scan(fname_tmp(1:length),'/\',back=.true.)
@@ -657,8 +657,8 @@ contains
     function get_fpath( fname ) result( path )
         class(string),    intent(in)  :: fname
         character(len=:), allocatable :: fname_tmp
-        type(string) :: path
-        integer      :: pos
+        type(string)                  :: path
+        integer                       :: pos
         fname_tmp = fname%to_char()
         pos       = scan(fname_tmp,'/\',back=.true.)
         if( pos == 0 )then
@@ -671,11 +671,11 @@ contains
 
     !>  \brief  returns numbered names (body) with 0-padded integer strings
     function make_dirnames( body, n, numlen ) result( names )
-        character(len=*),  intent(in) :: body
-        integer,           intent(in) :: n
-        integer, optional, intent(in) :: numlen
+        character(len=*),  intent(in)           :: body
+        integer,           intent(in)           :: n
+        integer,           optional, intent(in) :: numlen
         type(string), allocatable :: names(:)
-        integer :: nnumlen, i
+        integer                   :: nnumlen, i
         nnumlen = len(int2str(n))
         if( present(numlen) ) nnumlen = numlen
         allocate(names(n))
@@ -686,13 +686,13 @@ contains
 
     !>  \brief  returns numbered file-names with 0-padded integer strings
     function make_filenames( body, n, ext, numlen, suffix ) result( names )
-        character(len=*),           intent(in) :: body, ext
-        integer,                    intent(in) :: n
-        integer,          optional, intent(in) :: numlen
-        character(len=*), optional, intent(in) :: suffix
+        character(len=*),           intent(in)           :: body, ext
+        integer,                    intent(in)           :: n
+        integer,                    optional, intent(in) :: numlen
+        character(len=*),           optional, intent(in) :: suffix
         type(string), allocatable :: names(:)
-        integer :: nnumlen, i
-        logical :: suffix_present
+        integer                   :: nnumlen, i
+        logical                   :: suffix_present
         nnumlen = len(int2str(n))
         if( present(numlen) ) nnumlen = numlen
         suffix_present = present(suffix)
@@ -708,8 +708,8 @@ contains
 
     !> concatenate strings together to with '/' to create a filename
     function filepath_str(s1, s2, s3) result( fname )
-        class(string),           intent(in) :: s1, s2
-        class(string), optional, intent(in) :: s3
+        class(string),           intent(in)           :: s1, s2
+        class(string),           optional, intent(in) :: s3
         type(string) :: fname
         if( present(s3) )then
             fname = s1%to_char()//PATH_SEPARATOR//s2%to_char()//PATH_SEPARATOR//s3%to_char()
@@ -741,13 +741,13 @@ contains
 
     !> \brief  is for deleting consecutively numbered files with padded number strings
     subroutine del_files_numbered( body, n, ext, numlen, suffix )
-        character(len=*),           intent(in) :: body !< input filename body
-        integer,                    intent(in) :: n    !< total num for del, formatted as body[n].ext
-        character(len=*), optional, intent(in) :: ext  !< input filename extension
-        integer,          optional, intent(in) :: numlen !< number length
-        character(len=*), optional, intent(in) :: suffix !< file suffix
+        character(len=*),           intent(in)           :: body   !< input filename body
+        integer,                    intent(in)           :: n      !< total num for del, formatted as body[n].ext
+        character(len=*),           optional, intent(in) :: ext    !< input filename extension
+        integer,                    optional, intent(in) :: numlen !< number length
+        character(len=*),           optional, intent(in) :: suffix !< file suffix
         type(string), allocatable :: names(:)
-        integer :: ifile
+        integer                   :: ifile
         if( present(ext) )then
             names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
         else
@@ -768,11 +768,11 @@ contains
     end subroutine del_files_list
 
     subroutine move_files_in_cwd( dir, files_that_stay )
-        class(string),           intent(in) :: dir
-        class(string), optional, intent(in) :: files_that_stay(:)
+        class(string),           intent(in)           :: dir
+        class(string),           optional, intent(in) :: files_that_stay(:)
         type(string), allocatable :: file_list(:)
-        integer :: n_stay, n_move, i, j
-        logical :: l_move
+        integer                   :: n_stay, n_move, i, j
+        logical                   :: l_move
         n_stay = 0
         if( present(files_that_stay) )then
             n_stay = size(files_that_stay)
@@ -820,7 +820,7 @@ contains
     function fname2format( fname )
         class(string),    intent(in)  :: fname
         character(len=1)              :: fname2format
-        type(string) :: extension
+        type(string)                  :: extension
         extension = fname2ext(fname)
         select case(extension%to_char())
             case ('img','hed')
@@ -853,8 +853,8 @@ contains
     end function fname2format
 
     subroutine read_filetable( filetable, filenames )
-        class(string),             intent(in)    :: filetable    !< input table filename
-        type(string), allocatable, intent(inout) :: filenames(:) !< array of filenames
+        class(string),             intent(in)                 :: filetable    !< input table filename
+        type(string),              allocatable, intent(inout) :: filenames(:) !< array of filenames
         integer :: nl, funit, iline, io_stat
         nl = nlines(filetable)
         if( nl == 0 ) return
@@ -983,8 +983,8 @@ contains
     function file2rarr( fnam ) result( arr )
         class(string), intent(in) :: fnam  !< input table filename
         real, allocatable         :: arr(:)
-        real    :: rval
-        integer :: recsz, i, n, funit,io_stat
+        real                      :: rval
+        integer                   :: recsz, i, n, funit,io_stat
         if( file_exists(fnam) )then
             inquire(iolength=recsz) rval
             call fopen(funit, fnam,'old','unknown', io_stat,'direct','unformatted',recl=recsz)
@@ -1005,8 +1005,8 @@ contains
     function file2drarr( fnam ) result( arr )
         class(string), intent(in) :: fnam  !< input table filename
         real(dp), allocatable     :: arr(:)
-        real(dp) :: rval
-        integer  :: recsz, i, n, funit,io_stat
+        real(dp)                  :: rval
+        integer                   :: recsz, i, n, funit,io_stat
         if( file_exists(fnam) )then
             inquire(iolength=recsz) rval
             call fopen(funit,fnam,'old','unknown', io_stat,'direct','unformatted',recl=recsz)
@@ -1068,8 +1068,8 @@ contains
 
     !> \brief  for converting a file generated by rmat2file back to a matrix
     subroutine file2rmat( fname, rmat )
-        class(string),     intent(in)    :: fname       !< input filename
-        real, allocatable, intent(inout) :: rmat(:,:)   !< output matrix
+        class(string),     intent(in)                 :: fname     !< input filename
+        real,              allocatable, intent(inout) :: rmat(:,:) !< output matrix
         integer :: dims(2), funit,io_stat
         if( .not.file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
         call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
@@ -1083,8 +1083,8 @@ contains
 
     !> \brief  for converting a file generated by lmat2file back to a logical matrix
     subroutine file2lmat( fname, mat )
-        class(string),        intent(in)    :: fname    !< input filename
-        logical, allocatable, intent(inout) :: mat(:,:) !< output matrix
+        class(string),        intent(in)                 :: fname    !< input filename
+        logical,              allocatable, intent(inout) :: mat(:,:) !< output matrix
         integer :: dims(2), funit,io_stat
         if( .not.file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
         call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
@@ -1098,8 +1098,8 @@ contains
 
     !> \brief  for converting a file generated by imat2file back to an integer matrix
     subroutine file2imat( fname, imat )
-        class(string),         intent(in)    :: fname       !< input filename
-        integer, allocatable,  intent(inout) :: imat(:,:)   !< output matrix
+        class(string),         intent(in)                  :: fname     !< input filename
+        integer,               allocatable,  intent(inout) :: imat(:,:) !< output matrix
         integer :: dims(2), funit, io_stat
 
         if( .not. file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist')
@@ -1113,12 +1113,12 @@ contains
     end subroutine file2imat
 
     subroutine simple_copy_file(fname1, fname2, status)
-        class(string),     intent(in)  :: fname1, fname2 !< input filenames
-        integer, optional, intent(out) :: status
+        class(string),     intent(in)            :: fname1, fname2 !< input filenames
+        integer,           optional, intent(out) :: status
         integer(dp),       parameter   :: MAXBUFSZ = nint(1e8) ! 100 MB max buffer size
         character(len=1),  allocatable :: byte_buffer(:)
-        integer(dp) :: sz, nchunks, leftover, bufsz, bytepos, in, out, ichunk
-        integer     :: ioerr
+        integer(dp)                    :: sz, nchunks, leftover, bufsz, bytepos, in, out, ichunk
+        integer                        :: ioerr
         if( present(status) )status = 0
         if( .not. file_exists(fname1) ) THROW_HARD('file '//fname1%to_char()//' does not exist')
         ! we need to inquire size before opening file as stream access
@@ -1172,10 +1172,10 @@ contains
     ! byte-for-byte comparison of two files; false when either is missing or unreadable
     logical function files_identical( fname1, fname2 )
         class(string), intent(in) :: fname1, fname2 !< input filenames
-        integer(dp),   parameter  :: MAXBUFSZ = nint(1e8) ! 100 MB max buffer size
+        integer(dp),      parameter   :: MAXBUFSZ = nint(1e8) ! 100 MB max buffer size
         character(len=1), allocatable :: buf1(:), buf2(:)
-        integer(dp) :: sz1, sz2, bufsz, bytepos, nleft
-        integer     :: in1, in2, ioerr1, ioerr2, unit2
+        integer(dp)                   :: sz1, sz2, bufsz, bytepos, nleft
+        integer                       :: in1, in2, ioerr1, ioerr2, unit2
         files_identical = .false.
         if( .not. file_exists(fname1) ) return
         if( .not. file_exists(fname2) ) return
@@ -1225,8 +1225,8 @@ contains
     !! @p root. @p trimlength caches that position across calls with paths of the same layout: 0 on
     !! entry locates it, and it is returned (0 when not found).
     function get_relative_path_str( path, root, trimlength ) result( newpath )
-        class(string),     intent(in)    :: path, root
-        integer, optional, intent(inout) :: trimlength
+        class(string),     intent(in)              :: path, root
+        integer,           optional, intent(inout) :: trimlength
         integer      :: l_trimlength
         type(string) :: newpath
         l_trimlength = 0
@@ -1243,10 +1243,10 @@ contains
     !> get_relative_path on character paths, into a fixed XLONGSTRLEN buffer: no string temporaries,
     !! for the STAR writers' per-row loops (@p trimlength thread-private in parallel ones)
     function get_relative_path_char( path, root, trimlength ) result( newpath )
-        character(len=*),  intent(in)    :: path, root
-        integer, optional, intent(inout) :: trimlength
+        character(len=*),  intent(in)              :: path, root
+        integer,           optional, intent(inout) :: trimlength
         character(len=XLONGSTRLEN) :: newpath
-        integer :: l_trimlength
+        integer                    :: l_trimlength
         l_trimlength = 0
         if(present(trimlength)) l_trimlength = trimlength
         if(l_trimlength .eq. 0) l_trimlength = index(path, root)

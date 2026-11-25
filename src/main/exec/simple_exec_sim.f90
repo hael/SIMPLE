@@ -9,12 +9,12 @@ implicit none
 public :: exec_sim_commander
 private
 
-type(commander_cif2mrc)            :: xcif2mrc
-type(commander_pdb2mrc)            :: xpdb2mrc
-type(commander_simulate_movie)     :: xsimulate_movie
-type(commander_simulate_noise)     :: xsimulate_noise
-type(commander_simulate_particles) :: xsimulate_particles
-type(commander_simulate_scattering):: xsimulate_scattering
+type(commander_cif2mrc)             :: xcif2mrc
+type(commander_pdb2mrc)             :: xpdb2mrc
+type(commander_simulate_movie)      :: xsimulate_movie
+type(commander_simulate_noise)      :: xsimulate_noise
+type(commander_simulate_particles)  :: xsimulate_particles
+type(commander_simulate_scattering) :: xsimulate_scattering
 
 contains
 

@@ -24,7 +24,7 @@ contains
     subroutine fixture( X )
         real(dp), intent(out) :: X(54,2)
         real(dp), parameter :: TWOPI = 6.283185307179586_dp
-        integer :: i
+        integer             :: i
         do i = 1, 50
             X(i,1) = 0.5_dp*cos(TWOPI*real(i,dp)/50._dp)
             X(i,2) = 0.5_dp*sin(TWOPI*real(i,dp)/50._dp)
@@ -36,8 +36,8 @@ contains
     end subroutine fixture
 
     subroutine test_kcenter_coverage()
-        real(dp) :: X(54,2)
-        integer  :: centers(3), labels(54), centers2(3), labels2(54)
+        real(dp)      :: X(54,2)
+        integer       :: centers(3), labels(54), centers2(3), labels2(54)
         type(kcenter) :: kc
         write(*,'(A)') 'test_kcenter_coverage'
         call fixture(X)
@@ -55,8 +55,8 @@ contains
     end subroutine test_kcenter_coverage
 
     subroutine test_kcenter_edges()
-        real(dp) :: X(54,2)
-        integer  :: centers(1), labels(54)
+        real(dp)      :: X(54,2)
+        integer       :: centers(1), labels(54)
         type(kcenter) :: kc
         write(*,'(A)') 'test_kcenter_edges'
         call fixture(X)

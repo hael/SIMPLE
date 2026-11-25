@@ -13,9 +13,9 @@ private
 
 type dock_vols
     private
-    integer               :: box = 0, box_clip = 0, ldim(3) = [0,0,0], ldim_clip(3) = [0,0,0]
+    integer               :: box    = 0, box_clip = 0, ldim(3) = [0,0,0], ldim_clip(3) = [0,0,0]
     real                  :: smpd, hp, lp, msk, smpd_clip, scale
-    real                  :: eul(3)=0., shift(3)=0., cc
+    real                  :: eul(3) = 0., shift(3)=0., cc
     type(projector)       :: vol_ref, vol
     type(oris)            :: eulspace, eulspace_sub
     type(volpft_corrcalc) :: vpcc
@@ -46,10 +46,10 @@ real,             parameter :: LP2SMPD_TARGET = 1./3.
 contains
 
     subroutine new( self, vol_ref_fname, vol_fname, smpd, hp, lp, mskdiam, mag )
-        class(dock_vols),  intent(inout) :: self
-        class(string),     intent(in)    :: vol_ref_fname, vol_fname
-        real,              intent(in)    :: smpd, hp, lp, mskdiam
-        logical, optional, intent(in)    :: mag
+        class(dock_vols),  intent(inout)        :: self
+        class(string),     intent(in)           :: vol_ref_fname, vol_fname
+        real,              intent(in)           :: smpd, hp, lp, mskdiam
+        logical,           optional, intent(in) :: mag
         self%mag = .true.
         if( present(mag) ) self%mag = mag
         call self%set_ref(vol_ref_fname, smpd, hp, lp, mskdiam)
@@ -238,9 +238,9 @@ contains
     end subroutine srch_rots
 
     subroutine rotpeak_interp( self, angstep, corrs, peak_ang, peak_cc )
-        class(dock_vols), intent(in) :: self
-        real, intent(in)             :: angstep, corrs(:)
-        real, intent(out)            :: peak_ang, peak_cc
+        class(dock_vols), intent(in)  :: self
+        real,             intent(in)  :: angstep, corrs(:)
+        real,             intent(out) :: peak_ang, peak_cc
         real    :: denom, alpha,beta,gamma
         integer :: nangs, maxpos
         nangs  = size(corrs)

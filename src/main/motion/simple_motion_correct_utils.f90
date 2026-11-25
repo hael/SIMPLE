@@ -80,12 +80,12 @@ contains
 
     ! gain correction, calculate image sum and identify outliers
     subroutine correct_gain( frames_here, gainref_fname, gainimg, eerdecoder, frames_range, flipgain )
-        type(image),     allocatable, intent(inout) :: frames_here(:)
-        class(string),                intent(in)    :: gainref_fname
-        class(image),                 intent(inout) :: gainimg
-        class(eer_decoder), optional, intent(in)    :: eerdecoder
-        integer,            optional, intent(in)    :: frames_range(2)
-        character(len=*),   optional, intent(in)    :: flipgain
+        type(image),                  allocatable, intent(inout) :: frames_here(:)
+        class(string),                intent(in)                 :: gainref_fname
+        class(image),                 intent(inout)              :: gainimg
+        class(eer_decoder),           optional, intent(in)       :: eerdecoder
+        integer,                      optional, intent(in)       :: frames_range(2)
+        character(len=*),             optional, intent(in)       :: flipgain
         integer :: ldim_here(3), ldim_gain(3), iframe, ifoo, nframes_here, from, to
         write(logfhandle,'(a)') '>>> PERFORMING GAIN CORRECTION'
         nframes_here = size(frames_here)
@@ -128,13 +128,13 @@ contains
     ! flips, writes gain reference & update command line
     subroutine flip_gain( cline, gainref_fname, mode )
         use simple_cmdline, only: cmdline
-        class(cmdline),   intent(inout) :: cline
-        class(string),    intent(inout) :: gainref_fname
-        character(len=*),  intent(in)   :: mode
+        class(cmdline),    intent(inout) :: cline
+        class(string),     intent(inout) :: gainref_fname
+        character(len=*),  intent(in)    :: mode
         type(image)  :: gain
         type(string) :: new_fname, ext
-        real    :: smpd
-        integer :: ldim(3), n
+        real         :: smpd
+        integer      :: ldim(3), n
         if( .not.cline%defined('gainref') ) return
         if( .not.cline%defined('flipgain') ) return
         select case(trim(uppercase(mode)))
@@ -201,8 +201,8 @@ contains
         real,         intent(in)    :: smpd, hp, lp, bfactor
         real,         intent(inout) :: weights(:,:)
         integer, parameter :: BPWIDTH = 3
-        real    :: w, bfacw, rsh, rhplim, rlplim, width, spafreqsq,spafreqh,spafreqk
-        integer :: phys(3),nr_lims(3,2), bphplimsq,hplimsq,bplplimsq,lplimsq, shsq, h,k, hplim,lplim
+        real               :: w, bfacw, rsh, rhplim, rlplim, width, spafreqsq,spafreqh,spafreqk
+        integer            :: phys(3),nr_lims(3,2), bphplimsq,hplimsq,bplplimsq,lplimsq, shsq, h,k, hplim,lplim
         weights   = 0.
         width     = real(BPWIDTH)
         nr_lims   = reference%loop_lims(2)

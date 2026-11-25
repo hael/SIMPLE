@@ -36,15 +36,15 @@ contains
         real,             intent(in) :: smpd
         character(len=*), intent(in) :: tag
         logical,          intent(in) :: defects
-        class(cmdline), allocatable :: cl
-        class(sp_project), allocatable :: source, result
+        class(cmdline),    allocatable        :: cl
+        class(sp_project), allocatable        :: source, result
         type(commander_tseries_prep4tracking) :: prep
-        type(image) :: img
-        type(string) :: cwd, root, run_dir, source_file, fname, tracked, cwd_glob_saved
-        real, allocatable :: pattern(:,:,:), actual(:,:,:), expected(:,:,:)
-        real :: mean_tol
-        integer :: nfail0, t, x, y, ntracked, unit, ios, idx, ox, oy, nout, ldim(3), nimgs, outdim(3)
-        logical :: saw_hot, saw_dead
+        type(image)                           :: img
+        type(string)                          :: cwd, root, run_dir, source_file, fname, tracked, cwd_glob_saved
+        real,              allocatable        :: pattern(:,:,:), actual(:,:,:), expected(:,:,:)
+        real                                  :: mean_tol
+        integer                               :: nfail0, t, x, y, ntracked, unit, ios, idx, ox, oy, nout, ldim(3), nimgs, outdim(3)
+        logical                               :: saw_hot, saw_dead
         write(*,'(A)') 'test_project_outputs: '//tag
         nfail0 = tests_failed
         cwd_glob_saved = CWD_GLOB

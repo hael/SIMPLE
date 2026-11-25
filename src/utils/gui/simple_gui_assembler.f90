@@ -71,23 +71,23 @@ type :: gui_assembler
   logical                   :: init      = .false.     ! .true. once new() has been called
   real                      :: version   = 1.0         ! JSON schema version sent to the frontend
 contains
-  procedure :: new
-  procedure :: kill
-  procedure :: to_string
-  procedure :: set_stoptime
-  procedure :: clear_hashes
-  procedure :: is_associated
-  procedure :: assemble_stream_heartbeat
-  procedure :: assemble_batch_heartbeat
-  procedure :: assemble_batch_metadata
-  procedure :: assemble_stream_preprocess
-  procedure :: assemble_stream_optics_assignment
-  procedure :: assemble_stream_initial_picking
-  procedure :: assemble_stream_reference_picking
-  procedure :: assemble_stream_initial_analysis
-  procedure :: assemble_stream_particle_sieving
-  procedure :: assemble_stream_pool2D
-  procedure :: assemble_stream_solve3D_multistate
+  procedure          :: new
+  procedure          :: kill
+  procedure          :: to_string
+  procedure          :: set_stoptime
+  procedure          :: clear_hashes
+  procedure          :: is_associated
+  procedure          :: assemble_stream_heartbeat
+  procedure          :: assemble_batch_heartbeat
+  procedure          :: assemble_batch_metadata
+  procedure          :: assemble_stream_preprocess
+  procedure          :: assemble_stream_optics_assignment
+  procedure          :: assemble_stream_initial_picking
+  procedure          :: assemble_stream_reference_picking
+  procedure          :: assemble_stream_initial_analysis
+  procedure          :: assemble_stream_particle_sieving
+  procedure          :: assemble_stream_pool2D
+  procedure          :: assemble_stream_solve3D_multistate
   procedure, private :: open_section
   procedure, private :: add_assigned_micrographs
   procedure, private :: add_assigned_histograms
@@ -144,10 +144,10 @@ contains
   ! aggregate status derived from the union of all child-process states.
   subroutine assemble_stream_heartbeat( self, preprocess, assign_optics, initial_analysis, reference_picking,&
       particle_sieving, pool2D, solve3D_multistate, n_active_persistent_workers )
-    class(gui_assembler),   intent(inout) :: self
-    type(gui_stage_status), intent(in)    :: preprocess, assign_optics, initial_analysis, reference_picking
-    type(gui_stage_status), intent(in)    :: particle_sieving, pool2D, solve3D_multistate
-    integer, optional,      intent(in)    :: n_active_persistent_workers
+    class(gui_assembler),   intent(inout)             :: self
+    type(gui_stage_status), intent(in)                :: preprocess, assign_optics, initial_analysis, reference_picking
+    type(gui_stage_status), intent(in)                :: particle_sieving, pool2D, solve3D_multistate
+    integer,                optional,      intent(in) :: n_active_persistent_workers
     type(json_value),       pointer       :: json_ptr, json_master_ptr
     integer                               :: n_running, n_failed, n_unknown
     n_running    = 0
@@ -253,11 +253,11 @@ contains
 
   ! Write the preprocessing section, including micrographs, histograms, and timeplots.
   subroutine assemble_stream_preprocess( self, meta_preprocess, meta_micrographs, meta_histograms, meta_timeplots )
-    class(gui_assembler),                              intent(inout) :: self
-    type(gui_metadata_stream_preprocess),              intent(in)    :: meta_preprocess
-    type(gui_metadata_micrograph),        allocatable, intent(in)    :: meta_micrographs(:)
-    type(gui_metadata_histogram),         allocatable, intent(in)    :: meta_histograms(:)
-    type(gui_metadata_timeplot),          allocatable, intent(in)    :: meta_timeplots(:)
+    class(gui_assembler),                              intent(inout)           :: self
+    type(gui_metadata_stream_preprocess),              intent(in)              :: meta_preprocess
+    type(gui_metadata_micrograph),                     allocatable, intent(in) :: meta_micrographs(:)
+    type(gui_metadata_histogram),                      allocatable, intent(in) :: meta_histograms(:)
+    type(gui_metadata_timeplot),                       allocatable, intent(in) :: meta_timeplots(:)
     type(json_value),                     pointer                    :: json_ptr
     if( .not. self%open_section(json_ptr, 'preprocessing', meta_preprocess) ) return
     if( allocated(meta_micrographs) ) call self%add_assigned(json_ptr, 'latest_micrographs', meta_micrographs, l_object=.false.)
@@ -268,9 +268,9 @@ contains
 
   ! Write the optics-assignment section, including optics groups.
   subroutine assemble_stream_optics_assignment( self, meta_optics_assignment, meta_optics_groups )
-    class(gui_assembler),                              intent(inout) :: self
-    type(gui_metadata_stream_optics_assignment),       intent(in)    :: meta_optics_assignment
-    type(gui_metadata_optics_group),      allocatable, intent(in)    :: meta_optics_groups(:)
+    class(gui_assembler),                              intent(inout)           :: self
+    type(gui_metadata_stream_optics_assignment),       intent(in)              :: meta_optics_assignment
+    type(gui_metadata_optics_group),                   allocatable, intent(in) :: meta_optics_groups(:)
     type(json_value),                     pointer                    :: json_ptr
     if( .not. self%open_section(json_ptr, 'optics_assignment', meta_optics_assignment) ) return
     if( allocated(meta_optics_groups) ) call self%add_assigned(json_ptr, 'optics_assignments', meta_optics_groups, l_object=.false.)
@@ -279,9 +279,9 @@ contains
 
   ! Write the initial-picking section, including micrographs.
   subroutine assemble_stream_initial_picking( self, meta_initial_picking, meta_micrographs )
-    class(gui_assembler),                              intent(inout) :: self
-    type(gui_metadata_stream_picking),                 intent(in)    :: meta_initial_picking
-    type(gui_metadata_micrograph),        allocatable, intent(in)    :: meta_micrographs(:)
+    class(gui_assembler),                              intent(inout)           :: self
+    type(gui_metadata_stream_picking),                 intent(in)              :: meta_initial_picking
+    type(gui_metadata_micrograph),                     allocatable, intent(in) :: meta_micrographs(:)
     type(json_value),                     pointer                    :: json_ptr
     if( .not. self%open_section(json_ptr, 'initial_picking', meta_initial_picking) ) return
     if( allocated(meta_micrographs) ) call self%add_assigned(json_ptr, 'latest_micrographs', meta_micrographs, l_object=.false.)
@@ -290,10 +290,10 @@ contains
 
   ! Write the reference-picking section, including micrographs and the picking references.
   subroutine assemble_stream_reference_picking( self, meta_reference_picking, meta_micrographs, meta_cavgs2D )
-    class(gui_assembler),                              intent(inout) :: self
-    type(gui_metadata_stream_picking),                 intent(in)    :: meta_reference_picking
-    type(gui_metadata_micrograph),        allocatable, intent(in)    :: meta_micrographs(:)
-    type(gui_metadata_cavg2D),            allocatable, intent(in)    :: meta_cavgs2D(:)
+    class(gui_assembler),                              intent(inout)           :: self
+    type(gui_metadata_stream_picking),                 intent(in)              :: meta_reference_picking
+    type(gui_metadata_micrograph),                     allocatable, intent(in) :: meta_micrographs(:)
+    type(gui_metadata_cavg2D),                         allocatable, intent(in) :: meta_cavgs2D(:)
     type(json_value),                     pointer                    :: json_ptr
     if( .not. self%open_section(json_ptr, 'reference_picking', meta_reference_picking) ) return
     if( allocated(meta_micrographs) ) call self%add_assigned(json_ptr, 'latest_micrographs', meta_micrographs, l_object=.false.)
@@ -306,10 +306,10 @@ contains
   ! single solve3D_cavgs volume chosen for reprojection/picking references and is embedded as a
   ! nested 'volume' object (no FSC/postprocessed fields at this stage).
   subroutine assemble_stream_initial_analysis( self, meta_initial_analysis, meta_latest_cavgs2D, meta_selected_pickrefs, meta_vol3D )
-    class(gui_assembler),                        intent(inout) :: self
-    type(gui_metadata_stream_initial_analysis),  intent(in)    :: meta_initial_analysis
-    type(gui_metadata_cavg2D),      allocatable, intent(in)    :: meta_latest_cavgs2D(:), meta_selected_pickrefs(:)
-    type(gui_metadata_vol3D),       optional,    intent(in)    :: meta_vol3D
+    class(gui_assembler),                        intent(inout)           :: self
+    type(gui_metadata_stream_initial_analysis),  intent(in)              :: meta_initial_analysis
+    type(gui_metadata_cavg2D),                   allocatable, intent(in) :: meta_latest_cavgs2D(:), meta_selected_pickrefs(:)
+    type(gui_metadata_vol3D),                    optional,    intent(in) :: meta_vol3D
     type(json_value),               pointer                    :: json_ptr, json_vol3D_ptr
     if( .not. self%open_section(json_ptr, 'opening2D', meta_initial_analysis) ) return
     if( present(meta_vol3D) ) then
@@ -329,9 +329,9 @@ contains
   ! Write the particle-sieving section, including the reference class averages and the
   ! latest class averages.
   subroutine assemble_stream_particle_sieving( self, meta_particle_sieving, meta_latest_cavgs2D, meta_ref_cavgs )
-    class(gui_assembler),                        intent(inout) :: self
-    type(gui_metadata_stream_particle_sieving),  intent(in)    :: meta_particle_sieving
-    type(gui_metadata_cavg2D),      allocatable, intent(in)    :: meta_latest_cavgs2D(:), meta_ref_cavgs(:)
+    class(gui_assembler),                        intent(inout)           :: self
+    type(gui_metadata_stream_particle_sieving),  intent(in)              :: meta_particle_sieving
+    type(gui_metadata_cavg2D),                   allocatable, intent(in) :: meta_latest_cavgs2D(:), meta_ref_cavgs(:)
     type(json_value),               pointer                    :: json_ptr
     if( .not. self%open_section(json_ptr, 'particle_sieving', meta_particle_sieving) ) return
     if( allocated(meta_ref_cavgs)      ) call self%add_assigned(json_ptr, 'ref_cls2D',    meta_ref_cavgs,      l_object=.false.)
@@ -344,11 +344,11 @@ contains
   ! averages selected for the current snapshot and is embedded as 'cls2D' nested
   ! under the 'snapshot' object.
   subroutine assemble_stream_pool2D( self, meta_pool2D, meta_latest_cavgs2D, meta_pool2D_snapshot, meta_snapshot_cavgs2D )
-    class(gui_assembler),                                intent(inout) :: self
-    type(gui_metadata_stream_pool2D),                    intent(in)    :: meta_pool2D
-    type(gui_metadata_cavg2D),   allocatable,            intent(in)    :: meta_latest_cavgs2D(:)
-    type(gui_metadata_stream_snapshot),           intent(in)    :: meta_pool2D_snapshot
-    type(gui_metadata_cavg2D),   allocatable, optional,  intent(in)    :: meta_snapshot_cavgs2D(:)
+    class(gui_assembler),                                intent(inout)                      :: self
+    type(gui_metadata_stream_pool2D),                    intent(in)                         :: meta_pool2D
+    type(gui_metadata_cavg2D),                           allocatable,            intent(in) :: meta_latest_cavgs2D(:)
+    type(gui_metadata_stream_snapshot),                  intent(in)                         :: meta_pool2D_snapshot
+    type(gui_metadata_cavg2D),                           allocatable, optional,  intent(in) :: meta_snapshot_cavgs2D(:)
     type(json_value),            pointer                               :: json_ptr, json_snapshot_ptr
     if( .not. self%open_section(json_ptr, 'pool2D', meta_pool2D) ) return
     if( meta_pool2D_snapshot%assigned() ) then
@@ -376,11 +376,11 @@ contains
   ! 'reprojtiles' array inside the matching state_volumes entry; a state without
   ! tiles has none.
   subroutine assemble_stream_solve3D_multistate( self, meta_solve3D_multistate, meta_snapshot, meta_states_vol3D, meta_reprojtiles )
-    class(gui_assembler),                                 intent(inout) :: self
-    type(gui_metadata_stream_solve3D_multistate),         intent(in)    :: meta_solve3D_multistate
-    type(gui_metadata_stream_snapshot),                   intent(in)    :: meta_snapshot
-    type(gui_metadata_vol3D),  allocatable, optional,     intent(in)    :: meta_states_vol3D(:)
-    type(gui_metadata_cavg2D), allocatable, optional,     intent(in)    :: meta_reprojtiles(:)
+    class(gui_assembler),                                 intent(inout)                         :: self
+    type(gui_metadata_stream_solve3D_multistate),         intent(in)                            :: meta_solve3D_multistate
+    type(gui_metadata_stream_snapshot),                   intent(in)                            :: meta_snapshot
+    type(gui_metadata_vol3D),                             allocatable, optional,     intent(in) :: meta_states_vol3D(:)
+    type(gui_metadata_cavg2D),                            allocatable, optional,     intent(in) :: meta_reprojtiles(:)
     type(json_value),          pointer                                  :: json_ptr, json_states_ptr, json_state_vol_ptr
     type(json_value),          pointer                                  :: json_snapshot_ptr
     logical                                                             :: l_add

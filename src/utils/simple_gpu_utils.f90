@@ -58,40 +58,40 @@ interface
 
     integer(c_int) function cufftPlan1d(plan, nx, ffttype, batch) bind(C, name='cufftPlan1d')
        import :: c_int
-       integer(c_int) :: plan
+       integer(c_int)        :: plan
        integer(c_int), value :: nx, ffttype, batch
     end function cufftPlan1d
 
     integer(c_int) function cufftPlan2d(plan, nx, ny, ffttype) bind(C, name='cufftPlan2d')
        import :: c_int
-       integer(c_int) :: plan
+       integer(c_int)        :: plan
        integer(c_int), value :: nx, ny, ffttype
     end function cufftPlan2d
 
     integer(c_int) function cufftPlan3d(plan, nx, ny, nz, ffttype) bind(C, name='cufftPlan3d')
        import :: c_int
-       integer(c_int) :: plan
+       integer(c_int)        :: plan
        integer(c_int), value :: nx, ny, nz, ffttype
     end function cufftPlan3d
 
     integer(c_int) function cufftExecR2C(plan, idata, odata) bind(C, name='cufftExecR2C')
        import :: c_int, c_ptr
        integer(c_int), value :: plan
-       type(c_ptr), value :: idata
-       type(c_ptr), value :: odata
+       type(c_ptr),    value :: idata
+       type(c_ptr),    value :: odata
     end function cufftExecR2C
 
     integer(c_int) function cufftExecC2R(plan, idata, odata) bind(C, name='cufftExecC2R')
        import :: c_int, c_ptr
        integer(c_int), value :: plan
-       type(c_ptr), value :: idata
-       type(c_ptr), value :: odata
+       type(c_ptr),    value :: idata
+       type(c_ptr),    value :: odata
     end function cufftExecC2R
 
     integer(c_int) function cufftPlanMany(plan, rank, n, inembed, istride, idist, onembed,&
                             &ostride, odist, ffttype, batch) bind(C, name='cufftPlanMany')
        import :: c_int
-       integer(c_int) :: plan
+       integer(c_int)        :: plan
        integer(c_int), value :: rank
        integer(c_int), dimension(*), intent(in) :: n
        integer(c_int), dimension(*), intent(in) :: inembed
@@ -181,7 +181,7 @@ contains
     subroutine set_offload_device_id( id )
         integer, intent(in) :: id
 #ifdef USE_OPENMP_OFFLOAD
-        integer :: ndevices, host_device
+        integer        :: ndevices, host_device
         integer(c_int) :: ierr
         ndevices = omp_get_num_devices()
         if( ndevices < 1 ) then

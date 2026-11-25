@@ -13,13 +13,13 @@ private
 type stack_io
     private
     real(kind=c_float), pointer :: rmat_ptr(:,:,:) => null()
-    type(string)  :: stkname
-    type(image)   :: buffer
-    type(imgfile) :: ioimg
-    integer       :: nptcls  = 0, fromp = 0, top = 0, bufsz = 0, n_in_buf = 0
-    integer       :: ldim(3) = [0,0,0]
-    real          :: smpd    = 0.
-    logical       :: ft = .false., l_read = .false., l_open = .false.
+    type(string)                :: stkname
+    type(image)                 :: buffer
+    type(imgfile)               :: ioimg
+    integer                     :: nptcls          = 0, fromp = 0, top = 0, bufsz = 0, n_in_buf = 0
+    integer                     :: ldim(3)         = [0,0,0]
+    real                        :: smpd            = 0.
+    logical                     :: ft              = .false., l_read = .false., l_open = .false.
 contains
     procedure, private :: open_box, open_ldim
     generic            :: open => open_box, open_ldim
@@ -38,14 +38,14 @@ end type stack_io
 contains
 
     subroutine open_box( self, stkname, smpd, rwaction, is_ft, box, bufsz, wfloat16 )
-        class(stack_io),   intent(inout) :: self
-        class(string),     intent(in)    :: stkname
-        character(len=*),  intent(in)    :: rwaction
-        real,              intent(in)    :: smpd
-        logical, optional, intent(in)    :: is_ft
-        integer, optional, intent(in)    :: box
-        integer, optional, intent(in)    :: bufsz
-        logical, optional, intent(in)    :: wfloat16
+        class(stack_io),   intent(inout)        :: self
+        class(string),     intent(in)           :: stkname
+        character(len=*),  intent(in)           :: rwaction
+        real,              intent(in)           :: smpd
+        logical,           optional, intent(in) :: is_ft
+        integer,           optional, intent(in) :: box
+        integer,           optional, intent(in) :: bufsz
+        logical,           optional, intent(in) :: wfloat16
         if( present(box) ) then
             call self%open_ldim(stkname, smpd, rwaction, [box,box], is_ft=is_ft, bufsz=bufsz, wfloat16=wfloat16)
         else
@@ -54,14 +54,14 @@ contains
     end subroutine open_box
 
     subroutine open_ldim( self, stkname, smpd, rwaction, ldim, is_ft, bufsz, wfloat16 )
-        class(stack_io),   intent(inout) :: self
-        class(string),     intent(in)    :: stkname
-        character(len=*),  intent(in)    :: rwaction
-        real,              intent(in)    :: smpd
-        integer,           intent(in)    :: ldim(2)
-        logical, optional, intent(in)    :: is_ft
-        integer, optional, intent(in)    :: bufsz
-        logical, optional, intent(in)    :: wfloat16
+        class(stack_io),   intent(inout)        :: self
+        class(string),     intent(in)           :: stkname
+        character(len=*),  intent(in)           :: rwaction
+        real,              intent(in)           :: smpd
+        integer,           intent(in)           :: ldim(2)
+        logical,           optional, intent(in) :: is_ft
+        integer,           optional, intent(in) :: bufsz
+        logical,           optional, intent(in) :: wfloat16
         integer          :: mode ! FT or not in MRC file lingo
         logical          :: ft_requested, write_float16
         call self%close
@@ -194,7 +194,7 @@ contains
         integer,         intent(in)    :: i
         class(image),    intent(inout) :: img
         real(kind=c_float), pointer :: rmat_ptr(:,:,:) => null()
-        integer :: ind_in_buf
+        integer                     :: ind_in_buf
         if( .not. self%l_open ) THROW_HARD('stack not open')
         if(       self%l_read ) THROW_HARD('stack not open for write')
         if( self%fromp == 0 )then

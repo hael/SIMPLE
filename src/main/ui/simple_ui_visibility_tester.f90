@@ -28,7 +28,7 @@ public :: run_all_ui_visibility_tests
 
 ! shared by the lookup helpers below
 type(ui_program), pointer :: registered_prg => null()
-type(string) :: cli_text, program_name
+type(string)              :: cli_text, program_name
 
 contains
 
@@ -142,8 +142,8 @@ contains
 
     !> a program descriptor: display name, category, input visibility, groups, activation, overrides, requirements
     subroutine test_program_descriptor()
-        type(ui_param)   :: param
-        type(ui_program) :: ui_prg
+        type(ui_param)            :: param
+        type(ui_program)          :: ui_prg
         type(string), allocatable :: supplied_keys(:)
         write(*,'(A)') 'test_program_descriptor'
         call param%set_param('binary_param', 'binary', 'Binary parameter', 'Binary parameter help', &
@@ -315,10 +315,10 @@ contains
     subroutine test_cont_surface_contract()
         character(len=14), parameter :: REFINE3D_PROGRAMS(3) = &
             &[character(len=14) :: 'refine3D', 'refine3D_auto', 'refine3D_local']
-        type(string) :: choices
+        type(string)      :: choices
         character(len=16) :: default_value
-        logical      :: found
-        integer      :: i
+        logical           :: found
+        integer           :: i
         write(*,'(A)') 'test_cont_surface_contract'
         call make_ui
         program_name = 'refine3D'
@@ -387,8 +387,8 @@ contains
             'refine3D', 'refine3D_auto', 'refine3D_states', 'refine3D_states_cavgs', &
             'solve3D', 'solve3D_cavgs', 'solve3D_addon', 'solve3D_chunks']
         type(string) :: choices
-        logical :: found
-        integer :: i
+        logical      :: found
+        integer      :: i
         call make_ui
         do i = 1, size(PROGRAMS)
             program_name = trim(PROGRAMS(i))
@@ -410,8 +410,8 @@ contains
         character(len=16), parameter :: OTHER_PROGRAMS(3) = &
             &[character(len=16) :: 'solve3D_cavgs', 'solve3D_addon', 'solve3D_chunks']
         character(len=16) :: default_value
-        logical :: found
-        integer :: i
+        logical           :: found
+        integer           :: i
         write(*,'(A)') 'test_solve3D_trs_contract'
         call make_ui
         program_name = 'solve3D'
@@ -438,7 +438,7 @@ contains
 
     subroutine test_refine_motion_model_contract()
         character(len=16) :: default_value
-        logical :: found
+        logical           :: found
         write(*,'(A)') 'test_refine_motion_model_contract'
         call make_ui
         program_name = 'refine_motion_model'
@@ -503,10 +503,10 @@ contains
         character(len=*),  intent(in)  :: key
         logical,           intent(out) :: found
         type(string),      intent(out) :: choices
-        type(list_iterator)   :: iterator
-        class(*), allocatable :: value
+        type(list_iterator)           :: iterator
+        class(*),         allocatable :: value
         character(len=:), allocatable :: joined
-        integer :: i
+        integer                       :: i
         found  = .false.
         joined = ''
         iterator = params%begin()
@@ -560,11 +560,11 @@ contains
 
     subroutine assert_registered_test_category( name, expected_category, expected_display_name, expected_order, &
         &expected_required_key )
-        character(len=*), intent(in) :: name, expected_category, expected_display_name
-        integer,          intent(in) :: expected_order
+        character(len=*), intent(in)           :: name, expected_category, expected_display_name
+        integer,          intent(in)           :: expected_order
         character(len=*), intent(in), optional :: expected_required_key
         type(string), allocatable :: required_keys(:)
-        integer :: nrequired
+        integer                   :: nrequired
         program_name = name
         call get_test_prg_ptr(program_name, registered_prg)
         call assert_true(associated(registered_prg), trim(name)//' test is registered')
@@ -593,8 +593,8 @@ contains
         character(len=*), intent(in) :: name
         character(len=*), intent(in) :: expected_keys(:)
         type(string), allocatable :: required_keys(:)
-        integer :: i, j, nrequired
-        logical :: found
+        integer                   :: i, j, nrequired
+        logical                   :: found
         program_name = name
         call get_prg_ptr(program_name, registered_prg)
         call assert_true(associated(registered_prg), trim(name)//' is registered')
@@ -615,7 +615,7 @@ contains
 
     subroutine assert_registered_requirement(name, expected_id, expected_minimum, expected_maximum)
         character(len=*), intent(in) :: name, expected_id
-        integer, intent(in) :: expected_minimum, expected_maximum
+        integer,          intent(in) :: expected_minimum, expected_maximum
         program_name = name
         call get_prg_ptr(program_name, registered_prg)
         call assert_true(associated(registered_prg), trim(name)//' is registered')
@@ -791,13 +791,13 @@ contains
 
     !> the input `key` exists in `params`, with the expected type and default when given
     subroutine assert_ui_param( params, key, prg_name, expected_type, expected_default, expected_visibility )
-        type(linked_list), intent(in) :: params
-        character(len=*),  intent(in) :: key, prg_name
+        type(linked_list), intent(in)           :: params
+        character(len=*),  intent(in)           :: key, prg_name
         character(len=*),  intent(in), optional :: expected_type, expected_default
         integer,           intent(in), optional :: expected_visibility
         type(list_iterator)   :: iterator
         class(*), allocatable :: value
-        logical :: found
+        logical               :: found
         found    = .false.
         iterator = params%begin()
         do while( iterator%has_value() )
