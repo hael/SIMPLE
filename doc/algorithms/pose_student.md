@@ -183,17 +183,15 @@ coarse-to-fine search was measured and changed the winning rotation too often
 for its gain), and the templates' gradient is one product over the whole batch.
 Every matrix product takes the same arithmetic whatever the team: `sgemm`
 where the build's BLAS stays on the calling thread inside OpenMP teams
-(`SIMPLE_BLAS_TEAM_SAFE`). Otherwise the build and the shape choose between
+(`SIMPLE_BLAS_TEAM_SAFE`). Otherwise the shape chooses between
 explicit loops down the columns of the result and the `matmul` intrinsic,
 gfortran's single-threaded product, which is compiled into its runtime and so
 runs optimised even in a Debug build. On the Dell's Arrow Lake core, one
 thread, the optimised loops ran at 30 to 54 GFLOP/s on the network's products
 against `matmul`'s 6 to 43. The exception is a transposed product of fewer than
-16 rows (the readout's four): there the loops ran at 6 and `matmul` at 37. In a
-Debug build the loops ran at 4 to 5 and `matmul` at 9 to 63. So a Release build
-takes the loops except on those few-row products, and a Debug build takes
-`matmul` everywhere, transposing an operand first where `matmul` of a
-transposed section would run at a sixth of the speed.
+16 rows (the readout's four): there the loops ran at 6 and `matmul` at 37.
+Both Release and Debug builds take the loops except on those few-row
+products, which transpose an operand before calling `matmul`.
 
 **Held-out micrographs** (every tenth of the selected particles' stacks in
 order of their numbers when they lie on ten or more, otherwise every tenth

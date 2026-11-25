@@ -16,7 +16,7 @@ use simple_oris,         only: oris
 use simple_binoris,      only: binoris, binoris_seginfo
 use simple_binoris_io,   only: binread_oritab, binread_ctfparams_state_eo, binread_nlines, binwrite_oritab
 use simple_sp_project,   only: sp_project
-use simple_forked_process, only: forked_process, FORK_STATUS_FAILED, FORK_STATUS_STOPPED
+use simple_forked_process, only: forked_process, FORK_STATUS_STOPPED
 use simple_cmdline,      only: cmdline
 implicit none
 private
@@ -186,9 +186,10 @@ contains
     end subroutine test_particle_segment_roundtrip
 
     !> a particle row carries only its named slots: nonslot_key names another key, strip_nonslot_keys removes it,
-    !! and writing a row that still carries one stops in a Debug build (Release drops the key)
+    !! and writing a row that still carries one drops the key
     subroutine test_nonslot_key_on_particle_row()
         type(oris)           :: os
+        type(binoris)        :: bos
         type(nonslot_writer) :: child
         type(string)         :: key
         write(*,'(A)') 'test_nonslot_key_on_particle_row'
@@ -206,12 +207,15 @@ contains
         call os%kill
         call child%start(name=string('BINORIS_NONSLOT_ROW'))
         call child%await_final_status()
-#ifdef _DEBUG
-        call assert_int(FORK_STATUS_FAILED, child%status(), 'a particle row with a non-slot key stops the writer (Debug)')
-#else
-        call assert_int(FORK_STATUS_STOPPED, child%status(), 'Release writes the row without the key')
-#endif
+        call assert_int(FORK_STATUS_STOPPED, child%status(), 'a particle row with a non-slot key is written')
         call child%destroy
+        call bos%open(string(BIN_FILE))
+        call os%new(NPTCLS, is_ptcl=.true.)
+        call bos%read_segment(PTCL2D_SEG, os)
+        key = os%nonslot_key(2)
+        call assert_int(0, key%strlen_trim(), 'the written particle record carries only named slots')
+        call bos%close
+        call os%kill
         call del_file(BIN_FILE)
     end subroutine test_nonslot_key_on_particle_row
 

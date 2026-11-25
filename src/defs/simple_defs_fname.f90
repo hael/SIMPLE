@@ -122,18 +122,18 @@ character(len=*), parameter :: DIR_SET                        = 'set_'
 character(len=*), parameter :: USER_PARAMS2D                  = 'stream2D_user_params.txt'
 character(len=*), parameter :: OPTICS_MAP_PREFIX              = 'optics_map_'
 ! STARFILES
-character(len=*), parameter :: MICS_STAR_BODY                = 'micrographs'
-character(len=*), parameter :: PTCL2D_STAR_BODY              = 'particles2D'
+character(len=*), parameter :: MICS_STAR_BODY                 = 'micrographs'
+character(len=*), parameter :: PTCL2D_STAR_BODY               = 'particles2D'
 ! WORKERS
-character(len=*), parameter :: WORKER_SCRIPT_PREFIX         = 'worker_'
-character(len=*), parameter :: WORKER_DIR                   = 'workers/'
+character(len=*), parameter :: WORKER_SCRIPT_PREFIX           = 'worker_'
+character(len=*), parameter :: WORKER_DIR                     = 'workers/'
 ! MISCELLANEOUS
-character(len=3), parameter :: NIL                           = 'nil'
-character(len=*), parameter :: STDERR2STDOUT                 = '2>&1'
-character(len=*), parameter :: CLUST_MEDIODS_FNAME           = 'clust_medoids.bin'
-character(len=*), parameter :: TMP_STK_FNAME                 = 'temp.mrc'
+character(len=3), parameter :: NIL                            = 'nil'
+character(len=*), parameter :: STDERR2STDOUT                  = '2>&1'
+character(len=*), parameter :: CLUST_MEDIODS_FNAME            = 'clust_medoids.bin'
+character(len=*), parameter :: TMP_STK_FNAME                  = 'temp.mrc'
 ! character constants
-character(len=*), parameter :: NEWLINE                       = new_line('a')
-character(len=*), parameter :: SUPPRESS_MSG                  = '2>/dev/null'
-character(len=*), parameter :: CSV_DELIM                     = ', '
+character(len=*), parameter :: NEWLINE                        = new_line('a')
+character(len=*), parameter :: SUPPRESS_MSG                   = '2>/dev/null'
+character(len=*), parameter :: CSV_DELIM                      = ', '
 end module simple_defs_fname

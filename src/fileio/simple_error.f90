@@ -17,7 +17,6 @@ end interface simple_exception
 contains
 
     subroutine simple_exception_hard( msg, file, line )
-!GCC$ ATTRIBUTES NORETURN :: simple_exception_hard
         character(len=*), intent(in) :: msg, file
         integer,          intent(in) :: line
         call simple_exception_opt(msg, file, line, .true.)

@@ -103,9 +103,6 @@ end function cast_time_char
       tickrate = INT(0, timer_int_kind)
       if (clock_ticks_per_second .eq. 0) call system_clock(count_rate=tickrate)
       clock_ticks_per_second = tickrate
-#ifdef _DEBUG
-      write (*, '(A,1d20.10)') " CLOCK_RATE(ticks/sec) ", REAL(clock_ticks_per_second, timer_int_kind)
-#endif
    end function tickrate
 
 !< Calculate the time from two timestamps
@@ -146,9 +143,6 @@ end function cast_time_char
 
       if (present(tstart)) last_time_point = tstart
       call system_clock(count=end_point)
-#ifdef _DEBUG
-      write (*, '(A,1ES20.10)') " TOC Time stamp ", REAL(end_point, timer_int_kind)
-#endif
       elapsed = tdiff(end_point, last_time_point)
       last_time_point = end_point
       write (*, '(A,A,1ES20.10)') trim(comment), " Elapsed time ", elapsed
@@ -377,9 +371,6 @@ end function cast_time_char
       if (ival .gt. num_profile_vars) then
          write (*, '(A,A,A,1i10)') "Error Timer_Profile_start:", &
             trim(adjustl(token)), " label index outside range ", ival
-#ifdef _DEBUG
-      else
-#endif
       end if
    end subroutine timer_profile_start
 
@@ -414,11 +405,6 @@ end function cast_time_char
       if (iloop .gt. num_profile_loops + 1) then
          write (*, '(A,1i8)') "Error profile: loop index outside range ", iloop
       end if
-#ifdef _DEBUG
-      if ((ival .gt. num_profile_vars) .or. (iloop .gt. num_profile_loops)) then
-         write (*, '(A,2i10)') "Timer_Profile_break: label/loop index outside range ", ival, iloop
-      end if
-#endif
    end subroutine timer_profile_break
 
 !< Profile report

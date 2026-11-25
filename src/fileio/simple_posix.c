@@ -183,21 +183,11 @@ static int regerror(int errcode, const regex_t *preg, char *errbuf, size_t errbu
 #include <ftw.h>
 #endif
 /* By default, print all messages of severity info and above.  */
-#ifdef _DEBUG
-static int global_debug = 3;
-#else
 static int global_debug = 1;
-#endif
 /* Name of this program */
 static char *global_progname = "simple_posix";
-#ifdef _DEBUG
-#define dgprintf if (global_debug >= 3) \
-        fprintf (stderr, "%s: debug: (%d) ", global_progname, __LINE__), \
-        fprintf
-#else
 void noprint(FILE *f,...){}
 #define dgprintf noprint
-#endif
 #define eprintf if (global_debug >= 0) \
         fprintf (stderr, "%s: error: (%d) ", global_progname, __LINE__), \
         fprintf

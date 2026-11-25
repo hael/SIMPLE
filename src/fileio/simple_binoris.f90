@@ -205,9 +205,6 @@ contains
         ! write orientation data (2nd part)
         ibytes = self%header(isegment)%first_data_byte
         if( is_particle_seg(isegment) )then
-#ifdef _DEBUG
-             call check_particle_slots(os, int(self%header(isegment)%fromto))
-#endif
              do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
                 call os%ori2prec(i, ptcl_record)
                 disk_record(1:N_PTCL_ORIPARAMS) = ptcl_record
@@ -422,9 +419,6 @@ contains
         ! write orientation data
         ibytes = self%header(isegment)%first_data_byte
         if( is_particle_seg(isegment) )then ! is ptcl2D or ptcl3D segment, see simple_sp_project
-#ifdef _DEBUG
-             call check_particle_slots(os, int(self%header(isegment)%fromto))
-#endif
              do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
                 call os%ori2prec(i, ptcl_record)
                 disk_record(1:N_PTCL_ORIPARAMS) = ptcl_record
@@ -803,24 +797,5 @@ contains
         ! type(oris) :: os_ptcl3D ! per-particle 3D os, segment 6
         if( isegment == 3 .or. isegment == 6 ) is_particle_seg = .true.
     end function is_particle_seg
-
-#ifdef _DEBUG
-    !> a particle record carries only its named slots: a key the write would drop stops (Debug builds)
-    subroutine check_particle_slots( os, fromto )
-        class(oris), intent(in) :: os
-        integer,     intent(in) :: fromto(2)
-        type(string)                  :: key
-        character(len=:), allocatable :: msg
-        integer                       :: i
-        do i = fromto(1), fromto(2)
-            key = os%nonslot_key(i)
-            if( key%strlen_trim() > 0 )then
-                msg = 'particle row '//int2str(i)//' carries the key '//key%to_char()//&
-                    &', which no named slot holds (a project write would drop it)'
-                THROW_HARD(msg)
-            endif
-        enddo
-    end subroutine check_particle_slots
-#endif
 
 end module simple_binoris

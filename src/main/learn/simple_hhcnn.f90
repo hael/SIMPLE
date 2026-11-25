@@ -59,19 +59,11 @@ real(sp),       parameter :: NORM_EPS            = 1.e-3                      !<
 real(sp),       parameter :: ADAM_BETA1          = 0.9
 real(sp),       parameter :: ADAM_BETA2          = 0.999
 real(sp),       parameter :: ADAM_EPS            = 1.e-8
-! the products' arithmetic is a property of the build and the shape, never of the team, so that a step is the same at
-! any thread count: sgemm where the build's BLAS stays on the calling thread inside teams; otherwise the faster of the
-! explicit loops and the matmul intrinsic (the runtime's single-threaded product, optimised even in a Debug build,
-! whose loops are not): doc/algorithms/pose_student.md
+! Products use team-safe BLAS or a shape-dependent choice of loops and matmul, independent of thread count.
 #ifdef SIMPLE_BLAS_TEAM_SAFE
 logical, parameter :: L_BLAS_TEAM_SAFE = .true.
 #else
 logical, parameter :: L_BLAS_TEAM_SAFE = .false.
-#endif
-#ifdef _DEBUG
-logical, parameter :: L_MATMUL_PRODUCTS = .true.
-#else
-logical, parameter :: L_MATMUL_PRODUCTS = .false.
 #endif
 
 !> one convolution block: real kernels w(cout, 9 cin) over the 3 by 3 taps (ci fastest, then the angle offset,
@@ -537,8 +529,8 @@ contains
 
     ! ===== THE LAYERS =====
 
-    !> c = beta c + a b (a: m x k, b: k x n), on the calling thread; without a team-safe BLAS matmul in a Debug build,
-    !! otherwise the loops down the columns of c (contiguous, vectorised); c not read where beta is zero as sgemm does not
+    !> c = beta c + a b (a: m x k, b: k x n), using team-safe BLAS or contiguous column loops.
+    !! c is not read where beta is zero, as with sgemm.
     subroutine gemm_nn( m, n, k, a, lda, b, ldb, c, ldc, beta )
         integer,  intent(in)    :: m, n, k, lda, ldb, ldc
         real(sp), intent(in)    :: a(lda,*), b(ldb,*), beta
@@ -546,12 +538,6 @@ contains
         integer :: j, l
         if( L_BLAS_TEAM_SAFE )then
             call sgemm('N', 'N', m, n, k, 1.0, a, lda, b, ldb, beta, c, ldc)
-        else if( L_MATMUL_PRODUCTS )then
-            if( beta == 0. )then
-                c(1:m,1:n) = matmul(a(1:m,1:k), b(1:k,1:n))
-            else
-                c(1:m,1:n) = beta * c(1:m,1:n) + matmul(a(1:m,1:k), b(1:k,1:n))
-            endif
         else
             do j = 1,n
                 if( beta == 0. )then
@@ -566,19 +552,14 @@ contains
         endif
     end subroutine gemm_nn
 
-    !> c = c + a b^T (a: m x k, b: n x k); without a team-safe BLAS in a Debug build b is transposed first, since
-    !! matmul of a transposed section runs at a sixth of its speed
+    !> c = c + a b^T (a: m x k, b: n x k), using team-safe BLAS or contiguous column loops.
     subroutine gemm_nt_acc( m, n, k, a, lda, b, ldb, c, ldc )
         integer,  intent(in)    :: m, n, k, lda, ldb, ldc
         real(sp), intent(in)    :: a(lda,*), b(ldb,*)
         real(sp), intent(inout) :: c(ldc,*)
-        real(sp), allocatable   :: bt(:,:)
         integer                 :: j, l
         if( L_BLAS_TEAM_SAFE )then
             call sgemm('N', 'T', m, n, k, 1.0, a, lda, b, ldb, 1.0, c, ldc)
-        else if( L_MATMUL_PRODUCTS )then
-            bt = transpose(b(1:n,1:k))
-            c(1:m,1:n) = c(1:m,1:n) + matmul(a(1:m,1:k), bt)
         else
             do j = 1,n
                 do l = 1,k
@@ -588,9 +569,8 @@ contains
         endif
     end subroutine gemm_nt_acc
 
-    !> c = a^T b (a: k x m, b: k x n); without a team-safe BLAS a is transposed whole and multiplied by matmul in a
-    !! Debug build and for fewer than CNN_MATMUL_ROWS rows, otherwise transposed in blocks of CNN_LOOP_ROWS rows of c
-    !! so that the loops run down the columns of c as gemm_nn's do
+    !> c = a^T b (a: k x m, b: k x n); without team-safe BLAS, small products use matmul.
+    !! Larger products transpose in blocks so the loops run down contiguous columns.
     subroutine gemm_tn( m, n, k, a, lda, b, ldb, c, ldc )
         integer,  intent(in)    :: m, n, k, lda, ldb, ldc
         real(sp), intent(in)    :: a(lda,*), b(ldb,*)
@@ -600,7 +580,7 @@ contains
         integer               :: i0, nr, i, j, l
         if( L_BLAS_TEAM_SAFE )then
             call sgemm('T', 'N', m, n, k, 1.0, a, lda, b, ldb, 0.0, c, ldc)
-        else if( L_MATMUL_PRODUCTS .or. m < CNN_MATMUL_ROWS )then
+        else if( m < CNN_MATMUL_ROWS )then
             atw = transpose(a(1:k,1:m))
             c(1:m,1:n) = matmul(atw, b(1:k,1:n))
         else
