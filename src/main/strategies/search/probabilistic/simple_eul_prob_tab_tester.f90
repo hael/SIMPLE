@@ -134,7 +134,7 @@ contains
         call calc%set_rnd_scope(scope)
         allocate(row(nrots), post(nrots), lm(MG_NREFS), iref_of(MG_NREFS), pens(MG_NREFS), drow(MG_NREFS))
         allocate(lnz_ins(MG_NREFS), dmin_ins(MG_NREFS), wq(INPL_POSTERIOR_BUDGET), iq(INPL_POSTERIOR_BUDGET))
-        allocate(bank(MG_PFTSZ+1, MG_KFROMTO(2)-MG_KFROMTO(1)+1))
+        allocate(bank(2*(MG_KFROMTO(2)-MG_KFROMTO(1)+1), MG_PFTSZ+1))
         do iref = 1,MG_NREFS
             iref_of(iref) = iref
         enddo

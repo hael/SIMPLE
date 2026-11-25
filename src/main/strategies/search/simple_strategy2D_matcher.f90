@@ -511,7 +511,7 @@ contains
             real    :: lp_band
             kfromto = b_ptr%pftc%get_kfromto()
             call inpl_ins%new(INPL_POSTERIOR_BUDGET, max(1,batchsz_max))
-            call prep_strategy2D_inpl_bank(b_ptr%pftc%get_pftsz() + 1, kfromto(2) - kfromto(1) + 1)
+            call prep_strategy2D_inpl_bank(2 * (kfromto(2) - kfromto(1) + 1), b_ptr%pftc%get_pftsz() + 1)
             lp_band   = real(p_ptr%box_crop) * p_ptr%smpd_crop / real(max(1,kfromto(2)))
             inpl_mmax = 0
             if( p_ptr%mskdiam > 0. ) inpl_mmax = ceiling(PI * p_ptr%mskdiam / lp_band)

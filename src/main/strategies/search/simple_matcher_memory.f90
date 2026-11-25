@@ -31,7 +31,7 @@ contains
         fixed_bytes = fixed_bytes + 4_int64 * nrows * (box/2_int64)
         fixed_bytes = fixed_bytes + int(nthreads,int64) * &
             &(128_int64*(p+1_int64)*max(ni,nk) + 8_int64*(crop*crop+pad*pad))
-        particle_bytes = 12_int64*p*ni + 16_int64*(p+1_int64)*nk + 8_int64*nk + 32_int64
+        particle_bytes = 12_int64*p*ni + 48_int64*(p+1_int64)*nk + 8_int64*nk + 32_int64
         particle_bytes = particle_bytes + 4_int64*(box+2_int64)*box
         if( box_sums > 0 )then
             sum_box = int(box_sums,int64)
@@ -42,19 +42,18 @@ contains
         endif
     end subroutine matcher_memory_terms
 
-    !> The block kernel's memory, for a table that scores with it: the bin-major reference memo of both halves
-    !! (memoize_ref_bins) and each thread's particle terms, tile, products, transposed products and transforms
-    pure integer(int64) function matcher_block_kernel_bytes( params, nrefs, nthreads ) result( nbytes )
+    !> The block kernel's memory, for a table that scores with it: each thread's particle terms, gathered tile,
+    !! products, transposed products and transforms; it reads the reference memo every kernel reads
+    pure integer(int64) function matcher_block_kernel_bytes( params, nthreads ) result( nbytes )
         use simple_polarft_calc, only: PFTC_BLOCK_NB, PFTC_BLOCK_NR
         class(parameters), intent(in) :: params
-        integer,           intent(in) :: nrefs, nthreads
+        integer,           intent(in) :: nthreads
         integer(int64) :: p1, n2k, nb, nr
         p1  = int(max(1,params%pftsz),int64) + 1_int64
         n2k = 2_int64 * int(max(1,params%kfromto(2)-params%kfromto(1)+1),int64)
         nb  = int(PFTC_BLOCK_NB,int64)
         nr  = int(PFTC_BLOCK_NR,int64)
-        nbytes = 16_int64 * n2k * int(max(1,nrefs),int64) * p1
-        nbytes = nbytes + int(max(1,nthreads),int64) * (8_int64 * (n2k*nb*p1 + n2k*nr + 2_int64*nb*nr*p1) +&
+        nbytes = int(max(1,nthreads),int64) * (8_int64 * (n2k*nb*p1 + n2k*nr + 2_int64*nb*nr*p1) +&
             &8_int64 * (p1 - 1_int64) * nr * nb)
     end function matcher_block_kernel_bytes
 

@@ -593,9 +593,9 @@ contains
                 !$ nthreads = omp_get_max_threads()
                 call matcher_memory_terms(p_ptr, nrefs, nptcls, nthreads, 0, fixed_bytes, particle_bytes)
                 ! the dense table and the neighbourhood table's state mode (its representatives) score with the block
-                ! kernel: its bin-major reference memo and per-thread work
+                ! kernel: its per-thread work
                 if( trim(ctrl%refine_mode) /= 'prob_neigh' .or. trim(p_ptr%prob_neigh_mode) == 'state' )&
-                    &fixed_bytes = fixed_bytes + matcher_block_kernel_bytes(p_ptr, nrefs, nthreads)
+                    &fixed_bytes = fixed_bytes + matcher_block_kernel_bytes(p_ptr, nthreads)
                 preferred   = batchsz_max
                 batchsz_max = matcher_batch_capacity(nptcls, preferred, nthreads, pipeline_budget, fixed_bytes, particle_bytes)
                 if( batchsz_max < preferred ) write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
@@ -643,11 +643,11 @@ contains
                 allocate(eul_prob_tab_neigh :: eulprob_obj_part)
                 select type( tab => eulprob_obj_part )
                     type is( eul_prob_tab_neigh )
-                        call tab%new_neigh_pipeline(p_ptr, b_ptr, pinds, block_memo=.true.)
+                        call tab%new_neigh_pipeline(p_ptr, b_ptr, pinds)
                 end select
             else
                 allocate(eul_prob_tab :: eulprob_obj_part)
-                call eulprob_obj_part%new_pipeline(p_ptr, b_ptr, pinds, block_memo=.true.)
+                call eulprob_obj_part%new_pipeline(p_ptr, b_ptr, pinds)
             endif
             call eulprob_obj_part%set_model_from_field
             if( p_ptr%topk > 1 ) call eulprob_obj_part%set_insert_cone(insert_cone_from_fsc(p_ptr%nstates, &

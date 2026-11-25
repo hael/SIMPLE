@@ -57,6 +57,8 @@ contains
                     &real(self%sigma2_noise(ik,ih),dp)
             enddo
         enddo
+        ! the memoised particle terms carry the weights
+        if( self%ptcl_gen_memo == self%ptcl_gen ) call memoize_ptcl_terms(self)
     end subroutine memoize_sigma2_weights
 
     !> The particle self-term under the current sigma2: memoised by memoize_sqsum_ptcl and refreshed by
@@ -124,7 +126,44 @@ contains
         enddo
         !$omp end parallel do
         self%ptcl_gen_memo = self%ptcl_gen
+        call memoize_ptcl_terms(self)
     end subroutine memoize_ptcls
+
+    !> The particle terms the memo kernels sum against the reference terms, from the finished ft_ctf2 and
+    !! ft_ptcl_ctf: per particle and bin FT(CTF2) and FT(X.CTF) for the cc kernels, and w_k FT(CTF2) and
+    !! -2 w_k FT(X.CTF) under the weights of the particle's half for the Euclidean ones, made when the weights exist
+    !! (memoize_sigma2_weights calls again when they change)
+    subroutine memoize_ptcl_terms( self )
+        class(polarft_calc), intent(inout) :: self
+        real(sp) :: a(self%nk), b(self%nk)
+        integer  :: i, ih, p, k, kk, k0
+        logical  :: l_weights
+        if( .not. allocated(self%ft_ptcl_terms) ) return
+        l_weights = allocated(self%sigma2_wk)
+        k0 = self%kfromto(1)
+        !$omp parallel do private(i,ih,p,k,kk,a,b) default(shared) proc_bind(close) schedule(static)
+        do i = 1, self%nptcls
+            do p = 1, self%pftsz+1
+                do k = self%kfromto(1), self%kfromto(2)
+                    kk = k - k0 + 1
+                    self%ft_ptcl_terms(kk,p,i)         = self%ft_ctf2(p,k,i)
+                    self%ft_ptcl_terms(self%nk+kk,p,i) = self%ft_ptcl_ctf(p,k,i)
+                enddo
+            enddo
+            if( .not. l_weights ) cycle
+            ih = merge(1, 2, self%iseven(i))
+            a  = self%sigma2_wk(:,ih)
+            b  = -2._sp * a
+            do p = 1, self%pftsz+1
+                do k = self%kfromto(1), self%kfromto(2)
+                    kk = k - k0 + 1
+                    self%ft_ptcl_wterms(kk,p,i)         = a(kk) * self%ft_ctf2(p,k,i)
+                    self%ft_ptcl_wterms(self%nk+kk,p,i) = b(kk) * self%ft_ptcl_ctf(p,k,i)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine memoize_ptcl_terms
 
     !> a scorer reads the memoised particle transforms: they must be those of the particles set now
     module subroutine check_ptcl_memo(self)
@@ -148,22 +187,31 @@ contains
         self%ptcl_gen = self%ptcl_gen + 1_int64
     end subroutine bump_ptcl_gen
 
-    !> FT of the particle times CTF shifted by -shift in its own (particle) frame, in the layout of ft_ptcl_ctf:
-    !! bank(:,k-kfromto(1)+1) for k = kfromto(1):kfromto(2). Scored against an unshifted reference it equals the
-    !! reference shifted by +shift. Thread-safe: works in the calling thread's FFT buffers, writes only bank.
+    !> The particle's terms with FT(X.CTF) shifted by -shift in its own (particle) frame, in the layout of the
+    !! particle terms of the calculator's objective: bank(2nk, pftsz+1), rows 1..nk the memoised FT(CTF2) terms, rows
+    !! nk+1..2nk the shifted FT(X.CTF) weighted alike. Scored against an unshifted reference it equals the reference
+    !! shifted by +shift. Thread-safe: works in the calling thread's FFT buffers, writes only bank.
     module subroutine memoize_shifted_ptcl(self, iptcl, shift, bank)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl
         real(sp),            intent(in)    :: shift(2)
         complex(sp),         intent(out)   :: bank(:,:)
         complex(sp), pointer :: shmat(:,:)
-        integer              :: ithr, i, k, kk, k0
-        if( size(bank,1) /= self%pftsz+1 .or. size(bank,2) /= self%nk )then
+        real(sp)             :: b(self%nk)
+        integer              :: ithr, i, k, kk, k0, p
+        logical              :: l_euclid
+        if( size(bank,1) /= 2*self%nk .or. size(bank,2) /= self%pftsz+1 )then
             THROW_HARD('shifted particle bank has the wrong shape; memoize_shifted_ptcl')
         endif
+        call self%check_ptcl_memo
         ithr  =  omp_get_thread_num() + 1
         i     =  self%pinds(iptcl)
         k0    =  self%kfromto(1)
+        l_euclid = self%is_euclid_objfun()
+        if( l_euclid )then
+            call self%check_euclid_weights
+            b = -2._sp * self%sigma2_wk(:,merge(1, 2, self%iseven(i)))
+        endif
         shmat => self%heap_vars(ithr)%shmat
         call self%gen_shmat4aln(ithr, shift, shmat)
         do k = self%kfromto(1), self%kfromto(2)
@@ -176,9 +224,21 @@ contains
             self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
         end do
         call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-        do kk = 1, self%nk
-            bank(:,kk) = self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)
-        end do
+        if( l_euclid )then
+            do p = 1, self%pftsz+1
+                bank(1:self%nk,p) = self%ft_ptcl_wterms(1:self%nk,p,i)
+                do kk = 1, self%nk
+                    bank(self%nk+kk,p) = b(kk) * self%cmat2_many(ithr)%c(p,kk)
+                end do
+            end do
+        else
+            do p = 1, self%pftsz+1
+                bank(1:self%nk,p) = self%ft_ptcl_terms(1:self%nk,p,i)
+                do kk = 1, self%nk
+                    bank(self%nk+kk,p) = self%cmat2_many(ithr)%c(p,kk)
+                end do
+            end do
+        endif
     end subroutine memoize_shifted_ptcl
 
     module subroutine memoize_refs(self, eulspace)
@@ -213,9 +273,10 @@ contains
                     psi = canonical_mirror_frame_angle(frame_angles(iproj))
                     half_turn = psi == 180._dp
                     if( psi == 0._dp .or. half_turn )then
-                        self%ft_ref(:,:,mref,:) = conjg(self%ft_ref(:,:,iref,:))
-                        if( half_turn ) self%ft_ref(2:self%pftsz+1:2,:,mref,:) = -self%ft_ref(2:self%pftsz+1:2,:,mref,:)
-                        self%ft_ref2(:,:,mref,:) = conjg(self%ft_ref2(:,:,iref,:))
+                        ! the mirror's FT(REF) and FT(REF2) are the conjugates; a half turn flips FT(REF)'s odd orders
+                        self%ft_ref_terms(:,:,mref,:) = conjg(self%ft_ref_terms(:,:,iref,:))
+                        if( half_turn ) self%ft_ref_terms(self%nk+1:,2:self%pftsz+1:2,mref,:) = &
+                            &-self%ft_ref_terms(self%nk+1:,2:self%pftsz+1:2,mref,:)
                     else
                         ! Form the power memo from the resampled reference, preserving its actual squared modulus.
                         call memoize_one_ref(self,mref,ithr)
@@ -231,54 +292,29 @@ contains
             enddo
             !$omp end parallel do
         endif
-        self%ref_gen = self%ref_gen + 1_int64
     end subroutine memoize_refs
-
-    !> The block kernel's bin-major copy of the reference memo, a layout transform of the finished ft_ref and ft_ref2
-    !! (so it carries memoize_refs' mirrors): for a table that scores with the block kernel, after memoize_refs
-    module subroutine memoize_ref_bins( self )
-        class(polarft_calc), intent(inout) :: self
-        character(len=STDLEN) :: alloc_msg
-        integer               :: iref, ieo, j, k, kk, alloc_stat
-        if( OMP_IN_PARALLEL() ) THROW_HARD('No memoization inside OpenMP regions')
-        if( self%ref_gen < 1_int64 .or. .not. allocated(self%ft_ref) ) THROW_HARD('memoize_ref_bins after memoize_refs')
-        if( .not. allocated(self%ft_ref_bins) )then
-            alloc_msg = ''
-            allocate(self%ft_ref_bins(2*self%nk,self%nrefs,self%pftsz+1,N_REF_PARITIES), stat=alloc_stat, errmsg=alloc_msg)
-            if( alloc_stat /= 0 ) THROW_HARD('memoize_ref_bins failed allocating the bin-major memo: '//trim(alloc_msg))
-        endif
-        !$omp parallel do private(iref,ieo,j,k,kk) default(shared) proc_bind(close) schedule(static)
-        do iref = 1,self%nrefs
-            do ieo = REF_EVEN,REF_ODD
-                do j = 1,self%pftsz+1
-                    do k = self%kfromto(1),self%kfromto(2)
-                        kk = k - self%kfromto(1) + 1
-                        self%ft_ref_bins(kk,iref,j,ieo)         = conjg(self%ft_ref2(j,k,iref,ieo))
-                        self%ft_ref_bins(self%nk+kk,iref,j,ieo) = self%ft_ref(j,k,iref,ieo)
-                    enddo
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-        self%ref_gen_bins = self%ref_gen
-    end subroutine memoize_ref_bins
 
     !> Transform one reference's two halves using the calling thread's existing FFT workspace.
     subroutine memoize_one_ref(self, iref, ithr)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, ithr
-        integer :: ieo
+        integer :: ieo, p, kk
         do ieo = REF_EVEN,REF_ODD
             self%cmat2_many(ithr)%c(1:self%pftsz,:) = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
             self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots,:) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz,:))
             call fftwf_execute_dft(self%plan_fwd1_many,self%cmat2_many(ithr)%c,self%cmat2_many(ithr)%c)
-            self%ft_ref(:,:,iref,ieo) = self%cmat2_many(ithr)%c(1:self%pftsz+1,:)
             self%crmat1_many(ithr)%r(1:self%pftsz,:) = real( &
                 self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)* &
                 conjg(self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)))
             self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots,:) = self%crmat1_many(ithr)%r(1:self%pftsz,:)
             call fftwf_execute_dft_r2c(self%plan_mem_r2c_many,self%crmat1_many(ithr)%r,self%crmat1_many(ithr)%c)
-            self%ft_ref2(:,:,iref,ieo) = conjg(self%crmat1_many(ithr)%c)
+            ! FT(REF2) is the conjugate of the power's r2c transform, so its conjugate is the transform itself
+            do p = 1,self%pftsz+1
+                do kk = 1,self%nk
+                    self%ft_ref_terms(kk,p,iref,ieo)         = self%crmat1_many(ithr)%c(p,kk)
+                    self%ft_ref_terms(self%nk+kk,p,iref,ieo) = self%cmat2_many(ithr)%c(p,kk)
+                enddo
+            enddo
         enddo
     end subroutine memoize_one_ref
 
@@ -291,7 +327,7 @@ contains
         call self%kill_memo_ptcls
         nelems   = int(self%pftsz+1,kind=longer) * int(self%nk,kind=longer) * int(self%nptcls,kind=longer)
         array_gb = real(nelems,dp) * 8.d0 / (1024.d0**3)
-        total_gb = 2.d0 * array_gb
+        total_gb = 6.d0 * array_gb
         alloc_msg = ''
         allocate(self%ft_ptcl_ctf(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nptcls),&
                 &stat=alloc_stat, errmsg=alloc_msg)
@@ -304,6 +340,13 @@ contains
         if( alloc_stat /= 0 )then
             if( allocated(self%ft_ptcl_ctf) ) deallocate(self%ft_ptcl_ctf)
             call memo_ptcls_alloc_error('ft_ctf2', array_gb, total_gb, trim(alloc_msg))
+        endif
+        alloc_msg = ''
+        allocate(self%ft_ptcl_terms(2*self%nk,self%pftsz+1,self%nptcls),&
+                &self%ft_ptcl_wterms(2*self%nk,self%pftsz+1,self%nptcls), stat=alloc_stat, errmsg=alloc_msg)
+        if( alloc_stat /= 0 )then
+            deallocate(self%ft_ptcl_ctf, self%ft_ctf2)
+            call memo_ptcls_alloc_error('ft_ptcl_terms', 4.d0 * array_gb, total_gb, trim(alloc_msg))
         endif
 
     contains
@@ -324,8 +367,7 @@ contains
     module subroutine alloc_memo_refs(self)
         class(polarft_calc), intent(inout) :: self
         call self%kill_memo_refs
-        allocate(self%ft_ref( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs,N_REF_PARITIES),&
-                &self%ft_ref2(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs,N_REF_PARITIES))
+        allocate(self%ft_ref_terms(2*self%nk,self%pftsz+1,self%nrefs,N_REF_PARITIES))
     end subroutine alloc_memo_refs
 
     module subroutine allocate_memo_workspace(self, nmany_refs)
@@ -472,15 +514,13 @@ contains
     module subroutine kill_memo_ptcls(self)
         class(polarft_calc), intent(inout) :: self
         if( allocated(self%ft_ptcl_ctf) )    deallocate(self%ft_ptcl_ctf,self%ft_ctf2)
+        if( allocated(self%ft_ptcl_terms) )  deallocate(self%ft_ptcl_terms)
+        if( allocated(self%ft_ptcl_wterms) ) deallocate(self%ft_ptcl_wterms)
     end subroutine kill_memo_ptcls
 
     module subroutine kill_memo_refs(self)
         class(polarft_calc), intent(inout) :: self
-        if( allocated(self%ft_ref) )then
-            deallocate(self%ft_ref,self%ft_ref2)
-        endif
-        if( allocated(self%ft_ref_bins) ) deallocate(self%ft_ref_bins)
-        self%ref_gen_bins = -1_int64
+        if( allocated(self%ft_ref_terms) ) deallocate(self%ft_ref_terms)
     end subroutine kill_memo_refs
 
     module subroutine kill_memo_workspace(self)

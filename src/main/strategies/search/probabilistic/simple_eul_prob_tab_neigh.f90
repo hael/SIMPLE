@@ -92,18 +92,13 @@ contains
 
     !> the pipeline's neighbourhood table of a part (the shared-memory matcher): the assignment map, the thread
     !! buffers the fill keeps for the batch's own selection (assign_batch); no part file. The state mode scores the
-    !! subspace representatives with the block kernel: with block_memo (a caller whose references are memoized) the
-    !! state mode asks for the kernel's memo
-    subroutine new_neigh_pipeline( self, params, build, pinds, block_memo )
-        class(eul_prob_tab_neigh), intent(inout)                :: self
-        class(parameters),         target, intent(in)           :: params
-        class(builder),            target, intent(in)           :: build
-        integer,                   intent(in)                   :: pinds(:)
-        logical,                   optional,         intent(in) :: block_memo
-        logical :: l_memo
-        l_memo = .false.
-        if( present(block_memo) ) l_memo = block_memo .and. trim(params%prob_neigh_mode) == 'state'
-        call self%eul_prob_tab%new_pipeline(params, build, pinds, block_memo=l_memo)
+    !! subspace representatives with the block kernel
+    subroutine new_neigh_pipeline( self, params, build, pinds )
+        class(eul_prob_tab_neigh), intent(inout)      :: self
+        class(parameters),         target, intent(in) :: params
+        class(builder),            target, intent(in) :: build
+        integer,                   intent(in)         :: pinds(:)
+        call self%eul_prob_tab%new_pipeline(params, build, pinds)
         allocate(self%candidate_buffers(nthr_glob))
         call validate_neigh_mode(self)
         if( trim(self%p_ptr%prob_neigh_mode) == 'geom' ) call set_cell_radii(self)
@@ -559,7 +554,7 @@ contains
         ! the state mode's blocks hold a bank per slot, geom's particles one
         nslots = 1
         if( l_state_neigh ) nslots = PFTC_BLOCK_NB
-        allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto_loc(2)-kfromto_loc(1)+1, nslots, nteam))
+        allocate(seed_bank(2*(kfromto_loc(2)-kfromto_loc(1)+1), self%b_ptr%pftc%get_pftsz()+1, nslots, nteam))
         allocate(l_bank(nslots,nteam), source=.false.)
         nsubs        = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
@@ -1700,7 +1695,7 @@ contains
         complex(sp),               allocatable,  intent(inout) :: seed_bank(:,:,:)
         integer :: kfromto(2)
         kfromto = self%b_ptr%pftc%get_kfromto()
-        allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1, nthr_glob))
+        allocate(seed_bank(2*(kfromto(2)-kfromto(1)+1), self%b_ptr%pftc%get_pftsz()+1, nthr_glob))
     end subroutine alloc_seed_bank
 
     !> shifts the particle once by its seed (l_bank: the bank holds it) and counts the memos built

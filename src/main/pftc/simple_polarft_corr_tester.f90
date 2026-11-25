@@ -206,7 +206,7 @@ contains
         call pftc%assign_sigma2_noise(sigma2)
         call pftc%memoize_refs
         call pftc%memoize_ptcls
-        allocate(bank(pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1), seen(nrots), vals(nrots), w(nrots))
+        allocate(bank(2*(kfromto(2)-kfromto(1)+1), pftc%get_pftsz()+1), seen(nrots), vals(nrots), w(nrots))
         ! a huge temperature: the argmin of the same kernel, at a nonzero reference shift
         s = [1.3, -0.6]
         call pftc%gen_best_objfun_val(2, 1, s, dist_b, irot_b)
@@ -396,10 +396,9 @@ contains
         call pftc%assign_sigma2_noise(sigma2)
         call pftc%memoize_refs
         call pftc%memoize_ptcls
-        call pftc%memoize_ref_bins
         call pftc%set_rnd_scope(rnd_scope_key(20261121_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 1))
         ! seed banks for every other pair of particles (both halves), at random particle-frame shifts
-        allocate(banks(pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1, NPTCLS), source=cmplx(0.,0.,kind=sp))
+        allocate(banks(2*(kfromto(2)-kfromto(1)+1), pftc%get_pftsz()+1, NPTCLS), source=cmplx(0.,0.,kind=sp))
         allocate(l_bank(NPTCLS), temps(NPTCLS))
         do i = 1,NPTCLS
             l_bank(i) = mod((i+1)/2, 2) == 1
@@ -466,7 +465,7 @@ contains
                 enddo
             enddo
         enddo
-        ! with consecutive tiles (read in place) and listed ones (gathered): a pair's entry depends neither on its block
+        ! with consecutive tiles and listed ones: a pair's entry depends neither on its block
         ! (one per half, singletons) nor on its chunk of references, and a team scoring tasks of a block and a chunk
         ! gives what one thread gave for the whole, bit for bit in three repeats
         call make_blocks(4)
@@ -694,7 +693,7 @@ contains
         call pftc%assign_sigma2_noise(sigma2)
         call pftc%memoize_refs
         call pftc%memoize_ptcls
-        allocate(vals(nrots), bank(pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1))
+        allocate(vals(nrots), bank(2*(kfromto(2)-kfromto(1)+1), pftc%get_pftsz()+1))
         ! the at-pose loss at a nonzero reference shift is the shift search's objective, every rotation
         s = [1.3, -0.6]
         call pftc%gen_objfun_vals(1, 1, s, vals)

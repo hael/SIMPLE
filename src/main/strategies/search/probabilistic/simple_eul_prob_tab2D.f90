@@ -838,7 +838,7 @@ contains
         complex(sp),              allocatable, intent(inout) :: seed_bank(:,:,:)
         integer :: kfromto(2)
         kfromto = self%b_ptr%pftc%get_kfromto()
-        allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1, nthr_glob))
+        allocate(seed_bank(2*(kfromto(2)-kfromto(1)+1), self%b_ptr%pftc%get_pftsz()+1, nthr_glob))
     end subroutine alloc_seed_bank2D
 
     !> shifts the particle once by its seed (l_bank: the bank holds it) and counts the memos built

@@ -171,21 +171,16 @@ contains
     end subroutine initialize_storage
 
     !> the table of a part (the matcher's, in shared memory and in a distributed part alike): the assignment map and,
-    !! batch by batch, the rows the fill keeps for the batch's own selection (fill_tab_range, assign_batch); with
-    !! block_memo the calculator's bin-major reference memo the dense fill's block kernel reads (after memoize_refs)
-    subroutine new_pipeline( self, params, build, pinds, block_memo )
-        class(eul_prob_tab),       intent(inout)                :: self
-        class(parameters),         target, intent(in)           :: params
-        class(builder),            target, intent(in)           :: build
-        integer,                   intent(in)                   :: pinds(:)
-        logical,                   optional,         intent(in) :: block_memo
+    !! batch by batch, the rows the fill keeps for the batch's own selection (fill_tab_range, assign_batch)
+    subroutine new_pipeline( self, params, build, pinds )
+        class(eul_prob_tab),       intent(inout)      :: self
+        class(parameters),         target, intent(in) :: params
+        class(builder),            target, intent(in) :: build
+        integer,                   intent(in)         :: pinds(:)
         call self%new_common(params,build,pinds)
         allocate(self%assgn_map(self%nptcls))
         call self%initialize_storage
         self%seed_nrots = build%pftc%get_nrots()
-        if( present(block_memo) )then
-            if( block_memo ) call self%b_ptr%pftc%memoize_ref_bins
-        endif
     end subroutine new_pipeline
 
     !> the iteration's model from the complete incoming field (section 3.2 of the pipeline note): the refined-reference
@@ -340,7 +335,7 @@ contains
             if( self%p_ptr%l_shift_prior ) sigma2_prior = self%sigma2_prior_model
             if( l_sh_first )then
                 kfromto_loc = self%b_ptr%pftc%get_kfromto()
-                allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto_loc(2)-kfromto_loc(1)+1, PFTC_BLOCK_NB, nteam))
+                allocate(seed_bank(2*(kfromto_loc(2)-kfromto_loc(1)+1), self%b_ptr%pftc%get_pftsz()+1, PFTC_BLOCK_NB, nteam))
             endif
             ! the polar shift map (shift_sigma > 0): the coarse map over a particle's box at its likely references, the
             ! refinement at full resolution from its optimum. The box is the disk of three sigma under the prior for a

@@ -135,7 +135,6 @@ type :: polar_matching_bench
     real(dp)                         :: t_gmat             = 0._dp   !< seconds spent building gmat
     real(dp)                         :: t_parts(3)         = 0._dp   !< last score's thread seconds per part (replica, matrix)
     logical                          :: with_prod_refs     = .false., with_memo = .false., with_gmat = .false., l_cc = .false.
-    logical                          :: with_ref_bins      = .false. !< the calculator's bin-major memo is made (layout PMB_BLOCK_PROD)
     logical                          :: exists             = .false.
     class(builder),      allocatable :: build                        !< the fill harness's toolbox (fill_route > 0): the same references and particles in build%pftc, the particle field of previous poses, the direction space
     integer                          :: fill_route         = 0       !< the harness's route (PMB_ROUTE_*; 0: no harness)
@@ -499,13 +498,13 @@ contains
             endif
         end subroutine memoize_ref
 
-        ! memoize_ptcls' FT(X.CTF) (memoize_shifted_ptcl at zero shift: the same products and plan) and FT(CTF2)
-        ! from create_polar_absctfmats' CTF matrices, recomputed here
+        ! memoize_ptcls' FT(X.CTF) (its products of the calculator's particle and CTF matrix, transformed with the
+        ! benchmark's plan) and FT(CTF2) from create_polar_absctfmats' CTF matrices, recomputed here
         subroutine memoize_ptcls_here
             use simple_ctf, only: ctf
             type(ctf)                :: tfun
-            real(sp),    allocatable :: px(:,:), py(:,:), spafreqsq(:,:), angs(:,:), ctfmat(:,:)
-            complex(sp), allocatable :: bank(:,:)
+            real(sp),    allocatable :: px(:,:), py(:,:), spafreqsq(:,:), angs(:,:), ctfmat(:,:), ctf_ptcl(:,:)
+            complex(sp), allocatable :: pft_ptcl(:,:)
             real                     :: hinv, kinv
             integer                  :: irot, kh, kk, k0, ip
             k0 = self%kfromto(1)
@@ -513,7 +512,8 @@ contains
                     &self%ft_ctf2(self%pftsz+1,self%kfromto(1):self%kfromto(2),nptcls))
             allocate(px(self%kfromto(1):self%kfromto(2),self%pftsz), py(self%kfromto(1):self%kfromto(2),self%pftsz),&
                 &spafreqsq(self%pftsz,self%kfromto(1):self%kfromto(2)), angs(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                &ctfmat(self%pftsz,self%kfromto(1):self%kfromto(2)), bank(self%pftsz+1,self%nk))
+                &ctfmat(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                &ctf_ptcl(self%pftsz,self%kfromto(1):self%kfromto(2)), pft_ptcl(self%pftsz,self%kfromto(1):self%kfromto(2)))
             call self%pftc%get_polar_coords(1, px)
             call self%pftc%get_polar_coords(2, py)
             do irot = 1,self%pftsz
@@ -525,8 +525,18 @@ contains
                 end do
             end do
             do ip = 1,nptcls
-                call self%pftc%memoize_shifted_ptcl(ip, [0._sp,0._sp], bank)
-                self%ft_ptcl_ctf(:,:,ip) = bank
+                call self%pftc%get_ptcl_pft(ip, pft_ptcl)
+                call self%pftc%get_ptcl_ctfmat(ip, ctf_ptcl)
+                do kh = self%kfromto(1), self%kfromto(2)
+                    kk = kh - k0 + 1
+                    cmat(1:self%pftsz,kk)            = pft_ptcl(:,kh) * ctf_ptcl(:,kh)
+                    cmat(self%pftsz+1:self%nrots,kk) = conjg(cmat(1:self%pftsz,kk))
+                end do
+                call fftwf_execute_dft(plan_fwd, cmat, cmat)
+                do kh = self%kfromto(1), self%kfromto(2)
+                    kk = kh - k0 + 1
+                    self%ft_ptcl_ctf(:,kh,ip) = cmat(1:self%pftsz+1,kk)
+                end do
                 tfun = ctf(PMB_SMPD, PMB_KV, PMB_CS, PMB_FRACA)
                 call tfun%init(dfxs(ip), dfys(ip), angasts(ip))
                 ctfmat = abs(tfun%eval_canonical(spafreqsq, angs, 0.))
@@ -541,7 +551,7 @@ contains
                     self%ft_ctf2(:,kh,ip) = crc(:,kk)
                 end do
             enddo
-            deallocate(px, py, spafreqsq, angs, ctfmat, bank)
+            deallocate(px, py, spafreqsq, angs, ctfmat, ctf_ptcl, pft_ptcl)
         end subroutine memoize_ptcls_here
 
         ! the harness's toolbox: the calculator the tables reach through the builder holds the same references,
@@ -636,7 +646,6 @@ contains
         self%plan_bat  = c_null_ptr
         self%plan_bins = c_null_ptr
         self%plan_bins_shape = 0
-        self%with_ref_bins   = .false.
         self%exists = .false.
     end subroutine kill
 
@@ -663,9 +672,6 @@ contains
             case(PMB_BLOCK_PROD)
                 if( .not. self%with_prod_refs .or. self%l_cc ) THROW_HARD('polar_matching_bench: the block kernel needs production references and euclid')
                 if( bsz > PFTC_BLOCK_NB ) THROW_HARD('polar_matching_bench: the block kernel takes at most PFTC_BLOCK_NB particles')
-                ! the kernel's memo, made once outside the timed region as a table's new_pipeline makes it
-                if( .not. self%with_ref_bins ) call self%pftc%memoize_ref_bins
-                self%with_ref_bins = .true.
             case DEFAULT
                 THROW_HARD('polar_matching_bench: unknown layout')
         end select
@@ -1248,7 +1254,7 @@ contains
         !$ call omp_set_num_threads(nthr)
         nteam = 1
         !$ nteam = omp_get_max_threads()
-        allocate(bank(self%pftsz+1,self%nk,nteam), source=cmplx(0.,0.,kind=sp))
+        allocate(bank(2*self%nk,self%pftsz+1,nteam), source=cmplx(0.,0.,kind=sp))
         !$omp parallel do default(shared) private(i,ithr,iref) proc_bind(close) schedule(dynamic)
         do i = 1,nptcls_use
             ithr = 1
@@ -1416,7 +1422,7 @@ contains
             select case(self%fill_route)
                 case(PMB_ROUTE_3D_DENSE, PMB_ROUTE_3D_SEEDED, PMB_ROUTE_3D_NOSHIFT)
                     allocate(tab3D)
-                    call tab3D%new_pipeline(self%params, self%build, pinds, block_memo=.true.)
+                    call tab3D%new_pipeline(self%params, self%build, pinds)
                     call tab3D%set_iteration_model(projs_ns_model, sigma2_model)
                     call tab3D%set_insert_cone(cone)
                     call tab3D%open_assignment(nglob=self%nptcls, rank0=ioff)
@@ -1434,7 +1440,7 @@ contains
                     deallocate(tab3D)
                 case(PMB_ROUTE_3D_NEIGH, PMB_ROUTE_3D_STATE, PMB_ROUTE_3D_GEOM)
                     allocate(tabnb)
-                    call tabnb%new_neigh_pipeline(self%params, self%build, pinds, block_memo=.true.)
+                    call tabnb%new_neigh_pipeline(self%params, self%build, pinds)
                     call tabnb%set_iteration_model(0, sigma2_model)
                     call tabnb%set_insert_cone(cone)
                     call tabnb%open_assignment(nglob=self%nptcls, rank0=ioff)
@@ -1847,7 +1853,6 @@ contains
         call self%pftc%assign_sigma2_noise(self%sigma2)
         call self%pftc%memoize_refs
         call self%pftc%memoize_ptcls
-        call self%pftc%memoize_ref_bins
         call self%pftc%set_rnd_scope(rnd_scope_key(int(PMB_SEED, int64), RND_PROG_REFINE3D, RND_PASS_ALIGN, 1))
         allocate(self%temps(nptcls))
         do i = 1,nptcls

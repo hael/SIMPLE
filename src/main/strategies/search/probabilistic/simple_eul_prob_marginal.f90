@@ -79,7 +79,7 @@ contains
         allocate(self%refs(self%kin, i_first:i_last), source=0)
         allocate(self%rows(self%nrots, self%kin, i_first:i_last), source=0.)
         allocate(self%wrow(self%nrots, nthr), self%wcdf(self%nrots, nthr), source=0.)
-        allocate(self%bank(pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1, nthr))
+        allocate(self%bank(2*(kfromto(2)-kfromto(1)+1), pftc%get_pftsz()+1, nthr))
         self%exists = .true.
     end subroutine new
 

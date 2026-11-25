@@ -287,7 +287,8 @@ contains
         integer,                     intent(in)            :: imap, iref, iptcl
         type(shiftmap_work), pointer :: wk
         real(dp)                     :: w(self%kfromto(1):self%kfromto(2)), wj(self%kfromto(1):self%kfromto(2))
-        integer                      :: ithr, i, ieo, ih, k, m, n, irho, nrho, nmax, nalpha, nh, jn, sgn, kb(2), k1, k2, nwrap, ir0
+        complex(sp)                  :: csum
+        integer                      :: ithr, i, ieo, ih, k, k0, kr, m, n, irho, nrho, nmax, nalpha, nh, jn, sgn, kb(2), k1, k2, nwrap, ir0
         if( .not. self%has_shiftmap(imap) ) THROW_HARD('no shift map; new_shiftmap first; gen_shiftmap')
         ithr   =  omp_get_thread_num() + 1
         i      =  self%pinds(iptcl)
@@ -333,19 +334,33 @@ contains
         endif
         ! the weighted reference power under the rotated CTF: sum_k w_k FT(CTF2) FT(REF2) back-transformed is
         ! 2 nrots times the half-ring sum at every rotation (the reference term of the Euclidean kernels)
-        self%crvec1(ithr)%c = cmplx(0., 0., kind=c_float_complex)
-        do k = k1, k2
-            self%crvec1(ithr)%c = self%crvec1(ithr)%c + real(w(k), sp) * self%ft_ctf2(:,k,i) * self%ft_ref2(:,k,iref,ieo)
-        enddo
+        ! (euclid: one dot product per bin of the memoised terms over the map's shells, the weights in the particle
+        ! terms; cc weighs the shells by k, which the particle terms do not carry)
+        k0 = self%kfromto(1)
+        if( self%p_ptr%cc_objfun == OBJFUN_EUCLID )then
+            call term_sums(k2-k1+1, self%pftsz+1, self%ft_ref_terms(k1-k0+1,1,iref,ieo), 2*self%nk,&
+                &self%ft_ptcl_wterms(k1-k0+1,1,i), 2*self%nk, self%crvec1(ithr)%c)
+        else
+            do m = 1, self%pftsz+1
+                csum = cmplx(0., 0., kind=sp)
+                do k = k1, k2
+                    csum = csum + real(w(k), sp) * self%ft_ctf2(m,k,i) * conjg(self%ft_ref_terms(k-k0+1,m,iref,ieo))
+                enddo
+                self%crvec1(ithr)%c(m) = csum
+            enddo
+        endif
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
         wk%refpow = real(self%crvec1(ithr)%r(1:self%nrots), dp) / real(2 * self%nrots, dp)
         ! the full-ring spectra from the memoised half spectra: F[nrots - m] = (-1)^m conj(F[m])
         do k = k1, k2
-            wk%rhat(1:self%pftsz+1,k) =       self%ft_ref(:,k,iref,ieo)
+            kr = self%nk + k - k0 + 1
+            do m = 1, self%pftsz+1
+                wk%rhat(m,k) = self%ft_ref_terms(kr,m,iref,ieo)
+            enddo
             wk%yhat(1:self%pftsz+1,k) = conjg(self%ft_ptcl_ctf(:,k,i))
             do m = 1, self%pftsz - 1
                 sgn = 1 - 2 * mod(m, 2)
-                wk%rhat(self%nrots-m+1,k) = real(sgn, sp) * conjg(self%ft_ref(m+1,k,iref,ieo))
+                wk%rhat(self%nrots-m+1,k) = real(sgn, sp) * conjg(self%ft_ref_terms(kr,m+1,iref,ieo))
                 wk%yhat(self%nrots-m+1,k) = real(sgn, sp) *       self%ft_ptcl_ctf(m+1,k,i)
             enddo
         enddo

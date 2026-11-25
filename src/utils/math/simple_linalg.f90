@@ -13,7 +13,7 @@ public :: qr_solve
 public :: solve_real_spd_complex
 public :: cholesky, chol_forward, chol_backward, spd_inverse, spd_logdet, spd_solve_rel
 public :: trace, vabs, vector_angle_norm, vox2ang, ang2vox
-public :: gemm_tn, cgemm, sgemm, SGEMM_ONE_THREAD_MNK
+public :: gemm_tn, cgemm, sgemm, cdotc_sub, SGEMM_ONE_THREAD_MNK
 
 ! the bundled OpenBLAS computes a real product of m*n*k below this on the calling thread wherever it is called;
 ! past it a call outside an active OpenMP team may be threaded (from 125000 on its Neoverse V2 kernels, past 262144
@@ -101,6 +101,14 @@ interface
         complex(kind=4),  intent(in)    :: a(lda,*), b(ldb,*)
         complex(kind=4),  intent(inout) :: c(ldc,*)
     end subroutine cgemm
+
+    ! sum_i conj(x_i) y_i by the BLAS's C entry: a subroutine, so no complex function result crosses the call
+    subroutine cdotc_sub(n, x, incx, y, incy, dotc) bind(C, name='cblas_cdotc_sub')
+        use, intrinsic :: iso_c_binding, only: c_int, c_float_complex
+        integer(c_int),           value       :: n, incx, incy
+        complex(c_float_complex), intent(in)  :: x(*), y(*)
+        complex(c_float_complex), intent(out) :: dotc
+    end subroutine cdotc_sub
 
     function dnrm2(n, x, incx) result(res)
         integer(kind=4), intent(in) :: n, incx

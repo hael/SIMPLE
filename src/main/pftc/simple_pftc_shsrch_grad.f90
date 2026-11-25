@@ -68,7 +68,7 @@ type :: pftc_shsrch_grad
     integer(int64)            :: profile_fit(0:FIT_NREASONS) = 0_int64 !< (0) fits kept, (1:5) fallbacks per FIT_* reason
     ! particle-frame coarse grid (the multi-state probabilistic table)
     logical                   :: grid_ptcl           = .false. !< the grid is the lattice of particle-frame shifts, scored from a bank
-    complex(sp),  allocatable :: grid_bank(:,:,:)              !< shifted particle memos (pftsz+1, nk, lattice points + 1 scratch)
+    complex(sp),  allocatable :: grid_bank(:,:,:)              !< shifted particle banks (2nk, pftsz+1, lattice points + 1 scratch)
     integer                   :: grid_bank_ptcl      = 0       !< particle the bank was built for (0: none)
     real(dp)                  :: grid_u_star(2)      = 0.d0    !< lattice shift of the grid minimum
     integer(int64)            :: profile_bank_builds = 0_int64 !< shifted particle memos built
@@ -213,7 +213,7 @@ contains
         if( present(grid_ptcl) ) self%grid_ptcl = grid_ptcl .and. self%opt_angle .and. self%coarse_init
         if( self%grid_ptcl )then
             kfromto = self%b_ptr%pftc%get_kfromto()
-            allocate(self%grid_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1, &
+            allocate(self%grid_bank(2*(kfromto(2)-kfromto(1)+1), self%b_ptr%pftc%get_pftsz()+1, &
                 &coarse_num_steps*coarse_num_steps+1))
         endif
         self%grid_bank_ptcl = 0

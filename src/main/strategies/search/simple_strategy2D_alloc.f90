@@ -190,7 +190,7 @@ contains
     !> the per-thread shifted-particle banks of the in-plane insertion, sized by the team the pass's regions run
     subroutine prep_strategy2D_inpl_bank( nrow, ncol )
         !$ use omp_lib,   only: omp_get_max_threads
-        integer, intent(in) :: nrow, ncol !< pftsz + 1 and the number of shells of the band
+        integer, intent(in) :: nrow, ncol !< twice the number of shells of the band and pftsz + 1 (the bank's shape)
         integer :: nteam
         nteam = nthr_glob
         !$ nteam = omp_get_max_threads()

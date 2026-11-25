@@ -1015,7 +1015,7 @@ contains
             call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, [2., -1.5], .false.)
             nrots   = b%pftc%get_nrots()
             kfromto = b%pftc%get_kfromto()
-            allocate(bank(b%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1), vals(nrots), vals_today(nrots), pvec(nrots))
+            allocate(bank(2*(kfromto(2)-kfromto(1)+1), b%pftc%get_pftsz()+1), vals(nrots), vals_today(nrots), pvec(nrots))
             max_err   = 0.d0
             max_today = 0.d0
             do ish = 1, size(PROBE_SHIFTS,2)
@@ -1219,7 +1219,7 @@ contains
             call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false., nrefs=NREFS_LT, nthr=nthr_full)
             kfromto = b%pftc%get_kfromto()
             nrots   = b%pftc%get_nrots()
-            allocate(bank(b%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1), rows1(nrots,2,NREFS_LT), rowsn(nrots,2,NREFS_LT))
+            allocate(bank(2*(kfromto(2)-kfromto(1)+1), b%pftc%get_pftsz()+1), rows1(nrots,2,NREFS_LT), rowsn(nrots,2,NREFS_LT))
             call b%pftc%memoize_shifted_ptcl(1, [0.7, -0.4], bank)
             !$ call omp_set_num_threads(1)
             call score_refs(res1, rows1)
@@ -1540,7 +1540,7 @@ contains
             do icase = 1,size(TRUE_SHIFTS,2)
                 call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUE_SHIFTS(:,icase), .false.)
                 kfromto = b%pftc%get_kfromto()
-                allocate(bank(b%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1), vals(b%pftc%get_nrots()))
+                allocate(bank(2*(kfromto(2)-kfromto(1)+1), b%pftc%get_pftsz()+1), vals(b%pftc%get_nrots()))
                 temp = posterior_temperature(b%pftc%wsqsum_ptcl_now(1), b%pftc%get_pftsz())
                 call srch%new_alternating(b, limits, lims_init=lims_init, maxits=60, coarse_init=.true., &
                     &grid_fit=.true., grid_ptcl=l_ptcl)

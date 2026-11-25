@@ -1108,7 +1108,7 @@ contains
         kfromto = b%pftc%get_kfromto()
         pdim    = b%pftc%get_pdim_interp()
         allocate(ref(pdim(1),pdim(2):pdim(3)), ptcl(pdim(1),pdim(2):pdim(3)), source=cmplx(0.,0.))
-        allocate(bank(pftsz+1,kfromto(2)-kfromto(1)+1), row(nrots), rowref(nrots), rowx(nrots))
+        allocate(bank(2*(kfromto(2)-kfromto(1)+1),pftsz+1), row(nrots), rowref(nrots), rowx(nrots))
         do k = kfromto(1), kfromto(2)
             do pp = 1, pftsz
                 ref(pp,k) = cmplx(gasdev(), gasdev())

@@ -202,7 +202,7 @@ contains
         integer                  :: half,iref,ius,r,kfromto(2)
         calc%p_ptr%cc_objfun = OBJFUN_EUCLID
         kfromto = calc%get_kfromto()
-        allocate(bank(NP+1,kfromto(2)-kfromto(1)+1))
+        allocate(bank(2*(kfromto(2)-kfromto(1)+1),NP+1))
         us(:,1) = [0.31,-0.27]
         us(:,2) = [1.3,-0.9]
         dang = 360./real(NR)

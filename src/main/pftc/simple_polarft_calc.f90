@@ -98,7 +98,7 @@ end type shiftmap_cache
 ! products of every angular bin, each pair's bins made contiguous and their inverse transforms
 type block_work
     complex(sp),                   allocatable         :: pterms(:,:,:)      !< (2nk, PFTC_BLOCK_NB, pftsz+1) the weighted particle terms per bin
-    complex(sp),                   allocatable         :: tile(:,:)          !< (2nk, PFTC_BLOCK_NR) one bin of a gathered or partial tile
+    complex(sp),                   allocatable         :: tile(:,:)          !< (2nk, PFTC_BLOCK_NR) one bin of a listed or partial tile
     complex(sp),                   allocatable         :: prods(:,:,:)       !< (PFTC_BLOCK_NB, PFTC_BLOCK_NR, pftsz+1) the conjugated sums per bin
     real(dp),                      allocatable         :: norms(:)           !< (PFTC_BLOCK_NB) the particles' loss normalisation
     type(c_ptr)                                        :: pct      = c_null_ptr
@@ -143,14 +143,14 @@ type :: polarft_calc
     ! Memoized terms
     complex(kind=c_float_complex), allocatable :: ft_ptcl_ctf(:,:,:)                      !< Fourier Transform of particle times CTF
     complex(kind=c_float_complex), allocatable :: ft_ctf2(:,:,:)                          !< Fourier Transform of CTF squared modulus
-    complex(kind=c_float_complex), allocatable :: ft_ref(:,:,:,:)                         !< Fourier transforms of references, final dimension is parity
-    ! Fourier transforms of squared reference moduli; final dimension is parity
-    complex(kind=c_float_complex), allocatable :: ft_ref2(:,:,:,:)
-    ! the block kernel's bin-major copy of the two (memoize_ref_bins): conj(FT(REF2)) on rows 1..nk and FT(REF) on
-    ! rows nk+1..2nk of every angular bin, (2nk, nrefs, pftsz+1, parity)
-    complex(sp),                   allocatable :: ft_ref_bins(:,:,:,:)
-    integer(int64)                             :: ref_gen      = 0_int64   !< bumped by memoize_refs
-    integer(int64)                             :: ref_gen_bins = -1_int64  !< ref_gen when ft_ref_bins was derived
+    ! the memoised reference terms, the one copy every kernel reads: per reference and angular bin the shells'
+    ! conj(FT(REF2)) on rows 1..nk and FT(REF) on rows nk+1..2nk, (2nk, pftsz+1, nrefs, parity)
+    complex(sp),                   allocatable :: ft_ref_terms(:,:,:,:)
+    ! the memoised particle terms in the same order (memoize_ptcl_terms), (2nk, pftsz+1, nptcls): FT(CTF2) on rows
+    ! 1..nk and FT(X.CTF) on rows nk+1..2nk for the cc kernels, and for the Euclidean ones the same weighted by the
+    ! sigma2 weights of the particle's half, w_k FT(CTF2) and -2 w_k FT(X.CTF)
+    complex(sp),                   allocatable :: ft_ptcl_terms(:,:,:)
+    complex(sp),                   allocatable :: ft_ptcl_wterms(:,:,:)
     ! the block kernel's per-thread work and its c2r plan of PFTC_BLOCK_NR transforms (one particle's tile)
     type(block_work),              allocatable :: bwork(:)
     type(c_ptr)                                :: plan_block = c_null_ptr
@@ -260,7 +260,6 @@ type :: polarft_calc
     procedure          :: memoize_sigma2_weights
     procedure          :: wsqsum_ptcl_now
     procedure          :: memoize_ptcls, memoize_refs
-    procedure          :: memoize_ref_bins
     procedure, private :: check_ptcl_memo, check_euclid_weights, bump_ptcl_gen
     procedure          :: memoize_shifted_ptcl
     procedure, private :: kill_memo_ptcls, kill_memo_refs
@@ -705,10 +704,6 @@ interface
         class(oris),                   optional, intent(in) :: eulspace
     end subroutine memoize_refs
 
-    module subroutine memoize_ref_bins( self )
-        class(polarft_calc), intent(inout) :: self
-    end subroutine memoize_ref_bins
-
     module subroutine memoize_shifted_ptcl(self, iptcl, shift, bank)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl
@@ -794,6 +789,14 @@ interface
         real(sp),            intent(out)   :: dist
         integer,             intent(out)   :: irot
     end subroutine gen_posterior_val_bank
+
+    ! acc(p) = sum_k conj(g(k,p)) t(k,p) over n shell terms of the bins 1..np: the sums of the memo kernels as one
+    ! dot product per bin of reference terms g and particle terms t (simple_polarft_corr.f90)
+    module subroutine term_sums( n, np, g, ldg, t, ldt, acc )
+        integer,     intent(in)    :: n, np, ldg, ldt
+        complex(sp), intent(in)    :: g(ldg,*), t(ldt,*)
+        complex(sp), intent(inout) :: acc(np)
+    end subroutine term_sums
 
     ! the tail the per-pair Euclidean kernels and the block kernel share: the distances from a pair's inverse
     ! transform and the posterior draw over them (simple_polarft_corr.f90)

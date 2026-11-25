@@ -1149,22 +1149,40 @@ blocks of m·n·k below `SGEMM_ONE_THREAD_MNK` (`simple_linalg`), the bound unde
 which the bundled OpenBLAS stays on the calling thread outside a team as well, so
 a pair's map is the same on any thread, in any team and from a serial caller.
 
-The kernel reads a bin-major copy of the reference memo, `ft_ref_bins`
-(2·nk, nrefs, pftsz+1, half: conj(FT(REF2)) and FT(REF) per bin), derived by
-`memoize_ref_bins` from the finished `ft_ref`/`ft_ref2` after `memoize_refs`,
-in parallel over references; a generation counter stops the kernel on a stale
-copy. A table asks for it in its pipeline constructor when its caller passes
-`block_memo`: the dense table always, the neighbourhood table in `state` mode.
-Every caller that fills such a table passes it (the matcher, the pose
-student's training `learn_pose_student`, the benchmark's fills harness), after
-`memoize_refs`; a fill without the memo stops. The testers that build a table
-without filling it do not. It is released with the other
-reference memos and at `kill`. Its memory, 32 bytes per shell, bin and
-reference (two rows of both halves) beside the per-thread work
-(`matcher_block_kernel_bytes`; 1.8 GB at 5,000 directions, shells 2-81 and
-141 bins), is counted by the matcher when the dense
-table or the `state` mode runs. It covers every reference, although the
-`state` mode reads only the representatives.
+The references are memoised once, in one layout every kernel reads:
+`ft_ref_terms` (2·nk, pftsz+1, nrefs, half) holds, per reference and angular
+bin, the shells' conj(FT(REF2)) on rows 1..nk and FT(REF) on rows nk+1..2nk.
+The particles' terms have the same order (2·nk, pftsz+1, particles):
+`ft_ptcl_terms` holds FT(CTF2) and FT(X·CTF) for the cc kernels,
+`ft_ptcl_wterms` the same under the sigma2 weights of the particle's half,
+w_k FT(CTF2) and -2 w_k FT(X·CTF), for the Euclidean ones. Both are made by
+`memoize_ptcls`, the weighted ones again by `memoize_sigma2_weights` when the
+weights change, so the objective may change on a live calculator. A
+shifted-particle bank (`memoize_shifted_ptcl`) is a particle's terms of the
+calculator's objective with the shifted cross term, shaped (2·nk, pftsz+1): a
+caller allocates it in that shape and scores it under the objective it was
+made for.
+
+With the shells of a bin contiguous, a pair's two sums are one dot product per
+bin of the reference terms and the particle terms (`term_sums`, the BLAS's
+`cdotc` through its C entry): the unshifted and bank kernels of both
+objectives, and the reference-power term of the kernels that transform a
+shifted reference or a section on the fly (their cross term stays a shell
+loop over `ft_ptcl_ctf`, bins by shells, which the particle memo keeps beside
+the terms). The block kernel takes its products from the same memo: a full
+tile of consecutive references is read in place, the columns of a bin one
+reference apart (the product's leading dimension), any other tile gathered
+bin by bin; the block's particle terms are gathered from `ft_ptcl_terms` or
+the banks. No kernel keeps a second copy of the references. The block
+kernel's entries are those of the earlier bin-major copy bit for bit; the
+per-pair kernels' sums differ from the earlier shell loops in the last bits
+(measured: at most 6e-7 relative on every memo-reading kernel, bundled
+OpenBLAS on arm64). The per-thread work of the block kernel
+(`matcher_block_kernel_bytes`) is counted by the matcher when the dense table
+or the `state` mode runs. A persistent bin-major copy of every reference
+beside `ft_ref`/`ft_ref2` (2026-11-21 to 2026-11-25) cost 32 bytes per shell,
+bin and reference in every part: 6.6 GiB at refine3D_auto's 20,000
+directions.
 
 The per-pair kernels keep every other caller: `gen_posterior_val` the members
 of the `state` mode's pooled cells, the `geom` cones and the `shc`/`snhc`

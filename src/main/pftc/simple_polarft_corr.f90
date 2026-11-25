@@ -3,10 +3,24 @@ submodule (simple_polarft_calc) simple_polarft_corr
 use simple_defs, only: DTWOPI
 use simple_eul_prob_tab_utils, only: sample_bounded_dists, sample_power_dists, draw_posterior_row, posterior_temperature
 use simple_rnd,                only: rnd_keyed, rnd_draw_key, RND_FAM_INPL
+use simple_linalg,             only: cdotc_sub
 #include "simple_local_flags.inc"
 implicit none
 
 contains
+
+    !> acc(p) = sum_k conj(g(k,p)) t(k,p) over n shell terms of the bins 1..np, one BLAS dot product per bin: the
+    !! reference terms g and the particle terms t keep the shells of a bin contiguous
+    module subroutine term_sums( n, np, g, ldg, t, ldt, acc )
+        use, intrinsic :: iso_c_binding, only: c_int
+        integer,     intent(in)    :: n, np, ldg, ldt
+        complex(sp), intent(in)    :: g(ldg,*), t(ldt,*)
+        complex(sp), intent(inout) :: acc(np)
+        integer :: p
+        do p = 1,np
+            call cdotc_sub(int(n,c_int), g(1,p), 1_c_int, t(1,p), 1_c_int, acc(p))
+        enddo
+    end subroutine term_sums
 
     module subroutine calc_frc( self, iref, iptcl, irot, shvec, frc )
         class(polarft_calc), intent(inout) :: self
@@ -118,8 +132,8 @@ contains
         ieo     =  merge(REF_EVEN, REF_ODD, self%iseven(i))
         shmat   => self%heap_vars(ithr)%shmat
         ! IFFT( sum_k FT(CTF2) x FT(REF2) )
-        call cc_sums(self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i), self%ft_ref2(:,:,iref,ieo), .false.,&
-            &self%crvec1(ithr)%c)
+        call term_sums(self%nk, self%pftsz+1, self%ft_ref_terms(1,1,iref,ieo), 2*self%nk,&
+            &self%ft_ptcl_terms(1,1,i), 2*self%nk, self%crvec1(ithr)%c)
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
         cc = self%crvec1(ithr)%r(1:self%nrots)
         ! IFFT( sum_k FT(X.CTF) x FT(S.REF)* ), the memoized FT(REF) when there is no shift
@@ -133,11 +147,11 @@ contains
                     conjg(self%cmat2_many(ithr)%c(1:self%pftsz,kk))
             enddo
             call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-            call cc_sums(self%pftsz+1, self%nrots, self%nk, self%ft_ptcl_ctf(:,:,i), self%cmat2_many(ithr)%c, .true.,&
+            call cc_sums(self%pftsz+1, self%nrots, self%nk, self%ft_ptcl_ctf(:,:,i), self%cmat2_many(ithr)%c,&
                 &self%crvec1(ithr)%c)
         else
-            call cc_sums(self%pftsz+1, self%pftsz+1, self%nk, self%ft_ptcl_ctf(:,:,i), self%ft_ref(:,:,iref,ieo), .true.,&
-                &self%crvec1(ithr)%c)
+            call term_sums(self%nk, self%pftsz+1, self%ft_ref_terms(self%nk+1,1,iref,ieo), 2*self%nk,&
+                &self%ft_ptcl_terms(self%nk+1,1,i), 2*self%nk, self%crvec1(ithr)%c)
         endif
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
         ! Final correlation computation
@@ -179,10 +193,9 @@ contains
         real(sp),                    intent(in)            :: shift(2)
         real(sp),                    intent(out)           :: losses(self%nrots)
         complex(sp), pointer :: shmat(:,:)
-        complex(sp)          :: c
         real(dp)             :: ptcl_sqsum
-        real(sp)             :: A_sp, shift_mag_sq, wk
-        integer              :: k, i, ithr, kk, k0, p, ieo, ih
+        real(sp)             :: A_sp, shift_mag_sq
+        integer              :: k, i, ithr, kk, k0, ieo, ih
         call self%check_ptcl_memo
         call self%check_euclid_weights
         ithr         =  omp_get_thread_num() + 1
@@ -205,29 +218,17 @@ contains
             enddo
             ! Calculate FT(S.REF)
             call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-            ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*)
-            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-            do k = self%kfromto(1), self%kfromto(2)
-                wk = self%sigma2_wk(k,ih)
-                kk = k - k0 + 1
-                do p = 1,self%pftsz+1
-                    c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo) - &
-                        &2._sp * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p,kk))
-                    self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
-                enddo
-            enddo
+            ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*): the reference power from the memoised
+            ! terms, the cross term shell by shell
+            call term_sums(self%nk, self%pftsz+1, self%ft_ref_terms(1,1,iref,ieo), 2*self%nk,&
+                &self%ft_ptcl_wterms(1,1,i), 2*self%nk, self%crvec1(ithr)%c)
+            call euclid_cross_sums(self%pftsz+1, self%pftsz+1, self%nrots, self%nk, self%ft_ptcl_ctf(:,:,i),&
+                &self%cmat2_many(ithr)%c, self%sigma2_wk(:,ih), self%crvec1(ithr)%c)
         else
-            ! The reference is not shifted, memoized FT(REF) can be used
-            ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(REF)*)
-            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-            do k = self%kfromto(1), self%kfromto(2)
-                wk = self%sigma2_wk(k,ih)
-                do p = 1,self%pftsz+1
-                    c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo) - &
-                        &2._sp * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo))
-                    self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
-                enddo
-            enddo
+            ! The reference is not shifted: sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(REF)*) is one dot
+            ! product per bin of the memoised terms
+            call term_sums(2*self%nk, self%pftsz+1, self%ft_ref_terms(1,1,iref,ieo), 2*self%nk,&
+                &self%ft_ptcl_wterms(1,1,i), 2*self%nk, self%crvec1(ithr)%c)
         endif
         A_sp = real(ptcl_sqsum * real(2*self%nrots, dp), sp)
         ! IFFT
@@ -285,47 +286,45 @@ contains
                     conjg(self%cmat2_many(ithr)%c(1:self%pftsz,kk))
             enddo
             call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-            call euclid_sums(self%pftsz+1, self%pftsz+1, self%nrots, self%nk, self%ft_ctf2(:,:,i),&
-                &self%ft_ref2(:,:,iref,ieo), self%ft_ptcl_ctf(:,:,i), self%cmat2_many(ithr)%c, self%sigma2_wk(:,ih),&
-                &self%crvec1(ithr)%c)
+            ! the reference power from the memoised terms, the cross term against the shifted reference
+            call term_sums(self%nk, self%pftsz+1, self%ft_ref_terms(1,1,iref,ieo), 2*self%nk,&
+                &self%ft_ptcl_wterms(1,1,i), 2*self%nk, self%crvec1(ithr)%c)
+            call euclid_cross_sums(self%pftsz+1, self%pftsz+1, self%nrots, self%nk, self%ft_ptcl_ctf(:,:,i),&
+                &self%cmat2_many(ithr)%c, self%sigma2_wk(:,ih), self%crvec1(ithr)%c)
         else
-            call euclid_sums(self%pftsz+1, self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i),&
-                &self%ft_ref2(:,:,iref,ieo), self%ft_ptcl_ctf(:,:,i), self%ft_ref(:,:,iref,ieo), self%sigma2_wk(:,ih),&
-                &self%crvec1(ithr)%c)
+            call term_sums(2*self%nk, self%pftsz+1, self%ft_ref_terms(1,1,iref,ieo), 2*self%nk,&
+                &self%ft_ptcl_wterms(1,1,i), 2*self%nk, self%crvec1(ithr)%c)
         endif
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
     end subroutine gen_euclid_crvec
 
-    !> The euclid sums of one pair over angular bins 1..np, sum_k w_k (FT(CTF2) x FT(REF2) - 2 FT(X.CTF) x FT(REF)*),
-    !! into acc, one shell per call of euclid_shell_sum: with the shell loop around the bin loop in one procedure gcc
-    !! unroll-and-jams two shells, which on x86 vectorizes with lane permutes and reads twice the memory streams
-    subroutine euclid_sums( np, n1, ldr, nk, ctf2, ref2, xctf, ref, wk, acc )
+    !> acc(p) = acc(p) - 2 sum_k w_k FT(X.CTF) x FT(REF)* over the angular bins 1..np, the cross term against a
+    !! reference transformed on the fly (ref: bins by shells), one shell per call of euclid_cross_shell: with the shell
+    !! loop around the bin loop in one procedure gcc unroll-and-jams two shells, which on x86 vectorizes with lane
+    !! permutes and reads twice the memory streams
+    subroutine euclid_cross_sums( np, n1, ldr, nk, xctf, ref, wk, acc )
         integer,     intent(in)    :: np, n1, ldr, nk
-        complex(sp), intent(in)    :: ctf2(n1,nk), ref2(n1,nk), xctf(n1,nk), ref(ldr,nk)
+        complex(sp), intent(in)    :: xctf(n1,nk), ref(ldr,nk)
         real(sp),    intent(in)    :: wk(nk)
         complex(sp), intent(inout) :: acc(n1)
         integer :: kk
-        acc = cmplx(0.,0.,kind=sp)
         do kk = 1,nk
-            call euclid_shell_sum(np, ctf2(:,kk), ref2(:,kk), xctf(:,kk), ref(:,kk), wk(kk), acc)
+            call euclid_cross_shell(np, xctf(:,kk), ref(:,kk), wk(kk), acc)
         enddo
-    end subroutine euclid_sums
+    end subroutine euclid_cross_sums
 
-    !> One shell of euclid_sums: plain array dummies, unit stride and no overlap; the weight single precision as
-    !! the data (sigma2_wk), so the loop runs at the full single-precision vector width
-    subroutine euclid_shell_sum( np, ctf2, ref2, xctf, ref, wk, acc )
+    !> One shell of euclid_cross_sums: plain array dummies, unit stride and no overlap; the weight single precision
+    !! as the data (sigma2_wk), so the loop runs at the full single-precision vector width
+    subroutine euclid_cross_shell( np, xctf, ref, wk, acc )
         integer,     intent(in)    :: np
-        complex(sp), intent(in)    :: ctf2(np), ref2(np), xctf(np), ref(np)
+        complex(sp), intent(in)    :: xctf(np), ref(np)
         real(sp),    intent(in)    :: wk
         complex(sp), intent(inout) :: acc(np)
-        complex(sp) :: c
-        integer     :: p
+        integer :: p
         do p = 1,np
-            c = ctf2(p) * ref2(p)
-            c = c - 2.0 * xctf(p) * conjg(ref(p))
-            acc(p) = acc(p) + wk * c
+            acc(p) = acc(p) - wk * (2.0 * xctf(p) * conjg(ref(p)))
         enddo
-    end subroutine euclid_shell_sum
+    end subroutine euclid_cross_shell
 
     !> The euclid distances of the n rotations from the inverse FFT r of gen_euclid_crvec, huge above -log(TINY).
     !! Converting every element (vc clamps a huge v) and overwriting those above, not if/else, lets the loop vectorize
@@ -523,26 +522,27 @@ contains
         real(dp),            intent(out)            :: norm
         integer,             intent(out)            :: ithr
         logical,             optional,   intent(in) :: cross
-        integer :: i, ieo, ih
+        integer :: i, ieo
         call self%check_ptcl_memo
         call self%check_euclid_weights
+        if( size(bank,1) /= 2*self%nk .or. size(bank,2) /= self%pftsz+1 ) THROW_HARD('the bank has the wrong shape')
         ithr = omp_get_thread_num() + 1
         i    = self%pinds(iptcl)
-        ih   = merge(1, 2, self%iseven(i))
         ieo  = merge(REF_EVEN, REF_ODD, self%iseven(i))
         if( present(cross) )then
             if( cross ) ieo = merge(REF_ODD, REF_EVEN, self%iseven(i))
         endif
         norm = self%wsqsum_ptcl_now(iptcl) * real(2*self%nrots, dp)
-        call euclid_sums(self%pftsz+1, self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i),&
-            &self%ft_ref2(:,:,iref,ieo), bank, self%ft_ref(:,:,iref,ieo), self%sigma2_wk(:,ih), self%crvec1(ithr)%c)
+        ! the bank holds the particle's terms: both sums are one dot product per bin
+        call term_sums(2*self%nk, self%pftsz+1, self%ft_ref_terms(1,1,iref,ieo), 2*self%nk, bank, 2*self%nk,&
+            &self%crvec1(ithr)%c)
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
     end subroutine gen_euclid_crvec_bank
 
     subroutine gen_corrs_bank( self, iref, iptcl, bank, cc )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl
-        complex(sp),         intent(in)    :: bank(:,:)
+        complex(sp),         intent(in)    :: bank(2*self%nk,self%pftsz+1)
         real(sp),            intent(out)   :: cc(self%nrots)
         integer :: i, ithr, ieo
         call self%check_ptcl_memo
@@ -550,55 +550,45 @@ contains
         i    = self%pinds(iptcl)
         ieo  = merge(REF_EVEN, REF_ODD, self%iseven(i))
         ! IFFT( sum_k FT(CTF2) x FT(REF2) )
-        call cc_sums(self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i), self%ft_ref2(:,:,iref,ieo), .false.,&
+        call term_sums(self%nk, self%pftsz+1, self%ft_ref_terms(1,1,iref,ieo), 2*self%nk, bank, 2*self%nk,&
             &self%crvec1(ithr)%c)
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
         cc = self%crvec1(ithr)%r(1:self%nrots)
         ! IFFT( sum_k FT(S.X.CTF) x FT(REF)* )
-        call cc_sums(self%pftsz+1, self%pftsz+1, self%nk, bank, self%ft_ref(:,:,iref,ieo), .true., self%crvec1(ithr)%c)
+        call term_sums(self%nk, self%pftsz+1, self%ft_ref_terms(self%nk+1,1,iref,ieo), 2*self%nk,&
+            &bank(self%nk+1,1), 2*self%nk, self%crvec1(ithr)%c)
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
         cc = self%crvec1(ithr)%r(1:self%nrots) / &
             &sqrt(cc * real(self%sqsums_ptcls(i), sp) * real(2*self%nrots, sp))
     end subroutine gen_corrs_bank
 
-    !> sum_k a_k x b_k (l_conj: a_k x b_k*) over the n1 angular bins into acc, two shells per call of cc_shells_sum
-    !! (a shell loop here would be unroll-and-jammed, see euclid_sums)
-    subroutine cc_sums( n1, ldb, nk, a, b, l_conj, acc )
+    !> sum_k a_k x b_k* over the n1 angular bins into acc, the cc cross term against a reference transformed on the
+    !! fly (b: bins by shells), two shells per call of cc_shells_sum (a shell loop here would be unroll-and-jammed,
+    !! see euclid_cross_sums)
+    subroutine cc_sums( n1, ldb, nk, a, b, acc )
         integer,     intent(in)    :: n1, ldb, nk
         complex(sp), intent(in)    :: a(n1,nk), b(ldb,nk)
-        logical,     intent(in)    :: l_conj
         complex(sp), intent(inout) :: acc(n1)
         integer :: kk
         acc = cmplx(0.,0.,kind=sp)
         do kk = 1,nk-1,2
-            call cc_shells_sum(n1, ldb, 2, a(:,kk:kk+1), b(:,kk:kk+1), l_conj, acc)
+            call cc_shells_sum(n1, ldb, 2, a(:,kk:kk+1), b(:,kk:kk+1), acc)
         enddo
-        if( mod(nk,2) == 1 ) call cc_shells_sum(n1, ldb, 1, a(:,nk:nk), b(:,nk:nk), l_conj, acc)
+        if( mod(nk,2) == 1 ) call cc_shells_sum(n1, ldb, 1, a(:,nk:nk), b(:,nk:nk), acc)
     end subroutine cc_sums
 
     !> One or two shells of cc_sums in one pass over acc, summed in shell order; plain array dummies
-    subroutine cc_shells_sum( n1, ldb, ns, a, b, l_conj, acc )
+    subroutine cc_shells_sum( n1, ldb, ns, a, b, acc )
         integer,     intent(in)    :: n1, ldb, ns
         complex(sp), intent(in)    :: a(n1,ns), b(ldb,ns)
-        logical,     intent(in)    :: l_conj
         complex(sp), intent(inout) :: acc(n1)
         integer :: p
         if( ns == 2 )then
-            if( l_conj )then
-                do p = 1,n1
-                    acc(p) = (acc(p) + a(p,1) * conjg(b(p,1))) + a(p,2) * conjg(b(p,2))
-                enddo
-            else
-                do p = 1,n1
-                    acc(p) = (acc(p) + a(p,1) * b(p,1)) + a(p,2) * b(p,2)
-                enddo
-            endif
+            do p = 1,n1
+                acc(p) = (acc(p) + a(p,1) * conjg(b(p,1))) + a(p,2) * conjg(b(p,2))
+            enddo
         else
-            if( l_conj )then
-                acc = acc + a(:,1) * conjg(b(1:n1,1))
-            else
-                acc = acc + a(:,1) * b(1:n1,1)
-            endif
+            acc = acc + a(:,1) * conjg(b(1:n1,1))
         endif
     end subroutine cc_shells_sum
 
@@ -610,6 +600,7 @@ contains
         real(sp),            intent(out)   :: vals(self%nrots)
         real(dp) :: norm, v
         integer  :: ithr, irot
+        if( size(bank,1) /= 2*self%nk .or. size(bank,2) /= self%pftsz+1 ) THROW_HARD('the bank has the wrong shape')
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 call gen_corrs_bank(self, iref, iptcl, bank, vals)
@@ -1233,7 +1224,7 @@ contains
         complex(sp), pointer :: coeffs(:,:)
         complex(sp), pointer :: shmat(:,:)
         complex(sp), pointer :: cjoint(:,:)
-        complex(sp)          :: cross_term, ref2_term
+        complex(sp)          :: cross_term, ref2_sums(self%pftsz+1)
         real(sp)             :: A_sp, shift(2), shift_mag_sq, wk
         real(dp)             :: wsq_now
         integer              :: i, ithr, k, k0, kk, p, ieo, ih
@@ -1282,13 +1273,16 @@ contains
                 &-conjg(cjoint(1:self%pftsz,2*self%nk+kk))
         enddo
         call fftwf_execute_dft(self%plan_fwd3_many, cjoint, cjoint)
+        ! the reference power sum_k w_k FT(CTF2) x FT(REF2) from the memoised terms, the cross terms shell by shell
+        call term_sums(self%nk, self%pftsz+1, self%ft_ref_terms(1,1,iref,ieo), 2*self%nk,&
+            &self%ft_ptcl_wterms(1,1,i), 2*self%nk, ref2_sums)
+        coeffs(1:self%pftsz+1,1) = ref2_sums
         do k = self%kfromto(1), self%kfromto(2)
             wk = self%sigma2_wk(k,ih)
             kk = k - k0 + 1
             do p = 1,self%pftsz+1
-                ref2_term  = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
                 cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,kk))
-                coeffs(p,1) = coeffs(p,1) + wk * (ref2_term - 2._sp*cross_term)
+                coeffs(p,1) = coeffs(p,1) - wk * (2._sp*cross_term)
                 cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,self%nk+kk))
                 coeffs(p,2) = coeffs(p,2) + wk * cmplx(0._sp,2._sp,kind=sp) * cross_term
                 cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,2*self%nk+kk))
@@ -1429,10 +1423,11 @@ contains
                 coeffs(p,2) = coeffs(p,2) - cmplx(0._sp,1._sp,kind=sp) * cross_term
                 cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,2*self%nk+kk))
                 coeffs(p,3) = coeffs(p,3) - cmplx(0._sp,1._sp,kind=sp) * cross_term
-                denom_coeffs(p) = denom_coeffs(p) + &
-                    &self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
             enddo
         enddo
+        ! the denominator series sum_k FT(CTF2) x FT(REF2) from the memoised terms
+        call term_sums(self%nk, self%pftsz+1, self%ft_ref_terms(1,1,iref,ieo), 2*self%nk,&
+            &self%ft_ptcl_terms(1,1,i), 2*self%nk, denom_coeffs)
         ! numer = N(theta), ngrad(1:2) = dN/dshift, ngrad(3) = dN/dtheta
         call eval_joint_coeffs_at_rotind(self, coeffs, rotind_frac, numer, ngrad)
         call eval_series_at_rotind(self, denom_coeffs, rotind_frac, denom_val, denom_dtheta)
@@ -1692,10 +1687,8 @@ contains
         enddo
         if( l_cc )then
             ! |model|^2 and its tau derivative from the denominator series of gen_normalized_corr_grad_at_angle
-            denom_coeffs = cmplx(0._sp,0._sp,kind=sp)
-            do k = self%kfromto(1), self%kfromto(2)
-                denom_coeffs = denom_coeffs + self%ft_ctf2(:,k,i) * self%ft_ref2(:,k,iref,ieo)
-            enddo
+            call term_sums(self%nk, self%pftsz+1, self%ft_ref_terms(1,1,iref,ieo), 2*self%nk,&
+                &self%ft_ptcl_terms(1,1,i), 2*self%nk, denom_coeffs)
             call eval_series_at_rotind(self, denom_coeffs, rotind_frac, dm, dm_dtau)
             dm      = dm / real(self%nrots,dp)
             dm_dtau = dm_dtau / real(self%nrots,dp)
@@ -2079,9 +2072,9 @@ contains
         integer,                     intent(in)            :: iptcl
         real(sp),                    intent(in)            :: shift(2)
         complex(sp), pointer :: shmat(:,:)
-        complex(sp)          :: c
+        complex(sp)          :: acc(self%pftsz+1)
         real(dp)             :: A, v
-        real(sp)             :: wk, shift_mag_sq
+        real(sp)             :: shift_mag_sq
         integer              :: k, kk, k0, i, j, ithr, iref, p, ieo, ih
         call self%check_ptcl_memo
         call self%check_euclid_weights
@@ -2110,30 +2103,22 @@ contains
                 enddo
                 ! FT(S.REF)
                 call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-                ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*)
-                do k = self%kfromto(1), self%kfromto(2)
-                    wk = self%sigma2_wk(k,ih)
-                    kk = k - k0 + 1
-                    do p = 1, self%pftsz+1
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
-                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p,kk))
-                        self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
-                    enddo
-                enddo
+                ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*): the reference power from the
+                ! memoised terms, the cross term shell by shell
+                call term_sums(self%nk, self%pftsz+1, self%ft_ref_terms(1,1,iref,ieo), 2*self%nk,&
+                    &self%ft_ptcl_wterms(1,1,i), 2*self%nk, acc)
+                call euclid_cross_sums(self%pftsz+1, self%pftsz+1, self%nrots, self%nk, self%ft_ptcl_ctf(:,:,i),&
+                    &self%cmat2_many(ithr)%c, self%sigma2_wk(:,ih), acc)
+                self%crmat_many(ithr)%c(1:self%pftsz+1,j) = acc
             enddo
         else
-            ! No shift: use memoize FT(REF)
-            ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(REF)*)
+            ! No shift: sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(REF)*) is one dot product per bin of
+            ! the memoised terms
             do j = 1, nr
                 iref = irefs(j)
-                do k = self%kfromto(1), self%kfromto(2)
-                    wk = self%sigma2_wk(k,ih)
-                    do p = 1, self%pftsz+1
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
-                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo))
-                        self%crmat_many(ithr)%c(p,j) = self%crmat_many(ithr)%c(p,j) + wk * c
-                    enddo
-                enddo
+                call term_sums(2*self%nk, self%pftsz+1, self%ft_ref_terms(1,1,iref,ieo), 2*self%nk,&
+                    &self%ft_ptcl_wterms(1,1,i), 2*self%nk, acc)
+                self%crmat_many(ithr)%c(1:self%pftsz+1,j) = acc
             enddo
         endif
         ! iFFT for all references: IFFT(sum_k w_k*(FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*))
@@ -2272,21 +2257,21 @@ contains
         ! associate arays to avoid memory allocation, device attachment issues
         ! and the self object inside of the kernel
         t = tic()
-        associate(ft_ref => self%ft_ref, ft_ref2 => self%ft_ref2)
-        !$omp target enter data map(to:ft_ref, ft_ref2)&
+        associate(ft_ref_terms => self%ft_ref_terms)
+        !$omp target enter data map(to:ft_ref_terms)&
         !$omp& map(alloc:buffer_c)
         print *,'GPU - persistent data transfer time: ',toc(t)
         t = tic()
         call gen_many2many_euclids_cufft_kernel( self%kfromto, self%pftsz, self%nrefs,&
             &nptcls, self%nrots, plan_cufft, wks, halves, howmany, wsq_now,&
-            &ft_ref, ft_ref2,&
+            &ft_ref_terms,&
             &self%ft_ctf2(:,:,pfromto(1):pfromto(2)), self%ft_ptcl_ctf(:,:,pfromto(1):pfromto(2)),&
             &buffer_c, ierr)
         if (ierr /= 0) stop 7
         ! transfer computed values to host
         !$omp target update from(buffer_c)
         ! frees up device memory and association
-        !$omp target exit data map(delete:ft_ref, ft_ref2)
+        !$omp target exit data map(delete:ft_ref_terms)
         !$omp target exit data map(delete:buffer_c)
         end associate
         print *,'GPU: ',toc(t)
@@ -2325,7 +2310,7 @@ contains
 
     subroutine gen_many2many_euclids_cufft_kernel( kfromto, pftsz, nrefs, nptcls, nrots,&
         &plan_cufft, wks, halves, howmany, wsqsums_ptcls, &
-        &ft_ref, ft_ref2,&
+        &ft_ref_terms,&
         &ft_ctf2, ft_ptcl_ctf, buffer_c, ierr )
         use  simple_gpu_utils
         use, intrinsic :: iso_c_binding, only: c_loc, c_int, c_ptr
@@ -2334,8 +2319,8 @@ contains
         real(sp),            intent(in)            :: wks(kfromto(1):kfromto(2), 2) !< k/sigma2 of the two halves
         integer,             intent(in)            :: halves(nptcls)                !< each particle's half (column of wks)
         real(dp),            intent(in)            :: wsqsums_ptcls(nptcls)
-        complex(sp),         intent(in)            :: ft_ref( pftsz+1,kfromto(1):kfromto(2),nrefs,N_REF_PARITIES)
-        complex(sp),         intent(in)            :: ft_ref2(pftsz+1,kfromto(1):kfromto(2),nrefs,N_REF_PARITIES)
+        !> the reference terms: conj(FT(REF2)) on rows 1..nk, FT(REF) on rows nk+1..2nk of every bin
+        complex(sp),         intent(in)            :: ft_ref_terms(2*(kfromto(2)-kfromto(1)+1),pftsz+1,nrefs,N_REF_PARITIES)
         complex(sp),         intent(in)            :: ft_ctf2 (    pftsz+1, kfromto(1):kfromto(2), nptcls)
         complex(sp),         intent(in)            :: ft_ptcl_ctf( pftsz+1, kfromto(1):kfromto(2), nptcls)
         complex(sp),         target, intent(inout) :: buffer_c(pftsz+1,howmany)
@@ -2344,21 +2329,23 @@ contains
         type(c_ptr) :: p_c
         complex(sp) :: c, d
         real(dp)    :: A
-        integer     :: iptcl, iref, p, k, j
+        integer     :: iptcl, iref, p, k, kk, nk, j
+        nk = kfromto(2) - kfromto(1) + 1
         !$omp target teams distribute parallel do collapse(3)&
-        !$omp& map(to:kfromto, pftsz, nrefs, nptcls, wks, halves)&
-        !$omp& map(present, to:ft_ref2, ft_ref)&
+        !$omp& map(to:kfromto, pftsz, nrefs, nptcls, wks, halves, nk)&
+        !$omp& map(present, to:ft_ref_terms)&
         !$omp& map(present, alloc:buffer_c)&
         !$omp& map(to:ft_ctf2, ft_ptcl_ctf)&
-        !$omp& private(k,c,d,iref,iptcl,p,j)
+        !$omp& private(k,kk,c,d,iref,iptcl,p,j)
         do iptcl = 1, nptcls
             do iref = 1, nrefs
                 do p = 1, pftsz+1
                     j = (iptcl - 1)*nrefs + iref
                     d = cmplx(0.,0.,sp)
                     do k = kfromto(1), kfromto(2)
-                        c = ft_ctf2(p,k,iptcl) * ft_ref2(p,k,iref,REF_EVEN)
-                        c = c - 2.0_sp * ft_ptcl_ctf(p,k,iptcl) * conjg(ft_ref(p,k,iref,REF_EVEN))
+                        kk = k - kfromto(1) + 1
+                        c = ft_ctf2(p,k,iptcl) * conjg(ft_ref_terms(kk,p,iref,REF_EVEN))
+                        c = c - 2.0_sp * ft_ptcl_ctf(p,k,iptcl) * conjg(ft_ref_terms(nk+kk,p,iref,REF_EVEN))
                         d = d + wks(k,halves(iptcl)) * c
                     end do
                     buffer_c(p,j) = d
