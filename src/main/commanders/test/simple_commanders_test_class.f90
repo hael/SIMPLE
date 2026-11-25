@@ -92,6 +92,7 @@ use simple_project_superset_tester,          only: run_all_project_superset_test
 use simple_solve3D_addon_report_tester,      only: run_all_solve3D_addon_report_tests
 use simple_solve3D_chunks_plan_tester,  only: run_all_solve3D_chunks_plan_tests
 use simple_volpair_metrics_tester,           only: run_all_volpair_metrics_tests
+use simple_fsc_tester,                       only: run_all_fsc_tests
 use simple_nu_filter,                        only: run_all_nu_filter_tests, run_all_nu_order_mask_tests
 use simple_halfmap_enhancer_tester,          only: run_all_halfmap_enhancer_tests
 use simple_solve3D_addon_report,             only: run_all_solve3D_addon_dock_tests
@@ -511,6 +512,7 @@ contains
         call add_suite(s, n, 'frozen accumulator',        run_all_frozen_accum_tests)
         call add_suite(s, n, 'weighted insertion',        run_all_reconstructor_tests)
         call add_suite(s, n, 'volume pair metrics',       run_all_volpair_metrics_tests)
+        call add_suite(s, n, 'FSC phase repeatability',   run_all_fsc_tests)
         call add_suite(s, n, 'nonuniform filtering',      run_all_nu_filter_tests)
         call add_suite(s, n, 'half-map enhancement',      run_all_halfmap_enhancer_tests)
         call add_suite(s, n, 'order mask',                run_all_nu_order_mask_tests)

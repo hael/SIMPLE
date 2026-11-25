@@ -51,6 +51,7 @@ contains
         call test_copy_and_inplace_threading()
         call test_checkups_and_stats()
         call test_fft_roundtrip_and_nyquist()
+        call test_keyed_image_phase()
         call test_bandpass()
         call test_apply_filter()
         call test_dose_weighing_modes()
@@ -77,6 +78,105 @@ contains
         call test_odd_box_shift_constant()
         call test_ctf_maps_box_check()
     end subroutine run_all_image_tests
+
+    subroutine test_keyed_image_phase()
+        use simple_rnd, only: rnd_key, rnd_scope, RND_PROG_FSC, RND_PASS_DIAG
+        !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads, omp_get_num_threads, &
+        !$     omp_get_dynamic, omp_set_dynamic
+        class(image), allocatable :: a,b,c,legacy,source
+        type(rnd_key)             :: key
+        complex, pointer          :: pixels(:,:,:)
+        complex, allocatable      :: original(:,:,:),first(:,:,:)
+        real, pointer             :: real_pixels(:,:,:)
+        logical                   :: previous_dynamic
+        integer, parameter        :: FIXED_SEED=20261124, TEST_THREADS=3
+        complex                   :: low
+        real                      :: amplitude
+        integer                   :: address(3),previous,actual
+        write(*,'(A)') 'test_keyed_image_phase'
+        previous_dynamic=.false.
+        !$ previous_dynamic=omp_get_dynamic()
+        !$ call omp_set_dynamic(.false.)
+        allocate(a,b,c,legacy,source)
+        call source%new([48,48,48],1.,wthreads=.false.)
+        call source%get_rmat_ptr(real_pixels)
+        ! An impulse supplies nonzero Fourier amplitude above and below the onset.
+        real_pixels=0.
+        real_pixels(25,25,25)=1.
+        call a%copy(source)
+        call a%fft
+        call a%get_cmat_ptr(pixels)
+        original=pixels
+        amplitude=maxval(abs(original))
+        address=a%comp_addr_phys([1,1,1])
+        low=pixels(address(1),address(2),address(3))
+        key%seed=offset_seed(FIXED_SEED)
+        key%scope=rnd_scope(RND_PROG_FSC,RND_PASS_DIAG)
+        key%reference=1
+        key%family=1
+        previous=1
+        !$ previous=omp_get_max_threads()
+        !$ call omp_set_num_threads(1)
+        call a%phase_rand(8.,key)
+        call a%get_cmat_ptr(pixels)
+        first=pixels
+        call assert_real(0.,maxval(abs(abs(first)-abs(original)))/amplitude,2.e-6, &
+            'keyed phases preserve Fourier amplitudes')
+        call assert_real(0.,abs(pixels(address(1),address(2),address(3))-low),0., &
+            'keyed phases preserve coefficients below randomization onset')
+        call b%copy(source)
+        call b%fft
+        !$ call omp_set_num_threads(TEST_THREADS)
+        actual=1
+        !$omp parallel default(shared) num_threads(TEST_THREADS)
+        !$omp single
+        !$ actual=omp_get_num_threads()
+        !$omp end single
+        !$omp end parallel
+        !$ call assert_int(TEST_THREADS,actual,'keyed image phases exercise the requested OpenMP team')
+        call b%phase_rand(8.,key)
+        call b%get_cmat_ptr(pixels)
+        call assert_real(0.,maxval(abs(pixels-first))/amplitude,2.e-6, &
+            'same-key Fourier coefficients ignore thread count')
+        call c%copy(source)
+        call c%fft
+        key%family=2
+        call c%phase_rand(8.,key)
+        call c%get_cmat_ptr(pixels)
+        call assert_true(maxval(abs(pixels-first))/amplitude>1.e-4,'half identities select distinct phase realizations')
+        key%family=1
+        key%seed=offset_seed(FIXED_SEED+1)
+        call c%kill
+        call c%copy(source)
+        call c%fft
+        call c%phase_rand(8.,key)
+        call c%get_cmat_ptr(pixels)
+        call assert_true(maxval(abs(pixels-first))/amplitude>1.e-4,'different phase keys select distinct realizations')
+        ! The existing no-key caller keeps its serial intrinsic-RNG behavior.
+        !$ call omp_set_num_threads(1)
+        call legacy%copy(source)
+        call legacy%fft
+        call set_fixed_seed(FIXED_SEED,propagate=.true.)
+        call legacy%phase_rand(8.)
+        call legacy%get_cmat_ptr(pixels)
+        first=pixels
+        call b%kill
+        call b%copy(source)
+        call b%fft
+        call set_fixed_seed(FIXED_SEED,propagate=.true.)
+        call b%phase_rand(8.)
+        call b%get_cmat_ptr(pixels)
+        call assert_real(0.,maxval(abs(pixels-first)),0.,'legacy no-key serial phase randomization remains repeatable')
+        call a%kill
+        call b%kill
+        call c%kill
+        call legacy%kill
+        call source%kill
+        deallocate(a,b,c,legacy,source)
+        !$ call omp_set_num_threads(previous)
+        !$ call omp_set_dynamic(previous_dynamic)
+        call fix_test_seed()
+    end subroutine test_keyed_image_phase
 
     !> the shift constant is 2 pi/n for an odd dimension too: a shift by the box length is the identity
     subroutine test_odd_box_shift_constant()

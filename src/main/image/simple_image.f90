@@ -2,6 +2,7 @@
 module simple_image
 use simple_core_module_api
 use simple_math, only: parabolic_peak_offset
+use simple_rnd,  only: rnd_key
 use simple_fftw3
 use simple_neighs
 use gnufor2
@@ -1312,9 +1313,10 @@ interface
         real,           optional, intent(in) :: halfwidth
     end subroutine tophat
 
-    module subroutine phase_rand( self, lp )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: lp
+    module subroutine phase_rand( self, lp, phase_key )
+        class(image),           intent(inout) :: self
+        real,                   intent(in)    :: lp
+        type(rnd_key), optional, intent(in)   :: phase_key
     end subroutine phase_rand
 
     module subroutine whiten_noise_power( self_even, self_odd, is_ptcl )

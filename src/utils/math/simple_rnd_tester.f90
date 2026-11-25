@@ -41,6 +41,7 @@ integer(int64), parameter :: VEC_WORD(NVEC) = [-4131892048949355934_int64, -3402
 real(dp), parameter :: VEC_UNIT(NVEC) = [0.7760096832026763_dp, 0.8155373330931133_dp, 0.25384644210001805_dp, &
     &0.8425546875220895_dp, 0.36810200638740853_dp, 0.7613896385335287_dp, 0.8889266156555558_dp, &
     &0.19453614615930637_dp, 0.7987128821603042_dp, 0.6909857438342711_dp]
+integer, parameter :: RND_FSC_SCOPE_EXPECTED = 52 !< FSC diagnostic scope = 3*16 + 4
 integer, parameter :: RND_SCOPE_EXPECTED = 17 !< rnd_scope(RND_PROG_REFINE3D, RND_PASS_ALIGN) = 16 + 1
 
 contains
@@ -338,6 +339,7 @@ contains
         lanes = rnd_key_lanes(key)
         call assert_true(lanes(1) == 12345_int64 .and. lanes(2) == 1073741824_int64, 'the seed splits into its low and high words')
         call assert_int(RND_SCOPE_EXPECTED, rnd_scope(RND_PROG_REFINE3D, RND_PASS_ALIGN), 'the scope packs the program and the pass kind')
+        call assert_int(RND_FSC_SCOPE_EXPECTED,rnd_scope(RND_PROG_FSC,RND_PASS_DIAG),'FSC diagnostic scope has a separate namespace')
     end subroutine test_keyed_mapping
 
     !> Independence of order: the variates of a key sequence are the same drawn in order, in reverse, and

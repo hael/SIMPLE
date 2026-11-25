@@ -367,13 +367,16 @@ contains
         if( didft ) call self%ifft()
     end subroutine tophat
 
-    module subroutine phase_rand( self, lp )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: lp
-        integer                     :: h,k,l,phys(3),lims(3,2)
-        logical                     :: didft
-        real                        :: freq,lp_freq, amp,phase
-        real, parameter             :: errfrac=0.5
+    module subroutine phase_rand( self, lp, phase_key )
+        use simple_rnd, only: rnd_keyed
+        class(image),           intent(inout) :: self
+        real,                   intent(in)    :: lp
+        type(rnd_key), optional, intent(in)   :: phase_key
+        type(rnd_key)                         :: coefficient_key
+        integer                               :: h,k,l,phys(3),lims(3,2)
+        logical                               :: didft
+        real                                  :: freq,lp_freq, amp,phase
+        real, parameter                       :: errfrac=0.5
         didft = .false.
         if( .not. self%ft )then
             call self%fft()
@@ -381,7 +384,7 @@ contains
         endif
         lp_freq = real(self%fit%get_find(1,lp)) ! assuming square 4 now
         lims    = self%fit%loop_lims(2)
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,freq,phys,amp,phase)&
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,freq,phys,amp,phase,coefficient_key)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
@@ -390,7 +393,15 @@ contains
                     if(freq .gt. lp_freq)then
                         phys  = self%fit%comp_addr_phys(h,k,l)
                         amp   = mycabs(self%cmat(phys(1),phys(2),phys(3)))
-                        phase = ran3() * TWOPI
+                        if( present(phase_key) )then
+                            coefficient_key           = phase_key
+                            coefficient_key%iteration = h
+                            coefficient_key%particle  = k
+                            coefficient_key%ordinal   = l
+                            phase = real(rnd_keyed(coefficient_key) * real(TWOPI,dp))
+                        else
+                            phase = ran3() * TWOPI
+                        endif
                         self%cmat(phys(1),phys(2),phys(3)) = amp * cmplx(cos(phase), sin(phase))
                     endif
                 end do

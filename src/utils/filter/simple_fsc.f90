@@ -40,6 +40,8 @@ contains
 
     ! calculate phase-randomized FSC according to Chen et al,JSB,2013
     subroutine phase_rand_fsc(even, odd, envmask, state, n, fsc, fsc_t, fsc_n, fsc_u )
+        use iso_fortran_env,        only: int64
+        use simple_rnd,             only: rnd_key, rnd_scope, RND_PROG_FSC, RND_PASS_DIAG
         use simple_refine3D_fnames, only: refine3D_fsc_unmasked_fname, refine3D_fsc_masked_fname, &
             &refine3D_fsc_randomized_fname
         class(image),                intent(in)                         :: even, odd
@@ -49,6 +51,8 @@ contains
         real,                        allocatable, optional, intent(out) :: fsc_u(:)
         type(image)       :: work_even, work_odd
         real, allocatable :: fsc_unmasked(:)
+        type(rnd_key)     :: phase_key_even, phase_key_odd
+        real(dp)          :: phase_seed
         real              :: lp_rand, smpd, denom
         integer           :: ldim(3), k, k_rand
         call seed_rnd()
@@ -94,8 +98,16 @@ contains
             call work_odd%copy(odd)
             call work_even%ifft()
             call work_odd%ifft()
-            call work_even%phase_rand(lp_rand)
-            call work_odd%phase_rand(lp_rand)
+            ! One serial seed preserves fresh per-call realizations; Fourier keys ignore worker state.
+            call random_number(phase_seed)
+            phase_key_even%seed      = int(phase_seed * real(shiftl(1_int64,53),dp),int64)
+            phase_key_even%scope     = rnd_scope(RND_PROG_FSC,RND_PASS_DIAG)
+            phase_key_even%reference = state
+            phase_key_even%family    = 1
+            phase_key_odd            = phase_key_even
+            phase_key_odd%family     = 2
+            call work_even%phase_rand(lp_rand,phase_key_even)
+            call work_odd%phase_rand(lp_rand,phase_key_odd)
             call work_even%zero_env_background(envmask)
             call work_odd%zero_env_background(envmask)
             call work_even%mul(envmask)
