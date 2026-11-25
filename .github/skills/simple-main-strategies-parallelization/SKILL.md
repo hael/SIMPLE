@@ -1,6 +1,6 @@
 ---
 name: simple-main-strategies-parallelization
-description: Use when working in SIMPLE's src/main/strategies/parallelization: the create_*_strategy shared-memory, distributed-master and worker strategies (refine3D, refine2D, reconstruct3D and PCG, make_cavgs, cls_expansion, flex_pca, calc_pspec, preprocess, motion_correct, ctf_estimate, pick, extract, reextract, refine_motion_model), the distributed master's iteration, sample draw, readout merge and project writes, and the master steps on its own (params, build): volassemble_exec, cavgassemble_exec, commit_sigma2_exec.
+description: Use when working in SIMPLE's src/main/strategies/parallelization: the create_*_strategy shared-memory, distributed-master and worker strategies (refine3D, refine2D, reconstruct3D and PCG, make_cavgs, cls_expansion, flex_pca, calc_pspec, preprocess, motion_correct, ctf_estimate, pick, extract, reextract, fractionate_model), the distributed master's iteration, sample draw, readout merge and project writes, and the master steps on its own (params, build): volassemble_exec, cavgassemble_exec, commit_sigma2_exec.
 ---
 
 # `strategies/parallelization`: execution strategies and the master's steps

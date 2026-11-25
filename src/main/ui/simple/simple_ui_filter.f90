@@ -231,7 +231,7 @@ subroutine new_filter( prgtab )
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call dose_filter3D%add_input(UI_IMG, 'filetab', 'file', 'Dose series manifest', &
-        &'Manifest of the per-window half-map pairs and their doses, written by refine_motion_model', &
+        &'Manifest of the per-window half-map pairs and their doses, written by fractionate_model', &
         &'dose_series.txt file', .true., '', &
         &visibility=UI_VIS_STANDARD)
         call dose_filter3D%add_input(UI_IMG, outvol, required_override=.false., &

@@ -135,7 +135,7 @@ contains
                 parsed = .true.
                 select case(slot)
                     case(1)
-                        parsed = val == 'refine_motion_model'
+                        parsed = val == 'fractionate_model'
                     case(2)
                         parsed = parse_int(val, self%state)
                     case(3)
@@ -222,7 +222,7 @@ contains
         open(newunit=unit, file=tmp%to_char(), status='new', action='write', iostat=ios)
         if( ios /= 0 ) return
         write(unit,'(A)',iostat=ios) VERSION_LINE
-        if( ios == 0 ) write(unit,'(A)',iostat=ios) '# program refine_motion_model'
+        if( ios == 0 ) write(unit,'(A)',iostat=ios) '# program fractionate_model'
         if( ios == 0 ) write(unit,'(A,I0)',iostat=ios) '# state ', self%state
         if( ios == 0 ) write(unit,'(A,I0)',iostat=ios) '# box ', self%box
         if( ios == 0 ) write(unit,'(A,ES24.16E3)',iostat=ios) '# smpd ', self%smpd

@@ -16,9 +16,9 @@ This policy governs `motion_correct` and the motion-correction stage of
 that stage. It defines the scientific and data contracts that changes must
 preserve. Current implementation limitations are identified separately below.
 
-`refine_motion_model` consumes these outputs for saved-model particle
+`fractionate_model` consumes these outputs for saved-model particle
 re-extraction and interval reconstruction using existing particle poses. Its
-[own policy](refine_motion_model_policy.md) governs that workflow; it does not
+[own policy](fractionate_model_policy.md) governs that workflow; it does not
 estimate new motion against particle or volume references. Consumers must
 respect this producer's metadata conventions without changing its objective.
 
@@ -408,7 +408,7 @@ new implementation pass.
 - [Shared motion utilities](../../src/main/motion/simple_motion_correct_utils.f90)
 - [Motion model persistence](../../src/main/motion/simple_motion_model.f90)
 - [Particle extraction from motion models](../../src/main/preprocess/simple_particle_extractor.f90)
-- [Motion model refinement execution](../../src/main/strategies/parallelization/simple_refine_motion_model_strategy.f90)
+- [Model fractionation execution](../../src/main/strategies/parallelization/simple_fractionate_model_strategy.f90)
 - [Streaming gain resolution](../../src/main/stream/stages/simple_stream_stage_preprocess.f90)
 - [Motion correction execution](../../src/main/strategies/parallelization/simple_motion_correct_strategy.f90)
 - [Preprocessing execution](../../src/main/strategies/parallelization/simple_preprocess_strategy.f90)

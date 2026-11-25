@@ -103,7 +103,7 @@ None of these is registered in the project here: `add_vol2os_out`/`add_fsc2os_ou
   the FSC/support policy and supplies the background median.
 - `simple_halfmap_enhancer` (local Wiener sharpening, `halfmap_enhance`), `simple_volpair_metrics`
   (two maps of one frame: FSC and band correlation), `simple_vol_pproc_policy` (mask artifact box and
-  sampling check). The dose-series manifest of `refine_motion_model` is in `motion/`.
+  sampling check). The dose-series manifest of `fractionate_model` is in `motion/`.
 - Analysis with module state, one use at a time: `simple_volpft_symsrch`, `simple_volanalyzer`,
   `simple_symanalyzer`; also `simple_dock_vols`, `simple_volcluster`, `simple_volpft_corrcalc`,
   `simple_volinterp` (module `simple_simple_volinterp`).

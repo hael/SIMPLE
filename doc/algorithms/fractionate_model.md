@@ -1,4 +1,4 @@
-# Motion Model Particle Re-extraction
+# Fractionate Model: Particle Re-extraction
 
 ## Problem
 
@@ -7,17 +7,17 @@ the translations already estimated for each particle. Returning to the raw
 movie also makes it possible to produce separate particle datasets for short
 intervals of the exposure, while correcting the motion within each interval.
 
-`refine_motion_model` performs this re-extraction using a saved binary motion
+`fractionate_model` performs this re-extraction using a saved binary motion
 model, then reconstructs each interval from saved 3D poses and exports raw
 FSC diagnostics by default. With `oritype=ptcl2D`, it instead generates class
-averages from saved 2D alignments and classes. Despite its name, it does not compare movie particles
-with reference images, estimate new trajectories, or write a newly refined
-motion model. Its polynomial refit
-uses the existing patch measurements, not new image-alignment measurements.
+averages from saved 2D alignments and classes. Its polynomial refit uses the
+existing patch measurements.
+The application does not compare movie particles with reference images,
+estimate new trajectories, or write a newly refined motion model.
 
 This is distinct from [reference-free motion correction](motion_correction.md),
 which estimates the initial global and local motion. The
-[workflow policy](../policies/refine_motion_model_policy.md) owns the current
+[workflow policy](../policies/fractionate_model_policy.md) owns the current
 execution, scientific, project and output contracts; this chapter explains the
 algorithm.
 
@@ -177,9 +177,12 @@ Reconstruction uses gridding, `objfun=cc`, `ml_reg=no`, and
 emission. Maps use the saved 3D orientations, residual translations, CTF
 metadata, the interval stacks' native geometry, and the supplied `pgrp` and
 `mskdiam`. Additional undocumented reconstruction-crop arguments are not a
-supported cross-dispatch mode. Optional filtering, automatic envelope masking,
-and postprocessing are disabled. Ordinary gridding correction applies to every
-map; spherical support applies to standard outputs after writing the unmasked
+supported cross-dispatch mode. Nonuniform filtering and automatic envelope
+masking are disabled. Classical postprocessing is enabled with `bfac=0` and
+`mirr=no`: `_pproc.mrc` receives FSC amplitude weighting and a Butterworth
+low-pass at FSC=0.143, with no B-factor fitting or sharpening. The native
+`_lp.mrc` companion is retained and no mirrored map is written. Ordinary
+gridding correction applies to every map; spherical support applies to standard outputs after writing the unmasked
 `_unfil` half maps. Each interval is reconstructed by a nested,
 complete run of the `reconstruct3D` program on its own project copy, with its
 own freshly parsed parameters; the master then registers the delivered merged
@@ -216,7 +219,8 @@ After all intervals complete, usable state-1 dose metadata produce a
 maps using paths relative to that file and records the original inclusive
 fraction range plus its accumulated physical dose bounds. The header includes
 native geometry, saved voltage, dose per fraction, contributor/half counts and
-a fingerprint of the fixed state-1 partition.
+a fingerprint of the fixed state-1 partition. The producer tag is
+`# program fractionate_model`; manifest readers require that program name.
 
 For fraction dose `d` from the saved motion model and interval `[a,b]`, the
 bounds are `(a-1)*d` and `b*d` e/Angstrom^2. This dose already includes EER
@@ -265,10 +269,156 @@ states are displayed without inventing a surface. Gnuplot runs headlessly;
 plotting failures warn and retain the numerical export and reconstructions.
 There is no Python rendering dependency.
 
-The 3D branch ends after unfiltered reconstruction and raw FSC export. No SNR
+For `oritype=ptcl3D`, a second diagnostic compares the standard merged
+`recvol_stateNN.mrc` maps between fraction intervals, within each state.
+Each unordered pair is evaluated once on the native shell grid; no alignment,
+additional masking or filtering is applied. These are merged-map similarity
+curves, distinct from the even/odd FSCs above. They do not use `_pproc`, `_lp`
+or half maps.
+
+Every `rec_frames_aa-bb/` folder receives
+`fsc_cross_fractions_stateNN.tsv`, `_diagnostics.png`, `.gp` and `_surface.tsv`
+(the latter three share the `fsc_cross_fractions_stateNN` prefix). The TSV
+contains shell, resolution and reciprocal frequency, followed by one labelled
+column per other target interval in its original order; self-comparisons are
+excluded. The existing plotting routine draws the curves on the left and the
+frequency/target-interval/FSC surface on the right, using the same style as
+`fsc_fractions_stateNN_diagnostics.png`. Its title identifies the local
+reference interval and state. Missing maps remain `NaN`, sparse comparisons
+are shown as points and empty comparisons are explicitly labelled. Plotting
+failures retain the numerical files. The 2D branch does not run this step.
+
+The 3D branch delivers the reconstruction maps, unsharpened FSC-weighted
+postprocessed maps, raw half-map FSCs and cross-fraction merged-map FSCs. No SNR
 transformation, fit selection, dose-model fitting or model-derived outputs are
 performed. The raw diagnostics impose no dose-metadata or fitting-coverage
 requirements. Standalone Python analysis scripts remain independent.
+
+## Accumulated interval maps
+
+The 3D execution also writes one set of totals per populated state in
+`rec_frames_total/`. It sums every saved unmasked/unfiltered even interval map
+and every odd interval map separately, without averaging or dose weighting.
+Overlapping final intervals remain in the sum exactly as saved. These are
+restored-map sums, not a joint reconstruction from unique frames.
+
+The outputs are `recvol_stateNN_even_unfil.mrc`,
+`recvol_stateNN_odd_unfil.mrc`, and their literal sum
+`recvol_stateNN_unfil.mrc`. All three remain unfiltered and unmasked.
+`image_msk%automask3D` generates `automask3D_stateNN.mrc` from a copy of that
+merged sum using non-tight Otsu, largest-component selection and fixed
+`amsklp=15` Å, `binwidth=1`, `edge=1`. At this edge width the saved mask is
+binary on the native grid. Caller mask settings are preserved.
+
+The same binary mask supplies `distance_to_surface.mrc` for state 1 and
+`distance_to_surface_stateNN.mrc` for other populated states. These volumes
+have the mask's box and sampling. Each voxel holds the Euclidean distance in
+Å to the nearest opposite-valued voxel centre, positive where the mask is 1
+and negative where it is 0. The calculation subtracts the existing distance
+transform of the complementary mask from that of the mask; it does not wrap
+at box edges or apply a half-voxel surface offset. Empty/full masks are rejected.
+
+Copies of the even and odd totals receive the ordinary soft spherical mask
+from `mskdiam` before FSC calculation. `fsc_stateNN.bin` and
+`fsc_stateNN.tsv` retain that spherical-masked curve, without density masking
+or phase randomization. The merged sum receives the usual FSC amplitude
+weighting and Butterworth low-pass at FSC=0.143; its
+`recvol_stateNN_pproc.mrc` output retains both the spherical support and the
+density envelope. Sharpening and mirrored outputs are disabled. The 2D branch
+does not generate totals.
+
+## Exporting voxel features
+
+The standalone [exporter](../../scripts/export_fraction_voxel_features.py)
+writes a voxel-by-feature TSV for one state:
+
+```sh
+python3 scripts/export_fraction_voxel_features.py /path/to/master --mskdiam 100 -o voxel_features.tsv
+```
+
+It requires NumPy, SciPy and mrcfile. Use `--state NN` for another state,
+`--threads N` for FFT threads, `--chunk-rows N` to size TSV row batches, and
+`--tmpdir /scratch` to choose temporary storage. The default output is
+`MASTER/voxel_features_stateNN.tsv`. A companion `<output>.json` records
+geometry, units, source files, interval ordering and filtering settings.
+
+Rows contain every voxel centre inside the hard sphere of the supplied
+`mskdiam` in Å, centred on SIMPLE's origin voxel `(N//2,N//2,N//2)` in zero-based
+coordinates. This selection includes both density-envelope and solvent voxels.
+Rows run in Z/Y/X order, with X fastest. The first five columns are
+`x_vox`, `y_vox`, `z_vox`, `distance_to_surface_vox`, and `in_envelope` (0/1).
+Distance values are read from the total's Å-valued distance volume and divided
+by the isotropic sampling to obtain voxel units.
+
+Four intensity groups follow: all unfiltered even fractions, all unfiltered
+odd fractions, all FSC-filtered even fractions, then all FSC-filtered odd
+fractions. Each group is ordered by increasing interval end fraction, hence
+increasing cumulative exposure; overlapping intervals are retained. Column
+names identify the group and exact interval. There are `5 + 4*N` columns for
+`N` intervals. Absolute dose metadata are not required for this ordering.
+
+The unfiltered columns use the saved `_even_unfil.mrc` and `_odd_unfil.mrc`
+files. The native application filters only the merged map, so the script
+generates filtered halves independently using each interval's
+`fsc_stateNN.bin`. Each raw half receives the native soft sphere before FSC
+amplitude weighting and order-eight Butterworth low-pass at FSC=0.143, with
+no sharpening or density-envelope masking. A half is never replaced by the
+merged `_pproc` map. Temporary filtered maps are deleted after export; no
+input is modified. Memory mapping and row batches avoid keeping the full
+feature matrix or every volume in RAM. Geometry mismatches, missing inputs,
+nonbinary envelopes and invalid values fail without publishing a partial TSV.
+
+## Per-voxel even/odd analysis
+
+```sh
+python3 scripts/analyze_fraction_voxel_features.py voxel_features.tsv -o voxel_stats
+```
+
+The analyser reads the TSV and its `.tsv.json` geometry sidecar. Unfiltered
+analysis and output are temporarily suspended by commenting out the unfiltered
+entry in `GROUPS`. Unfiltered columns are neither required nor parsed, and old
+unfiltered output files are left untouched. The exporter itself is unchanged.
+
+Active outputs retain the filtered Pearson, Spearman and `even + odd` population
+variance (`ddof=0`) maps, histogram figure, three-panel distance-scatter figure,
+and progress JSON. New maps are `voxel_stats_filtered_pearson_pvalue.mrc` and
+`voxel_stats_filtered_spearman_pvalue.mrc`. All maps retain full original XYZ
+geometry. Correlations/p-values for constant series are `NaN`; background voxels
+are `-1` in both correlation and both p-value maps; background variance stays
+zero. These background values are written from initialization onward. Variance units are squared input intensity.
+
+Pearson p-values use the two-sided exact beta null for independent bivariate
+normal observations, with p=1 for two nonconstant pairs. Spearman p-values use
+the two-sided absolute-tail pairing permutation test with average tied ranks.
+All N! pairings are enumerated for N<=8, including tied-value multiplicities;
+above eight, use 9,999 fixed-seed Monte Carlo permutations and the conservative
+(count+1)/(B+1) estimate. `--spearman-resamples B` changes the latter count.
+Null distributions are cached by sorted rank tie patterns, and results do not
+depend on chunk size. No asymptotic Spearman p-value is substituted.
+
+These p-values are nominal and uncorrected for multiple voxel tests. Interval
+observations need independence/exchangeability under their respective nulls.
+Shared frames in overlapping intervals, temporal dependence, and shared
+FSC-derived filtering can violate those assumptions. The JSON records methods,
+permutation count/seed, assumptions and interval overlap. Exact enumeration
+removes the small-sample approximation; it does not remove dependence bias.
+See [Pearson](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.pearsonr.html)
+and [permutation tests](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.permutation_test.html).
+
+Filtered histogram panels retain separately normalized inside/outside-envelope
+Pearson and Spearman distributions. The filtered scatter retains Pearson,
+Spearman and filtered sum variance vs signed distance in voxel units (positive
+inside, negative outside). Its shared fixed-seed uniform voxel sample is capped
+at 200,000 (`--scatter-max-points`); maps and histograms use every table voxel.
+
+Default analysis chunks remain 65,536 rows (`--chunk-rows`). All five active
+MRCs, including p-values, write directly to their final paths and flush with
+header statistics after every chunk. Both figures refresh after the first/last
+chunks and periodically (`--plot-every`, default ten seconds). Progress JSON
+updates per chunk; failed/interrupted outputs remain partial, and only
+`complete` certifies completion. Source files are preserved. Other options
+remain `--metadata`, `--bins`, and `--overwrite`; dependencies remain NumPy,
+SciPy, mrcfile and Matplotlib.
 
 ## Rationale
 
@@ -287,11 +437,11 @@ as though they were disjoint portions of the exposure.
 ## Implementation
 
 - CLI registration: `src/main/ui/simple/simple_ui_preproc.f90`,
-  `new_refine_motion_model`.
+  `new_fractionate_model`.
 - Entry point: `src/main/commanders/simple/simple_commanders_motion.f90`,
-  `exec_refine_motion_model`.
+  `exec_fractionate_model`.
 - Recentering, frame-block endpoints, worker execution, and project assembly:
-  `src/main/strategies/parallelization/simple_refine_motion_model_strategy.f90`:
+  `src/main/strategies/parallelization/simple_fractionate_model_strategy.f90`:
   `distr_execute` coordinates dispatch, `assemble_motion_fractions` merges and
   writes interval projects, then `reconstruct_motion_fractions` delivers maps
   or `generate_fractions_cavgs` invokes `commander_make_cavgs_distr`.
@@ -304,7 +454,7 @@ as though they were disjoint portions of the exposure.
 - Shared polynomial coordinate mapping, basis, and evaluation:
   `src/main/motion/simple_motion_correct_utils.f90`.
 - Raw FSC matrix export and native gnuplot diagnostics:
-  `src/main/strategies/parallelization/simple_refine_motion_model_strategy.f90`.
+  `src/main/strategies/parallelization/simple_fractionate_model_strategy.f90`.
   The reconstruction coordinator keeps the collected matrix after interval
   partial-volume cleanup and writes each state's tables and plots.
 - Existing numerical coverage:

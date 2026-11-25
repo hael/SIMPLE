@@ -1,8 +1,8 @@
-# Motion Model Fraction Re-extraction and Reconstruction Policy
+# Fractionate Model Policy
 
 ## Purpose and scope
 
-This policy governs the current `refine_motion_model` application: re-extract
+This policy governs the current `fractionate_model` application: re-extract
 particle fractions using saved movie motion, assemble a project for each
 exposure interval, then reconstruct those intervals from saved 3D poses or
 restore class averages from saved 2D alignments and classes.
@@ -17,7 +17,7 @@ estimate new trajectories, or publish a newly refined motion model. Its local
 polynomial refit uses saved patch measurements. The reconstructed interval maps
 do not feed back into motion estimation or particle alignment in this workflow.
 
-The [algorithm description](../algorithms/refine_motion_model.md) explains the
+The [algorithm description](../algorithms/fractionate_model.md) explains the
 coordinate operations and summation. The
 [motion-correction policy](motion_correction_policy.md) owns the producer's
 binary-model, EER, gain, and coordinate conventions. The
@@ -184,7 +184,7 @@ fixed settings:
 
 ```text
 objfun=cc ml_reg=no cc_emit_sigma=no rec_backend=gridding
-filt_mode=none automsk=no postprocess=no unfil_unmasked=yes
+filt_mode=none automsk=no postprocess=yes bfac=0 mirr=no unfil_unmasked=yes
 m_estimator=no update_frac=1 trail_rec=no
 ```
 
@@ -213,6 +213,16 @@ Normal particle preprocessing, gridding density/interpolation correction and
 FSC calculation remain active. Write the `_unfil` half-map exports before
 spherical support; standard half maps and the merged reconstruction retain
 that support and the supplied symmetry/mask size.
+
+After reconstruction, run the existing classical postprocessing with explicit
+`bfac=0` to bypass automatic B-factor estimation and disable sharpening.
+It writes `recvol_stateNN_pproc.mrc` with FSC amplitude weighting
+`sqrt(2*FSC/(1+FSC))` and the usual Butterworth low-pass at FSC=0.143.
+The input is the standard spherical-supported merged map; no additional
+mask is applied when its support provenance is present. The native
+`recvol_stateNN_lp.mrc` companion is also written. With zero B-factor it
+contains the same filtered map. Explicit `mirr=no` suppresses the mirrored
+postprocessed volume. Existing unmasked half exports are unchanged.
 
 Run each interval as a nested `reconstruct3D` program on its own project copy:
 a sparse command line carrying the fixed settings, symmetry, mask diameter and
@@ -287,6 +297,9 @@ partial directories are not resumable checkpoints under the current contract.
 
 ## Dose-series half maps and manifest
 
+The manifest producer tag is `# program fractionate_model`. The shared Fortran
+reader/writer and Python analysis scripts use that exact program name.
+
 Every populated state's `recvol_stateNN_even_unfil.mrc` and
 `recvol_stateNN_odd_unfil.mrc` contains the density-corrected, deapodized,
 unregularized half volume before spherical masking, written as real-space
@@ -335,7 +348,7 @@ changed state-1 sample or insufficient disjoint intervals suppresses this new
 manifest with an explicit reason. It must not discard valid maps, stacks or
 raw FSC outputs. Existing fatal reconstruction and global partition checks
 remain fatal. Report file-publication errors explicitly. No dose fitting is
-performed by `refine_motion_model`; `dose_filter3D` consumes the manifest in a
+performed by `fractionate_model`; `dose_filter3D` consumes the manifest in a
 separate application.
 
 ## Raw FSC diagnostics
@@ -376,11 +389,147 @@ available command/data artifacts, and report which plots were not produced.
 A plotting failure does not discard successful reconstructions or the raw
 FSC export.
 
-The application stops after unfiltered reconstruction and raw FSC export. It
+The application delivers the reconstruction maps, unsharpened FSC-weighted
+postprocessed maps, raw half-map FSCs, cross-fraction merged-map FSCs and
+accumulated map products. It
 does not preprocess SNR, select fitting points, fit decay or critical-exposure
 models, or generate fitted parameters, predictions, residuals or new dose
 weights. No fitting-coverage or dose-compatibility gate may reject the raw
 output. Existing standalone Python analysis scripts remain independent.
+
+## Cross-fraction merged-map FSC diagnostics
+
+For `oritype=ptcl3D`, after all interval reconstructions complete, compare each
+state's standard `recvol_stateNN.mrc` map with the same state's standard map
+from every other interval. Compute each unordered pair once and reuse its FSC
+in both reference intervals' outputs. Do not include self-comparisons or mix
+states. Use the maps as written, with their existing spherical support; do
+not align, remask, filter, sharpen or substitute `_pproc`, `_lp` or half maps.
+These merged-map correlations describe similarity across fraction intervals;
+they are distinct from the even/odd half-map FSCs in the master directory's
+`fsc_fractions_stateNN.tsv` and are not independent half-map resolution estimates.
+
+In every `rec_frames_aa-bb/` folder, write one set per state with prefix
+`fsc_cross_fractions_stateNN`:
+
+- `.tsv`: the native shell, resolution and reciprocal-frequency columns,
+  followed by `FSC_fractions_<first>-<last>` columns for all other intervals
+  in their original order. The folder identifies the reference interval.
+- `_diagnostics.png`: the existing two-panel style, with the comparison
+  curves on the left and a 3D surface on the right. The figure title identifies
+  the reference interval and state. Target interval midpoints define the surface
+  axis, with exact interval labels.
+- `.gp` and `_surface.tsv`: reproducible commands and surface data, using the
+  same renderer and numerical writers as the half-map diagnostics.
+
+Use the native FSC calculation and frequency grid, preserving finite signed
+correlations without clipping. A missing map leaves its pairwise curves `NaN`
+and absent from the plots. A single comparison is shown as points on the right;
+a single interval or absent state produces an explicitly empty figure. Do not
+bridge missing target intervals with an invented surface. Rendering failures
+warn and retain the numerical outputs. No new outputs are generated for
+`oritype=ptcl2D`.
+
+## Accumulated interval maps
+
+For `oritype=ptcl3D`, after every interval reconstruction completes, sum the
+saved `recvol_stateNN_even_unfil.mrc` maps into one even total per populated
+state, and the odd maps separately. Use every saved interval with coefficient
+one, including an overlapping final interval. Do not prune windows, divide by
+the interval count, apply dose weights or change the saved half assignments.
+This is a sum of restored interval maps, not a new joint reconstruction or a
+unique-frame full-exposure estimate. States absent from an interval contribute
+nothing; missing half files for a delivered state are fatal. Keep native
+geometry and reject incompatible dimensions, sampling or nonfinite voxels.
+
+Write one set per populated state in `rec_frames_total/`:
+
+| Artifact | Definition |
+|---|---|
+| `recvol_stateNN_even_unfil.mrc`, `recvol_stateNN_odd_unfil.mrc` | Unfiltered, unmasked sums of the corresponding saved interval halves |
+| `recvol_stateNN_unfil.mrc` | Literal even-total plus odd-total, without dividing by two; unfiltered and unmasked |
+| `automask3D_stateNN.mrc` | Density envelope from the raw merged sum using `image_msk%automask3D`, non-tight Otsu, largest component, `amsklp=15`, `binwidth=1`, `edge=1` |
+| `distance_to_surface.mrc` (state 1), `distance_to_surface_stateNN.mrc` (other states) | Signed Euclidean distance in Å to the nearest opposite-valued voxel of the binary density mask; same box and sampling as the mask |
+| `fsc_stateNN.bin`, `fsc_stateNN.tsv` | FSC between copies of the totals soft-spherically masked with the supplied `mskdiam`, without background subtraction or phase randomization |
+| `recvol_stateNN_pproc.mrc` | Merged sum with classical FSC amplitude weighting and Butterworth low-pass at spherical FSC=0.143, then spherical and density-envelope masking; no sharpening or mirrored output |
+
+Generate the envelope from a copy so the raw sum stays unchanged. The fixed
+mask settings override caller mask preferences only for this product and never
+mutate the caller's parameters. A one-voxel cosine edge is binary on the native
+voxel grid; apply the resulting mask by multiplication without the soft-skirt
+background estimator. The envelope is not used for the FSC. The TSV retains
+shell, resolution, reciprocal frequency and signed `FSC_spherical` values.
+The distance volume uses voxel-centre distances: positive inside the binary
+mask, negative outside. Adjacent opposite-valued voxels report `+smpd` and
+`-smpd`, with no half-voxel offset. Search only the recorded box, without
+periodic wrapping or imaginary exterior background. Reuse the existing exact
+Euclidean `image%distance_transform` on the mask and its complement, then
+subtract. Require both labels; an empty/full mask has no finite opposite-label
+distance and is rejected. State-specific filenames prevent overwriting the
+state-1 output in multistate runs.
+
+No total map or mask is fabricated for an entirely unpopulated state. This
+step belongs to execution, outside finalization, and does not run for `ptcl2D`.
+
+## Standalone voxel feature export
+
+`scripts/export_fraction_voxel_features.py` exports one TSV row per voxel
+centre inside the hard spherical selection `mskdiam/(2*smpd)`, centred at the
+zero-based origin voxel `N//2` on each axis. Include both envelope and solvent
+voxels. Coordinates are zero-based XYZ indices, rows are ordered with X
+fastest, and the signed total-mask distances are converted from Å to voxel
+units by division by the native isotropic sampling.
+
+Column order is fixed: X, Y, Z, signed distance, binary envelope membership,
+then all raw even intervals, all raw odd intervals, all filtered even
+intervals and all filtered odd intervals. Sort each group by interval end,
+then start, preserving overlaps; this is increasing cumulative exposure.
+Keep native intensities without normalization. Raw features use the saved
+unfiltered/unmasked halves. Generate each filtered half independently from
+its own raw half with the native soft sphere, the interval's saved FSC
+amplitude weights and Butterworth cutoff at FSC=0.143; no sharpening or
+masking by the density envelope. Never substitute the merged `_pproc` map or
+mislabel the native spherical-only half maps as FSC-filtered.
+
+Read the chosen state's envelope and distance volume from `rec_frames_total`.
+Validate dimensions, sampling, axis order, origin and grid starts across all
+inputs. The matrix includes one group entry per discovered interval; missing
+maps/FSCs are errors. Require finite features and signed distances consistent
+with the binary envelope in the selected region. Stream TSV rows and keep
+only one half-map FFT in memory; derived half maps use temporary disk storage.
+Preserve input files and publish the TSV only on success. A JSON sidecar
+records feature names, sources, units, geometry and processing choices. This
+is an offline Python analysis tool and adds no Python dependency to the native
+`fractionate_model` workflow.
+
+The companion `scripts/analyze_fraction_voxel_features.py` currently analyses
+filtered values only. Comment out the unfiltered GROUPS entry to suspend its
+analysis and outputs; do not parse or require unfiltered intensity columns.
+Preserve existing unfiltered files without updating or deleting them.
+
+Keep the filtered even/odd Pearson, average-tied-rank Spearman, paired-sum
+population variance, histogram and three-panel distance-scatter outputs.
+Add filtered Pearson/Spearman p-value maps, retaining full source geometry.
+Background voxels in both correlation and both p-value maps must be -1,
+including unwritten coordinates while streaming. Constant-series coefficients
+and p-values remain NaN; background variance remains zero. Header statistics
+include the finite -1 background. Preserve the existing 65,536-row default, direct per-chunk
+MRC writes/flushes/statistics, incremental figures and progress JSON, signed
+distance convention and bounded uniform scatter sampling. Only complete status
+certifies a finished run; failures leave marked partial outputs.
+
+Pearson uses its two-sided beta null (independent bivariate normal pairs), with
+p=1 for N=2. Spearman uses an absolute-tail pairing permutation null: exact all
+N! permutations for N<=8, correctly retaining tied-value multiplicities;
+otherwise fixed-seed 9,999 Monte Carlo permutations with (count+1)/(B+1),
+configurable via --spearman-resamples. Reuse conditional nulls by sorted rank
+tie patterns with bounded caching. Results must be chunk-independent.
+
+Record that p-values are nominal, uncorrected across voxels, and conditional
+on independence/exchangeability assumptions. Record interval overlap and the
+potential violations from shared frames, temporal dependence and shared
+FSC-based filtering. Exact small-sample enumeration does not correct these
+violations. Do not interpret NaNs or absent voxels as significant zeros.
 
 ## Current limitations
 
@@ -523,7 +672,7 @@ record implementation history and dated results in implementation notes.
 
 ## Implementation references
 
-- [Application strategy](../../src/main/strategies/parallelization/simple_refine_motion_model_strategy.f90): range helpers, worker extraction, master dispatch, `assemble_motion_fractions`, `generate_fractions_cavgs`, and `reconstruct_motion_fractions`.
+- [Application strategy](../../src/main/strategies/parallelization/simple_fractionate_model_strategy.f90): range helpers, worker extraction, master dispatch, `assemble_motion_fractions`, `generate_fractions_cavgs`, and `reconstruct_motion_fractions`.
 - [Motion commander](../../src/main/commanders/simple/simple_commanders_motion.f90) and [UI](../../src/main/ui/simple/simple_ui_preproc.f90): command-line defaults, lifecycle and public input contract.
 - [Particle extractor](../../src/main/preprocess/simple_particle_extractor.f90) and [binary model](../../src/main/motion/simple_motion_model.f90): saved-motion extraction and equal-weight normalized sums.
 - [Reconstruct3D strategy](../../src/main/strategies/parallelization/simple_rec3D_strategy.f90) (`run_rec3D`), [reconstruction service](../../src/main/strategies/parallelization/simple_rec3D_service.f90) and [volume assembly](../../src/main/strategies/parallelization/simple_volassemble_strategy.f90): the nested interval reconstruction runs.

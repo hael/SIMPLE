@@ -64,7 +64,8 @@ contains
     !! optional core and dilated outputs expose the two binary intermediates
     !! (before dilation, and after dilation before the skirt) as 0/1 images,
     !! so a caller can address the dilation ring by Euclidean geometry.
-    subroutine automask3D( self, params, vol, l_tight, pix_thres, vol_masked, lp_override, l_report, core, dilated )
+    subroutine automask3D( self, params, vol, l_tight, pix_thres, vol_masked, lp_override, l_report, core, dilated, &
+        &binwidth_override, edge_override )
         class(image_msk),       intent(inout)           :: self
         class(parameters),      intent(in)              :: params
         class(image),           intent(in)              :: vol
@@ -75,6 +76,7 @@ contains
         logical,                optional, intent(in)    :: l_report
         class(image),           optional, intent(inout) :: core    !< binary core before dilation
         class(image),           optional, intent(inout) :: dilated !< binary envelope after dilation, before the skirt
+        integer,                optional, intent(in)    :: binwidth_override, edge_override
         logical :: l_rep
         if( vol%is_2d() )THROW_HARD('automask3D is intended for volumes only')
         l_rep = .true.
@@ -83,6 +85,8 @@ contains
         if( present(lp_override) ) self%amsklp = lp_override
         self%binwidth = params%binwidth
         self%edge     = params%edge
+        if( present(binwidth_override) ) self%binwidth = binwidth_override
+        if( present(edge_override) ) self%edge = edge_override
         if( l_rep ) write(logfhandle,'(A,F7.2,A,I3,A,I3,A)') '>>> AUTOMASKING LOW-PASS/DILATION LAYERS/EDGE: ',&
             &self%amsklp, ' A/',self%binwidth, ' voxels/', self%edge, ' voxels'
         ! low-pass smoothing

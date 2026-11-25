@@ -44,7 +44,7 @@ contains
         call test_cont_surface_contract()
         call test_mirrored_references_contract()
         call test_solve3D_trs_contract()
-        call test_refine_motion_model_contract()
+        call test_fractionate_model_contract()
         call test_tseries_prep4tracking_contract()
     end subroutine run_all_ui_visibility_tests
 
@@ -259,11 +259,11 @@ contains
         call make_ui
         call assert_registered_cli_summary('extract', 'wfloat16', 'Write float16 particle stacks (yes|no){no}')
         call assert_registered_cli_summary('reextract', 'wfloat16', 'Write float16 particle stacks (yes|no){no}')
-        program_name = 'refine_motion_model'
+        program_name = 'fractionate_model'
         call get_prg_ptr(program_name, registered_prg)
-        call assert_true(associated(registered_prg), 'refine_motion_model is registered')
+        call assert_true(associated(registered_prg), 'fractionate_model is registered')
         if( associated(registered_prg) ) call assert_false(program_has_key(registered_prg, 'wfloat16'), &
-            &'refine_motion_model does not offer a particle-stack format switch')
+            &'fractionate_model does not offer a particle-stack format switch')
     end subroutine test_particle_storage_contract
 
     !> the registered test programs
@@ -436,31 +436,31 @@ contains
             &'Fractional-update sampling units (none|class|cavg){class}')
     end subroutine test_solve3D_trs_contract
 
-    subroutine test_refine_motion_model_contract()
+    subroutine test_fractionate_model_contract()
         character(len=16) :: default_value
         logical           :: found
-        write(*,'(A)') 'test_refine_motion_model_contract'
+        write(*,'(A)') 'test_fractionate_model_contract'
         call make_ui
-        program_name = 'refine_motion_model'
+        program_name = 'fractionate_model'
         call get_prg_ptr(program_name, registered_prg)
-        call assert_true(associated(registered_prg), 'refine_motion_model is registered')
+        call assert_true(associated(registered_prg), 'fractionate_model is registered')
         if( .not. associated(registered_prg) ) return
-        call assert_ui_param(registered_prg%parm_ios, 'stepf', 'refine_motion_model', expected_type='num')
+        call assert_ui_param(registered_prg%parm_ios, 'stepf', 'fractionate_model', expected_type='num')
         call assert_input_placeholder(registered_prg%parm_ios, 'stepf', 'e.g. 3')
-        call assert_ui_param(registered_prg%srch_ctrls, 'pgrp', 'refine_motion_model', expected_type='str')
+        call assert_ui_param(registered_prg%srch_ctrls, 'pgrp', 'fractionate_model', expected_type='str')
         call assert_input_visibility(registered_prg%srch_ctrls, 'pgrp', UI_VIS_STANDARD)
-        call assert_ui_param(registered_prg%mask_ctrls, 'mskdiam', 'refine_motion_model', expected_type='num')
+        call assert_ui_param(registered_prg%mask_ctrls, 'mskdiam', 'fractionate_model', expected_type='num')
         call assert_input_visibility(registered_prg%mask_ctrls, 'mskdiam', UI_VIS_STANDARD)
-        call get_ui_default('simple_exec', 'refine_motion_model', 'stepf', found, default_value)
-        call assert_true(found, 'refine_motion_model fraction-width display default is resolved')
-        call assert_char('3', trim(default_value), 'refine_motion_model defaults to three fractions per interval')
-        call assert_registered_required_keys('refine_motion_model', &
+        call get_ui_default('simple_exec', 'fractionate_model', 'stepf', found, default_value)
+        call assert_true(found, 'fractionate_model fraction-width display default is resolved')
+        call assert_char('3', trim(default_value), 'fractionate_model defaults to three fractions per interval')
+        call assert_registered_required_keys('fractionate_model', &
             &[character(len=7) :: 'mskdiam', 'nparts', 'nthr'])
-        call assert_ui_param(registered_prg%parm_ios, 'oritype', 'refine_motion_model', expected_type='multi')
-        call get_ui_default('simple_exec', 'refine_motion_model', 'oritype', found, default_value)
-        call assert_true(found, 'refine_motion_model metadata-source default is resolved')
-        call assert_char('ptcl3D', trim(default_value), 'refine_motion_model defaults to 3D products')
-    end subroutine test_refine_motion_model_contract
+        call assert_ui_param(registered_prg%parm_ios, 'oritype', 'fractionate_model', expected_type='multi')
+        call get_ui_default('simple_exec', 'fractionate_model', 'oritype', found, default_value)
+        call assert_true(found, 'fractionate_model metadata-source default is resolved')
+        call assert_char('ptcl3D', trim(default_value), 'fractionate_model defaults to 3D products')
+    end subroutine test_fractionate_model_contract
 
     !> tracking preparation stays a project workflow with existing FLEX controls
     subroutine test_tseries_prep4tracking_contract()

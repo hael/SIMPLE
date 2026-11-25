@@ -133,7 +133,7 @@ peripheral atoms of a particle of diameter D then lose 10 % at
 - L-BFGS-B (`src/main/opt/simple_opt_lbfgsb.f90`) is already used with
   analytic gradients in CTF estimation, the polar shift search and the
   Fourier-expanded shift search.
-- `refine_motion_model` extracts per-frame particle stacks from the motion
+- `fractionate_model` extracts per-frame particle stacks from the motion
   model; this is the start of polishing.
 
 ## 6. Plan

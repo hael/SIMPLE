@@ -5,7 +5,7 @@ use simple_string,               only: string
 use simple_image,                only: image
 use simple_dose_series_manifest, only: dose_series_manifest
 use simple_syslib,               only: simple_mkdir, simple_rename, file_exists, del_file
-use simple_test_utils,           only: assert_true, assert_false, assert_int, enter_fixture, leave_fixture, tests_failed
+use simple_test_utils,           only: assert_true, assert_false, assert_int, assert_char, enter_fixture, leave_fixture, tests_failed
 use, intrinsic :: iso_fortran_env, only: int8
 use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 implicit none
@@ -61,12 +61,21 @@ contains
     subroutine test_roundtrip()
         type(dose_series_manifest) :: original, loaded
         type(string)               :: message, even, odd
-        integer                    :: box, a, b
+        integer                    :: box, a, b, unit, ios
+        character(len=128)         :: header
         real(dp)                   :: smpd, kv, lo, hi
         logical                    :: ok
         call make_series(original)
         ok = original%write(string('data/dose_series.txt'),message)
         call assert_true(ok,'manifest write: '//message%to_char())
+        if( ok )then
+            open(newunit=unit,file='data/dose_series.txt',status='old',action='read')
+            read(unit,'(A)',iostat=ios) header
+            if( ios == 0 ) read(unit,'(A)',iostat=ios) header
+            close(unit)
+            call assert_int(0,ios,'manifest producer header is readable')
+            if( ios == 0 ) call assert_char('# program fractionate_model',trim(header),'manifest producer tag')
+        endif
         ok = loaded%read(string('data/dose_series.txt'),message)
         call assert_true(ok,'manifest read: '//message%to_char())
         if( .not. ok ) return
@@ -105,7 +114,7 @@ contains
         type(string)               :: message
         integer                    :: which
         logical                    :: ok
-        do which = 1,16
+        do which = 1,17
             call write_case(which)
             ok = series%read(string('data/case.txt'),message)
             call assert_false(ok,'invalid manifest case')
@@ -125,7 +134,11 @@ contains
         else
             write(unit,'(A)') '# SIMPLE dose series 1'
         endif
-        write(unit,'(A)') '# program refine_motion_model'
+        if( which == 17 )then
+            write(unit,'(A)') '# program another_program'
+        else
+            write(unit,'(A)') '# program fractionate_model'
+        endif
         if( which == 2 )then
             write(unit,'(A)') '# state 2'
         else

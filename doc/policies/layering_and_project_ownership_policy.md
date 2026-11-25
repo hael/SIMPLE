@@ -151,7 +151,7 @@ process reads it can be seen half-written.
    `gen_pspecs_and_thumbs`, `preprocess`) has each worker write a mic-row part
    document that the master merges with `merge_algndocs`, which checks
    coverage and overlap. A step that creates stacks and particles (`extract`,
-   `reextract`, `refine_motion_model`) has each worker write a part project and
+   `reextract`, `fractionate_model`) has each worker write a part project and
    the master assemble them with one shared routine. The stream's job project,
    which the worker updates in place, is the documented exception.
 3. **Write only the segments you changed**, with
@@ -248,7 +248,7 @@ write-and-reread around the `prob_align` step) are gone from the list.
   part documents merged by `merge_algndocs` (`motion_correct`, `ctf_estimate`,
   `pick`, `gen_pspecs_and_thumbs`, `preprocess`); whole part projects assembled
   by hand in three near-identical copies (`extract`, `reextract`,
-  `refine_motion_model`), with count checks only and `extract` copying particle
+  `fractionate_model`), with count checks only and `extract` copying particle
   fields one by one where the others use `transfer_ori`; a job project updated
   in place by the worker (stream); and stage-owned projects. In the first group
   the worker reads the whole project to update a few rows and the master reads

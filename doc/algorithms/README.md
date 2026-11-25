@@ -201,7 +201,7 @@ calibration estimator that decides the orientation of the detector gain
 reference from the first movies of a session.
 
 [Dose-series accumulation](dose_filter3D.md) measures how the signal fades
-with dose, from half maps that `refine_motion_model` reconstructs from windows
+with dose, from half maps that `fractionate_model` reconstructs from windows
 of movie fractions, accumulates the windows under that measured curve, and
 lets `reextract` weight the movie fractions by it.
 

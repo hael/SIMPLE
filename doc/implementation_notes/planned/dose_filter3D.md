@@ -1,7 +1,7 @@
 # Dose-series accumulation under a temporal attenuation model
 
 Initial design, 3 November 2026, against SIMPLE `69c6c9d78` plus the working-tree
-`refine_motion_model` changes. Producer integration is implemented and committed (section 10). The consumer,
+`fractionate_model` changes. Producer integration is implemented and committed (section 10). The consumer,
 `dose_filter3D`, is implemented in the working tree: its implementation and corrections are in section 11. The re-extraction of particles under the measured curve
 (`reextract dose_weighting=measured`) is in section 12, its uncertainty and comparison corrections in 12.1, and
 the validation to redo after these changes in section 13. This
@@ -219,7 +219,7 @@ coincide. The input manifest records *physical* dose; the program applies the sc
 
 ### 4.1 Inputs, window selection, noise and band
 
-**Inputs.** $W$ raw half pairs from `refine_motion_model`'s interval reconstructions —
+**Inputs.** $W$ raw half pairs from `fractionate_model`'s interval reconstructions —
 `recvol_state01_{even,odd}_unfil.mrc` in each `rec_frames_aa-bb/`, unfiltered and unmasked, state 1 only — at one
 box $N$, one sampling $d$, one pose convention, with the same even/odd particle partition in every window. A
 manifest written by the producer carries, per window: the two half-map paths, the inclusive fraction range
@@ -236,7 +236,7 @@ voltage scaling of section 3.3.
 
 ```text
 # SIMPLE dose series 1
-# program            refine_motion_model
+# program            fractionate_model
 # state              1
 # box                288
 # smpd               1.06
@@ -265,7 +265,7 @@ below; non-increasing `from`; a `dose_hi` not greater than its `dose_lo`; non-in
 windows; a `kv` outside {300, 200, 100}; a missing half map; and any volume whose box, sampling or
 cubic shape disagrees with the header.
 
-**Window selection.** `refine_motion_model`'s last interval keeps its full `stepf` width, so when
+**Window selection.** `fractionate_model`'s last interval keeps its full `stepf` width, so when
 $(\texttt{tof} - \texttt{fromf} + 1)$ is not a multiple of `stepf` it overlaps its predecessor and the two share
 particle images — which would break the independence of (2). Drop the *predecessor*, keeping the full-width
 highest-dose window. The survivors are disjoint but need not tile the exposure. Fewer than two surviving windows
@@ -680,7 +680,7 @@ the peak is one set; Fourier-crop the halves to the box the band needs when memo
 
 ## 9 Open points
 
-Settled with the maintainer, 3 November 2026: raw `_unfil` halves as the input (with `refine_motion_model` adjusted
+Settled with the maintainer, 3 November 2026: raw `_unfil` halves as the input (with `fractionate_model` adjusted
 to make that pair genuinely unfiltered and unmasked, leaving `_even`/`_odd` and therefore the exported FSC matrix
 untouched); a producer-written manifest for the dose; dropping the window before an overlapping last one; state 1
 only; the band rule of section 4.1; detector noise independent across windows with structure error shared; $\beta$
@@ -714,7 +714,7 @@ Still open:
 ## 10 Producer integration
 
 Status: implemented and validated in the working tree. Scope: make
-`refine_motion_model` emit genuinely unmasked `_unfil` half maps and a complete, portable dose manifest,
+`fractionate_model` emit genuinely unmasked `_unfil` half maps and a complete, portable dose manifest,
 and verify that `dose_filter3D` reads those products correctly. The existing attenuation fitting and
 weight equations were preserved. Existing consumer changes, including its high-pass fitting bound,
 were retained.
@@ -830,7 +830,7 @@ Expected production files:
 
 - `src/main/params/simple_parameters.f90`, `simple_parameters_parse.f90`,
   `simple_parameters_phases.f90`: internal output setting and validation.
-- `src/main/strategies/parallelization/simple_refine_motion_model_strategy.f90`: enable export,
+- `src/main/strategies/parallelization/simple_fractionate_model_strategy.f90`: enable export,
   collect authoritative metadata, verify interval identity and publish the manifest.
 - `src/main/strategies/parallelization/simple_volassemble_strategy.f90`: write corrected halves before
   support, with the existing standard half-map/FSC path preserved.
@@ -843,8 +843,8 @@ Expected production files:
 Tests extend the existing reconstruction/provenance suites and add the manifest tester to the existing
 `unit_reconstruction` area, with producer metadata in `unit_motion` and export integration in
 `lib_reconstruction`; no new executable or CMake target is needed. Register its suite in the normal test
-registry/help locations. Update this living note, `doc/algorithms/refine_motion_model.md` and
-`doc/policies/refine_motion_model_policy.md` as the implementation is completed.
+registry/help locations. Update this living note, `doc/algorithms/fractionate_model.md` and
+`doc/policies/fractionate_model_policy.md` as the implementation is completed.
 
 Acceptance checks for the producer are listed in section 13.
 
@@ -902,7 +902,7 @@ data, and halves whose difference is below $10^{-6}$ of their power.
 ### 11.6 Figures
 
 The decay figure and the weights figure of section 6 are rendered by gnuplot under Fortran control, as in
-`refine_motion_model`; `posix_quote` in `simple_string_utils` quotes the paths. A rendering failure warns and keeps
+`fractionate_model`; `posix_quote` in `simple_string_utils` quotes the paths. A rendering failure warns and keeps
 the tables.
 
 ### 11.7 Test tools

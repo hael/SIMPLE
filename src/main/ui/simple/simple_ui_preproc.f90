@@ -7,7 +7,7 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('prepr
 type(ui_program),          target    :: assign_optics_groups
 type(ui_program),          target    :: ctf_estimate
 type(ui_program),          target    :: extract
-type(ui_program),          target    :: refine_motion_model
+type(ui_program),          target    :: fractionate_model
 type(ui_program),          target    :: gen_pspecs_and_thumbs
 type(ui_program),          target    :: motion_correct
 type(ui_program),          target    :: particle_sieving
@@ -23,7 +23,7 @@ contains
         call new_assign_optics_groups(prgtab)
         call new_ctf_estimate(prgtab)
         call new_extract(prgtab)
-        call new_refine_motion_model(prgtab)
+        call new_fractionate_model(prgtab)
         call new_gen_pspecs_and_thumbs(prgtab)
         call new_motion_correct(prgtab)
         call new_particle_sieving(prgtab)
@@ -165,52 +165,52 @@ contains
         call add_ui_program('extract', extract, prgtab, UI_CATEGORY)
     end subroutine new_extract
 
-    subroutine new_refine_motion_model( prgtab )
+    subroutine new_fractionate_model( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call refine_motion_model%new(&
-        &'refine_motion_model', &                                                         ! name
+        call fractionate_model%new(&
+        &'fractionate_model', &                                                         ! name
         &'Generate 2D class averages or 3D reconstructions of particle fractions',& ! summary
         &'Re-extract non-dose-weighted particle fractions using saved motion, then generate class averages from&
         & ptcl2D metadata or reconstruct each interval from ptcl3D poses and export raw FSC diagnostics',& ! descr long
         &'simple_exec',&                                                        ! executable
         &.true., &
-        &visibility=UI_VIS_STANDARD, display_name='Refine Motion Model') ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Fractionate Model') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call refine_motion_model%add_input(UI_PARM, oritype, &
+        call fractionate_model%add_input(UI_PARM, oritype, &
         &choices_override=ui_choices([character(len=6) :: 'ptcl2D', 'ptcl3D']), visibility=UI_VIS_STANDARD)
-        call refine_motion_model%add_input(UI_PARM, box,     required_override=.false., &
+        call fractionate_model%add_input(UI_PARM, box,     required_override=.false., &
         &visibility=UI_VIS_ADVANCED)
-        call refine_motion_model%add_input(UI_PARM, pcontrast, &
+        call fractionate_model%add_input(UI_PARM, pcontrast, &
         &visibility=UI_VIS_ADVANCED)
-        call refine_motion_model%add_input(UI_PARM, 'fromf', 'num', 'Starting frame', &
+        call fractionate_model%add_input(UI_PARM, 'fromf', 'num', 'Starting frame', &
         & 'Starting movie frame for particle re-extraction', 'frame index', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
-        call refine_motion_model%add_input(UI_PARM, 'tof', 'num', 'Final frame', &
+        call fractionate_model%add_input(UI_PARM, 'tof', 'num', 'Final frame', &
         & 'Final movie frame for particle re-extraction(0=all)', 'frame index', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
-        call refine_motion_model%add_input(UI_PARM, 'stepf', 'num', 'Incremental frame step size', &
+        call fractionate_model%add_input(UI_PARM, 'stepf', 'num', 'Incremental frame step size', &
         & 'Frames per output stack; the final block ends at tof and overlaps if needed', '', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call refine_motion_model%add_input(UI_SRCH, pgrp, required_override=.false., visibility=UI_VIS_STANDARD)
+        call fractionate_model%add_input(UI_SRCH, pgrp, required_override=.false., visibility=UI_VIS_STANDARD)
         ! filter controls
         ! <empty>
         ! mask controls
-        call refine_motion_model%add_input(UI_MASK, mskdiam, visibility=UI_VIS_STANDARD)
+        call fractionate_model%add_input(UI_MASK, mskdiam, visibility=UI_VIS_STANDARD)
         ! computer controls
-        call refine_motion_model%add_input(UI_COMP, nparts, &
+        call fractionate_model%add_input(UI_COMP, nparts, &
         &visibility=UI_VIS_STANDARD)
-        call refine_motion_model%add_input(UI_COMP, nthr, &
+        call fractionate_model%add_input(UI_COMP, nthr, &
         &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('refine_motion_model', refine_motion_model, prgtab, UI_CATEGORY)
-    end subroutine new_refine_motion_model
+        call add_ui_program('fractionate_model', fractionate_model, prgtab, UI_CATEGORY)
+    end subroutine new_fractionate_model
 
     subroutine new_gen_pspecs_and_thumbs( prgtab )
         class(ui_hash), intent(inout) :: prgtab

@@ -11,9 +11,9 @@ half-map pairs reconstructed from consecutive windows of fractions, and accumula
 
 ## Data
 
-`refine_motion_model` reconstructs state 1 from blocks of `stepf` fractions with the refined poses held
+`fractionate_model` reconstructs state 1 from blocks of `stepf` fractions with the refined poses held
 fixed and writes `dose_series.txt`: per window its fractions, its physical dose bounds and its unfiltered,
-unmasked even and odd half maps ([refine_motion_model](refine_motion_model.md), dose-series export). The
+unmasked even and odd half maps ([fractionate_model](fractionate_model.md), dose-series export). The
 manifest also carries the box, sampling, voltage and dose per fraction, so the program needs only the
 manifest, `smpd` and `mskdiam`:
 

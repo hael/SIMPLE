@@ -11,7 +11,7 @@ alignment, sums), `motion_align_hybrid`, `motion_patched`, `motion_model` (the `
 `motion_correct_utils` (gain, EER fractions, polynomial basis), the gain-flip analysis and
 `motion_align_nano` (SINGLE time series). `preprocess/` holds `ptcl_extractor` (particles from the
 micrograph, or from the movie through the `.mmodel`) and `pspec_thumb_iter`. `motion/` also holds
-`simple_dose_series_manifest` (the dose-series half maps of `refine_motion_model`, `dose_series.txt`;
+`simple_dose_series_manifest` (the dose-series half maps of `fractionate_model`, `dose_series.txt`;
 its tests run in `unit_reconstruction suite=dose_series_manifest`). Scheduling, gain
 preparation and project writes belong to the strategies in `strategies/parallelization` and the
 stream's preprocessing stage; CTF to `ctf/`; box files to `pick/`.
@@ -51,7 +51,7 @@ Silent ones first: nothing reports these.
 - The `.mmodel` is the only motion metadata SIMPLE reads (`mc_starfile` is for other software).
   Readers reject other `FILE_VERSION`s: a layout change bumps it and the tester's binary fixture.
 - Extractor: `init_mic`; `init_mov` falls back to `init_mic` with only a warning when `mcmodel` is
-  missing; `init_model` (`refine_motion_model`) stops. Coordinates are box-file corners on the
+  missing; `init_model` (`fractionate_model`) stops. Coordinates are box-file corners on the
   `intg` grid; centre = corner + box/2, +1 for `pix2polycoords`; motion is referred to the model's
   `fixed_frame` (central), so `extractfrommov=yes` needs `mcconvention=simple`: motion correction records
   the convention on the micrograph row and `init_mov` stops on `first`/`relion` (which register `intg` to
@@ -65,7 +65,7 @@ Silent ones first: nothing reports these.
 - `doc/policies/motion_correction_policy.md` (the convention tables), then
   `simple_motion_correct_iter.f90` (one movie; with `tseries=yes` no `forctf`, model or STAR).
 - Callers: `strategies/parallelization/simple_preprocess_strategy.f90`, `simple_extract_strategy.f90`,
-  `simple_refine_motion_model_strategy.f90`; `stream/stages/simple_stream_stage_preprocess.f90` (gain).
+  `simple_fractionate_model_strategy.f90`; `stream/stages/simple_stream_stage_preprocess.f90` (gain).
 
 ## Tests
 
@@ -79,5 +79,5 @@ Silent ones first: nothing reports these.
 
 ## See also
 
-`doc/policies/motion_gain_analysis_policy.md`, `doc/policies/refine_motion_model_policy.md`,
+`doc/policies/motion_gain_analysis_policy.md`, `doc/policies/fractionate_model_policy.md`,
 `doc/algorithms/motion_correction.md`; skills `simple-main-ctf`, `simple-main-pick`, `simple-main-stream`.

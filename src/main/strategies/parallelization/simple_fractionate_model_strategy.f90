@@ -1,5 +1,5 @@
-!@descr: Strategy pattern for refine_motion_model
-module simple_refine_motion_model_strategy
+!@descr: Strategy pattern for fractionate_model
+module simple_fractionate_model_strategy
 use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_finite
 use simple_core_module_api
 use simple_parameters,   only: parameters
@@ -13,45 +13,45 @@ use simple_motion_model, only: motion_model
 use simple_string_utils, only: posix_quote
 implicit none
 
-public :: refine_motion_model_strategy
-public :: refine_motion_model_inmem_strategy
-public :: refine_motion_model_distr_strategy
-public :: create_refine_motion_model_strategy
+public :: fractionate_model_strategy
+public :: fractionate_model_inmem_strategy
+public :: fractionate_model_distr_strategy
+public :: create_fractionate_model_strategy
 public :: prepare_fraction_dose_manifest, reconstruct_motion_fractions, remove_fraction_stacks
-public :: run_all_refine_motion_model_tests, run_all_refine_motion_model_lib_tests
+public :: run_all_fractionate_model_tests, run_all_fractionate_model_lib_tests
 private
 #include "simple_local_flags.inc"
 
-real(dp),         parameter :: DOSE_FRACTION_RELTOL     = 1.e-5_dp
-real(dp),         parameter :: DOSE_FRACTION_ABSTOL     = 1.e-7_dp
-real(dp),         parameter :: DOSE_VOLTAGE_TOL         = 1.e-3_dp
+real(dp),         parameter :: DOSE_FRACTION_RELTOL = 1.e-5_dp
+real(dp),         parameter :: DOSE_FRACTION_ABSTOL = 1.e-7_dp
+real(dp),         parameter :: DOSE_VOLTAGE_TOL     = 1.e-3_dp
 integer,          parameter :: DOSE_PARTITION_ROW_WIDTH = 15 !< I12, colon, half digit, semicolon
-character(len=*), parameter :: DOSE_MANIFEST_FNAME      = 'dose_series.txt'
+character(len=*), parameter :: DOSE_MANIFEST_FNAME = 'dose_series.txt'
 
 ! --------------------------------------------------------------------
 ! Strategy interface
 ! --------------------------------------------------------------------
-type, abstract :: refine_motion_model_strategy
+type, abstract :: fractionate_model_strategy
 contains
     procedure(init_interface),           deferred :: initialize
     procedure(exec_interface),           deferred :: execute
     procedure(finalize_interface),       deferred :: finalize_run
     procedure(cleanup_interface),        deferred :: cleanup
     procedure(endmsg_interface),         deferred :: end_message
-end type refine_motion_model_strategy
+end type fractionate_model_strategy
 
 ! Worker/shared-memory strategy
-type, extends(refine_motion_model_strategy) :: refine_motion_model_inmem_strategy
+type, extends(fractionate_model_strategy) :: fractionate_model_inmem_strategy
 contains
     procedure :: initialize     => inmem_initialize
     procedure :: execute        => inmem_execute
     procedure :: finalize_run   => inmem_finalize_run
     procedure :: cleanup        => inmem_cleanup
     procedure :: end_message    => inmem_end_message
-end type refine_motion_model_inmem_strategy
+end type fractionate_model_inmem_strategy
 
 ! Distributed-master strategy
-type, extends(refine_motion_model_strategy) :: refine_motion_model_distr_strategy
+type, extends(fractionate_model_strategy) :: fractionate_model_distr_strategy
     type(sp_project)                 :: spproj
     type(qsys_env)                   :: qenv
     type(chash)                      :: job_descr
@@ -65,50 +65,50 @@ contains
     procedure :: finalize_run   => distr_finalize_run
     procedure :: cleanup        => distr_cleanup
     procedure :: end_message    => distr_end_message
-end type refine_motion_model_distr_strategy
+end type fractionate_model_distr_strategy
 
 abstract interface
     subroutine init_interface(self, params, cline)
-        import :: refine_motion_model_strategy, parameters, cmdline
-        class(refine_motion_model_strategy), intent(inout) :: self
-        type(parameters),                    intent(inout) :: params
-        class(cmdline),                      intent(inout) :: cline
+        import :: fractionate_model_strategy, parameters, cmdline
+        class(fractionate_model_strategy), intent(inout) :: self
+        type(parameters),          intent(inout) :: params
+        class(cmdline),            intent(inout) :: cline
     end subroutine init_interface
 
     subroutine exec_interface(self, params, cline)
-        import :: refine_motion_model_strategy, parameters, cmdline
-        class(refine_motion_model_strategy), intent(inout) :: self
-        type(parameters),                    intent(inout) :: params
-        class(cmdline),                      intent(inout) :: cline
+        import :: fractionate_model_strategy, parameters, cmdline
+        class(fractionate_model_strategy), intent(inout) :: self
+        type(parameters),          intent(inout) :: params
+        class(cmdline),            intent(inout) :: cline
     end subroutine exec_interface
 
     subroutine finalize_interface(self, params, cline)
-        import :: refine_motion_model_strategy, parameters, cmdline
-        class(refine_motion_model_strategy), intent(inout) :: self
-        type(parameters),                    intent(in)    :: params
-        class(cmdline),                      intent(inout) :: cline
+        import :: fractionate_model_strategy, parameters, cmdline
+        class(fractionate_model_strategy), intent(inout) :: self
+        type(parameters),          intent(in)    :: params
+        class(cmdline),            intent(inout) :: cline
     end subroutine finalize_interface
 
     subroutine cleanup_interface(self, params, cline)
-        import :: refine_motion_model_strategy, parameters, cmdline
-        class(refine_motion_model_strategy), intent(inout) :: self
-        type(parameters),                    intent(in)    :: params
-        class(cmdline),                      intent(inout) :: cline
+        import :: fractionate_model_strategy, parameters, cmdline
+        class(fractionate_model_strategy), intent(inout) :: self
+        type(parameters),          intent(in)    :: params
+        class(cmdline),            intent(inout) :: cline
     end subroutine cleanup_interface
 
     function endmsg_interface(self) result(msg)
-        import :: refine_motion_model_strategy
-        class(refine_motion_model_strategy), intent(in) :: self
+        import :: fractionate_model_strategy
+        class(fractionate_model_strategy), intent(in) :: self
         character(len=:), allocatable :: msg
     end function endmsg_interface
 end interface
 
 interface
-    !> white-box tests (submodule simple_refine_motion_model_tester, built only with BUILD_TESTS=ON)
-    module subroutine run_all_refine_motion_model_tests()
-    end subroutine run_all_refine_motion_model_tests
-    module subroutine run_all_refine_motion_model_lib_tests()
-    end subroutine run_all_refine_motion_model_lib_tests
+    !> white-box tests (submodule simple_fractionate_model_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_fractionate_model_tests()
+    end subroutine run_all_fractionate_model_tests
+    module subroutine run_all_fractionate_model_lib_tests()
+    end subroutine run_all_fractionate_model_lib_tests
 end interface
 
 contains
@@ -116,21 +116,21 @@ contains
     ! --------------------------------------------------------------------
     ! Factory
     ! --------------------------------------------------------------------
-    function create_refine_motion_model_strategy(cline) result(strategy)
+    function create_fractionate_model_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
-        class(refine_motion_model_strategy), allocatable :: strategy
-        logical                                          :: is_master
+        class(fractionate_model_strategy), allocatable :: strategy
+        logical :: is_master
         ! master if nparts defined but no explicit worker range/part.
         is_master = cline%defined('nparts') .and. (.not.cline%defined('part')) &
                    .and. (.not.cline%defined('fromp')) .and. (.not.cline%defined('top'))
         if( is_master )then
-            allocate(refine_motion_model_distr_strategy :: strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED REFINE_MOTION_MODEL (MASTER)'
+            allocate(fractionate_model_distr_strategy :: strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED FRACTIONATE_MODEL (MASTER)'
         else
-            allocate(refine_motion_model_inmem_strategy :: strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> REFINE_MOTION_MODEL (WORKER / SHARED-MEMORY)'
+            allocate(fractionate_model_inmem_strategy :: strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> FRACTIONATE_MODEL (WORKER / SHARED-MEMORY)'
         endif
-    end function create_refine_motion_model_strategy
+    end function create_fractionate_model_strategy
 
     subroutine validate_fraction_range( fromf, tof, stepf )
         integer, intent(in) :: fromf, tof, stepf
@@ -178,9 +178,9 @@ contains
     ! ====================================================================
 
     subroutine inmem_initialize(self, params, cline)
-        class(refine_motion_model_inmem_strategy), intent(inout) :: self
-        type(parameters),                          intent(inout) :: params
-        class(cmdline),                            intent(inout) :: cline
+        class(fractionate_model_inmem_strategy), intent(inout) :: self
+        type(parameters),                intent(inout) :: params
+        class(cmdline),                  intent(inout) :: cline
         call params%new(cline)
         ! mirror original worker routine
         call cline%set('mkdir', 'no')
@@ -189,25 +189,25 @@ contains
     subroutine inmem_execute(self, params, cline)
         use simple_particle_extractor, only: ptcl_extractor
         use simple_matcher_ptcl_io,    only: prepimgbatch, killimgbatch
-        class(refine_motion_model_inmem_strategy), intent(inout) :: self
-        type(parameters),                          intent(inout) :: params
-        class(cmdline),                            intent(inout) :: cline
+        class(fractionate_model_inmem_strategy), intent(inout) :: self
+        type(parameters),                        intent(inout) :: params
+        class(cmdline),                          intent(inout) :: cline
         type(sp_project), allocatable :: fraction_projects(:)
-        type(sp_project)              :: spproj, spproj_in
-        type(builder)                 :: build
-        type(ori)                     :: o_mov, o_stk
-        type(stack_io)                :: stkio_w
-        type(ptcl_extractor)          :: extractor
-        type(motion_model)            :: mcmodel
-        type(string)                  :: mov_name, ext, stack, range, str, frame_dir
-        logical,          allocatable :: mov_mask(:), ptcl_mask(:), fraction_mask(:)
-        integer,          allocatable :: mic2stk_inds(:), boxcoords(:,:), coords(:,:)
-        real                          :: prev_shift(2),shift2d(2),shift3d(2),prev_shift_sc(2), translation(2)
-        real                          :: prev_center_sc(2), stk_min, stk_max, stk_mean, stk_sdev
-        integer                       :: prev_pos(2), new_pos(2), ishift(2), prev_center(2), new_center(2)
-        integer                       :: ffromto(2), i,ind, imov, iptcl, nmovs, prev_box, box_foo, cnt, nmovies_tot, stk_ind
-        integer                       :: fromp, top, istk, nptcls2extract, nptcls, nfractioned_stacks, imov_local
-        logical                       :: l_from3D
+        type(sp_project)        :: spproj, spproj_in
+        type(builder)           :: build
+        type(ori)               :: o_mov, o_stk
+        type(stack_io)          :: stkio_w
+        type(ptcl_extractor)    :: extractor
+        type(motion_model)      :: mcmodel
+        type(string)            :: mov_name, ext, stack, range, str, frame_dir
+        logical,    allocatable :: mov_mask(:), ptcl_mask(:), fraction_mask(:)
+        integer,    allocatable :: mic2stk_inds(:), boxcoords(:,:), coords(:,:)
+        real    :: prev_shift(2),shift2d(2),shift3d(2),prev_shift_sc(2), translation(2)
+        real    :: prev_center_sc(2), stk_min, stk_max, stk_mean, stk_sdev
+        integer :: prev_pos(2), new_pos(2), ishift(2), prev_center(2), new_center(2)
+        integer :: ffromto(2), i,ind, imov, iptcl, nmovs, prev_box, box_foo, cnt, nmovies_tot, stk_ind
+        integer :: fromp, top, istk, nptcls2extract, nptcls, nfractioned_stacks, imov_local
+        logical :: l_from3D
         call validate_input
         params%msk    = RADFRAC_NORM_EXTRACT * real(params%box/2)
         l_from3D      = trim(params%oritype).eq.'ptcl3D'
@@ -235,10 +235,10 @@ contains
                 call spproj_in%os_stk%get_ori(stk_ind, o_stk)
                 box_foo = o_stk%get_int('box')
                 if( prev_box == 0 ) prev_box = box_foo
-                if( prev_box /= box_foo ) THROW_HARD('Inconsistent box size; exec_refine_motion_model')
+                if( prev_box /= box_foo ) THROW_HARD('Inconsistent box size; exec_fractionate_model')
             enddo
             if( .not.cline%defined('box') ) params%box = prev_box
-            if( is_odd(params%box) ) THROW_HARD('Box size must be of even dimension! exec_refine_motion_model')
+            if( is_odd(params%box) ) THROW_HARD('Box size must be of even dimension! exec_fractionate_model')
             ! read particle segments
             call spproj_in%read_segment('ptcl2D', params%projfile)
             call spproj_in%read_segment('ptcl3D', params%projfile)
@@ -452,23 +452,23 @@ contains
     end subroutine inmem_execute
 
     subroutine inmem_finalize_run(self, params, cline)
-        class(refine_motion_model_inmem_strategy), intent(inout) :: self
-        type(parameters),                          intent(in)    :: params
-        class(cmdline),                            intent(inout) :: cline
-        call qsys_declare_part_finished(params, string('simple_commanders_motion :: exec_refine_motion_model'))
+        class(fractionate_model_inmem_strategy), intent(inout) :: self
+        type(parameters),                intent(in)    :: params
+        class(cmdline),                  intent(inout) :: cline
+        call qsys_declare_part_finished(params, string('simple_commanders_motion :: exec_fractionate_model'))
     end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params, cline)
-        class(refine_motion_model_inmem_strategy), intent(inout) :: self
+        class(fractionate_model_inmem_strategy), intent(inout) :: self
         type(parameters),                          intent(in)    :: params
         class(cmdline),                            intent(inout) :: cline
         ! No-op
     end subroutine inmem_cleanup
 
     function inmem_end_message(self) result(msg)
-        class(refine_motion_model_inmem_strategy), intent(in) :: self
+        class(fractionate_model_inmem_strategy), intent(in) :: self
         character(len=:), allocatable :: msg
-        msg = '**** SIMPLE_REFINE_MOTION_MODEL NORMAL STOP ****'
+        msg = '**** SIMPLE_FRACTIONATE_MODEL NORMAL STOP ****'
     end function inmem_end_message
 
     ! ====================================================================
@@ -477,14 +477,14 @@ contains
 
     subroutine distr_initialize(self, params, cline)
         use simple_eo_partition, only: ensure_field_halves
-        class(refine_motion_model_distr_strategy), intent(inout) :: self
-        type(parameters),                          intent(inout) :: params
-        class(cmdline),                            intent(inout) :: cline
+        class(fractionate_model_distr_strategy), intent(inout) :: self
+        type(parameters),                intent(inout) :: params
+        class(cmdline),                  intent(inout) :: cline
         type(ori)          :: o_mov
         type(motion_model) :: mcmodel
         type(string)       :: mov_name, model_name
-        integer            :: imov, state, ipart
-        integer            :: nmovies_valid
+        integer        :: imov, state, ipart
+        integer        :: nmovies_valid
         call params%new(cline)
         call cline%set('mkdir', 'no')
         call self%spproj%read(params%projfile)
@@ -520,7 +520,7 @@ contains
         enddo
         call o_mov%kill
         if( nmovies_valid == 0 )then
-            THROW_WARN('No particles to extract! exec_refine_motion_model_distr')
+            THROW_WARN('No particles to extract! exec_fractionate_model_distr')
             self%skip_run = .true.
             call self%spproj%kill
             call o_mov%kill
@@ -541,13 +541,13 @@ contains
     end subroutine distr_initialize
 
     subroutine distr_execute(self, params, cline)
-        class(refine_motion_model_distr_strategy), intent(inout) :: self
+        class(fractionate_model_distr_strategy), intent(inout) :: self
         type(parameters),                          intent(inout) :: params
         class(cmdline),                            intent(inout) :: cline
         type(string), allocatable :: frame_projects(:)
         integer,      allocatable :: frame_ranges(:,:)
-        type(string)              :: frame_dir
-        integer                   :: ffromto(2), ind, nfractioned_stacks
+        type(string) :: frame_dir
+        integer      :: ffromto(2), ind, nfractioned_stacks
         if( self%skip_run ) return
         call validate_fraction_range(params%fromf, params%tof, params%stepf)
         nfractioned_stacks = count_fractioned_stacks(params%fromf, params%tof, params%stepf)
@@ -576,16 +576,16 @@ contains
     !> Read extraction part projects; write interval projects and remove consumed stack-table parts.
     subroutine assemble_motion_fractions(self, params, frame_projects, frame_ranges)
         use simple_oris, only: oris
-        class(refine_motion_model_distr_strategy), intent(inout)                            :: self
-        type(parameters),                          intent(in)                               :: params
-        type(string),                              allocatable,                 intent(out) :: frame_projects(:)
-        integer,                                   allocatable,                 intent(out) :: frame_ranges(:,:)
+        class(fractionate_model_distr_strategy), intent(inout) :: self
+        type(parameters),                          intent(in)    :: params
+        type(string), allocatable,                 intent(out)   :: frame_projects(:)
+        integer,      allocatable,                 intent(out)   :: frame_ranges(:,:)
         type(sp_project), allocatable :: spproj_parts(:)
         type(string),     allocatable :: stktab(:)
-        type(oris)                    :: os_stk
-        type(string)                  :: ptcl_project, mic_project, frame_project, stk_project, range, frame_dir
-        integer                       :: numlen, ffromto(2), ipart, imic, istk, ind, nfractioned_stacks
-        integer                       :: nmovs, cnt, nstks, nptcls, i, stkind
+        type(oris)   :: os_stk
+        type(string) :: ptcl_project, mic_project, frame_project, stk_project, range, frame_dir
+        integer      :: numlen, ffromto(2), ipart, imic, istk, ind, nfractioned_stacks
+        integer      :: nmovs, cnt, nstks, nptcls, i, stkind
         nfractioned_stacks = count_fractioned_stacks(params%fromf, params%tof, params%stepf)
         allocate(frame_projects(nfractioned_stacks), frame_ranges(2,nfractioned_stacks))
         allocate(spproj_parts(params%nparts))
@@ -687,11 +687,11 @@ contains
         type(string),     intent(in)    :: frame_projects(:)
         integer,          intent(in)    :: frame_ranges(:,:)
         type(commander_make_cavgs_distr) :: xmake_cavgs
-        type(sp_project)                 :: spproj
-        type(cmdline)                    :: cline_cavgs
-        type(string)                     :: cwd_saved, product_dir, project, refs, cavgs, frcs, half, ext
-        integer                          :: i, j, ncls, nimages, ldim(3), saved_threads, saved_nthr_glob
-        real                             :: smpd
+        type(sp_project) :: spproj
+        type(cmdline)    :: cline_cavgs
+        type(string)     :: cwd_saved, product_dir, project, refs, cavgs, frcs, half, ext
+        integer :: i, j, ncls, nimages, ldim(3), saved_threads, saved_nthr_glob
+        real :: smpd
         if( size(frame_ranges,1) /= 2 ) THROW_HARD('Fraction ranges must have two endpoints')
         if( size(frame_ranges,2) /= size(frame_projects) ) THROW_HARD('Fraction project/range count mismatch')
         if( size(frame_projects) == 0 ) return
@@ -767,18 +767,19 @@ contains
         type(string),     intent(in)    :: frame_projects(:)
         integer,          intent(in)    :: frame_ranges(:,:)
         integer,          intent(in)    :: nstates
-        type(sp_project)           :: spproj
-        type(cmdline)              :: cline_rec
+        type(sp_project)      :: spproj
+        type(cmdline)         :: cline_rec
         type(dose_series_manifest) :: dose_manifest
-        type(string)               :: cwd_saved, rec_dir, rec_project, volname, fscname
-        type(string)               :: manifest_fname, manifest_message
-        integer,  allocatable      :: state1_rows(:), state1_halves(:), current_state1_rows(:), current_state1_halves(:)
-        integer,  allocatable      :: pinds(:), selected(:), halves(:), current_halves(:), state_pops(:)
-        real,     allocatable      :: fsc_matrix(:,:,:), fsc_curve(:), resolution(:)
-        real(dp), allocatable      :: reciprocal_frequency(:)
-        integer                    :: i, j, state, nselected, nptcls, old_out_states, nregistered
-        integer                    :: saved_threads, saved_nthr_glob
-        logical                    :: l_manifest
+        type(string)          :: cwd_saved, rec_dir, rec_project, volname, fscname
+        type(string)          :: manifest_fname, manifest_message
+        type(string), allocatable :: rec_dirs(:)
+        integer, allocatable  :: state1_rows(:), state1_halves(:), current_state1_rows(:), current_state1_halves(:)
+        integer, allocatable  :: pinds(:), selected(:), halves(:), current_halves(:), state_pops(:)
+        real,    allocatable  :: fsc_matrix(:,:,:), fsc_curve(:), resolution(:)
+        real(dp), allocatable :: reciprocal_frequency(:)
+        integer :: i, j, state, nselected, nptcls, old_out_states, nregistered
+        integer :: saved_threads, saved_nthr_glob
+        logical :: l_manifest
         if( size(frame_ranges,1) /= 2 ) THROW_HARD('Fraction ranges must have two endpoints')
         if( size(frame_ranges,2) /= size(frame_projects) ) THROW_HARD('Fraction project/range count mismatch')
         if( size(frame_projects) == 0 ) return
@@ -797,9 +798,11 @@ contains
         saved_nthr_glob = nthr_glob
         saved_threads   = nthr_glob
         !$ saved_threads = omp_get_max_threads()
+        allocate(rec_dirs(size(frame_projects)))
         do i = 1, size(frame_projects)
             rec_dir = filepath(cwd_saved, 'rec_frames_'//int2str_pad(frame_ranges(1,i),2)//'-'// &
                 &int2str_pad(frame_ranges(2,i),2))
+            rec_dirs(i) = rec_dir
             if( dir_exists(rec_dir) ) THROW_HARD('Reconstruction directory already exists: '//rec_dir%to_char())
             call simple_mkdir(rec_dir)
             rec_project = filepath(rec_dir, basename(frame_projects(i)))
@@ -862,7 +865,9 @@ contains
                 call cline_rec%set('rec_backend',   'gridding')
                 call cline_rec%set('filt_mode',     'none')
                 call cline_rec%set('automsk',       'no')
-                call cline_rec%set('postprocess',   'no')
+                call cline_rec%set('postprocess',   'yes')
+                call cline_rec%set('bfac',          0.)
+                call cline_rec%set('mirr',          'no')
                 call cline_rec%set('m_estimator',   'no')
                 call cline_rec%set('update_frac',   1.)
                 call cline_rec%set('trail_rec',     'no')
@@ -909,8 +914,11 @@ contains
         do state = 1, nstates
             fscname = filepath(cwd_saved, 'fsc_fractions_state'//int2str_pad(state,2))
             call write_fraction_fsc_matrix(fscname//'.tsv', reciprocal_frequency, frame_ranges, fsc_matrix(:,:,state))
-            call plot_fraction_fsc(fscname, resolution, reciprocal_frequency, frame_ranges, fsc_matrix(:,:,state), state)
+            call plot_fraction_fsc(fscname, resolution, reciprocal_frequency, frame_ranges, fsc_matrix(:,:,state), &
+                &'Raw FSC observations: state '//int2str(state))
         enddo
+        call generate_fraction_totals(params, rec_dirs, any(ieee_is_finite(fsc_matrix),dim=1))
+        call export_cross_fraction_fsc(params, rec_dirs, frame_ranges, resolution, reciprocal_frequency, nstates)
         if( l_manifest ) l_manifest = dose_manifest%write(manifest_fname, manifest_message)
         if( l_manifest )then
             write(logfhandle,'(A)') '>>> DOSE SERIES MANIFEST: '//manifest_fname%to_char()
@@ -924,19 +932,19 @@ contains
     logical function prepare_fraction_dose_manifest(params, spproj, pinds, frame_ranges, manifest, rows, halves, message) result(ok)
         use simple_dose_series_manifest,   only: dose_series_manifest
         use simple_refine3D_fnames,        only: refine3D_state_halfvol_fname
-        class(parameters),           target, intent(in)       :: params
-        class(sp_project),           intent(inout)            :: spproj
-        integer,                     intent(in)               :: pinds(:), frame_ranges(:,:)
-        class(dose_series_manifest), intent(inout)            :: manifest
-        integer,                     allocatable, intent(out) :: rows(:), halves(:)
-        type(string),                intent(out)              :: message
+        class(parameters),   target, intent(in)    :: params
+        class(sp_project),           intent(inout) :: spproj
+        integer,                     intent(in)    :: pinds(:), frame_ranges(:,:)
+        class(dose_series_manifest), intent(inout) :: manifest
+        integer,        allocatable, intent(out)   :: rows(:), halves(:)
+        type(string),                intent(out)   :: message
         type(motion_model)            :: model
         type(string)                  :: model_name, digest_text, digest, rec_dir, even_name, odd_name
         integer,          allocatable :: mic2stk(:), stk2mic(:)
         logical,          allocatable :: contributing(:)
         character(len=:), allocatable :: partition_rows
-        real(dp)                      :: dose, voltage, current_dose, current_voltage, dose_lo, dose_hi
-        integer                       :: nmics, nstks, imic, istk, i, neven, nodd, last_fraction, nwithptcls
+        real(dp) :: dose, voltage, current_dose, current_voltage, dose_lo, dose_hi
+        integer  :: nmics, nstks, imic, istk, i, neven, nodd, last_fraction, nwithptcls
         ok = .false.
         message = ''
         call manifest%kill
@@ -1045,11 +1053,11 @@ contains
 
     !> Select the actual state-1 reconstruction rows and their existing even/odd labels.
     subroutine fraction_state1_rows(spproj, pinds, rows, halves)
-        class(sp_project),    intent(in)               :: spproj
-        integer,              intent(in)               :: pinds(:)
-        integer,              allocatable, intent(out) :: rows(:), halves(:)
+        class(sp_project),    intent(in)  :: spproj
+        integer,              intent(in)  :: pinds(:)
+        integer, allocatable, intent(out) :: rows(:), halves(:)
         logical, allocatable :: selected(:)
-        integer              :: i
+        integer :: i
         allocate(selected(size(pinds)))
         do i = 1, size(pinds)
             selected(i) = spproj%os_ptcl3D%get_state(pinds(i)) == 1
@@ -1067,10 +1075,10 @@ contains
         use simple_refine3D_fnames, only: refine3D_partial_rec_fname, refine3D_partial_rho_fname
         class(string), intent(in) :: cwd, rec_dir
         integer,       intent(in) :: frames(2), nstates, nparts
-        character(len=4), parameter   :: HALVES(2)=[character(len=4) :: 'even','odd']
-        type(string),     allocatable :: partials(:)
-        type(string)                  :: root, reconstruction_dir, expected_path, resolved
-        integer                       :: j, state, part, half, numlen, status, nremoved
+        character(len=4), parameter :: HALVES(2)=[character(len=4) :: 'even','odd']
+        type(string),   allocatable :: partials(:)
+        type(string) :: root, reconstruction_dir, expected_path, resolved
+        integer      :: j, state, part, half, numlen, status, nremoved
         if( nstates<1 .or. nparts<1 ) THROW_HARD('Invalid fraction cleanup inputs')
         if( frames(1)<1 .or. frames(2)<frames(1) ) THROW_HARD('Invalid fraction cleanup interval')
         root=simple_abspath(cwd,status=status)
@@ -1108,6 +1116,199 @@ contains
         write(logfhandle,'(A,I0,A)') '>>> REMOVED ', nremoved, ' PARTIAL RECONSTRUCTION FILES FROM '//reconstruction_dir%to_char()
     end subroutine remove_fraction_partials
 
+    !> Sum saved unmasked halves per state; spherical FSC filters the sum before density-envelope masking.
+    subroutine generate_fraction_totals(params, rec_dirs, populated)
+        use simple_image,                     only: image
+        use simple_image_msk,                 only: image_msk
+        use simple_imghead,                   only: find_ldim_nptcls, find_img_smpd
+        use simple_estimate_ssnr,             only: fsc2cref
+        use simple_butterworth,               only: butterworth_filter
+        use simple_halfmap_diagnostics,       only: write_support_provenance
+        use simple_defs_fractionate_model,    only: FRACTIONATE_TOTAL_DIR, FRACTIONATE_MASK_LP, &
+            &FRACTIONATE_MASK_BINWIDTH, FRACTIONATE_MASK_EDGE, FRACTIONATE_DISTANCE_FBODY
+        use simple_refine3D_fnames,           only: refine3D_state_halfvol_fname, refine3D_state_vol_suffix_fname, &
+            &refine3D_fsc_fname, refine3D_fsc_fbody
+        type(parameters), intent(in) :: params
+        type(string), intent(in) :: rec_dirs(:)
+        logical, intent(in) :: populated(:,:)
+        class(image), allocatable :: even, odd, work, merged
+        class(image_msk), allocatable :: envelope
+        type(string) :: total_dir, fname, halfname
+        real, allocatable :: fsc(:), resolution(:), lowpass(:)
+        real, pointer :: pixels(:,:,:)
+        real :: radius, fsc05, fsc0143
+        integer :: state, i, half, k, cutoff, unit, ios, ldim(3), nimages
+        character, parameter :: TAB = achar(9)
+        if( .not. any(populated) ) return
+        total_dir = string(FRACTIONATE_TOTAL_DIR)
+        if( dir_exists(total_dir) ) THROW_HARD('Accumulated reconstruction directory already exists')
+        call simple_mkdir(total_dir)
+        allocate(even, odd, work, merged, envelope)
+        call even%new([params%box,params%box,params%box], params%smpd)
+        call odd%new([params%box,params%box,params%box], params%smpd)
+        call work%new([params%box,params%box,params%box], params%smpd)
+        radius = params%mskdiam/(2.*params%smpd)
+        resolution = get_resarr(params%box, params%smpd)
+        allocate(fsc(size(resolution)), lowpass(even%get_filtsz()))
+        do state = 1, size(populated,2)
+            if( .not. any(populated(:,state)) ) cycle
+            call even%zero_and_unflag_ft
+            call odd%zero_and_unflag_ft
+            do i = 1, size(rec_dirs)
+                if( .not. populated(i,state) ) cycle
+                do half = 1, 2
+                    if( half == 1 )then
+                        halfname = refine3D_state_halfvol_fname(state, 'even', unfil=.true.)
+                    else
+                        halfname = refine3D_state_halfvol_fname(state, 'odd', unfil=.true.)
+                    endif
+                    fname = filepath(rec_dirs(i), halfname)
+                    if( .not. file_exists(fname) ) THROW_HARD('Missing fraction half map for accumulation: '//fname%to_char())
+                    call find_ldim_nptcls(fname, ldim, nimages)
+                    if( any(ldim /= params%box) ) THROW_HARD('Accumulated half-map box mismatch')
+                    if( .not. is_equal(find_img_smpd(fname),params%smpd) ) THROW_HARD('Accumulated half-map sampling mismatch')
+                    call work%read(fname)
+                    call work%get_rmat_ptr(pixels)
+                    if( .not. all(ieee_is_finite(pixels)) ) THROW_HARD('Nonfinite fraction half map for accumulation')
+                    if( half == 1 )then
+                        call even%add(work)
+                    else
+                        call odd%add(work)
+                    endif
+                enddo
+            enddo
+            fname = filepath(total_dir, refine3D_state_halfvol_fname(state, 'even', unfil=.true.))
+            call even%write(fname)
+            call write_support_provenance(fname, .false., 'gridding', support_kind='none')
+            fname = filepath(total_dir, refine3D_state_halfvol_fname(state, 'odd', unfil=.true.))
+            call odd%write(fname)
+            call write_support_provenance(fname, .false., 'gridding', support_kind='none')
+            call merged%copy(even)
+            call merged%add(odd)
+            fname = filepath(total_dir, refine3D_state_vol_suffix_fname(state, '_unfil'))
+            call merged%write(fname)
+            call write_support_provenance(fname, .false., 'gridding', support_kind='none')
+            call envelope%automask3D(params, merged, .false., lp_override=FRACTIONATE_MASK_LP, &
+                &binwidth_override=FRACTIONATE_MASK_BINWIDTH, edge_override=FRACTIONATE_MASK_EDGE)
+            fname = filepath(total_dir, AUTOMASK_FBODY//int2str_pad(state,2)//MRC_EXT)
+            call envelope%write(fname)
+            ! Mask the in-memory halves for FSC after saving their unmasked sums.
+            call even%mask3D_soft(radius, backgr=0.)
+            call odd%mask3D_soft(radius, backgr=0.)
+            call even%fft()
+            call odd%fft()
+            call even%fsc(odd, fsc)
+            call arr2file(fsc, filepath(total_dir, refine3D_fsc_fname(state)))
+            fname = filepath(total_dir, refine3D_fsc_fbody(state)//'.tsv')
+            call fopen(unit, file=fname, status='replace', action='write', form='formatted')
+            write(unit,'(A)',iostat=ios) 'shell'//TAB//'resolution_A'//TAB//'reciprocal_frequency_A^-1'//TAB//'FSC_spherical'
+            call fileiochk('Writing accumulated FSC header', ios)
+            do k = 1, size(fsc)
+                write(unit,'(I0,3(A,ES24.16E3))',iostat=ios) k, TAB, real(resolution(k),dp), &
+                    &TAB, real(k,dp)/(real(params%box,dp)*real(params%smpd,dp)), TAB, real(fsc(k),dp)
+                call fileiochk('Writing accumulated FSC curve', ios)
+            enddo
+            call fclose(unit)
+            ! Reuse the FSC buffers: EDT(mask) - EDT(complement) is signed distance in Angstroms.
+            call envelope%get_rmat_ptr(pixels)
+            if( .not. any(pixels > 0.5) .or. .not. any(pixels <= 0.5) ) &
+                &THROW_HARD('Surface distances require both foreground and background in the envelope')
+            call even%copy(envelope)
+            call even%distance_transform()
+            call work%copy(envelope)
+            call work%bin_inv()
+            call work%distance_transform()
+            call even%subtr(work)
+            if( state == 1 )then
+                fname = filepath(total_dir, FRACTIONATE_DISTANCE_FBODY//MRC_EXT)
+            else
+                fname = filepath(total_dir, FRACTIONATE_DISTANCE_FBODY//'_state'//int2str_pad(state,2)//MRC_EXT)
+            endif
+            call even%write(fname)
+            ! Match the classical no-sharpening filter, using the spherical FSC and its 0.143 cutoff.
+            call get_resolution(fsc, resolution, fsc05, fsc0143)
+            if( fsc0143 < TINY ) fsc0143 = resolution(1)
+            cutoff = max(1, min(params%box/2, calc_fourier_index(fsc0143,params%box,params%smpd)))
+            call merged%fft()
+            call merged%apply_filter(fsc2cref(fsc))
+            call butterworth_filter(cutoff, lowpass)
+            call merged%apply_filter(lowpass)
+            call merged%ifft()
+            call merged%mask3D_soft(radius, backgr=0.)
+            ! A one-voxel skirt can be binary: multiply directly without soft-skirt background estimation.
+            call merged%mul(envelope)
+            call merged%write(filepath(total_dir, refine3D_state_vol_suffix_fname(state, '_pproc')))
+            write(logfhandle,'(A,I0,A,I0)') '>>> ACCUMULATED FRACTIONS FOR STATE ', state, ': ', count(populated(:,state))
+        enddo
+        call even%kill
+        call odd%kill
+        call work%kill
+        call merged%kill
+        call envelope%kill_bimg
+    end subroutine generate_fraction_totals
+
+    !> Compare standard merged maps once per pair, then export each reference interval's diagnostics.
+    subroutine export_cross_fraction_fsc(params, rec_dirs, frame_ranges, resolution, reciprocal_frequency, nstates)
+        use simple_image,           only: image
+        use simple_imghead,         only: find_ldim_nptcls, find_img_smpd
+        use simple_refine3D_fnames, only: refine3D_state_vol_fname
+        type(parameters), intent(in) :: params
+        type(string),     intent(in) :: rec_dirs(:)
+        integer,          intent(in) :: frame_ranges(:,:), nstates
+        real,             intent(in) :: resolution(:)
+        real(dp),         intent(in) :: reciprocal_frequency(:)
+        class(image), allocatable :: reference, other
+        type(string), allocatable :: maps(:)
+        type(string) :: prefix
+        real, allocatable :: pair_fsc(:,:,:)
+        integer, allocatable :: targets(:)
+        logical, allocatable :: available(:)
+        integer :: state, i, j, nintervals, ldim(3), nimages
+        nintervals = size(rec_dirs)
+        allocate(reference, other, maps(nintervals), available(nintervals))
+        call reference%new([params%box,params%box,params%box], params%smpd)
+        call other%new([params%box,params%box,params%box], params%smpd)
+        allocate(pair_fsc(size(resolution),nintervals,nintervals))
+        do state = 1, nstates
+            pair_fsc = ieee_value(0.,ieee_quiet_nan)
+            do i = 1, nintervals
+                maps(i) = filepath(rec_dirs(i), refine3D_state_vol_fname(state))
+                available(i) = file_exists(maps(i))
+                if( .not. available(i) ) cycle
+                call find_ldim_nptcls(maps(i), ldim, nimages)
+                if( any(ldim /= params%box) ) THROW_HARD('Cross-fraction FSC map box mismatch: '//maps(i)%to_char())
+                if( .not. is_equal(find_img_smpd(maps(i)),params%smpd) ) &
+                    &THROW_HARD('Cross-fraction FSC map sampling mismatch: '//maps(i)%to_char())
+            enddo
+            do i = 1, nintervals-1
+                if( .not. available(i) ) cycle
+                call reference%set_ft(.false.)
+                call reference%read(maps(i))
+                call reference%fft()
+                do j = i+1, nintervals
+                    if( .not. available(j) ) cycle
+                    call other%set_ft(.false.)
+                    call other%read(maps(j))
+                    call other%fft()
+                    call reference%fsc(other, pair_fsc(:,i,j))
+                    if( .not. all(ieee_is_finite(pair_fsc(:,i,j))) ) THROW_HARD('Nonfinite cross-fraction FSC values')
+                    pair_fsc(:,j,i) = pair_fsc(:,i,j)
+                enddo
+            enddo
+            do i = 1, nintervals
+                targets = pack([(j,j=1,nintervals)], [(j/=i,j=1,nintervals)])
+                prefix = filepath(rec_dirs(i), 'fsc_cross_fractions_state'//int2str_pad(state,2))
+                call write_fraction_fsc_matrix(prefix//'.tsv', reciprocal_frequency, &
+                    &frame_ranges(:,targets), pair_fsc(:,i,targets))
+                call plot_fraction_fsc(prefix, resolution, reciprocal_frequency, frame_ranges(:,targets), &
+                    &pair_fsc(:,i,targets), 'Cross-fraction FSC: state '//int2str(state)//', reference interval: '// &
+                    &int2str(frame_ranges(1,i))//'-'//int2str(frame_ranges(2,i)))
+            enddo
+        enddo
+        call reference%kill
+        call other%kill
+    end subroutine export_cross_fraction_fsc
+
     !> Write raw FSC columns on their native shell grid.
     subroutine write_fraction_fsc_matrix(fname, reciprocal_frequency, frame_ranges, fsc_matrix)
         class(string), intent(in) :: fname
@@ -1115,7 +1316,7 @@ contains
         real,          intent(in) :: fsc_matrix(:,:)
         integer,       intent(in) :: frame_ranges(:,:)
         character, parameter :: TAB = achar(9)
-        integer              :: funit, i, j, io_stat
+        integer :: funit, i, j, io_stat
         call fopen(funit, file=fname, status='replace', action='write', form='formatted')
         write(funit,'(A)',advance='no',iostat=io_stat) 'shell'//TAB//'resolution_A'//TAB//'reciprocal_frequency_A^-1'
         call fileiochk('Writing fraction FSC header', io_stat)
@@ -1136,17 +1337,18 @@ contains
     end subroutine write_fraction_fsc_matrix
 
     !> Render raw interval FSC curves and their surface with native gnuplot.
-    subroutine plot_fraction_fsc(prefix, resolution, reciprocal_frequency, frame_ranges, fsc_matrix, state)
+    subroutine plot_fraction_fsc(prefix, resolution, reciprocal_frequency, frame_ranges, fsc_matrix, title)
         class(string), intent(in) :: prefix
         real,          intent(in) :: resolution(:), fsc_matrix(:,:)
         real(dp),      intent(in) :: reciprocal_frequency(:)
-        integer,       intent(in) :: frame_ranges(:,:), state
-        character,        parameter   :: TAB = achar(9)
+        integer,       intent(in) :: frame_ranges(:,:)
+        character(len=*), intent(in) :: title
+        character, parameter :: TAB = achar(9)
         character(len=:), allocatable :: base, gridfile, gpfile, plotlog, line, interval
-        real(dp)                      :: midpoint, xlo, xhi, ylo, yhi, flo, fhi
-        integer                       :: unit, ios, close_status, i, j, stride, cmdstatus, exitstatus, bytes
-        logical                       :: have_values, have_cells, exists, rendered
-        if( size(resolution)==0 .or. size(fsc_matrix,2)==0 ) return
+        real(dp) :: midpoint, xlo, xhi, ylo, yhi, flo, fhi
+        integer :: unit, ios, close_status, i, j, stride, cmdstatus, exitstatus, bytes
+        logical :: have_values, have_cells, exists, rendered
+        if( size(resolution)==0 ) return
         base = prefix%to_char()
         gridfile = base//'_surface.tsv'
         gpfile = base//'.gp'
@@ -1190,9 +1392,12 @@ contains
         if( xhi<=xlo )then
             xlo=max(0._dp,xlo-0.001_dp); xhi=xhi+0.001_dp
         endif
-        ylo=(real(frame_ranges(1,1),dp)+real(frame_ranges(2,1),dp))/2._dp
-        i=size(frame_ranges,2)
-        yhi=(real(frame_ranges(1,i),dp)+real(frame_ranges(2,i),dp))/2._dp
+        ylo=0._dp; yhi=1._dp
+        if( size(frame_ranges,2)>0 )then
+            ylo=(real(frame_ranges(1,1),dp)+real(frame_ranges(2,1),dp))/2._dp
+            i=size(frame_ranges,2)
+            yhi=(real(frame_ranges(1,i),dp)+real(frame_ranges(2,i),dp))/2._dp
+        endif
         if( yhi<=ylo )then
             ylo=ylo-0.5_dp; yhi=yhi+0.5_dp
         endif
@@ -1205,7 +1410,7 @@ contains
         call gp('set palette defined (0 "#440154", 0.25 "#3b528b", 0.5 "#21918c", 0.75 "#5ec962", 1 "#fde725")')
         call gp('set terminal pngcairo size 1800,850 enhanced font "Sans,11"')
         call gp('set output '//gnu_quote(base//'_diagnostics.png'))
-        call gp('set multiplot layout 1,2 title "Raw FSC observations: state '//int2str(state)//'"')
+        call gp('set multiplot layout 1,2 title '//gnu_quote(title))
         call gp('unset pm3d; unset colorbox; unset label; unset zlabel; set ytics autofreq offset 0,0; set xtics offset 0,0')
         call gp('set title "FSC curves of fraction intervals"')
         call gp('set xlabel "Reciprocal frequency (Angstrom^{-1})" offset 0,0; set ylabel "FSC" offset 0,0')
@@ -1244,7 +1449,7 @@ contains
             interval=int2str(frame_ranges(1,i))//'-'//int2str(frame_ranges(2,i))
             line=line//gnu_quote(interval)//' '//number(midpoint)
         enddo
-        call gp(line//') offset 3,0')
+        if( size(frame_ranges,2)>0 ) call gp(line//') offset 3,0')
         line='splot '//gnu_quote(gridfile)//' using 1:2:3'
         if( have_cells )then
             call gp('set pm3d depthorder corners2color mean')
@@ -1296,7 +1501,7 @@ contains
     function gnu_quote(value) result(text)
         character(len=*), intent(in) :: value
         character(len=:), allocatable :: text
-        integer                       :: n
+        integer :: n
         text='"'
         do n=1,len_trim(value)
             select case(iachar(value(n:n)))
@@ -1316,14 +1521,14 @@ contains
     end function gnu_quote
 
     subroutine distr_finalize_run(self, params, cline)
-        class(refine_motion_model_distr_strategy), intent(inout) :: self
+        class(fractionate_model_distr_strategy), intent(inout) :: self
         type(parameters),                          intent(in)    :: params
         class(cmdline),                            intent(inout) :: cline
         ! No-op
     end subroutine distr_finalize_run
 
     subroutine distr_cleanup(self, params, cline)
-        class(refine_motion_model_distr_strategy), intent(inout) :: self
+        class(fractionate_model_distr_strategy), intent(inout) :: self
         type(parameters),                          intent(in)    :: params
         class(cmdline),                            intent(inout) :: cline
         integer :: i
@@ -1343,9 +1548,9 @@ contains
     end subroutine distr_cleanup
 
     function distr_end_message(self) result(msg)
-        class(refine_motion_model_distr_strategy), intent(in) :: self
+        class(fractionate_model_distr_strategy), intent(in) :: self
         character(len=:), allocatable :: msg
-        msg = '**** SIMPLE_REFINE_MOTION_MODEL_DISTR NORMAL STOP ****'
+        msg = '**** SIMPLE_FRACTIONATE_MODEL_DISTR NORMAL STOP ****'
     end function distr_end_message
 
-end module simple_refine_motion_model_strategy
+end module simple_fractionate_model_strategy

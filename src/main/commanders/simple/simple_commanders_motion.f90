@@ -1,33 +1,33 @@
-!@descr: refine_motion_model commander: saved-motion fraction re-extraction and interval reconstruction
+!@descr: fractionate_model commander: saved-motion fraction re-extraction and interval reconstruction
 module simple_commanders_motion
 use simple_commander_base, only: commander_base
 implicit none
 
-public :: commander_refine_motion_model
+public :: commander_fractionate_model
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: commander_refine_motion_model
+type, extends(commander_base) :: commander_fractionate_model
   contains
-    procedure :: execute       => exec_refine_motion_model
-end type commander_refine_motion_model
+    procedure :: execute       => exec_fractionate_model
+end type commander_fractionate_model
 
 contains
 
-    subroutine exec_refine_motion_model( self, cline )
+    subroutine exec_fractionate_model( self, cline )
         use simple_error,                              only: simple_exception
         use simple_core_module_api,                    only: simple_end
-        use simple_refine_motion_model_strategy,      only: refine_motion_model_strategy, &
-                                                               create_refine_motion_model_strategy
+        use simple_fractionate_model_strategy,         only: fractionate_model_strategy, &
+                                                               create_fractionate_model_strategy
         use simple_string,                             only: string
         use simple_cmdline,                            only: cmdline
         use simple_parameters,                         only: parameters
-        class(commander_refine_motion_model), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        class(refine_motion_model_strategy), allocatable   :: strategy
-        type(parameters)                                   :: params
-        type(string)                                       :: oritype
-        call cline%set('prg', 'refine_motion_model')
+        class(commander_fractionate_model), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        class(fractionate_model_strategy), allocatable :: strategy
+        type(parameters) :: params
+        type(string)     :: oritype
+        call cline%set('prg', 'fractionate_model')
         call cline%set('wfloat16', 'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         oritype = cline%get_carg('oritype')
@@ -37,7 +37,7 @@ contains
             case('ptcl3D')
                 if( .not.cline%defined('pgrp') ) THROW_HARD('pgrp is required for oritype=ptcl3D')
             case default
-                THROW_HARD('refine_motion_model requires oritype=ptcl2D or ptcl3D')
+                THROW_HARD('fractionate_model requires oritype=ptcl2D or ptcl3D')
         end select
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('pcontrast')    ) call cline%set('pcontrast',    'black')
@@ -51,20 +51,22 @@ contains
             call cline%set('rec_backend', 'gridding')
             call cline%set('filt_mode', 'none')
             call cline%set('automsk', 'no')
-            call cline%set('postprocess', 'no')
+            call cline%set('postprocess', 'yes')
+            call cline%set('bfac', 0.)
+            call cline%set('mirr', 'no')
             call cline%set('m_estimator', 'no')
             call cline%set('update_frac', 1.)
             call cline%set('trail_rec', 'no')
             call cline%set('trs', 5.)
             call cline%delete('refine')
         endif
-        strategy = create_refine_motion_model_strategy(cline)
+        strategy = create_fractionate_model_strategy(cline)
         call strategy%initialize(params, cline)
         call strategy%execute(params, cline)
         call strategy%finalize_run(params, cline)
         call strategy%cleanup(params, cline)
         call simple_end(strategy%end_message())
         if( allocated(strategy) ) deallocate(strategy)
-    end subroutine exec_refine_motion_model
+    end subroutine exec_fractionate_model
 
 end module simple_commanders_motion
