@@ -37,6 +37,7 @@ contains
         call test_get_current_rss_bytes()
         call test_syslib_c2fortran_string()
         call test_find_next_int_dir_prefix()
+        call test_is_run_dir_name()
         call test_project_discovery()
         call test_print_slurm_env_smoke()
         call teardown_test_env()
@@ -560,6 +561,19 @@ contains
         call simple_rmdir(d1)
         call simple_rmdir(d2)
     end subroutine test_find_next_int_dir_prefix
+
+    !> a run folder is <digits>_<name>, as int2str(n)//'_'//prg and NICE's <n>_<prog> make it
+    subroutine test_is_run_dir_name()
+        write(*,'(A)') 'test_is_run_dir_name'
+        call assert_true(is_run_dir_name('7_solve2D'),          'is_run_dir_name: 7_solve2D is a run folder')
+        call assert_true(is_run_dir_name('12_selection'),       'is_run_dir_name: several digits')
+        call assert_false(is_run_dir_name('ds_new_workspace_1'), 'is_run_dir_name: a name without leading digits is not')
+        call assert_false(is_run_dir_name('.workspace_1'),       'is_run_dir_name: a NICE workspace folder is not')
+        call assert_false(is_run_dir_name('3run'),               'is_run_dir_name: digits need the underscore')
+        call assert_false(is_run_dir_name('2024'),               'is_run_dir_name: digits alone are not')
+        call assert_false(is_run_dir_name('_x'),                 'is_run_dir_name: an underscore needs digits before it')
+        call assert_false(is_run_dir_name(''),                   'is_run_dir_name: an empty name is not')
+    end subroutine test_is_run_dir_name
 
     !---------------- print_slurm_env (smoke test) ----------------
 

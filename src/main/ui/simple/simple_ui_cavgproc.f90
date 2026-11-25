@@ -12,7 +12,6 @@ type(ui_program),          target    :: cluster_stack
 type(ui_program),          target    :: match_cavgs
 type(ui_program),          target    :: match_stacks
 type(ui_program),          target    :: select_clusters
-type(ui_program),          target    :: select2D
 
 contains
 
@@ -26,7 +25,6 @@ contains
         call new_match_cavgs(prgtab)
         call new_match_stacks(prgtab)
         call new_select_clusters(prgtab)
-        call new_select2D(prgtab)
     end subroutine construct_cavgproc_programs
 
 subroutine new_cluster_cavgs( prgtab )
@@ -354,41 +352,5 @@ subroutine new_cluster_cavgs( prgtab )
         ! add to ui_hash
         call add_ui_program('select_clusters', select_clusters, prgtab, UI_CATEGORY)
     end subroutine new_select_clusters
-
-    subroutine new_select2D( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call select2D%new(&
-        &'select2D',&                                                                     ! name
-        &'Select class averages interactively and record the selection in the project',&  ! summary
-        &'is a program that shows the class averages of a project in a window, where classes are selected '//&
-        &'by clicking and sorted by resolution or population, with adjustable display; the selection is '//&
-        &'written to the copy of the project in the execution directory, as program selection does. '//&
-        &'Needs a desktop session',&                                                      ! help
-        &'simple_exec',&                                                                  ! executable
-        &.true., &
-        &visibility=UI_VIS_STANDARD, &
-        &display_name='Select Class Averages')                                            ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call select2D%add_input(UI_FILE, projfile, &
-        &visibility=UI_VIS_STANDARD)
-        call select2D%add_input(UI_PARM, 'append', 'binary', 'Append selection to existing', &
-        &'Previously deselected particles will stay deselected(yes|no){no}', '', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-        ! add to ui_hash
-        call add_ui_program('select2D', select2D, prgtab, UI_CATEGORY)
-    end subroutine new_select2D
 
 end module simple_ui_cavgproc

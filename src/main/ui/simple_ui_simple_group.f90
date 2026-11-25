@@ -23,6 +23,7 @@ use simple_ui_sym,       only: construct_symmetry_programs
 use simple_ui_dock,      only: construct_dock_programs
 use simple_ui_volume,    only: construct_volume_programs
 use simple_ui_other,     only: construct_other_programs
+use simple_ui_viewer,    only: construct_viewer_programs
 implicit none
 
 public :: add_simple_programs
@@ -54,6 +55,7 @@ contains
         call construct_dock_programs(prgtab)
         call construct_volume_programs(prgtab)
         call construct_other_programs(prgtab)
+        call construct_viewer_programs(prgtab)
     end subroutine add_simple_programs
 
 

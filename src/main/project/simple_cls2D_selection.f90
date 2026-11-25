@@ -1,11 +1,14 @@
 !@descr: a class-average selection session on a project's cls2D segment: visibility, display order, selection and its write
 ! Reads cls2D pop, res and state; a class is shown unless its pop is present and 0, and starts selected when
-! its state is above 0 (or absent). save writes the states as prg=selection oritype=cls2D does
-! (report_state2cls2D), the four changed segments to the project file and a 0/1 selection.txt.
+! its state is above 0 (or absent). save writes the input project with the selection applied as prg=selection
+! oritype=cls2D append=no does (report_state2cls2D: the class selection alone sets the particle states) to
+! <n>_selection/ in the input's workspace root, made by the first save
+! (doc/implementation_notes/planned/select2D_viewer.md, decisions 8, 13 and 14).
 module simple_cls2D_selection
 use simple_defs,       only: dp, logfhandle
 use simple_error,      only: simple_exception
 use simple_string,     only: string
+use simple_chash,      only: chash
 use simple_sp_project, only: sp_project
 implicit none
 
@@ -16,21 +19,23 @@ private
 integer,          parameter :: SEL_SORT_RES   = 1   ! resolution ascending (the start)
 integer,          parameter :: SEL_SORT_POP   = 2   ! population descending
 integer,          parameter :: SEL_SORT_CLASS = 3   ! class index ascending
-character(len=*), parameter :: SELECTION_FNAME = 'selection.txt'
+character(len=*), parameter :: SELECTION_DIR_SUFFIX = 'selection'   ! the program name prg=selection gives its run folder
 
 type :: cls2D_selection
     private
-    class(sp_project), pointer :: spproj => null()
-    type(string)               :: projfile
-    real(dp), allocatable      :: pop(:), res(:)
-    logical,  allocatable      :: l_pop(:), l_res(:), visible(:), selected(:)
-    integer,  allocatable      :: order(:)        ! the visible classes in display order
+    type(string)          :: projfile                 ! the input project, never written
+    type(string)          :: rootdir                  ! the workspace root, where the selection folder is made
+    type(string)          :: saved_projfile           ! the project the saves write (empty before the first)
+    type(chash)           :: job_descr                ! recorded in the saved project's jobproc
+    real(dp), allocatable :: pop(:), res(:)
+    logical,  allocatable :: l_pop(:), l_res(:), visible(:), selected(:)
+    integer,  allocatable :: order(:)                 ! the visible classes in display order
     integer :: ncls     = 0
     integer :: nvis     = 0
-    integer :: anchor   = 0                       ! the last clicked class (0: none)
+    integer :: anchor   = 0                           ! the last clicked class (0: none)
     integer :: sort_key = SEL_SORT_RES
-    logical :: append   = .false.
     logical :: dirty    = .false.
+    logical :: l_saved  = .false.
     logical :: l_exists = .false.
   contains
     procedure :: new
@@ -47,6 +52,7 @@ type :: cls2D_selection
     procedure :: get_res
     procedure :: is_selected
     procedure :: is_dirty
+    procedure :: get_saved_projfile
     procedure :: counts
     procedure :: sort
     procedure :: click
@@ -57,18 +63,28 @@ end type cls2D_selection
 
 contains
 
-    ! the session on spproj (kept by pointer), written to projfile; append as prg=selection's
-    subroutine new( self, spproj, projfile, append )
-        class(cls2D_selection),    intent(inout) :: self
-        class(sp_project), target, intent(inout) :: spproj
-        class(string),             intent(in)    :: projfile
-        logical,                   intent(in)    :: append
-        integer :: icls
+    ! the session on spproj's cls2D segment; saves read projfile and write in its workspace root (the folder
+    ! holding it, or that folder's parent when it is a numbered run folder)
+    subroutine new( self, spproj, projfile, job_descr )
+        use simple_syslib, only: simple_abspath, is_run_dir_name
+        use simple_fileio, only: stemname, basename
+        class(cls2D_selection), intent(inout) :: self
+        class(sp_project),      intent(inout) :: spproj
+        class(string),          intent(in)    :: projfile
+        class(chash),           intent(in)    :: job_descr
+        type(string) :: projdir, dirname
+        integer      :: icls
         call self%kill
-        self%spproj   => spproj
-        self%projfile = projfile
-        self%append   = append
-        self%ncls     = spproj%os_cls2D%get_noris()
+        self%projfile  = simple_abspath(projfile)
+        projdir        = stemname(self%projfile)
+        dirname        = basename(projdir)
+        if( is_run_dir_name(dirname%to_char()) )then
+            self%rootdir = stemname(projdir)
+        else
+            self%rootdir = projdir
+        endif
+        self%job_descr = job_descr
+        self%ncls      = spproj%os_cls2D%get_noris()
         if( self%ncls == 0 ) THROW_HARD('empty cls2D segment; cls2D_selection%new')
         allocate(self%pop(self%ncls), self%res(self%ncls), self%l_pop(self%ncls), self%l_res(self%ncls),&
             &self%visible(self%ncls), self%selected(self%ncls))
@@ -103,10 +119,14 @@ contains
         if( allocated(self%selected) ) deallocate(self%selected)
         if( allocated(self%order)    ) deallocate(self%order)
         call self%projfile%kill
-        self%spproj   => null()
+        call self%rootdir%kill
+        call self%saved_projfile%kill
+        call self%job_descr%kill
         self%ncls     = 0
         self%nvis     = 0
         self%anchor   = 0
+        self%dirty    = .false.
+        self%l_saved  = .false.
         self%l_exists = .false.
     end subroutine kill
 
@@ -186,6 +206,14 @@ contains
         class(cls2D_selection), intent(in) :: self
         is_dirty = self%dirty
     end function is_dirty
+
+    ! the project file the saves write; empty before the first save
+    function get_saved_projfile( self ) result( fname )
+        class(cls2D_selection), intent(in) :: self
+        type(string) :: fname
+        fname = ''
+        if( self%l_saved ) fname = self%saved_projfile
+    end function get_saved_projfile
 
     ! selected and visible classes; particles (pop) of the selected classes and of all classes
     subroutine counts( self, nsel, nvis, psel, ptot )
@@ -267,28 +295,38 @@ contains
         self%dirty    = .true.
     end subroutine deselect_all
 
-    ! the selection into the project in memory and on disk (cls2D, cls3D, ptcl2D, ptcl3D), and selection.txt
+    ! the input project with the selection applied as prg=selection oritype=cls2D append=no applies it, written in
+    ! full to <n>_selection/<input name>; the first save makes the folder in rootdir, later saves rewrite its project
     subroutine save( self )
-        use simple_fileio, only: fopen, fclose
+        use simple_string_utils, only: int2str
+        use simple_syslib,       only: find_next_int_dir_prefix, simple_mkdir
+        use simple_fileio,       only: filepath, basename
         class(cls2D_selection), intent(inout) :: self
+        type(sp_project)     :: proj
+        type(string)         :: dir
         integer, allocatable :: states(:)
-        integer :: funit, icls
         if( .not. self%l_exists ) THROW_HARD('no selection session; cls2D_selection%save')
         allocate(states(self%ncls), source=0)
         where( self%selected ) states = 1
-        call self%spproj%report_state2cls2D(states, self%append)
-        call self%spproj%write_segment_inside('cls2D', self%projfile)
-        if( self%spproj%os_cls3D%get_noris()  > 0 ) call self%spproj%write_segment_inside('cls3D',  self%projfile)
-        if( self%spproj%os_ptcl2D%get_noris() > 0 ) call self%spproj%write_segment_inside('ptcl2D', self%projfile)
-        if( self%spproj%os_ptcl3D%get_noris() > 0 ) call self%spproj%write_segment_inside('ptcl3D', self%projfile)
-        call fopen(funit, file=string(SELECTION_FNAME), status='replace', action='write')
-        do icls = 1,self%ncls
-            write(funit,'(i0)') states(icls)
-        end do
-        call fclose(funit)
+        ! every save starts from the input, as prg=selection starts from its copy of it
+        call proj%read(self%projfile)
+        if( proj%os_cls2D%get_noris() /= self%ncls ) THROW_HARD('the cls2D segment of the input project changed since it was opened; nothing saved')
+        if( .not. self%l_saved )then
+            dir = filepath(self%rootdir, int2str(find_next_int_dir_prefix(self%rootdir))//'_'//SELECTION_DIR_SUFFIX)
+            call simple_mkdir(dir)
+            self%saved_projfile = filepath(dir, basename(self%projfile))
+            self%l_saved        = .true.
+        endif
+        ! no append: every classified particle takes its class's state, whatever its state in the input
+        call proj%report_state2cls2D(states, append=.false.)
+        call proj%update_projinfo(self%saved_projfile)
+        call self%job_descr%set('projfile', self%saved_projfile)
+        call proj%append_job_descr2jobproc(self%job_descr)
+        call proj%write(self%saved_projfile)
+        call proj%kill
         self%dirty = .false.
         write(logfhandle,'(a,i0,a,i0,a)') '>>> SELECTION SAVED: ', count(states == 1), ' classes kept, ', &
-            &count(states == 0), ' rejected, to '//self%projfile%to_char()//' and '//SELECTION_FNAME
+            &count(states == 0), ' rejected, to '//self%saved_projfile%to_char()
     end subroutine save
 
 end module simple_cls2D_selection

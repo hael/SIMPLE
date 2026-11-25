@@ -1068,6 +1068,18 @@ contains
         endif
     end function find_next_int_dir_prefix
 
+    !> whether a folder name has the <digits>_<name> form of the run folders that SIMPLE and NICE make
+    pure logical function is_run_dir_name( dirname )
+        character(len=*), intent(in) :: dirname
+        integer :: i
+        is_run_dir_name = .false.
+        do i = 1,len_trim(dirname)
+            if( char_is_a_number(dirname(i:i)) ) cycle
+            is_run_dir_name = i > 1 .and. dirname(i:i) == '_'
+            return
+        end do
+    end function is_run_dir_name
+
     function simple_list_dirs( path, status ) result( list )
         class(*),          intent(in)            :: path
         integer,           optional, intent(out) :: status

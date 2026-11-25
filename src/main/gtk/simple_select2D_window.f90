@@ -1,4 +1,4 @@
-!@descr: select2D's GTK 3 window: the class-average grid, sorting and selection, the display panel and saving to the project
+!@descr: select2D's GTK 3 window: the class-average grid, sorting and selection, the display panel and saving the selection
 ! An app on the shared GTK modules (doc/implementation_notes/planned/select2D.md, decisions 10-12): an image
 ! grid fed by a delegate over the cls2D_selection and the stack_display, and a popover with sorting,
 ! select all/none and the display panel.
@@ -6,8 +6,9 @@ module simple_select2D_window
 use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_float, c_null_char, c_null_ptr, c_funloc, c_loc, &
     c_f_pointer, c_associated
 use simple_defs,              only: dp, logfhandle
-use simple_defs_gtk,          only: GTKUI_GRID_MARGIN, GTKUI_U_MIDDOT, GTKUI_U_UP, GTKUI_U_DOWN, GTKUI_U_CMD, &
+use simple_defs_gtk,          only: GTKUI_GRID_MARGIN, GTKUI_U_MIDDOT, GTKUI_U_UP, GTKUI_U_DOWN, GTKUI_U_RIGHT, GTKUI_U_CMD, &
     GTKUI_KEY_F10, GTKUI_KEY_MENU
+use simple_string,            only: string
 use simple_string_utils,      only: int2str, int2str_sep, real2str_sig
 use simple_stack_display,     only: stack_display
 use simple_cls2D_selection,   only: cls2D_selection
@@ -55,7 +56,7 @@ type :: s2d_window
     type(s2d_delegate)        :: dlg
     type(gtkui_image_grid)    :: grid
     type(gtkui_display_panel) :: panel
-    type(c_ptr) :: window = c_null_ptr, footer = c_null_ptr, popover = c_null_ptr
+    type(c_ptr) :: window = c_null_ptr, path_label = c_null_ptr, footer = c_null_ptr, popover = c_null_ptr
     type(c_ptr) :: radio(3) = c_null_ptr, btn_select = c_null_ptr, btn_deselect = c_null_ptr
     integer     :: nfields = 0, fields(2) = 0
     logical     :: syncing = .false.     ! radio buttons set from the model, not by the user
@@ -94,7 +95,7 @@ contains
     subroutine on_activate( app, data ) bind(c)
         type(c_ptr), value :: app, data
         type(s2d_window), pointer :: w
-        type(c_ptr) :: vbox, bar, label, button, foot, hint
+        type(c_ptr) :: vbox, bar, button, foot, hint
         character(len=:), allocatable :: modifier
         call c_f_pointer(data, w)
         w%window = gtk_application_window_new(app)
@@ -104,13 +105,13 @@ contains
         call g_signal_connect(w%window, 'destroy'//c_null_char,         c_funloc(on_destroy),    data)
         call g_signal_connect(w%window, 'key-press-event'//c_null_char, c_funloc(on_window_key), data)
         vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0_c_int)
-        ! toolbar: the project and Save
+        ! toolbar: the project (and, once saved, where the selection went) and Save
         bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8_c_int)
         call gtkui_margins(bar, 12, 12, 12, 11)
-        label = gtk_label_new(w%projfile//c_null_char)
-        call gtk_label_set_xalign(label, 0._c_float)
-        call gtk_label_set_ellipsize(label, PANGO_ELLIPSIZE_MIDDLE)
-        call gtk_box_pack_start(bar, label, TRUE, TRUE, 0_c_int)
+        w%path_label = gtk_label_new(w%projfile//c_null_char)
+        call gtk_label_set_xalign(w%path_label, 0._c_float)
+        call gtk_label_set_ellipsize(w%path_label, PANGO_ELLIPSIZE_MIDDLE)
+        call gtk_box_pack_start(bar, w%path_label, TRUE, TRUE, 0_c_int)
         button = gtk_button_new_with_label('Save selection'//c_null_char)
         call g_signal_connect(button, 'clicked'//c_null_char, c_funloc(on_save), data)
         call gtk_box_pack_end(bar, button, FALSE, FALSE, 0_c_int)
@@ -221,16 +222,22 @@ contains
         type(c_ptr), value :: widget, event, data
         integer(c_int)     :: keep_open
         type(s2d_window), pointer :: w
+        type(string)              :: saved
         call c_f_pointer(data, w)
         keep_open = FALSE
         if( .not. w%sel%is_dirty() ) return
         select case( gtkui_choice_dialog(w%window, 'Unsaved selection', &
-            &'The selection has changes that are not saved to the project.', &
+            &'The selection has changes that are not saved.', &
             &[character(len=8) :: 'Save', 'Discard', 'Cancel']) )
             case( 1 )
                 call w%sel%save()
             case( 2 )
-                write(logfhandle,'(a)') '>>> SELECTION DISCARDED; the project keeps its last saved selection'
+                saved = w%sel%get_saved_projfile()
+                if( saved%strlen_trim() == 0 )then
+                    write(logfhandle,'(a)') '>>> SELECTION DISCARDED; nothing was written'
+                else
+                    write(logfhandle,'(a)') '>>> SELECTION DISCARDED; '//saved%to_char()//' keeps the last saved selection'
+                endif
             case DEFAULT
                 keep_open = TRUE
         end select
@@ -261,8 +268,11 @@ contains
     subroutine on_save( button, data ) bind(c)
         type(c_ptr), value :: button, data
         type(s2d_window), pointer :: w
+        type(string)              :: saved
         call c_f_pointer(data, w)
         call w%sel%save()
+        saved = w%sel%get_saved_projfile()
+        call gtk_label_set_text(w%path_label, w%projfile//'  '//GTKUI_U_RIGHT//'  '//saved%to_char()//c_null_char)
         call update_status(w)
     end subroutine on_save
 

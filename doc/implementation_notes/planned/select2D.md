@@ -1,5 +1,10 @@
 # select2D: interactive class-average selection with a GTK 3 window, written to the project
 
+Partly superseded, 2026-11-25, by `select2D_viewer.md`: decisions 2 and 4, the `mkdir=yes` of decision 3 and the
+executable, router and category of decision 1 are replaced (select2D runs in its own executable `simple_viewer`,
+writes nothing until Save selection, and saves a new project into `<n>_selection/` as `prg=selection` does, without
+`selection.txt`). The rest stands.
+
 Status, 2026-11-25: implemented in one pass by the owner's ruling to skip the phased run (Phase 0 ran on the Mac;
 no tester or Progress entries for Phases 1-6; the decisions below are what the code follows), built and tried by the
 owner. Restructured the same day, before the first build, into shared GTK modules (simple_defs_gtk, simple_gtk_utils,

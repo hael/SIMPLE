@@ -11,6 +11,7 @@ set(SINGLE_EXE          single_exec)
 set(STREAM_EXE          simple_stream)
 set(SIMPLE_PRIVATE_EXE  simple_private_exec)
 set(SIMPLE_WORKER_EXE   simple_persistent_worker)
+set(SIMPLE_VIEWER_EXE   simple_viewer)
 
 add_executable(${SIMPLE_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec.f90")
@@ -23,6 +24,8 @@ add_executable(${SIMPLE_PRIVATE_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec_driver.f90")
 add_executable(${SIMPLE_WORKER_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/simple_persistent_worker.f90")
+add_executable(${SIMPLE_VIEWER_EXE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/simple_viewer.f90")
 
 set(SIMPLE_EXECUTABLES
     ${SIMPLE_EXE}
@@ -30,6 +33,7 @@ set(SIMPLE_EXECUTABLES
     ${STREAM_EXE}
     ${SIMPLE_PRIVATE_EXE}
     ${SIMPLE_WORKER_EXE}
+    ${SIMPLE_VIEWER_EXE}
 )
 
 # simple_test_exec is the one test executable: built only with BUILD_TESTS=ON
@@ -65,9 +69,9 @@ foreach(exe IN LISTS SIMPLE_EXECUTABLES)
     endif()
 endforeach()
 
-# GTK code in the library is reached from simple_exec (prg=select2D) and the GTK tester: the two
+# GTK code in the library is reached from simple_viewer (select2D) and the GTK tester: the two
 # executables that link GTK
-target_link_libraries(${SIMPLE_EXE} PRIVATE ${SIMPLE_GTK_LIBRARIES})
+target_link_libraries(${SIMPLE_VIEWER_EXE} PRIVATE ${SIMPLE_GTK_LIBRARIES})
 if(BUILD_TESTS)
     target_link_libraries(${SIMPLE_TEST_EXE} PRIVATE ${SIMPLE_GTK_LIBRARIES})
 endif()
