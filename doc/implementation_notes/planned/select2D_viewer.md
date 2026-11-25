@@ -22,8 +22,8 @@ as `prg=selection` names and places its run folder, through the routines `prg=se
 
 ## 2. Contract
 
-- `simple_viewer projfile=<p>.simple` opens the select2D window; no `prg=` is needed; there is no `append=`
-  (decision 14: `simple_viewer` stops on one).
+- `simple_viewer prg=select2D projfile=<p>.simple` opens the select2D window (`prg=` first and required since
+  decision 15); there is no `append=` (decision 14: `simple_viewer` stops on one).
 - `simple_exec` no longer offers or routes `select2D` and no longer links GTK (`otool -L` / `ldd` of
   `simple_exec` lists no `gtk`). `simple_exec prg=select2D` stops in `cmdline%parse` with "select2D is not
   executed by simple_exec but by simple_viewer" (no alias; release 4 keeps no compatibility).
@@ -67,7 +67,7 @@ as `prg=selection` names and places its run folder, through the routines `prg=se
    before Save selection and where the selection goes.
 5. (2026-11-25, owner) Nothing on disk at start: the commander sets `mkdir=no` unconditionally (over any
    `mkdir=` given), so `params%new` neither makes a directory nor copies the project. Replaces the `mkdir=yes`
-   of `select2D.md` decision 3. The display check before `params%new` (decision 15) stays.
+   of `select2D.md` decision 3. The display check before `params%new` (`select2D.md` decision 15) stays.
 6. (proposed) Start-up reads only the `cls2D` and `out` segments of the input (`read_segment`), all the window
    uses (`select2D.md` decision 8: rows, `pop`, `res`, `state`, the cavg stack of `out`); the particle segments
    are read only at Save. Today the whole project is read at start.
@@ -133,6 +133,23 @@ as `prg=selection` names and places its run folder, through the routines `prg=se
     commander stops on an `append=` on the command line rather than ignore it (agent's default, not ruled).
     `prg=selection`, `report_state2cls2D` and `map2ptcls_state` keep their `append`. Replaces the `append` of
     decisions 2, 4, 8, 10 and 12, and the append split of the tester runs in decision 13.
+15. (2026-11-25, owner: "keep the select2D commander but make it a commander for simple_viewer prg=select2D")
+    `simple_viewer` takes `prg=` like `simple_exec`: `simple_viewer prg=select2D projfile=<p>.simple`, with
+    `prg=` first. `commander_select2D` and the router `simple_viewer_views` stay. `cmdline%parse` puts
+    `simple_viewer` in the `prg=`-required case and takes the program from the first argument, as for the other
+    executables; the single-program path of decision 2 (`l_single_prg`, `nprg_args`, the `prg=` check after the
+    key loop) and `get_executable_prg` are removed, so `parse` and `simple_ui.f90` are back to their `2750c34ac`
+    form but for `simple_viewer` in its executable cases. `simple_viewer` alone stops asking for `prg=` first
+    (since decision 16 in `cmdline_err`, as `simple_exec` alone does); `simple_viewer prg=select2D` alone prints
+    the usage; a program of another executable stops in the executable check of `parse`. Replaces the command
+    line of decision 2.
+16. (2026-11-25, owner) `simple_viewer prg=list` lists the viewer programs, and an unknown name stops with
+    `Program "<x>" not recognized. Use prg=list to see available programs.`, both in the front door before
+    `cline%parse`, as `simple_exec` and `single_exec` do: the front door reads the first argument
+    (`cmdline_err`), builds the UI, lists on `prg=list` with the new `list_viewer_prgs_in_ui` of `simple_ui.f90`
+    (`print_registered_programs(prgtab, prgnames, 'simple_viewer')`) and looks the name up with `get_prg_ptr`.
+    The `prg=list` block inside `parse` is never reached for any executable (the program lookup stops on `list`
+    first); its `simple_viewer` case stays a no-op with a comment.
 
 Defaults taken without a question: the file and module names in decisions 3, 4 and 12; the category id,
 display name and order; `get_executable_prg`; the sub-suite name; the folder suffix `'selection'` as a private
@@ -188,7 +205,7 @@ Stop and report when: a file outside the table needs an edit; 12(c) fails beyond
   directory: `simple_viewer projfile=<p>.simple` opens the window and `ls` shows no new folder; closing
   unchanged leaves none; toggling and Save makes `1_selection/<p>.simple` whose
   `simple_exec prg=print_project_field oritype=cls2D` shows the saved states; a second Save rewrites it and makes
-  no second folder; the input's checksum is unchanged; without a display it stops with decision 15's message and
+  no second folder; the input's checksum is unchanged; without a display it stops with `select2D.md` decision 15's message and
   makes no folder.
 - **Phase 3, records.** Progress entries; `select2D.md` banner naming the superseded decisions. Exit: both
   written.
@@ -211,8 +228,8 @@ Stop and report when: a file outside the table needs an edit; 12(c) fails beyond
 | `src/main/ui/simple/simple_ui_viewer.f90` | new category module with `select2D` | 2 |
 | `src/main/ui/simple/simple_ui_cavgproc.f90` | `select2D` removed | 2 |
 | `src/main/ui/simple_ui_simple_group.f90` | constructs the new category | 2 |
-| `src/main/ui/simple_ui.f90` | `get_executable_prg` | 2 |
-| `src/main/simple_cmdline.f90` | the `simple_viewer` case of `parse` | 2 |
+| `src/main/ui/simple_ui.f90` | `get_executable_prg` (removed by decision 15); `list_viewer_prgs_in_ui` (decision 16) | 2 |
+| `src/main/simple_cmdline.f90` | the `simple_viewer` case of `parse` (`prg=` required since decision 15) | 2 |
 | `doc/implementation_notes/planned/select2D_viewer.md` | this plan, Progress | all |
 | `doc/implementation_notes/planned/select2D.md` | banner: superseded decisions | 3 |
 
@@ -308,3 +325,26 @@ state 1 after each save; fixture folders `select2D_save_run_folder` and `select2
 `prg=selection` and `report_state2cls2D` are unchanged. Exits to run on the Mac: build, fast gate
 (`unit_project`, sub-suite `select2d_save`), install; `simple_viewer projfile=<p>.simple append=yes` stops with
 decision 14's message.
+
+### Decision 15, 2026-11-25, written in the agent's sandbox on `595499064`, not built
+
+The owner first asked to remove `commander_select2D`, then ruled to keep it and give `simple_viewer` a `prg=`.
+Changed: `simple_cmdline.f90` (`parse` differs from `2750c34ac` only by `simple_viewer` in the `prg=`-required
+and `get_prg_ptr` cases and a no-op case in the `prg=list` block); `simple_ui.f90` (`get_executable_prg` and its
+`public` gone: byte-identical to `2750c34ac`); `simple_ui_viewer.f90` (help: `simple_viewer prg=select2D
+projfile=<project>.simple`); `production/simple_viewer.f90` (`!@descr` and the comment on `parse`). Unchanged:
+the commander, the router, CMake, the tester. The build is the proof that nothing else called
+`get_executable_prg` (skill `simple-dead-code`). Exits to run on the Mac: build, fast gate, install;
+`simple_viewer` alone stops asking for `prg=`; `simple_viewer prg=select2D` prints the usage;
+`simple_viewer prg=select2D projfile=<p>.simple` opens the window; `simple_viewer prg=selection projfile=x.simple`
+stops naming `simple_exec`.
+
+### Decision 16, 2026-11-25, written in the agent's sandbox on top of decision 15, not built
+
+Changed: `simple_ui.f90` (`list_viewer_prgs_in_ui`, public); `production/simple_viewer.f90` (reads the first
+argument with `cmdline_err`, lists on `prg=list`, looks the name up with `get_prg_ptr` before `parse`; the
+router's "not recognized" message also points to `prg=list`); `simple_cmdline.f90` (comment of the
+`simple_viewer` case in the `prg=list` block only). Exits to run on the Mac: build, fast gate, install;
+`simple_viewer prg=list` prints the `Viewer:` heading and `select2D`; `simple_viewer prg=foo` stops with the
+"not recognized. Use prg=list" message; `simple_viewer` alone stops in `cmdline_err`; `simple_viewer prg=select2D`
+still prints the usage.

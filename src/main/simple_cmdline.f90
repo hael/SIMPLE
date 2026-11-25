@@ -1,7 +1,7 @@
 !@descr: the class implementing command line parsing
 module simple_cmdline
 use simple_core_module_api
-use simple_ui,         only: get_prg_ptr, get_test_prg_ptr, get_executable_prg, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui,list_stream_prgs_in_ui, list_single_prgs_in_ui
+use simple_ui,         only: get_prg_ptr, get_test_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui,list_stream_prgs_in_ui, list_single_prgs_in_ui
 use simple_ui_program, only: ui_program
 use simple_args,       only: args
 use simple_fileio,     only: executable_name
@@ -69,42 +69,29 @@ contains
         type(string),     allocatable  :: keys_required(:), defined_keys(:)
         type(args)                     :: allowed_args
         type(ui_program), pointer      :: ptr2prg => null()
-        type(string)                   :: prgname, exec_cmd_ui, executable, prg_given
+        type(string)                   :: prgname, exec_cmd_ui, executable
         character(len=XLONGSTRLEN)     :: arg
-        integer                        :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req, nprg_args
-        logical                        :: skip_required_keys, l_single_prg
+        integer                        :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
+        logical                        :: skip_required_keys
         ! parse command line
         self%argcnt = command_argument_count()
         call get_command(self%entire_line)
         cmdline_glob = trim(self%entire_line)
         executable = executable_name()
-        l_single_prg = executable%to_char() == 'simple_viewer'
         select case(executable%to_char())
-            case('simple_exec', 'single_exec', 'simple_stream', 'simple_private_exec')
+            case('simple_exec', 'single_exec', 'simple_stream', 'simple_private_exec', 'simple_viewer')
                 if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg=flag must be set on command line')
             case('simple_test_exec')
                 if( .not. str_has_substr(self%entire_line,'test=') ) THROW_HARD('test=flag must be set on command line')
-            case('simple_viewer')
-                ! runs one program: prg= is not needed
             case DEFAULT
                 THROW_HARD('Executable '//executable%to_char()//' not supported 1')
         end select
         if( DEBUG_HERE ) print *, 'executable from get_command_argument in cmdline class: ', executable%to_char()
-        ! parse program name: the first argument, or the registry's one program of a single-program executable
-        nprg_args = 1
-        if( l_single_prg )then
-            call get_executable_prg(executable%to_char(), prgname)
-            nprg_args = 0
-            do i = 1,self%argcnt
-                call get_command_argument(i, arg, cmdlen, cmdstat)
-                if( arg(1:4) == 'prg=' ) nprg_args = 1
-            end do
-        else
-            call get_command_argument(1, arg, cmdlen, cmdstat)
-            pos = index(arg, '=') ! position of '='
-            call cmdline_err(cmdstat, cmdlen, arg, pos)
-            prgname = arg(pos+1:)
-        endif
+        ! parse program name
+        call get_command_argument(1, arg, cmdlen, cmdstat)
+        pos = index(arg, '=') ! position of '='
+        call cmdline_err(cmdstat, cmdlen, arg, pos)
+        prgname = arg(pos+1:)
         if( DEBUG_HERE ) print *, 'prgname from command-line in cmdline class: ', prgname%to_char()
         ! obtain pointer to the program in the simple_ui specification
         select case(executable%to_char())
@@ -148,7 +135,7 @@ contains
                     stop
                 endif
             case('simple_viewer')
-                ! one program, nothing to list
+                ! prg=list is listed by production/simple_viewer.f90 before parse
             case DEFAULT
                 THROW_HARD('Program '//executable%to_char()//' not supported 3')
         end select
@@ -164,8 +151,7 @@ contains
             call ptr2prg%print_cmdline()
             stop
         endif
-        ! nothing but the program name: the usage
-        if( self%argcnt == nprg_args .and. executable%to_char() /= 'simple_test_exec' )then
+        if( self%argcnt == 1 .and. executable%to_char() /= 'simple_test_exec' )then
             call ptr2prg%print_cmdline()
             stop
         endif
@@ -173,14 +159,14 @@ contains
         skip_required_keys = skip_mode_required_keys(prgname%to_char(), self%entire_line)
         if( skip_required_keys )then
             sz_keys_req    = 0
-            nargs_required = nprg_args
+            nargs_required = 1
         else
             sz_keys_req = ptr2prg%get_nrequired_keys()
             if( sz_keys_req > 0 )then
                 keys_required  = ptr2prg%get_required_keys()
-                nargs_required = sz_keys_req + nprg_args ! and prg=, when given
+                nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
             else
-                nargs_required = nprg_args
+                nargs_required = 1
             endif
         endif
         if( self%argcnt < nargs_required )then
@@ -206,14 +192,6 @@ contains
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
-        ! a single-program executable takes no other prg= and sets its program
-        if( l_single_prg )then
-            if( self%defined('prg') )then
-                prg_given = self%get_carg('prg')
-                if( prg_given .ne. prgname ) THROW_HARD(executable%to_char()//' runs '//prgname%to_char()//' only; give no prg= or prg='//prgname%to_char())
-            endif
-            call self%set('prg', prgname)
-        endif
         if (.not. skip_required_keys) then
             defined_keys = self%get_keys()
             if (.not. ptr2prg%requirements_satisfied(defined_keys)) then

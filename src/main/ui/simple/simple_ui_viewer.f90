@@ -25,7 +25,7 @@ contains
         &'project (or inside the folder that holds it, when that is not a run folder) with the project and the '//&
         &'selection applied, as program selection does (each particle takes the state of its class); the input '//&
         &'project is not changed. '//&
-        &'Run as simple_viewer projfile=<project>.simple; needs a desktop session',&    ! help
+        &'Run as simple_viewer prg=select2D projfile=<project>.simple; needs a desktop session',&  ! help
         &'simple_viewer',&                                                                ! executable
         &.true., &
         &visibility=UI_VIS_STANDARD, &

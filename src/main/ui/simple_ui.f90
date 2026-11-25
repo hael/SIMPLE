@@ -15,8 +15,9 @@ use simple_ui_single_group, only: add_single_programs
 use simple_ui_test_group,   only: add_test_programs
 implicit none
 
-public :: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr, get_executable_prg
+public :: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr
 public :: list_simple_prgs_in_ui, list_simple_test_prgs_in_ui, list_stream_prgs_in_ui, list_single_prgs_in_ui
+public :: list_viewer_prgs_in_ui
 public :: print_ui_json, write_ui_json
 public :: print_stream_ui_json, validate_ui_json, validate_ui_presentation
 private
@@ -66,23 +67,6 @@ contains
         ptr2prg => null()
         call prgtab%get_ui_program(which_program, ptr2prg)
     end subroutine get_prg_ptr
-
-    !> the one program the registry holds for an executable that runs a single program (simple_viewer)
-    subroutine get_executable_prg( executable, prgname )
-        character(len=*), intent(in)    :: executable
-        type(string),     intent(inout) :: prgname
-        type(ui_program), pointer :: ptr2prg
-        integer                   :: iprg, nfound
-        if( .not. allocated(prgnames) ) THROW_HARD('the program registry is not built; get_executable_prg')
-        nfound = 0
-        do iprg = 1, size(prgnames)
-            call prgtab%get_ui_program(prgnames(iprg), ptr2prg)
-            if( trim(ptr2prg%executable%to_char()) /= trim(executable) ) cycle
-            nfound  = nfound + 1
-            prgname = ptr2prg%name
-        enddo
-        if( nfound /= 1 ) THROW_HARD('the registry must hold exactly one program for '//trim(executable)//'; get_executable_prg')
-    end subroutine get_executable_prg
 
     subroutine validate_ui_presentation
         use simple_linked_list, only: linked_list, list_iterator
@@ -186,6 +170,10 @@ contains
     subroutine list_single_prgs_in_ui
         call print_registered_programs(prgtab, prgnames, 'single_exec')
     end subroutine list_single_prgs_in_ui
+
+    subroutine list_viewer_prgs_in_ui
+        call print_registered_programs(prgtab, prgnames, 'simple_viewer')
+    end subroutine list_viewer_prgs_in_ui
 
     subroutine print_registered_programs( program_table, program_names, executable )
         class(ui_hash),   intent(in)           :: program_table
