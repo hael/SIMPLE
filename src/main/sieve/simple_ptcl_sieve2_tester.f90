@@ -1,4 +1,4 @@
-!@descr: unit tests of particle_sieving_2's rules: the seed and batch cut with the seed's two limits, the retraining rounds, the junk labels, the rounds' low-pass limit and agreement, the student's table by class, the freeze, the greedy update fraction, the final states and the two stops
+!@descr: unit tests of particle_sieving_2's rules: the seed and batch cut with the seed's two limits, the retraining rounds, the junk labels, the rounds' low-pass limit and agreement, the student's table by class, the freeze, the montages' frames, the greedy update fraction, the final states and the two stops
 submodule (simple_ptcl_sieve2) simple_ptcl_sieve2_tester
 use simple_test_utils,     only: assert_true, assert_false, assert_int, assert_real
 use simple_cmdline,        only: cmdline
@@ -35,6 +35,7 @@ contains
         call test_kept_order()
         call test_class_pops()
         call test_freeze_rules()
+        call test_frame_codes()
         call test_final_states()
         call test_both_halves()
         call test_classes_left_stop()
@@ -245,6 +246,25 @@ contains
         call assert_real(1.,   sieve%newonly_frac(0, 0),      1.e-6, 'no particle: a full update')
         deallocate(sieve)
     end subroutine test_freeze_rules
+
+    !> the montages' frames: red for junk, orange for a populated class whose most probable group is junk below the
+    !! threshold, none for the rest (an empty or unpopulated class included)
+    subroutine test_frame_codes()
+        class(ptcl_sieve2), allocatable :: sieve
+        integer,  allocatable :: codes(:)
+        real(dp) :: pclass(3,5)
+        write(*,'(A)') 'test_frame_codes'
+        allocate(sieve)
+        pclass(:,1) = [0.95_dp, 0.03_dp, 0.02_dp]   ! junk above the threshold
+        pclass(:,2) = [0.60_dp, 0.30_dp, 0.10_dp]   ! most probably junk, below it
+        pclass(:,3) = [0.30_dp, 0.20_dp, 0.50_dp]   ! most probably protein
+        pclass(:,4) = [0.70_dp, 0.20_dp, 0.10_dp]   ! most probably junk, but no particle
+        pclass(:,5) = [0.70_dp, 0.20_dp, 0.10_dp]   ! most probably junk, but empty
+        call sieve%frame_codes(pclass, [.false., .false., .false., .false., .true.], [5, 5, 5, 0, 5], &
+            &[.true., .false., .false., .false., .false.], codes)
+        call assert_true(all(codes == [1, 2, 0, 0, 0]), 'red, orange, none, none without particles, none empty')
+        deallocate(sieve)
+    end subroutine test_frame_codes
 
     !> accepted: selected, ingested and of a class that is not junk; a particle without a class is rejected
     subroutine test_final_states()

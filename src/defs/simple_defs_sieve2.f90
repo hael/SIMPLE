@@ -8,7 +8,7 @@ private
 public :: SIEVE2_NMICS, SIEVE2_SEED_NPTCLS, SIEVE2_NCLS, SIEVE2_BATCH_NPTCLS, SIEVE2_ROUND_NBATCHES, SIEVE2_ROUND_OLD_FRAC
 public :: SIEVE2_TRAIN_NPTCLS, SIEVE2_JUNK_THRES, SIEVE2_LPSTOP, SIEVE2_ROUND_ITER0, SIEVE2_FREEZE_CORR, SIEVE2_FREEZE_NROUNDS
 public :: SIEVE2_SEED_DIR, SIEVE2_BATCH_DIR, SIEVE2_ROUND_DIR, SIEVE2_LEARN_DIR, SIEVE2_LABELS_FBODY
-public :: SIEVE2_REPORT, SIEVE2_STUDENT_TABLE
+public :: SIEVE2_REPORT, SIEVE2_STUDENT_TABLE, SIEVE2_ROUND_CAVGS_DIR, SIEVE2_ROUND_CAVGS, SIEVE2_ROUND_CAVGS_JPG
 
 ! ---- the workflow
 integer,  parameter :: SIEVE2_NMICS          = 100    !< micrographs of the seed solve2D at most (nmics)
@@ -34,6 +34,9 @@ character(len=*), parameter :: SIEVE2_SEED_DIR     = 'seed'
 character(len=*), parameter :: SIEVE2_BATCH_DIR    = 'batch_'     !< + the batch, three digits
 character(len=*), parameter :: SIEVE2_ROUND_DIR    = 'round_'     !< + the round, two digits
 character(len=*), parameter :: SIEVE2_LEARN_DIR    = 'learn_'     !< + the rounds done before it, two digits
+character(len=*), parameter :: SIEVE2_ROUND_CAVGS_DIR = '_cavgs'  !< round_<nn> + it: a frozen round's diagnostic averages
+character(len=*), parameter :: SIEVE2_ROUND_CAVGS = 'cavgs_round_particles.mrc' !< of the particles the round aligned only
+character(len=*), parameter :: SIEVE2_ROUND_CAVGS_JPG = 'cavgs_round_particles.jpg' !< its montage, framed by the labels
 character(len=*), parameter :: SIEVE2_LABELS_FBODY = 'labels_'    !< + seed or round_<nn>, .txt: the CNN's labels
 character(len=*), parameter :: SIEVE2_REPORT       = 'particle_sieving_2_report.txt'
 character(len=*), parameter :: SIEVE2_STUDENT_TABLE = 'student_by_class.txt' !< the student's agreement by class, ranked

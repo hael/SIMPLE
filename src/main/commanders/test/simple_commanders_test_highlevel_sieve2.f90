@@ -13,7 +13,8 @@ contains
         use simple_test_gate,          only: test_gate
         use simple_ptcl_sieve2,        only: ptcl_sieve2, sieve2_settings
         use simple_defs_sieve2,        only: SIEVE2_LABELS_FBODY, SIEVE2_ROUND_DIR, SIEVE2_BATCH_DIR, SIEVE2_LEARN_DIR, &
-            &SIEVE2_REPORT, SIEVE2_STUDENT_TABLE
+            &SIEVE2_REPORT, SIEVE2_STUDENT_TABLE, SIEVE2_ROUND_CAVGS_DIR, SIEVE2_ROUND_CAVGS, &
+            &SIEVE2_ROUND_CAVGS_JPG
         use simple_timer,              only: tic, toc, timer_int_kind
         use simple_sigma2_state_file,  only: sigma2_state_read_particles, SIGMA2_STATE_FNAME
         use, intrinsic :: iso_fortran_env, only: real32
@@ -190,7 +191,8 @@ contains
             if( file_exists(SIEVE2_LABELS_FBODY//'round_'//int2str_pad(ir, 2)//'.txt') ) nlabels = nlabels + 1
         enddo
         call read_labels(SIEVE2_LABELS_FBODY//'round_'//int2str_pad(ir_lab, 2)//'.txt', lab_pop, lab_bad, l_found)
-        call gate%check('one_selection_on_the_frozen_references', l_found .and. nlabels == 1)
+        call gate%check('one_selection_on_the_frozen_references', l_found .and. nlabels == 1 .and. &
+            &file_exists(SIEVE2_LABELS_FBODY//'round_'//int2str_pad(ir_lab, 2)//'.jpg'))
         ! the result: accepted exactly the particles whose class those labels keep, every particle decided
         call proj%read(projname)
         nacc   = 0
@@ -216,7 +218,8 @@ contains
             &any(.not. lab_bad .and. lab_pop > 0))
         call proj%kill
         ! the freeze, from the report's own class-average changes: a frozen round searched no earlier particle, one before
-        ! the last kept the references (the change 1), and some round froze
+        ! the last kept the references (the change 1), a frozen round alone left its particles' diagnostic averages, and
+        ! some round froze
         call check_freeze(kept, refcorr, l_ok)
         call gate%check('once_frozen_the_rounds_search_the_new_particles_only', l_ok)
         ! the table by class: every class once, every new particle once among the predictions, ranked by the share kept
@@ -306,6 +309,8 @@ contains
                 if( ios /= 0 .or. ir < 1 .or. ir > NROUNDS ) cycle
                 read(line,*, iostat=ios) step, wall_s, ning, acc_tok, junk_tok, tok
                 if( ios /= 0 ) cycle
+                ! a round's own line (round_<nn>), not a step named after it (round_<nn>_cavgs)
+                if( len_trim(step) /= 8 ) cycle
                 do k = 1,4
                     if( trim(tok(k)) == '-' )then
                         kept_pct(ir,k) = -1.
@@ -356,6 +361,10 @@ contains
             do ir = 1,NROUNDS
                 l_frozen = ncons >= FREEZE_NROUNDS
                 l_any    = l_any .or. l_frozen
+                if( l_frozen .neqv. file_exists(SIEVE2_ROUND_DIR//int2str_pad(ir, 2)//SIEVE2_ROUND_CAVGS_DIR//'/'// &
+                    &SIEVE2_ROUND_CAVGS) ) ok = .false.
+                if( l_frozen .neqv. file_exists(SIEVE2_ROUND_DIR//int2str_pad(ir, 2)//SIEVE2_ROUND_CAVGS_DIR//'/'// &
+                    &SIEVE2_ROUND_CAVGS_JPG) ) ok = .false.
                 if( l_frozen )then
                     if( kept_pct(ir,4) > -0.5 ) ok = .false.
                     if( ir < NROUNDS .and. abs(corr(ir) - 1.) > 1.e-3 ) ok = .false.

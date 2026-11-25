@@ -73,6 +73,7 @@ type :: ptcl_sieve2
     integer,          allocatable :: cls_pred(:)                 !< new particles the student put in a class, over the rounds
     integer,          allocatable :: cls_kept(:)                 !< of them, those their first round left there
     integer,          allocatable :: cls_into(:)                 !< new particles their first round put in a class
+    integer,          allocatable :: lab_frame(:)                !< the labelling's frame by class: 1 junk, 2 junk the CNN's most probable group, 0 neither
     integer,          allocatable :: ptcl_batch(:)               !< 0 the seed, b > 0 batch b, -1 not selected
     logical                       :: exists   = .false.
   contains
@@ -91,9 +92,11 @@ type :: ptcl_sieve2
     procedure, private         :: adopt_artifacts
     procedure, private         :: report_step
     procedure, private         :: refs_change
+    procedure, private         :: round_cavgs
     procedure, private, nopass :: plan_batches
     procedure, private, nopass :: retrains_after
     procedure, private, nopass :: class_labels
+    procedure, private, nopass :: frame_codes
     procedure, private, nopass :: greedy_frac
     procedure, private, nopass :: round_lowpass
     procedure, private, nopass :: round_agreement
@@ -254,6 +257,7 @@ contains
         if( allocated(self%pending)    ) deallocate(self%pending)
         if( allocated(self%pjunk)      ) deallocate(self%pjunk)
         if( allocated(self%cls_pred)   ) deallocate(self%cls_pred, self%cls_kept, self%cls_into)
+        if( allocated(self%lab_frame)  ) deallocate(self%lab_frame)
         call self%edir%kill
         call self%projfile%kill
         call self%copy_name%kill
@@ -344,6 +348,7 @@ contains
     subroutine label_classes( self, tag )
         use simple_cavg_cnn_predict, only: cavg_cnn_class_probs
         use simple_defs_sieve2,      only: SIEVE2_LABELS_FBODY
+        use simple_gui_utils,        only: mrc2jpeg_tiled
         use simple_fileio,           only: fopen, fclose, fileiochk
         class(ptcl_sieve2), intent(inout) :: self
         character(len=*),   intent(in)    :: tag
@@ -366,6 +371,10 @@ contains
         enddo
         call self%class_labels(pclass(1,:), empty, pops, self%s%junk_thres, self%bad)
         self%pjunk = pclass(1,:)
+        call self%frame_codes(pclass, empty, pops, self%bad, self%lab_frame)
+        ! the labelled averages as a montage, red the junk ones, orange those the CNN finds most likely junk below
+        ! the threshold
+        call mrc2jpeg_tiled(self%cavgs, string(SIEVE2_LABELS_FBODY//tag//'.jpg'), frames=self%lab_frame)
         fname = SIEVE2_LABELS_FBODY//tag//'.txt'
         call fopen(funit, fname, status='replace', action='write', iostat=ios)
         call fileiochk('ptcl_sieve2; open '//fname%to_char(), ios)
@@ -610,7 +619,45 @@ contains
             &' CLASS AVERAGES AGAINST THE PREVIOUS ONES: WEIGHTED CORRELATION ', refcorr, ' (TO ', lp, ' A)'
         call self%report_step('round_'//int2str_pad(self%nrounds, 2), toc(t0), [pct(nnew_kept, nnew), split(1), &
             &split(2), pct(nold_kept, nold)], refcorr)
+        ! a frozen round's diagnostic class averages: its own particles alone, never a reference
+        if( l_frozen ) call self%round_cavgs(self%ingested .and. cnt1 > cnt0)
     end subroutine greedy_round
+
+    !> make_cavgs on the particles of mask (a frozen round's searched ones) in their current classes, in the round's
+    !! own folder: class averages for inspection only, which nothing reads back
+    subroutine round_cavgs( self, mask )
+        use simple_cmdline,            only: cmdline
+        use simple_commanders_mkcavgs, only: commander_make_cavgs
+        use simple_defs_sieve2,        only: SIEVE2_ROUND_DIR, SIEVE2_ROUND_CAVGS_DIR, SIEVE2_ROUND_CAVGS, &
+            &SIEVE2_ROUND_CAVGS_JPG
+        use simple_gui_utils,          only: mrc2jpeg_tiled
+        use simple_syslib,             only: simple_chdir
+        class(ptcl_sieve2), intent(inout) :: self
+        logical,            intent(in)    :: mask(:)
+        type(commander_make_cavgs)    :: xmake_cavgs
+        type(cmdline)                 :: cl
+        integer(timer_int_kind)       :: t0
+        character(len=:), allocatable :: dir
+        t0  = tic()
+        dir = SIEVE2_ROUND_DIR//int2str_pad(self%nrounds, 2)//SIEVE2_ROUND_CAVGS_DIR
+        call self%enter_step(dir)
+        call self%write_copy(mask)
+        call cl%set('prg',      'make_cavgs')
+        call cl%set('projfile', self%copy_name%to_char())
+        call cl%set('refs',     SIEVE2_ROUND_CAVGS)
+        call cl%set('ncls',     self%s%ncls)
+        call cl%set('mskdiam',  self%mskdiam)
+        call cl%set('nthr',     self%nthr)
+        call cl%set('mkdir',    'no')
+        call xmake_cavgs%execute(cl)
+        call cl%kill
+        ! framed by the labelling of the frozen references
+        call mrc2jpeg_tiled(string(SIEVE2_ROUND_CAVGS), string(SIEVE2_ROUND_CAVGS_JPG), frames=self%lab_frame)
+        call simple_chdir(self%edir)
+        write(logfhandle,'(A,I0,A,I0,A,A)') '>>> PARTICLE_SIEVING_2: ROUND ', self%nrounds, ', CLASS AVERAGES OF ITS ', &
+            &count(mask), ' PARTICLES ALONE (DIAGNOSTIC): ', dir//'/'//SIEVE2_ROUND_CAVGS
+        call self%report_step(dir, toc(t0))
+    end subroutine round_cavgs
 
     !> the states from the last labels (a particle is accepted when its class is not junk), the class states, the 2D
     !! shifts in ptcl3D unless it holds a 3D alignment; no sigma2 store, as particle_sieving's result has none (a later
@@ -1057,6 +1104,24 @@ contains
         pct = -1.
         if( ntot > 0 ) pct = 100. * real(n) / real(ntot)
     end function pct
+
+    !> a class's frame in the montages: 1 junk by the threshold, 2 populated and not empty with junk the CNN's most
+    !! probable group (p_junk the largest of the three), 0 neither
+    subroutine frame_codes( pclass, empty, pops, bad, codes )
+        real(dp),             intent(in)  :: pclass(:,:)
+        logical,              intent(in)  :: empty(:), bad(:)
+        integer,              intent(in)  :: pops(:)
+        integer, allocatable, intent(out) :: codes(:)
+        integer :: icls
+        allocate(codes(size(bad)), source=0)
+        do icls = 1,size(bad)
+            if( bad(icls) )then
+                codes(icls) = 1
+            else if( pops(icls) > 0 .and. .not. empty(icls) )then
+                if( maxloc(pclass(:,icls), dim=1) == 1 ) codes(icls) = 2
+            endif
+        enddo
+    end subroutine frame_codes
 
     !> a greedy round's low-pass limit (A): the class FRCs' estimate, never finer than lpstop
     real function round_lowpass( lp_frc, lpstop )

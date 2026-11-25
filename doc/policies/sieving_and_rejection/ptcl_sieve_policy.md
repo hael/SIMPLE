@@ -461,7 +461,9 @@ The run, in its execution directory:
    time: after the round that froze the references (step 5), on those averages; without a freeze, after the last
    round; with no batch at all, on the seed's. A class is junk when it is populated, not empty and its `p_junk`
    exceeds 0.9 (`SIEVE2_JUNK_THRES`, strictly). The run stops when no populated class is left that is not junk. Until
-   the labelling the run report's accepted and junk columns read - (decision 37).
+   the labelling the run report's accepted and junk columns read - (decision 37). The labelled averages are written
+   as a montage, `labels_<tag>.jpg`: a red frame on a junk class, an orange one on a populated class whose most probable
+   CNN group is junk below the threshold (`mrc2jpeg_tiled` with `frames`; decision 40).
 3. **Student.** `learn_class_student` on a random sample of at most 10,000 ingested particles (junk classes
    included) against the current class averages: after the seed, on the seed's particles, and again after each
    greedy round listed in `retrain` (comma-separated rounds; none by default) that a batch follows (a listed round
@@ -499,7 +501,10 @@ The run, in its execution directory:
    previous ones, every later round searches the new particles only (`update_frac` = new / ingested) and passes
    `restore_cavgs=no`, so the references and their labels stay; with the key `restore_cavgs=yes` (default no) the last
    round restores them from the carried sums and its new particles, for the output averages only: the selection is
-   the one made on the frozen references. An earlier particle then keeps its class (decisions 36 to 38). A
+   the one made on the frozen references. An earlier particle then keeps its class (decisions 36 to 38). After each
+   frozen round, `make_cavgs` sums the round's own particles in their new classes into
+   `round_<nn>_cavgs/cavgs_round_particles.mrc`, for inspection, with its montage framed by the labelling
+   (`cavgs_round_particles.jpg`): nothing reads these averages back (decisions 39 and 40). A
    class a round
    empties stays empty: the first round empties the seed's nearly empty classes (17 to 23 of 100 on betagal) and
    nothing refills them (decision 29).
@@ -509,7 +514,7 @@ The run, in its execution directory:
    It carries no sigma2 store, as `particle_sieving`'s combined result has none; a later program rebuilds it.
 
 Folders and files: `seed/`, `learn_<nn>/` (`nn` the rounds done, `00` after the seed), `batch_<nnn>/`,
-`round_<nn>/`, each with
+`round_<nn>/`, `round_<nn>_cavgs/` (frozen rounds), each with
 its own copy of the work project under the project's own file name (the sigma2 store's layout digest
 includes the project name) and of the current sigma2 store; one labels table, `labels_round_<nn>.txt` (`labels_seed.txt` without
 batches) (class, population, the three probabilities, empty, junk); `particle_sieving_2_report.txt` (step, wall

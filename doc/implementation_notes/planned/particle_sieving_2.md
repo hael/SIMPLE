@@ -1,6 +1,6 @@
 # particle_sieving_2: a seed solve2D, the class-average CNN's labels and the class student for the rest
 
-Status, 2026-11-25: delivered, uncommitted, for review (decisions 25 to 29 added 2026-11-24, 30 to 38 on 2026-11-25;
+Status, 2026-11-25: delivered, uncommitted, for review (decisions 25 to 29 added 2026-11-24, 30 to 40 on 2026-11-25;
 the key `retrain` of decision 27 approved by Joe on 2026-11-24); report
 [particle_sieving_2_report.md](particle_sieving_2_report.md). Base: `638d99ae3` (the working tree also holds
 untracked scripts under `scripts/`, which this plan does not touch). Supersedes: none. Owner: Joe. Depends on:
@@ -233,6 +233,15 @@ All dated 2026-11-23. 1 to 14 are Joe's; the request gave 1 to 6, the questions 
     `particle_sieving_2` defaults it to no). With yes a frozen last round restores the class averages from the
     carried sums and its new particles, for the output only; the selection stays the frozen references' (decision 37).
     Without a freeze the last round restores as every round does.
+39. (2026-11-25, Joe) **A frozen round's own class averages, for diagnosis:** after each frozen round, `make_cavgs`
+    on a copy with only the round's searched particles active, in their new classes, writes
+    `round_<nn>_cavgs/cavgs_round_particles.mrc` (and its halves). They show what the student and the search put in each
+    class from the round's batches alone; nothing reads them back, the references stay frozen.
+40. (2026-11-25, Joe) **Montages framed by the labels:** the labelling writes `labels_<tag>.jpg` and each frozen
+    round's diagnostic averages `cavgs_round_particles.jpg`, a red frame on a junk class (p_junk above the threshold)
+    and an orange one on a populated class whose most probable CNN group is junk below it, as in the montages of the
+    runs' reviews. `mrc2jpeg_tiled` (`simple_gui_utils`, the owner of the class-average montages) takes an optional
+    frame code per image and then writes a true-colour JPEG (`write_rgb_jpeg`); its other callers are unchanged.
 
 Defaults taken without a question (veto cheaply):
 
@@ -380,6 +389,7 @@ Gates no ruling may waive: the fast gate; `unit_project suite=particle_sieve` (t
 | `src/main/exec/simple_test_exec_highlevel.f90`, `production/CMakeLists.txt` (entry and `SIMPLE_CTEST_BUDGET`), `doc/policies/test_environment_policy.md` (the budget's number) | the workflow test's route and CTest entry (decision 19); added 2026-11-23 | 3 |
 | `doc/policies/sieving_and_rejection/ptcl_sieve_policy.md` | the new program's section | 5 |
 | `src/main/params/simple_parameters.f90`, `src/main/params/simple_parameters_parse.f90` | the key `retrain` (decision 27); added 2026-11-24 | - |
+| `src/utils/gui/simple_gui_utils.f90`, `src/main/image/simple_jpg_tester.f90` | the montage's optional frames and their test (decision 40); added 2026-11-25 | - |
 | this plan, its report, `doc/implementation_notes/README.md` | Progress, the close | 0-5 |
 
 ## Progress
@@ -642,4 +652,33 @@ and the report.
   class averages are round 4's), 8.2 to 13.6 s each. The student kept 57.9 % in all (in the labelled rounds 63.7 %
   for classes not junk, 37.8 % for junk ones). 38 028 accepted (54.6 % in protein-view classes; the most probable
   group 28 499, 72.9 %), no protein-view particle rejected; Jaccard 0.69 with run 12, 0.71 with run 16.
+
+**Decision 39, 2026-11-25**, development machine (the tree at the pulled `61535cb57`). Files: `simple_defs_sieve2.f90`
+(`SIEVE2_ROUND_CAVGS_DIR`, `SIEVE2_ROUND_CAVGS`), the module (`round_cavgs`), the workflow test (the freeze gate checks
+the stacks; its report reader takes only `round_<nn>` lines, which the new `round_<nn>_cavgs` step lines had fooled),
+the registry (the stacks among the identity outputs), the two policies, this plan and the report.
+- Exit: `particle_sieve2` 57 of 57; `particle_sieving_2_mini` 17 of 17 gates at eight threads and twice at one, the
+  frozen rounds 2 and 3 with their averages of 600 and 300 particles; `test=identity` 15 of 15 (the six new stacks
+  included); the four checks; the fast gate 15 of 15.
+- thunder, `run18_b1000_round_cavgs` (this tree as of decision 39, at the pulled commits; thunder now needed
+  `gtk3-devel`, which Joe installed): normal stop in 629 s (seed 287 s, training 60 s, rounds 183 s, thunder busier
+  than for run 17; the four diagnostic `make_cavgs` 20.5 s in all). Frozen from round 5 (rounds 3 and 4 at 0.9949 and
+  0.9959); the one labelling on round 4's averages (48 of 87 populated classes junk); 36 330 accepted. The frozen
+  rounds' own averages against the frozen references (to 10 A, the mask, weighted by the round's particles): classes
+  not junk 0.933, 0.951, 0.966 and 0.944 (medians about 0.96), junk classes 0.808, 0.812, 0.842 and 0.877 (medians
+  0.68 to 0.79); the protein views look alike in both, the junk classes take other content from later batches.
+
+**Decision 40, 2026-11-25**, development machine. Files: `simple_gui_utils.f90` (`mrc2jpeg_tiled`'s `frames`, a
+contained true-colour writer), `simple_jpg_tester.f90` (`test_framed_tiles`), `simple_defs_sieve2.f90`
+(`SIEVE2_ROUND_CAVGS_JPG`), the module (`frame_codes`, the two montages), its tester (`test_frame_codes`), the workflow
+test (the montages' presence in two gates), the policy, this plan and the report.
+- Exit: `unit_image suite=mrc2jpeg` 33 of 33 (the framed montage decoded: red frame on tile 1, orange on tile 3, no
+  colour at an unframed tile's edge); `particle_sieve2` 58 of 58; `particle_sieving_2_mini` 17 of 17 gates at eight
+  threads and twice at one, `labels_round_01.jpg` byte-identical between the one-thread runs; `test=identity` 15 of
+  15; the four checks; the fast gate 15 of 15.
+- thunder, `run19_b1000_framed` (this tree as of decision 40): normal stop in 501 s (seed 265 s, training 47 s, rounds
+  95 s; frozen rounds 8.4 to 8.6 s each). Frozen from round 5 (rounds 3 and 4 at 0.9952 and 0.9965); the one
+  labelling on round 4's averages (40 of 83 populated classes junk); 39 921 accepted. The program wrote
+  `labels_round_04.jpg` and the four frozen rounds' `cavgs_round_particles.jpg`, framed red and orange as decision 40
+  says. In the montages an empty class is a white tile (`mrc2jpeg_tiled`'s, as before) and no tile is numbered.
 

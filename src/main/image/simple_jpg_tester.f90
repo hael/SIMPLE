@@ -53,7 +53,66 @@ contains
             call verify_jpeg(section)
         end do
         call cleanup_files
+        call test_framed_tiles
     end subroutine run_all_mrc2jpeg_tests
+
+    !> mrc2jpeg_tiled with frames: four 32x32 images on a 2x2 grid of JPEG_DIM tiles, frames red, none, orange,
+    !! none; decoded, the frames' middle rows carry their colours and an unframed tile's edge stays grey
+    subroutine test_framed_tiles()
+        use simple_defs,      only: JPEG_DIM
+        use simple_gui_utils, only: mrc2jpeg_tiled
+        character(len=*), parameter :: STK = 'tmp_mrc2jpeg_framed.mrc', JPG = 'tmp_mrc2jpeg_framed.jpg'
+        type(image) :: img
+        character(kind=c_char, len=:), allocatable :: c_filename
+        integer(c_signed_char),        pointer     :: pixels(:)
+        type(c_ptr)    :: buffer
+        integer(c_int) :: w, h, comps
+        integer        :: k, x, y, rgb_red(3), rgb_orange(3), rgb_none(3)
+        call img%new([32, 32, 1], SMPD, wthreads=.false.)
+        do k = 1,4
+            do y = 1,32
+                do x = 1,32
+                    call img%set([x, y, 1], real(mod(x + y + k, 7)))
+                end do
+            end do
+            call img%write(string(STK), k)
+        end do
+        call img%kill
+        call mrc2jpeg_tiled(string(STK), string(JPG), frames=[1, 0, 2, 0])
+        call assert_true(file_exists(string(JPG)), 'mrc2jpeg_tiled with frames writes its JPEG')
+        if( .not. file_exists(string(JPG)) ) return
+        c_filename = JPG//c_null_char
+        buffer     = stbi_load(c_filename, w, h, comps, 3_c_int)
+        call assert_true(c_associated(buffer), 'the framed JPEG decodes')
+        if( .not. c_associated(buffer) ) return
+        call assert_int(2 * JPEG_DIM, int(w), 'the framed JPEG holds two tiles across')
+        call assert_int(2 * JPEG_DIM, int(h), 'and two down')
+        call c_f_pointer(buffer, pixels, [3 * int(w) * int(h)])
+        rgb_red    = pixel(JPEG_DIM / 2, 2)               ! tile 1, the top frame's middle row
+        rgb_orange = pixel(JPEG_DIM / 2, JPEG_DIM + 2)    ! tile 3 (column 1, row 2)
+        rgb_none   = pixel(JPEG_DIM + JPEG_DIM / 2, 2)    ! tile 2, no frame
+        call assert_true(rgb_red(1) > 180 .and. rgb_red(2) < 90 .and. rgb_red(3) < 90, 'a red frame on tile 1')
+        call assert_true(rgb_orange(1) > 180 .and. rgb_orange(2) > 100 .and. rgb_orange(2) < 210 .and. &
+            &rgb_orange(3) < 90, 'an orange frame on tile 3')
+        call assert_true(maxval(rgb_none) - minval(rgb_none) < 30, 'no colour at the edge of the unframed tile 2')
+        call stbi_image_free(buffer)
+        nullify(pixels)
+        call del_file(STK)
+        call del_file(JPG)
+
+      contains
+
+        function pixel( px, py ) result( rgb )
+            integer, intent(in) :: px, py
+            integer :: rgb(3), c, v
+            do c = 1,3
+                v = int(pixels(3 * ((py - 1) * int(w) + px - 1) + c))
+                if( v < 0 ) v = v + 256
+                rgb(c) = v
+            end do
+        end function pixel
+
+    end subroutine test_framed_tiles
 
     subroutine write_source_stack()
         type(image) :: img

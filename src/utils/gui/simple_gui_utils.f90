@@ -44,15 +44,18 @@ contains
         call padded%kill
     end subroutine mic2thumb
 
-    ! write tiled jpeg of mrc file
-    subroutine mrc2jpeg_tiled(mrcfile, outfile, scale, ntiles, msk, n_xtiles, n_ytiles, mskdiam_px)
+    !> write tiled jpeg of mrc file; frames (one code per image: 0 none, 1 red, 2 orange) writes it in colour with a
+    !! frame around each tile of a coded image
+    subroutine mrc2jpeg_tiled(mrcfile, outfile, scale, ntiles, msk, n_xtiles, n_ytiles, mskdiam_px, frames)
         class(string),                  intent(in)                         :: mrcfile, outfile
         real,                           optional,              intent(out) :: scale
         integer,                        optional,              intent(out) :: ntiles, n_xtiles, n_ytiles
         logical,                        optional, allocatable, intent(in)  :: msk(:)
         integer,                        optional,              intent(in)  :: mskdiam_px
-        type(image)    :: img, img_pad, img_jpeg
-        type(stack_io) :: stkio_r
+        integer,                        optional,              intent(in)  :: frames(:)
+        type(image)          :: img, img_pad, img_jpeg
+        type(stack_io)       :: stkio_r
+        integer, allocatable :: tile_xy(:,:)
         integer        :: ldim_stk(3)
         integer        :: ncls_here, xtiles, ytiles, icls, ix, iy, l_ntiles
         real           :: smpd
@@ -71,6 +74,7 @@ contains
         l_ntiles = 0
         ! mask memoization
         call img%memoize_mask_coords
+        allocate(tile_xy(2,ncls_here), source=0)
         do icls=1, ncls_here
             if(present(msk)) then
                 if( .not. msk(icls)) cycle
@@ -86,6 +90,7 @@ contains
             end if
             call img_pad%ifft
             call img_jpeg%tile(img_pad, ix, iy)
+            tile_xy(:,icls) = [ix, iy]
             l_ntiles = l_ntiles + 1
             ix = ix + 1
             if(ix > xtiles) then
@@ -94,7 +99,11 @@ contains
             end if
         enddo
         call stkio_r%close()
-        call img_jpeg%write_jpg(string(outfile%to_char() // ".tmp"))
+        if( present(frames) )then
+            call write_framed(string(outfile%to_char() // ".tmp"))
+        else
+            call img_jpeg%write_jpg(string(outfile%to_char() // ".tmp"))
+        endif
         call simple_rename(outfile%to_char()// ".tmp", outfile)
         if(present(scale))  scale  = real(JPEG_DIM) / ldim_stk(1)
         if(present(ntiles)) ntiles = l_ntiles
@@ -103,6 +112,52 @@ contains
         call img%kill()
         call img_pad%kill()
         call img_jpeg%kill()
+
+      contains
+
+        !> the montage in colour, scaled between its extremes as the grey writer does, a frame of FRAME_PX around
+        !! each placed tile whose image has a code
+        subroutine write_framed( fname )
+            use simple_jpg, only: write_rgb_jpeg
+            class(string), intent(in) :: fname
+            integer, parameter :: FRAME_PX = 3
+            real,    parameter :: RGB_RED(3) = [230., 40., 40.] / 255., RGB_ORANGE(3) = [255., 160., 0.] / 255.
+            real, allocatable  :: rmat(:,:,:), rgb(:,:,:)
+            real    :: lo, hi, col(3)
+            integer :: w, h, i, j, k, x0, y0, d
+            if( size(frames) /= ncls_here ) THROW_HARD('one frame code per image; mrc2jpeg_tiled')
+            rmat = img_jpeg%get_rmat()
+            w    = xtiles * JPEG_DIM
+            h    = ytiles * JPEG_DIM
+            lo   = minval(rmat(:w,:h,1))
+            hi   = maxval(rmat(:w,:h,1))
+            allocate(rgb(3,w,h))
+            do j = 1,h
+                do i = 1,w
+                    rgb(:,i,j) = 0.5
+                    if( hi > lo ) rgb(:,i,j) = (rmat(i,j,1) - lo) / (hi - lo)
+                enddo
+            enddo
+            do k = 1,ncls_here
+                if( frames(k) < 1 .or. tile_xy(1,k) < 1 ) cycle
+                col = RGB_RED
+                if( frames(k) == 2 ) col = RGB_ORANGE
+                x0 = (tile_xy(1,k) - 1) * JPEG_DIM
+                y0 = (tile_xy(2,k) - 1) * JPEG_DIM
+                do d = 1,FRAME_PX
+                    do i = x0 + 1,x0 + JPEG_DIM
+                        rgb(:,i,y0 + d)                = col
+                        rgb(:,i,y0 + JPEG_DIM + 1 - d) = col
+                    enddo
+                    do j = y0 + 1,y0 + JPEG_DIM
+                        rgb(:,x0 + d,j)                = col
+                        rgb(:,x0 + JPEG_DIM + 1 - d,j) = col
+                    enddo
+                enddo
+            enddo
+            call write_rgb_jpeg(fname%to_char(), rgb, quality=90)
+        end subroutine write_framed
+
     end subroutine mrc2jpeg_tiled
 
 end module simple_gui_utils

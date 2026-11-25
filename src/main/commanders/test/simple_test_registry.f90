@@ -51,8 +51,8 @@ character(len=48), parameter :: SIMPTCLS_OUT(6) = [character(len=48) :: '*.mrc',
     &'*/*.mrc', '*/*.txt']
 ! particle_sieving_2's result, its labels and the class averages of its rounds (simple_test_exec makes no execution
 ! directory: the program runs in the test's)
-character(len=48), parameter :: SIEVE2_OUT(4) = [character(len=48) :: '*.simple', 'labels_*.txt', &
-    &'round_*/cavgs_iter*.mrc', 'student_by_class.txt']
+character(len=48), parameter :: SIEVE2_OUT(5) = [character(len=48) :: '*.simple', 'labels_*.txt', &
+    &'round_*/cavgs_iter*.mrc', 'student_by_class.txt', 'round_*_cavgs/cavgs_round_particles*.mrc']
 character(len=48), parameter :: ATOMS_OUT(3) = [character(len=48) :: '*.mrc', '*.pdb', '*.csv']
 character(len=48), parameter :: PREPROC_OUT(8) = [character(len=48) :: '*.mrcs', '*.simple', '1_simulate_movies/*.mrc', &
     &'simulation_truth/*.mrc', 'simulation_truth/*.txt', 'stream_preproc/*.simple', 'stream_preproc/motion_correct/*.mrc', &
