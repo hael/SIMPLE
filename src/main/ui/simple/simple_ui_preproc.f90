@@ -411,6 +411,15 @@ contains
         call particle_sieving_2%add_input(UI_MASK, mskdiam, required_override=.true., &
         &help_override='Mask diameter (in A) of every step; 0: the seed solve2D''s estimate', &
         &group="mask", visibility=UI_VIS_STANDARD)
+        ! filter controls
+        call particle_sieving_2%add_input(UI_FILT, 'lpstop', 'num', 'Alignment low-pass limit', 'Finest low-pass limit &
+        &(in A) of the alignment: the seed solve2D''s stages march to it (its final FRC stage is not held) and each &
+        &greedy round''s limit from the class FRCs is held at it{10}', 'low-pass limit in Angstroms{10}', .false., 10., &
+        &group="filter", visibility=UI_VIS_ADVANCED)
+        call particle_sieving_2%add_input(UI_SRCH, 'restore_cavgs', 'binary', 'Restore the class averages at the end', &
+        &'Once the references froze, whether the last greedy round restores the class averages from the carried sums and &
+        &its new particles; the selection is made on the frozen ones either way(yes|no){no}', '', .false., 'no', &
+        &group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         ! computer controls
         call particle_sieving_2%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
         call particle_sieving_2%add_input(UI_COMP, nparts, required_override=.false., group="compute", &

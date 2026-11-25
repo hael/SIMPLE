@@ -121,8 +121,8 @@ contains
     !! (simple_ptcl_sieve2); the work project is the execution directory's copy, written once at the end
     subroutine exec_sieve_ptcls2( self, cline )
         use simple_ptcl_sieve2,  only: ptcl_sieve2, sieve2_settings
-        use simple_defs_sieve2,  only: SIEVE2_NMICS, SIEVE2_NCLS
-        use simple_string_utils, only: list_of_ints2arr
+        use simple_defs_sieve2,  only: SIEVE2_NMICS, SIEVE2_NCLS, SIEVE2_LPSTOP
+        use simple_string_utils, only: list_of_ints2arr, int2str
         class(commander_sieve_ptcls2), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         class(ptcl_sieve2), allocatable :: sieve
@@ -130,20 +130,31 @@ contains
         type(parameters)                :: params
         type(string)                    :: retrain
         integer,            allocatable :: rounds(:)
-        real                            :: mskdiam
+        real                            :: mskdiam, rretrain
         logical                         :: l_parts
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('nmics') ) call cline%set('nmics', SIEVE2_NMICS)
         if( .not. cline%defined('ncls')  ) call cline%set('ncls',  SIEVE2_NCLS)
+        if( .not. cline%defined('lpstop') ) call cline%set('lpstop', SIEVE2_LPSTOP)
+        if( .not. cline%defined('restore_cavgs') ) call cline%set('restore_cavgs', 'no')
         call cline%set('oritype', 'ptcl2D')
         l_parts = cline%defined('nparts')
         if( .not. cline%defined('mskdiam') ) THROW_HARD('mskdiam is required (0: the seed''s solve2D estimates it)')
         ! 0: the seed's solve2D estimates the mask; params%new would replace a zero with a default
         mskdiam = max(0., cline%get_rarg('mskdiam'))
         if( mskdiam < 0.1 ) call cline%delete('mskdiam')
+        if( cline%get_rarg('lpstop') <= 0. ) THROW_HARD('lpstop must be a positive low-pass limit (A)')
         if( cline%defined('retrain') )then
-            ! refused before params%new makes the execution directory; a non-integer entry reads as 0
+            ! refused before params%new makes the execution directory; a non-integer entry of a list reads as 0. A
+            ! single round parses as a number, which a character key does not take: it goes back as its text
             retrain = cline%get_carg('retrain')
+            if( len_trim(retrain%to_char()) == 0 )then
+                rretrain = cline%get_rarg('retrain')
+                if( abs(rretrain - real(nint(rretrain))) > 1.e-6 ) THROW_HARD('retrain: greedy rounds are integers')
+                call cline%delete('retrain')
+                call cline%set('retrain', int2str(nint(rretrain)))
+                retrain = cline%get_carg('retrain')
+            endif
             rounds  = list_of_ints2arr(retrain%to_char())
             if( size(rounds) < 1 ) THROW_HARD('retrain: no greedy round given')
             if( any(rounds < 1) )  THROW_HARD('retrain: greedy rounds are integers from 1, separated by commas')
@@ -152,6 +163,8 @@ contains
         settings%nmics   = params%nmics
         settings%ncls    = params%ncls
         settings%mskdiam = mskdiam
+        settings%lpstop  = params%lpstop
+        settings%final_restore = trim(params%restore_cavgs) == 'yes'
         if( l_parts ) settings%nparts = params%nparts
         if( len_trim(params%retrain) > 0 ) settings%retrain_rounds = list_of_ints2arr(params%retrain)
         allocate(sieve)

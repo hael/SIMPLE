@@ -454,10 +454,14 @@ The run, in its execution directory:
    every step uses the same mask. `mskdiam=0` runs the seed's `solve2D` in its automatic mode, and the later steps
    take the mask it registers with its final class averages. A mask far wider than the particle (the box's) lets
    `solve2D`'s stage 2 leave many classes as ring-shaped rotational averages (decisions 23 and 28 of the plan).
+   `solve2D` takes `lpstop` (10 A by default), the limit its stages march to; its last stage and terminal pass
+   take their limit from the class FRCs, which `refine2D` holds at `lpstop` only in the stream (decision 30).
    Each seed particle is then given `updatecnt` 1.
-2. **Labels.** The class-average CNN (`infile`, `cavg_cnn_class_probs`) scores the current class averages; a
-   class is junk when it is populated, not empty and its `p_junk` exceeds 0.9 (`SIEVE2_JUNK_THRES`,
-   strictly). The run stops when no populated class is left that is not junk.
+2. **Labels, once.** The class-average CNN (`infile`, `cavg_cnn_class_probs`) scores the class averages a single
+   time: after the round that froze the references (step 5), on those averages; without a freeze, after the last
+   round; with no batch at all, on the seed's. A class is junk when it is populated, not empty and its `p_junk`
+   exceeds 0.9 (`SIEVE2_JUNK_THRES`, strictly). The run stops when no populated class is left that is not junk. Until
+   the labelling the run report's accepted and junk columns read - (decision 37).
 3. **Student.** `learn_class_student` on a random sample of at most 10,000 ingested particles (junk classes
    included) against the current class averages: after the seed, on the seed's particles, and again after each
    greedy round listed in `retrain` (comma-separated rounds; none by default) that a batch follows (a listed round
@@ -475,29 +479,52 @@ The run, in its execution directory:
 5. **Greedy rounds.** After every five batches and after the last one: one `refine2D` iteration,
    `refine=greedy`, at the full box (`autoscale=no`), on every ingested particle, junk classes included.
    The first round is a full update; it publishes carried class sums at the full box (`solve2D`'s are at
-   its crop and its final averages at the full box), and every later round takes `update_frac =
-   min(1, 2 * new / ingested)`, the new particles (update count 0) and as many of the lowest update count,
-   blended with the carried sums. Round r is iteration `SIEVE2_ROUND_ITER0 + r - 1` (8 first). Each round
-   is followed by the labels and, when listed in `retrain` and a batch follows, the student. A class a round
+   its crop and its final averages at the full box), and every later round takes `update_frac` for the new
+   particles (update count 0) and a quarter of the earlier ones (`SIEVE2_ROUND_OLD_FRAC`), never fewer earlier ones
+   than new, lowest update count first (shuffled within a count), blended with the carried sums: an earlier particle
+   is searched again about every fourth round. (With as many earlier particles as new, the previous round's batches
+   took that whole share and every particle searched twice was never searched again; decision 31.) A class's
+   blended sums are the sampled particles' plus the carried sums scaled by `(N - n) / M` (N the class's particles
+   ever searched, n those sampled, M what the carried sums held). Round r is iteration `SIEVE2_ROUND_ITER0 + r - 1`
+   (8 first). A round
+   aligns at the limit `refine2D` would take from the class FRCs, never finer than `lpstop` (passed as `lp`, with
+   `solve2D`'s stage keys `stage` and `gold_std_stage` so that the references stay half-specific). Each round
+   is followed, when listed in `retrain` and a batch follows, by the student's training. Each round reports the
+   student's agreement: the share of its new particles the search left in the class the student gave them (all, and
+   split by that class's label when the batch was predicted), beside the share of the earlier particles searched
+   again that kept theirs, the search's own agreement (decisions 32 and 33), and how much the class averages moved:
+   each class's new average against its previous one (the seed's for round 1) inside the mask and up to the round's
+   low-pass limit, weighted by its new population (decision 35). **Freeze:** once two rounds running
+   (`SIEVE2_FREEZE_NROUNDS`) left the averages at a weighted correlation of 0.99 or more (`SIEVE2_FREEZE_CORR`) with the
+   previous ones, every later round searches the new particles only (`update_frac` = new / ingested) and passes
+   `restore_cavgs=no`, so the references and their labels stay; with the key `restore_cavgs=yes` (default no) the last
+   round restores them from the carried sums and its new particles, for the output averages only: the selection is
+   the one made on the frozen references. An earlier particle then keeps its class (decisions 36 to 38). A
+   class a round
    empties stays empty: the first round empties the seed's nearly empty classes (17 to 23 of 100 on betagal) and
    nothing refills them (decision 29).
 6. **Result.** A particle is accepted (state 1 in `ptcl2D` and `ptcl3D`) when it is selected, ingested and
-   its class is not junk by the last labels; junk classes get state 0 in `cls2D` and `cls3D`. The 2D shifts
+   its class is not junk by the labels; junk classes get state 0 in `cls2D` and `cls3D`. The 2D shifts
    go to `ptcl3D` unless it holds a 3D alignment, and the project is written once (a temporary file, renamed).
    It carries no sigma2 store, as `particle_sieving`'s combined result has none; a later program rebuilds it.
 
 Folders and files: `seed/`, `learn_<nn>/` (`nn` the rounds done, `00` after the seed), `batch_<nnn>/`,
 `round_<nn>/`, each with
 its own copy of the work project under the project's own file name (the sigma2 store's layout digest
-includes the project name) and of the current sigma2 store; `labels_seed.txt`, `labels_round_<nn>.txt`
-(class, population, the three probabilities, empty, junk); `particle_sieving_2_report.txt` (step, wall
-time, particles ingested and accepted, junk classes). There is no restart: a rerun needs a fresh folder.
+includes the project name) and of the current sigma2 store; one labels table, `labels_round_<nn>.txt` (`labels_seed.txt` without
+batches) (class, population, the three probabilities, empty, junk); `particle_sieving_2_report.txt` (step, wall
+time, particles ingested and accepted, junk classes and, for a round, the agreement shares in %: new particles,
+those of a class not junk and of a junk class, earlier ones searched again; then the class averages' weighted
+correlation with the previous round's); `student_by_class.txt` (the student's
+agreement by class, ranked by the share kept: class, new particles predicted there, kept, placed there by their first
+round, final population, last `p_junk` and label; decision 34). There is no restart: a rerun needs a fresh folder.
 
 Tests: `test=unit_project suite=particle_sieve2` (the seed and batch cut with the seed's two limits, the
 retraining rounds, the labels, the update fraction, the final states, the halves of the sigma2 seeding, the two
 stops in forked children) and the CTest entry `particle_sieving_2_mini` (the program on 2 000 simulated particles
 in 20 stacks, a micrograph each and no halves, the seed ended by its particle cap before `nmics`, the student
 retrained after round 1 of a list that also names the last round, with the CNN fixture at a threshold frozen
-between its `p_junk` values; among its gates, the training folders, both halves in
+between its `p_junk` values; among its gates, the training folders, no round finer than `lpstop`, the agreement
+shares reported for every round, the table by class (every class once, every new particle once, ranked), both halves in
 every batch, balanced halves and a valid sigma2 record for every particle in the last round's store; its run
 directory is kept for `test=identity`).

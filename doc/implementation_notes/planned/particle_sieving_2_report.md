@@ -101,6 +101,12 @@ Run of [the plan](particle_sieving_2.md), 2026-11-23, interactive, on the develo
 | 5 | 3 | section 15 of `ptcl_sieve_policy.md`; this report; the notes index |
 | decisions 23, 24 | 5 | `mskdiam` captured by the commander before `params%new` (0 dropped: the seed's estimate); `mask_diameter` and the seed's registered mask in the module; its test; the UI help; the policy |
 | decisions 25, 26 | 8 | `SIEVE2_SEED_NPTCLS` and `SIEVE2_NMICS` 100 in `simple_defs_sieve2.f90`; the seed's two limits in `plan_batches` and one training in `run`; `test_plan_seed_cap`; the workflow test's seed ended by a cap of 450 before `nmics` 10; the UI help and default; the policy; the plan; this report |
+| decisions 37, 38 | 8 | one labelling in `run` (at the freeze, else after the last round, or on the seed's averages), the reports without labels (`pct_str`, - columns, the run total over labelled rounds), the log line without empty parts; `restore_cavgs` (default no in the commander, `final_restore` in the settings, the UI input); the workflow test's one-labelling gate and its restoring last round; the policies; the plan; this report |
+| decision 36 | 7 | `SIEVE2_FREEZE_CORR`, `SIEVE2_FREEZE_NROUNDS` and their settings; the freeze count in `run`, the frozen round's new-only fraction and `restore_cavgs=no` in `greedy_round` (`freeze_count`, `newonly_frac`); `test_freeze_rules`; the workflow test's freeze gate (frozen after one round); the policies; the plan; this report |
+| decision 35 | 6 | the class averages' change (`refs_change`, `class_pops`), the column and log line; its test and gate; the policies; the plan; this report |
+| decisions 33, 34 | 9 | the agreement split by the predicted class's label (two columns, the log line, the run total); `student_by_class.txt` (`class_agreement`, `kept_order`); their tests and gate; the table among the identity outputs; the policies; the plan; this report |
+| decisions 31, 32 | 8 | `SIEVE2_ROUND_OLD_FRAC` and the settings' `round_old_frac`; `greedy_frac` with the earlier particles' share; the round's agreement counts (`round_agreement`), the log lines, the run report's two columns and the run total; `test_greedy_frac` rewritten, `test_round_agreement`; the workflow test's agreement gate and reads; the two policies; the plan; this report |
+| decision 30 | 7 | `SIEVE2_LPSTOP`; `lpstop` defaulted and refused (not positive) by the commander, handed to the seed's `solve2D`, and each round's `lp` from the class FRCs held at it (`round_lowpass`) with `stage`/`gold_std_stage`; `test_round_lowpass`; the workflow test's gate on the rounds' limits; the UI input; the two policies; the plan; this report |
 | decisions 27, 28 | 9 | the key `retrain` in `simple_parameters.f90` and `_parse.f90`; the commander (parsed and refused before `params%new`; `mskdiam` required); `retrain_rounds` in the settings, `retrains_after` and the warning for a round no batch follows in the module, the folders `learn_<nn>` again; `test_retrains_after`; the workflow test retrained after round 1 (a training-folder gate); the UI input and `mskdiam` required; the policy; the plan; this report |
 
 ## 3. Decisions taken under delegation
@@ -154,6 +160,15 @@ Run of [the plan](particle_sieving_2.md), 2026-11-23, interactive, on the develo
 | thunder, runs 6 to 8 (decisions 23, 24) | normal stops; masks 174.72, 174 and 140 A (automatic); protein-view shares in section 1 |
 | thunder, runs 9 to 11 (decisions 25, 26; variant builds) | normal stops; 3 918, 1 109 and 4 008 s; section 1 |
 | decisions 25 and 26, this tree | `particle_sieve2` 36 of 36; `particle_sieving_2_mini` 12 of 12 at eight threads (21 s) and twice at one (81 s), the seed ended by its particle cap; identity 14 of 14; `unit_ui`, the checks and the fast gate (15 of 15) pass |
+| decisions 37 and 38, this tree | `particle_sieve2` 57 of 57; `particle_sieving_2_mini` 17 of 17 at eight threads and twice at one (one labelling after round 1; the last round restoring); identity 9 of 9; `unit_ui` 1 042 of 1 042; the fast gate 15 of 15 |
+| decision 36, this tree | `particle_sieve2` 57 of 57; `particle_sieving_2_mini` 17 of 17 at eight threads and twice at one (frozen from round 2); identity 12 of 12; the fast gate 15 of 15 |
+| decision 35, this tree | `particle_sieve2` 51 of 51; `particle_sieving_2_mini` 16 of 16 at eight threads and twice at one; identity 15 of 15; the fast gate 15 of 15 |
+| decisions 33 and 34, this tree | `particle_sieve2` 50 of 50; `particle_sieving_2_mini` 16 of 16 at eight threads and twice at one; identity 15 of 15; the fast gate 15 of 15 |
+| decisions 31 and 32, this tree | `particle_sieve2` 44 of 44; `particle_sieving_2_mini` 15 of 15 at eight threads and twice at one, the agreement reported for every round; identity 14 of 14; `check_cli_chain.py` and the fast gate (15 of 15) pass; `retrain` with a single round fixed and checked by hand |
+| thunder, runs 12 and 13 (this tree, batches of 1 000) | normal stops; 510 and 544 s; every round at 10 A; the student 58 % in all; retraining after round 5 about +3 points in the next two rounds |
+| thunder, run 14 (a variant: a greedy round on the seed before the training) | normal stop, 502 s; the student 57.4 % against 58.1 %: not taken |
+| thunder, runs 15 and 16 (variants: the freeze, then with new-only rounds) | normal stops, 520 and 483 s; frozen from round 5; 16 and 5 labels changed at the end; run 16's behaviour taken as decision 36 |
+| decision 30, this tree | `particle_sieve2` 38 of 38; `particle_sieving_2_mini` 14 of 14 at eight threads and twice at one, the rounds at 10 A (6.4 to 5.7 A from the FRCs before), the seed's e/o stage at 6.4 A as ruled; identity 14 of 14; `unit_ui`, `check_cli_chain.py` and the fast gate (15 of 15) pass |
 | decisions 27 and 28, this tree | `particle_sieve2` 39 of 39; `particle_sieving_2_mini` 13 of 13 at eight threads (27 s) and twice at one (82 s), retrained after round 1, the last round of the list ignored; identity 14 of 14; `unit_ui`, `unit_core suite=parameters` 66 of 66, `check_cli_chain.py` and the fast gate (15 of 15) pass; the refusals of a missing `mskdiam` and a bad `retrain` checked by hand |
 
 ## 6. Left open for the maintainer
@@ -196,7 +211,9 @@ update, the later ones blended with the carried class sums), each followed by th
 labels and, after the rounds the new key retrain lists, the student's retraining.
 Particles of junk classes are deselected at the end; the result carries no sigma2
 store. mskdiam is required and taken by every step (0: the seed's solve2D estimates
-it). The program makes the even/odd halves of every selected particle
+it). lpstop (10 A by default) holds the alignment: the seed's solve2D marches to it
+and each round's limit from the class FRCs is held at it. The program makes the
+even/odd halves of every selected particle
 before the seed (left to the seed's solve2D, every batch particle fell into one half)
 and seeds the batch particles' sigma2 records from the store's global curves
 (sigma2_state_extend). cavg_cnn_class_probs extracted from cavg_cnn_predict (its table

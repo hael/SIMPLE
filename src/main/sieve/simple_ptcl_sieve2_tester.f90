@@ -1,4 +1,4 @@
-!@descr: unit tests of particle_sieving_2's rules: the seed and batch cut with the seed's two limits, the retraining rounds, the junk labels, the greedy update fraction, the final states and the two stops
+!@descr: unit tests of particle_sieving_2's rules: the seed and batch cut with the seed's two limits, the retraining rounds, the junk labels, the rounds' low-pass limit and agreement, the student's table by class, the freeze, the greedy update fraction, the final states and the two stops
 submodule (simple_ptcl_sieve2) simple_ptcl_sieve2_tester
 use simple_test_utils,     only: assert_true, assert_false, assert_int, assert_real
 use simple_cmdline,        only: cmdline
@@ -29,6 +29,12 @@ contains
         call test_retrains_after()
         call test_class_labels()
         call test_greedy_frac()
+        call test_round_lowpass()
+        call test_round_agreement()
+        call test_class_agreement()
+        call test_kept_order()
+        call test_class_pops()
+        call test_freeze_rules()
         call test_final_states()
         call test_both_halves()
         call test_classes_left_stop()
@@ -131,17 +137,114 @@ contains
         deallocate(sieve)
     end subroutine test_class_labels
 
-    !> the new particles and as many earlier ones, at most every particle
+    !> the new particles and old_frac of the earlier ones, at least as many earlier as new, at most every particle;
+    !! old_frac 0 is twice the new particles
     subroutine test_greedy_frac()
         class(ptcl_sieve2), allocatable :: sieve
         write(*,'(A)') 'test_greedy_frac'
         allocate(sieve)
-        call assert_real(0.2,  sieve%greedy_frac(100, 1000), 1.e-6, 'twice the new particles over the ingested')
-        call assert_real(1.0,  sieve%greedy_frac(600, 1000), 1.e-6, 'at most every particle')
-        call assert_real(1.0,  sieve%greedy_frac(500, 1000), 1.e-6, 'half new: every particle')
-        call assert_real(1.0,  sieve%greedy_frac(0, 0),      1.e-6, 'no particle: a full update')
+        call assert_real(0.325, sieve%greedy_frac(100, 1000, 0.25), 1.e-6, 'the new and a quarter of the 900 earlier')
+        call assert_real(0.6,   sieve%greedy_frac(300, 1000, 0.25), 1.e-6, 'never fewer earlier particles than new')
+        call assert_real(0.2,   sieve%greedy_frac(100, 1000, 0.),   1.e-6, 'old_frac 0: twice the new particles')
+        call assert_real(1.0,   sieve%greedy_frac(100, 1000, 1.),   1.e-6, 'old_frac 1: every particle')
+        call assert_real(1.0,   sieve%greedy_frac(600, 1000, 0.25), 1.e-6, 'at most every particle')
+        call assert_real(1.0,   sieve%greedy_frac(0, 0, 0.25),      1.e-6, 'no particle: a full update')
         deallocate(sieve)
     end subroutine test_greedy_frac
+
+    !> a round's low-pass limit is the class FRCs' estimate, held at lpstop when the FRCs reach finer
+    subroutine test_round_lowpass()
+        class(ptcl_sieve2), allocatable :: sieve
+        write(*,'(A)') 'test_round_lowpass'
+        allocate(sieve)
+        call assert_real(10., sieve%round_lowpass(6.4, 10.),  1.e-6, 'FRCs finer than lpstop: held at lpstop')
+        call assert_real(14., sieve%round_lowpass(14., 10.),  1.e-6, 'FRCs coarser than lpstop: the FRCs'' limit')
+        deallocate(sieve)
+    end subroutine test_round_lowpass
+
+    !> the round's agreement: new particles (no update before) that kept their class, also among those whose class was
+    !! junk, earlier ones searched again that kept theirs; particles the round did not search and inactive ones count
+    !! in neither
+    subroutine test_round_agreement()
+        class(ptcl_sieve2), allocatable :: sieve
+        logical, parameter :: ACTIVE(7) = [.true., .true., .true., .true., .true., .true., .false.]
+        integer, parameter :: CLS0(7)   = [3, 4, 5, 6, 7, 8, 9]
+        integer, parameter :: CLS1(7)   = [3, 1, 5, 2, 7, 8, 1]
+        integer, parameter :: CNT0(7)   = [0, 0, 1, 1, 2, 1, 0]
+        integer, parameter :: CNT1(7)   = [1, 1, 2, 2, 2, 1, 1]
+        logical, parameter :: BAD(9)    = [.false., .false., .false., .true., .false., .false., .false., .false., .true.]
+        integer :: nnew, nnew_kept, njunk, njunk_kept, nold, nold_kept
+        write(*,'(A)') 'test_round_agreement'
+        allocate(sieve)
+        call sieve%round_agreement(ACTIVE, CLS0, CLS1, CNT0, CNT1, BAD, nnew, nnew_kept, njunk, njunk_kept, nold, &
+            &nold_kept)
+        call assert_int(2, nnew,       'two new particles searched (the inactive one not counted)')
+        call assert_int(1, nnew_kept,  'one of them kept the student''s class')
+        call assert_int(1, njunk,      'one of them came with a junk class (the inactive one in class 9 not counted)')
+        call assert_int(0, njunk_kept, 'and left it')
+        call assert_int(2, nold,      'two earlier particles searched again (the unsearched ones not counted)')
+        call assert_int(1, nold_kept, 'one of them kept its class')
+        deallocate(sieve)
+    end subroutine test_round_agreement
+
+    !> the class counts: a new particle searched counts in its predicted class (kept when the round left it there) and
+    !! in the class the round put it in; an earlier, an unsearched and an inactive particle in none
+    subroutine test_class_agreement()
+        class(ptcl_sieve2), allocatable :: sieve
+        logical, parameter :: ACTIVE(5) = [.true., .true., .true., .true., .false.]
+        integer, parameter :: CLS0(5)   = [2, 2, 3, 1, 2]
+        integer, parameter :: CLS1(5)   = [2, 3, 3, 3, 2]
+        integer, parameter :: CNT0(5)   = [0, 0, 1, 0, 0]
+        integer, parameter :: CNT1(5)   = [1, 1, 2, 0, 1]
+        integer :: npred(3), nkept(3), ninto(3)
+        write(*,'(A)') 'test_class_agreement'
+        allocate(sieve)
+        npred = 0
+        nkept = 0
+        ninto = 0
+        call sieve%class_agreement(ACTIVE, CLS0, CLS1, CNT0, CNT1, npred, nkept, ninto)
+        call assert_true(all(npred == [0, 2, 0]), 'two new particles predicted into class 2 count')
+        call assert_true(all(nkept == [0, 1, 0]), 'one of them kept')
+        call assert_true(all(ninto == [0, 1, 1]), 'one placed in class 2, one in class 3')
+        deallocate(sieve)
+    end subroutine test_class_agreement
+
+    !> the classes by the share kept, best first, ties in class order, those without a prediction last
+    subroutine test_kept_order()
+        class(ptcl_sieve2), allocatable :: sieve
+        integer, allocatable :: order(:)
+        write(*,'(A)') 'test_kept_order'
+        allocate(sieve)
+        order = sieve%kept_order([4, 0, 10, 2, 8], [1, 0, 9, 1, 4])
+        call assert_true(all(order == [3, 4, 5, 1, 2]), '90 %, 50 % before 50 % in class order, 25 %, none last')
+        deallocate(sieve)
+    end subroutine test_kept_order
+
+    !> the populations count the masked rows by class; classes outside 1..ncls count in none
+    subroutine test_class_pops()
+        class(ptcl_sieve2), allocatable :: sieve
+        integer, allocatable :: pops(:)
+        write(*,'(A)') 'test_class_pops'
+        allocate(sieve)
+        call sieve%class_pops([.true., .true., .false., .true., .true.], [2, 2, 1, 0, 3], 3, pops)
+        call assert_true(all(pops == [0, 2, 1]), 'two in class 2, one in class 3, the masked and the unclassified not')
+        deallocate(sieve)
+    end subroutine test_class_pops
+
+    !> the freeze: rounds at the threshold or above count up, one below starts again; a frozen round's fraction is the
+    !! new particles over the ingested ones
+    subroutine test_freeze_rules()
+        class(ptcl_sieve2), allocatable :: sieve
+        write(*,'(A)') 'test_freeze_rules'
+        allocate(sieve)
+        call assert_int(1, sieve%freeze_count(0, 0.995, 0.99), 'a round at the threshold or above counts')
+        call assert_int(2, sieve%freeze_count(1, 0.99,  0.99), 'the threshold itself counts')
+        call assert_int(0, sieve%freeze_count(2, 0.985, 0.99), 'a round below starts the count again')
+        call assert_int(0, sieve%freeze_count(0, 1.,    1.01), 'a threshold above 1 never counts')
+        call assert_real(0.25, sieve%newonly_frac(250, 1000), 1.e-6, 'the new particles over the ingested')
+        call assert_real(1.,   sieve%newonly_frac(0, 0),      1.e-6, 'no particle: a full update')
+        deallocate(sieve)
+    end subroutine test_freeze_rules
 
     !> accepted: selected, ingested and of a class that is not junk; a particle without a class is rejected
     subroutine test_final_states()

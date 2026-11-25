@@ -1,7 +1,7 @@
 # particle_sieving_2: a seed solve2D, the class-average CNN's labels and the class student for the rest
 
-Status, 2026-11-24: delivered, uncommitted, for review (decisions 25 to 29 added 2026-11-24; the key `retrain` of
-decision 27 approved by Joe the same day); report
+Status, 2026-11-25: delivered, uncommitted, for review (decisions 25 to 29 added 2026-11-24, 30 to 38 on 2026-11-25;
+the key `retrain` of decision 27 approved by Joe on 2026-11-24); report
 [particle_sieving_2_report.md](particle_sieving_2_report.md). Base: `638d99ae3` (the working tree also holds
 untracked scripts under `scripts/`, which this plan does not touch). Supersedes: none. Owner: Joe. Depends on:
 - the class student (hhcnn) and its programs `learn_class_student` and `predict_classes`
@@ -65,7 +65,7 @@ All dated 2026-11-23. 1 to 14 are Joe's; the request gave 1 to 6, the questions 
    state, 0 when its class's last label is bad.
 9. **The class averages are rebuilt only by the greedy rounds.** Between rounds the batches are predicted against
    the averages and the model of the last round.
-10. **The earlier particles of a greedy round are those of lowest `updatecnt`**, by the existing
+10. (Its share replaced by decision 31.) **The earlier particles of a greedy round are those of lowest `updatecnt`**, by the existing
     `sample4update_cnt` through `update_frac = min(1, 2 * n_new / n_active)`, where `n_new` is the number of
     particles added since the last round and `n_active` all ingested particles. The new particles have
     `updatecnt` 0 and fill the first tier; the lowest remaining tiers give the other half. No new bookkeeping
@@ -159,7 +159,8 @@ All dated 2026-11-23. 1 to 14 are Joe's; the request gave 1 to 6, the questions 
     26's one training). After each listed round, once its labels are written and while batches remain, the student
     is trained on a random sample of at most 10,000 ingested particles against the round's class averages
     (`learn_<rr>/`); a listed round no batch follows is ignored with a warning, and an entry below 1 (or not an
-    integer, which reads as 0) stops the commander before `params%new`. A new key against decision 13: a
+    integer, which reads as 0) stops the commander before `params%new`; a single round, which the command line
+    reads as a number, is written back as its text (fixed 2026-11-25). A new key against decision 13: a
     `character(len=STDLEN)` field like `clustinds`, parsed with `list_of_ints2arr`.
 28. (2026-11-24, Joe) **`mskdiam` is required.** Replaces decision 2's box default on the command line: under the
     box's mask (283 A on betagal) the seed's `solve2D` left about two thirds of its classes as rings (decision 23).
@@ -171,6 +172,67 @@ All dated 2026-11-23. 1 to 14 are Joe's; the request gave 1 to 6, the questions 
     classes against 47.6 to 53.5 %); classes the first round empties stay empty (17 to 23 of 100 on betagal; the
     policy says so); every step keeps its copies of the project and the sigma2 store. **Decision 19 confirmed:** the
     miniature stays a CTest entry of its own (budget 46).
+30. (2026-11-25, Joe) **The alignment is held at `lpstop`, 10 A by default** (an existing key, so no new parameter;
+    `SIEVE2_LPSTOP`). The seed's `solve2D` takes it as the limit its stages march to (15, 12.5, 11.25, 10.6, 10 A at
+    `mskdiam=180`), and keeps its e/o stage (`eo_stage=yes`, Joe's choice over dropping it): that last stage and the
+    terminal pass take their limit from the class FRCs, which `refine2D` holds at `lpstop` only in the stream, so the
+    seed can end finer than 10 A (run 10 without the limit: 7.9 to 8.6 A). Each greedy round passes `lp = max(the
+    class FRCs' estimate, lpstop)`, the estimate `refine2D` itself takes (`estimate_lp_for_align`), with `stage=1
+    gold_std_stage=1`: with `lp` set, a standalone `refine2D` would align against merged references, and these are
+    `solve2D`'s keys for half-specific ones (in 2D they decide nothing else). The student already works at 15 A.
+    Without the limit, run 10's rounds aligned at 7.9 A (round 1) to 5.9 A (round 8). Not taken: `refine2D`
+    honouring `lpstop` as a cap outside the stream, which would change the existing sieve's chunks, the stream's
+    initial analysis, validation and `solve2D_chunks`, which pass `lpstop` to `solve2D`.
+31. (2026-11-25, Joe) **A round searches the new particles and a quarter of the earlier ones**, never fewer earlier
+    ones than new (`update_frac = min(1, (n_new + max(n_new, 0.25 n_old)) / n_active)`, `SIEVE2_ROUND_OLD_FRAC`),
+    lowest update count first. Replaces decision 10's "as many earlier particles as new": the previous round's
+    batches (count 1) filled that share every round, so a particle was searched twice and never again; run 10 ended
+    with 47 026 of 53 050 particles at count 2, the seed's 10 083 searched once after `solve2D` (289 twice). The
+    share must grow with the set: a fixed multiple of the new particles moves the pile up a count (count 2 held at
+    2x count 1: 39 994 at count 3 after run 10's eight rounds), and holding every count at 2x the one below makes
+    some rounds near-full updates (lowest count first). On run 10's schedule the rule searches 111 474 particles in
+    the rounds against 90 571 (about 230 s against 186 s), and an earlier particle comes up about every fourth round.
+32. (2026-11-25, Joe) **Each round reports the student's agreement:** of its new particles (no update before the
+    round), how many the exhaustive search left in the class `predict_classes` gave them, and, as the baseline, of
+    the earlier particles it searched again how many kept theirs (the search's own agreement). In the log, as two
+    columns of the run report (`new_kept_pct`, `searched_kept_pct`) and as a run total. Run 9's offline analysis
+    found 42 to 62 % for the new particles and 82 to 92 % for the earlier ones searched again.
+33. (2026-11-25, Joe) **The round's agreement is split by the predicted class's label** when the batch was predicted
+    (the labels the round's own replace next): two more columns of the run report (`new_nonjunk_kept_pct`,
+    `new_junk_kept_pct`), the log line and the run total. In run 12 (offline) the student kept 66.3 % of the
+    particles it put in classes not junk and 30.7 % of those in junk ones (73.2 % in the protein-view classes, 18.5 %
+    in classes under 100 particles); 16 % of the new particles changed between junk and not junk, so the selection
+    agrees about 84 % where the class agrees 58 %.
+34. (2026-11-25, Joe) **`student_by_class.txt`, written with the result:** each class's new particles predicted
+    there, kept by their first round, placed there by it, its final population and last `p_junk` and label, ranked
+    by the share kept (classes without a prediction last; `scores2order_stable`). Run 12 (offline): the protein-view
+    classes and sharply featured junk (comets, carbon edges) keep 70 to 96 %; diffuse junk classes are over- and
+    under-filled by the student (class 38: 3 505 predicted, 978 placed) and keep 5 to 30 %.
+35. (2026-11-25, Joe) **Each round reports how much the class averages moved:** each class populated before and
+    after the round, its new average against its previous one (the seed's for round 1) inside the mask and up to the
+    round's low-pass limit (`image%corr` with `lp_dyn`), weighted by its new population; a column of the run report
+    (`ref_corr`) and a log line. Run 12 (offline, the same measure in numpy): 0.935, 0.974, 0.990, 0.994, 0.993,
+    0.993, 0.997 and 0.996 over the eight rounds, while the search kept 86 to 90 % of the earlier particles from
+    round 3 on: a candidate signal for when the references may stop changing (run 15 tests a freeze).
+36. (2026-11-25, Joe) **The references freeze once they stop moving:** after two rounds running at a weighted
+    class-average correlation of 0.99 or more (decision 35's column; `SIEVE2_FREEZE_CORR`, `SIEVE2_FREEZE_NROUNDS`,
+    settings, not keys), every later round searches the new particles only and keeps the references
+    (`restore_cavgs=no`); the last round, also new particles only, restores them, and the final labels follow. Tried
+    on thunder as variants: run 15 (frozen rounds with the usual sample) changed 16 labels at the end and saved
+    nothing; run 16 (new particles only) took 95 s for the rounds against 114 s (run 12) and changed 5 labels at the
+    end; its selection 39 202 (53.4 % in protein-view classes; the most probable group 71.5 %). After the freeze an
+    earlier particle keeps its class (the search had kept 86 to 90 % of re-searched particles before). The last
+    round's blend scales the sums carried from the freeze to the particles assigned since, which were not summed.
+37. (2026-11-25, Joe) **The class-average CNN labels once, on the frozen references:** after the round that froze
+    them (decision 36), else after the last round, or on the seed's averages without batches. The labels before it
+    only fed the reports and flipped with classes near p_junk 0.9 (run 15's final relabelling changed 16 classes);
+    the run report's accepted and junk columns and the agreement's junk split read - until then, and the run total
+    splits over the labelled rounds only. A frozen round's log line drops the earlier particles' share (none
+    searched).
+38. (2026-11-25, Joe) **The final restoration is optional, off by default:** `restore_cavgs` (an existing key;
+    `particle_sieving_2` defaults it to no). With yes a frozen last round restores the class averages from the
+    carried sums and its new particles, for the output only; the selection stays the frozen references' (decision 37).
+    Without a freeze the last round restores as every round does.
 
 Defaults taken without a question (veto cheaply):
 
@@ -475,4 +537,109 @@ commits pulled after the base; none touches this plan's files).
 - Then, on Joe's word: `simple_ptcl_sieve2` named among the controllers that import commander modules (layering
   policy, sections 3 and 8); a row for `particle_sieving_2_mini` in `test_environment_policy.md`; the paragraph
   on `particle_sieving_2` added to the `simple-main-sieve` guide.
+
+**Decision 30, 2026-11-25**, development machine. Files: `simple_defs_sieve2.f90` (`SIEVE2_LPSTOP`), the module
+(`lpstop` to the seed's `solve2D`; each round's `lp` from the class FRCs held at it, `round_lowpass`, with `stage` and
+`gold_std_stage`), its tester, the commander (`lpstop` defaulted and refused when not positive), the workflow test
+(a gate on the rounds' limits), the UI input, section 15 of the sieve policy, the test policy's row, this plan and
+the report.
+- Exit: `particle_sieve2` 38 of 38 (`test_round_lowpass` new); `particle_sieving_2_mini` 14 of 14 gates at eight
+  threads and twice at one (1 230 of 2 000 accepted at one thread), `test=identity` 14 of 14; `unit_ui` 1 042 of
+  1 042; `check_cli_chain.py`; the fast gate 15 of 15.
+- The miniature's limits: the seed's stages 16.5, 13.25, 11.6, 10.8 and 10 A, its e/o stage and terminal pass
+  6.4 A (from the class FRCs, not held, as ruled); the three rounds 10 A, where the class FRCs gave 6.4, 5.7 and
+  5.9 A before. The new gate fails without the hold.
+
+**Decisions 31 and 32, 2026-11-25**, development machine, then thunder. Files: `simple_defs_sieve2.f90`
+(`SIEVE2_ROUND_OLD_FRAC`), the module (`greedy_frac` with the earlier particles' share, `round_agreement`, the log lines,
+the run report's two columns, the run total), its tester, the workflow test (an agreement gate and reads), the two
+policies, this plan and the report; and the commander (`retrain` with a single round).
+- Exit: `particle_sieve2` 44 of 44 (`test_greedy_frac` rewritten, `test_round_agreement` new);
+  `particle_sieving_2_mini` 15 of 15 gates at eight threads and twice at one (1 227 of 2 000 accepted at one thread;
+  the student kept 80.8, 77.0 and 82.3 % of the rounds' new particles, the search 100, 96.7 and 95.3 % of the
+  earlier ones it searched again), `test=identity` 14 of 14; `check_cli_chain.py`; the fast gate 15 of 15.
+- Found by run 13's first start: `retrain=5` stopped with "no greedy round given". A command-line value that reads
+  as a number is stored as a real, which a character key does not take (`get_carg` and `add_char` see nothing);
+  `retrain=2,5` stays text and worked, and the checks by hand had tried only lists. The commander now writes a single
+  round back as its text before `params%new` and refuses a non-integer one. Checked by hand: `5` and `2,5` pass the
+  refusals; `5.5`, `0`, `a` and `,` are refused.
+- thunder (`~/Code/SIMPLE_ps2_b1000`, this tree with batches of 1 000; mask 180 A, 64 threads, the defaults
+  otherwise), `run12_b1000_lp10_old025`: normal stop in 510 s (seed 266 s, training 41 s, batches 78 s, rounds 114 s,
+  every round at 10 A); 42 104 accepted (47.8 % in protein-view classes; the most probable group 30 254, 66.5 %), no
+  protein-view particle rejected, 17 classes empty; the student kept 48.3, 65.3, 60.7, 56.5, 61.6, 60.7, 60.3 and
+  49.1 % of the rounds' new particles (58.1 % in all), the search 80 to 90 % of the earlier ones it searched again;
+  update counts at the end 4 352 at 1, 28 885 at 2, 19 813 at 3, as simulated. Run 10 (the same seed rule, one
+  training, no limit, as many earlier particles as new): 1 109 s, training 504 s (training time varies with the
+  epochs it stops after), 42 918 accepted (47.6 %, 63.3 %); the accepted sets' Jaccard 0.73.
+- `run13_b1000_lp10_old025_retrain5` (run 12 with `retrain=5`): 544 s (the second training 43 s); the student kept
+  48.0, 64.2, 59.0, 56.3 and 61.2 % before the retraining (0.7 points below run 12 on average) and 63.6, 62.6 and
+  48.9 % after it (2.9, 2.3 and -0.2 points above); 39 081 accepted, Jaccard 0.71 with run 12, which follows the
+  unseeded runs' spread.
+- Tried and not taken (Joe, 2026-11-25): a greedy round on the seed straight after its `solve2D`, before the
+  student's training (`run14_b1000_lp10_old025_seedround`, a variant build with a switch, not this tree; no
+  retraining). The round kept 86.4 % of the seed's particles in their `solve2D` class and made the first batch round
+  fractional (0.70). The student, trained on the greedy classes, kept 57.4 % of the new particles in all against run
+  12's 58.1 % (44.7 against 48.3 % in the first batch round, within 1.4 points after); 47 474 accepted (43.5 % in
+  protein-view classes; the most probable group 32 615, 63.3 %) with 21 junk classes against run 12's 31, the
+  accepted sets' Jaccard 0.77, the unseeded runs' spread. 502 s.
+
+**Decisions 33 and 34, 2026-11-25**, development machine. Files: `simple_defs_sieve2.f90` (`SIEVE2_STUDENT_TABLE`), the
+module (the split counts, `class_agreement`, `kept_order`, the last `p_junk` kept, the table written with the
+result), its tester, the workflow test (the table's gate and reads), the registry (the table among the miniature's
+identity outputs), the two policies, this plan and the report.
+- Exit: `particle_sieve2` 50 of 50 (`test_class_agreement`, `test_kept_order` new; `test_round_agreement` with the
+  split); `particle_sieving_2_mini` 16 of 16 gates at eight threads and twice at one, its table byte-identical between
+  the one-thread runs; `test=identity` 15 of 15 (the table added); the fast gate 15 of 15; the four checks.
+- The first workflow run caught a defect in the table's format (one integer too many before the kept share): the
+  program stopped writing it after the header. The identity check passed regardless, both runs having stopped alike;
+  the new gate fails on it.
+
+**Decision 35, 2026-11-25**, development machine. Files: the module (`refs_change`, `class_pops`, the box and pixel
+size kept, the column and the log line; the table's populations through `class_pops`), its tester
+(`test_class_pops`), the workflow test (the column read and gated, reported), the two policies, this plan and the
+report.
+- Exit: `particle_sieve2` 51 of 51; `particle_sieving_2_mini` 16 of 16 gates at eight threads and twice at one (its
+  classes barely move: 0.9988, 0.9996 and 0.9998), `test=identity` 15 of 15; the fast gate 15 of 15; the four checks.
+- thunder, a freeze test (`run15_b1000_lp10_old025_freeze099`, a variant build with a switch, not this tree): once two
+  rounds reach a weighted correlation of 0.99, the rounds search with `restore_cavgs=no` (the references and labels
+  kept), and the last round restores. Rounds 3 and 4 reached 0.9946 and 0.9964, so rounds 5 to 7 kept the references:
+  their labels stayed the set of round 4 (39 junk classes) and the student kept 62.8, 62.5 and 63.5 % (run 12: 61.6,
+  60.7, 60.3). The last round's restoration moved the averages little (0.9970 against the frozen ones), but its
+  labels changed 16 classes (10 out of junk, 6 in) and the accepted particles rose from 41 672 to 46 171: the labels
+  flip near p_junk 0.9, not with the averages. 520 s (no saving: the greedy search dominates the rounds). 46 171
+  accepted (42.9 % in protein-view classes; the most probable group 25 858, 76.6 %), Jaccard 0.76 with run 12.
+- thunder, `run16_b1000_lp10_old025_freeze099_newonly` (run 15's freeze; once frozen a round searches the new particles
+  only, `update_frac = new / ingested`, the last round too, which still restores): frozen from round 5 (rounds 3 and 4
+  at 0.9952 and 0.9962); the frozen rounds took 8.0 to 9.4 s (run 15: 15.1 to 17.8 s), all rounds 95 s (run 12 114 s,
+  run 15 137 s), 483 s in all. The last round's restoration moved the averages by 0.9990 and its labels changed 5
+  classes (run 15: 16), the accepted particles 39 338 to 39 202. The student kept 60.9, 61.4 and 62.1 % in the frozen
+  rounds, 58.2 % in all. 39 202 accepted (53.4 % in protein-view classes; the most probable group 29 291, 71.5 %), no
+  protein-view particle rejected; Jaccard 0.71 with run 12, 0.74 with run 15.
+
+**Decision 36, 2026-11-25**, development machine. Files: `simple_defs_sieve2.f90` (`SIEVE2_FREEZE_CORR`,
+`SIEVE2_FREEZE_NROUNDS`), the module (the settings, the count in `run`, `greedy_round(l_frozen, l_last, refcorr)`,
+`freeze_count`, `newonly_frac`), its tester (`test_freeze_rules`), the workflow test (frozen after one round, a gate
+built from the report's own changes), the two policies, this plan and the report.
+- Exit: `particle_sieve2` 57 of 57; `particle_sieving_2_mini` 17 of 17 gates at eight threads and twice at one: round 1
+  at 0.9988, round 2 frozen (its 600 new particles only, the references kept, change 1.0000), round 3 frozen and
+  last (300 new, restored, 0.9999); `test=identity` 12 of 12 (the frozen round writes no class averages, three
+  declared outputs fewer); the fast gate 15 of 15; the four checks. Not run on thunder from this tree: run 16 took
+  the same path through its variant (thunder's variant tree still holds the switches of runs 15 and 16).
+
+**Decisions 37 and 38, 2026-11-25**, development machine. Files: the module (one labelling in `run`, `pct_str`, the
+reports without labels, the log line without empty parts, `final_restore`), the commander (`restore_cavgs` defaulted to
+no), the UI input, the workflow test (the one-labelling gate, the last round restoring), the two policies, this plan
+and the report.
+- Exit: `particle_sieve2` 57 of 57; `particle_sieving_2_mini` 17 of 17 gates at eight threads and twice at one: one
+  labels table, `labels_round_01.txt`, after round 1 froze the references (4 of 9 classes junk, the frozen threshold
+  still between the miniature's values), round 2 frozen keeping the references, round 3 frozen restoring them;
+  `test=identity` 9 of 9 (three labels tables fewer); `unit_ui` 1 042 of 1 042; the four checks; the fast gate 15 of
+  15.
+- thunder, `run17_b1000_freeze_label_once` (this tree as of decisions 37 and 38, batches of 1 000, mask 180 A, 64
+  threads, the defaults otherwise): normal stop in 492 s (seed 274 s, training 25 s, batches 82 s, rounds 109 s).
+  Rounds 3 and 4 at 0.9959 and 0.9974; the one labelling on round 4's averages (37 of 82 populated classes junk);
+  rounds 5 to 8 frozen, the new particles only, the references kept (the last too, `restore_cavgs=no`: the result's
+  class averages are round 4's), 8.2 to 13.6 s each. The student kept 57.9 % in all (in the labelled rounds 63.7 %
+  for classes not junk, 37.8 % for junk ones). 38 028 accepted (54.6 % in protein-view classes; the most probable
+  group 28 499, 72.9 %), no protein-view particle rejected; Jaccard 0.69 with run 12, 0.71 with run 16.
 
