@@ -63,6 +63,13 @@ contains
         call simple_touch(string('other.simple'))
         call resolve_project_files(string('.'), previous, next_dir, projects)
         if( allocated(projects) ) call assert_int(2,size(projects), 'project discovery: ambiguity is retained for the caller')
+        call simple_mkdir(string('99notes'))
+        call simple_touch(string('99notes/ignored.simple'))
+        call resolve_project_files(string('.'), previous, next_dir, projects)
+        call assert_int(1,next_dir, 'project discovery: a numeric prefix without an underscore does not reserve a run number')
+        call assert_false(previous%is_allocated(), 'project discovery: a non-run child is not a previous run')
+        call assert_true(allocated(projects), 'project discovery: non-run children leave current projects discoverable')
+        if( allocated(projects) ) call assert_int(2,size(projects), 'project discovery: a non-run child does not hide current projects')
         call simple_mkdir(string('1_refine'))
         call simple_touch(string('1_refine/latest.simple'))
         call resolve_project_files(string('.'), previous, next_dir, projects)
@@ -546,20 +553,37 @@ contains
     !---------------- find_next_int_dir_prefix ----------------
 
     subroutine test_find_next_int_dir_prefix()
-        type(string) :: base, d1, d2, last
-        integer      :: next
+        character(len=12), parameter :: rejected(5) = &
+            &[character(len=12) :: '99run', '100', '101_', '102run_more', '_103']
+        type(string) :: saved, fixture, d1, d2, last
+        integer      :: next, i, nfail0
         write(*,'(A)') 'test_find_next_int_dir_prefix'
-        base = '.'
-        d1 = '1run'
-        d2 = '3run'
+        nfail0 = tests_failed
+        call enter_fixture('int_dir_prefix', saved, fixture)
+        next = find_next_int_dir_prefix(string('.'), last_prev_dir=last)
+        call assert_int(1, next, 'find_next_int_dir_prefix: an empty directory starts at 1')
+        call assert_false(last%is_allocated(), 'find_next_int_dir_prefix: an empty directory has no previous run')
+        do i=1,size(rejected)
+            call simple_mkdir(string(trim(rejected(i))), verbose=.false.)
+        enddo
+        next = find_next_int_dir_prefix(string('.'), last_prev_dir=last)
+        call assert_int(1, next, 'find_next_int_dir_prefix: names outside <digits>_<name> do not reserve run numbers')
+        call assert_false(last%is_allocated(), 'find_next_int_dir_prefix: non-run directories are not previous runs')
+        d1 = '1_refine'
+        d2 = '12_selection'
         call simple_mkdir(d1, verbose=.false.)
         call simple_mkdir(d2, verbose=.false.)
-        next = find_next_int_dir_prefix(base, last_prev_dir=last)
-        call assert_int(4, next, 'find_next_int_dir_prefix: returns max+1 (3+1=4)')
-        call assert_true(last%to_char() == d2%to_char() .or. last%to_char() == d1%to_char(), &
-            'find_next_int_dir_prefix: last_prev_dir is one of the integer dirs')
-        call simple_rmdir(d1)
+        next = find_next_int_dir_prefix(string('.'), last_prev_dir=last)
+        call assert_int(13, next, 'find_next_int_dir_prefix: the highest valid run number determines the next')
+        call assert_char(d2%to_char(), last%to_char(), 'find_next_int_dir_prefix: the highest-numbered run is returned')
         call simple_rmdir(d2)
+        next = find_next_int_dir_prefix(string('.'))
+        call assert_int(2, next, 'find_next_int_dir_prefix: the previous-run output is optional')
+        call simple_rmdir(d1)
+        next = find_next_int_dir_prefix(string('.'), last_prev_dir=last)
+        call assert_int(1, next, 'find_next_int_dir_prefix: removing all valid runs resets numbering')
+        call assert_false(last%is_allocated(), 'find_next_int_dir_prefix: no stale previous run is returned')
+        call leave_fixture(saved, fixture, nfail0)
     end subroutine test_find_next_int_dir_prefix
 
     !> a run folder is <digits>_<name>, as int2str(n)//'_'//prg and NICE's <n>_<prog> make it
@@ -567,10 +591,13 @@ contains
         write(*,'(A)') 'test_is_run_dir_name'
         call assert_true(is_run_dir_name('7_solve2D'),          'is_run_dir_name: 7_solve2D is a run folder')
         call assert_true(is_run_dir_name('12_selection'),       'is_run_dir_name: several digits')
+        call assert_true(is_run_dir_name('12_more_names'),      'is_run_dir_name: the name may contain underscores')
         call assert_false(is_run_dir_name('ds_new_workspace_1'), 'is_run_dir_name: a name without leading digits is not')
         call assert_false(is_run_dir_name('.workspace_1'),       'is_run_dir_name: a NICE workspace folder is not')
         call assert_false(is_run_dir_name('3run'),               'is_run_dir_name: digits need the underscore')
         call assert_false(is_run_dir_name('2024'),               'is_run_dir_name: digits alone are not')
+        call assert_false(is_run_dir_name('7_'),                 'is_run_dir_name: the name must not be empty')
+        call assert_false(is_run_dir_name('7_   '),              'is_run_dir_name: the name must not be blank')
         call assert_false(is_run_dir_name('_x'),                 'is_run_dir_name: an underscore needs digits before it')
         call assert_false(is_run_dir_name(''),                   'is_run_dir_name: an empty name is not')
     end subroutine test_is_run_dir_name

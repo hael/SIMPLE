@@ -1032,12 +1032,10 @@ contains
         class(string),           optional, intent(out) :: last_prev_dir
         character(len=:), allocatable :: str
         type(string),     allocatable :: dirs(:)
-        logical,          allocatable :: nrmap(:)
         integer,          allocatable :: dirinds(:)
-        integer                       :: i, j, last_nr_ind
+        integer                       :: i
         integer                       :: next_int_dir_prefix, ndirs, loc(1)
         dirs = simple_list_dirs(dir2list)
-        last_nr_ind = 1
         if( allocated(dirs) )then
             ndirs = size(dirs)
         else
@@ -1047,17 +1045,8 @@ contains
         allocate(dirinds(ndirs), source=0)
         do i=1,ndirs
             str = dirs(i)%to_char()
-            if( char_is_a_number(str(1:1)) )then
-                nrmap = map_str_nrs(trim(str))
-                do j=1,size(nrmap)
-                    if( nrmap(j) )then
-                        last_nr_ind = j
-                    else
-                        exit
-                    endif
-                enddo
-                dirinds(i) = str2int(str(1:last_nr_ind))
-            endif
+            if( .not. is_run_dir_name(str) ) cycle
+            dirinds(i) = str2int(str(:index(str,'_')-1))
         end do
         if( any(dirinds > 0) )then
             loc = maxloc(dirinds)
@@ -1075,7 +1064,7 @@ contains
         is_run_dir_name = .false.
         do i = 1,len_trim(dirname)
             if( char_is_a_number(dirname(i:i)) ) cycle
-            is_run_dir_name = i > 1 .and. dirname(i:i) == '_'
+            is_run_dir_name = i > 1 .and. dirname(i:i) == '_' .and. i < len_trim(dirname)
             return
         end do
     end function is_run_dir_name
