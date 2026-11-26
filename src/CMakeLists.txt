@@ -236,6 +236,16 @@ install(DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}/"
     FILES_MATCHING PATTERN "*.mod"
 )
 # Install varlist for command line argument error checking
+# simple_varlist.txt is written together with simple_args.f90 by one custom
+# command, so it is not the unique output of a build target and CMake >= 4.5
+# cannot infer which target builds it for the "install_prep/" targets (it warns
+# otherwise). Name the producing target explicitly; BUILD_DEPENDS is only known
+# to install(FILES) from CMake 4.5 on.
+set(SIMPLE_VARLIST_BUILD_DEPENDS "")
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 4.5)
+    set(SIMPLE_VARLIST_BUILD_DEPENDS BUILD_DEPENDS simple_args)
+endif()
 install(FILES "${SIMPLE_GEN_DIR}/simple_varlist.txt"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple"
+    ${SIMPLE_VARLIST_BUILD_DEPENDS}
 )
