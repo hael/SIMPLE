@@ -139,6 +139,7 @@ contains
     procedure          :: get_nptcls
     procedure          :: get_boxcoords
     procedure          :: set_boxcoords
+    procedure          :: remove_duplicate_particles
 
     ! OUT
     procedure          :: add_cavgs2os_out
@@ -649,6 +650,12 @@ interface
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: iptcl, coords(2)
     end subroutine set_boxcoords
+
+    module subroutine remove_duplicate_particles( self, oritype, nrejected )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: oritype
+        integer,           intent(out)   :: nrejected
+    end subroutine remove_duplicate_particles
 
     ! OUT
 

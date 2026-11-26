@@ -65,6 +65,7 @@ contains
         call test_rnd_seed_roundtrip()
         call test_read_does_not_mutate_projinfo()
         call test_map_cls3D_states2ptcls()
+        call test_remove_duplicate_particles()
         call test_prune_particles()
         call test_partial_docs_merge()
         call test_partial_docs_merge_uneven()
@@ -73,6 +74,62 @@ contains
         call test_odd_box_refused()
         call cleanup()
     end subroutine run_all_sp_project_tests
+
+    subroutine test_remove_duplicate_particles()
+        class(sp_project), allocatable :: proj
+        integer                        :: i, istk, nrejected
+        integer, parameter             :: X(13) = [10,13,20,22,23,10,40,43,62,61,60,62,62]
+        integer, parameter             :: Y(13) = [10,10,20,21,21,10,40,40,60,60,60,60,60]
+        write(*,'(A)') 'test_remove_duplicate_particles'
+        allocate(proj)
+        call proj%os_mic%new(3, is_ptcl=.false.)
+        call proj%os_stk%new(2, is_ptcl=.false.)
+        call proj%os_ptcl2D%new(13, is_ptcl=.true.)
+        call proj%os_ptcl3D%new(13, is_ptcl=.true.)
+        do i = 1, 3
+            call proj%os_mic%set_state(i, 1)
+        enddo
+        call proj%os_mic%set(1, 'nptcls', 5)
+        call proj%os_mic%set(2, 'nptcls', 0)
+        call proj%os_mic%set(3, 'nptcls', 8)
+        do i = 1, 2
+            call proj%os_stk%set_state(i, 1)
+        enddo
+        call proj%os_stk%set(1, 'nptcls', 5)
+        call proj%os_stk%set(2, 'nptcls', 8)
+        do i = 1, 13
+            istk = 1
+            if( i > 5 ) istk = 2
+            call proj%os_ptcl2D%set(i, 'stkind', istk)
+            call proj%set_boxcoords(i, [X(i), Y(i)])
+            call proj%os_ptcl2D%set_state(i, 1)
+            call proj%os_ptcl3D%set_state(i, 1)
+        enddo
+        call proj%os_ptcl2D%set_state(12, 0)
+        call proj%os_ptcl3D%set_state(12, 0)
+        call proj%os_ptcl3D%set_shift(2, [2., 0.])
+        call proj%os_ptcl3D%set_shift(5, [-3., 0.])
+        call proj%os_ptcl3D%set_shift(8, [1.9, 0.])
+        call proj%remove_duplicate_particles('ptcl3D', nrejected)
+        call assert_int(4, nrejected, '3D shifts reject later rows at the 1.1-pixel cutoff and exact ties')
+        do i = 1, 13
+            if( i == 2 .or. i == 8 .or. i == 10 .or. i == 12 .or. i == 13 )then
+                call assert_int(0, proj%os_ptcl2D%get_state(i), 'rejected particle has 2D state zero')
+                call assert_int(0, proj%os_ptcl3D%get_state(i), 'rejected particle has 3D state zero')
+            else
+                call assert_int(1, proj%os_ptcl2D%get_state(i), 'surviving particle keeps 2D state')
+                call assert_int(1, proj%os_ptcl3D%get_state(i), 'surviving particle keeps 3D state')
+            endif
+        enddo
+        call proj%remove_duplicate_particles('ptcl3D', nrejected)
+        call assert_int(0, nrejected, 'repeating rejection finds no new pairs')
+        call proj%remove_duplicate_particles('ptcl2D', nrejected)
+        call assert_int(1, nrejected, '2D shifts reject their distinct close pair')
+        call assert_int(0, proj%os_ptcl2D%get_state(5), '2D duplicate has 2D state zero')
+        call assert_int(0, proj%os_ptcl3D%get_state(5), '2D duplicate has 3D state zero')
+        call proj%kill
+        deallocate(proj)
+    end subroutine test_remove_duplicate_particles
 
     !> one owner per project: a partition worker writes its part files, never its master's project
     subroutine test_worker_writes_no_project()

@@ -197,7 +197,7 @@ contains
         real                          :: stk_min, stk_max, stk_mean, stk_sdev, scale
         integer                       :: prev_pos(2), new_pos(2), ishift(2), ldim(3), prev_center(2), new_center(2), ldim_sc(3)
         integer                       :: i, nframes, imic, iptcl, nmics, prev_box, box_foo, cnt, nmics_tot, stk_ind
-        integer                       :: fromp, top, istk, nptcls2extract, nptcls
+        integer                       :: fromp, top, istk, nptcls2extract, nptcls, nrejected
         logical                       :: l_3d, l_scale_particles, l_movie_frames, l_measured
         l_movie_frames    = trim(params%extractfrommov).eq.'yes'
         l_measured        = trim(params%dose_weighting).eq.'measured'
@@ -276,6 +276,14 @@ contains
             write(logfhandle,'(A)')'>>> EXTRACTING... '
             call spproj_in%read_segment('ptcl2D', params%projfile)
             call spproj_in%read_segment('ptcl3D', params%projfile)
+            if( .not.params%l_distr_worker )then
+                call spproj_in%remove_duplicate_particles(params%oritype, nrejected)
+                if( nrejected > 0 )then
+                    write(logfhandle,'(A,I0)') '>>> DUPLICATE PARTICLES REMOVED: ', nrejected
+                    call spproj_in%write_segment_inside('ptcl2D', params%projfile)
+                    call spproj_in%write_segment_inside('ptcl3D', params%projfile)
+                endif
+            endif
             allocate(ptcl_mask(spproj_in%os_ptcl2D%get_noris()),source=.false.)
             ldim = 0
             do imic = params%fromp, params%top
@@ -544,7 +552,7 @@ contains
         type(dose_curve) :: curve
         type(string)     :: mic_name, imgkind, message
         integer          :: imic, nmics_tot, state, ipart
-        integer          :: nmics_valid
+        integer          :: nmics_valid, nrejected
         call validate_reextract_cline(cline)
         call set_reextract_defaults(cline)
         call params%new(cline)
@@ -585,7 +593,14 @@ contains
             call o_mic%kill
             return
         endif
-        ! wipe existing in-memory segments (as in original)
+        ! remove duplicate particles
+        call self%spproj%remove_duplicate_particles(params%oritype, nrejected)
+        if( nrejected > 0 )then
+            write(logfhandle,'(A,I0)') '>>> DUPLICATE PARTICLES REMOVED: ', nrejected
+            call self%spproj%write_segment_inside('ptcl2D', params%projfile)
+            call self%spproj%write_segment_inside('ptcl3D', params%projfile)
+         endif
+        ! wipe existing in-memory segments
         call self%spproj%os_mic%kill
         call self%spproj%os_stk%kill
         call self%spproj%os_ptcl2D%kill

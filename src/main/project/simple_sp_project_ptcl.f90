@@ -756,4 +756,108 @@ contains
         call self%os_ptcl2D%set(iptcl,'ypos',coords(2))
     end subroutine set_boxcoords
 
+    ! Identify duplicate particle pairs by their micrograph coordinates.
+    ! Reject the later active particle in each pair.
+    module subroutine remove_duplicate_particles( self, oritype, nrejected )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: oritype
+        integer,           intent(out)   :: nrejected
+        real, parameter                  :: DUPLICATE_DISTANCE_PX = 1.1
+        integer, allocatable             :: mic2stk(:), stk2mic(:), stkind(:), counts(:), starts(:), next(:), grouped(:), inds(:)
+        real,    allocatable             :: x(:), y(:), xsorted(:)
+        logical, allocatable             :: rejected(:)
+        real    :: shift(2), dist2, dy
+        integer :: nptcls, nstks, iptcl, istk, i, j, k, n
+        logical :: has_ptcl3D
+        if( trim(oritype) /= 'ptcl2D' .and. trim(oritype) /= 'ptcl3D' )&
+            &THROW_HARD('oritype must be ptcl2D or ptcl3D; remove_duplicate_particles')
+        if( self%os_mic%get_noris() == 0 .or. self%os_stk%get_noris() == 0 )&
+            &THROW_HARD('micrographs and stacks required; remove_duplicate_particles')
+        nptcls = self%os_ptcl2D%get_noris()
+        nstks  = self%os_stk%get_noris()
+        has_ptcl3D = self%os_ptcl3D%get_noris() > 0
+        if( has_ptcl3D .or. trim(oritype) == 'ptcl3D' )then
+            if( self%os_ptcl3D%get_noris() /= nptcls )&
+                &THROW_HARD('ptcl2D and ptcl3D counts differ; remove_duplicate_particles')
+        endif
+        nrejected = 0
+        call self%get_mic2stk_inds(mic2stk, stk2mic)
+        allocate(x(nptcls), y(nptcls), stkind(nptcls), counts(nstks), starts(nstks+1), next(nstks), grouped(nptcls))
+        allocate(rejected(nptcls), source=.false.)
+        stkind = 0
+        counts = 0
+        do iptcl = 1, nptcls
+            if( .not.self%os_ptcl2D%isthere(iptcl, 'stkind') )&
+                &THROW_HARD('particle stack missing; remove_duplicate_particles')
+            istk = self%os_ptcl2D%get_int(iptcl, 'stkind')
+            if( istk < 1 .or. istk > nstks ) THROW_HARD('particle stack out of range; remove_duplicate_particles')
+            if( stk2mic(istk) == 0 ) THROW_HARD('particle micrograph missing; remove_duplicate_particles')
+            if( self%os_ptcl2D%get_state(iptcl) <= 0 ) cycle
+            if( has_ptcl3D )then
+                if( self%os_ptcl3D%get_state(iptcl) <= 0 ) cycle
+            endif
+            if( .not.self%os_ptcl2D%isthere(iptcl, 'xpos') ) cycle
+            if( .not.self%os_ptcl2D%isthere(iptcl, 'ypos') ) cycle
+            if( trim(oritype) == 'ptcl3D' )then
+                shift = self%os_ptcl3D%get_2Dshift(iptcl)
+            else
+                shift = self%os_ptcl2D%get_2Dshift(iptcl)
+            endif
+            ! The half-box center offset is constant within a stack and cancels in pair distances.
+            x(iptcl) = real(self%os_ptcl2D%get_int(iptcl, 'xpos')) - shift(1)
+            y(iptcl) = real(self%os_ptcl2D%get_int(iptcl, 'ypos')) - shift(2)
+            stkind(iptcl) = istk
+            counts(istk)  = counts(istk) + 1
+        enddo
+        starts(1) = 1
+        do istk = 1, nstks
+            starts(istk+1) = starts(istk) + counts(istk)
+        enddo
+        next = starts(1:nstks)
+        do iptcl = 1, nptcls
+            istk = stkind(iptcl)
+            if( istk == 0 ) cycle
+            grouped(next(istk)) = iptcl
+            next(istk) = next(istk) + 1
+        enddo
+        dist2 = DUPLICATE_DISTANCE_PX * DUPLICATE_DISTANCE_PX
+        do istk = 1, nstks
+            n = counts(istk)
+            if( n < 2 ) cycle
+            allocate(xsorted(n), inds(n))
+            do k = 1, n
+                inds(k) = grouped(starts(istk) + k - 1)
+                xsorted(k) = x(inds(k))
+            enddo
+            call hpsort(xsorted, inds)
+            do k = starts(istk), starts(istk+1) - 1
+                iptcl = grouped(k)
+                if( rejected(iptcl) ) cycle
+                j = max(1, locate(xsorted, n, x(iptcl) - DUPLICATE_DISTANCE_PX))
+                do while( j > 1 )
+                    if( xsorted(j-1) < x(iptcl) - DUPLICATE_DISTANCE_PX ) exit
+                    j = j - 1
+                enddo
+                do while( j <= n )
+                    if( xsorted(j) - x(iptcl) > DUPLICATE_DISTANCE_PX ) exit
+                    i = inds(j)
+                    if( i < iptcl )then
+                        if( .not.rejected(i) )then
+                            dy = y(i) - y(iptcl)
+                            if( (x(i) - x(iptcl))**2 + dy**2 <= dist2 )then
+                                call self%os_ptcl2D%set_state(iptcl, 0)
+                                if( has_ptcl3D ) call self%os_ptcl3D%set_state(iptcl, 0)
+                                rejected(iptcl) = .true.
+                                nrejected = nrejected + 1
+                                exit
+                            endif
+                        endif
+                    endif
+                    j = j + 1
+                enddo
+            enddo
+            deallocate(xsorted, inds)
+        enddo
+    end subroutine remove_duplicate_particles
+
 end submodule simple_sp_project_ptcl

@@ -206,7 +206,7 @@ contains
         real    :: prev_center_sc(2), stk_min, stk_max, stk_mean, stk_sdev
         integer :: prev_pos(2), new_pos(2), ishift(2), prev_center(2), new_center(2)
         integer :: ffromto(2), i,ind, imov, iptcl, nmovs, prev_box, box_foo, cnt, nmovies_tot, stk_ind
-        integer :: fromp, top, istk, nptcls2extract, nptcls, nfractioned_stacks, imov_local
+        integer :: fromp, top, istk, nptcls2extract, nptcls, nfractioned_stacks, imov_local, nrejected
         logical :: l_from3D
         call validate_input
         params%msk    = RADFRAC_NORM_EXTRACT * real(params%box/2)
@@ -244,6 +244,14 @@ contains
             call spproj_in%read_segment('ptcl3D', params%projfile)
             if( spproj_in%os_ptcl2D%get_noris() /= spproj_in%os_ptcl3D%get_noris() )then
                 THROW_HARD('Inconsistent number of particles in ptcl2D and ptcl3D')
+            endif
+            if( .not.params%l_distr_worker )then
+                call spproj_in%remove_duplicate_particles(params%oritype, nrejected)
+                if( nrejected > 0 )then
+                    write(logfhandle,'(A,I0)') '>>> DUPLICATE PARTICLES REMOVED: ', nrejected
+                    call spproj_in%write_segment_inside('ptcl2D', params%projfile)
+                    call spproj_in%write_segment_inside('ptcl3D', params%projfile)
+                endif
             endif
             allocate(ptcl_mask(spproj_in%os_ptcl2D%get_noris()),source=.false.)
             ! loop over movies within the specified range
@@ -483,8 +491,7 @@ contains
         type(ori)          :: o_mov
         type(motion_model) :: mcmodel
         type(string)       :: mov_name, model_name
-        integer        :: imov, state, ipart
-        integer        :: nmovies_valid
+        integer :: imov, state, ipart, nrejected, nmovies_valid
         call params%new(cline)
         call cline%set('mkdir', 'no')
         call self%spproj%read(params%projfile)
@@ -527,6 +534,13 @@ contains
         else
             call validate_fraction_range(params%fromf, params%tof, params%stepf)
             call ensure_field_halves(self%spproj, trim(params%oritype), params%projfile)
+            ! remove duplicate particles
+            call self%spproj%remove_duplicate_particles(params%oritype, nrejected)
+            if( nrejected > 0 )then
+                write(logfhandle,'(A,I0)') '>>> DUPLICATE PARTICLES REMOVED: ', nrejected
+                call self%spproj%write_segment_inside('ptcl2D', params%projfile)
+                call self%spproj%write_segment_inside('ptcl3D', params%projfile)
+            endif
             ! build explicit fromp/top for each partition
             self%parts = split_nobjs_even(self%nmovies, params%nparts)
             allocate(self%part_params(params%nparts))
