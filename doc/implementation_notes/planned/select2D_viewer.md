@@ -150,6 +150,18 @@ as `prg=selection` names and places its run folder, through the routines `prg=se
     (`print_registered_programs(prgtab, prgnames, 'simple_viewer')`) and looks the name up with `get_prg_ptr`.
     The `prg=list` block inside `parse` is never reached for any executable (the program lookup stops on `list`
     first); its `simple_viewer` case stays a no-op with a comment.
+17. (2026-11-25, owner reported "the right click does not work sometimes"; ruled: fix in the grid module, a
+    left click on the grid while the popover is up only closes it) The popover is modal (GTK 3's default), so
+    while it is up GTK's grab sends every grid click to the popover and none reaches the grid's `on_press`; the
+    grid selects no release events, so the popover's own close-on-release likely never fires for grid clicks
+    either, and a right-click elsewhere did nothing until Esc or a click outside the grid. `gtkui_image_grid`
+    gets `attach_popover(popover)`, which connects the popover's `button-press-event` and
+    `button-release-event`. For events whose widget is the grid's drawing area: a context-menu press (right
+    click; Ctrl-click on macOS) calls the delegate's `context`, which re-points the open popover at the new
+    position in one click; any other single press closes it without touching the selection; the extra events of
+    a double or triple click are dropped; the matching release is swallowed so the popover's own handler cannot
+    close a popover that has just moved. Presses inside the popover, Esc, Shift+F10/Menu and the popover's
+    buttons are unchanged. select2D calls it once in `build_popover`; the popover stays modal.
 
 Defaults taken without a question: the file and module names in decisions 3, 4 and 12; the category id,
 display name and order; `get_executable_prg`; the sub-suite name; the folder suffix `'selection'` as a private
@@ -217,7 +229,8 @@ Stop and report when: a file outside the table needs an edit; 12(c) fails beyond
 | `src/main/project/simple_cls2D_selection.f90` | `new` arguments, `save` to `<n>_selection/`, getter; no `selection.txt` | 1 |
 | `src/fileio/simple_syslib.f90`, `simple_syslib_tester.f90` | `is_run_dir_name` and its checks (decision 13) | 1 |
 | `src/main/commanders/simple/simple_commanders_select2D.f90` | `mkdir=no`, segment reads, job description, root dir | 1 |
-| `src/main/gtk/simple_select2D_window.f90` | toolbar path after Save, Discard message | 1 |
+| `src/main/gtk/simple_select2D_window.f90` | toolbar path after Save, Discard message; `attach_popover` call (decision 17) | 1 |
+| `src/main/gtk/simple_gtk_image_grid.f90` | `attach_popover` and the popover's press/release handlers (decision 17) | 1 |
 | `src/main/commanders/simple/simple_select2D_tester.f90` | new: `select2D save` | 1 |
 | `src/main/commanders/test/simple_commanders_test_class.f90` | suite row | 1 |
 | `src/main/ui/simple_test/simple_test_ui_class.f90` | `suite=` list of `unit_project` | 1 |
@@ -348,3 +361,15 @@ router's "not recognized" message also points to `prg=list`); `simple_cmdline.f9
 `simple_viewer prg=list` prints the `Viewer:` heading and `select2D`; `simple_viewer prg=foo` stops with the
 "not recognized. Use prg=list" message; `simple_viewer` alone stops in `cmdline_err`; `simple_viewer prg=select2D`
 still prints the usage.
+
+### Decision 17, 2026-11-25, written in the agent's sandbox on `0b43d033f`, not built
+
+Changed: `simple_gtk_image_grid.f90` (`attach_popover`; private `on_popover_press` and `on_popover_release` on the
+grid's user data; comments of the module, `context` and `on_press`); `simple_select2D_window.f90` (`build_popover`
+calls `w%grid%attach_popover(w%popover)`; comment of `show_popover`). gtk-fortran interfaces checked against the
+3.24.49 source (`gtk_get_event_widget`, `gtk_popover_popdown`). Not reproduced here (no display, no compiler): the
+cause is read from the code and GTK 3's documented popover grab. Exits to run on the Mac: build, fast gate,
+`test=gtk`, install; then in the window on betagal: right-click opens the popover; a right-click elsewhere on the
+grid moves it there (one click); Ctrl-click does the same; a fast double right-click leaves it open; a left
+click on a class while it is up closes it and the footer count does not change; the next left click toggles;
+Esc, Sort, Select All and Deselect All still close it; brightness, contrast and the histogram still work inside.

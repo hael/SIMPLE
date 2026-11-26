@@ -1,6 +1,7 @@
 !@descr: a GTK 3 scrolling grid of image tiles with captions, selection marks, zoom and hover, fed by a delegate
 ! One drawing area draws only the visible rows, beside its own scrollbar (select2d.py's layout; geometry and
-! colours in simple_defs_gtk). An app extends gtkui_grid_delegate to say what is shown and to receive clicks.
+! colours in simple_defs_gtk). An app extends gtkui_grid_delegate to say what is shown and to receive clicks,
+! and attaches its context popover so the popover's grab does not swallow the grid's clicks while it is up.
 module simple_gtk_image_grid
 use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_double, c_null_char, c_null_ptr, c_funloc, c_loc, &
     c_f_pointer, c_associated
@@ -9,7 +10,7 @@ use simple_defs_gtk,  only: GTKUI_GRID_MARGIN, GTKUI_GRID_SPACING, GTKUI_GRID_BO
     GTKUI_TILE_MIN, GTKUI_TILE_MAX, GTKUI_ZOOM_FACTOR, GTKUI_PT2PX, GTKUI_MESSAGE_PX, GTKUI_COLOR_BG, GTKUI_COLOR_FG, &
     GTKUI_COLOR_ACCENT, GTKUI_COLOR_BACKDROP, GTKUI_COLOR_SURFACE, GTKUI_COLOR_BORDER, GTKUI_COLOR_HOVER, &
     GTKUI_COLOR_MUTED, GTKUI_COLOR_SELECTED
-use simple_gtk_utils, only: gtkui_event_xy, gtkui_event_state, gtkui_event_button, gtkui_event_scroll, &
+use simple_gtk_utils, only: gtkui_bool, gtkui_event_xy, gtkui_event_state, gtkui_event_button, gtkui_event_scroll, &
     gtkui_event_is_press, gtkui_event_context_menu
 use simple_gtk_draw,  only: gtkui_font_new, gtkui_font_free, gtkui_set_rgb, gtkui_text_size, gtkui_draw_text, &
     gtkui_fit_text, gtkui_draw_check, gtkui_gray_surface
@@ -17,9 +18,9 @@ use gtk,   only: gtk_box_new, gtk_box_pack_start, gtk_drawing_area_new, gtk_scro
     gtk_adjustment_get_value, gtk_adjustment_set_value, gtk_adjustment_configure, gtk_adjustment_get_page_size, &
     gtk_adjustment_get_upper, gtk_widget_set_can_focus, gtk_widget_add_events, gtk_widget_grab_focus, &
     gtk_widget_queue_draw, gtk_widget_get_allocated_width, gtk_widget_get_allocated_height, &
-    gtk_widget_create_pango_layout, g_signal_connect, TRUE, FALSE, GTK_ORIENTATION_HORIZONTAL, &
-    GTK_ORIENTATION_VERTICAL, GDK_SHIFT_MASK, GDK_CONTROL_MASK, GDK_META_MASK, GDK_MOD2_MASK, GDK_BUTTON_PRESS_MASK, &
-    GDK_POINTER_MOTION_MASK, GDK_LEAVE_NOTIFY_MASK, GDK_SCROLL_MASK, GDK_SMOOTH_SCROLL_MASK
+    gtk_widget_create_pango_layout, gtk_get_event_widget, gtk_popover_popdown, g_signal_connect, TRUE, FALSE, &
+    GTK_ORIENTATION_HORIZONTAL, GTK_ORIENTATION_VERTICAL, GDK_SHIFT_MASK, GDK_CONTROL_MASK, GDK_META_MASK, GDK_MOD2_MASK, &
+    GDK_BUTTON_PRESS_MASK, GDK_POINTER_MOTION_MASK, GDK_LEAVE_NOTIFY_MASK, GDK_SCROLL_MASK, GDK_SMOOTH_SCROLL_MASK
 use g,     only: g_object_unref
 use cairo, only: cairo_paint, cairo_rectangle, cairo_fill, cairo_stroke, cairo_set_line_width, &
     cairo_set_source_surface, cairo_surface_destroy
@@ -41,7 +42,8 @@ type, abstract :: gtkui_grid_delegate
     procedure(grid_count),   deferred :: ncaptions    ! caption fields below each image
     procedure(grid_caption), deferred :: caption      ! field k of an item (item 0: the widest value expected)
     procedure(grid_click),   deferred :: click        ! a click on an item, with or without Shift
-    procedure(grid_context), deferred :: context      ! a context-menu request at (x, y) of the grid
+    procedure(grid_context), deferred :: context      ! a context-menu request at (x, y) of the grid, also while
+                                                      ! the attached popover is up (re-point it there)
 end type gtkui_grid_delegate
 
 abstract interface
@@ -115,6 +117,7 @@ type :: gtkui_image_grid
     real(dp) :: zoom_acc = 0._dp         ! smooth-scroll steps not yet applied as zoom
   contains
     procedure :: new
+    procedure :: attach_popover
     procedure :: get_widget
     procedure :: get_area
     procedure :: relayout
@@ -151,6 +154,17 @@ contains
         sbar = gtk_scrollbar_new(GTK_ORIENTATION_VERTICAL, self%vadj)
         call gtk_box_pack_start(self%root, sbar, FALSE, FALSE, 0_c_int)
     end subroutine new
+
+    ! the app's context popover over the grid. While a modal popover (GTK's default) is up it holds GTK's grab,
+    ! so the grid's clicks go to the popover, not to on_press: they are taken there by on_popover_press
+    subroutine attach_popover( self, popover )
+        class(gtkui_image_grid), target, intent(inout) :: self
+        type(c_ptr),                     intent(in)    :: popover
+        type(c_ptr) :: data
+        data = grid_cptr(self)
+        call g_signal_connect(popover, 'button-press-event'//c_null_char,   c_funloc(on_popover_press),   data)
+        call g_signal_connect(popover, 'button-release-event'//c_null_char, c_funloc(on_popover_release), data)
+    end subroutine attach_popover
 
     ! the grid with its scrollbar, to pack into a window
     function get_widget( self ) result( widget )
@@ -466,7 +480,8 @@ contains
         call gtk_widget_queue_draw(gr%area)
     end subroutine on_vadj
 
-    ! a left click goes to the delegate's click, a context-menu press to its context
+    ! a left click goes to the delegate's click, a context-menu press to its context (while an attached popover
+    ! is up, on_popover_press gets them instead)
     function on_press( widget, event, data ) bind(c) result( handled )
         type(c_ptr), value :: widget, event, data
         integer(c_int)     :: handled
@@ -488,6 +503,36 @@ contains
         call gr%dlg%click(gr%dlg%item_at(pos), iand(gtkui_event_state(event), GDK_SHIFT_MASK) /= 0)
         call gtk_widget_queue_draw(gr%area)
     end function on_press
+
+    ! a press on the grid while the attached popover is up: a context-menu press moves the popover there (the
+    ! delegate's context), any other press only closes it, the extra events of a double or triple click are
+    ! dropped; presses inside the popover go on to its own handlers
+    function on_popover_press( popover, event, data ) bind(c) result( handled )
+        type(c_ptr), value :: popover, event, data
+        integer(c_int)     :: handled
+        type(gtkui_image_grid), pointer :: gr
+        real(dp) :: x, y
+        call c_f_pointer(data, gr)
+        handled = FALSE
+        if( .not. c_associated(gtk_get_event_widget(event), gr%area) ) return
+        handled = TRUE
+        if( .not. gtkui_event_is_press(event) ) return
+        if( gtkui_event_context_menu(event) )then
+            if( gtkui_event_xy(event, x, y) ) call gr%dlg%context(x, y)
+        else
+            call gtk_popover_popdown(popover)
+        endif
+    end function on_popover_press
+
+    ! the release of a grid click taken by on_popover_press, kept from the popover's own release handler, which
+    ! would close a popover that has just been moved
+    function on_popover_release( popover, event, data ) bind(c) result( handled )
+        type(c_ptr), value :: popover, event, data
+        integer(c_int)     :: handled
+        type(gtkui_image_grid), pointer :: gr
+        call c_f_pointer(data, gr)
+        handled = gtkui_bool(c_associated(gtk_get_event_widget(event), gr%area))
+    end function on_popover_release
 
     function on_motion( widget, event, data ) bind(c) result( handled )
         type(c_ptr), value :: widget, event, data

@@ -151,6 +151,7 @@ contains
         type(c_ptr) :: pg, label
         integer     :: k
         w%popover = gtk_popover_new(w%grid%get_area())
+        call w%grid%attach_popover(w%popover)
         pg = gtk_grid_new()
         call gtkui_margins(pg, 8, 8, 8, 8)
         call gtk_grid_set_row_spacing(pg, 4_c_int)
@@ -177,7 +178,7 @@ contains
         call gtk_widget_show_all(pg)
     end subroutine build_popover
 
-    ! the popover at (x, y) of the grid, its controls set from the models
+    ! the popover at (x, y) of the grid, its controls set from the models; when it is already up it moves there
     subroutine show_popover( w, x, y )
         type(s2d_window), intent(inout) :: w
         real(dp),         intent(in)    :: x, y
