@@ -7,6 +7,9 @@ use simple_optimizer,       only: optimizer
 implicit none
 
 public :: volpft_symsrch_init, volpft_srch4symaxis
+public :: run_all_volpft_symsrch_tests
+! Public for tester-submodule linkage on gfortran before 16.
+public :: fill_symaxis_candidates
 private
 #include "simple_local_flags.inc"
 
@@ -27,6 +30,11 @@ integer                       :: nsym          = 0  !< # symmetry ops
 integer                       :: nspace        = 0  !< # complex vectors in vpftc
 integer                       :: nspace_nonred = 0  !< # nonredundant complex vectors in vpftc
 integer                       :: kfromto(2)         !< Fourier index range
+
+interface
+    module subroutine run_all_volpft_symsrch_tests()
+    end subroutine run_all_volpft_symsrch_tests
+end interface
 
 contains
 
@@ -90,20 +98,16 @@ contains
         integer,      allocatable :: order(:)
         class(*),     pointer     :: fun_self => null()
         type(ori),    target      :: dummyobject ! a dummy object for minimizer, could be any type
-        type(ori)                 :: symaxis
         type(oris)                :: espace, cand_axes
-        integer                   :: fromto(2), ntot, iproj, iproj_best
+        integer                   :: fromto(2), ntot, iproj
         integer                   :: istop, ithr, iloc
-        real                      :: eul(3), corr_best, cost, rmat(3,3)
+        real                      :: eul(3), cost, rmat(3,3)
         ! dummy association
         fun_self => dummyobject
         ! set range
         fromto(1) = 1
         fromto(2) = NPROJ
         ntot      = fromto(2) - fromto(1) + 1
-        ! container for candidate symmetry axes
-        call cand_axes%new(NPROJ, is_ptcl=.false.)
-        call cand_axes%set_all2single('corr', -1.0) ! for later ordering
         ! projection directions in discrete search
         call espace%new(NPROJ, is_ptcl=.false.)
         call espace%spiral
@@ -129,18 +133,7 @@ contains
             corrs(iproj) = volpft_symsrch_scorefun(rmat)
         end do
         !$omp end parallel do
-        ! identify the best candidates (serial code)
-        corr_best  = -1.0
-        iproj_best = 0
-        do iproj=fromto(1),fromto(2)
-            if( corrs(iproj) > corr_best )then
-                corr_best  = corrs(iproj)
-                iproj_best = iproj
-            endif
-            call espace%get_ori(iproj_best, symaxis)
-            call symaxis%set('corr', corr_best)
-            call cand_axes%set_ori(iproj,symaxis)
-        end do
+        call fill_symaxis_candidates(espace, fromto, corrs, cand_axes)
         ! refine local optima
         ! order the local optima according to correlation
         order = cand_axes%order()
@@ -161,10 +154,27 @@ contains
         call cand_axes%get_ori(order(1), saxis_glob)
         ! return best
         call cand_axes%get_ori(order(1), symaxis_best)
-        call symaxis%kill
         call espace%kill
         call cand_axes%kill
     end subroutine volpft_srch4symaxis
+
+    subroutine fill_symaxis_candidates( espace, fromto, corrs, cand_axes )
+        class(oris), intent(in)    :: espace
+        integer,     intent(in)    :: fromto(2)
+        real,        intent(in)    :: corrs(fromto(1):fromto(2))
+        class(oris), intent(inout) :: cand_axes
+        type(ori) :: symaxis
+        integer   :: iproj
+        call cand_axes%new(espace%get_noris(), is_ptcl=.false.)
+        call cand_axes%set_all2single('corr', -1.)
+        ! Keep each axis paired with its own score; running maxima duplicate refinement starts.
+        do iproj = fromto(1), fromto(2)
+            call espace%get_ori(iproj, symaxis)
+            call symaxis%set('corr', corrs(iproj))
+            call cand_axes%set_ori(iproj, symaxis)
+        enddo
+        call symaxis%kill
+    end subroutine fill_symaxis_candidates
 
     function volpft_symsrch_costfun( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
