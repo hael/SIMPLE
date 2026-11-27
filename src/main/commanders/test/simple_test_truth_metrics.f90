@@ -213,13 +213,15 @@ contains
                     &'; minimum ', min_corr
             endif
             corr_ok = ieee_is_finite(corr) .and. corr >= min_corr
-            if( .not. corr_ok )then
+            if( .not. corr_ok .and. l_corr_gated )then
                 write(logfhandle,'(a)') '    FAIL: final-volume correlation is below the required minimum'
             endif
             write(logfhandle,'(a,f7.2,a,f7.2,a,f7.2,a)') '>>> Masked truth FSC: 0.500 at ', fsc05, &
                 &' A; 0.143 at ', fsc0143, ' A; maximum ', max_fsc0143, ' A'
             fsc_ok = ieee_is_finite(fsc0143) .and. fsc0143 > 0. .and. fsc0143 <= max_fsc0143
-            if( .not. fsc_ok ) write(logfhandle,'(a)') '    FAIL: final-volume FSC resolution is outside the accepted range'
+            if( .not. fsc_ok .and. l_fsc_gated )then
+                write(logfhandle,'(a)') '    FAIL: final-volume FSC resolution is outside the accepted range'
+            endif
             passed = (corr_ok .or. .not. l_corr_gated) .and. (fsc_ok .or. .not. l_fsc_gated)
         endif
         call gate%check(tag//'_map_written_with_expected_box_and_sampling', geom_ok)

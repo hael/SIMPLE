@@ -388,8 +388,9 @@ contains
         ! PROGRAM SPECIFICATION
         call simulated_workflow%new(&
         &'simulated_workflow',&                          ! name
-        &'validate the simulated workflow for the embedded 6VXX system',&
-        &'runs one molecular suite through preprocessing and initial-model reconstruction, then validates the final volume',&
+        &'validate simulated workflows for embedded 6VXX and 1JXY systems',&
+        &'runs one molecular suite through preprocessing and initial-model reconstruction, then validates map quality and profiles pose recovery; '//&
+        &'1jxy uses a two-orbit D2-preserving fiducial reference and repeats solve3D over two worker processes from the same input and seed',&
         &'simple_test_exec',&                            ! executable
         &.false., display_name='Simulated Workflow Validation')                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -397,9 +398,9 @@ contains
         !call simulated_workflow%add_input(UI_IO, )
         ! parameter input/output
         call simulated_workflow%add_input(UI_PARM, 'suite', 'multi', 'Molecular suite', &
-            &'The simulated system: 6vxx (SARS-CoV-2 spike, c3); '//&
-            &'list prints the accepted names(6vxx|list)', '', .true., '', &
-            &choices=ui_choices([character(len=4) :: '6vxx', 'list']))
+            &'The simulated system: 6vxx (SARS-CoV-2 spike, c3) or 1jxy (beta-galactosidase, d2); '//&
+            &'list prints the accepted names(6vxx|1jxy|list)', '', .true., '', &
+            &choices=ui_choices([character(len=4) :: '6vxx', '1jxy', 'list']))
         call simulated_workflow%add_input(UI_PARM, 'picker', 'multi', 'Picker under test', &
             &'Particle picker used by the simulated workflow(segdiam|new){segdiam}','', .false., 'segdiam', &
         &choices=ui_choices([character(len=7) :: 'segdiam', 'new']), preserve_default=.true.)
