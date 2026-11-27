@@ -54,13 +54,14 @@ real(dp), parameter :: GTKUI_AUTO_PCT(2)       = [1._dp, 99.9_dp]
 integer,  parameter :: GTKUI_HIST_NBINS        = 256
 
 ! image grid (select2d.py): margins and spacing, image border, tile sizes, zoom per wheel step
-integer,  parameter :: GTKUI_GRID_MARGIN  = 12
-integer,  parameter :: GTKUI_GRID_SPACING = 12
-integer,  parameter :: GTKUI_GRID_BORDER  = 2
-integer,  parameter :: GTKUI_TILE_START   = 240
-integer,  parameter :: GTKUI_TILE_MIN     = 50
-integer,  parameter :: GTKUI_TILE_MAX     = 1000
-real(dp), parameter :: GTKUI_ZOOM_FACTOR  = 1.15_dp
+integer,  parameter :: GTKUI_GRID_MARGIN    = 12
+integer,  parameter :: GTKUI_GRID_SPACING   = 12
+integer,  parameter :: GTKUI_GRID_BORDER    = 2
+integer,  parameter :: GTKUI_TILE_START     = 240
+integer,  parameter :: GTKUI_PICK_BOX_START = 64
+integer,  parameter :: GTKUI_TILE_MIN       = 50
+integer,  parameter :: GTKUI_TILE_MAX       = 1000
+real(dp), parameter :: GTKUI_ZOOM_FACTOR    = 1.15_dp
 
 ! display panel (select2d.py): histogram size and the pick distance of its limit lines (pixels)
 integer, parameter :: GTKUI_HIST_W      = 400

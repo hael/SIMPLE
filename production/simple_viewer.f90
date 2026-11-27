@@ -1,4 +1,4 @@
-!@descr: runs the simple_viewer programs: select2D, the GTK 3 window for selecting a project's class averages (simple_viewer prg=select2D projfile=<p>.simple)
+!@descr: runs SIMPLE's native GTK viewers for class selection and tracking-position picking
 program simple_viewer
 use iso_fortran_env,     only: output_unit
 use simple_defs,         only: logfhandle, SIMPLE_GIT_VERSION, STDLEN, XLONGSTRLEN

@@ -55,10 +55,11 @@ end type stack_display
 contains
 
     ! the raw images; visible marks the images a view shows (they set the automatic window)
-    subroutine new( self, imgs, visible )
+    subroutine new( self, imgs, visible, auto_percentiles )
         class(stack_display), intent(inout) :: self
         class(image),        intent(in)    :: imgs(:)
         logical,             intent(in)    :: visible(:)
+        real(dp), optional,  intent(in)    :: auto_percentiles(2)
         real, allocatable :: rmat(:,:,:)
         integer :: icls, ldim(3)
         call self%kill
@@ -75,7 +76,7 @@ contains
             self%pix(:,:,icls) = rmat(:,:,1)
         end do
         call stack_range(self)
-        call auto_window(self, visible)
+        call auto_window(self, visible, auto_percentiles)
         call histogram(self)
         self%brightness = 0._dp
         self%contrast   = 1._dp
@@ -292,21 +293,26 @@ contains
     end subroutine stack_range
 
     ! medians, taken separately, of the visible images' low and high percentiles of their finite pixels
-    subroutine auto_window( self, visible )
+    subroutine auto_window( self, visible, auto_percentiles )
         type(stack_display), intent(inout) :: self
         logical,            intent(in)    :: visible(:)
+        real(dp), optional, intent(in)    :: auto_percentiles(2)
         real(dp), allocatable :: vals(:), lows(:), highs(:)
-        real(dp) :: lo, hi
+        real(dp) :: lo, hi, pct(2)
         integer  :: icls, n, nlim
         allocate(lows(self%ncls), highs(self%ncls), vals(self%nx * self%ny))
+        pct = GTKUI_AUTO_PCT
+        if( present(auto_percentiles) ) pct = auto_percentiles
+        if( .not. all(ieee_is_finite(pct)) ) THROW_HARD('nonfinite display percentiles')
+        if( pct(1) < 0._dp .or. pct(2) > 100._dp .or. pct(1) >= pct(2) ) THROW_HARD('invalid display percentiles')
         nlim = 0
         do icls = 1,self%ncls
             if( .not. visible(icls) ) cycle
             n = count(ieee_is_finite(self%pix(:,:,icls)))
             if( n == 0 ) cycle
             vals(1:n) = real(pack(self%pix(:,:,icls), ieee_is_finite(self%pix(:,:,icls))), dp)
-            lo = percentile(vals(1:n), GTKUI_AUTO_PCT(1))
-            hi = percentile(vals(1:n), GTKUI_AUTO_PCT(2))
+            lo = percentile(vals(1:n), pct(1))
+            hi = percentile(vals(1:n), pct(2))
             if( lo < hi )then
                 nlim        = nlim + 1
                 lows(nlim)  = lo

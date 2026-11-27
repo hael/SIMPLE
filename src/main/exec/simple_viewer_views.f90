@@ -1,13 +1,15 @@
-!@descr: execution of the simple_viewer commanders (select2D)
+!@descr: execution of the simple_viewer commanders
 module simple_viewer_views
 use simple_cmdline,             only: cmdline
 use simple_commanders_select2D, only: commander_select2D
+use simple_commanders_pick_positions, only: commander_pick_positions
 implicit none
 
 public :: exec_viewer_commander
 private
 
 type(commander_select2D) :: xselect2D
+type(commander_pick_positions) :: xpick_positions
 
 contains
 
@@ -22,6 +24,8 @@ contains
         select case(trim(which))
             case( 'select2D' )
                 call xselect2D%execute(cline)
+            case( 'pick_positions' )
+                call xpick_positions%execute(cline)
             case default
                 l_did_execute = .false.
         end select

@@ -572,7 +572,7 @@ def make_records(root: Path, registry: dict[tuple[str, str], set[str]], bindings
     entry_cache: dict[str, tuple[list[str], list[dict]]] = {}
     router_cache: dict[str, dict[str, list[dict]]] = {}
     for (executable, program), ui_keys in sorted(registry.items()):
-        if executable not in {"simple_exec", "single_exec", "simple_stream"}:
+        if executable not in {"simple_exec", "single_exec", "simple_stream", "simple_viewer"}:
             diagnostics.append({"severity": "info", "program": program, "message": f"{executable} is outside the command-default audit scope"})
             continue
         if executable == "simple_stream":
@@ -751,7 +751,7 @@ def collect_program_overrides(root: Path, procedures: dict[str, list[Procedure]]
                               baselines: dict[str, dict], helper_procedures: dict[str, list[Procedure]]) -> dict[tuple[str, str], dict[str, str]]:
     """Collect only exact missing-key rules; unsupported routes stay absent."""
     result: dict[tuple[str, str], dict[str, str]] = {}
-    for executable in ("simple_exec", "single_exec", "simple_stream"):
+    for executable in ("simple_exec", "single_exec", "simple_stream", "simple_viewer"):
         if executable == "simple_stream":
             entry_rules = []
             routes = extract_stream_routes(root)
@@ -815,7 +815,7 @@ def write_fortran_defaults(path: Path, baselines: dict[str, dict], bindings: dic
     for key, value in sorted(baseline_by_key.items()):
         lines += [f"        case({fortran_string(key)})", "            found = .true.", f"            value = {fortran_string(value)}"]
     lines += ["    end select", "    select case(trim(executable))"]
-    for executable in ("simple_exec", "single_exec", "simple_stream"):
+    for executable in ("simple_exec", "single_exec", "simple_stream", "simple_viewer"):
         programs = [(program, values) for (exe, program), values in overrides.items() if exe == executable]
         if not programs:
             continue
@@ -869,7 +869,7 @@ def main() -> int:
         )
         output = {
             "schema_version": 1,
-            "scope": "simple_exec, single_exec, and simple_stream programs emitted by the Fortran UI registry",
+            "scope": "simple_exec, single_exec, simple_stream, and simple_viewer programs emitted by the Fortran UI registry",
             "records": records,
             "diagnostics": diagnostics,
         }

@@ -46,6 +46,7 @@ use simple_class_candidates,                 only: run_all_class_candidates_test
 use simple_cavgs_work_project_tester,        only: run_all_cavgs_work_project_tests
 use simple_eo_partition,                     only: run_all_eo_partition_tests
 use simple_select2D_tester,                  only: run_all_select2D_tests
+use simple_manual_picker_tester,              only: run_all_manual_picker_tests
 use simple_class_compatibility,              only: run_all_class_compatibility_tests
 use simple_ptcl_sieve,                       only: run_all_ptcl_sieve_tests
 use simple_ptcl_sieve2,                      only: run_all_ptcl_sieve2_tests
@@ -399,6 +400,7 @@ contains
         call add_suite(s, n, 'CTF',                  run_all_ctf_tests)
         call add_suite(s, n, 'image serialisation',  run_all_image_serialize_tests)
         call add_suite(s, n, 'reference picking correlation', run_all_pickref_corr_batch_tests)
+        call add_suite(s, n, 'manual picking',       run_all_manual_picker_tests)
     end subroutine suites_image
 
     subroutine suites_numerics( s, n )
