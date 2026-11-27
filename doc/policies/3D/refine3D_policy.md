@@ -722,6 +722,15 @@ disk under the key, `shift_box_radius`) and the incoming shift, so the solve
 starts at, and is judged against, the pose it refines (the review's T1,
 2026-11-03; `test_continuous_seed_beyond_window`). Before, a disk shift beyond
 the window was projected into it and kept with the projected pose's score.
+The disk remains circular through both refinement stages: `minimize_in_cell`
+rejects an escaping result and re-scores the valid coarse cell at its best grid
+rotation; `minimize_joint` rejects an escaping result so the consumer retains
+the coupled incoming pose and score. Dense and neighbourhood tables, classic
+searches, extra poses and joint view refinement use the same rule. The radius
+is `disk_radius_px` before any rectangular-limit expansion, with only
+floating-point rotation roundoff allowed. It bounds the native-pixel increment
+from the stored shift, not the accumulated shift. Local-window searches keep
+their rectangular refinement bounds.
 Every posterior draw of the tables, the fills' in-plane draws
 (`pftc%ptcl_posterior_temp`) and the assignments' direction, class and
 neighbourhood draws alike, runs at one tempering factor times the particle

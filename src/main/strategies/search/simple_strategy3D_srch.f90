@@ -6,7 +6,7 @@ use simple_strategy3D_alloc, only: prep_strategy3D_thread, s3D, &
     &seed_continuous_inplane_candidate
 use simple_builder,          only: builder
 use simple_eul_prob_tab,     only: eul_prob_tab
-use simple_eul_prob_tab_utils, only: posterior_temperature, prob_insert_poses, record_shift_state, shift_box_radius
+use simple_eul_prob_tab_utils, only: posterior_temperature, prob_insert_poses, record_shift_state, shift_box_radius, shift_needs_disk
 use simple_parameters,       only: parameters
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_polarft_calc,     only: shift_ptcl2ref
@@ -17,7 +17,7 @@ implicit none
 integer, parameter :: CONT_ROUTE_NOT_ATTEMPTED  = 0
 integer, parameter :: CONT_ROUTE_IMPROVED       = 1
 integer, parameter :: CONT_ROUTE_NO_IMPROVEMENT = 2
-integer, parameter :: CONT_ROUTE_INVALID        = 3
+integer, parameter :: CONT_ROUTE_INVALID        = 3 ! numerical failures and domain rejections, including the disk bound
 
 public :: strategy3D_srch, strategy3D_spec, view_solve
 private
@@ -474,7 +474,7 @@ contains
     subroutine refine_selected_continuously_impl( self, ref )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref
-        real     :: cxy(3), joint_lims(3,2), xy_native(2), rbox
+        real     :: cxy(3), joint_lims(3,2), xy_native(2), rbox, rdisk
         real(dp) :: rotind_frac
         integer  :: irot, incoming_irot
         logical  :: evaluation_valid, improved
@@ -499,9 +499,13 @@ contains
         endif
         ! the joint domain contains the particle's box (its disk under the key) and the incoming shift, so the solve
         ! starts at, and is judged against, the pose it refines
-        rbox = self%p_ptr%trs
-        if( self%p_ptr%l_centring ) rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
-            &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%p_ptr%trs)
+        rbox  = self%p_ptr%trs
+        rdisk = 0.
+        if( self%p_ptr%l_centring )then
+            rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
+                &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%p_ptr%trs)
+            if( shift_needs_disk(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'), self%p_ptr%trs) ) rdisk = rbox
+        endif
         rbox = max(rbox, maxval(abs(xy_native)))
         joint_lims(1,:) = [-rbox, rbox]
         joint_lims(2,:) = [-rbox, rbox]
@@ -517,7 +521,7 @@ contains
         ! durable pass never performs another global all-angle reselection
         cxy = self%joint_inpl_optimizer%minimize_joint(irot, xy_native, &
             &sh_rot=.true., rotind_frac=rotind_frac, &
-            &evaluation_valid=evaluation_valid, improved=improved, irot_in=incoming_irot)
+            &evaluation_valid=evaluation_valid, improved=improved, irot_in=incoming_irot, disk_radius=rdisk)
         if( self%joint_evaluation_invalid(evaluation_valid) )then
             ! retain the incoming assignment untouched
             self%continuous_route_outcome = CONT_ROUTE_INVALID
@@ -588,7 +592,7 @@ contains
         logical,                intent(in)                  :: l_view
         type(view_solve),       intent(out)                 :: vs
         real,                   optional,        intent(in) :: seed_coord
-        real     :: cxy(3), lims(5,2), xy_ref(2), rbox, seed_angle
+        real     :: cxy(3), lims(5,2), xy_ref(2), rbox, rdisk, seed_angle
         real(dp) :: rotind_frac, xsol(5)
         integer  :: refined_inpl, iproj, state
         logical  :: evaluation_valid, improved
@@ -618,9 +622,13 @@ contains
         endif
         ! the joint domain contains the particle's box (its disk under the key) and the incoming shift, so the solve
         ! starts at, and is judged against, the pose it refines
-        rbox = self%p_ptr%trs
-        if( self%p_ptr%l_centring ) rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
-            &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%p_ptr%trs)
+        rbox  = self%p_ptr%trs
+        rdisk = 0.
+        if( self%p_ptr%l_centring )then
+            rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
+                &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%p_ptr%trs)
+            if( shift_needs_disk(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'), self%p_ptr%trs) ) rdisk = rbox
+        endif
         rbox = max(rbox, maxval(abs(xy_ref)))
         lims(1,:) = [-rbox, rbox]
         lims(2,:) = [-rbox, rbox]
@@ -646,12 +654,12 @@ contains
             call self%view_optimizer%set_indices(ref, self%iptcl)
             call self%view_optimizer%set_limits(lims)
             cxy = self%view_optimizer%minimize_joint(refined_inpl, xy_ref, sh_rot=.true., rotind_frac=rotind_frac, &
-                &evaluation_valid=evaluation_valid, improved=improved, irot_in=inpl, xsol=xsol, rotind_seed=seed_coord)
+                &evaluation_valid=evaluation_valid, improved=improved, irot_in=inpl, xsol=xsol, rotind_seed=seed_coord, disk_radius=rdisk)
         else
             call self%joint_inpl_optimizer%set_indices(ref, self%iptcl)
             call self%joint_inpl_optimizer%set_limits(lims(1:3,:))
             cxy = self%joint_inpl_optimizer%minimize_joint(refined_inpl, xy_ref, sh_rot=.true., rotind_frac=rotind_frac, &
-                &evaluation_valid=evaluation_valid, improved=improved, irot_in=inpl)
+                &evaluation_valid=evaluation_valid, improved=improved, irot_in=inpl, disk_radius=rdisk)
         endif
         if( .not. evaluation_valid )then
             ! retain the incoming assignment untouched

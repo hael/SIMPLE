@@ -86,6 +86,7 @@ contains
         call test_table_increment_axes()
         call test_map_initialised_refinement()
         call test_continuous_seed_beyond_window()
+        call test_continuous_disk_boundary()
         call test_solved_row_frame()
         call test_rec_observation_mask()
         call test_pass_team_check()
@@ -1078,6 +1079,92 @@ contains
         call cline%kill
         call del_file(PHANTOM)
     end subroutine test_continuous_seed_beyond_window
+
+    !> Both 3D consumers reject a square-interior optimum outside the disk, at several rotated frames.
+    subroutine test_continuous_disk_boundary()
+        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_disk_boundary.mrc'
+        real, parameter :: RADIUS = 3., SEED(2) = [1.8, 1.8], PLANTED(2) = [2.5, 2.5]
+        real, parameter :: STORED_SHIFT(2) = [8., -6.]
+        class(builder),         allocatable, target :: b
+        class(parameters),      allocatable, target :: p
+        class(cmdline),         allocatable         :: cline
+        class(strategy3D_srch), allocatable         :: srch
+        type(strategy3D_spec)                      :: spec
+        complex(sp), allocatable :: ref(:,:), ptcl(:,:)
+        real, allocatable, target :: sigma2(:,:)
+        real, allocatable :: scores(:)
+        real :: seed_sh(2), sh(2), corr, inpl_coord, seed_corr, euler(3), total_shift(2)
+        integer :: pftsz, kfromto(2), pdim(3), k, pp, inpl, irot, mode
+        logical :: inpl_valid
+        write(*,'(A)') 'test_continuous_disk_boundary'
+        allocate(b, p, cline, srch)
+        call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec, trs=RADIUS, objfun='euclid')
+        call set_fixed_seed(20261127)
+        p%l_centring = .true.
+        p%shift_sigma = RADIUS * p%smpd / 3.
+        pftsz = b%pftc%get_pftsz()
+        kfromto = b%pftc%get_kfromto()
+        pdim = b%pftc%get_pdim_interp()
+        allocate(ref(pdim(1),pdim(2):pdim(3)), ptcl(pdim(1),pdim(2):pdim(3)), source=cmplx(0.,0.))
+        allocate(scores(b%pftc%get_nrots()), sigma2(kfromto(1):kfromto(2),2), source=1.)
+        do k = kfromto(1), kfromto(2)
+            do pp = 1, pftsz
+                ref(pp,k) = cmplx(gasdev(), gasdev())
+            enddo
+        enddo
+        call b%pftc%set_ref_pft(1, ref, iseven=.true.)
+        call b%pftc%set_eo(1, .true.)
+        call b%pftc%memoize_refs
+        call b%pftc%assign_sigma2_noise(sigma2)
+        do inpl = 1, b%pftc%get_nrots(), max(1, b%pftc%get_nrots()/3)
+            call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, ref(:,kfromto(1):kfromto(2)), inpl, ptcl(:,kfromto(1):kfromto(2)))
+            call shift_half_ring(pftsz, kfromto, p%box, shift_ref2ptcl(PLANTED, b%pftc%get_rot(inpl)), &
+                &ptcl(:,kfromto(1):kfromto(2)))
+            call b%pftc%set_ptcl_pft(1, ptcl)
+            call b%pftc%memoize_ptcls
+            call b%pftc%gen_objfun_vals(1, 1, SEED, scores)
+            seed_corr = scores(inpl)
+            seed_sh = shift_ref2ptcl(SEED, b%pftc%get_rot(inpl))
+            ! Reuse one optimizer for an uncentred disk, a narrow window and a widened-prior disk.
+            ! Exact fallback comparisons require the incoming pose and score to remain untouched.
+            do mode = 1, 3
+                call b%spproj_field%set(1, 'shsig', -1.)
+                if( mode == 2 ) call b%spproj_field%set(1, 'shsig', 0.)
+                if( mode == 3 ) call b%spproj_field%set(1, 'shsig', p%trs)
+                irot = inpl
+                corr = seed_corr
+                sh = seed_sh
+                call srch%refine_assignment_continuously(1, irot, corr, sh, inpl_coord, inpl_valid)
+                if( mode == 2 )then
+                    call assert_true(norm2(sh) > RADIUS + 0.2, 'negative control: 3D probability windows retain square-interior optima')
+                else
+                    call assert_true(all(sh == seed_sh), '3D probability disk rejection retains the incoming shift exactly')
+                    call assert_true(corr == seed_corr, '3D probability disk rejection retains the incoming score exactly')
+                    call assert_int(inpl, irot, '3D probability disk rejection retains the incoming rotation')
+                    call assert_false(inpl_valid, '3D probability disk rejection publishes no fractional rotation')
+                endif
+                call srch%store_discrete_seed_solution(1, inpl, seed_corr, seed_sh)
+                call srch%refine_selected_continuously(1)
+                if( mode == 2 )then
+                    call assert_true(norm2(s3D%proj_space_shift(:,1,1)) > RADIUS + 0.2, 'negative control: classic 3D windows retain square-interior optima')
+                else
+                    call assert_true(all(s3D%proj_space_shift(:,1,1) == seed_sh), 'classic 3D disk rejection retains the incoming shift exactly')
+                    call assert_true(s3D%proj_space_corrs(1,1) == seed_corr, 'classic 3D disk rejection retains the incoming score exactly')
+                    call assert_int(inpl, s3D%proj_space_inplinds(1,1), 'classic 3D disk rejection retains the incoming rotation')
+                    call assert_false(s3D%proj_space_inplvalid(1,1), 'classic 3D disk rejection publishes no fractional rotation')
+                    call candidate_pose(srch, 1, inpl, seed_sh, euler, total_shift)
+                    call assert_true(all(abs(total_shift - (STORED_SHIFT + seed_sh)) < 1.e-6), 'the disk bounds the increment, not the accumulated 3D shift')
+                endif
+            enddo
+        enddo
+        call srch%kill
+        call clean_strategy3D
+        call b%pftc%kill
+        call b%kill_strategy3D_tbox
+        call b%kill_general_tbox
+        call cline%kill
+        call del_file(PHANTOM)
+    end subroutine test_continuous_disk_boundary
 
     !> The in-plane row of a solved pose at the increment both continuous solves return (bank, stored frame): its
     !! minimum within one bin of the solved angle, its value at that bin the shifted-reference kernel at

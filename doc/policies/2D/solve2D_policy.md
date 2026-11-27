@@ -244,8 +244,10 @@ sparse table scores every class for one; the written class carries its own
 mapped shift, and `assign_ori` records the shift state. The matcher builds the
 maps once per run (`setup_shiftmap_srch`). The stream's pool (`snhc_smpl`, its
 appended particles greedy) is centred this way.
-The continuous in-plane route's joint domain contains the particle's box and the
-incoming shift (the refine3D policy), so a disk shift is refined, not clipped.
+Both refinement stages enforce the circular disk and preserve a scored fallback
+as specified in the [refine3D shift-search contract](../3D/refine3D_policy.md#dense-table-assignment-assign_rows).
+The bound applies to the native-pixel increment; local-window searches retain
+their rectangular bounds.
 
 The centring is a per-particle state, not a stage (ruling 19, 2026-11-02; the
 sampling strategies inject particles no stage would otherwise centre). Each

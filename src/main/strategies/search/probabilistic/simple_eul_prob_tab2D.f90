@@ -432,7 +432,8 @@ contains
                         ! optimum if it beat the origin, minimize's baseline; else the coarse optimum, scored at full
                         ! resolution, if it beats the origin's row; else that row stands
                         irot = scr_irot(icls)
-                        call gso%minimize_in_cell(irot, scr_xy(:,icls), step_map(imap), cxy_prob, l_cont_refined)
+                        call gso%minimize_in_cell(irot, scr_xy(:,icls), step_map(imap), cxy_prob, l_cont_refined,&
+                            &disk_radius=merge(disk_radius_px(self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box), 0., l_disk))
                         inpl_dist = eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun)
                         if( l_cont_refined .or. inpl_dist < cls_dists(icls) )then
                             call self%record_sparse_eval(i, ithr, icls, inpl_dist, irot, cxy_prob(2), cxy_prob(3), .true.,&
@@ -747,7 +748,8 @@ contains
                     nrefined(ithr_loc) = nrefined(ithr_loc) + 1_int64
                     call gso%set_indices(icls_loc, iptcl_loc)
                     irot_loc = scr_irot_loc(icls_loc)
-                    call gso%minimize_in_cell(irot_loc, scr_xy_loc(:,icls_loc), step_map(imap_loc), cxy_prob_loc, l_cont_refined_loc)
+                    call gso%minimize_in_cell(irot_loc, scr_xy_loc(:,icls_loc), step_map(imap_loc), cxy_prob_loc, l_cont_refined_loc,&
+                        &disk_radius=disk_radius_px(self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box))
                     dist_loc = eulprob_dist_switch(cxy_prob_loc(1), self%p_ptr%cc_objfun)
                     if( l_cont_refined_loc .or. dist_loc < eval_work%eval_dists(slot_of_loc(icls_loc),ithr_loc) )then
                         call self%record_sparse_eval(i_loc, ithr_loc, icls_loc, dist_loc, irot_loc,&

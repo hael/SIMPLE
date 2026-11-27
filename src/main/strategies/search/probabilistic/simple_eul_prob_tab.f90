@@ -651,7 +651,8 @@ contains
                 if( scr_loss(ri_loc,ithr_loc) >= huge(1.0)/2. ) cycle
                 call gso%set_indices(self%ref_full(ri_loc), iptcl_loc)
                 irot_loc = scr_irot(ri_loc,ithr_loc)
-                call gso%minimize_in_cell(irot_loc, scr_xy(:,ri_loc,ithr_loc), step_map(imap), cxy, l_cont_refined)
+                call gso%minimize_in_cell(irot_loc, scr_xy(:,ri_loc,ithr_loc), step_map(imap), cxy, l_cont_refined,&
+                    &disk_radius=merge(real(radius_disk), 0., l_disk))
                 dist_loc = eulprob_dist_switch(cxy(1), self%p_ptr%cc_objfun)
                 if( .not. l_cont_refined .and. .not. (dist_loc < rows_batch(ri_loc,i_loc)%dist) ) cycle
                 rows_batch(ri_loc,i_loc) = prob_dense_entry(dist_loc, irot_loc)

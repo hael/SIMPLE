@@ -1819,7 +1819,8 @@ contains
                     ri = ew%evaluated_ref_ids(eval_slot,ithr)
                     call gso%set_indices(self%ref_full(ri), iptcl)
                     irot = scr_irot(eval_slot)
-                    call gso%minimize_in_cell(irot, scr_xy(:,eval_slot), step, refined_shift, l_cont_refined)
+                    call gso%minimize_in_cell(irot, scr_xy(:,eval_slot), step, refined_shift, l_cont_refined,&
+                        &disk_radius=disk_radius_px(self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box))
                     dist = eulprob_dist_switch(refined_shift(1), self%p_ptr%cc_objfun)
                     if( l_cont_refined .or. dist < ew%evaluated_ref_dists(eval_slot,ithr) )then
                         call record_sparse_eval(self, i, ithr, ri, dist, irot, refined_shift(2), refined_shift(3), .true.,&

@@ -306,12 +306,13 @@ contains
     !! set, stays centred at the stored shift. cxy is (correlation, the shift rotated into the particle's axes) of the
     !! better of the refinement and the cell at its best rotation; l_cont_refined says it beat the stored shift's best
     !! rotation, else the caller keeps its stored-shift row unless cxy beats it
-    subroutine minimize_in_cell( self, irot, xy_cell, step, cxy, l_cont_refined )
+    subroutine minimize_in_cell( self, irot, xy_cell, step, cxy, l_cont_refined, disk_radius )
         class(pftc_shsrch_grad), intent(inout) :: self
         integer,                 intent(inout) :: irot
         real,                    intent(in)    :: xy_cell(2), step
         real,                    intent(out)   :: cxy(3)
         logical,                 intent(out)   :: l_cont_refined
+        real, optional,          intent(in)    :: disk_radius !< positive: bound the increment from the stored shift
         real    :: lims_orig(2,2), lims_box(2,2), corrs(self%nrots)
         if( self%search_mode /= SHSRCH_SHIFT ) THROW_HARD('the cell refinement needs a shift search object; minimize_in_cell')
         lims_orig     = self%ospec%limits(1:2,1:2)
@@ -320,8 +321,11 @@ contains
         call self%ospec%set_limits(lims_box)
         cxy = self%minimize(irot=irot, sh_rot=.true., xy_in=xy_cell, prior_origin=.true.)
         call self%ospec%set_limits(lims_orig)
+        if( irot > 0 )then
+            if( .not. shift_inside_disk(cxy(2:3), disk_radius) ) irot = 0
+        endif
         if( irot < 1 )then
-            ! the refinement did not improve on the cell: the cell at its best rotation
+            ! A rejected refinement retains the valid cell, scored at its own best rotation.
             call self%objfun_vals(xy_cell, corrs)
             irot     = maxloc(corrs, dim=1)
             cxy(1)   = corrs(irot)
@@ -331,6 +335,20 @@ contains
         call self%objfun_vals([0.,0.], corrs)
         l_cont_refined = cxy(1) > maxval(corrs)
     end subroutine minimize_in_cell
+
+    !> A disk constrains the increment in either rotated frame; absent or zero retains rectangular windows.
+    pure logical function shift_inside_disk( xy, radius ) result( inside )
+        real,           intent(in) :: xy(2)
+        real, optional, intent(in) :: radius
+        real(dp) :: bound
+        inside = .true.
+        if( .not. present(radius) ) return
+        if( radius <= 0. ) return
+        ! Allow only rounding of a single-precision rotation at the rim.
+        bound  = real(radius, dp) * (1.d0 + 8.d0 * real(epsilon(1.), dp))
+        inside = all(ieee_is_finite(xy))
+        if( inside ) inside = sum(real(xy, dp)**2) <= bound**2
+    end function shift_inside_disk
 
     !> The shift prior of the next minimisations: sigma2 the shift variance per axis (pixels^2, from the previous
     !! iteration's shift increments), temp the particle's temperature (posterior_temperature, untempered: the prior
@@ -892,7 +910,7 @@ contains
     !! irot_in is authoritative, there is no all-angle rescan. An invalid or non-material solve returns the
     !! seed cell re-scored at xy_in (irot never 0, always committable); evaluation_valid/improved say which.
     function grad_shsrch_minimize_joint( self, irot, xy_in, sh_rot, rotind_frac, &
-            &evaluation_valid, improved, initial_cost_out, irot_in, xsol, rotind_seed ) result(cxy)
+            &evaluation_valid, improved, initial_cost_out, irot_in, xsol, rotind_seed, disk_radius ) result(cxy)
         class(pftc_shsrch_grad), intent(inout)         :: self
         integer,                 intent(out)           :: irot
         real,                    intent(in)            :: xy_in(2)
@@ -903,6 +921,7 @@ contains
         integer,                 intent(in)            :: irot_in
         real(dp),                optional, intent(out) :: xsol(:)     !< the result's point: the solution when improved, else the seed (shift in the reference frame, rotation index[, tilts])
         real,                    optional, intent(in)  :: rotind_seed !< geometric proposal's exact stored in-plane coordinate
+        real,                    optional, intent(in)  :: disk_radius !< positive: bound the increment from the stored shift
         ! a final cost this far outside its physical range is a series artifact: invalid solve
         real(dp), parameter :: JOINT_NEG_COST_TOL = 1.d-2
         ! a gain must be material, not solver noise
@@ -994,6 +1013,7 @@ contains
                 &all(real(self%ospec%x,dp) <= &
                 &real(self%ospec%limits(:,2),dp)+coordinate_tol(1:ndim))
         endif
+        if( valid_coordinates ) valid_coordinates = shift_inside_disk(self%ospec%x(1:2), disk_radius)
         valid_result = self%joint_initial_cost_valid .and. ieee_is_finite(initial_cost) .and. &
             &ieee_is_finite(final_cost) .and. valid_coordinates
         if( valid_result )then

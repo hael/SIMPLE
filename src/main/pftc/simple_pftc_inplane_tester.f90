@@ -72,6 +72,7 @@ contains
         call test_euclid_band_edges()
         call test_cc_evaluator()
         call test_strategy2D_route_flags()
+        call test_disk_refinement_boundaries()
         call test_grid_fit_search()
         call test_particle_bank()
         call test_grid_ptcl_search()
@@ -836,6 +837,119 @@ contains
         end function joint_solve_valid
 
     end subroutine test_strategy2D_route_flags
+
+    !> A planted optimum inside the square but outside the disk must retain a scored seed at both stages.
+    subroutine test_disk_refinement_boundaries()
+        use simple_strategy2D_alloc, only: s2D
+        class(builder),         allocatable, target :: b
+        class(parameters),      allocatable, target :: p
+        class(strategy2D_srch), allocatable         :: route
+        class(pftc_shsrch_grad), allocatable        :: cell, joint
+        type(strategy2D_spec)                      :: spec
+        real, parameter :: RADIUS = 3., SEED(2) = [1.8, 1.8], PLANTED(2) = [2.5, 2.5]
+        real, parameter :: SCORE_TOL = 5.e-5 ! single-precision polar sums versus the double-precision joint objective
+        real, allocatable :: scores(:)
+        real    :: lims(2,2), jlims(3,2), free_pose(3), disk_pose(3), inside_pose(3), seed_score, seed_sh(2)
+        real(dp) :: rotind, seed_cost, grad(3)
+        integer  :: irot, seed_rot, mode
+        logical  :: refined, valid, improved, had_schedule, saved_schedule
+        write(*,'(A)') 'test_disk_refinement_boundaries'
+        allocate(b, p, route, cell, joint)
+        call build_fixture(b, p, OBJ_EUCLID, LP_LOW, 0., PLANTED, .false.)
+        allocate(scores(b%pftc%get_nrots()))
+        call b%pftc%gen_objfun_vals(1, 1, SEED, scores)
+        seed_rot   = maxloc(scores, dim=1)
+        seed_score = scores(seed_rot)
+        seed_sh    = shift_ref2ptcl(SEED, b%pftc%get_rot(seed_rot))
+        lims(:,1) = -RADIUS
+        lims(:,2) =  RADIUS
+        call cell%new_alternating(b, lims, maxits=100)
+        call cell%set_indices(1, 1)
+        irot = seed_rot
+        call cell%minimize_in_cell(irot, SEED, 0.9, free_pose, refined)
+        call assert_true(refined, 'the planted cell refinement improves on the stored shift')
+        call assert_true(norm2(free_pose(2:3)) > RADIUS + 0.2, 'negative control: rectangular cell refinement escapes the disk')
+        call assert_true(abs(norm2(free_pose(2:3)) - norm2(PLANTED)) < 0.1, 'cell refinement recovers the independently planted magnitude')
+        irot = seed_rot
+        call cell%minimize_in_cell(irot, SEED, 0.9, disk_pose, refined, disk_radius=RADIUS)
+        call assert_int(seed_rot, irot, 'disk rejection retains the coarse cell at its best grid rotation')
+        call assert_true(all(abs(disk_pose(2:3) - seed_sh) < 1.e-6), 'disk rejection retains the coarse cell without projecting it')
+        call assert_true(abs(disk_pose(1) - seed_score) < SCORE_TOL, 'the retained cell carries its own score')
+        irot = seed_rot
+        call cell%minimize_in_cell(irot, SEED, 0.9, inside_pose, refined, disk_radius=4.)
+        call assert_true(all(abs(inside_pose - free_pose) < 1.e-6), 'an improving cell refinement inside the disk is unchanged')
+        call cell%kill
+        jlims(1:2,:) = lims
+        jlims(3,:) = [-1., real(b%pftc%get_nrots())+2.]
+        call joint%new_joint(b, jlims, 100)
+        call joint%set_indices(1, 1)
+        free_pose = joint%minimize_joint(irot, SEED, sh_rot=.true., rotind_frac=rotind, &
+            &evaluation_valid=valid, improved=improved, irot_in=seed_rot)
+        call assert_true(valid .and. improved, 'the planted joint solve is valid and improves on the seed')
+        call assert_true(norm2(free_pose(2:3)) > RADIUS + 0.2, 'negative control: joint refinement escapes the disk inside the square')
+        disk_pose = joint%minimize_joint(irot, SEED, sh_rot=.true., rotind_frac=rotind, &
+            &evaluation_valid=valid, improved=improved, irot_in=seed_rot, disk_radius=RADIUS)
+        call assert_false(valid, 'the joint solve rejects an out-of-disk result')
+        call assert_false(improved, 'the rejected joint result cannot be committed as an improvement')
+        call assert_int(seed_rot, irot, 'the rejected joint result retains the seed angle')
+        ! Exact equality checks an untouched fallback coordinate, not numerical agreement.
+        call assert_true(rotind == real(seed_rot,dp), 'the rejected joint result retains the seed fractional coordinate')
+        call assert_true(all(abs(disk_pose(2:3) - seed_sh) < 1.e-6), 'the rejected joint result retains the seed shift')
+        call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, real(SEED,dp), real(seed_rot,dp), seed_cost, grad)
+        call assert_true(abs(disk_pose(1) - real(exp(-seed_cost))) < SCORE_TOL, 'the rejected joint result carries the seed objective')
+        inside_pose = joint%minimize_joint(irot, SEED, sh_rot=.true., rotind_frac=rotind, &
+            &evaluation_valid=valid, improved=improved, irot_in=seed_rot, disk_radius=4.)
+        call assert_true(valid .and. improved, 'an improving joint result inside the disk is accepted')
+        call assert_true(all(abs(inside_pose - free_pose) < 1.e-6), 'the accepted joint pose and score are unchanged')
+        call joint%kill
+        ! The real 2D caller supplies the disk only for a disk search, independently of the accumulated shift.
+        p%ncls = p%nspace
+        p%trs = RADIUS
+        p%shift_sigma = RADIUS * p%smpd / 3.
+        p%l_prob_align_mode = .true.
+        p%l_centring = .true.
+        call b%spproj_field%set_shift(1, [8., -6.])
+        spec%iptcl = 1
+        spec%iptcl_batch = 1
+        spec%iptcl_map = 1
+        had_schedule = allocated(s2D%do_inplsrch)
+        saved_schedule = .false.
+        if( had_schedule )then
+            saved_schedule = s2D%do_inplsrch(1)
+        else
+            allocate(s2D%do_inplsrch(1))
+        endif
+        s2D%do_inplsrch(1) = .true.
+        call route%new(p, spec, b)
+        ! Reuse one optimizer for an uncentred disk, a narrow window and a widened-prior disk.
+        do mode = 1, 3
+            call b%spproj_field%set(1, 'shsig', -1.)
+            if( mode == 2 ) call b%spproj_field%set(1, 'shsig', 0.)
+            if( mode == 3 ) call b%spproj_field%set(1, 'shsig', p%trs)
+            route%best_class = 1
+            route%best_rot   = seed_rot
+            route%best_corr  = seed_score
+            route%best_shvec = seed_sh
+            route%has_continuous_e3 = .false.
+            call route%refine_selected_continuously
+            if( mode == 2 )then
+                call assert_true(norm2(route%best_shvec) > RADIUS + 0.2, '2D local windows retain rectangular shift bounds')
+            else
+                ! Exact equality requires the incoming pose and score to remain untouched.
+                call assert_true(all(route%best_shvec == seed_sh), '2D disk rejection preserves the incoming shift exactly')
+                call assert_int(seed_rot, route%best_rot, '2D disk rejection preserves the incoming grid angle')
+                call assert_true(route%best_corr == seed_score, '2D disk rejection preserves the incoming score exactly')
+                call assert_false(route%has_continuous_e3, '2D disk rejection cannot publish a fractional angle')
+            endif
+        enddo
+        call route%kill
+        if( had_schedule )then
+            s2D%do_inplsrch(1) = saved_schedule
+        else
+            deallocate(s2D%do_inplsrch)
+        endif
+        call kill_fixture(b)
+    end subroutine test_disk_refinement_boundaries
 
     ! ---- quadratic shift step from the coarse grid (multi-state table) -------
 

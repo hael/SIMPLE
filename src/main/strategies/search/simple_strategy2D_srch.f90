@@ -4,7 +4,7 @@ use simple_core_module_api, only: dp
 use simple_pftc_srch_api
 use simple_strategy2D_alloc, only: prep_strategy2D_thread, s2D, is_fresh_2D_start
 use simple_eul_prob_tab2D,   only: eul_prob_tab2D
-use simple_eul_prob_tab_utils, only: posterior_temperature, record_shift_state, shift_box_radius, prob_rnd_scope, &
+use simple_eul_prob_tab_utils, only: posterior_temperature, record_shift_state, shift_box_radius, shift_needs_disk, prob_rnd_scope, &
     &prob_insert_inpl
 use simple_rnd,              only: rnd_keyed_int, rnd_draw_key, RND_FAM_ASSIGN
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
@@ -20,7 +20,7 @@ private
 integer, parameter :: CONT_ROUTE_NOT_ATTEMPTED  = 0
 integer, parameter :: CONT_ROUTE_IMPROVED       = 1
 integer, parameter :: CONT_ROUTE_NO_IMPROVEMENT = 2
-integer, parameter :: CONT_ROUTE_INVALID        = 3
+integer, parameter :: CONT_ROUTE_INVALID        = 3 ! numerical failures and domain rejections, including the disk bound
 
 type strategy2D_spec
     type(eul_prob_tab2D),   pointer :: eulprob_obj_part2D => null()
@@ -414,15 +414,19 @@ contains
         call rotmat2d(self%b_ptr%pftc%get_rot(self%best_rot), rotmat)
         xy_native = matmul(self%best_shvec, transpose(rotmat))
         block
-        real     :: cxy(3), joint_lims(3,2), rbox
+        real     :: cxy(3), joint_lims(3,2), rbox, rdisk
         real(dp) :: rotind_frac
         integer  :: irot
         logical  :: evaluation_valid, improved
         ! the joint domain contains the particle's box (its disk under the key) and the incoming shift, so the solve
         ! starts at, and is judged against, the pose it refines
-        rbox = self%trs
-        if( self%p_ptr%l_centring ) rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
-            &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%trs)
+        rbox  = self%trs
+        rdisk = 0.
+        if( self%p_ptr%l_centring )then
+            rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
+                &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%trs)
+            if( shift_needs_disk(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'), self%trs) ) rdisk = rbox
+        endif
         rbox = max(rbox, maxval(abs(xy_native)))
         joint_lims(1,:) = [-rbox, rbox]
         joint_lims(2,:) = [-rbox, rbox]
@@ -436,7 +440,7 @@ contains
         call self%joint_inpl_optimizer%set_limits(joint_lims)
         cxy = self%joint_inpl_optimizer%minimize_joint(irot, xy_native, &
             &sh_rot=.true., rotind_frac=rotind_frac, &
-            &evaluation_valid=evaluation_valid, improved=improved, irot_in=self%best_rot)
+            &evaluation_valid=evaluation_valid, improved=improved, irot_in=self%best_rot, disk_radius=rdisk)
         if( .not. evaluation_valid )then
             ! retain the incoming assignment untouched
             self%continuous_route_outcome = CONT_ROUTE_INVALID

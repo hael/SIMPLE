@@ -169,7 +169,8 @@ contains
             irot = scr_irot(k)
             if( self%l_disk )then
                 call self%gso_disk%set_indices(ref, self%iptcl)
-                call self%gso_disk%minimize_in_cell(irot, scr_xy(:,k), step_run(self%imap), cxy, l_cont_refined)
+                call self%gso_disk%minimize_in_cell(irot, scr_xy(:,k), step_run(self%imap), cxy, l_cont_refined,&
+                    &disk_radius=disk_radius_px(self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box))
             else
                 call self%gso_win%set_indices(ref, self%iptcl)
                 call self%gso_win%minimize_in_cell(irot, scr_xy(:,k), step_run(self%imap), cxy, l_cont_refined)
