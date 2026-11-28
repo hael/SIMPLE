@@ -1,0 +1,300 @@
+--- a/src/main/pftc/simple_pftc_shsrch_grad.f90
++++ b/src/main/pftc/simple_pftc_shsrch_grad.f90
+@@ -9,16 +9,18 @@
+ implicit none
+ 
+ public :: pftc_shsrch_grad
+-public :: fit_quadratic_step, grid_stencil_exists
++public :: fit_quadratic_step, grid_stencil_centre
+ public :: shift_ptcl2ref, shift_ref2ptcl
+-public :: FIT_EDGE, FIT_CURVATURE, FIT_STEP, FIT_LIMITS, FIT_VALUE, FIT_NREASONS
++public :: FIT_KEPT_EDGE, FIT_CURVATURE, FIT_STEP, FIT_LIMITS, FIT_VALUE, FIT_NREASONS
+ private
+ #include "simple_local_flags.inc"
+ 
+ integer,  parameter :: coarse_num_steps = 5       ! no. of coarse search steps in x AND y (hence real no. is its square)
+ integer,  parameter :: SHSRCH_SHIFT = 1, SHSRCH_JOINT = 2
+-! reasons the quadratic grid step falls back to the L-BFGS-B alternations
+-integer,  parameter :: FIT_EDGE = 1, FIT_CURVATURE = 2, FIT_STEP = 3, FIT_LIMITS = 4, FIT_VALUE = 5, FIT_NREASONS = 5
++! outcomes of the quadratic grid step other than a fit kept from the stencil centred on the grid minimum: (FIT_KEPT_EDGE)
++! a fit kept from a stencil centred one point inside, because the grid minimum is on the edge of the lattice, and the
++! reasons for falling back to the L-BFGS-B alternations
++integer,  parameter :: FIT_KEPT_EDGE = 1, FIT_CURVATURE = 2, FIT_STEP = 3, FIT_LIMITS = 4, FIT_VALUE = 5, FIT_NREASONS = 5
+ real(dp), parameter :: FIT_MIN_CURV_RATIO = 0.01d0 ! smallest accepted ratio of the Hessian's eigenvalues
+ 
+ type :: pftc_shsrch_grad
+@@ -49,7 +51,7 @@
+     real,         allocatable :: grid_corrs(:,:)        !< objective of every grid point over all rotations (nrots, points)
+     integer                   :: grid_ix_star = 0       !< grid point of the lowest cost, x index
+     integer                   :: grid_iy_star = 0       !< grid point of the lowest cost, y index
+-    integer(int64)            :: profile_fit(0:FIT_NREASONS) = 0_int64 !< (0) fits kept, (1:5) fallbacks per FIT_* reason
++    integer(int64)            :: profile_fit(0:FIT_NREASONS) = 0_int64 !< (0) fits kept, (FIT_KEPT_EDGE) fits kept from an edge-centred stencil, (2:5) fallbacks per FIT_* reason
+     ! particle-frame coarse grid (prob_grid_ptcl)
+     logical                   :: grid_ptcl    = .false. !< the grid is the lattice of particle-frame shifts, scored from a bank
+     complex(sp),  allocatable :: grid_bank(:,:,:)       !< shifted particle memos (pftsz+1, nk, lattice points + 1 scratch)
+@@ -712,18 +714,24 @@
+         u(2) = s(1) * rotmat(1,2) + s(2) * rotmat(2,2)
+     end function shift_ref2ptcl
+ 
+-    !> a grid point has the full 3x3 stencil of the quadratic step unless it lies on the edge of the lattice
+-    pure logical function grid_stencil_exists( ix, iy )
+-        integer, intent(in) :: ix, iy
+-        grid_stencil_exists = ix >= 2 .and. ix <= coarse_num_steps-1 .and. iy >= 2 .and. iy <= coarse_num_steps-1
+-    end function grid_stencil_exists
+-
+-    !> Stationary point (da,db), in grid spacings, of the least-squares quadratic over a 3x3 stencil v(a,b).
+-    !! reason: 0 = step, FIT_CURVATURE = H not positive definite or ill conditioned, FIT_STEP = leaves the centre cell.
+-    pure subroutine fit_quadratic_step( v, da, db, reason )
++    !> the centre of the 3x3 stencil of the quadratic step for a grid minimum at (ix,iy): the grid minimum itself,
++    !! or the nearest inner point of the lattice when it lies on the edge, so that the stencil always contains it
++    pure subroutine grid_stencil_centre( ix, iy, cx, cy )
++        integer, intent(in)  :: ix, iy
++        integer, intent(out) :: cx, cy
++        cx = max(2, min(coarse_num_steps-1, ix))
++        cy = max(2, min(coarse_num_steps-1, iy))
++    end subroutine grid_stencil_centre
++
++    !> Stationary point (da,db), in grid spacings from the grid minimum, of the least-squares quadratic over a 3x3
++    !! stencil v(a,b). The stencil is centred on the grid minimum, or (oa,ob) grid steps from it (an edge minimum).
++    !! reason: 0 = step, FIT_CURVATURE = H not positive definite or ill conditioned, FIT_STEP = leaves the cell of the
++    !! grid minimum.
++    pure subroutine fit_quadratic_step( v, da, db, reason, oa, ob )
+         real(dp), intent(in)  :: v(-1:1,-1:1)
+         real(dp), intent(out) :: da, db
+         integer,  intent(out) :: reason
++        integer, optional, intent(in) :: oa, ob !< stencil centre minus grid minimum, in grid steps (default 0)
+         real(dp) :: S, Sa, Sb, Sab, Sa2, Sb2, g1, g2, h11, h22, h12, det, tr, disc, lmax, lmin
+         integer  :: ia, ib
+         da = 0.d0
+@@ -755,6 +763,8 @@
+         endif
+         da = -( h22 * g1 - h12 * g2) / det
+         db = -(-h12 * g1 + h11 * g2) / det
++        if( present(oa) ) da = da + real(oa,dp)
++        if( present(ob) ) db = db + real(ob,dp)
+         if( .not. (abs(da) <= 0.5d0 .and. abs(db) <= 0.5d0) )then
+             reason = FIT_STEP
+             return
+@@ -763,28 +773,27 @@
+     end subroutine fit_quadratic_step
+ 
+     !> Quadratic step from the coarse grid minimum: the 3x3 stencil of the grid loss at its rotation, -log(objective)
+-    !! for Euclid (the objective is exp(-loss)), -objective otherwise. A failed guard counts its reason and leaves the
+-    !! state untouched; see doc/policies/3D/refine3D_policy.md.
++    !! for Euclid (the objective is exp(-loss)), -objective otherwise. The stencil is centred on the grid minimum, or
++    !! on the nearest inner lattice point when the minimum is on the edge; the step is measured from the minimum either
++    !! way. A failed guard counts its reason and leaves the state untouched; see doc/policies/3D/refine3D_policy.md.
+     subroutine try_grid_fit( self, corrs, fitted )
+         class(pftc_shsrch_grad), intent(inout) :: self
+         real,                    intent(out)   :: corrs(self%nrots)  !< objective over all rotations at the fitted shift
+         logical,                 intent(out)   :: fitted
+         real(dp) :: v(-1:1,-1:1), da, db, stepx, stepy, fx, fy
+         real     :: fit_xy(2), best_grid_corr
+-        integer  :: ix, iy, ia, ib, irot_star, irot_fit, reason
+-        logical  :: l_euclid
++        integer  :: ix, iy, cx, cy, ia, ib, irot_star, irot_fit, reason
++        logical  :: l_euclid, l_edge
+         fitted = .false.
+         ix = self%grid_ix_star
+         iy = self%grid_iy_star
+         irot_star = self%cur_inpl_idx
+-        if( .not. grid_stencil_exists(ix, iy) )then
+-            self%profile_fit(FIT_EDGE) = self%profile_fit(FIT_EDGE) + 1_int64
+-            return
+-        endif
+-        l_euclid = self%b_ptr%pftc%is_euclid_objfun()
++        call grid_stencil_centre(ix, iy, cx, cy)
++        l_edge    = cx /= ix .or. cy /= iy
++        l_euclid  = self%b_ptr%pftc%is_euclid_objfun()
+         do ia = -1,1
+             do ib = -1,1
+-                v(ia,ib) = real(self%grid_corrs(irot_star,(ix+ia-1)*coarse_num_steps+iy+ib), dp)
++                v(ia,ib) = real(self%grid_corrs(irot_star,(cx+ia-1)*coarse_num_steps+cy+ib), dp)
+                 if( l_euclid )then
+                     v(ia,ib) = -log(max(v(ia,ib), 1.d-30))
+                 else
+@@ -792,7 +801,7 @@
+                 endif
+             enddo
+         enddo
+-        call fit_quadratic_step(v, da, db, reason)
++        call fit_quadratic_step(v, da, db, reason, cx - ix, cy - iy)
+         if( reason /= 0 )then
+             self%profile_fit(reason) = self%profile_fit(reason) + 1_int64
+             return
+@@ -847,7 +856,11 @@
+         self%ospec%x_8       = dble(fit_xy)
+         self%cur_inpl_idx    = irot_fit
+         self%cur_inpl_rotind = real(irot_fit)
+-        self%profile_fit(0)  = self%profile_fit(0) + 1_int64
++        if( l_edge )then
++            self%profile_fit(FIT_KEPT_EDGE) = self%profile_fit(FIT_KEPT_EDGE) + 1_int64
++        else
++            self%profile_fit(0)             = self%profile_fit(0) + 1_int64
++        endif
+         fitted = .true.
+     end subroutine try_grid_fit
+ 
+@@ -865,7 +878,7 @@
+                    &xy(2) >= real(self%ospec%limits(2,1),dp) .and. xy(2) <= real(self%ospec%limits(2,2),dp)
+     end function in_limits
+ 
+-    !> fits kept (0) and fallbacks per FIT_* reason (1:5)
++    !> fits kept from the grid minimum's stencil (0), fits kept from an edge-centred stencil (FIT_KEPT_EDGE) and fallbacks per FIT_* reason (2:5)
+     subroutine grad_shsrch_get_fit_profile( self, counts )
+         class(pftc_shsrch_grad), intent(in)  :: self
+         integer(int64),          intent(out) :: counts(0:FIT_NREASONS)
+--- a/src/main/pftc/simple_pftc_inplane_tester.f90
++++ b/src/main/pftc/simple_pftc_inplane_tester.f90
+@@ -12,7 +12,8 @@
+ use simple_image,                   only: image
+ use simple_matcher_smpl_and_lplims, only: set_bp_range3D
+ use simple_polarft_calc,            only: polarft_calc, vol_pad2ref_pfts
+-use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad, fit_quadratic_step, grid_stencil_exists, FIT_CURVATURE, FIT_STEP, &
++use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad, fit_quadratic_step, grid_stencil_centre, FIT_CURVATURE, FIT_STEP, &
++    &FIT_KEPT_EDGE, &
+     &shift_ptcl2ref, shift_ref2ptcl
+ use simple_strategy2D_srch,         only: strategy2D_srch, strategy2D_spec
+ use simple_test_utils
+@@ -538,7 +539,7 @@
+     subroutine test_grid_fit_step()
+         real(dp), parameter :: HESS(2,2) = reshape([2.d0, 0.5d0, 0.5d0, 1.5d0], [2,2])
+         real(dp) :: v(-1:1,-1:1), da, db
+-        integer  :: ia, ib, reason
++        integer  :: ia, ib, reason, cx, cy
+         write(*,'(A)') 'test_grid_fit_step'
+         ! an exact quadratic with its stationary point inside the centre cell
+         call fill_quadratic([0.3d0, -0.2d0], v)
+@@ -580,11 +581,28 @@
+         enddo
+         call fit_quadratic_step(v, da, db, reason)
+         call assert_int(FIT_CURVATURE, reason, 'an ill-conditioned curvature is refused')
+-        ! the stencil exists away from the edge of the 5 x 5 lattice only
+-        call assert_true(grid_stencil_exists(3,3) .and. grid_stencil_exists(2,2) .and. grid_stencil_exists(4,4), &
+-            &'interior grid points have a full stencil')
+-        call assert_false(grid_stencil_exists(1,3) .or. grid_stencil_exists(5,3) .or. grid_stencil_exists(3,1) .or. &
+-            &grid_stencil_exists(3,5), 'edge grid points have none')
++        ! a stencil centred one point inside the lattice, the grid minimum at its edge (a = +1): the step is measured
++        ! from the grid minimum
++        call fill_quadratic([1.3d0, 0.1d0], v)
++        call fit_quadratic_step(v, da, db, reason, -1, 0)
++        call assert_int(0, reason, 'an edge-centred stencil with the stationary point near the grid minimum is accepted')
++        call assert_true(abs(da - 0.3d0) <= 1.d-10 .and. abs(db - 0.1d0) <= 1.d-10, &
++            &'the step is measured from the grid minimum, not from the stencil centre')
++        call fill_quadratic([1.8d0, 0.d0], v)
++        call fit_quadratic_step(v, da, db, reason, -1, 0)
++        call assert_int(FIT_STEP, reason, 'a stationary point beyond half a step from the grid minimum is refused')
++        call fill_quadratic([-0.2d0, -1.4d0], v)
++        call fit_quadratic_step(v, da, db, reason, 0, 1)
++        call assert_int(0, reason, 'the other axis, the grid minimum at b = -1 of the stencil, is accepted')
++        call assert_true(abs(da + 0.2d0) <= 1.d-10 .and. abs(db - (-1.4d0 + 1.d0)) <= 1.d-10, &
++            &'the step is measured from the grid minimum on the other axis')
++        ! the stencil is centred on the grid minimum, or one point inside the 5 x 5 lattice when it is on the edge
++        call grid_stencil_centre(3, 3, cx, cy)
++        call assert_true(cx == 3 .and. cy == 3, 'an interior grid minimum is its own stencil centre')
++        call grid_stencil_centre(1, 3, cx, cy)
++        call assert_true(cx == 2 .and. cy == 3, 'an edge minimum at ix = 1 is centred at 2')
++        call grid_stencil_centre(5, 5, cx, cy)
++        call assert_true(cx == 4 .and. cy == 4, 'a corner minimum is centred diagonally inside')
+ 
+     contains
+ 
+@@ -604,7 +622,7 @@
+     end subroutine test_grid_fit_step
+ 
+     !> grid_fit against the L-BFGS-B path from the same grid on the phantom: a kept fit is within 0.2 px of its
+-    !! shift, a fallback and the option off are bit-identical to it. The printed counts say why a case did not fit.
++    !! shift (0.3 px from an edge-centred stencil; phantom case 3 is 0.23 px), a fallback and the option off are bit-identical to it. The printed counts say why a case did not fit.
+     subroutine test_grid_fit_search()
+         integer :: icase
+         write(*,'(A)') 'test_grid_fit_search'
+@@ -622,7 +640,7 @@
+             type(parameters), target :: p
+             type(pftc_shsrch_grad) :: base, with_fit, off
+             integer(int64) :: counts(0:5), counts_off(0:5)
+-            real    :: limits(2,2), lims_init(2,2), cxy_a(3), cxy_b(3), cxy_c(3)
++            real    :: limits(2,2), lims_init(2,2), cxy_a(3), cxy_b(3), cxy_c(3), fit_tol
+             integer :: irot_a, irot_b, irot_c
+             limits(:,1)    = -TRS
+             limits(:,2)    =  TRS
+@@ -645,16 +663,19 @@
+             call assert_true(all(counts_off == 0_int64), 'no fit decisions without the option')
+             call assert_true(same_result(irot_c, cxy_c, irot_a, cxy_a), &
+                 &'option off: identical to the search built without it')
+-            if( counts(0) == 1_int64 )then
++            if( counts(0) + counts(FIT_KEPT_EDGE) == 1_int64 )then
+                 ! irot = 0 flags a search that found nothing better than zero shift; cxy is then undefined
+                 if( irot_a > 0 .and. irot_b > 0 )then
+-                    call assert_true(all(abs(cxy_b(2:3) - cxy_a(2:3)) <= 0.2), &
+-                        &'a kept fit lies within 0.2 px of the L-BFGS-B shift from the same grid point')
++                    ! a stencil centred one point inside the lattice extrapolates to the edge minimum: looser
++                    fit_tol = 0.2
++                    if( counts(FIT_KEPT_EDGE) == 1_int64 ) fit_tol = 0.3
++                    call assert_true(all(abs(cxy_b(2:3) - cxy_a(2:3)) <= fit_tol), &
++                        &'a kept fit lies within 0.2 px (0.3 px from an edge-centred stencil) of the L-BFGS-B shift from the same grid point')
+                 endif
+             else
+                 call assert_true(same_result(irot_b, cxy_b, irot_a, cxy_a), 'a fallback is identical to the L-BFGS-B path')
+             endif
+-            write(*,'(A,I0,A,6I4)') '  case ', icase_loc, ' fit counts (kept, edge, curvature, step, box, value): ', int(counts)
++            write(*,'(A,I0,A,6I4)') '  case ', icase_loc, ' fit counts (kept, kept from an edge stencil, curvature, step, box, value): ', int(counts)
+             write(*,'(A,2F8.3,A,2F8.3)') '  L-BFGS-B shift: ', cxy_a(2:3), '   with fit: ', cxy_b(2:3)
+             call base%kill
+             call with_fit%kill
+@@ -832,7 +853,7 @@
+             if( irot_p > 0 .and. irot_f > 0 )then
+                 call assert_true(all(abs(cxy_f(2:3) - cxy_p(2:3)) <= 0.3), 'with the step the shift agrees with the lattice search')
+             endif
+-            write(*,'(A,I0,A,6I4)') '  case ', icase_loc, ' lattice fit counts (kept, edge, curvature, step, box, value): ', int(counts)
++            write(*,'(A,I0,A,6I4)') '  case ', icase_loc, ' lattice fit counts (kept, kept from an edge stencil, curvature, step, box, value): ', int(counts)
+             write(*,'(A,2F8.3,A,2F8.3,A,2F8.3)') '  reference grid: ', cxy_a(2:3), '   particle grid: ', cxy_p(2:3), &
+                 &'   with fit: ', cxy_f(2:3)
+             call base%kill
+--- a/src/main/commanders/simple/simple_commanders_prob.f90
++++ b/src/main/commanders/simple/simple_commanders_prob.f90
+@@ -652,8 +652,8 @@
+             write(fnr,'(a,i0)') 'prob_tab objective evaluations      : ', fill%objective_evals
+             write(fnr,'(a,i0)') 'prob_tab gradient evaluations (E)   : ', fill%gradient_evals
+             if( trim(params%prob_grid_fit) == 'yes' )then
+-                write(fnr,'(a,i0)') 'prob_tab grid fits kept             : ', fill%fit_counts(0)
+-                write(fnr,'(a,i0)') 'prob_tab fit fallback, edge         : ', fill%fit_counts(1)
++                write(fnr,'(a,i0)') 'prob_tab grid fits kept             : ', fill%fit_counts(0) + fill%fit_counts(1)
++                write(fnr,'(a,i0)') 'prob_tab   of which, edge stencil   : ', fill%fit_counts(1)
+                 write(fnr,'(a,i0)') 'prob_tab fit fallback, curvature    : ', fill%fit_counts(2)
+                 write(fnr,'(a,i0)') 'prob_tab fit fallback, step         : ', fill%fit_counts(3)
+                 write(fnr,'(a,i0)') 'prob_tab fit fallback, search box   : ', fill%fit_counts(4)
+--- a/src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90
++++ b/src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90
+@@ -44,7 +44,7 @@
+     integer(int64) :: grid_points     = 0_int64 !< coarse-grid points scored
+     integer(int64) :: minimize_calls  = 0_int64 !< shift searches started
+     integer(int64) :: bank_builds     = 0_int64 !< shifted particle memos built (prob_grid_ptcl, prob_seed_ptcl)
+-    integer(int64) :: fit_counts(0:5) = 0_int64 !< quadratic grid step: (0) fits kept, (1:5) fallbacks per reason; all zero with the key off
++    integer(int64) :: fit_counts(0:5) = 0_int64 !< quadratic grid step: (0) fits kept, (1) fits kept from an edge-centred stencil, (2:5) fallbacks per reason; all zero with the key off
+ end type prob_fill_profile
+ 
+ ! Thread-owned append buffer used while candidate counts are not known in advance.
+--- a/doc/policies/3D/refine3D_policy.md
++++ b/doc/policies/3D/refine3D_policy.md
+@@ -675,12 +675,15 @@
+ 
+ `prob_grid_fit` (`yes|no`, default `no`) is a developer key pending promotion.
+ In the multi-state probabilistic table it replaces the L-BFGS-B alternations of
+-every refined reference by a quadratic fit to the coarse shift grid, where the
+-grid minimum has a full 3 x 3 stencil, the fitted curvature is positive definite
+-and well conditioned, the step stays inside the centre cell and the search box,
+-and one exact evaluation at the fitted shift beats the grid minimum. Otherwise
+-the alternations run from the grid minimum as before. The bench file counts the
+-fits kept and the fallbacks per reason. The key is read by `fill_tab_range` and
++every refined reference by a quadratic fit to the coarse shift grid: a 3 x 3
++stencil centred on the grid minimum, or one lattice point inside when the grid
++minimum is on the edge of the 5 x 5 lattice, so that it always contains the
++minimum. The fit is kept where the fitted curvature is positive definite and
++well conditioned, the fitted shift lies within half a grid step of the grid
++minimum and inside the search box, and one exact evaluation at the fitted shift
++beats the grid minimum. Otherwise the alternations run from the grid minimum as
++before. The bench file counts the fits kept (and how many of them used an
++edge-centred stencil) and the fallbacks per reason. The key is read by `fill_tab_range` and
+ reaches `prob_tab` through the `prob_align` command line.
+ 
+ `prob_grid_ptcl` and `prob_seed_ptcl` (`yes|no`, default `no`) are developer
